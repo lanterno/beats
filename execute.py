@@ -24,11 +24,16 @@ def create_project(p_name, p_estimatedtime, details=''):
 
 def start_timer_on_project(p_name):
     now = time.ctime().split()[-2]
-    with open('data/projects.json', 'r') as p_file:
+    with open('data/projects.json', 'r+') as p_file:
         projects = json.load(p_file)
         if projects.get(p_name) == None:
             print("We don't have a project with this name dear.")
             return 0
+        projects.get(p_name)["state"] = "ON"
+        p_file.seek(0)
+        p_file.truncate()
+        p_file.write(simplejson.dumps(projects, indent=4))
+
     with open('data/logs/{}.json'.format(p_name), 'r+') as logs_file:
         logs = json.load(logs_file)
         logs_file.seek(0)
