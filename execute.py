@@ -64,6 +64,10 @@ def stop_timer_on_project():
         logs = json.load(logs_file)
         logs_file.seek(0)
         logs_file.truncate()
+        if logs[-1]["end"] != "Not yet.":
+            print("Error. Either you don't have a running log or\
+                  the program is writing on the wrong log instance.")
+            return 0
         logs[-1]["end"] = str(now)
         logs_file.write(simplejson.dumps(logs, indent=4))
         start = Time()
