@@ -53,6 +53,13 @@ def stop_timer_on_project():
         settings = json.load(settings_file)
         p_name = settings["working on"]
 
+    with open('data/projects.json', 'r+') as p_file:
+        projects = json.load(p_file)
+        projects.get(p_name)["state"] = "OFF"
+        p_file.seek(0)
+        p_file.truncate()
+        p_file.write(simplejson.dumps(projects, indent=4))
+
     with open('data/logs/{}.json'.format(p_name), 'r+') as logs_file:
         logs = json.load(logs_file)
         logs_file.seek(0)
