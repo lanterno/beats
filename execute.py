@@ -1,6 +1,7 @@
 import json
 import simplejson
 from p_time import Time
+from .fms import manager
 
 
 def create_project(p_name, p_estimatedtime, details=''):
@@ -41,7 +42,7 @@ def start_timer_on_project(p_name):
         logs = json.load(logs_file)
         logs_file.seek(0)
         logs_file.truncate()
-        logs.append({'start': str(now), 'end': 'not yet'})
+        logs.append({'start': str(now), 'end': 'Not yet.'})
         logs_file.write(simplejson.dumps(logs, indent=4))
 
     with open('data/settings.json', 'r+') as settings_file:
@@ -90,6 +91,10 @@ def stop_timer_on_project():
         p_file.write(simplejson.dumps(projects, indent=4))
 
 
+def list_projects():
+    projects = manager.read('projects')
+    print(projects)
+
 def execute_from_command_line(commands):
     if commands[0] == "createp":
         print("Creating project...")
@@ -102,3 +107,7 @@ def execute_from_command_line(commands):
     elif commands[0] == "stop":
         print("Stoping timer...")
         stop_timer_on_project()
+
+    elif commands[0] == "list_projects":
+        print("your projects are: ")
+        list_projects()
