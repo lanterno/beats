@@ -1,1 +1,20 @@
-{}
+{
+    "pocket": {
+        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
+        "estimated time": "5",
+        "total_spent_time": "5:23:24",
+        "state": "OFF"
+    },
+    "supermarket": {
+        "details": "A project for work.",
+        "estimated time": "00",
+        "total_spent_time": "21:15:17",
+        "state": "OFF"
+    },
+    "javaapplets": {
+        "details": "our oral exam reports",
+        "estimated time": "3",
+        "total_spent_time": "6:52:0",
+        "state": "OFF"
+    }
+}
