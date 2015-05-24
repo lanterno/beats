@@ -14,10 +14,10 @@ class Manager(object):
     def create(name):
         pass
 
-    def read(fname):
+    def read(cls, fname):
         with open('data/' + fname + '.json', 'r+') as p_file:
             projects = json.load(p_file)
-        return [project.get('name') for project in projects]
+        return [project for project in projects]
 
     def update(name):
         pass

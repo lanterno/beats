@@ -1,7 +1,7 @@
 import json
 import simplejson
 from p_time import Time
-from .fms import manager
+from fms import manager
 
 
 def create_project(p_name, p_estimatedtime, details=''):
@@ -93,7 +93,8 @@ def stop_timer_on_project():
 
 def list_projects():
     projects = manager.read('projects')
-    print(projects)
+    return projects
+
 
 def execute_from_command_line(commands):
     if commands[0] == "createp":
@@ -109,5 +110,4 @@ def execute_from_command_line(commands):
         stop_timer_on_project()
 
     elif commands[0] == "list_projects":
-        print("your projects are: ")
-        list_projects()
+        print("your projects are: " + str(list_projects()))
