@@ -1,20 +1,32 @@
 {
-    "pocket": {
-        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
-        "estimated time": "5",
-        "total_spent_time": "5:23:24",
-        "state": "OFF"
+    "javaapplets": {
+        "details": "our oral exam reports",
+        "state": "OFF",
+        "estimated time": "3",
+        "total_spent_time": "6:52:0"
+    },
+    "datasci101": {
+        "details": "the udacity course intro to datascience.",
+        "state": "ON",
+        "estimated time": "unlimited",
+        "total_spent_time": "0:47:26"
     },
     "supermarket": {
         "details": "A project for work.",
+        "state": "OFF",
         "estimated time": "00",
-        "total_spent_time": "21:15:17",
-        "state": "OFF"
+        "total_spent_time": "29:2:28"
     },
-    "javaapplets": {
-        "details": "our oral exam reports",
-        "estimated time": "3",
-        "total_spent_time": "6:52:0",
-        "state": "OFF"
+    "db2": {
+        "details": "Studying for Database2 subject's exam",
+        "state": "ON",
+        "estimated time": "12h",
+        "total_spent_time": "9:4:3"
+    },
+    "pocket": {
+        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
+        "state": "OFF",
+        "estimated time": "5",
+        "total_spent_time": "5:23:24"
     }
 }
