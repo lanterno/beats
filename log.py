@@ -8,6 +8,7 @@ class Log(object):
         self.start.set_string(start)
         self.end = Time()
         self.set_string(end)
+        self.date = "00/00/00"
 
     def stop(self):
         self.end.set_current_time()
