@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-## Projects Time Control
+# Projects Time Control
 
 import sys
 from execute import execute_from_command_line

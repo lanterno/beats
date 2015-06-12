@@ -11,12 +11,12 @@ import simplejson
 
 class FileManager(object):
 
-    def read(cls, fname):
+    def read(fname):
         with open('data/' + fname + '.json', 'r') as p_file:
             objects = json.load(p_file)
         return objects
 
-    def update(cls, fname, objects, mode='r+'):
+    def update(fname, objects, mode='r+'):
         with open('data/' + fname + '.json', mode) as p_file:
             p_file.seek(0)
             p_file.truncate()

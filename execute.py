@@ -35,7 +35,7 @@ def start_timer_on_project(p_name):
     FileManager.update('logs/{}'.format(p_name), logs)
 
     # put the project in workon in the settings file.
-    settings = FileManager.read('setting')
+    settings = FileManager.read('settings')
     settings["working on"] = p_name
     FileManager.update('settings', settings)
 
@@ -59,10 +59,11 @@ def stop_timer_on_project():
     elapsed_time = now.minues(start)
 
     # CHANGE PROJECT STATE TO OFF.
-    # ADD THE ELAPSED TIME.
     projects = FileManager.read('projects')
     workon_project = projects.get(p_name)
     workon_project["state"] = "OFF"
+
+    # ADD THE ELAPSED TIME.
     total_time = Time()
     total_time.set_string(workon_project["total_spent_time"])
     total_time.add_time(elapsed_time)

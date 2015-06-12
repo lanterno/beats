@@ -1,74 +1,74 @@
 {
-    "db2": {
-        "total_spent_time": "9:4:3",
-        "estimated time": "12h",
-        "details": "Studying for Database2 subject's exam",
-        "state": "ON"
-    },
-    "micro_exam": {
-        "total_spent_time": "6:56:28",
-        "estimated time": "00",
-        "details": "Study for the college's final exam on microcontrollers.",
-        "state": "OFF"
-    },
-    "SPD1": {
-        "total_spent_time": "2:26:33",
-        "estimated time": "00",
-        "details": "Systematic programming design course on Edx.",
-        "state": "OFF"
-    },
-    "datasci101": {
-        "total_spent_time": "6:26:23",
-        "estimated time": "unlimited",
-        "details": "the udacity course intro to datascience.",
-        "state": "OFF"
+    "graphics": {
+        "total_spent_time": "0:40:48",
+        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
+        "state": "OFF",
+        "estimated time": "00"
     },
     "javaapplets": {
         "total_spent_time": "6:52:0",
-        "estimated time": "3",
         "details": "our oral exam reports",
-        "state": "OFF"
+        "state": "OFF",
+        "estimated time": "3"
     },
-    "supermarket": {
-        "total_spent_time": "59:19:3",
-        "estimated time": "00",
-        "details": "A project for work.",
-        "state": "OFF"
+    "db2": {
+        "total_spent_time": "9:4:3",
+        "details": "Studying for Database2 subject's exam",
+        "state": "ON",
+        "estimated time": "12h"
+    },
+    "micro_exam": {
+        "total_spent_time": "6:56:28",
+        "details": "Study for the college's final exam on microcontrollers.",
+        "state": "OFF",
+        "estimated time": "00"
     },
     "javaapplets_exam": {
         "total_spent_time": "3:24:21",
-        "estimated time": "00",
         "details": "study for the final exam",
-        "state": "OFF"
+        "state": "OFF",
+        "estimated time": "00"
     },
     "sys-exam": {
         "total_spent_time": "5:15:44",
-        "estimated time": "00",
         "details": "studying foe the college's final exam of the subject Systems Analysis and design.",
-        "state": "OFF"
+        "state": "OFF",
+        "estimated time": "00"
     },
-    "pocket": {
-        "total_spent_time": "5:23:24",
-        "estimated time": "5",
-        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
-        "state": "OFF"
+    "supermarket": {
+        "total_spent_time": "59:19:3",
+        "details": "A project for work.",
+        "state": "OFF",
+        "estimated time": "00"
     },
-    "graphics": {
-        "total_spent_time": "0:40:48",
-        "estimated time": "00",
-        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
-        "state": "OFF"
-    },
-    "html5-edx": {
-        "total_spent_time": "1:19:0",
-        "estimated time": "unlimited",
-        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
-        "state": "ON"
+    "datasci101": {
+        "total_spent_time": "6:26:23",
+        "details": "the udacity course intro to datascience.",
+        "state": "ON",
+        "estimated time": "unlimited"
     },
     "II-exam": {
         "total_spent_time": "6:18:34",
-        "estimated time": "00",
         "details": "IndndustInsdustrial instrumentation subject study for the final exam",
-        "state": "OFF"
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "pocket": {
+        "total_spent_time": "5:23:24",
+        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
+        "state": "OFF",
+        "estimated time": "5"
+    },
+    "SPD1": {
+        "total_spent_time": "2:26:33",
+        "details": "Systematic programming design course on Edx.",
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "html5-edx": {
+        "total_spent_time": "1:19:0",
+        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
+        "state": "ON",
+        "estimated time": "unlimited"
     }
 }
