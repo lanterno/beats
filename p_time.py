@@ -1,5 +1,6 @@
 # handles time
 import time
+from datetime import datetime
 
 
 class Time(object):
@@ -28,7 +29,6 @@ class Time(object):
         return self.hours*3600 + self.minutes*60 + self.seconds
 
     def add_time(self, time):
-        print(time)
         self.set_seconds(self.get_seconds() + time.get_seconds())
 
     def minues(self, other_time):
@@ -36,3 +36,6 @@ class Time(object):
         seconds = abs(self.get_seconds() - other_time.get_seconds())
         t.set_seconds(seconds)
         return t
+
+    def date(cls):
+        return str(datetime.now().date())

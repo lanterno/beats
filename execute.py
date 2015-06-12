@@ -31,7 +31,7 @@ def start_timer_on_project(p_name):
 
     # START LOG TIME
     logs = FileManager.read('logs/{}'.format(p_name))
-    logs.append({'start': str(now), 'end': 'Not yet.', 'date': '00/00/00'})
+    logs.append({'start': str(now), 'end': 'Not yet.', 'date': now.date()})
     FileManager.update('logs/{}'.format(p_name), logs)
 
     # put the project in workon in the settings file.
