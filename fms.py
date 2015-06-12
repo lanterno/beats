@@ -1,27 +1,25 @@
 '''
 Name: File Management System.
 Details:
-## this file should implement A manager class for reading, writing and deleting to/from files.
-## Also it should convert the extracted information to the proper type.
-## the operations that should be implemented are CRUD "Create - Read - Update - Delete"
-Author: Zee93
+    this file should implement A manager class for reading, writing to/from files.
+Author:
+    Zee93
 '''
 import json
+import simplejson
 
 
-class Manager(object):
-
-    def create(name):
-        pass
+class FileManager(object):
 
     def read(cls, fname):
-        with open('data/' + fname + '.json', 'r+') as p_file:
-            projects = json.load(p_file)
-        return [project for project in projects]
+        with open('data/' + fname + '.json', 'r') as p_file:
+            objects = json.load(p_file)
+        return objects
 
-    def update(name):
-        pass
+    def update(cls, fname, objects, mode='r+'):
+        with open('data/' + fname + '.json', mode) as p_file:
+            p_file.seek(0)
+            p_file.truncate()
+            p_file.write(simplejson.dumps(objects, indent=4))
 
-    def delete(name):
-        pass
-manager = Manager()
+# file_manager = FileManager()

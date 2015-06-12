@@ -1,10 +1,8 @@
-import json
-import simplejson
 from p_time import Time
-from fms import manager
+from fms import FileManager
 
 
-def create_project(p_name, p_estimatedtime, details=''):
+def create_project(p_name, details='', p_estimatedtime="Unknown"):
     project = {
         'estimated time': p_estimatedtime,
         'details': details,
@@ -12,14 +10,11 @@ def create_project(p_name, p_estimatedtime, details=''):
         'total_spent_time': "0:0:0"
     }
 
-    with open('data/projects.json', 'r+') as p_file:
-        projects = json.load(p_file)
-        p_file.seek(0)
-        p_file.truncate()
-        projects.update({p_name: project})
-        p_file.write(simplejson.dumps(projects, indent=4))
-    with open('data/logs/{}.json'.format(p_name), 'w') as p_file:
-        p_file.write('[]')
+    projects = FileManager.read('projects')
+    projects.update({p_name: project})
+    FileManager.update(projects)
+
+    FileManager.update('logs/{}'.format(p_name), mode='w')
 
     print('project created.')
 
@@ -27,74 +22,59 @@ def create_project(p_name, p_estimatedtime, details=''):
 def start_timer_on_project(p_name):
     now = Time()
     # CHANGE PROJECT STATE TO ON
-    with open('data/projects.json', 'r+') as p_file:
-        projects = json.load(p_file)
-        if projects.get(p_name) == None:
-            print("We don't have a project with this name dear.")
-            return 0
-        projects.get(p_name)["state"] = "ON"
-        p_file.seek(0)
-        p_file.truncate()
-        p_file.write(simplejson.dumps(projects, indent=4))
+    projects = FileManager.read('projects')
+    if projects.get(p_name) == None:
+        print("We don't have a project with this name dear.")
+        return 0
+    projects.get(p_name)["state"] = "ON"
+    FileManager.update('projects', projects)
 
     # START LOG TIME
-    with open('data/logs/{}.json'.format(p_name), 'r+') as logs_file:
-        logs = json.load(logs_file)
-        logs_file.seek(0)
-        logs_file.truncate()
-        logs.append({'start': str(now), 'end': 'Not yet.'})
-        logs_file.write(simplejson.dumps(logs, indent=4))
+    logs = FileManager.read('logs/{}'.format(p_name))
+    logs.append({'start': str(now), 'end': 'Not yet.', 'date': '00/00/00'})
+    FileManager.update('logs/{}'.format(p_name), logs)
 
-    with open('data/settings.json', 'r+') as settings_file:
-        settings = json.load(settings_file)
-        settings_file.seek(0)
-        settings_file.truncate()
-        settings["working on"] = p_name
-        settings_file.write(simplejson.dumps(settings, indent=4, sort_keys=True))
+    # put the project in workon in the settings file.
+    settings = FileManager.read('setting')
+    settings["working on"] = p_name
+    FileManager.update('settings', settings)
 
 
 def stop_timer_on_project():
     now = Time()
     # GET PROJECT NAME.
-    with open('data/settings.json', 'r') as settings_file:
-        settings = json.load(settings_file)
-        p_name = settings["working on"]
+    settings = FileManager.read('settings')
+    p_name = settings["working on"]
 
     # UPDATE THE LOG.
-    with open('data/logs/{}.json'.format(p_name), 'r+') as logs_file:
-        logs = json.load(logs_file)
-        logs_file.seek(0)
-        logs_file.truncate()
-        if logs[-1]["end"] != "Not yet.":
-            print("Error. Either you don't have a running log or\
-                  the program is writing on the wrong log instance.")
-            logs_file.write(simplejson.dumps(logs, indent=4))
-            return 0
-        logs[-1]["end"] = str(now)
-        logs_file.write(simplejson.dumps(logs, indent=4))
-        start = Time()
-        start.set_string(logs[-1]["start"])
-        elapsed_time = now.minues(start)
+    logs = FileManager.read('logs/{}'.format(p_name))
+    if logs[-1]["end"] != "Not yet.":
+        print("Error. Either you don't have a running log or\
+              the program is writing on the wrong log instance.")
+        return 0
+    logs[-1]["end"] = str(now)
+    FileManager.update('logs/{}'.format(p_name), logs)
+    start = Time()
+    start.set_string(logs[-1]["start"])
+    elapsed_time = now.minues(start)
 
     # CHANGE PROJECT STATE TO OFF.
-    # ADD THE LAPSED TIME.
-    with open('data/projects.json', 'r+') as p_file:
-        projects = json.load(p_file)
-        project = projects.get(p_name)
-        project["state"] = "OFF"
-        total_time = Time()
-        total_time.set_string(project["total_spent_time"])
-        total_time.add_time(elapsed_time)
-        project["total_spent_time"] = str(total_time)
-        projects[p_name] = project
-        p_file.seek(0)
-        p_file.truncate()
-        p_file.write(simplejson.dumps(projects, indent=4))
+    # ADD THE ELAPSED TIME.
+    projects = FileManager.read('projects')
+    workon_project = projects.get(p_name)
+    workon_project["state"] = "OFF"
+    total_time = Time()
+    total_time.set_string(workon_project["total_spent_time"])
+    total_time.add_time(elapsed_time)
+    print("Elapsed time: " + str(elapsed_time))
+    workon_project["total_spent_time"] = str(total_time)
+    projects[p_name] = workon_project
+    FileManager.update('projects', projects)
 
 
 def list_projects():
-    projects = manager.read('projects')
-    return projects
+    projects = FileManager.read('projects')
+    return [project for project in projects]
 
 
 def execute_from_command_line(commands):
@@ -104,11 +84,13 @@ def execute_from_command_line(commands):
 
     elif commands[0] == "start":
         print("Happy coding...")
+        print("Time now: " + str(Time()))
         start_timer_on_project(commands[1])
 
     elif commands[0] == "stop":
         print("Stoping timer...")
+        print("Time now: " + str(Time()))
         stop_timer_on_project()
 
-    elif commands[0] == "list_projects":
+    elif commands[0] == "list":
         print("your projects are: " + str(list_projects()))
