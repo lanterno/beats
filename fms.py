@@ -11,6 +11,8 @@ import simplejson
 
 class FileManager(object):
 
+    '''File manager to read or write to files with Json objects.'''
+
     def read(fname):
         with open('data/' + fname + '.json', 'r') as p_file:
             objects = json.load(p_file)

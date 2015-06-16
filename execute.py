@@ -12,9 +12,9 @@ def create_project(p_name, details='', p_estimatedtime="Unknown"):
 
     projects = FileManager.read('projects')
     projects.update({p_name: project})
-    FileManager.update(projects)
+    FileManager.update('projects', projects)
 
-    FileManager.update('logs/{}'.format(p_name), mode='w')
+    FileManager.update('logs/{}'.format(p_name), [], mode='w')
 
     print('project created.')
 
@@ -31,7 +31,7 @@ def start_timer_on_project(p_name):
 
     # START LOG TIME
     logs = FileManager.read('logs/{}'.format(p_name))
-    logs.append({'start': str(now), 'end': 'Not yet.', 'date': now.date()})
+    logs.append({'start': str(now), 'end': 'Not yet.', 'date': Time.date()})
     FileManager.update('logs/{}'.format(p_name), logs)
 
     # put the project in workon in the settings file.
@@ -56,7 +56,8 @@ def stop_timer_on_project():
     FileManager.update('logs/{}'.format(p_name), logs)
     start = Time()
     start.set_string(logs[-1]["start"])
-    elapsed_time = now.minues(start)
+    now.minues(start)
+    elapsed_time = now
 
     # CHANGE PROJECT STATE TO OFF.
     projects = FileManager.read('projects')
@@ -64,8 +65,7 @@ def stop_timer_on_project():
     workon_project["state"] = "OFF"
 
     # ADD THE ELAPSED TIME.
-    total_time = Time()
-    total_time.set_string(workon_project["total_spent_time"])
+    total_time = Time(str_time=workon_project["total_spent_time"])
     total_time.add_time(elapsed_time)
     print("Elapsed time: " + str(elapsed_time))
     workon_project["total_spent_time"] = str(total_time)
@@ -76,6 +76,13 @@ def stop_timer_on_project():
 def list_projects():
     projects = FileManager.read('projects')
     return [project for project in projects]
+
+
+def get_time_for_certain_day(p_name, date=Time.date()):
+    logs = FileManager.read('logs/{}'.format(p_name))
+    logs = [log for log in logs if log.get('date', None) == date]
+    total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in logs]))
+    print(total_time)
 
 
 def execute_from_command_line(commands):
@@ -95,3 +102,17 @@ def execute_from_command_line(commands):
 
     elif commands[0] == "list":
         print("your projects are: " + str(list_projects()))
+
+    elif commands[0] == "total_time_for":
+        pass
+    elif commands[0] == "today_time_for":
+        if len(commands) == 3:
+            return get_time_for_certain_day(commands[1], commands[2])
+        return get_time_for_certain_day(commands[1])
+
+    elif commands[0] == "yesterday_time_for":
+        if len(commands) == 3:
+            return get_time_for_certain_day(commands[1], commands[2])
+        return get_time_for_certain_day(commands[1])
+    else:
+        print("Wrong Command")
