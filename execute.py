@@ -104,7 +104,7 @@ def execute_from_command_line(commands):
         print("your projects are: " + str(list_projects()))
 
     elif commands[0] == "total_time_for":
-        pass
+        print("Not implemented Yet.")
     elif commands[0] == "today_time_for":
         if len(commands) == 3:
             return get_time_for_certain_day(commands[1], commands[2])
@@ -114,5 +114,8 @@ def execute_from_command_line(commands):
         if len(commands) == 3:
             return get_time_for_certain_day(commands[1], commands[2])
         return get_time_for_certain_day(commands[1])
+
+    elif commands[0] == "date":
+        print(Time.date())
     else:
         print("Wrong Command")
