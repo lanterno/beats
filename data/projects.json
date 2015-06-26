@@ -1,98 +1,104 @@
 {
-    "sys-exam": {
+    "SPD1": {
         "estimated time": "00",
-        "state": "OFF",
-        "total_spent_time": "5:15:44",
-        "details": "studying foe the college's final exam of the subject Systems Analysis and design."
-    },
-    "javaapplets_exam": {
-        "estimated time": "00",
-        "state": "OFF",
-        "total_spent_time": "3:24:21",
-        "details": "study for the final exam"
-    },
-    "html5-edx": {
-        "estimated time": "unlimited",
-        "state": "OFF",
-        "total_spent_time": "1:19:0",
-        "details": "the edx course HTML5.1x Learn HTML5 from W3C"
-    },
-    "javaapplets": {
-        "estimated time": "3",
-        "state": "OFF",
-        "total_spent_time": "6:52:0",
-        "details": "our oral exam reports"
+        "total_spent_time": "5:1:47",
+        "details": "Systematic programming design course on Edx.",
+        "state": "OFF"
     },
     "datasci101": {
         "estimated time": "unlimited",
-        "state": "ON",
-        "total_spent_time": "16:53:14",
-        "details": "the udacity course intro to datascience."
-    },
-    "codeforces": {
-        "estimated time": "All the time I spend praticing on CodeForces.com",
-        "state": "OFF",
-        "total_spent_time": "0:0:18",
-        "details": "Unknown"
-    },
-    "II-exam": {
-        "estimated time": "00",
-        "state": "OFF",
-        "total_spent_time": "6:18:34",
-        "details": "IndndustInsdustrial instrumentation subject study for the final exam"
-    },
-    "graphics": {
-        "estimated time": "00",
-        "state": "OFF",
-        "total_spent_time": "0:40:48",
-        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course."
-    },
-    "SPD1": {
-        "estimated time": "00",
-        "state": "OFF",
-        "total_spent_time": "3:34:47",
-        "details": "Systematic programming design course on Edx."
+        "total_spent_time": "17:24:41",
+        "details": "the udacity course intro to datascience.",
+        "state": "OFF"
     },
     "supermarket": {
         "estimated time": "00",
-        "state": "OFF",
-        "total_spent_time": "88:29:12",
-        "details": "A project for work."
+        "total_spent_time": "97:38:35",
+        "details": "A project for work.",
+        "state": "OFF"
     },
-    "ptc": {
-        "estimated time": "undefined",
-        "state": "OFF",
-        "total_spent_time": "0:31:40",
-        "details": "Projects time manager tool."
+    "codeforces": {
+        "estimated time": "All the time I spend praticing on CodeForces.com",
+        "total_spent_time": "0:0:18",
+        "details": "Unknown",
+        "state": "OFF"
     },
     "share_it": {
         "estimated time": "For Shrouk. stationary market.",
-        "state": "OFF",
-        "total_spent_time": "1:49:47",
-        "details": "Unknown"
+        "total_spent_time": "4:9:29",
+        "details": "Unknown",
+        "state": "OFF"
     },
-    "db2": {
-        "estimated time": "12h",
-        "state": "OFF",
-        "total_spent_time": "9:4:3",
-        "details": "Studying for Database2 subject's exam"
+    "ptc": {
+        "estimated time": "undefined",
+        "total_spent_time": "2:40:44",
+        "details": "Projects time manager tool.",
+        "state": "ON"
     },
-    "programmingapplications-exam": {
-        "estimated time": "Unknown",
-        "state": "OFF",
-        "total_spent_time": "3:4:56",
-        "details": "my study for the final exam of the subject Programming Applications @ college."
+    "djoser": {
+        "estimated time": "Work on the open source app. Djoser.",
+        "total_spent_time": "0:10:40",
+        "details": "3",
+        "state": "OFF"
     },
-    "pocket": {
-        "estimated time": "5",
-        "state": "OFF",
-        "total_spent_time": "5:23:24",
-        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management "
+    "javaapplets": {
+        "estimated time": "3",
+        "total_spent_time": "6:52:0",
+        "details": "our oral exam reports",
+        "state": "OFF"
     },
     "micro_exam": {
         "estimated time": "00",
-        "state": "OFF",
         "total_spent_time": "6:56:28",
-        "details": "Study for the college's final exam on microcontrollers."
+        "details": "Study for the college's final exam on microcontrollers.",
+        "state": "OFF"
+    },
+    "db2": {
+        "estimated time": "12h",
+        "total_spent_time": "9:4:3",
+        "details": "Studying for Database2 subject's exam",
+        "state": "OFF"
+    },
+    "html5-edx": {
+        "estimated time": "unlimited",
+        "total_spent_time": "1:19:0",
+        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
+        "state": "OFF"
+    },
+    "sys-exam": {
+        "estimated time": "00",
+        "total_spent_time": "5:15:44",
+        "details": "studying foe the college's final exam of the subject Systems Analysis and design.",
+        "state": "OFF"
+    },
+    "javaapplets_exam": {
+        "estimated time": "00",
+        "total_spent_time": "3:24:21",
+        "details": "study for the final exam",
+        "state": "OFF"
+    },
+    "graphics": {
+        "estimated time": "00",
+        "total_spent_time": "0:40:48",
+        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
+        "state": "OFF"
+    },
+    "programmingapplications-exam": {
+        "estimated time": "Unknown",
+        "total_spent_time": "3:4:56",
+        "details": "my study for the final exam of the subject Programming Applications @ college.",
+        "state": "OFF"
+    },
+    "II-exam": {
+        "estimated time": "00",
+        "total_spent_time": "6:18:34",
+        "details": "IndndustInsdustrial instrumentation subject study for the final exam",
+        "state": "OFF"
+    },
+    "pocket": {
+        "estimated time": "5",
+        "total_spent_time": "5:23:24",
+        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
+        "state": "OFF"
     }
 }
