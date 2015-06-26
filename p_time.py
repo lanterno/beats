@@ -39,16 +39,25 @@ class Time(object):
         self.hours = int(seconds/3600)
         self.minutes = int(seconds/60) - self.hours*60
         self.seconds = seconds % 60
+        return self
 
     def get_seconds(self):
         return self.hours*3600 + self.minutes*60 + self.seconds
 
     def add_time(self, t):
-        self.set_seconds(self.get_seconds() + t.get_seconds())
+        return self.set_seconds(self.get_seconds() + t.get_seconds())
 
-    def minues(self, other_time):
-        seconds = abs(self.get_seconds() - other_time.get_seconds())
-        self.set_seconds(seconds)
+    def minues(self, before):
+        if self.greater_than(before):  # before midnight
+            seconds = abs(self.get_seconds() - before.get_seconds())
+            return self.set_seconds(seconds)
+        else:                          # after midnight
+            print("inside if")
+            before_midnight = Time('24:00:00').minues(before)
+            return self.add_time(before_midnight)
+
+    def greater_than(self, time):
+        return self.get_seconds() > time.get_seconds()
 
     def log_time(log):
         if log is None:
@@ -60,4 +69,5 @@ class Time(object):
         return end
 
     def date():
+        # 'yyyy-mm-dd'
         return str(datetime.now().date())
