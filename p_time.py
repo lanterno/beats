@@ -52,7 +52,6 @@ class Time(object):
             seconds = abs(self.get_seconds() - before.get_seconds())
             return self.set_seconds(seconds)
         else:                          # after midnight
-            print("inside if")
             before_midnight = Time('24:00:00').minues(before)
             return self.add_time(before_midnight)
 

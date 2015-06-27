@@ -1,5 +1,6 @@
 from p_time import Time
 from fms import FileManager
+from spread import upload_to_spread_sheet
 
 
 def create_project(p_name, details='', p_estimatedtime="Unknown"):
@@ -83,6 +84,7 @@ def get_time_for_certain_day(p_name, date=Time.date()):
     day_logs = [log for log in all_logs if log.get('date', None) == date]
     total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in day_logs]))
     print(total_time)
+    return str(total_time)
 
 
 def get_total_monthly_time_on_project(p_name, month=Time.date()):
@@ -91,6 +93,20 @@ def get_total_monthly_time_on_project(p_name, month=Time.date()):
                   int(log.get('date').split('-')[1]) == 6]
     total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in month_logs]))
     print(total_time)
+    return str(total_time)
+
+
+def sync(p_name='supermarket', spreadsheet='WorkSheet', month=Time.date()):
+    all_logs = FileManager.read('logs/{}'.format(p_name))
+    month_days = set([log['date'] for log in all_logs if log.get('date', None) != None and
+                      int(log.get('date').split('-')[1]) == 6])
+    cells_time = {}
+    for day_date in month_days:
+        cell_row = str(int(day_date.split('-')[2]) + 1)  # we start from 2 not 1
+        cells_time.update(
+            {cell_row: get_time_for_certain_day(p_name, date=day_date)})
+    month = int(month.split('-')[1])
+    return upload_to_spread_sheet(p_name=p_name, spreadsheet=spreadsheet, month=month, cells_time=cells_time)
 
 
 def execute_from_command_line(commands):
@@ -127,5 +143,7 @@ def execute_from_command_line(commands):
         print(Time.date())
     elif commands[0] == "month_time_for":
         return get_total_monthly_time_on_project(commands[1])
+    elif commands[0] == "sync":
+        return sync()
     else:
         print("Wrong Command")
