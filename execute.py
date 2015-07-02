@@ -1,6 +1,7 @@
 from p_time import Time
 from fms import FileManager
 from spread import upload_to_spread_sheet
+from datetime import datetime
 
 
 def create_project(p_name, details='', p_estimatedtime="Unknown"):
@@ -87,10 +88,10 @@ def get_time_for_certain_day(p_name, date=Time.date()):
     return str(total_time)
 
 
-def get_total_monthly_time_on_project(p_name, month=Time.date()):
+def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_logs = [log for log in all_logs if log.get('date', None) != None and
-                  int(log.get('date').split('-')[1]) == 6]
+                  int(log.get('date').split('-')[1]) == month]
     total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in month_logs]))
     print(total_time)
     return str(total_time)
@@ -142,7 +143,12 @@ def execute_from_command_line(commands):
     elif commands[0] == "date":
         print(Time.date())
     elif commands[0] == "month_time_for":
-        return get_total_monthly_time_on_project(commands[1])
+        try:
+            month = int(commands[2])
+        except:
+            return get_total_monthly_time_on_project(commands[1])
+        return get_total_monthly_time_on_project(commands[1], month)
+
     elif commands[0] == "sync":
         return sync()
     else:
