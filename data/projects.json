@@ -1,104 +1,122 @@
 {
-    "SPD1": {
-        "estimated time": "00",
-        "total_spent_time": "5:1:47",
-        "details": "Systematic programming design course on Edx.",
-        "state": "OFF"
-    },
-    "datasci101": {
-        "estimated time": "unlimited",
-        "total_spent_time": "17:24:41",
-        "details": "the udacity course intro to datascience.",
-        "state": "OFF"
-    },
-    "supermarket": {
-        "estimated time": "00",
-        "total_spent_time": "97:38:35",
-        "details": "A project for work.",
-        "state": "OFF"
-    },
-    "codeforces": {
-        "estimated time": "All the time I spend praticing on CodeForces.com",
-        "total_spent_time": "0:0:18",
-        "details": "Unknown",
-        "state": "OFF"
-    },
-    "share_it": {
-        "estimated time": "For Shrouk. stationary market.",
-        "total_spent_time": "4:9:29",
-        "details": "Unknown",
-        "state": "OFF"
-    },
-    "ptc": {
-        "estimated time": "undefined",
-        "total_spent_time": "2:40:44",
-        "details": "Projects time manager tool.",
-        "state": "ON"
-    },
-    "djoser": {
-        "estimated time": "Work on the open source app. Djoser.",
-        "total_spent_time": "0:10:40",
-        "details": "3",
-        "state": "OFF"
-    },
-    "javaapplets": {
-        "estimated time": "3",
-        "total_spent_time": "6:52:0",
-        "details": "our oral exam reports",
-        "state": "OFF"
-    },
-    "micro_exam": {
-        "estimated time": "00",
-        "total_spent_time": "6:56:28",
-        "details": "Study for the college's final exam on microcontrollers.",
-        "state": "OFF"
-    },
-    "db2": {
-        "estimated time": "12h",
-        "total_spent_time": "9:4:3",
-        "details": "Studying for Database2 subject's exam",
-        "state": "OFF"
-    },
-    "html5-edx": {
-        "estimated time": "unlimited",
-        "total_spent_time": "1:19:0",
-        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
-        "state": "OFF"
-    },
     "sys-exam": {
-        "estimated time": "00",
+        "state": "OFF",
         "total_spent_time": "5:15:44",
         "details": "studying foe the college's final exam of the subject Systems Analysis and design.",
-        "state": "OFF"
+        "estimated time": "00"
     },
-    "javaapplets_exam": {
-        "estimated time": "00",
-        "total_spent_time": "3:24:21",
-        "details": "study for the final exam",
-        "state": "OFF"
-    },
-    "graphics": {
-        "estimated time": "00",
-        "total_spent_time": "0:40:48",
-        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
-        "state": "OFF"
-    },
-    "programmingapplications-exam": {
-        "estimated time": "Unknown",
-        "total_spent_time": "3:4:56",
-        "details": "my study for the final exam of the subject Programming Applications @ college.",
-        "state": "OFF"
+    "SPD1": {
+        "state": "OFF",
+        "total_spent_time": "5:1:52",
+        "details": "Systematic programming design course on Edx.",
+        "estimated time": "00"
     },
     "II-exam": {
-        "estimated time": "00",
+        "state": "OFF",
         "total_spent_time": "6:18:34",
         "details": "IndndustInsdustrial instrumentation subject study for the final exam",
-        "state": "OFF"
+        "estimated time": "00"
+    },
+    "html5-edx": {
+        "state": "OFF",
+        "total_spent_time": "1:20:57",
+        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
+        "estimated time": "unlimited"
+    },
+    "CS190.1X": {
+        "state": "OFF",
+        "total_spent_time": "0:2:40",
+        "details": "CS190.1x Scalable Machine Learning",
+        "estimated time": "Unknown"
+    },
+    "supermarket": {
+        "state": "OFF",
+        "total_spent_time": "300:01:01",
+        "details": "A project for work.",
+        "estimated time": "00"
+    },
+    "javaapplets_exam": {
+        "state": "OFF",
+        "total_spent_time": "3:24:21",
+        "details": "study for the final exam",
+        "estimated time": "00"
+    },
+    "shroukERP": {
+        "state": "OFF",
+        "total_spent_time": "7:52:13",
+        "details": "3Weeks",
+        "estimated time": "A supermarket management application."
+    },
+    "DDP": {
+        "state": "OFF",
+        "total_spent_time": "3:42:6",
+        "details": "Reading Django Design Patterns and best practices book.",
+        "estimated time": "Unknown"
+    },
+    "programmingapplications-exam": {
+        "state": "OFF",
+        "total_spent_time": "3:4:56",
+        "details": "my study for the final exam of the subject Programming Applications @ college.",
+        "estimated time": "Unknown"
+    },
+    "graphics": {
+        "state": "OFF",
+        "total_spent_time": "0:40:48",
+        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
+        "estimated time": "00"
     },
     "pocket": {
-        "estimated time": "5",
+        "state": "OFF",
         "total_spent_time": "5:23:24",
         "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
-        "state": "OFF"
+        "estimated time": "5"
+    },
+    "db2": {
+        "state": "OFF",
+        "total_spent_time": "9:4:3",
+        "details": "Studying for Database2 subject's exam",
+        "estimated time": "12h"
+    },
+    "micro_exam": {
+        "state": "OFF",
+        "total_spent_time": "6:56:28",
+        "details": "Study for the college's final exam on microcontrollers.",
+        "estimated time": "00"
+    },
+    "codeforces": {
+        "state": "OFF",
+        "total_spent_time": "0:0:18",
+        "details": "Unknown",
+        "estimated time": "All the time I spend praticing on CodeForces.com"
+    },
+    "djoser": {
+        "state": "OFF",
+        "total_spent_time": "0:10:40",
+        "details": "3",
+        "estimated time": "Work on the open source app. Djoser."
+    },
+    "ptc": {
+        "state": "OFF",
+        "total_spent_time": "4:33:33",
+        "details": "Projects time manager tool.",
+        "estimated time": "undefined"
+    },
+    "datasci101": {
+        "state": "OFF",
+        "total_spent_time": "27:59:20",
+        "details": "the udacity course intro to datascience.",
+        "estimated time": "unlimited"
+    },
+    "javaapplets": {
+        "state": "OFF",
+        "total_spent_time": "6:52:0",
+        "details": "our oral exam reports",
+        "estimated time": "3"
+    },
+    "share_it": {
+        "state": "OFF",
+        "total_spent_time": "6:51:55",
+        "details": "Unknown",
+        "estimated time": "For Shrouk. stationary market."
     }
 }
