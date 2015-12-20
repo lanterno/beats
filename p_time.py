@@ -67,6 +67,6 @@ class Time(object):
         end.minues(start)
         return end
 
-    def date():
+    def date(self):
         # 'yyyy-mm-dd'
         return str(datetime.now().date())
