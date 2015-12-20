@@ -25,7 +25,7 @@ def start_timer_on_project(p_name):
     now = Time()
     # CHANGE PROJECT STATE TO ON
     projects = FileManager.read('projects')
-    if projects.get(p_name) == None:
+    if not projects.get(p_name):
         print("We don't have a project with this name dear.")
         return 0
     projects.get(p_name)["state"] = "ON"
@@ -42,8 +42,11 @@ def start_timer_on_project(p_name):
     FileManager.update('settings', settings)
 
 
-def stop_timer_on_project():
-    now = Time()
+def stop_timer_on_project(time=None):
+    if time:
+        now = Time(str_time=time)
+    else:
+        now = Time()
     # GET PROJECT NAME.
     settings = FileManager.read('settings')
     p_name = settings["working on"]
@@ -90,16 +93,16 @@ def get_time_for_certain_day(p_name, date=Time.date()):
 
 def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month):
     all_logs = FileManager.read('logs/{}'.format(p_name))
-    month_logs = [log for log in all_logs if log.get('date', None) != None and
+    month_logs = [log for log in all_logs if log.get('date', None) and
                   int(log.get('date').split('-')[1]) == month]
     total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in month_logs]))
     print(total_time)
     return str(total_time)
 
 
-def sync(p_name='supermarket', spreadsheet='WorkSheet', month=Time.date()):
+def sync(p_name='cube', spreadsheet='WorkSheet', month=Time.date()):
     all_logs = FileManager.read('logs/{}'.format(p_name))
-    month_days = set([log['date'] for log in all_logs if log.get('date', None) != None and
+    month_days = set([log['date'] for log in all_logs if log.get('date', None) and
                       int(log.get('date').split('-')[1]) == 6])
     cells_time = {}
     for day_date in month_days:
@@ -136,6 +139,7 @@ def execute_from_command_line(commands):
         return get_time_for_certain_day(commands[1])
 
     elif commands[0] == "yesterday_time_for":
+        print('WARNING: not working properly.')
         if len(commands) == 3:
             return get_time_for_certain_day(commands[1], commands[2])
         return get_time_for_certain_day(commands[1])
