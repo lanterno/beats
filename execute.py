@@ -126,6 +126,8 @@ def execute_from_command_line(commands):
     elif commands[0] == "stop":
         print("Stoping timer...")
         print("Time now: " + str(Time()))
+        if len(commands) == 2:
+            stop_timer_on_project(commands[1])
         stop_timer_on_project()
 
     elif commands[0] == "list":
