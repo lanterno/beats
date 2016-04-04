@@ -1,254 +1,254 @@
 {
-    "djoser": {
-        "total_spent_time": "0:10:40",
+    "DDA691x": {
+        "details": "Delft design course.",
+        "total_spent_time": "1:8:49",
         "state": "OFF",
-        "details": "3",
-        "estimated time": "Work on the open source app. Djoser."
-    },
-    "school_IS": {
-        "total_spent_time": "8:54:41",
-        "state": "OFF",
-        "details": "College course -selective 3- where we study information systems.",
-        "estimated time": "Unknown"
+        "estimated time": "48"
     },
     "school_PE": {
+        "details": "School selectiveve course 2 -Power Electronics- 3rd year Mansoura eng. school.",
         "total_spent_time": "20:23:4",
         "state": "OFF",
-        "details": "School selectiveve course 2 -Power Electronics- 3rd year Mansoura eng. school.",
         "estimated time": "Unknown"
     },
-    "AhmedKhan": {
-        "total_spent_time": "0:0:0",
+    "learning_docker": {
+        "details": "learning by reading the book using docker written by Adrian Mouat. I got the book for free from oreilly newsletter as cristmas gift. ^_^ thanks Oreilly",
+        "total_spent_time": "4:38:18",
         "state": "OFF",
-        "details": "My own website XD",
-        "estimated time": "00"
+        "estimated time": "10H"
     },
     "db2": {
+        "details": "Studying for Database2 subject's exam",
         "total_spent_time": "9:4:3",
         "state": "OFF",
-        "details": "Studying for Database2 subject's exam",
         "estimated time": "12h"
     },
-    "codeforces": {
-        "total_spent_time": "0:0:18",
+    "html5-edx": {
+        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
+        "total_spent_time": "1:20:57",
         "state": "OFF",
-        "details": "Unknown",
-        "estimated time": "All the time I spend praticing on CodeForces.com"
+        "estimated time": "unlimited"
     },
-    "Khan": {
-        "total_spent_time": "0:13:8",
+    "datasci101": {
+        "details": "the udacity course intro to datascience.",
+        "total_spent_time": "29:3:21",
         "state": "OFF",
-        "details": "My own website XD",
-        "estimated time": "00"
-    },
-    "7.00x": {
-        "total_spent_time": "0:17:5",
-        "state": "OFF",
-        "details": "Edx Course: MITx: 7.00x Introduction to Biology - The Secret of Life",
-        "estimated time": "Unknown"
-    },
-    "webScraping": {
-        "total_spent_time": "1:24:32",
-        "state": "OFF",
-        "details": "Learning Web scraping, for now I'm just reading web scraping with python book by ryan mitchell.",
-        "estimated time": "Unknown"
-    },
-    "funcprog": {
-        "total_spent_time": "3:2:12",
-        "state": "OFF",
-        "details": "DelftX: FP101x Introduction to Functional Programming course ON Edx.",
-        "estimated time": "48:00:00"
-    },
-    "sw_arch": {
-        "total_spent_time": "0:31:15",
-        "state": "OFF",
-        "details": "UC3Mx: INF.1x The Software Architect Code: Building the Digital World -- ON EDX",
-        "estimated time": "Unknown"
+        "estimated time": "unlimited"
     },
     "sys-exam": {
+        "details": "studying foe the college's final exam of the subject Systems Analysis and design.",
         "total_spent_time": "5:15:44",
         "state": "OFF",
-        "details": "studying foe the college's final exam of the subject Systems Analysis and design.",
         "estimated time": "00"
     },
-    "CS190.1X": {
-        "total_spent_time": "0:2:40",
-        "state": "OFF",
-        "details": "CS190.1x Scalable Machine Learning",
-        "estimated time": "Unknown"
-    },
-    "sports": {
-        "total_spent_time": "0:17:31",
-        "state": "OFF",
-        "details": "Keeping track with my daily sport practice.",
-        "estimated time": "Daily"
-    },
     "school_networks2": {
+        "details": "2nd course in networks in Mansoura University CSED 4th year 1st term. ",
         "total_spent_time": "13:32:39",
         "state": "OFF",
-        "details": "2nd course in networks in Mansoura University CSED 4th year 1st term. ",
+        "estimated time": "Unknown"
+    },
+    "programmingapplications-exam": {
+        "details": "my study for the final exam of the subject Programming Applications @ college.",
+        "total_spent_time": "3:4:56",
+        "state": "OFF",
         "estimated time": "Unknown"
     },
     "javaapplets": {
+        "details": "our oral exam reports",
         "total_spent_time": "6:52:0",
         "state": "OFF",
-        "details": "our oral exam reports",
         "estimated time": "3"
     },
-    "school_comparch2": {
-        "total_spent_time": "16:43:32",
+    "ptc": {
+        "details": "Projects time manager tool.",
+        "total_spent_time": "5:3:10",
         "state": "OFF",
-        "details": "This is Computer Architecture2 subject in my final year at Eng. college Mansoura Uni.",
-        "estimated time": "Uknown"
-    },
-    "javaapplets_exam": {
-        "total_spent_time": "3:24:21",
-        "state": "OFF",
-        "details": "study for the final exam",
-        "estimated time": "00"
-    },
-    "DDA691x": {
-        "total_spent_time": "1:8:49",
-        "state": "OFF",
-        "details": "Delft design course.",
-        "estimated time": "48"
-    },
-    "II-exam": {
-        "total_spent_time": "6:18:34",
-        "state": "OFF",
-        "details": "IndndustInsdustrial instrumentation subject study for the final exam",
-        "estimated time": "00"
-    },
-    "learning_docker": {
-        "total_spent_time": "4:38:18",
-        "state": "OFF",
-        "details": "learning by reading the book using docker written by Adrian Mouat. I got the book for free from oreilly newsletter as cristmas gift. ^_^ thanks Oreilly",
-        "estimated time": "10H"
-    },
-    "html5-edx": {
-        "total_spent_time": "1:20:57",
-        "state": "OFF",
-        "details": "the edx course HTML5.1x Learn HTML5 from W3C",
-        "estimated time": "unlimited"
+        "estimated time": "undefined"
     },
     "mean_stack": {
+        "details": "MongoDBx: M101x Introduction to MongoDB using the MEAN Stack course on edx.",
         "total_spent_time": "3:5:35",
         "state": "OFF",
-        "details": "MongoDBx: M101x Introduction to MongoDB using the MEAN Stack course on edx.",
         "estimated time": "24h"
     },
-    "a7yaa": {
-        "total_spent_time": "78:28:46",
+    "sw_arch": {
+        "details": "UC3Mx: INF.1x The Software Architect Code: Building the Digital World -- ON EDX",
+        "total_spent_time": "0:31:15",
         "state": "OFF",
-        "details": "A freelance project. Owner: Ahmed El-werdani.",
-        "estimated time": "12"
-    },
-    "freelance": {
-        "total_spent_time": "98:34:21",
-        "state": "OFF",
-        "details": "Smallprojects and time spent on Finding freelance jobs.",
-        "estimated time": "Unknown"
-    },
-    "xgame": {
-        "total_spent_time": "4:13:40",
-        "state": "OFF",
-        "details": "My finalYear's project in college. We are making a game using Unity2D.",
-        "estimated time": "Unkown"
-    },
-    "ColWri2.2x": {
-        "total_spent_time": "0:0:0",
-        "state": "OFF",
-        "details": "studying this course: BerkeleyX: ColWri2.2x English Grammar and Essay Writing",
         "estimated time": "Unknown"
     },
     "SPD1": {
+        "details": "Systematic programming design course on Edx.",
         "total_spent_time": "5:1:52",
         "state": "OFF",
-        "details": "Systematic programming design course on Edx.",
         "estimated time": "00"
     },
-    "shroukERP": {
-        "total_spent_time": "9:6:54",
+    "funcprog": {
+        "details": "DelftX: FP101x Introduction to Functional Programming course ON Edx.",
+        "total_spent_time": "3:2:12",
         "state": "OFF",
-        "details": "A supermarket management application.",
-        "estimated time": "3Weeks."
+        "estimated time": "48:00:00"
     },
-    "cube": {
-        "total_spent_time": "1069:33:37",
+    "sports": {
+        "details": "Keeping track with my daily sport practice.",
+        "total_spent_time": "0:17:31",
         "state": "OFF",
-        "details": "work.",
-        "estimated time": "00"
+        "estimated time": "Daily"
     },
-    "school_ML": {
-        "total_spent_time": "19:18:42",
+    "djoser": {
+        "details": "3",
+        "total_spent_time": "0:10:40",
         "state": "OFF",
-        "details": "School Course in ML - Note: I added a couple of hours in a dumy date representing the 1 or 2 lectures I attended.",
+        "estimated time": "Work on the open source app. Djoser."
+    },
+    "ColWri2.2x": {
+        "details": "studying this course: BerkeleyX: ColWri2.2x English Grammar and Essay Writing",
+        "total_spent_time": "0:0:0",
+        "state": "OFF",
         "estimated time": "Unknown"
     },
-    "yesir": {
-        "total_spent_time": "117:8:31",
+    "javaapplets_exam": {
+        "details": "study for the final exam",
+        "total_spent_time": "3:24:21",
         "state": "OFF",
-        "details": "My first freelance project, I didn't get it yet but I got approached by the employer.",
-        "estimated time": "Unknown"
-    },
-    "graphics": {
-        "total_spent_time": "0:40:48",
-        "state": "OFF",
-        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
         "estimated time": "00"
     },
     "share_it": {
+        "details": "Unknown",
         "total_spent_time": "6:51:55",
         "state": "OFF",
-        "details": "Unknown",
         "estimated time": "For Shrouk. stationary market."
     },
-    "micro_exam": {
-        "total_spent_time": "6:56:28",
-        "state": "OFF",
-        "details": "Study for the college's final exam on microcontrollers.",
-        "estimated time": "00"
-    },
-    "datasci101": {
-        "total_spent_time": "29:3:21",
-        "state": "OFF",
-        "details": "the udacity course intro to datascience.",
-        "estimated time": "unlimited"
-    },
-    "pocket": {
-        "total_spent_time": "5:23:24",
-        "state": "OFF",
-        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
-        "estimated time": "5"
-    },
-    "mongo": {
-        "total_spent_time": "4:7:13",
-        "state": "OFF",
-        "details": "Studying the course M101P: MongoDB for Developers",
-        "estimated time": "Unknown"
-    },
     "DDP": {
+        "details": "Reading Django Design Patterns and best practices book.",
         "total_spent_time": "3:42:6",
         "state": "OFF",
-        "details": "Reading Django Design Patterns and best practices book.",
         "estimated time": "Unknown"
+    },
+    "cube": {
+        "details": "work.",
+        "total_spent_time": "1093:1:54",
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "shroukERP": {
+        "details": "A supermarket management application.",
+        "total_spent_time": "9:6:54",
+        "state": "OFF",
+        "estimated time": "3Weeks."
+    },
+    "Khan": {
+        "details": "My own website XD",
+        "total_spent_time": "0:13:8",
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "7.00x": {
+        "details": "Edx Course: MITx: 7.00x Introduction to Biology - The Secret of Life",
+        "total_spent_time": "0:17:5",
+        "state": "OFF",
+        "estimated time": "Unknown"
+    },
+    "a7yaa": {
+        "details": "A freelance project. Owner: Ahmed El-werdani.",
+        "total_spent_time": "78:28:46",
+        "state": "OFF",
+        "estimated time": "12"
+    },
+    "yesir": {
+        "details": "My first freelance project, I didn't get it yet but I got approached by the employer.",
+        "total_spent_time": "117:37:35",
+        "state": "OFF",
+        "estimated time": "Unknown"
+    },
+    "school_IS": {
+        "details": "College course -selective 3- where we study information systems.",
+        "total_spent_time": "8:54:41",
+        "state": "OFF",
+        "estimated time": "Unknown"
+    },
+    "school_ML": {
+        "details": "School Course in ML - Note: I added a couple of hours in a dumy date representing the 1 or 2 lectures I attended.",
+        "total_spent_time": "19:18:42",
+        "state": "OFF",
+        "estimated time": "Unknown"
+    },
+    "school_comparch2": {
+        "details": "This is Computer Architecture2 subject in my final year at Eng. college Mansoura Uni.",
+        "total_spent_time": "16:43:32",
+        "state": "OFF",
+        "estimated time": "Uknown"
+    },
+    "webScraping": {
+        "details": "Learning Web scraping, for now I'm just reading web scraping with python book by ryan mitchell.",
+        "total_spent_time": "1:24:32",
+        "state": "OFF",
+        "estimated time": "Unknown"
+    },
+    "AhmedKhan": {
+        "details": "My own website XD",
+        "total_spent_time": "0:0:0",
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "freelance": {
+        "details": "Smallprojects and time spent on Finding freelance jobs.",
+        "total_spent_time": "103:26:49",
+        "state": "ON",
+        "estimated time": "Unknown"
+    },
+    "pocket": {
+        "details": "a project for a school subject called systems analysis and design.. the project is called 'Pocket control' and it's about Expenses/income control and management ",
+        "total_spent_time": "5:23:24",
+        "state": "OFF",
+        "estimated time": "5"
     },
     "spark_training": {
+        "details": "Spark Training with Tamer abdel-rady.",
         "total_spent_time": "35:16:29",
         "state": "OFF",
-        "details": "Spark Training with Tamer abdel-rady.",
         "estimated time": "unknown"
     },
-    "ptc": {
-        "total_spent_time": "5:3:10",
+    "mongo": {
+        "details": "Studying the course M101P: MongoDB for Developers",
+        "total_spent_time": "7:15:36",
         "state": "OFF",
-        "details": "Projects time manager tool.",
-        "estimated time": "undefined"
-    },
-    "programmingapplications-exam": {
-        "total_spent_time": "3:4:56",
-        "state": "OFF",
-        "details": "my study for the final exam of the subject Programming Applications @ college.",
         "estimated time": "Unknown"
+    },
+    "codeforces": {
+        "details": "Unknown",
+        "total_spent_time": "0:0:18",
+        "state": "OFF",
+        "estimated time": "All the time I spend praticing on CodeForces.com"
+    },
+    "graphics": {
+        "details": "BerkeleyX: CS184.1x Foundations of Computer Graphics course.",
+        "total_spent_time": "0:40:48",
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "xgame": {
+        "details": "My finalYear's project in college. We are making a game using Unity2D.",
+        "total_spent_time": "7:48:43",
+        "state": "OFF",
+        "estimated time": "Unkown"
+    },
+    "CS190.1X": {
+        "details": "CS190.1x Scalable Machine Learning",
+        "total_spent_time": "0:2:40",
+        "state": "OFF",
+        "estimated time": "Unknown"
+    },
+    "micro_exam": {
+        "details": "Study for the college's final exam on microcontrollers.",
+        "total_spent_time": "6:56:28",
+        "state": "OFF",
+        "estimated time": "00"
+    },
+    "II-exam": {
+        "details": "IndndustInsdustrial instrumentation subject study for the final exam",
+        "total_spent_time": "6:18:34",
+        "state": "OFF",
+        "estimated time": "00"
     }
 }
