@@ -1,6 +1,6 @@
 from p_time import Time
 from fms import FileManager
-from spread import upload_to_spread_sheet
+# from spread import upload_to_spread_sheet
 from datetime import datetime
 
 
@@ -110,7 +110,8 @@ def sync(p_name='cube', spreadsheet='WorkSheet', month=Time.date()):
         cells_time.update(
             {cell_row: get_time_for_certain_day(p_name, date=day_date)})
     month = int(month.split('-')[1])
-    return upload_to_spread_sheet(p_name=p_name, spreadsheet=spreadsheet, month=month, cells_time=cells_time)
+    # return upload_to_spread_sheet(p_name=p_name, spreadsheet=spreadsheet, month=month, cells_time=cells_time)
+    return 0
 
 
 def execute_from_command_line(commands):
