@@ -91,10 +91,11 @@ def get_time_for_certain_day(p_name, date=Time.date()):
     return str(total_time)
 
 
-def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month):
+def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month, year=datetime.now().date().year):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_logs = [log for log in all_logs if log.get('date', None) and
-                  int(log.get('date').split('-')[1]) == month]
+                  int(log.get('date').split('-')[1]) == month]  # filtered by month
+    month_logs = [log for log in month_logs if log.get('date', None) and int(log.get('date').split('-')[0]) == year]
     total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in month_logs]))
     print(total_time)
     return str(total_time)
