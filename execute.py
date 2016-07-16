@@ -21,8 +21,11 @@ def create_project(p_name, details='', p_estimatedtime="Unknown"):
     print('project created.')
 
 
-def start_timer_on_project(p_name):
-    now = Time()
+def start_timer_on_project(p_name, time=None):
+    if time:
+        now = Time(str_time=time)
+    else:
+        now = Time()
     # CHANGE PROJECT STATE TO ON
     projects = FileManager.read('projects')
     if not projects.get(p_name):
