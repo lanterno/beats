@@ -125,15 +125,21 @@ def execute_from_command_line(commands):
 
     elif commands[0] == "start":
         print("Happy coding...")
-        print("Time now: " + str(Time()))
-        start_timer_on_project(commands[1])
+        if len(commands) == 3:
+            print("Time now: " + commands[1])
+            start_timer_on_project(commands[1], commands[2])
+        else:
+            print("Time now: " + commands[1])
+            start_timer_on_project(commands[1])
 
     elif commands[0] == "stop":
         print("Stoping timer...")
-        print("Time now: " + str(Time()))
         if len(commands) == 2:
             stop_timer_on_project(commands[1])
-        stop_timer_on_project()
+            print("Time now: " + commands[1])
+        else:
+            print("Time now: " + str(Time()))
+            stop_timer_on_project()
 
     elif commands[0] == "list":
         print("your projects are: " + str(list_projects()))
