@@ -21,6 +21,14 @@ def create_project(p_name, details='', p_estimatedtime="Unknown"):
     print('project created.')
 
 
+def get_status():
+    settings = FileManager.read('settings')
+    project_name = settings['working on']
+    projects = FileManager.read('projects')
+    status = projects.get(project_name)["state"]
+    print('last project: {} and its status: {}'.format(project_name, status))
+
+
 def start_timer_on_project(p_name, time=None):
     if time:
         now = Time(str_time=time)
@@ -57,8 +65,7 @@ def stop_timer_on_project(time=None):
     # UPDATE THE LOG.
     logs = FileManager.read('logs/{}'.format(p_name))
     if logs[-1]["end"] != "Not yet.":
-        print("Error. Either you don't have a running log or\
-              the program is writing on the wrong log instance.")
+        print("Error. Either you don't have a running log or the program is writing on the wrong log instance.")
         return 0
     logs[-1]["end"] = str(now)
     FileManager.update('logs/{}'.format(p_name), logs)
@@ -126,10 +133,10 @@ def execute_from_command_line(commands):
     elif commands[0] == "start":
         print("Happy coding...")
         if len(commands) == 3:
-            print("Time now: " + commands[1])
+            print("Time now: " + commands[2])
             start_timer_on_project(commands[1], commands[2])
         else:
-            print("Time now: " + commands[1])
+            print("Time now: " + str(Time()))
             start_timer_on_project(commands[1])
 
     elif commands[0] == "stop":
@@ -168,5 +175,8 @@ def execute_from_command_line(commands):
 
     elif commands[0] == "sync":
         return sync()
+
+    elif commands[0] == "status":
+        return get_status()
     else:
         print("Wrong Command")
