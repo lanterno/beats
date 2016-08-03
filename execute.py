@@ -58,6 +58,7 @@ def stop_timer_on_project(time=None):
         now = Time(str_time=time)
     else:
         now = Time()
+    print("stopping Time: " + str(now))
     # GET PROJECT NAME.
     settings = FileManager.read('settings')
     p_name = settings["working on"]
@@ -143,9 +144,7 @@ def execute_from_command_line(commands):
         print("Stoping timer...")
         if len(commands) == 2:
             stop_timer_on_project(commands[1])
-            print("Time now: " + commands[1])
         else:
-            print("Time now: " + str(Time()))
             stop_timer_on_project()
 
     elif commands[0] == "list":
