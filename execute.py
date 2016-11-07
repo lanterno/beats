@@ -168,9 +168,14 @@ def execute_from_command_line(commands):
     elif commands[0] == "month_time_for":
         try:
             month = int(commands[2])
+            try:
+                year = int(commands[3])
+                return get_total_monthly_time_on_project(commands[1], month, year)
+            except:
+                return get_total_monthly_time_on_project(commands[1], month)
+
         except:
             return get_total_monthly_time_on_project(commands[1])
-        return get_total_monthly_time_on_project(commands[1], month)
 
     elif commands[0] == "sync":
         return sync()
