@@ -36,13 +36,13 @@ class Time(object):
         return "{}:{}:{}".format(self.hours, self.minutes, self.seconds)
 
     def set_seconds(self, seconds):
-        self.hours = int(seconds/3600)
-        self.minutes = int(seconds/60) - self.hours*60
+        self.hours = int(seconds / 3600)
+        self.minutes = int(seconds / 60) - self.hours * 60
         self.seconds = seconds % 60
         return self
 
     def get_seconds(self):
-        return self.hours*3600 + self.minutes*60 + self.seconds
+        return self.hours * 3600 + self.minutes * 60 + self.seconds
 
     def add_time(self, t):
         return self.set_seconds(self.get_seconds() + t.get_seconds())
