@@ -681,9 +681,9 @@
     },
     {
         "end": "15:29:30",
+        "details": "Testing to see if extra fields are saved.",
         "date": "2016-05-26",
-        "start": "14:35:0",
-        "details": "Testing to see if extra fields are saved."
+        "start": "14:35:0"
     },
     {
         "end": "16:46:24",
@@ -1792,9 +1792,9 @@
     },
     {
         "end": "20:37:32",
+        "details": "forgot to stop it. assuming 10 minutes",
         "date": "2016-09-01",
-        "start": "20:27:32",
-        "details": "forgot to stop it. assuming 10 minutes"
+        "start": "20:27:32"
     },
     {
         "end": "21:33:17",
@@ -1898,9 +1898,9 @@
     },
     {
         "end": "21:32:53",
+        "details": "forgot to stop it. assuming 10 minutes",
         "date": "2016-09-05",
-        "start": "21:22:53",
-        "details": "forgot to stop it. assuming 10 minutes"
+        "start": "21:22:53"
     },
     {
         "end": "12:20:36",
@@ -2014,9 +2014,9 @@
     },
     {
         "end": "20:21:18",
+        "details": "forgot to stop it. assuming 10 minutes",
         "date": "2016-09-09",
-        "start": "20:11:18",
-        "details": "forgot to stop it. assuming 10 minutes"
+        "start": "20:11:18"
     },
     {
         "end": "15:26:41",
@@ -4892,5 +4892,10 @@
         "end": "17:40:0",
         "date": "2017-03-06",
         "start": "16:57:43"
+    },
+    {
+        "end": "22:58:42",
+        "date": "2017-03-09",
+        "start": "21:37:2"
     }
 ]
