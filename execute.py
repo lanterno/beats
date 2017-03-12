@@ -127,60 +127,61 @@ def sync(p_name='cube', spreadsheet='WorkSheet', month=Time.date()):
 
 
 def execute_from_command_line(commands):
-    if commands[0] == "createp":
+    action = commands.pop(0)
+    if action == "createp":
         print("Creating project...")
-        create_project(commands[1], commands[2], commands[3])
+        create_project(*commands)
 
-    elif commands[0] == "start":
+    elif action == "start":
         print("Happy coding...")
-        if len(commands) == 3:
-            print("Time now: " + commands[2])
-            start_timer_on_project(commands[1], commands[2])
+        if len(commands) == 2:
+            print("Time now: " + commands[1])
+            start_timer_on_project(*commands)
         else:
             print("Time now: " + str(Time()))
             start_timer_on_project(commands[1])
 
-    elif commands[0] == "stop":
+    elif action == "stop":
         print("Stoping timer...")
-        if len(commands) == 2:
-            stop_timer_on_project(commands[1])
+        if len(commands) == 1:
+            stop_timer_on_project(*commands)
         else:
             stop_timer_on_project()
 
-    elif commands[0] == "list":
+    elif action == "list":
         print("your projects are: " + str(list_projects()))
 
-    elif commands[0] == "total_time_for":
+    elif action == "total_time_for":
         print("Not implemented Yet.")
-    elif commands[0] == "today_time_for":
-        if len(commands) == 3:
-            return get_time_for_certain_day(commands[1], commands[2])
-        return get_time_for_certain_day(commands[1])
+    elif action == "today_time_for":
+        if len(commands) == 2:
+            return get_time_for_certain_day(*commands)
+        return get_time_for_certain_day(*commands)
 
-    elif commands[0] == "yesterday_time_for":
+    elif action == "yesterday_time_for":
         print('WARNING: not working properly.')
-        if len(commands) == 3:
-            return get_time_for_certain_day(commands[1], commands[2])
-        return get_time_for_certain_day(commands[1])
+        if len(commands) == 2:
+            return get_time_for_certain_day(*commands)
+        return get_time_for_certain_day(*commands)
 
-    elif commands[0] == "date":
+    elif action == "date":
         print(Time.date())
-    elif commands[0] == "month_time_for":
+    elif action == "month_time_for":
         try:
-            month = int(commands[2])
+            month = int(commands[1])
             try:
-                year = int(commands[3])
-                return get_total_monthly_time_on_project(commands[1], month, year)
+                year = int(commands[2])
+                return get_total_monthly_time_on_project(commands[0], month, year)
             except:
-                return get_total_monthly_time_on_project(commands[1], month)
+                return get_total_monthly_time_on_project(commands[0], month)
 
         except:
-            return get_total_monthly_time_on_project(commands[1])
+            return get_total_monthly_time_on_project(commands[0])
 
-    elif commands[0] == "sync":
+    elif action == "sync":
         return sync()
 
-    elif commands[0] == "status":
+    elif action == "status":
         return get_status()
     else:
         print("Wrong Command")
