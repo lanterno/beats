@@ -135,11 +135,11 @@ def execute_from_command_line(commands):
     elif action == "start":
         print("Happy coding...")
         if len(commands) == 2:
-            print("Time now: " + commands[1])
+            print("Time now: " + commands[0])
             start_timer_on_project(*commands)
         else:
             print("Time now: " + str(Time()))
-            start_timer_on_project(commands[1])
+            start_timer_on_project(*commands)
 
     elif action == "stop":
         print("Stoping timer...")
