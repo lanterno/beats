@@ -91,7 +91,7 @@ def stop_timer_on_project(time=None):
 
 def list_projects():
     projects = FileManager.read('projects')
-    return [project for project in projects]
+    return [project for project in projects if not projects[project]['archived']]
 
 
 def get_time_for_certain_day(p_name, date=Time.date()):
