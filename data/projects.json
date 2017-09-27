@@ -32,7 +32,7 @@
         "state": "OFF",
         "estimated time": "This isn't a project. I created it to keep track of the time I send reading or studying about something. I think will be mainly python or django articles and videos and something that's generally related to programming.",
         "archived": false,
-        "total_spent_time": "44:31:55"
+        "total_spent_time": "46:18:53"
     },
     "mongo": {
         "details": "Studying the course M101P: MongoDB for Developers",
@@ -248,7 +248,7 @@
         "state": "OFF",
         "estimated time": "00",
         "archived": false,
-        "total_spent_time": "2193:5:1"
+        "total_spent_time": "2230:54:8"
     },
     "school_micro2": {
         "details": "a course in college Mansoura Uni. in MicroControllers Given by Mohamed El-sherif.",
@@ -297,7 +297,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": true,
-        "total_spent_time": "1379:30:10"
+        "total_spent_time": "1477:42:18"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
