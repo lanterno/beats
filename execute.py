@@ -22,6 +22,7 @@ def create_project(p_name, details='', p_estimatedtime="Unknown"):
     print('project created.')
 
 
+@hug.get('/status/')
 def get_status():
     settings = FileManager.read('settings')
     project_name = settings['working on']
