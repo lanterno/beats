@@ -297,7 +297,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": true,
-        "total_spent_time": "1503:38:29"
+        "total_spent_time": "1538:13:34"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -355,7 +355,7 @@
     },
     "ptc": {
         "details": "Projects time manager tool.",
-        "state": "OFF",
+        "state": "ON",
         "estimated time": "undefined",
         "archived": false,
         "total_spent_time": "8:16:5"
@@ -488,6 +488,6 @@
         "estimated time": "Unknown",
         "details": "My full-time work at systematic computer science (Partner of STCS/STC) -> cloud.stc.com.sa",
         "state": "OFF",
-        "total_spent_time": "0:0:0"
+        "total_spent_time": "35:56:0"
     }
 }
