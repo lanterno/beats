@@ -11,6 +11,7 @@ simplejson = "*"
 gspread = "*"
 "oauth2client" = "*"
 hug = "*"
+uwsgi = "*"
 
 
 [dev-packages]
