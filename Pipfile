@@ -1,0 +1,19 @@
+[[source]]
+
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+
+[packages]
+
+simplejson = "*"
+gspread = "*"
+"oauth2client" = "*"
+hug = "*"
+
+
+[dev-packages]
+
+ipython = "*"
+pdbpp = "*"
