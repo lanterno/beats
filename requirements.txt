@@ -3,3 +3,4 @@ ipython
 simplejson
 gspread
 oauth2client
+hug

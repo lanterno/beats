@@ -1,3 +1,4 @@
+import hug
 from p_time import Time
 from fms import FileManager
 # from spread import upload_to_spread_sheet
@@ -29,6 +30,7 @@ def get_status():
     print('last project: {} and its status: {}'.format(project_name, status))
 
 
+@hug.get('/projects/start/', examples='p_name=ptc&time=14:20:0')
 def start_timer_on_project(p_name, time=None):
     if time:
         now = Time(str_time=time)
@@ -53,6 +55,7 @@ def start_timer_on_project(p_name, time=None):
     FileManager.update('settings', settings)
 
 
+@hug.get('/projects/stop/', examples='time=16:20:0')
 def stop_timer_on_project(time=None):
     if time:
         now = Time(str_time=time)
@@ -89,6 +92,8 @@ def stop_timer_on_project(time=None):
     FileManager.update('projects', projects)
 
 
+@hug.get('/projects/')
+@hug.cli()
 def list_projects():
     projects = FileManager.read('projects')
     return [project for project in projects if not projects[project].get('archived')]
@@ -185,3 +190,6 @@ def execute_from_command_line(commands):
         return get_status()
     else:
         print("Wrong Command")
+
+if __name__ == "__main__":
+    list_projects.interface.cli()
