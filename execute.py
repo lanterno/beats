@@ -1,9 +1,13 @@
 import hug
+import os
+import sys
 from app.p_time import Time
 from app.fms import FileManager
 # from spread import upload_to_spread_sheet
 from datetime import datetime
 
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def create_project(p_name, details='', p_estimatedtime="Unknown"):
     project = {
