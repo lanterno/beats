@@ -1,4 +1,4 @@
-from p_time import Time
+from .p_time import Time
 
 
 class Log(object):
