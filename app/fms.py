@@ -8,13 +8,15 @@ Author:
 import json
 import simplejson
 
+from .settings import BASE_DIR
+
 
 class FileManager(object):
 
     '''File manager to read or write to files with Json objects.'''
 
     def read(fname):
-        with open('../data/' + fname + '.json', 'r') as p_file:
+        with open(BASE_DIR + '/data/' + fname + '.json', 'r') as p_file:
             objects = json.load(p_file)
         return objects
 

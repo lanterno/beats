@@ -9,6 +9,8 @@ Author: Zee93
 import json
 import simplejson
 
+from .settings import BASE_DIR
+
 
 class ProjectsManager(object):
 
@@ -16,12 +18,12 @@ class ProjectsManager(object):
         pass
 
     def read(cls, fname='projects'):
-        with open('../data/' + fname + '.json', 'r+') as p_file:
+        with open(BASE_DIR + '/data/' + fname + '.json', 'r+') as p_file:
             projects = json.load(p_file)
         return projects
 
     def update(projects, fname='projects'):
-        with open('../data/' + fname + '.json', 'r+') as p_file:
+        with open(BASE_DIR + '/data/' + fname + '.json', 'r+') as p_file:
             p_file.seek(0)
             p_file.truncate()
             p_file.write(simplejson.dumps(projects, indent=4))
