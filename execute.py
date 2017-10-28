@@ -10,7 +10,7 @@ from app.fms import FileManager
 from datetime import datetime
 
 
-@hug.get('/projects/create/', examples=['?p_name=proj&details="details here.."&p_estimatedtime=44hours'])
+@hug.get('/projects/create/', examples=['p_name=proj&details="details here.."&p_estimatedtime=44hours'])
 def create_project(p_name, details='', p_estimatedtime="Unknown"):
     project = {
         'estimated time': p_estimatedtime,
@@ -37,7 +37,7 @@ def get_status():
     print('last project: {} and its status: {}'.format(project_name, status))
 
 
-@hug.get('/projects/start/', examples='?p_name=ptc&time=14:20:0')
+@hug.get('/projects/start/', examples='p_name=ptc&time=14:20:0')
 def start_timer_on_project(p_name, time=None):
     if time:
         now = Time(str_time=time)
@@ -62,7 +62,7 @@ def start_timer_on_project(p_name, time=None):
     FileManager.update('settings', settings)
 
 
-@hug.get('/projects/stop/', examples='?time=16:20:0')
+@hug.get('/projects/stop/', examples='time=16:20:0')
 def stop_timer_on_project(time=None):
     if time:
         now = Time(str_time=time)
@@ -106,7 +106,7 @@ def list_projects():
     return [project for project in projects if not projects[project].get('archived')]
 
 
-@hug.get('/day_time/', examples=['?p_name=proj&date=2017-06-07'])
+@hug.get('/day_time/', examples=['p_name=proj&date=2017-06-07'])
 def get_time_for_certain_day(p_name, date=Time.date()):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     day_logs = [log for log in all_logs if log.get('date', None) == date]
@@ -115,7 +115,7 @@ def get_time_for_certain_day(p_name, date=Time.date()):
     return str(total_time)
 
 
-@hug.get('/month_time/', examples=['?p_name=proj&month=6&year=2017'])
+@hug.get('/month_time/', examples=['p_name=proj&month=6&year=2017'])
 def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month, year=datetime.now().date().year):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_logs = [log for log in all_logs if log.get('date', None) and
@@ -126,7 +126,7 @@ def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month,
     return str(total_time)
 
 
-@hug.get('/sync/', examples=['?p_name=proj&spreadsheet=WorkSheet&month=6'])
+@hug.get('/sync/', examples=['p_name=proj&spreadsheet=WorkSheet&month=6'])
 def sync(p_name='cube', spreadsheet='WorkSheet', month=datetime.now().date().month):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_days = set([log['date'] for log in all_logs if log.get('date', None) and
