@@ -297,7 +297,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": true,
-        "total_spent_time": "1538:13:34"
+        "total_spent_time": "1551:6:26"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -355,10 +355,10 @@
     },
     "ptc": {
         "details": "Projects time manager tool.",
-        "state": "ON",
+        "state": "OFF",
         "estimated time": "undefined",
         "archived": false,
-        "total_spent_time": "16:46:45"
+        "total_spent_time": "17:43:12"
     },
     "school_ML": {
         "details": "School Course in ML - Note: I added a couple of hours in a dumy date representing the 1 or 2 lectures I attended.",
