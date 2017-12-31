@@ -32,7 +32,7 @@
         "state": "OFF",
         "estimated time": "This isn't a project. I created it to keep track of the time I send reading or studying about something. I think will be mainly python or django articles and videos and something that's generally related to programming.",
         "archived": false,
-        "total_spent_time": "46:26:37"
+        "total_spent_time": "46:46:37"
     },
     "mongo": {
         "details": "Studying the course M101P: MongoDB for Developers",
@@ -297,7 +297,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": true,
-        "total_spent_time": "1551:6:26"
+        "total_spent_time": "1635:15:22"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -488,6 +488,6 @@
         "estimated time": "Unknown",
         "details": "My full-time work at systematic computer science (Partner of STCS/STC) -> cloud.stc.com.sa",
         "state": "OFF",
-        "total_spent_time": "35:56:0"
+        "total_spent_time": "134:30:58"
     }
 }
