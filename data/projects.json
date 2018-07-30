@@ -3,7 +3,7 @@
         "details": "MITx: 6.008.1x Computational Probability and Inference",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:47:48"
     },
     "school_comparch2": {
@@ -32,13 +32,13 @@
         "state": "OFF",
         "estimated time": "This isn't a project. I created it to keep track of the time I send reading or studying about something. I think will be mainly python or django articles and videos and something that's generally related to programming.",
         "archived": false,
-        "total_spent_time": "46:46:37"
+        "total_spent_time": "92:46:43"
     },
     "mongo": {
         "details": "Studying the course M101P: MongoDB for Developers",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "18:49:21"
     },
     "xgame": {
@@ -52,21 +52,21 @@
         "details": "the edx course HTML5.1x Learn HTML5 from W3C",
         "state": "OFF",
         "estimated time": "unlimited",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "1:20:57"
     },
     "CYBER501x": {
         "details": "RITx: CYBER501x Cybersecurity Fundamentals on Edx.org",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "1:8:19"
     },
     "funcprog": {
         "details": "DelftX: FP101x Introduction to Functional Programming course ON Edx.",
         "state": "OFF",
         "estimated time": "48:00:00",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "3:2:12"
     },
     "school_DS": {
@@ -87,7 +87,7 @@
         "details": "CS190.1x Scalable Machine Learning",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:2:40"
     },
     "micro_exam": {
@@ -108,7 +108,7 @@
         "details": "Unknown",
         "state": "OFF",
         "estimated time": "All the time I spend praticing on CodeForces.com",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:0:18"
     },
     "II-exam": {
@@ -122,14 +122,14 @@
         "details": "Work on the open source app. Djoser.",
         "state": "OFF",
         "estimated time": "3",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:10:40"
     },
     "crypto": {
         "details": "Bitcoin and Cryptocurrency Technologies Course By Princeton University On Coursera",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:0:0"
     },
     "pocket": {
@@ -143,7 +143,7 @@
         "details": "Reading Django Design Patterns and best practices book.",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "3:42:6"
     },
     "yesir": {
@@ -157,7 +157,7 @@
         "details": "the udacity course intro to datascience.",
         "state": "OFF",
         "estimated time": "unlimited",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "29:3:21"
     },
     "graphics": {
@@ -171,7 +171,7 @@
         "details": "Introduction to Food and Health course from Stanford on Coursera",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:30:0"
     },
     "programmingapplications-exam": {
@@ -185,19 +185,19 @@
         "details": "Studying the course algorithms design and analysis part1 By Stanford @ coursera",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:29:55"
     },
     "torrent2direct": {
         "details": "A project that aims to help users convert torrent links to direct links.",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "1:8:30"
     },
-    "AhmedKhan": {
-        "details": "My own website XD",
-        "state": "OFF",
+    "tinkering": {
+        "details": "Playing with different projects",
+        "state": "ON",
         "estimated time": "00",
         "archived": false,
         "total_spent_time": "0:0:0"
@@ -206,7 +206,7 @@
         "details": "MITx course on Edx: Advanced Software Construction in Java",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "2:35:46"
     },
     "shroukERP": {
@@ -220,20 +220,21 @@
         "details": "Delft design course.",
         "state": "OFF",
         "estimated time": "48",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "2:49:53"
     },
     "learning_docker": {
         "details": "learning by reading the book using docker written by Adrian Mouat. I got the book for free from oreilly newsletter as cristmas gift. ^_^ thanks Oreilly",
         "state": "OFF",
         "estimated time": "10H",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "4:38:18"
     },
     "15.071x": {
-        "details": "Unknown",
+        "details": "edx: 15.071X, THE ANALYTICS EDGE!",
         "state": "OFF",
-        "estimated time": "edx: 15.071X, THE ANALYTICS EDGE!",
+        "estimated time": "Unknown",
+        "archived": true,
         "total_spent_time": "2:1:12"
     },
     "7.00x": {
@@ -247,7 +248,7 @@
         "details": "work.",
         "state": "OFF",
         "estimated time": "00",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "2264:16:36"
     },
     "school_micro2": {
@@ -275,7 +276,7 @@
         "details": "MITx course on edx: Mobile Application Experiences",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:57:4"
     },
     "cls": {
@@ -289,41 +290,42 @@
         "details": "Systematic programming design course on Edx.",
         "state": "OFF",
         "estimated time": "00",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "5:1:52"
     },
     "freelance": {
         "details": "Smallprojects and time spent on Finding freelance jobs.",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": true,
-        "total_spent_time": "1635:15:22"
+        "archived": false,
+        "total_spent_time": "1957:16:53"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "1:31:31"
     },
     "Khan": {
         "details": "My own website XD",
         "state": "OFF",
         "estimated time": "00",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:26:16"
     },
     "reading": {
         "details": "Time reading general non technical books",
         "state": "OFF",
         "estimated time": "Unknown",
+        "archived": false,
         "total_spent_time": "0:10:14"
     },
     "sw_arch": {
         "details": "UC3Mx: INF.1x The Software Architect Code: Building the Digital World -- ON EDX",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:31:15"
     },
     "sheetu": {
@@ -331,13 +333,13 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "1:44:50"
+        "total_spent_time": "3:37:27"
     },
     "mean_stack": {
         "details": "MongoDBx: M101x Introduction to MongoDB using the MEAN Stack course on edx.",
         "state": "OFF",
         "estimated time": "24h",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "3:5:35"
     },
     "a7yaa": {
@@ -351,6 +353,7 @@
         "details": "Estimation for a new project similar to Ahyaa -> More work on the project is possible if we got accepted.",
         "state": "OFF",
         "estimated time": "Unknown",
+        "archived": true,
         "total_spent_time": "1:56:1"
     },
     "ptc": {
@@ -358,7 +361,7 @@
         "state": "OFF",
         "estimated time": "undefined",
         "archived": false,
-        "total_spent_time": "17:43:12"
+        "total_spent_time": "17:58:9"
     },
     "school_ML": {
         "details": "School Course in ML - Note: I added a couple of hours in a dumy date representing the 1 or 2 lectures I attended.",
@@ -371,7 +374,7 @@
         "details": "studying this course: BerkeleyX: ColWri2.2x English Grammar and Essay Writing",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:0:0"
     },
     "school_microprocessor": {
@@ -420,14 +423,14 @@
         "details": "MITx: 6.005.1x Software Construction in Java on Edx.org",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "6:51:43"
     },
     "6.302.0x": {
         "details": "MITx: 6.302.0x Introduction to Control System Design \u2013 A First Look On EdX",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "0:0:0"
     },
     "spark_training": {
@@ -441,7 +444,7 @@
         "details": "Unknown",
         "state": "OFF",
         "estimated time": "Freelance project for creating an Authentication Server. this project is for 750 USD after freelancer.com fees.",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "2:19:19"
     },
     "wallapp": {
@@ -462,7 +465,7 @@
         "details": "Learning Web scraping, for now I'm just reading web scraping with python book by ryan mitchell.",
         "state": "OFF",
         "estimated time": "Unknown",
-        "archived": false,
+        "archived": true,
         "total_spent_time": "3:22:29"
     },
     "school_PE": {
@@ -476,18 +479,28 @@
         "estimated time": "Unknown",
         "details": "Study of course CaltechX: CS1156x Learning From Data (introductory Machine Learning course)",
         "state": "OFF",
+        "archived": true,
         "total_spent_time": "0:14:9"
     },
-    "kal": {
+    "calender": {
         "estimated time": "Unknown",
-        "details": "My smart calender app",
+        "details": "My smart calender app named kal",
         "state": "OFF",
+        "archived": false,
         "total_spent_time": "1:30:0"
     },
     "stc": {
         "estimated time": "Unknown",
         "details": "My full-time work at systematic computer science (Partner of STCS/STC) -> cloud.stc.com.sa",
         "state": "OFF",
-        "total_spent_time": "134:30:58"
+        "archived": false,
+        "total_spent_time": "941:2:0"
+    },
+    "LFS161x": {
+        "estimated time": "Unknown",
+        "details": "LinuxFoundationX: LFS161x  Introduction to DevOps: Transforming and Improving Operations",
+        "state": "OFF",
+        "archived": true,
+        "total_spent_time": "0:0:0"
     }
 }
