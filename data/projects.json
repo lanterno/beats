@@ -32,7 +32,7 @@
         "state": "OFF",
         "estimated time": "This isn't a project. I created it to keep track of the time I send reading or studying about something. I think will be mainly python or django articles and videos and something that's generally related to programming.",
         "archived": false,
-        "total_spent_time": "92:46:43"
+        "total_spent_time": "94:12:25"
     },
     "mongo": {
         "details": "Studying the course M101P: MongoDB for Developers",
@@ -197,10 +197,10 @@
     },
     "tinkering": {
         "details": "Playing with different projects",
-        "state": "ON",
+        "state": "OFF",
         "estimated time": "00",
         "archived": false,
-        "total_spent_time": "0:0:0"
+        "total_spent_time": "1:56:43"
     },
     "6.005.2x": {
         "details": "MITx course on Edx: Advanced Software Construction in Java",
@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "1957:16:53"
+        "total_spent_time": "2035:37:34"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -361,7 +361,7 @@
         "state": "OFF",
         "estimated time": "undefined",
         "archived": false,
-        "total_spent_time": "17:58:9"
+        "total_spent_time": "18:26:35"
     },
     "school_ML": {
         "details": "School Course in ML - Note: I added a couple of hours in a dumy date representing the 1 or 2 lectures I attended.",
@@ -494,13 +494,37 @@
         "details": "My full-time work at systematic computer science (Partner of STCS/STC) -> cloud.stc.com.sa",
         "state": "OFF",
         "archived": false,
-        "total_spent_time": "941:2:0"
+        "total_spent_time": "964:31:36"
     },
     "LFS161x": {
         "estimated time": "Unknown",
         "details": "LinuxFoundationX: LFS161x  Introduction to DevOps: Transforming and Improving Operations",
         "state": "OFF",
         "archived": true,
+        "total_spent_time": "0:0:0"
+    },
+    "webee": {
+        "estimated time": "unknown",
+        "details": "unkown",
+        "state": "OFF",
+        "total_spent_time": "0:46:43"
+    },
+    "6.034": {
+        "estimated time": "unknown",
+        "details": "MIT's course for Artificial Intelligence",
+        "state": "OFF",
+        "total_spent_time": "4:45:57"
+    },
+    "AGI": {
+        "estimated time": "Unknown",
+        "details": "",
+        "state": "OFF",
+        "total_spent_time": "1:5:21"
+    },
+    "edxgator": {
+        "estimated time": "Unknown",
+        "details": "Edx course aggregator project",
+        "state": "ON",
         "total_spent_time": "0:0:0"
     }
 }
