@@ -32,7 +32,7 @@
         "state": "OFF",
         "estimated time": "This isn't a project. I created it to keep track of the time I send reading or studying about something. I think will be mainly python or django articles and videos and something that's generally related to programming.",
         "archived": false,
-        "total_spent_time": "94:12:25"
+        "total_spent_time": "96:45:6"
     },
     "mongo": {
         "details": "Studying the course M101P: MongoDB for Developers",
@@ -200,7 +200,7 @@
         "state": "OFF",
         "estimated time": "00",
         "archived": false,
-        "total_spent_time": "1:56:43"
+        "total_spent_time": "3:34:18"
     },
     "6.005.2x": {
         "details": "MITx course on Edx: Advanced Software Construction in Java",
@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2035:37:34"
+        "total_spent_time": "2144:46:13"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -333,7 +333,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "3:37:27"
+        "total_spent_time": "8:40:30"
     },
     "mean_stack": {
         "details": "MongoDBx: M101x Introduction to MongoDB using the MEAN Stack course on edx.",
@@ -524,7 +524,13 @@
     "edxgator": {
         "estimated time": "Unknown",
         "details": "Edx course aggregator project",
-        "state": "ON",
-        "total_spent_time": "0:0:0"
+        "state": "OFF",
+        "total_spent_time": "7:16:42"
+    },
+    "korean": {
+        "estimated time": "Unknown",
+        "details": "Learning the korean language",
+        "state": "OFF",
+        "total_spent_time": "0:24:59"
     }
 }
