@@ -29,10 +29,10 @@
     },
     "free_learning": {
         "details": "Uknown",
-        "state": "OFF",
+        "state": "ON",
         "estimated time": "This isn't a project. I created it to keep track of the time I send reading or studying about something. I think will be mainly python or django articles and videos and something that's generally related to programming.",
         "archived": false,
-        "total_spent_time": "98:14:14"
+        "total_spent_time": "99:34:32"
     },
     "mongo": {
         "details": "Studying the course M101P: MongoDB for Developers",
@@ -295,10 +295,10 @@
     },
     "freelance": {
         "details": "Smallprojects and time spent on Finding freelance jobs.",
-        "state": "OFF",
+        "state": "ON",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2166:53:40"
+        "total_spent_time": "2228:45:30"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -333,7 +333,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "8:40:30"
+        "total_spent_time": "9:47:30"
     },
     "mean_stack": {
         "details": "MongoDBx: M101x Introduction to MongoDB using the MEAN Stack course on edx.",
@@ -525,7 +525,7 @@
         "estimated time": "Unknown",
         "details": "Edx course aggregator project",
         "state": "OFF",
-        "total_spent_time": "7:16:42"
+        "total_spent_time": "8:35:8"
     },
     "korean": {
         "estimated time": "Unknown",
