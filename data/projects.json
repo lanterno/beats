@@ -295,10 +295,10 @@
     },
     "freelance": {
         "details": "Smallprojects and time spent on Finding freelance jobs.",
-        "state": "ON",
+        "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2228:45:30"
+        "total_spent_time": "2235:6:7"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -532,5 +532,11 @@
         "details": "Learning the korean language",
         "state": "OFF",
         "total_spent_time": "0:24:59"
+    },
+    "backmarket": {
+        "estimated time": "Unknown",
+        "details": "My new work home. :).. hopefully :D",
+        "state": "OFF",
+        "total_spent_time": "36:9:4"
     }
 }
