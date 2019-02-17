@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2236:28:33"
+        "total_spent_time": "2267:7:32"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -525,7 +525,7 @@
         "estimated time": "Unknown",
         "details": "Edx course aggregator project",
         "state": "OFF",
-        "total_spent_time": "8:35:8"
+        "total_spent_time": "19:41:20"
     },
     "korean": {
         "estimated time": "Unknown",
@@ -537,6 +537,6 @@
         "estimated time": "Unknown",
         "details": "My new work home. :).. hopefully :D",
         "state": "ON",
-        "total_spent_time": "47:26:59"
+        "total_spent_time": "195:30:16"
     }
 }
