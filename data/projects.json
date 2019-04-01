@@ -197,10 +197,10 @@
     },
     "tinkering": {
         "details": "Playing with different projects",
-        "state": "ON",
+        "state": "OFF",
         "estimated time": "00",
         "archived": false,
-        "total_spent_time": "3:34:18"
+        "total_spent_time": "5:35:56"
     },
     "6.005.2x": {
         "details": "MITx course on Edx: Advanced Software Construction in Java",
@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2300:20:29"
+        "total_spent_time": "2307:52:36"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -536,7 +536,13 @@
     "backmarket": {
         "estimated time": "Unknown",
         "details": "My new work home. :).. hopefully :D",
+        "state": "ON",
+        "total_spent_time": "412:46:10"
+    },
+    "poliss": {
+        "estimated time": "This project's goal is to create a hackathon app for backmarket",
+        "details": "Unknown",
         "state": "OFF",
-        "total_spent_time": "374:11:20"
+        "total_spent_time": "3:28:59"
     }
 }
