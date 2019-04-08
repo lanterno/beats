@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2307:52:36"
+        "total_spent_time": "2311:30:55"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -525,7 +525,7 @@
         "estimated time": "Unknown",
         "details": "Edx course aggregator project",
         "state": "OFF",
-        "total_spent_time": "31:5:7"
+        "total_spent_time": "31:42:23"
     },
     "korean": {
         "estimated time": "Unknown",
@@ -536,13 +536,13 @@
     "backmarket": {
         "estimated time": "Unknown",
         "details": "My new work home. :).. hopefully :D",
-        "state": "ON",
-        "total_spent_time": "412:46:10"
+        "state": "OFF",
+        "total_spent_time": "461:6:7"
     },
     "poliss": {
         "estimated time": "This project's goal is to create a hackathon app for backmarket",
         "details": "Unknown",
         "state": "OFF",
-        "total_spent_time": "3:28:59"
+        "total_spent_time": "5:48:22"
     }
 }
