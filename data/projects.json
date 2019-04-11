@@ -220,7 +220,7 @@
         "details": "Delft design course.",
         "state": "OFF",
         "estimated time": "48",
-        "archived": true,
+        "archived": false,
         "total_spent_time": "2:49:53"
     },
     "learning_docker": {
@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2311:30:55"
+        "total_spent_time": "2312:24:14"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -536,8 +536,8 @@
     "backmarket": {
         "estimated time": "Unknown",
         "details": "My new work home. :).. hopefully :D",
-        "state": "OFF",
-        "total_spent_time": "461:6:7"
+        "state": "ON",
+        "total_spent_time": "482:21:31"
     },
     "poliss": {
         "estimated time": "This project's goal is to create a hackathon app for backmarket",
