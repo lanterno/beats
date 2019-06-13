@@ -298,7 +298,7 @@
         "state": "OFF",
         "estimated time": "Unknown",
         "archived": false,
-        "total_spent_time": "2332:34:9"
+        "total_spent_time": "2376:42:8"
     },
     "18.031x": {
         "details": "MITx: 18.031x Introduction to Differential Equations On EdX",
@@ -525,7 +525,7 @@
         "estimated time": "Unknown",
         "details": "Edx course aggregator project",
         "state": "OFF",
-        "total_spent_time": "31:42:23"
+        "total_spent_time": "32:43:43"
     },
     "korean": {
         "estimated time": "Unknown",
@@ -537,12 +537,24 @@
         "estimated time": "Unknown",
         "details": "My new work home. :).. hopefully :D",
         "state": "OFF",
-        "total_spent_time": "592:22:50"
+        "total_spent_time": "818:10:26"
     },
     "poliss": {
         "estimated time": "This project's goal is to create a hackathon app for backmarket",
         "details": "Unknown",
         "state": "OFF",
         "total_spent_time": "5:48:22"
+    },
+    "learn-FE": {
+        "estimated time": "Unknown",
+        "details": "Learning everything about Frontend design and web development",
+        "state": "OFF",
+        "total_spent_time": "0:43:36"
+    },
+    "6.431x": {
+        "estimated time": "Unknown",
+        "details": "MITx: 6.431x - Probability - The Science of Uncertainty and Data",
+        "state": "OFF",
+        "total_spent_time": "16:26:37"
     }
 }
