@@ -113,6 +113,27 @@ def get_time_for_certain_day(p_name, date=Time.date()):
     return str(total_time)
 
 
+def get_total_time_for_project(project_name):
+    all_logs = FileManager.read('logs/{}'.format(project_name))
+    total_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in all_logs]))
+    average_per_log = str(total_time.hours / (len(all_logs) or 1))[:4]
+    return "{} - with average per log: {} - number of logs: {}".format(total_time, average_per_log, len(all_logs))
+
+
+def total_time_for_all_projects():
+    print("Project: Total time")
+    for project in list_projects():
+        print("{}: {}".format(project, get_total_time_for_project(project)))
+    total_time = None
+    for project in list_projects():
+        project_time = Time(sec_time=sum([Time.log_time(log).get_seconds() for log in FileManager.read('logs/{}'.format(project))]))
+        if not total_time:
+            total_time = project_time
+        else:
+            total_time.add_time(project_time)
+    print("total user recorded time: {}".format(total_time))
+
+
 @hug.get('/month_time/', examples=['p_name=proj&month=6&year=2017'])
 def get_total_monthly_time_on_project(p_name, month=datetime.date.today().month, year=datetime.date.today().year):
     all_logs = FileManager.read('logs/{}'.format(p_name))
@@ -156,15 +177,17 @@ def execute_from_command_line(args):
         print("your projects are: " + str(list_projects()))
 
     elif action == "total_time_for":
-        print("Not implemented Yet.")
-    elif action == "today_time_for":
+        print(get_total_time_for_project(args[0]))
+
+    elif action == "draw":
+        total_time_for_all_projects()
+
+    elif action == "today_time_for":    
         return get_time_for_certain_day(*args)
 
     elif action == "yesterday_time_for":
         date = datetime.date.today() - datetime.timedelta(days=1)
-        if len(commands) == 2:
-            return get_time_for_certain_day(*commands)
-        return get_time_for_certain_day(*commands)
+        return get_time_for_certain_day(args[0], date=str(date))
 
     elif action == "date":
         print(Time.date())
