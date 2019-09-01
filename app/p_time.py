@@ -5,11 +5,11 @@ from datetime import datetime
 
 class Time(object):
 
-    '''
+    """
     has 3 distinct attributes Hour, Minute, Second.
     Every new method or modification on old methods must work on them as
-    the main properities that define the object.
-    '''
+    the main properties that define the object.
+    """
 
     def __init__(self, str_time=None, sec_time=None):
         if str_time:
@@ -58,6 +58,7 @@ class Time(object):
     def greater_than(self, time):
         return self.get_seconds() > time.get_seconds()
 
+    @staticmethod
     def log_time(log):
         if log is None:
             print("No logs for this day")
@@ -67,6 +68,7 @@ class Time(object):
         end.minues(start)
         return end
 
+    @staticmethod
     def date():
         # 'yyyy-mm-dd'
         return str(datetime.now().date())

@@ -1,13 +1,13 @@
-import hug
 import os
 import sys
+# from spread import upload_to_spread_sheet
+import datetime
+
+import hug
+from app.fms import FileManager
+from app.p_time import Time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from app.p_time import Time
-from app.fms import FileManager
-# from spread import upload_to_spread_sheet
-from datetime import datetime
 
 
 @hug.get('/projects/create/', examples=['p_name=proj&details="details here.."&p_estimatedtime=44hours'])
@@ -43,11 +43,12 @@ def start_timer_on_project(p_name, time=None):
         now = Time(str_time=time)
     else:
         now = Time()
+    print("Time now: {}".format(now))
     # CHANGE PROJECT STATE TO ON
     projects = FileManager.read('projects')
     if not projects.get(p_name):
         print("We don't have a project with this name dear.")
-        return 0
+        return
     projects.get(p_name)["state"] = "ON"
     FileManager.update('projects', projects)
 
@@ -64,10 +65,7 @@ def start_timer_on_project(p_name, time=None):
 
 @hug.get('/projects/stop/', examples='time=16:20:0')
 def stop_timer_on_project(time=None):
-    if time:
-        now = Time(str_time=time)
-    else:
-        now = Time()
+    now = Time(str_time=time) if time else Time()
     print("stopping Time: " + str(now))
     # GET PROJECT NAME.
     settings = FileManager.read('settings')
@@ -77,7 +75,7 @@ def stop_timer_on_project(time=None):
     logs = FileManager.read('logs/{}'.format(p_name))
     if logs[-1]["end"] != "Not yet.":
         print("Error. Either you don't have a running log or the program is writing on the wrong log instance.")
-        return 0
+        return
     logs[-1]["end"] = str(now)
     FileManager.update('logs/{}'.format(p_name), logs)
     start = Time()
@@ -87,15 +85,15 @@ def stop_timer_on_project(time=None):
 
     # CHANGE PROJECT STATE TO OFF.
     projects = FileManager.read('projects')
-    workon_project = projects.get(p_name)
-    workon_project["state"] = "OFF"
+    current_project = projects.get(p_name)
+    current_project["state"] = "OFF"
 
     # ADD THE ELAPSED TIME.
-    total_time = Time(str_time=workon_project["total_spent_time"])
+    total_time = Time(str_time=current_project["total_spent_time"])
     total_time.add_time(elapsed_time)
     print("Elapsed time: " + str(elapsed_time))
-    workon_project["total_spent_time"] = str(total_time)
-    projects[p_name] = workon_project
+    current_project["total_spent_time"] = str(total_time)
+    projects[p_name] = current_project
     FileManager.update('projects', projects)
 
 
@@ -116,7 +114,7 @@ def get_time_for_certain_day(p_name, date=Time.date()):
 
 
 @hug.get('/month_time/', examples=['p_name=proj&month=6&year=2017'])
-def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month, year=datetime.now().date().year):
+def get_total_monthly_time_on_project(p_name, month=datetime.date.today().month, year=datetime.date.today().year):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_logs = [log for log in all_logs if log.get('date', None) and
                   int(log.get('date').split('-')[1]) == month]  # filtered by month
@@ -127,7 +125,7 @@ def get_total_monthly_time_on_project(p_name, month=datetime.now().date().month,
 
 
 @hug.get('/sync/', examples=['p_name=proj&spreadsheet=WorkSheet&month=6'])
-def sync(p_name='cube', spreadsheet='WorkSheet', month=datetime.now().date().month):
+def sync(p_name='cube', spreadsheet='WorkSheet', month=datetime.date.month):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_days = set([log['date'] for log in all_logs if log.get('date', None) and
                       int(log.get('date').split('-')[1]) == 6])
@@ -140,27 +138,19 @@ def sync(p_name='cube', spreadsheet='WorkSheet', month=datetime.now().date().mon
     return 0
 
 
-def execute_from_command_line(commands):
-    action = commands.pop(0)
+def execute_from_command_line(args):
+    action = args.pop(0)
     if action == "createp":
         print("Creating project...")
-        create_project(*commands)
+        create_project(*args)
 
     elif action == "start":
         print("Happy coding...")
-        if len(commands) == 2:
-            print("Time now: " + commands[0])
-            start_timer_on_project(*commands)
-        else:
-            print("Time now: " + str(Time()))
-            start_timer_on_project(*commands)
+        start_timer_on_project(*args)
 
     elif action == "stop":
-        print("Stoping timer...")
-        if len(commands) == 1:
-            stop_timer_on_project(*commands)
-        else:
-            stop_timer_on_project()
+        print("Stopping timer...")
+        stop_timer_on_project(*args)
 
     elif action == "list":
         print("your projects are: " + str(list_projects()))
@@ -168,12 +158,10 @@ def execute_from_command_line(commands):
     elif action == "total_time_for":
         print("Not implemented Yet.")
     elif action == "today_time_for":
-        if len(commands) == 2:
-            return get_time_for_certain_day(*commands)
-        return get_time_for_certain_day(*commands)
+        return get_time_for_certain_day(*args)
 
     elif action == "yesterday_time_for":
-        print('WARNING: not working properly.')
+        date = datetime.date.today() - datetime.timedelta(days=1)
         if len(commands) == 2:
             return get_time_for_certain_day(*commands)
         return get_time_for_certain_day(*commands)
@@ -182,15 +170,15 @@ def execute_from_command_line(commands):
         print(Time.date())
     elif action == "month_time_for":
         try:
-            month = int(commands[1])
+            month = int(args[1])
             try:
-                year = int(commands[2])
-                return get_total_monthly_time_on_project(commands[0], month, year)
+                year = int(args[2])
+                return get_total_monthly_time_on_project(args[0], month, year)
             except:
-                return get_total_monthly_time_on_project(commands[0], month)
+                return get_total_monthly_time_on_project(args[0], month)
 
         except:
-            return get_total_monthly_time_on_project(commands[0])
+            return get_total_monthly_time_on_project(args[0])
 
     elif action == "sync":
         return sync()
@@ -199,6 +187,7 @@ def execute_from_command_line(commands):
         return get_status()
     else:
         print("Wrong Command")
+
 
 if __name__ == "__main__":
     list_projects.interface.cli()
