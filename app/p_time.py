@@ -23,8 +23,8 @@ class Time(object):
         if string is None:
             return 0
         if string.startswith('Not'):
-            print("WARNING: you have an unclosed time log.")
-            print("This is you total time so far.")
+            # print("WARNING: you have an unclosed time log.")
+            # print("This is you total time so far.")
             string = time.ctime().split()[-2]
 
         t = list(map(int, string.split(":")))

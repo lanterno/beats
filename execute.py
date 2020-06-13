@@ -158,6 +158,11 @@ def sync(p_name='cube', spreadsheet='WorkSheet', month=datetime.date.month):
     # return upload_to_spread_sheet(p_name=p_name, spreadsheet=spreadsheet, month=month, cells_time=cells_time)
     return 0
 
+def sync_to_mongo_db():
+    from app.sync_to_mongo import ProjectsMongoSynchronizer
+    engine = ProjectsMongoSynchronizer()
+    engine.synchronize()
+
 
 def execute_from_command_line(args):
     action = args.pop(0)
@@ -182,7 +187,7 @@ def execute_from_command_line(args):
     elif action == "draw":
         total_time_for_all_projects()
 
-    elif action == "today_time_for":    
+    elif action == "today_time_for":
         return get_time_for_certain_day(*args)
 
     elif action == "yesterday_time_for":
@@ -208,6 +213,8 @@ def execute_from_command_line(args):
 
     elif action == "status":
         return get_status()
+    elif action == "sync_mongodb":
+        return sync_to_mongo_db()
     else:
         print("Wrong Command")
 
