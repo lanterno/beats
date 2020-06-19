@@ -1,7 +1,7 @@
 FROM python:3.9-rc-buster
 
 WORKDIR /app
-RUN pip install pipenv
+RUN pip install 'pipenv==2018.11.26'
 
 COPY . .
 
