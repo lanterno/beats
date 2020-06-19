@@ -8,6 +8,8 @@ verify_ssl = true
 [packages]
 fastapi = "*"
 uvicorn = "*"
+pymongo = "*"
+dnspython = "*"  # required for mongodb "mongdb+srv"
 
 [requires]
 python_version = "3.9"
