@@ -1,8 +1,7 @@
 build:
-	docker build . -t ptc:latest
-
+	docker-compose build
 up:
-	docker run -p 8000:8000 ptc
+	docker-compose up
 
 shell:
-	docker run -it ptc bash
+	docker-compose run api bash
