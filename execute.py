@@ -3,14 +3,12 @@ import sys
 # from spread import upload_to_spread_sheet
 import datetime
 
-import hug
 from app.fms import FileManager
 from app.p_time import Time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 
-@hug.get('/projects/create/', examples=['p_name=proj&details="details here.."&p_estimatedtime=44hours'])
 def create_project(p_name, details='', p_estimatedtime="Unknown"):
     project = {
         'estimated time': p_estimatedtime,
@@ -28,7 +26,6 @@ def create_project(p_name, details='', p_estimatedtime="Unknown"):
     print('project created.')
 
 
-@hug.get('/status/')
 def get_status():
     settings = FileManager.read('settings')
     project_name = settings['working on']
@@ -37,7 +34,6 @@ def get_status():
     print('last project: {} and its status: {}'.format(project_name, status))
 
 
-@hug.get('/projects/start/', examples='p_name=ptc&time=14:20:0')
 def start_timer_on_project(p_name, time=None):
     if time:
         now = Time(str_time=time)
@@ -63,7 +59,6 @@ def start_timer_on_project(p_name, time=None):
     FileManager.update('settings', settings)
 
 
-@hug.get('/projects/stop/', examples='time=16:20:0')
 def stop_timer_on_project(time=None):
     now = Time(str_time=time) if time else Time()
     print("stopping Time: " + str(now))
@@ -97,14 +92,11 @@ def stop_timer_on_project(time=None):
     FileManager.update('projects', projects)
 
 
-@hug.get('/projects/')
-@hug.cli()
 def list_projects():
     projects = FileManager.read('projects')
     return [project for project in projects if not projects[project].get('archived')]
 
 
-@hug.get('/day_time/', examples=['p_name=proj&date=2017-06-07'])
 def get_time_for_certain_day(p_name, date=Time.date()):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     day_logs = [log for log in all_logs if log.get('date', None) == date]
@@ -134,7 +126,6 @@ def total_time_for_all_projects():
     print("total user recorded time: {}".format(total_time))
 
 
-@hug.get('/month_time/', examples=['p_name=proj&month=6&year=2017'])
 def get_total_monthly_time_on_project(p_name, month=datetime.date.today().month, year=datetime.date.today().year):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_logs = [log for log in all_logs if log.get('date', None) and
@@ -145,7 +136,6 @@ def get_total_monthly_time_on_project(p_name, month=datetime.date.today().month,
     return str(total_time)
 
 
-@hug.get('/sync/', examples=['p_name=proj&spreadsheet=WorkSheet&month=6'])
 def sync(p_name='cube', spreadsheet='WorkSheet', month=datetime.date.month):
     all_logs = FileManager.read('logs/{}'.format(p_name))
     month_days = set([log['date'] for log in all_logs if log.get('date', None) and
@@ -217,7 +207,3 @@ def execute_from_command_line(args):
         return sync_to_mongo_db()
     else:
         print("Wrong Command")
-
-
-if __name__ == "__main__":
-    list_projects.interface.cli()
