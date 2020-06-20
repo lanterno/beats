@@ -5,9 +5,14 @@ from ptc.models import ProjectManager
 app = FastAPI()
 
 
+def serialize_project(project):
+    project["_id"] = str(project["_id"])
+    return project
+
+
 @app.get("/projects")
 async def list_projects():
-    return list(ProjectManager.list())
+    return [serialize_project(p) for p in ProjectManager.list()]
 
 
 @app.post("/projects")
