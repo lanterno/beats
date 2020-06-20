@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from service.models import ProjectManager
+from ptc.models import ProjectManager
 
 app = FastAPI()
 
