@@ -4,4 +4,4 @@ up:
 	docker-compose up
 
 shell:
-	docker-compose run api bash
+	docker-compose run --rm api bash
