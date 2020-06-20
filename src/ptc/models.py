@@ -1,10 +1,9 @@
-import uuid
-
 from typing import List
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 from .db import db
+from .exceptions import LogIsStopped
 
 
 class BaseManager:
@@ -16,7 +15,7 @@ class BaseManager:
 
     @classmethod
     def update(cls, obj: dict) -> dict:
-        if not obj["_id"]:
+        if not obj.get("_id"):
             raise Exception("_id required for update")
         return cls.table.replace_one({"_id": obj.get("_id")}, obj)
 
@@ -25,7 +24,7 @@ class BaseManager:
         return cls.table.find(_filter or {})
 
     @classmethod
-    def delete(cls, time_log: dict) -> bool:
+    def delete(cls, obj_id: str) -> bool:
         pass
 
 
@@ -38,15 +37,19 @@ class ProjectManager(BaseManager):
 
 
 class TimeLog(BaseModel):
-    _id: uuid.UUID = None
+    id: str = None
     start: datetime = Field(default_factory=datetime.utcnow)
     end: datetime = None
     project_id: str = None
 
+    def stop_timer(self):
+        if self.end:
+            raise LogIsStopped
+        self.end = datetime.utcnow()
+
 
 class Project(BaseModel):
-    _id: uuid.UUID = None
+    id: str = None
     name: str
     description: str = None
     estimation: str = None
-    time_logs: List[TimeLog] = []

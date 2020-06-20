@@ -6,11 +6,11 @@ We're using mlab, and hosting our servers in Belgium (europe-west1).
 
 
 # Next steps:
-- [ ] "Create project" endpoint
-- [ ] Start timer on project
-- [ ] End timer on project
+- [x] "Create project" endpoint
+- [x] Start timer on project
+- [x] End timer on project
 - [ ] Check total time for day endpoint
-- [ ] Add validation for multiple active timers
+- [x] Add validation for multiple active timers
 - [ ] Provide custom starting time
 - [ ] Provide custom stopping time
 - [ ] Deploy on GCC
