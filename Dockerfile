@@ -7,4 +7,4 @@ COPY . .
 # TODO: read https://pythonspeed.com/articles/pipenv-docker/
 RUN pipenv install --deploy --system
 
-CMD ["uvicorn", "server:app", "--reload", "--host", "0.0.0.0"]
+CMD ["uvicorn", "service.server:app", "--reload", "--host", "0.0.0.0"]
