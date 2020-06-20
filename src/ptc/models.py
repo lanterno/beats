@@ -47,6 +47,10 @@ class TimeLog(BaseModel):
             raise LogIsStopped
         self.end = datetime.utcnow()
 
+    def duration(self):
+        end = self.end or datetime.utcnow()
+        return end - self.start
+
 
 class Project(BaseModel):
     id: str = None

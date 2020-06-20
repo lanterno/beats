@@ -1,4 +1,5 @@
 import logging
+from datetime import date, timedelta
 
 from fastapi import FastAPI
 
@@ -20,6 +21,14 @@ async def list_projects():
 async def create_project(project: Project):
     ProjectManager.create(project.dict(exclude_none=True))
     return project
+
+
+@app.get("/projects/{project_id}/today/summary/")
+async def today_time_for_project(project_id: str):
+    logs = list(TimeLogManager.list({"project_id": project_id}))
+    today_logs = [TimeLog(**serialize_from_document(log)) for log in logs if TimeLog(**log).start.date() == date.today()]
+
+    return {"duration": str(sum([log.duration() for log in today_logs], timedelta()))}
 
 
 @app.post("/projects/{project_id}/start")

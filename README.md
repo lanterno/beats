@@ -9,7 +9,7 @@ We're using mlab, and hosting our servers in Belgium (europe-west1).
 - [x] "Create project" endpoint
 - [x] Start timer on project
 - [x] End timer on project
-- [ ] Check total time for day endpoint
+- [x] Check total time for day endpoint
 - [x] Add validation for multiple active timers
 - [ ] Provide custom starting time
 - [ ] Provide custom stopping time
