@@ -11,8 +11,8 @@ We're using mlab, and hosting our servers in Belgium (europe-west1).
 - [x] End timer on project
 - [x] Check total time for day endpoint
 - [x] Add validation for multiple active timers
-- [ ] Use environment variables for DB DNS
-- [ ] Rotate secrets
+- [x] Use environment variables for DB DNS
+- [x] Rotate secrets
 - [ ] Push image to GCR
 - [ ] Deploy on GCC
 - [ ] Provide custom starting time

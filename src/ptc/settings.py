@@ -1,13 +1,8 @@
-from pydantic import BaseSettings
-
-USERNAME: str = "timekeeper"
-PASSWORD: str = "foresthunt"
-SERVER_URL: str = "ptc-akb5a.gcp.mongodb.net"
-DB_NAME: str = "ptc"
+from pydantic import BaseSettings, Field
 
 
 class Settings(BaseSettings):
-    db_dsn: str = f"mongodb+srv://{USERNAME}:{PASSWORD}@{SERVER_URL}/{DB_NAME}?retryWrites=true&w=majority"
+    db_dsn: str = Field(..., env='DB_DSN')
 
 
 settings = Settings()
