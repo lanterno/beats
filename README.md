@@ -11,12 +11,15 @@ We're using mlab, and hosting our servers in Belgium (europe-west1).
 - [x] End timer on project
 - [x] Check total time for day endpoint
 - [x] Add validation for multiple active timers
+- [ ] Use environment variables for DB DNS
+- [ ] Rotate secrets
+- [ ] Push image to GCR
 - [ ] Deploy on GCC
 - [ ] Provide custom starting time
 - [ ] Provide custom stopping time
 - [ ] Testing with pytest
 - [ ] Add CI
-- [ ] Add CD using docker repository
+- [ ] Add CD using GCR
 - [ ] Add versioning the repo
 - [ ] Think about Canary Releases
 - [ ] Migrate old data
