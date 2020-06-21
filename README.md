@@ -1,11 +1,18 @@
-# project-timer
+# Beats
+Because life is a time-series of heart beats
+
 measures the whole time spent on every project you have and helps you manage time on your projects.
 
-# database
-We're using mlab, and hosting our servers in Belgium (europe-west1).
+Goal: To become your time aware assistant. *To record even your heart beats.*
 
+---
+---
+## Tech stuff
+### database
+MongoDB hosted in the cloud. 
+We can add it to compose later to make it more convenient to users
 
-# Next steps:
+### Next steps:
 - [x] "Create project" endpoint
 - [x] Start timer on project
 - [x] End timer on project
