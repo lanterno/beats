@@ -12,7 +12,7 @@ Goal: To become your time aware assistant. *To record even your heart beats.*
 MongoDB hosted in the cloud. 
 We can add it to compose later to make it more convenient to users
 
-### Next steps:
+### RoadMap:
 - [x] "Create project" endpoint
 - [x] Start timer on project
 - [x] End timer on project
