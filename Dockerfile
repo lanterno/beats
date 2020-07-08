@@ -4,7 +4,7 @@ WORKDIR /src
 RUN pip install 'pipenv==2018.11.26'
 
 COPY . .
-ENV PYTHONPATH "${PYTHONPATH}:/src/ptc"
+ENV PYTHONPATH "${PYTHONPATH}:/src/beats"
 
 # TODO: read https://pythonspeed.com/articles/pipenv-docker/
 RUN pipenv install --deploy --system

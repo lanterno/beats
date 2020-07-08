@@ -3,10 +3,10 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 
-from ptc.db_helpers import serialize_from_document, serialize_to_document
-from ptc.exceptions import ProjectWasNotStarted, MoreThanOneLogOpenForProject, ProjectAlreadyStarted
-from ptc.models import ProjectManager, Project, TimeLog, TimeLogManager
-from ptc.validation_models import RecordTimeValidator
+from beats.db_helpers import serialize_from_document, serialize_to_document
+from beats.exceptions import ProjectWasNotStarted, MoreThanOneLogOpenForProject, ProjectAlreadyStarted
+from beats.models import ProjectManager, Project, TimeLog, TimeLogManager
+from beats.validation_models import RecordTimeValidator
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
