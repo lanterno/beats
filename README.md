@@ -20,18 +20,18 @@ We can add it to compose later to make it more convenient to users
 - [x] Add validation for multiple active timers
 - [x] Use environment variables for DB DNS
 - [x] Rotate secrets
-- [ ] Push image to GCR
-- [ ] Deploy on GCC
 - [x] Provide custom starting time
 - [x] Provide custom stopping time
 - [ ] Testing with pytest
 - [ ] Add CI
+- [ ] Make CI push images to GCR
+- [ ] Deploy on GCC
 - [ ] Add CD using GCR
 - [ ] Version the repo
 - [ ] Think about Canary Releases
+- [ ] DataLake and backup?
 - [ ] Migrate old data
 - [ ] Remove deprecated app
-- [ ] DataLake and backup?
 - [ ] Add console client written in bash or GoLang
 - [ ] Add dashboard
 - [ ] Think dashboard
