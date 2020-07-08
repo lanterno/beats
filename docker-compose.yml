@@ -9,6 +9,6 @@ services:
     env_file:
       - src/.env
     ports:
-      - "8000:8000"
+      - "7999:7999"
     volumes:
       - ./src:/src
