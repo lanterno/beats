@@ -6,13 +6,8 @@ measures the whole time spent on every project you have and helps you manage tim
 Goal: To become your time aware assistant. *To record even your heart beats.*
 
 ---
----
-## Tech stuff
-### database
-MongoDB hosted in the cloud. 
-We can add it to compose later to make it more convenient to users
 
-### RoadMap:
+## RoadMap:
 - [x] "Create project" endpoint
 - [x] Start timer on project
 - [x] End timer on project
@@ -38,3 +33,7 @@ We can add it to compose later to make it more convenient to users
 - [ ] Think desktop app like upwork timer (for macos)
 - [ ] Think browser plugin
 - [ ] Think mobileApp (sheetu)
+
+### database
+MongoDB hosted in the cloud. 
+We can add it to compose later to make it more convenient to users
