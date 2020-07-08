@@ -37,3 +37,8 @@ Goal: To become your time aware assistant. *To record even your heart beats.*
 ### database
 MongoDB hosted in the cloud. 
 We can add it to compose later to make it more convenient to users
+
+
+### Dependencies
+To install dependencies, use `make ops` to start a shell with pipenv files in sync.
+After that, run the pipenv commands you need. for example, `pipenv install pytest --dev`

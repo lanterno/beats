@@ -1,0 +1,10 @@
+version: "3.3"
+
+services:
+  api:
+    image: ptc:latest
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+      - .:/src
