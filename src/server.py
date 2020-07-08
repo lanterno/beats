@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from ptc.db_helpers import serialize_from_document, serialize_to_document
 from ptc.exceptions import ProjectWasNotStarted, MoreThanOneLogOpenForProject, ProjectAlreadyStarted
 from ptc.models import ProjectManager, Project, TimeLog, TimeLogManager
-
+from ptc.validation_models import RecordTimeValidator
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
@@ -32,20 +32,20 @@ async def today_time_for_project(project_id: str):
 
 
 @app.post("/projects/{project_id}/start")
-async def start_project_timer(project_id: str):
+async def start_project_timer(project_id: str, time_validator: RecordTimeValidator):
     available_project_ids = [str(p["_id"]) for p in ProjectManager.list()]
     if project_id not in available_project_ids:
         return {"project_id": "This project id does not exist"}
     logs = list(TimeLogManager.list({"project_id": project_id, "end": None}))
     if logs:
         raise ProjectAlreadyStarted
-    log = TimeLog(project_id=project_id)
+    log = TimeLog(project_id=project_id, start=time_validator.time)
     TimeLogManager.create(log.dict(exclude_none=True))
     return log
 
 
 @app.post("/projects/{project_id}/stop")
-async def end_project_timer(project_id: str):
+async def end_project_timer(project_id: str, time_validator: RecordTimeValidator):
     logs = list(TimeLogManager.list({"project_id": project_id, "end": None}))
     if not logs:
         raise ProjectWasNotStarted
@@ -55,7 +55,6 @@ async def end_project_timer(project_id: str):
     logger.info(f"We got log {log}")
     log = TimeLog(**log)
     logger.info(f"Validated log: {log.dict()}")
-    log.stop_timer()
+    log.stop_timer(time=time_validator.time)
     TimeLogManager.update(serialize_to_document(log.dict()))
     return log
-
