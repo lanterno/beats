@@ -22,12 +22,12 @@ We can add it to compose later to make it more convenient to users
 - [x] Rotate secrets
 - [ ] Push image to GCR
 - [ ] Deploy on GCC
-- [ ] Provide custom starting time
-- [ ] Provide custom stopping time
+- [x] Provide custom starting time
+- [x] Provide custom stopping time
 - [ ] Testing with pytest
 - [ ] Add CI
 - [ ] Add CD using GCR
-- [ ] Add versioning the repo
+- [ ] Version the repo
 - [ ] Think about Canary Releases
 - [ ] Migrate old data
 - [ ] Remove deprecated app
