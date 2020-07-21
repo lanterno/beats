@@ -1,13 +1,7 @@
 import logging
-import sys
-import os
 
 from datetime import date, timedelta
 from fastapi import FastAPI
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR + "/beats")
-print(sys.path)
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
 from beats.exceptions import ProjectWasNotStarted, MoreThanOneLogOpenForProject, ProjectAlreadyStarted
