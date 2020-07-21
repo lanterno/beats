@@ -17,7 +17,7 @@ Goal: To become your time aware assistant. *To record even your heart beats.*
 - [x] Rotate secrets
 - [x] Provide custom starting time
 - [x] Provide custom stopping time
-- [ ] Testing with pytest
+- [x] Testing with pytest
 - [ ] Add CI
 - [ ] Make CI push images to GCR
 - [ ] Deploy on GCC

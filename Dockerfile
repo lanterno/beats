@@ -9,7 +9,7 @@ RUN pip install 'pipenv==2018.11.26'
 
 
 # TODO: read https://pythonspeed.com/articles/pipenv-docker/
-RUN pipenv install --deploy --system
+RUN pipenv install --dev --system
 
 EXPOSE $PORT
 CMD uvicorn server:app --reload --host 0.0.0.0 --port $PORT
