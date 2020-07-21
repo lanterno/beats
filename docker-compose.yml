@@ -6,9 +6,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      PORT: 80
     env_file:
       - src/.env
     ports:
-      - "7999:7999"
+      - "7999:80"
     volumes:
       - ./src:/src
