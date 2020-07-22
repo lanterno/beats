@@ -8,3 +8,5 @@ shell:
 
 ops:  # use this to install packages, and run system operations
 	docker-compose -f compose-ops.yml run --rm api bash
+test:
+	docker-compose run --rm api pytest
