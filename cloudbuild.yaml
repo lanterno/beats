@@ -1,0 +1,7 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/beats-ptc/beats', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['run', '-e', 'DB_DSN=NONE', 'gcr.io/beats-ptc/beats:latest', 'pytest']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/beats-ptc/beats']
