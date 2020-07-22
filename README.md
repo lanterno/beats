@@ -18,8 +18,8 @@ Goal: To become your time aware assistant. *To record even your heart beats.*
 - [x] Provide custom starting time
 - [x] Provide custom stopping time
 - [x] Testing with pytest
-- [ ] Add CI
-- [ ] Make CI push images to GCR
+- [x] Add CI
+- [x] Make CI push images to GCR
 - [ ] Deploy on GCC
 - [ ] Add CD using GCR
 - [ ] Version the repo
