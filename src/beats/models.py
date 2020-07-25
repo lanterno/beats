@@ -57,3 +57,4 @@ class Project(BaseModel):
     name: str
     description: str = None
     estimation: str = None
+    archived: bool = False
