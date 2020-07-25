@@ -18,21 +18,26 @@ Goal: To become your time aware assistant. *To record even your heart beats.*
 - [x] Provide custom starting time
 - [x] Provide custom stopping time
 - [x] Testing with pytest
-- [x] Add CI
+- [x] Add Google build CI
 - [x] Make CI push images to GCR
-- [ ] Deploy on GCC
+- [x] Remove deprecated app
+- [x] Deploy on GCC
+- [x] Migrate old data
+- [ ] Smart assistant (alexa or google for a start)
+- [ ] Enhance API by providing a timer-specific API.
+        
+       It shouldn't be directly interfacting The timelogs
+- [ ] Move GCC to euro zone to lower latency to ~ 50 ms
+- [ ] Browser plugin
+- [ ] Set up different databases for different environments
 - [ ] Add CD using GCR
 - [ ] Version the repo
 - [ ] Think about Canary Releases
 - [ ] DataLake and backup?
-- [ ] Migrate old data
-- [ ] Remove deprecated app
+- [ ] Dashboard
 - [ ] Add console client written in bash or GoLang
-- [ ] Add dashboard
-- [ ] Think dashboard
-- [ ] Think desktop app like upwork timer (for macos)
-- [ ] Think browser plugin
-- [ ] Think mobileApp (sheetu)
+- [ ] Desktop app like Upwork timer (for macos)
+- [ ] MobileApp (sheetu)
 
 ### database
 MongoDB hosted in the cloud. 
