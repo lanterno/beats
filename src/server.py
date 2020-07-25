@@ -1,6 +1,6 @@
 import logging
 
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 from fastapi import FastAPI
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
@@ -58,3 +58,77 @@ async def end_project_timer(project_id: str, time_validator: RecordTimeValidator
     log.stop_timer(time=time_validator.time)
     TimeLogManager.update(serialize_to_document(log.dict()))
     return log
+
+@app.post("/projects/sync-sheets")
+def sync_sheets():
+    import json
+    with open('beats/sheets/' + "projects" + '.json', 'r') as p_file:
+        projects = json.load(p_file)
+
+    existing_projects = {}
+    for p in ProjectManager.list():
+        existing_projects[p["name"]] = p
+
+    for project in projects.items():
+        print(f"{project[0]} updating..")
+        project[1].update(existing_projects[project[0]])
+        project[1].pop("state")
+        project[1].pop("total_spent_time")
+        project[1].pop("details", None)
+        if project[1]["estimated time"] == "undefined":
+            project[1].pop("estimated time")
+        ProjectManager.update(project[1])
+
+    return {"status": "done"}
+
+
+def format_time(t, is_date=False):
+    separator = "-" if is_date else ":"
+    t = t.split(separator)
+    for i in [0, 1, 2]:
+        if len(t[i]) == 1:
+            t[i] = "0" + t[i]
+    t = separator.join(t)
+
+    if not is_date:
+        t = "T" + t + "+02:00"
+    return t
+
+@app.post("/sync-logs")
+def sync_logs():
+    import json
+    from datetime import datetime, timedelta
+
+    existing_projects = {}
+    for p in ProjectManager.list():
+        existing_projects[p["name"]] = p
+    for project in existing_projects.items():
+        print(f"{project[0]} starting...")
+        try:
+            with open("beats/sheets/logs/" + project[0] + '.json', 'r') as logs_f:
+                logs = json.load(logs_f)
+        except Exception:
+            print(f"no logs file for {project[0]}")
+            continue
+
+        for log in logs:
+            if "Not" in log["end"]:
+                print(f"one log for {project[0]} wasn't closed correctly!")
+                continue
+            if log.get("date") is None:
+                # print(f"couldn't find date for project {project[0]}")
+                continue
+
+            _date = format_time(log["date"], is_date=True)
+            start_time = datetime.fromisoformat(_date + format_time(log["start"]))
+            end_time = datetime.fromisoformat(_date + format_time(log["end"]))
+
+            if end_time < start_time:
+                end_time = end_time + timedelta(days=1)
+
+            log = TimeLog(project_id=str(project[1]["_id"]), start=start_time, end=end_time)
+
+            if not project[0] == "cube":
+                TimeLogManager.create(log.dict(exclude_none=True))
+
+    return {"status": "done"}
