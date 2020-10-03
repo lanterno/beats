@@ -6,7 +6,7 @@ from .db import db
 from .exceptions import LogIsStopped
 
 
-class BaseManager:
+class BaseRepository:
     table = None
 
     @classmethod
@@ -28,11 +28,11 @@ class BaseManager:
         pass
 
 
-class TimeLogManager(BaseManager):
+class TimeLogRepository(BaseRepository):
     table = db.timeLogs
 
 
-class ProjectManager(BaseManager):
+class ProjectRepository(BaseRepository):
     table = db.projects
 
 
