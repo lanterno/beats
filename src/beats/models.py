@@ -35,6 +35,12 @@ class TimeLogRepository(BaseRepository):
 class ProjectRepository(BaseRepository):
     table = db.projects
 
+    @classmethod
+    def list(cls, _filter: dict = None) -> List[dict]:
+        _filter = _filter or {}
+        _filter.update({"archived": False})
+        return cls.table.find(_filter)
+
 
 class TimeLog(BaseModel):
     id: str = None
