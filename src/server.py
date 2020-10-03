@@ -14,7 +14,10 @@ app = FastAPI()
 
 @app.get("/projects")
 async def list_projects():
-    return [serialize_from_document(p) for p in ProjectRepository.list()]
+    data = [serialize_from_document(p) for p in ProjectRepository.list()]
+    for item in data:
+        item.pop("archived")
+    return data
 
 
 @app.post("/projects")
