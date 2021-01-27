@@ -9,5 +9,10 @@ class ProjectWasNotStarted(Exception):
 class MoreThanOneLogOpenForProject(Exception):
     pass
 
+
 class ProjectAlreadyStarted(Exception):
     pass
+
+
+class InconsistentEndTime(Exception):
+    message = "End time must come after start time"

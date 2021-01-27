@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from .db import db
-from .exceptions import LogIsStopped
+from .exceptions import LogIsStopped, InconsistentEndTime
 
 
 class BaseRepository:
@@ -48,9 +48,15 @@ class TimeLog(BaseModel):
     end: datetime = None
     project_id: str = None
 
-    def stop_timer(self, time):
+    def stop_timer(self, time: datetime):
+        """
+        Closes the log with the provided time.
+        Validates the closing time is consistent with the start time -> comes after it.
+        """
         if self.end:
             raise LogIsStopped
+        if time < self.start:  # less than symbol "<" means "before" when comparing times
+            raise InconsistentEndTime
         self.end = time
 
     def duration(self):
