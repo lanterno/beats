@@ -26,6 +26,12 @@ async def create_project(project: Project):
     return project
 
 
+@app.post("/projects/{project_id}/archive")
+async def archive_project(project_id: str):
+    ProjectRepository.update({'_id': project_id, 'archived': True})
+    return {"status": "success"}
+
+
 @app.get("/projects/{project_id}/today/summary/")
 async def today_time_for_project(project_id: str):
     logs = list(TimeLogRepository.list({"project_id": project_id}))
