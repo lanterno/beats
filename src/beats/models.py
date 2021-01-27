@@ -9,6 +9,9 @@ from .exceptions import LogIsStopped, InconsistentEndTime
 class BaseRepository:
     table = None
 
+    def retrieve_by_id(self, id):
+        raise NotImplemented
+
     @classmethod
     def create(cls, obj: dict) -> dict:
         return cls.table.insert_one(obj)
