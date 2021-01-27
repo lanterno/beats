@@ -5,8 +5,7 @@ COPY src/ .
 COPY Pipfile Pipfile
 COPY Pipfile.lock Pipfile.lock
 
-RUN pip install 'pipenv==2018.11.26'
-
+RUN pip install pipenv
 
 # TODO: read https://pythonspeed.com/articles/pipenv-docker/
 RUN pipenv install --dev --system
