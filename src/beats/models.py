@@ -1,6 +1,7 @@
 from typing import List
 from datetime import datetime
 from pydantic import BaseModel, Field
+from bson.objectid import ObjectId
 
 from .db import db
 from .exceptions import LogIsStopped, InconsistentEndTime
@@ -9,8 +10,9 @@ from .exceptions import LogIsStopped, InconsistentEndTime
 class BaseRepository:
     table = None
 
-    def retrieve_by_id(self, id):
-        raise NotImplemented
+    @classmethod
+    def retrieve_by_id(cls, _id: str):
+        return cls.table.find({"_id": ObjectId(_id)})[0]
 
     @classmethod
     def create(cls, obj: dict) -> dict:

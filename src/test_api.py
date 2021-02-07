@@ -54,3 +54,59 @@ class TestProjectAPI:
         )
         assert response.status_code == 200, response.json()
         assert len(client.get("/projects").json()) == projects_count
+
+
+class TestTimeLogsDirectAPI:
+    def test_create_api(self):
+        project = client.post(
+            "/projects",
+            json={"name": "test-project-{}".format(time.time()), "description": "Test project - delete me"},
+        ).json()
+
+        response = client.post(
+            "/timelogs",
+            json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
+        )
+        assert response.status_code == 201, response.json()
+
+    def test_list_api_with_project_filter(self):
+        project = client.post(
+            "/projects",
+            json={"name": "test-project-{}".format(time.time()), "description": "Test project - delete me"},
+        ).json()
+
+        client.post(
+            "/timelogs",
+            json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
+        )
+        client.post(
+            "/timelogs",
+            json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
+        )
+
+        response = client.get(f"/timelogs?project_id={project['id']}")
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+    def test_list_api_with_date_filter(self):
+        pass  # Can not implement this until we find a way to clean the db after usage
+
+    def test_update_api(self):
+        project = client.post(
+            "/projects",
+            json={"name": "test-project-{}".format(time.time()), "description": "Test project - delete me"},
+        ).json()
+
+        timelog = client.post(
+            "/timelogs",
+            json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
+        ).json()
+        timelog["end"] = "2020-04-01T04:10:10"
+        response = client.put(
+            "/timelogs", json=timelog
+        )
+        assert response.status_code == 200, response.json()
+
+        response = client.get(f"/timelogs/{timelog['id']}")
+        assert response.status_code == 200, response.json()
+        assert response.json()["end"] == "2020-04-01T04:10:10"

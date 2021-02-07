@@ -1,6 +1,7 @@
 import http
 import logging
 
+from typing import Optional
 from datetime import date, timedelta
 from fastapi import FastAPI
 
@@ -73,3 +74,33 @@ async def end_project_timer(project_id: str, time_validator: RecordTimeValidator
     log.stop_timer(time=time_validator.time)
     TimeLogRepository.update(serialize_to_document(log.dict()))
     return log
+
+
+@app.get("/timelogs")
+async def list_timelogs(project_id: Optional[str] = None, date: Optional[date] = None):
+    filters = {}
+    if project_id:
+        filters.update({"project_id": project_id})
+    if date:
+        filters.update({"date": date})
+
+    logs = list(TimeLogRepository.list(filters))
+    return [serialize_from_document(log) for log in logs]
+
+
+@app.post("/timelogs", status_code=http.HTTPStatus.CREATED)
+async def create_timelog(log: TimeLog):
+    log = TimeLogRepository.create(log.dict(exclude_none=True))
+    return serialize_from_document(log)
+
+
+@app.get("/timelogs/{timelog_id}")
+async def get_timelog(timelog_id: str):
+    timelog = TimeLogRepository.retrieve_by_id(timelog_id)
+    return serialize_from_document(timelog)
+
+
+@app.put("/timelogs")
+async def update_timelog(log: TimeLog):
+    log = TimeLogRepository.update(serialize_to_document(log.dict()))
+    return serialize_from_document(log)
