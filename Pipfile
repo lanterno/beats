@@ -6,6 +6,9 @@ verify_ssl = true
 [dev-packages]
 pytest = "*"
 freezegun = "*"
+requests = "*"
+ipython = "*"
+pdbpp = "*"
 
 [packages]
 fastapi = "*"
