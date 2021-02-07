@@ -3,7 +3,7 @@ Because life is a time-series of heart beats
 
 measures the whole time spent on every project you have and helps you manage time on your projects.
 
-Goal: To become your time aware assistant. *To record even your heart beats.*
+Goal: To become your time-aware assistant. *To record even your heart beats.*
 
 ---
 
@@ -47,3 +47,14 @@ We can add it to compose later to make it more convenient to users
 ### Dependencies
 To install dependencies, use `make ops` to start a shell with pipenv files in sync.
 After that, run the pipenv commands you need. for example, `pipenv install pytest --dev`
+
+
+### Deployment
+This app uses GCP for deployment.
+Currently, the process is very manual though.
+
+The manual process:
+- git push will automatically create a new image on GCR
+- Go to Compute Engine, and create a new machine 
+- specify the image as the one we just pushed
+- put the needed env variables (check the project settings.py for that)
