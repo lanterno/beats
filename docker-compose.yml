@@ -1,6 +1,16 @@
-version: "3.3"
+version: "3.9"
 
 services:
+  # Even with all the following configuration
+  # It's still required to conect to mongo shell, and create both the DB
+  # and the user.
+  db:
+    image: mongo:latest
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mango
+      MONGO_INITDB_ROOT_PASSWORD: bango
+      MONGO_INITDB_DATABASE: ptc
   api:
     image: ptc:latest
     build:
@@ -8,9 +18,12 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: 80
+      DB_DSN: mongodb://mango:bango@db
     env_file:
       - src/.env
     ports:
       - "7999:80"
     volumes:
       - ./src:/src
+    depends_on:
+      - db
