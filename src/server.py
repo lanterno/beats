@@ -1,3 +1,4 @@
+import http
 import logging
 
 from datetime import date, timedelta
@@ -20,10 +21,16 @@ async def list_projects():
     return data
 
 
-@app.post("/projects")
+@app.post("/projects", status_code=http.HTTPStatus.CREATED)
 async def create_project(project: Project):
-    ProjectRepository.create(project.dict(exclude_none=True))
-    return project
+    project = ProjectRepository.create(project.dict(exclude_none=True))
+    return serialize_from_document(project)
+
+
+@app.put("/projects")
+async def update_project(project: Project):
+    project = ProjectRepository.update(serialize_to_document(project.dict(exclude_none=True)))
+    return serialize_from_document(project)
 
 
 @app.post("/projects/{project_id}/archive")

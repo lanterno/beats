@@ -14,13 +14,16 @@ class BaseRepository:
 
     @classmethod
     def create(cls, obj: dict) -> dict:
-        return cls.table.insert_one(obj)
+        _id = str(cls.table.insert_one(obj).inserted_id)
+        obj.update({"_id": _id})
+        return obj
 
     @classmethod
     def update(cls, obj: dict) -> dict:
         if not obj.get("_id"):
             raise Exception("_id required for update")
-        return cls.table.replace_one({"_id": obj.get("_id")}, obj)
+        cls.table.replace_one({"_id": obj.get("_id")}, obj)
+        return obj
 
     @classmethod
     def list(cls, _filter: dict = None) -> List[dict]:
