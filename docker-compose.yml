@@ -2,8 +2,16 @@ version: "3.9"
 
 services:
   # Even with all the following configuration
-  # It's still required to conect to mongo shell, and create both the DB
+  # It's still required to connect to mongo shell, and create both the DB
   # and the user.
+  # otherwise, you will get an authentication issue.
+  # >> docker exec -it your-mongo-container bash
+  # >> use ptc
+  # >> db.createUser({user: "mango", pwd: "bango", roles: [{role: "readWrite", db: "ptc"}]})
+  # you might also need:
+  # db.what_even.insert({})  # this causes the db to appear in show dbs;
+  #     Not sure if it has any effect though!
+
   db:
     image: mongo:latest
     restart: always
