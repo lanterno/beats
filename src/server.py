@@ -4,6 +4,7 @@ import logging
 from typing import Optional
 from datetime import date, timedelta
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
 from beats.exceptions import ProjectWasNotStarted, MoreThanOneLogOpenForProject, ProjectAlreadyStarted
@@ -12,7 +13,18 @@ from beats.validation_models import RecordTimeValidator
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
+origins = [
+    "http://localhost",
+    "http://localhost:8000",
+]
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/projects")
 async def list_projects():
