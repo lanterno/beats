@@ -1,4 +1,4 @@
-class LogIsStopped(Exception):
+class CanNotStopNonBeatingHeart(Exception):
     pass
 
 
@@ -6,7 +6,7 @@ class ProjectWasNotStarted(Exception):
     pass
 
 
-class MoreThanOneLogOpenForProject(Exception):
+class HeartAlreadyBeating(Exception):
     pass
 
 

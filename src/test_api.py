@@ -56,7 +56,7 @@ class TestProjectAPI:
         assert len(client.get("/projects").json()) == projects_count
 
 
-class TestTimeLogsDirectAPI:
+class TestBeatsDirectAPI:
     def test_create_api(self):
         project = client.post(
             "/projects",
@@ -64,7 +64,7 @@ class TestTimeLogsDirectAPI:
         ).json()
 
         response = client.post(
-            "/timelogs",
+            "/beats",
             json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
         )
         assert response.status_code == 201, response.json()
@@ -76,15 +76,15 @@ class TestTimeLogsDirectAPI:
         ).json()
 
         client.post(
-            "/timelogs",
+            "/beats",
             json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
         )
         client.post(
-            "/timelogs",
+            "/beats",
             json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
         )
 
-        response = client.get(f"/timelogs?project_id={project['id']}")
+        response = client.get(f"/beats?project_id={project['id']}")
         assert response.status_code == 200
         assert len(response.json()) == 2
 
@@ -97,16 +97,16 @@ class TestTimeLogsDirectAPI:
             json={"name": "test-project-{}".format(time.time()), "description": "Test project - delete me"},
         ).json()
 
-        timelog = client.post(
-            "/timelogs",
+        beat = client.post(
+            "/beats",
             json={"project_id": project["id"], "start": "2020-04-01T02:0:0", "end": "2020-04-01T03:0:0"}
         ).json()
-        timelog["end"] = "2020-04-01T04:10:10"
+        beat["end"] = "2020-04-01T04:10:10"
         response = client.put(
-            "/timelogs", json=timelog
+            "/beats", json=beat
         )
         assert response.status_code == 200, response.json()
 
-        response = client.get(f"/timelogs/{timelog['id']}")
+        response = client.get(f"/beats/{beat['id']}")
         assert response.status_code == 200, response.json()
         assert response.json()["end"] == "2020-04-01T04:10:10"

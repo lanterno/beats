@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from bson.objectid import ObjectId
 
 from .db import db
-from .exceptions import LogIsStopped, InconsistentEndTime
+from .exceptions import CanNotStopNonBeatingHeart, InconsistentEndTime
 
 
 class BaseRepository:
@@ -39,7 +39,7 @@ class BaseRepository:
         pass
 
 
-class TimeLogRepository(BaseRepository):
+class BeatRepository(BaseRepository):
     table = db.timeLogs
 
     @classmethod
@@ -57,7 +57,7 @@ class ProjectRepository(BaseRepository):
         return cls.table.find(_filter)
 
 
-class TimeLog(BaseModel):
+class Beat(BaseModel):
     id: str = None
     start: datetime = Field(default_factory=datetime.utcnow)
     end: datetime = None
@@ -69,7 +69,7 @@ class TimeLog(BaseModel):
         Validates the closing time is consistent with the start time -> comes after it.
         """
         if self.end:
-            raise LogIsStopped
+            raise CanNotStopNonBeatingHeart
         if time < self.start:  # less than symbol "<" means "before" when comparing times
             raise InconsistentEndTime
         self.end = time
