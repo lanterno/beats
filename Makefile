@@ -11,4 +11,4 @@ ops:  # use this to install packages, and run system operations
 	docker-compose -f compose-ops.yml run --rm api bash
 
 test:
-	docker-compose run --rm api pytest
+	docker-compose run -e DB_NAME="ptc-test" --rm api pytest
