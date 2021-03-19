@@ -1,5 +1,8 @@
 from typing import List
 from datetime import datetime
+
+import pymongo
+
 from pydantic import BaseModel, Field
 from bson.objectid import ObjectId
 
@@ -39,6 +42,10 @@ class BaseRepository:
 class TimeLogRepository(BaseRepository):
     table = db.timeLogs
 
+    @classmethod
+    def get_last(cls):
+        return cls.table.find_one(sort=[("start", pymongo.DESCENDING)])
+
 
 class ProjectRepository(BaseRepository):
     table = db.projects
@@ -66,6 +73,9 @@ class TimeLog(BaseModel):
         if time < self.start:  # less than symbol "<" means "before" when comparing times
             raise InconsistentEndTime
         self.end = time
+
+    def is_beating(self):
+        return not self.end
 
     @property
     def duration(self):

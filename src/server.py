@@ -116,3 +116,22 @@ async def get_timelog(timelog_id: str):
 async def update_timelog(log: TimeLog):
     log = TimeLogRepository.update(serialize_to_document(log.dict()))
     return serialize_from_document(log)
+
+
+@app.get("/heart/sounds")
+async def heart_status():
+    last_beat = TimeLog(**serialize_from_document(TimeLogRepository.get_last()))
+
+    if last_beat.is_beating():
+        return {
+            "isBeating": True,
+            "project": last_beat.project_id,
+            "since": last_beat.start,
+            "so_far": last_beat.duration
+        }
+    else:
+        return {
+            "isBeating": False,
+            "lastBeatOn": last_beat.project_id,
+            "for": last_beat.duration
+        }
