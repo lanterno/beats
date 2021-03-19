@@ -67,6 +67,7 @@ class TimeLog(BaseModel):
             raise InconsistentEndTime
         self.end = time
 
+    @property
     def duration(self):
         end = self.end or datetime.utcnow()
         return end - self.start

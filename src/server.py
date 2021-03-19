@@ -56,7 +56,7 @@ async def archive_project(project_id: str):
 async def today_time_for_project(project_id: str):
     logs = list(TimeLogRepository.list({"project_id": project_id}))
     today_logs = [TimeLog(**serialize_from_document(log)) for log in logs if TimeLog(**log).start.date() == date.today()]
-    return {"duration": str(sum([log.duration() for log in today_logs], timedelta()))}
+    return {"duration": str(sum([log.duration for log in today_logs], timedelta()))}
 
 
 @app.post("/projects/{project_id}/start")
