@@ -3,12 +3,14 @@ import logging
 
 from typing import Optional
 from datetime import date, timedelta
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
 from beats.exceptions import ProjectWasNotStarted, HeartAlreadyBeating, ProjectAlreadyStarted
 from beats.models import ProjectRepository, Project, Beat, BeatRepository
+from beats.settings import settings
 from beats.validation_models import RecordTimeValidator
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,8 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:8000",
+    "https://lifepete.com",
+    "http://lifepete.com"
 ]
 
 app.add_middleware(
@@ -25,6 +29,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def authenticate(request: Request, call_next):
+    logger.error(request.method)
+    PROTECTED_METHODS = ["POST", "PUT", "PATCH"]
+    if request.method in PROTECTED_METHODS and "X-API-Token" not in request.headers:
+        return JSONResponse(
+            content={"error": "Header X-API-Token is required for all POST actions"},
+            status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    if request.method in PROTECTED_METHODS and request.headers["X-API-Token"] != settings.access_token:
+        return JSONResponse(
+            content={"error": "your X-API-Token is not valid"},
+            status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    response = await call_next(request)
+    return response
+
 
 @app.get("/projects")
 async def list_projects():
