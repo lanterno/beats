@@ -23,6 +23,9 @@ Goal: To become your time-aware assistant. *To record even your heart beats.*
 - [x] Remove deprecated app
 - [x] Deploy on GCC
 - [x] Migrate old data
+- [x] Web App in VueJS
+- [ ] Deploy to Cloud Run
+- [ ] Finish CD using GCR, Cloud Run, and Cloud Build
 - [ ] Smart assistant (alexa or google for a start)
 - [ ] Enhance API by providing a timer-specific API.
         
@@ -30,7 +33,7 @@ Goal: To become your time-aware assistant. *To record even your heart beats.*
 - [ ] Move GCC to euro zone to lower latency to ~ 50 ms
 - [ ] Browser plugin
 - [ ] Set up different databases for different environments
-- [ ] Add CD using GCR
+
 - [ ] Version the repo
 - [ ] Think about Canary Releases
 - [ ] DataLake and backup?
