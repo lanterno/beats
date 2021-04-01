@@ -158,3 +158,8 @@ async def heart_status():
             "lastBeatOn": last_beat.project_id,
             "for": last_beat.duration
         }
+
+
+@app.post("/talk/ding")
+async def ding():
+    return {"message": "dong"}
