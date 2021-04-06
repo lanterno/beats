@@ -18,17 +18,10 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:8000",
+    "http://localhost:8080",
     "https://lifepete.com",
     "http://lifepete.com"
 ]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.middleware("http")
@@ -163,3 +156,14 @@ async def heart_status():
 @app.post("/talk/ding")
 async def ding():
     return {"message": "dong"}
+
+
+# Putting the middleware at the end fixes a CORS issue with 401 POST requests
+# There is still an issue with 500's
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
