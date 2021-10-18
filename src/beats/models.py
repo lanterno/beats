@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from bson.objectid import ObjectId
 
 from .db import db
-from .exceptions import CanNotStopNonBeatingHeart, InconsistentEndTime
+from .exceptions import CanNotStopNonBeatingHeart, InconsistentEndTime, NoObjectMatched
 
 
 class BaseRepository:
@@ -44,7 +44,10 @@ class BeatRepository(BaseRepository):
 
     @classmethod
     def get_last(cls):
-        return cls.table.find_one(sort=[("start", pymongo.DESCENDING)])
+        record = cls.table.find_one(sort=[("start", pymongo.DESCENDING)])
+        if not record:
+            raise NoObjectMatched()
+        return record
 
 
 class ProjectRepository(BaseRepository):

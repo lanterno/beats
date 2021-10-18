@@ -16,3 +16,7 @@ class ProjectAlreadyStarted(Exception):
 
 class InconsistentEndTime(Exception):
     message = "End time must come after start time"
+
+
+class NoObjectMatched(Exception):
+    message = "The used filter didn't yield any records"

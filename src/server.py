@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
-from beats.exceptions import ProjectWasNotStarted, HeartAlreadyBeating, ProjectAlreadyStarted
+from beats.exceptions import ProjectWasNotStarted, HeartAlreadyBeating, ProjectAlreadyStarted, NoObjectMatched
 from beats.models import ProjectRepository, Project, Beat, BeatRepository
 from beats.settings import settings
 from beats.validation_models import RecordTimeValidator
@@ -136,8 +136,13 @@ async def update_beat(log: Beat):
 
 @app.get("/heart/sounds")
 async def heart_status():
-    last_beat = Beat(**serialize_from_document(BeatRepository.get_last()))
-
+    try:
+        last_beat = Beat(**serialize_from_document(BeatRepository.get_last()))
+    except NoObjectMatched:
+        return {
+            "isBeating": False,
+            "project": None,
+        }
     if last_beat.is_beating():
         return {
             "isBeating": True,
