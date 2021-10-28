@@ -82,9 +82,15 @@ async def start_project_timer(project_id: str, time_validator: RecordTimeValidat
         return {"project_id": "This project id does not exist"}
     logs = list(BeatRepository.list({"project_id": project_id, "end": None}))
     if logs:
-        raise ProjectAlreadyStarted
+        log = logs[0]
+        log = Beat(**serialize_from_document(log))
+        return JSONResponse(
+            content={"error": "another beat already in progress", "beat": log.json(exclude_none=True)},
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+        # raise ProjectAlreadyStarted
     log = Beat(project_id=project_id, start=time_validator.time)
-    BeatRepository.create(log.dict(exclude_none=True))
+    log = Beat(**serialize_from_document(BeatRepository.create(log.dict(exclude_none=True))))
     return log
 
 
