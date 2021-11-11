@@ -1,7 +1,5 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/beats-ptc/beats', '.']
+    args: ['build', '-t', 'europe-west6-docker.pkg.dev/heart-beats-x/beats-backend', '.']
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/beats-ptc/beats']
-#  - name: 'gcr.io/cloud-builders/docker'
-#    args: [ 'run', '-e', 'DB_DSN=NONE', 'gcr.io/beats-ptc/beats:latest', 'pytest' ]
+    args: ['push', 'europe-west6-docker.pkg.dev/heart-beats-x/beats-backend']
