@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
 import pymongo
@@ -31,8 +31,8 @@ class BaseRepository:
         return obj
 
     @classmethod
-    def list(cls, _filter: dict = None) -> List[dict]:
-        return cls.table.find(_filter or {})
+    def list(cls, filters: Optional[dict] = None) -> List[dict]:
+        return cls.table.find(filters or {})
 
     @classmethod
     def delete(cls, obj_id: str) -> bool:
@@ -52,12 +52,6 @@ class BeatRepository(BaseRepository):
 
 class ProjectRepository(BaseRepository):
     table = db.projects
-
-    @classmethod
-    def list(cls, _filter: dict = None) -> List[dict]:
-        _filter = _filter or {}
-        _filter.update({"archived": False})
-        return cls.table.find(_filter)
 
 
 class Beat(BaseModel):

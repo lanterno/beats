@@ -9,7 +9,7 @@ from starlette.responses import JSONResponse
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
 from beats.exceptions import ProjectWasNotStarted, HeartAlreadyBeating, ProjectAlreadyStarted, NoObjectMatched
-from beats.models import ProjectRepository, Project, Beat, BeatRepository
+from beats.domain import ProjectRepository, Project, Beat, BeatRepository
 from beats.settings import settings
 from beats.validation_models import RecordTimeValidator
 
@@ -43,10 +43,8 @@ async def authenticate(request: Request, call_next):
 
 
 @app.get("/projects")
-async def list_projects():
-    data = [serialize_from_document(p) for p in ProjectRepository.list()]
-    for item in data:
-        item.pop("archived")
+async def list_projects(archived: bool = False):
+    data = [serialize_from_document(p) for p in ProjectRepository.list({"archived": archived})]
     return data
 
 
