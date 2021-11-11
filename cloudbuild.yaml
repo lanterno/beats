@@ -1,5 +1,5 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: [ 'build', '-t', 'europe-west6-docker.pkg.dev/heart-beats-x/beats-backend/latest', '.' ]
+  args: [ 'build', '-t', 'europe-west6-docker.pkg.dev/heart-beats-x/beats-backend/backend', '.' ]
 images:
-- 'europe-west6-docker.pkg.dev/heart-beats-x/beats-backend/latest'
+- 'europe-west6-docker.pkg.dev/heart-beats-x/beats-backend/backend'
