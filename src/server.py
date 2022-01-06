@@ -21,6 +21,7 @@ origins = [
     "http://localhost:8080",
     "https://lifepete.com",
     "http://lifepete.com"
+    "http://site.lifepete.com/"
 ]
 
 
