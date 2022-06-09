@@ -79,6 +79,9 @@ class Beat(BaseModel):
         end = self.end or datetime.utcnow()
         return end - self.start
 
+    @property
+    def day(self):
+        return self.start.date()
 
 class Project(BaseModel):
     id: str = None

@@ -6,10 +6,11 @@ services:
   # and the user.
   # otherwise, you will get an authentication issue.
   # >> docker exec -it your-mongo-container bash
-  # >> use ptc
-  # >> db.createUser({user: "mango", pwd: "bango", roles: [{role: "readWrite", db: "ptc"}]})
+  # >> mongo -u MY_USER -p MY_PASSWORD
+  # > use ptc
+  # > db.createUser({user: "mango", pwd: "bango", roles: [{role: "readWrite", db: "ptc"}]})
   # you might also need:
-  # db.what_even.insert({})  # this causes the db to appear in show dbs;
+  # > db.what_even.insert({})  # this causes the db to appear in show dbs;
   #     Not sure if it has any effect though!
 
   db:

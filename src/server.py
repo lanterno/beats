@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from beats.db_helpers import serialize_from_document, serialize_to_document
-from beats.exceptions import ProjectWasNotStarted, HeartAlreadyBeating, ProjectAlreadyStarted, NoObjectMatched
+from beats.exceptions import ProjectWasNotStarted, TwoProjectInProgess, NoObjectMatched
 from beats.domain import ProjectRepository, Project, Beat, BeatRepository
 from beats.settings import settings
 from beats.validation_models import RecordTimeValidator
@@ -67,11 +67,24 @@ async def archive_project(project_id: str):
     return {"status": "success"}
 
 
-@app.get("/projects/{project_id}/today/summary/")
+@app.get("/projects/{project_id}/today/")
 async def today_time_for_project(project_id: str):
     logs = list(BeatRepository.list({"project_id": project_id}))
     today_logs = [Beat(**serialize_from_document(log)) for log in logs if Beat(**log).start.date() == date.today()]
     return {"duration": str(sum([log.duration for log in today_logs], timedelta()))}
+
+
+@app.get("/projects/{project_id}/summary/")
+async def get_project_summary(project_id: str):
+    logs = list(BeatRepository.list({"project_id": project_id}))
+    logs = [Beat(**serialize_from_document(log)) for log in logs]
+    statistical = {}
+    for log in logs:
+        if not statistical.get(log.day):
+            statistical[log.day] = []
+        statistical[log.day].append(log.duration)
+    statistical = {key: str(sum(value)) for key, value in statistical}
+    return statistical
 
 
 @app.post("/projects/{project_id}/start")
@@ -93,13 +106,13 @@ async def start_project_timer(project_id: str, time_validator: RecordTimeValidat
     return log
 
 
-@app.post("/projects/{project_id}/stop")
-async def end_project_timer(project_id: str, time_validator: RecordTimeValidator):
-    logs = list(BeatRepository.list({"project_id": project_id, "end": None}))
+@app.post("/projects/stop")
+async def end_project_timer(time_validator: RecordTimeValidator):
+    logs = list(BeatRepository.list({"end": None}))
     if not logs:
         raise ProjectWasNotStarted
     if len(logs) > 1:
-        raise HeartAlreadyBeating
+        raise TwoProjectInProgess
     log = serialize_from_document(logs[0])
     logger.info(f"We got log {log}")
     log = Beat(**log)

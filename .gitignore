@@ -58,4 +58,4 @@ target/
 *.venv
 .idea
 data/
-.env
+src/.env

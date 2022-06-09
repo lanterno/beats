@@ -24,8 +24,9 @@ Goal: To become your time-aware assistant. *To record even your heart beats.*
 - [x] Deploy on GCC
 - [x] Migrate old data
 - [x] Web App in VueJS
-- [ ] Deploy to Cloud Run
-- [ ] Finish CD using GCR, Cloud Run, and Cloud Build
+- [x] Deploy to Cloud Run
+- [x] Finish CD using GCR, Cloud Run, and Cloud Build
+- [ ] Provide meaningful errors
 - [ ] Smart assistant (alexa or google for a start)
 - [ ] Enhance API by providing a timer-specific API.
         

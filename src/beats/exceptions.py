@@ -6,7 +6,7 @@ class ProjectWasNotStarted(Exception):
     pass
 
 
-class HeartAlreadyBeating(Exception):
+class TwoProjectInProgess(Exception):
     pass
 
 
