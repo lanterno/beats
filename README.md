@@ -55,10 +55,7 @@ After that, run the pipenv commands you need. for example, `pipenv install pytes
 
 ### Deployment
 This app uses GCP for deployment.
-Currently, the process is very manual though.
-
-The manual process:
-- git push will automatically create a new image on GCR
-- Go to Compute Engine, and create a new machine 
-- specify the image as the one we just pushed
-- put the needed env variables (check the project settings.py for that)
+Git push does everything automatically.
+1. Google build run the CI automatically.
+2. If all is well, an image is built
+3. Google Run is redeployed using the new image
