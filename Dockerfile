@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:latest
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /src
 COPY src/ .
