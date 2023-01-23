@@ -83,6 +83,7 @@ class Beat(BaseModel):
     def day(self):
         return self.start.date()
 
+
 class Project(BaseModel):
     id: str = None
     name: str
