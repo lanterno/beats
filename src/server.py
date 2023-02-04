@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from beats.settings import settings
 from beats.routers.projects import router as projects_router
 from beats.routers.beats import router as beats_router
+from beats.routers.timer import router as timer_router
+
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
@@ -21,6 +23,7 @@ origins = [
 
 app.include_router(projects_router)
 app.include_router(beats_router)
+app.include_router(timer_router)
 
 
 @app.middleware("http")
