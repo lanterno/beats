@@ -12,3 +12,5 @@ ops:  # use this to install packages, and run system operations
 
 test:
 	docker-compose run -e DB_NAME="ptc-test" --rm api pytest
+run-locally:
+	poetry run uvicorn server:app --reload --host 0.0.0.0 --port 7999 --env-file src/.env

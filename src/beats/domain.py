@@ -68,6 +68,7 @@ class Beat(BaseModel):
         if self.end:
             raise CanNotStopNonBeatingHeart
         if time < self.start:  # less than symbol "<" means "before" when comparing times
+            print(self.id)
             raise InconsistentEndTime
         self.end = time
 
