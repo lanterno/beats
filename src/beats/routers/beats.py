@@ -42,3 +42,9 @@ async def get_beat(beat_id: str):
 async def update_beat(log: Beat):
     log = BeatRepository.update(serialize_to_document(log.dict()))
     return serialize_from_document(log)
+
+
+@router.delete("/{beat_id}")
+async def delete_beat(beat_id: str):
+    log = BeatRepository.delete(beat_id)
+    return {"status": "deleted!"}

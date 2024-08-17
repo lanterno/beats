@@ -31,7 +31,7 @@ Goal: To become your time-aware assistant. *To record even your heart beats.*
 - [ ] Enhance API by providing a timer-specific API.
         
        It shouldn't be directly interfacting The timelogs
-- [ ] Move GCC to euro zone to lower latency to ~ 50 ms
+- [ ] Move GCC to Eurozone to lower latency to ~ 50 ms
 - [ ] Browser plugin
 - [ ] Set up different databases for different environments
 
