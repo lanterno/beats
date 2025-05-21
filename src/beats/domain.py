@@ -35,8 +35,8 @@ class BaseRepository:
         return cls.table.find(filters or {})
 
     @classmethod
-    def delete(cls, obj_id: str) -> bool:
-        pass
+    def delete(cls, _id: str) -> bool:
+        return cls.table.delete_one({"_id": ObjectId(_id)})
 
 
 class BeatRepository(BaseRepository):
