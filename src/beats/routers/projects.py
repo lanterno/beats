@@ -53,7 +53,14 @@ async def archive_project(project_id: str):
 @router.get("/{project_id}/today/")
 async def today_time_for_project(project_id: str):
     logs = list(BeatRepository.list({"project_id": project_id}))
-    today_logs = [Beat(**serialize_from_document(log)) for log in logs if Beat(**log).start.date() == date.today()]
+    today_logs = [
+        Beat(**serialize_from_document(log))
+        for log in logs
+        if Beat(**log).start.date() == (date.today() - timedelta(days=0))
+    ]
+    return {"duration": str(sum([log.duration for log in today_logs], timedelta()))}
+
+
 @router.get("/{project_id}/week/")
 async def current_week_time_for_project(project_id: str):
     logs = list(BeatRepository.list({"project_id": project_id}))
@@ -86,17 +93,22 @@ async def start_project_timer(project_id: str, time_validator: RecordTimeValidat
     available_project_ids = [str(p["_id"]) for p in ProjectRepository.list()]
     if project_id not in available_project_ids:
         return {"project_id": "This project id does not exist"}
-    logs = list(BeatRepository.list({"project_id": project_id, "end": None}))
+    logs = list(BeatRepository.list({"end": None}))
     if logs:
         log = logs[0]
         log = Beat(**serialize_from_document(log))
         return JSONResponse(
-            content={"error": "another beat already in progress", "beat": log.json(exclude_none=True)},
-            status_code=status.HTTP_400_BAD_REQUEST
+            content={
+                "error": "another beat already in progress",
+                "beat": log.json(exclude_none=True),
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
         # raise ProjectAlreadyStarted
     log = Beat(project_id=project_id, start=time_validator.time)
-    log = Beat(**serialize_from_document(BeatRepository.create(log.dict(exclude_none=True))))
+    log = Beat(
+        **serialize_from_document(BeatRepository.create(log.dict(exclude_none=True)))
+    )
     return log
 
 
