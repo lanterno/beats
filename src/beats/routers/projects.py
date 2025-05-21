@@ -15,14 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
-    prefix="/api/projects", tags=["Projects"],
+    prefix="/api/projects",
+    tags=["Projects"],
     responses={404: {"description": "Not found"}},
 )
 
 
 @router.get("/")
 async def list_projects(archived: bool = False):
-    data = [serialize_from_document(p) for p in ProjectRepository.list({"archived": archived})]
+    data = [
+        serialize_from_document(p)
+        for p in ProjectRepository.list({"archived": archived})
+    ]
     return data
 
 
@@ -34,13 +38,15 @@ async def create_project(project: Project):
 
 @router.put("/")
 async def update_project(project: Project):
-    project = ProjectRepository.update(serialize_to_document(project.dict(exclude_none=True)))
+    project = ProjectRepository.update(
+        serialize_to_document(project.dict(exclude_none=True))
+    )
     return serialize_from_document(project)
 
 
 @router.post("/{project_id}/archive")
 async def archive_project(project_id: str):
-    ProjectRepository.update({'_id': project_id, 'archived': True})
+    ProjectRepository.update({"_id": project_id, "archived": True})
     return {"status": "success"}
 
 
@@ -68,10 +74,10 @@ async def get_project_summary(project_id: str):
     logs = [Beat(**serialize_from_document(log)) for log in logs]
     statistical = {}
     for log in logs:
-        if not statistical.get(log.day):
+        if log.day not in statistical:
             statistical[log.day] = []
         statistical[log.day].append(log.duration)
-    statistical = {key: str(sum(value)) for key, value in statistical}
+    statistical = {key: str(sum(statistical[key])) for key in statistical}
     return statistical
 
 
