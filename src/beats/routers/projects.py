@@ -48,6 +48,17 @@ async def archive_project(project_id: str):
 async def today_time_for_project(project_id: str):
     logs = list(BeatRepository.list({"project_id": project_id}))
     today_logs = [Beat(**serialize_from_document(log)) for log in logs if Beat(**log).start.date() == date.today()]
+@router.get("/{project_id}/week/")
+async def current_week_time_for_project(project_id: str):
+    logs = list(BeatRepository.list({"project_id": project_id}))
+    today = date.today()
+    today_logs = [
+        Beat(**serialize_from_document(log))
+        for log in logs
+        if (date.today() - timedelta(days=today.weekday()))
+        <= Beat(**log).start.date()
+        <= (today + timedelta(days=0))
+    ]
     return {"duration": str(sum([log.duration for log in today_logs], timedelta()))}
 
 
