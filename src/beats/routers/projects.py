@@ -60,20 +60,42 @@ async def today_time_for_project(project_id: str):
     ]
     return {"duration": str(sum([log.duration for log in today_logs], timedelta()))}
 
+from collections import defaultdict
+
 
 @router.get("/{project_id}/week/")
 async def current_week_time_for_project(project_id: str):
     logs = list(BeatRepository.list({"project_id": project_id}))
     today = date.today()
-    today_logs = [
+    start_of_week = today - timedelta(days=today.weekday())  # Monday
+    end_of_week = start_of_week + timedelta(days=6)          # Sunday
+
+    # Filter logs to only this week
+    week_logs = [
         Beat(**serialize_from_document(log))
         for log in logs
-        if (date.today() - timedelta(days=today.weekday()))
-        <= Beat(**log).start.date()
-        <= (today + timedelta(days=0))
+        if start_of_week <= Beat(**log).start.date() <= end_of_week
     ]
-    return {"duration": str(sum([log.duration for log in today_logs], timedelta()))}
 
+    # Group by weekday
+    per_day = defaultdict(timedelta)
+    for log in week_logs:
+        per_day[log.start.strftime("%A")] += log.duration
+
+    # Ensure all weekdays are present
+    result = {}
+    total_duration = timedelta()
+    for i in range(7):
+        day_date = start_of_week + timedelta(days=i)
+        day_name = day_date.strftime("%A")
+        duration = per_day.get(day_name, timedelta())
+        result[day_name] = str(duration)
+        total_duration += duration
+
+    # Add total in hours (rounded to 2 decimals)
+    result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
+
+    return result
 
 @router.get("/{project_id}/summary/")
 async def get_project_summary(project_id: str):
