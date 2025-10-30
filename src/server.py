@@ -52,9 +52,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             if "X-API-Token" not in request.headers:
                 logger.warning(f"Unauthorized request to {request.url.path}")
                 return JSONResponse(
-                    content={
-                        "error": "Header X-API-Token is required for all POST actions"
-                    },
+                    content={"error": "Header X-API-Token is required for all POST actions"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
             if request.headers["X-API-Token"] != settings.access_token:
@@ -109,7 +107,7 @@ async def inconsistent_end_time_handler(request: Request, exc: InconsistentEndTi
 app.add_middleware(AuthenticationMiddleware)
 
 
-@app.post("/talk/ding")
+@app.api_route("/talk/ding", methods=["GET", "POST"])
 async def ding():
     return {"message": "dong"}
 
