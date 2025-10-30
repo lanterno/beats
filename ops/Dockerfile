@@ -1,22 +1,31 @@
-# syntax = docker/dockerfile:latest
-FROM python:3.11-slim as python
+FROM python:3.14-slim
+
 ENV PYTHONUNBUFFERED=true
+ENV PATH="/root/.local/bin:${PATH}"
 
-FROM python as deps_builder
-WORKDIR /deps
-ENV POETRY_VIRTUALENVS_IN_PROJECT=true
-ENV POETRY_HOME=/opt/poetry
-ENV PATH="$POETRY_HOME/bin:$PATH"
-RUN python -c 'from urllib.request import urlopen; print(urlopen("https://install.python-poetry.org").read().decode())' | python -
-COPY . ./
-RUN poetry install --no-interaction --no-ansi -vvv
+WORKDIR /app
 
+# Install uv and minimal tooling
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
 
-FROM python as runtime
-COPY --from=deps_builder /deps/.venv /deps/.venv
+# Copy only project metadata first for better layer caching
+COPY pyproject.toml ./
+COPY README.md ./
+COPY LICENSE ./
+COPY uv.lock* ./
 
-WORKDIR /src
+# Install runtime dependencies (no dev) using uv and the lock if present
+RUN uv sync --no-dev --frozen || uv sync --no-dev
+
+# Copy application source
 COPY src/ ./src
-ENV PATH="/deps/.venv/bin:$PATH"
+
+# Run from app source directory
+WORKDIR /app/src
+
 EXPOSE $PORT
-CMD uvicorn server:app --reload --host 0.0.0.0 --port $PORT
+# Use uv to run the server with the project virtualenv
+CMD uv run uvicorn server:app --host 0.0.0.0 --port $PORT

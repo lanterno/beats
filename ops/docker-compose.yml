@@ -1,38 +1,61 @@
+
 version: "3.9"
 
 services:
-  # Even with all the following configuration
-  # It's still required to connect to mongo shell, and create both the DB
-  # and the user.
-  # otherwise, you will get an authentication issue.
-  # >> docker exec -it your-mongo-container bash
-  # >> mongo -u MY_USER -p MY_PASSWORD
-  # > use ptc
-  # > db.createUser({user: "mango", pwd: "bango", roles: [{role: "readWrite", db: "ptc"}]})
-  # you might also need:
-  # > db.what_even.insert({})  # this causes the db to appear in show dbs;
-  #     Not sure if it has any effect though!
-
   db:
     image: mongo:latest
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: mango
       MONGO_INITDB_ROOT_PASSWORD: bango
-      MONGO_INITDB_DATABASE: ptc
+      MONGO_INITDB_DATABASE: beats
+    profiles:
+      - dev
+
+  db_test:
+    image: mongo:latest
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mango
+      MONGO_INITDB_ROOT_PASSWORD: bango
+      MONGO_INITDB_DATABASE: beats_test
+    ports:
+      - "27018:27017"
+    profiles:
+      - test
+
   api:
     image: ptc:latest
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ops/Dockerfile
     environment:
       PORT: 80
-      DB_DSN: mongodb://mango:bango@db
+      DB_DSN: mongodb://mango:bango@db/?authSource=admin
     env_file:
-      - src/.env
+      - ../src/.env
     ports:
       - "7999:80"
     volumes:
-      - ./src:/src
+      - ../src:/src
     depends_on:
       - db
+    profiles:
+      - dev
+
+  api_test:
+    image: ptc:latest
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    environment:
+      PORT: 80
+      DB_DSN: mongodb://mango:bango@db_test/?authSource=admin
+    env_file:
+      - ../.env.test
+    volumes:
+      - ../src:/src
+    depends_on:
+      - db_test
+    profiles:
+      - test
