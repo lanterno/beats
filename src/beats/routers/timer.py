@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter
 
 from beats.db_helpers import serialize_from_document
@@ -11,7 +12,7 @@ router = APIRouter(
 
 
 @router.get("/status")
-async def heart_status():
+async def heart_status() -> dict:
     try:
         last_beat = Beat(**serialize_from_document(BeatRepository.get_last()))
     except NoObjectMatched:
@@ -19,16 +20,17 @@ async def heart_status():
             "isBeating": False,
             "project": None,
         }
+    
     if last_beat.is_beating():
         return {
             "isBeating": True,
             "project": last_beat.project_id,
             "since": last_beat.start,
-            "so_far": last_beat.duration
+            "so_far": str(last_beat.duration)
         }
     else:
         return {
             "isBeating": False,
             "lastBeatOn": last_beat.project_id,
-            "for": last_beat.duration
+            "for": str(last_beat.duration)
         }

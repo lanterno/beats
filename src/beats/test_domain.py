@@ -1,8 +1,8 @@
+from datetime import datetime
+
 import pytest
 
-from datetime import datetime
 from beats.domain import Beat
-
 from beats.exceptions import InconsistentEndTime
 
 
