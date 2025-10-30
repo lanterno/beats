@@ -47,7 +47,7 @@ resource "render_web_service" "beats_api" {
   }
   
   # Health check configuration
-  health_check_path = "/talk/ding"
+  health_check_path = "/health"
 }
 
 # Note: The Render Terraform provider (v1.7.x) does not support managing custom domains.

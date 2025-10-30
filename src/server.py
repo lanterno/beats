@@ -107,6 +107,12 @@ async def inconsistent_end_time_handler(request: Request, exc: InconsistentEndTi
 app.add_middleware(AuthenticationMiddleware)
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker and monitoring"""
+    return {"status": "healthy", "service": "beats-api"}
+
+
 @app.api_route("/talk/ding", methods=["GET", "POST"])
 async def ding():
     return {"message": "dong"}
