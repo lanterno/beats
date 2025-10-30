@@ -22,7 +22,7 @@ resource "render_web_service" "beats_api" {
   
   runtime_source = {
     docker = {
-      dockerfile_path = "ops/Dockerfile"
+      dockerfile_path = "Dockerfile"
       docker_context  = "."
       repo_url        = var.github_repo_url
       branch          = var.github_branch

@@ -1,0 +1,115 @@
+version: "3.9"
+
+services:
+  # MongoDB for development
+  db:
+    image: mongo:8
+    container_name: beats-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mango
+      MONGO_INITDB_ROOT_PASSWORD: bango
+      MONGO_INITDB_DATABASE: beats
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - beats-network
+    profiles:
+      - dev
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for testing (separate instance)
+  db_test:
+    image: mongo:8
+    container_name: beats-db-test
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mango
+      MONGO_INITDB_ROOT_PASSWORD: bango
+      MONGO_INITDB_DATABASE: beats_test
+    ports:
+      - "27018:27017"
+    networks:
+      - beats-network
+    profiles:
+      - test
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API service for development
+  api:
+    image: beats-api:latest
+    container_name: beats-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    environment:
+      PORT: 8000
+      DB_DSN: mongodb://mango:bango@db:27017/?authSource=admin
+      DB_NAME: beats
+    env_file:
+      - .env
+    ports:
+      - "7999:8000"
+    volumes:
+      # Mount source for hot-reloading in development
+      - ./src:/app/src:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - beats-network
+    profiles:
+      - dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # API service for testing
+  api_test:
+    image: beats-api:latest
+    container_name: beats-api-test
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PORT: 8000
+      DB_DSN: mongodb://mango:bango@db_test:27017/?authSource=admin
+      DB_NAME: beats_test
+      BEATS_TEST_ENV: "1"
+    env_file:
+      - .env.test
+    volumes:
+      - ./src:/app/src:ro
+    depends_on:
+      db_test:
+        condition: service_healthy
+    networks:
+      - beats-network
+    profiles:
+      - test
+    restart: "no"
+
+networks:
+  beats-network:
+    driver: bridge
+    name: beats-network
+
+volumes:
+  mongo_data:
+    name: beats-mongo-data
