@@ -59,3 +59,10 @@ target/
 .idea
 data/
 src/.env
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
+terraform/.terraform.lock.hcl
