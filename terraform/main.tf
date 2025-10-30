@@ -29,6 +29,10 @@ resource "render_web_service" "beats_api" {
       auto_deploy     = var.auto_deploy
     }
   }
+
+  custom_domains = [ {
+    name = "beats.elghareeb.space"
+  } ]
   
   # Environment variables
   env_vars = {
