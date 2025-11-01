@@ -107,6 +107,7 @@ resource "google_cloudbuild_trigger" "docker_build" {
     _REPO_NAME         = local.artifact_registry_repo
     _IMAGE_NAME        = var.service_name
     _PROJECT_ID        = var.project_id
+    _REGION            = var.region
   }
 
   service_account = google_service_account.cloudbuild.id

@@ -24,6 +24,22 @@ steps:
       - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
     id: 'push-image-latest'
 
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_IMAGE_NAME}'
+      - '--image'
+      - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+    id: 'deploy-cloud-run'
+
 # Images to store in Artifact Registry
 images:
   - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'
