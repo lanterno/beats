@@ -15,8 +15,8 @@ provider "google" {
 }
 
 locals {
-  # Use Artifact Registry instead of GCR
-  artifact_registry_location = "europe"
+  # Use europe-west1 for all resources (Artifact Registry and Cloud Run)
+  artifact_registry_location = "europe-west1"
   artifact_registry_repo      = "docker"
   
   # Build image URL for Artifact Registry
@@ -47,12 +47,6 @@ resource "google_service_account" "cloudbuild" {
 }
 
 # Grant permissions to Cloud Build service account
-resource "google_project_iam_member" "cloudbuild_storage" {
-  project = var.project_id
-  role    = "roles/storage.admin"
-  member  = "serviceAccount:${google_service_account.cloudbuild.email}"
-}
-
 resource "google_project_iam_member" "cloudbuild_run" {
   project = var.project_id
   role    = "roles/run.admin"
@@ -71,15 +65,10 @@ resource "google_project_iam_member" "cloudbuild_logging" {
   member  = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
 
+# Artifact Registry permissions for Cloud Build to push images
 resource "google_project_iam_member" "cloudbuild_artifactregistry" {
   project = var.project_id
   role    = "roles/artifactregistry.writer"
-  member  = "serviceAccount:${google_service_account.cloudbuild.email}"
-}
-
-resource "google_project_iam_member" "cloudbuild_artifactregistry_admin" {
-  project = var.project_id
-  role    = "roles/artifactregistry.admin"
   member  = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
 
@@ -188,6 +177,20 @@ resource "google_cloud_run_service" "beats_api" {
       template[0].spec[0].containers[0].image
     ]
   }
+}
+
+# Grant Cloud Run default service account access to Artifact Registry
+# Cloud Run uses the Compute Engine default service account
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
+resource "google_artifact_registry_repository_iam_member" "cloudrun_reader" {
+  project    = var.project_id
+  location   = local.artifact_registry_location
+  repository = google_artifact_registry_repository.docker.name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
 }
 
 # IAM policy to allow unauthenticated access (public)
