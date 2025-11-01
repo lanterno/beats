@@ -1,24 +1,34 @@
-output "service_id" {
-  description = "Render service ID"
-  value       = render_web_service.beats_api.id
-}
-
 output "service_url" {
-  description = "Public URL of the deployed service"
-  value       = render_web_service.beats_api.url
+  description = "Public URL of the deployed Cloud Run service"
+  value       = google_cloud_run_service.beats_api.status[0].url
 }
 
 output "service_name" {
-  description = "Name of the deployed service"
-  value       = render_web_service.beats_api.name
+  description = "Name of the deployed Cloud Run service"
+  value       = google_cloud_run_service.beats_api.name
 }
 
-output "deploy_url" {
-  description = "Dashboard URL to view the service"
-  value       = "https://dashboard.render.com/web/${render_web_service.beats_api.id}"
+output "service_location" {
+  description = "Region where the service is deployed"
+  value       = google_cloud_run_service.beats_api.location
 }
 
-output "service_host_for_dns" {
-  description = "Host to use as CNAME target for your custom domain (copy the host from this URL)"
-  value       = render_web_service.beats_api.url
+output "dashboard_url" {
+  description = "GCP Console URL to view the service"
+  value       = "https://console.cloud.google.com/run/detail/${var.region}/${google_cloud_run_service.beats_api.name}?project=${var.project_id}"
+}
+
+output "custom_domain_url" {
+  description = "Custom domain URL"
+  value       = "https://${var.custom_domain}"
+}
+
+output "cloud_build_trigger_id" {
+  description = "Cloud Build trigger ID"
+  value       = google_cloudbuild_trigger.docker_build.trigger_id
+}
+
+output "built_image_url" {
+  description = "Built Docker image URL"
+  value       = "${local.built_image}:latest"
 }

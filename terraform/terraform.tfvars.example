@@ -2,21 +2,24 @@
 # Copy this to terraform.tfvars and fill in your actual values
 # WARNING: Never commit terraform.tfvars with real credentials!
 
-# Render API key - get from https://dashboard.render.com/account/api-keys
-render_api_key = "rnd_YOUR_RENDER_API_KEY_HERE"
+# Google Cloud Configuration
+project_id = "your-gcp-project-id"
+region     = "us-central1"  # Options: us-central1, us-east1, europe-west1, etc.
 
-# Render Owner ID - find at https://dashboard.render.com/settings
-# This is your account ID (starts with usr-) or team ID (starts with tea-)
-render_owner_id = "usr-YOUR_OWNER_ID_HERE"
-
-# Service configuration
+# Service Configuration
 service_name = "beats-api"
-service_plan = "free"  # Options: free, starter, standard, pro
-region       = "oregon"  # Options: oregon, frankfurt, singapore, ohio, virginia
 
-# GitHub repository (already set to your repo)
-github_repo_url = "https://github.com/lanterno/beats"
-github_branch   = "main"
+# Container Configuration
+container_port        = 8080  # Cloud Run sets PORT env var automatically
+cpu_limit             = "1000m"  # 1 vCPU
+memory_limit          = "512Mi"
+container_concurrency = 80  # Requests per instance
+timeout_seconds       = 300  # 5 minutes
+min_instances         = 0  # Scale to zero when idle
+max_instances         = 10
+
+# Access Control
+allow_unauthenticated = true  # Set to false to require authentication
 
 # MongoDB connection string from MongoDB Atlas or other provider
 db_dsn = "mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority"
@@ -27,5 +30,15 @@ db_name = "beats"
 # API access token for authentication
 access_token = "your-secure-random-token-here"
 
-# Auto-deploy on git push
-auto_deploy = true
+# Custom Domain
+custom_domain = "beats.elghareeb.space"
+
+# Cloud SQL Configuration (optional)
+# Leave empty if not using Cloud SQL
+# Format: PROJECT:REGION:INSTANCE
+cloud_sql_instance = ""
+
+# Cloud Build Configuration
+github_owner  = "lanterno"  # Your GitHub username or org
+github_repo   = "beats"  # Your repository name
+github_branch = "main"  # Branch to trigger builds on

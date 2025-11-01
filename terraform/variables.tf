@@ -1,46 +1,69 @@
-# Render API Configuration
-variable "render_api_key" {
-  description = "Render API key for authentication"
+# Google Cloud Configuration
+variable "project_id" {
+  description = "GCP Project ID"
   type        = string
-  sensitive   = true
 }
 
-variable "render_owner_id" {
-  description = "Render account owner ID or team ID"
+variable "region" {
+  description = "GCP region to deploy to (e.g., us-central1, europe-west1)"
   type        = string
-  sensitive   = true
+  default     = "us-central1"
 }
 
 # Service Configuration
 variable "service_name" {
-  description = "Name of the Render web service"
+  description = "Name of the Cloud Run service"
   type        = string
   default     = "beats-api"
 }
 
-variable "service_plan" {
-  description = "Render service plan (free, starter, standard, pro, etc.)"
-  type        = string
-  default     = "free"
+
+variable "container_port" {
+  description = "Port the container listens on (Cloud Run sets PORT env var automatically)"
+  type        = number
+  default     = 8080
 }
 
-variable "region" {
-  description = "Render region to deploy to"
+variable "cpu_limit" {
+  description = "CPU limit per container instance"
   type        = string
-  default     = "oregon"
+  default     = "1000m"  # 1 vCPU
 }
 
-# GitHub Repository Configuration
-variable "github_repo_url" {
-  description = "GitHub repository URL (format: https://github.com/owner/repo)"
+variable "memory_limit" {
+  description = "Memory limit per container instance"
   type        = string
-  default     = "https://github.com/lanterno/beats"
+  default     = "512Mi"
 }
 
-variable "github_branch" {
-  description = "Git branch to deploy from"
-  type        = string
-  default     = "main"
+variable "container_concurrency" {
+  description = "Maximum number of concurrent requests per container instance"
+  type        = number
+  default     = 80
+}
+
+variable "timeout_seconds" {
+  description = "Request timeout in seconds"
+  type        = number
+  default     = 300
+}
+
+variable "min_instances" {
+  description = "Minimum number of container instances to keep running"
+  type        = number
+  default     = 0
+}
+
+variable "max_instances" {
+  description = "Maximum number of container instances"
+  type        = number
+  default     = 10
+}
+
+variable "allow_unauthenticated" {
+  description = "Allow unauthenticated access to the service"
+  type        = bool
+  default     = true
 }
 
 # Database Configuration
@@ -63,15 +86,35 @@ variable "access_token" {
   sensitive   = true
 }
 
-variable "auto_deploy" {
-  description = "Enable auto-deploy on git push"
-  type        = bool
-  default     = true
+# Custom Domain Configuration
+variable "custom_domain" {
+  description = "Custom domain to attach to the Cloud Run service (e.g., beats.elghareeb.space)"
+  type        = string
 }
 
-# Custom Domain Configuration (optional)
-variable "custom_domain" {
-  description = "Custom domain to attach to the web service (e.g., beats.elghareeb.space). Leave empty to disable."
+# Cloud SQL Configuration (optional)
+variable "cloud_sql_instance" {
+  description = "Cloud SQL instance connection name (format: PROJECT:REGION:INSTANCE). Leave empty if not using Cloud SQL."
   type        = string
   default     = ""
 }
+
+# Cloud Build Configuration
+variable "github_owner" {
+  description = "GitHub repository owner (username or organization)"
+  type        = string
+  default     = "lanterno"
+}
+
+variable "github_repo" {
+  description = "GitHub repository name"
+  type        = string
+  default     = "beats"
+}
+
+variable "github_branch" {
+  description = "GitHub branch to trigger builds on"
+  type        = string
+  default     = "main"
+}
+
