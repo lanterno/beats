@@ -4,7 +4,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:$SHORT_SHA'
+      - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:$COMMIT_SHA'
       - '-t'
       - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:latest'
       - '.'
@@ -14,7 +14,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:$SHORT_SHA'
+      - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:$COMMIT_SHA'
     id: 'push-image-sha'
 
   # Push latest tag
@@ -24,13 +24,9 @@ steps:
       - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:latest'
     id: 'push-image-latest'
 
-# Substitutions (SHORT_SHA is automatically provided by Cloud Build)
-substitutions:
-  SHORT_SHA: '${SHORT_SHA:-latest}'
-
 # Images to store in GCR
 images:
-  - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:$SHORT_SHA'
+  - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:$COMMIT_SHA'
   - '${_GCR_REGION}/${_PROJECT_ID}/${_IMAGE_NAME}:latest'
 
 # Build options
