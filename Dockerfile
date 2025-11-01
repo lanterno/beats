@@ -16,7 +16,6 @@ RUN apt-get update -y \
 # Copy dependency files first for better layer caching
 COPY pyproject.toml ./
 COPY README.md ./
-COPY LICENSE ./
 
 # Copy uv.lock if it exists (using wildcard to make it optional)
 COPY uv.lock* ./
