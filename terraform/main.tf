@@ -15,15 +15,25 @@ provider "google" {
 }
 
 locals {
-  gcr_region = "eu.gcr.io"
+  # Use Artifact Registry instead of GCR
+  artifact_registry_location = "europe"
+  artifact_registry_repo      = "docker"
   
-  # Build image URL
-  built_image = "${local.gcr_region}/${var.project_id}/${var.service_name}"
+  # Build image URL for Artifact Registry
+  built_image = "${local.artifact_registry_location}-docker.pkg.dev/${var.project_id}/${local.artifact_registry_repo}/${var.service_name}"
 }
 
 # Enable required APIs
 resource "google_project_service" "cloudbuild" {
   service = "cloudbuild.googleapis.com"
+  project = var.project_id
+
+  disable_on_destroy = false
+}
+
+# Enable Artifact Registry API
+resource "google_project_service" "artifactregistry" {
+  service = "artifactregistry.googleapis.com"
   project = var.project_id
 
   disable_on_destroy = false
@@ -73,6 +83,19 @@ resource "google_project_iam_member" "cloudbuild_artifactregistry_admin" {
   member  = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
 
+# Artifact Registry repository for Docker images
+resource "google_artifact_registry_repository" "docker" {
+  location      = local.artifact_registry_location
+  repository_id = local.artifact_registry_repo
+  description   = "Docker repository for ${var.service_name}"
+  format        = "DOCKER"
+  project       = var.project_id
+
+  depends_on = [
+    google_project_service.artifactregistry,
+  ]
+}
+
 # Cloud Build trigger for building Docker images
 resource "google_cloudbuild_trigger" "docker_build" {
   name        = "${var.service_name}-build"
@@ -91,15 +114,18 @@ resource "google_cloudbuild_trigger" "docker_build" {
   filename = "cloudbuild.yaml"
 
   substitutions = {
-    _GCR_REGION  = local.gcr_region
-    _IMAGE_NAME  = var.service_name
-    _PROJECT_ID  = var.project_id
+    _REGISTRY_LOCATION = local.artifact_registry_location
+    _REPO_NAME         = local.artifact_registry_repo
+    _IMAGE_NAME        = var.service_name
+    _PROJECT_ID        = var.project_id
   }
 
   service_account = google_service_account.cloudbuild.id
 
   depends_on = [
     google_project_service.cloudbuild,
+    google_project_service.artifactregistry,
+    google_artifact_registry_repository.docker,
   ]
 }
 
