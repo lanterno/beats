@@ -67,6 +67,12 @@ resource "google_project_iam_member" "cloudbuild_artifactregistry" {
   member  = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
 
+resource "google_project_iam_member" "cloudbuild_artifactregistry_admin" {
+  project = var.project_id
+  role    = "roles/artifactregistry.admin"
+  member  = "serviceAccount:${google_service_account.cloudbuild.email}"
+}
+
 # Cloud Build trigger for building Docker images
 resource "google_cloudbuild_trigger" "docker_build" {
   name        = "${var.service_name}-build"
