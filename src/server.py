@@ -32,6 +32,8 @@ origins = [
     "https://lifepete.com",
     "http://lifepete.com",
     "http://site.lifepete.com/",
+    "https://beats.elghareeb.space",
+    "http://beats.elghareeb.space",
 ]
 
 app.include_router(projects_router)
@@ -43,6 +45,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     """Modern async middleware for API authentication"""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Allow OPTIONS requests (CORS preflight) to pass through
+        if request.method == "OPTIONS":
+            origin = request.headers.get("origin", "unknown")
+            logger.debug(f"CORS preflight OPTIONS request from origin: {origin}")
+            return await call_next(request)
+        
         PROTECTED_METHODS = ["POST", "PUT", "PATCH"]
         # Allow unauthenticated access to beats endpoints (tests rely on this)
         if request.url.path.startswith("/api/beats"):
@@ -50,17 +58,23 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         if request.method in PROTECTED_METHODS:
             if "X-API-Token" not in request.headers:
-                logger.warning(f"Unauthorized request to {request.url.path}")
-                return JSONResponse(
+                origin = request.headers.get("origin", "unknown")
+                logger.warning(f"Unauthorized request to {request.url.path} from origin: {origin}")
+                response = JSONResponse(
                     content={"error": "Header X-API-Token is required for all POST actions"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
+                # CORS middleware will add headers to this response
+                return response
             if request.headers["X-API-Token"] != settings.access_token:
-                logger.warning(f"Invalid token attempt to {request.url.path}")
-                return JSONResponse(
+                origin = request.headers.get("origin", "unknown")
+                logger.warning(f"Invalid token attempt to {request.url.path} from origin: {origin}")
+                response = JSONResponse(
                     content={"error": "your X-API-Token is not valid"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
+                # CORS middleware will add headers to this response
+                return response
 
         response = await call_next(request)
         return response
@@ -118,7 +132,8 @@ async def ding():
     return {"message": "dong"}
 
 
-# CORS middleware - should be last
+# CORS middleware - should be last (wraps all other middleware)
+# This ensures CORS headers are added to all responses, including error responses
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
