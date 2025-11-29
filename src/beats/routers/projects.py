@@ -116,9 +116,9 @@ async def today_time_for_project(project_id: str):
 
 
 @router.get("/{project_id}/week/")
-async def current_week_time_for_project(project_id: str):
+async def current_week_time_for_project(project_id: str, weeks_ago: int = 0):
     logs = list(BeatRepository.list({"project_id": project_id}))
-    today = date.today()
+    today = date.today() - timedelta(weeks=weeks_ago)
     start_of_week = today - timedelta(days=today.weekday())  # Monday
     end_of_week = start_of_week + timedelta(days=6)  # Sunday
 
