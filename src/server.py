@@ -28,12 +28,8 @@ app = FastAPI(
 origins = [
     "http://localhost",
     "http://localhost:8000",
-    "http://localhost:8080",
-    "https://lifepete.com",
-    "http://lifepete.com",
-    "http://site.lifepete.com/",
     "https://beats.elghareeb.space",
-    "http://beats.elghareeb.space",
+    "https://api.beats.elghareeb.space/",
 ]
 
 app.include_router(projects_router)
@@ -50,7 +46,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             origin = request.headers.get("origin", "unknown")
             logger.debug(f"CORS preflight OPTIONS request from origin: {origin}")
             return await call_next(request)
-        
+
         PROTECTED_METHODS = ["POST", "PUT", "PATCH"]
         # Allow unauthenticated access to beats endpoints (tests rely on this)
         if request.url.path.startswith("/api/beats"):
