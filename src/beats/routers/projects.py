@@ -23,11 +23,67 @@ router = APIRouter(
 
 @router.get("/")
 async def list_projects(archived: bool = False):
-    data = [
-        serialize_from_document(p)
-        for p in ProjectRepository.list({"archived": archived})
-    ]
-    return data
+    """
+    List all projects.
+
+    Returns a list of projects with calculated time tracking fields:
+    - `spent_hours`: Total number of hours spent on the project across all time
+    - `weekly_hours`: Number of hours worked on the project in the current week (Monday-Sunday)
+    - `weekly_goal`: Weekly goal in hours for the project (null if not set)
+
+    Results are sorted by `weekly_hours` in descending order by default.
+
+    Args:
+        archived: If True, returns only archived projects. If False, returns only active projects.
+
+    Returns:
+        List of project objects, each containing:
+        - Standard project fields (id, name, description, estimation, archived)
+        - `spent_hours` (float): Total hours spent on the project
+        - `weekly_hours` (float): Hours worked this week on the project
+        - `weekly_goal` (float | null): Weekly goal in hours (null if not set)
+    """
+    projects = list(ProjectRepository.list({"archived": archived}))
+    today = date.today()
+    start_of_week = today - timedelta(days=today.weekday())  # Monday
+    end_of_week = start_of_week + timedelta(days=6)  # Sunday
+
+    result = []
+    for project in projects:
+        project_data = serialize_from_document(project)
+        project_id = project_data.get("id")
+
+        # Get all beats for this project
+        logs = list(BeatRepository.list({"project_id": project_id}))
+        beats = [Beat(**serialize_from_document(log)) for log in logs]
+
+        # Calculate total spent hours
+        total_duration = sum([beat.duration for beat in beats], timedelta())
+        spent_hours = round(total_duration.total_seconds() / 3600, 2)
+
+        # Calculate weekly hours (only beats in current week)
+        week_beats = [
+            b for b in beats if start_of_week <= b.start.date() <= end_of_week
+        ]
+        weekly_duration = sum([beat.duration for beat in week_beats], timedelta())
+        weekly_hours = round(weekly_duration.total_seconds() / 3600, 2)
+
+        # Add calculated fields
+        project_data["spent_hours"] = spent_hours
+        project_data["weekly_hours"] = weekly_hours
+
+        # Add weekly_goal field (null if not present, otherwise as float)
+        if "weekly_goal" in project_data and project_data["weekly_goal"] is not None:
+            project_data["weekly_goal"] = float(project_data["weekly_goal"])
+        else:
+            project_data["weekly_goal"] = None
+
+        result.append(project_data)
+
+    # Sort by weekly_hours descending
+    result.sort(key=lambda x: x.get("weekly_hours", 0), reverse=True)
+
+    return result
 
 
 @router.post("/", status_code=http.HTTPStatus.CREATED)
