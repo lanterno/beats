@@ -68,3 +68,5 @@ terraform/*.auto.tfvars
 terraform/.terraform.lock.hcl
 terraform/tfplan
 terraform/*.tfplan
+
+.env
