@@ -8,6 +8,7 @@ requires-python = ">=3.14"
 dependencies = [
     "dnspython>=2.7",
     "fastapi>=0.128.0",
+    "motor>=3.7.1",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
     "pymongo>=4.16.0",
@@ -20,6 +21,7 @@ dev = [
     "ipython>=9.10.0",
     "ruff>=0.15.0",
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "httpx>=0.28.1",
 ]
@@ -55,3 +57,6 @@ docstring-code-format = true
 addopts = "-q"
 testpaths = ["src"]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"

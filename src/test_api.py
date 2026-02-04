@@ -468,7 +468,7 @@ class TestBeatsDirectAPI:
 
         response = client.delete(f"/api/beats/{beat['id']}")
         assert response.status_code == 200
-        assert response.json()["status"] == "deleted!"
+        assert response.json()["deleted"] is True
 
 
 class TestTimerAPI:
@@ -532,9 +532,7 @@ class TestMiscellaneousEndpoints:
 
     def test_ding_endpoint(self):
         """Test POST /talk/ding - Simple ping endpoint"""
-        response = client.post(
-            "/talk/ding", headers={"X-API-Token": settings.access_token}
-        )
+        response = client.post("/talk/ding", headers={"X-API-Token": settings.access_token})
         assert response.status_code == 200
         assert response.json() == {"message": "dong"}
 
@@ -549,9 +547,7 @@ class TestAuthenticationMiddleware:
 
     def test_post_requests_require_auth(self):
         """Test POST requests require authentication"""
-        response = client.post(
-            "/api/projects/", json={"name": "test", "description": "test"}
-        )
+        response = client.post("/api/projects/", json={"name": "test", "description": "test"})
         assert response.status_code == 401
         assert "X-API-Token" in response.json()["error"]
 

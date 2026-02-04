@@ -1,30 +1,46 @@
+"""FastAPI application entry point with DDD architecture."""
+
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from beats.exceptions import (
-    CanNotStopNonBeatingHeart,
-    InconsistentEndTime,
-    ProjectWasNotStarted,
-    TwoProjectInProgess,
-)
-from beats.routers.beats import router as beats_router
-from beats.routers.projects import router as projects_router
-from beats.routers.timer import router as timer_router
+from beats.api.routers.beats import router as beats_router
+from beats.api.routers.projects import router as projects_router
+from beats.api.routers.timer import router as timer_router
+from beats.domain.exceptions import DomainException
+from beats.infrastructure.database import Database
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """Application lifespan manager for startup/shutdown events."""
+    # Startup: Connect to database
+    logger.info("Connecting to database...")
+    await Database.connect()
+    logger.info("Database connected.")
+    yield
+    # Shutdown: Disconnect from database
+    logger.info("Disconnecting from database...")
+    await Database.disconnect()
+    logger.info("Database disconnected.")
+
+
 app = FastAPI(
     title="Beats API",
     description="A time tracking application",
-    version="0.3.0",
+    version="0.4.0",
+    lifespan=lifespan,
 )
 
+# CORS origins
 origins = [
     "http://localhost",
     "http://localhost:8000",
@@ -33,13 +49,9 @@ origins = [
     "https://api.beats.elghareeb.space/",
 ]
 
-app.include_router(projects_router)
-app.include_router(beats_router)
-app.include_router(timer_router)
-
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
-    """Modern async middleware for API authentication"""
+    """Async middleware for API authentication."""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Allow OPTIONS requests (CORS preflight) to pass through
@@ -49,6 +61,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         PROTECTED_METHODS = ["POST", "PUT", "PATCH"]
+
         # Allow unauthenticated access to beats endpoints (tests rely on this)
         if request.url.path.startswith("/api/beats"):
             return await call_next(request)
@@ -57,80 +70,53 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             if "X-API-Token" not in request.headers:
                 origin = request.headers.get("origin", "unknown")
                 logger.warning(f"Unauthorized request to {request.url.path} from origin: {origin}")
-                response = JSONResponse(
+                return JSONResponse(
                     content={"error": "Header X-API-Token is required for all POST actions"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
-                # CORS middleware will add headers to this response
-                return response
             if request.headers["X-API-Token"] != settings.access_token:
                 origin = request.headers.get("origin", "unknown")
                 logger.warning(f"Invalid token attempt to {request.url.path} from origin: {origin}")
-                response = JSONResponse(
+                return JSONResponse(
                     content={"error": "your X-API-Token is not valid"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
-                # CORS middleware will add headers to this response
-                return response
 
-        response = await call_next(request)
-        return response
+        return await call_next(request)
 
 
-# Exception handlers
-@app.exception_handler(ProjectWasNotStarted)
-async def project_was_not_started_handler(request: Request, exc: ProjectWasNotStarted):
+# Unified domain exception handler
+@app.exception_handler(DomainException)
+async def domain_exception_handler(request: Request, exc: DomainException):
+    """Handle all domain exceptions with appropriate HTTP responses."""
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={"error": "No project is currently started"},
+        status_code=exc.status_code,
+        content={"error": exc.message},
     )
 
 
-@app.exception_handler(CanNotStopNonBeatingHeart)
-async def can_not_stop_handler(request: Request, exc: CanNotStopNonBeatingHeart):
-    return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={"error": "Project timer is not running"},
-    )
+# Include routers
+app.include_router(projects_router)
+app.include_router(beats_router)
+app.include_router(timer_router)
 
-
-@app.exception_handler(TwoProjectInProgess)
-async def two_projects_handler(request: Request, exc: TwoProjectInProgess):
-    return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={"error": "Multiple projects cannot be running simultaneously"},
-    )
-
-
-@app.exception_handler(InconsistentEndTime)
-async def inconsistent_end_time_handler(request: Request, exc: InconsistentEndTime):
-    return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={
-            "error": exc.message
-            if hasattr(exc, "message")
-            else "End time must come after start time"
-        },
-    )
-
-
-# Middleware should be added before exception handlers but after routers
+# Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Docker and monitoring"""
+    """Health check endpoint for Docker and monitoring."""
     return {"status": "healthy", "service": "beats-api"}
 
 
 @app.api_route("/talk/ding", methods=["GET", "POST"])
 async def ding():
+    """Test endpoint."""
     return {"message": "dong"}
 
 
 # CORS middleware - should be last (wraps all other middleware)
-# This ensures CORS headers are added to all responses, including error responses
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
