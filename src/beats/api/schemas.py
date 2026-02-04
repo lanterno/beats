@@ -4,8 +4,6 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from beats.domain.models import Beat, Project
-
 # Request schemas
 
 
@@ -21,6 +19,7 @@ class CreateProjectRequest(BaseModel):
     name: str
     description: str | None = None
     estimation: str | None = None
+    weekly_goal: float | None = None  # Weekly goal in hours
 
 
 class UpdateProjectRequest(BaseModel):
@@ -31,6 +30,7 @@ class UpdateProjectRequest(BaseModel):
     description: str | None = None
     estimation: str | None = None
     archived: bool = False
+    weekly_goal: float | None = None  # Weekly goal in hours
 
 
 class CreateBeatRequest(BaseModel):
@@ -63,18 +63,6 @@ class BeatResponse(BaseModel):
     duration: str
     is_active: bool
 
-    @classmethod
-    def from_domain(cls, beat: Beat) -> BeatResponse:
-        """Create response from domain model."""
-        return cls(
-            id=beat.id or "",
-            project_id=beat.project_id,
-            start=beat.start,
-            end=beat.end,
-            duration=str(beat.duration),
-            is_active=beat.is_active,
-        )
-
 
 class ProjectResponse(BaseModel):
     """Response schema for a project."""
@@ -84,17 +72,7 @@ class ProjectResponse(BaseModel):
     description: str | None = None
     estimation: str | None = None
     archived: bool = False
-
-    @classmethod
-    def from_domain(cls, project: Project) -> ProjectResponse:
-        """Create response from domain model."""
-        return cls(
-            id=project.id or "",
-            name=project.name,
-            description=project.description,
-            estimation=project.estimation,
-            archived=project.archived,
-        )
+    weekly_goal: float | None = None  # Weekly goal in hours
 
 
 class TimerStatusResponse(BaseModel):

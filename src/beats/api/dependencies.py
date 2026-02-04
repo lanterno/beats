@@ -58,7 +58,6 @@ def get_project_service(
 
 
 # Type aliases for cleaner dependency injection in routes
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]

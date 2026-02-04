@@ -4,6 +4,8 @@ from datetime import UTC, date, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from beats.domain.utils import normalize_tz
+
 
 class Beat(BaseModel):
     """A time tracking entry (heartbeat) for a project.
@@ -35,8 +37,8 @@ class Beat(BaseModel):
         """
         end = self.end or datetime.now(UTC)
         # Ensure both datetimes are timezone-aware before subtraction
-        start = self._normalize_tz(self.start)
-        end = self._normalize_tz(end)
+        start = normalize_tz(self.start)
+        end = normalize_tz(end)
         return end - start
 
     @computed_field
@@ -44,13 +46,6 @@ class Beat(BaseModel):
     def day(self) -> date:
         """The date this beat started on."""
         return self.start.date()
-
-    @staticmethod
-    def _normalize_tz(dt: datetime) -> datetime:
-        """Ensure datetime is timezone-aware (UTC if naive)."""
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=UTC)
-        return dt
 
 
 class Project(BaseModel):
@@ -67,3 +62,4 @@ class Project(BaseModel):
     description: str | None = None
     estimation: str | None = None
     archived: bool = False
+    weekly_goal: float | None = None  # Weekly goal in hours

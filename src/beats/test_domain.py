@@ -3,7 +3,6 @@
 from datetime import UTC, datetime, timedelta
 
 from beats.domain.exceptions import (
-    CannotStopInactiveBeat,
     DomainException,
     InvalidEndTime,
     NoActiveTimer,
@@ -146,9 +145,3 @@ class TestDomainExceptions:
         exc = ProjectNotFound()
         assert exc.status_code == 404
         assert exc.message == "Project not found"
-
-    def test_cannot_stop_inactive_beat(self):
-        """Test CannotStopInactiveBeat exception."""
-        exc = CannotStopInactiveBeat()
-        assert exc.status_code == 400
-        assert exc.message == "Cannot stop a beat that is not active"

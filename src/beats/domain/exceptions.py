@@ -80,12 +80,6 @@ class BeatNotFound(DomainException):
             super().__init__()
 
 
-class CannotStopInactiveBeat(DomainException):
-    """Raised when attempting to stop a beat that is already stopped."""
-
-    message = "Cannot stop a beat that is not active"
-
-
 # General data exceptions
 class NoObjectMatched(DomainException):
     """Raised when a query returns no results."""

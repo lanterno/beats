@@ -2,7 +2,6 @@
 
 from .exceptions import (
     BeatNotFound,
-    CannotStopInactiveBeat,
     DomainException,
     InvalidEndTime,
     NoActiveTimer,
@@ -19,7 +18,6 @@ __all__ = [
     # Exceptions
     "DomainException",
     "BeatNotFound",
-    "CannotStopInactiveBeat",
     "InvalidEndTime",
     "NoActiveTimer",
     "NoObjectMatched",

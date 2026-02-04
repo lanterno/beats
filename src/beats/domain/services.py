@@ -11,6 +11,7 @@ from beats.domain.exceptions import (
     TimerAlreadyRunning,
 )
 from beats.domain.models import Beat, Project
+from beats.domain.utils import normalize_tz
 from beats.infrastructure.repositories import BeatRepository, ProjectRepository
 
 
@@ -77,8 +78,8 @@ class TimerService:
         end = end_time or datetime.now(UTC)
 
         # Validate end time is after start
-        start = self._normalize_tz(active.start)
-        end_normalized = self._normalize_tz(end)
+        start = normalize_tz(active.start)
+        end_normalized = normalize_tz(end)
         if end_normalized < start:
             raise InvalidEndTime()
 
@@ -102,7 +103,7 @@ class TimerService:
                     "since": active.start.isoformat(),
                     "so_far": str(active.duration),
                 }
-        except NoObjectMatched, ProjectNotFound:
+        except (NoObjectMatched, ProjectNotFound):
             pass
 
         # No active timer - try to get last beat info
@@ -118,13 +119,6 @@ class TimerService:
             }
         except NoObjectMatched:
             return {"isBeating": False}
-
-    @staticmethod
-    def _normalize_tz(dt: datetime) -> datetime:
-        """Ensure datetime is timezone-aware (UTC if naive)."""
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=UTC)
-        return dt
 
 
 class BeatService:
@@ -145,8 +139,8 @@ class BeatService:
         """Update an existing beat."""
         # Validate the beat can be stopped if end is being set
         if beat.end:
-            start = self._normalize_tz(beat.start)
-            end = self._normalize_tz(beat.end)
+            start = normalize_tz(beat.start)
+            end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
         return await self.beat_repo.update(beat)
@@ -163,12 +157,6 @@ class BeatService:
         """List beats with optional filters."""
         return await self.beat_repo.list(project_id=project_id, date_filter=date_filter)
 
-    @staticmethod
-    def _normalize_tz(dt: datetime) -> datetime:
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=UTC)
-        return dt
-
 
 class ProjectService:
     """Service for managing project operations and analytics."""
@@ -180,10 +168,6 @@ class ProjectService:
     async def create_project(self, project: Project) -> Project:
         """Create a new project."""
         return await self.project_repo.create(project)
-
-    async def get_project(self, project_id: str) -> Project:
-        """Get a project by ID."""
-        return await self.project_repo.get_by_id(project_id)
 
     async def update_project(self, project: Project) -> Project:
         """Update an existing project."""

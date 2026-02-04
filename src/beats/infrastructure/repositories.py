@@ -116,11 +116,6 @@ class ProjectRepository(ABC):
         ...
 
     @abstractmethod
-    async def delete(self, project_id: str) -> bool:
-        """Delete a project by ID. Returns True if deleted."""
-        ...
-
-    @abstractmethod
     async def list(self, archived: bool = False) -> list[Project]:
         """List projects with optional archived filter."""
         ...
@@ -223,10 +218,6 @@ class MongoProjectRepository(ProjectRepository):
         data = serialize_to_document(project.model_dump(exclude_none=True))
         await self.collection.replace_one({"_id": ObjectId(project.id)}, data)
         return project
-
-    async def delete(self, project_id: str) -> bool:
-        result = await self.collection.delete_one({"_id": ObjectId(project_id)})
-        return result.deleted_count > 0
 
     async def list(self, archived: bool = False) -> list[Project]:
         cursor = self.collection.find({"archived": archived})
