@@ -46,7 +46,11 @@ class TimerService:
         # Check no active timer
         active = await self.beat_repo.get_active()
         if active:
-            raise TimerAlreadyRunning()
+            active_project = await self.project_repo.get_by_id(active.project_id)
+            raise TimerAlreadyRunning(
+                project_name=active_project.name,
+                beat=active.model_dump(mode="json"),
+            )
 
         # Create new beat
         start = start_time or datetime.now(UTC)

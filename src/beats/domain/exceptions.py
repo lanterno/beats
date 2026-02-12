@@ -28,6 +28,23 @@ class TimerAlreadyRunning(DomainException):
 
     message = "A timer is already running"
 
+    def __init__(
+        self,
+        project_name: str | None = None,
+        beat: "dict | None" = None,
+    ):
+        msg = (
+            f"'{project_name}' already has a beat in progress"
+            if project_name
+            else self.__class__.message
+        )
+        super().__init__(msg)
+        self.detail = {}
+        if beat is not None:
+            self.detail["beat"] = beat
+        if project_name is not None:
+            self.detail["project_name"] = project_name
+
 
 class InvalidEndTime(DomainException):
     """Raised when the end time is before the start time."""

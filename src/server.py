@@ -89,9 +89,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 @app.exception_handler(DomainException)
 async def domain_exception_handler(request: Request, exc: DomainException):
     """Handle all domain exceptions with appropriate HTTP responses."""
+    content = {"error": exc.message}
+    if hasattr(exc, "detail") and exc.detail:
+        content.update(exc.detail)
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": exc.message},
+        content=content,
     )
 
 
