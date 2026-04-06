@@ -10,6 +10,7 @@ import type { ProjectWithDuration } from "@/entities/project";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarProjectList } from "./SidebarProjectList";
+import { DeviceStatus } from "./DeviceStatus";
 
 interface SidebarProps extends TimerProps {
   projects: ProjectWithDuration[];
@@ -58,6 +59,7 @@ export function Sidebar(props: SidebarProps) {
         <SidebarTimer {...props} />
         <SidebarStats />
         <SidebarProjectList projects={projects} />
+        <DeviceStatus />
       </div>
 
       {/* Install prompt */}
