@@ -148,15 +148,15 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
           <div
             key={day.dayName}
             className={cn(
-              "bg-card px-1.5 py-1.5 min-h-[100px] flex flex-col",
+              "bg-card px-2 py-2 min-h-[160px] flex flex-col",
               isToday && "bg-accent/[0.03]"
             )}
           >
             {/* Day header */}
-            <div className="text-center mb-1">
+            <div className="text-center mb-2">
               <p
                 className={cn(
-                  "text-[10px] uppercase tracking-wide leading-none",
+                  "text-xs uppercase tracking-wide leading-none",
                   isToday ? "text-accent font-semibold" : "text-muted-foreground"
                 )}
               >
@@ -174,18 +174,18 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 
             {/* Project segments */}
             {day.segments.length > 0 ? (
-              <div className="flex-1 flex flex-col gap-0.5">
+              <div className="flex-1 flex flex-col gap-1">
                 {day.segments.map((seg) => (
                   <div
                     key={seg.projectId}
-                    className="rounded px-1 py-0.5 text-[10px] leading-tight"
+                    className="rounded px-1.5 py-1 leading-tight"
                     style={{
                       backgroundColor: seg.projectColor + "18",
-                      borderLeft: `2px solid ${seg.projectColor}`,
+                      borderLeft: `3px solid ${seg.projectColor}`,
                     }}
                   >
-                    <p className="font-medium text-foreground truncate">{seg.projectName}</p>
-                    <p className="tabular-nums text-muted-foreground">
+                    <p className="text-xs font-medium text-foreground truncate">{seg.projectName}</p>
+                    <p className="text-[11px] tabular-nums text-muted-foreground">
                       {seg.minutes >= 60
                         ? `${(seg.minutes / 60).toFixed(1)}h`
                         : `${Math.round(seg.minutes)}m`}
@@ -195,7 +195,7 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
                 {/* Day total */}
                 <p
                   className={cn(
-                    "mt-auto pt-0.5 text-center text-[10px] font-medium tabular-nums",
+                    "mt-auto pt-1 text-center text-xs font-medium tabular-nums",
                     isToday ? "text-accent" : "text-foreground/60"
                   )}
                 >
@@ -204,7 +204,7 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center">
-                <span className="text-muted-foreground/25 text-[10px]">—</span>
+                <span className="text-muted-foreground/25 text-xs">—</span>
               </div>
             )}
           </div>
