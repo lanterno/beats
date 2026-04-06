@@ -91,6 +91,11 @@ class BeatRepository(ABC):
         """List all beats for a specific project."""
         ...
 
+    @abstractmethod
+    async def list_all_completed(self) -> list[Beat]:
+        """List all completed beats (with end time set)."""
+        ...
+
 
 class ProjectRepository(ABC):
     """Abstract interface for Project persistence operations."""
@@ -184,6 +189,11 @@ class MongoBeatRepository(BeatRepository):
 
     async def list_by_project(self, project_id: str) -> list[Beat]:
         cursor = self.collection.find({"project_id": project_id})
+        docs = await cursor.to_list(length=None)
+        return [Beat(**serialize_from_document(doc)) for doc in docs]
+
+    async def list_all_completed(self) -> list[Beat]:
+        cursor = self.collection.find({"end": {"$ne": None}})
         docs = await cursor.to_list(length=None)
         return [Beat(**serialize_from_document(doc)) for doc in docs]
 

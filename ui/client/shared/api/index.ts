@@ -14,6 +14,8 @@ export {
   ProjectTotalSchema,
   ApiProjectListSchema,
   ApiBeatListSchema,
+  HeatmapDayListSchema,
+  RhythmSlotListSchema,
   parseApiResponse,
   safeParseApiResponse,
 } from "./schemas";
@@ -25,4 +27,6 @@ export type {
   TimerStatus,
   WeekBreakdown,
   ProjectTotal,
+  HeatmapDay,
+  RhythmSlot,
 } from "./schemas";

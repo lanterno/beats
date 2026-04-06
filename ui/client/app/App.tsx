@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { QueryProvider } from "./providers";
 import Index from "@/pages/index";
+import Insights from "@/pages/insights";
 import ProjectDetails from "@/pages/project-details";
 import NotFound from "@/pages/not-found";
 import { LoginPage, useAuth, initializeAuth } from "@/features/auth";
@@ -60,6 +61,7 @@ export function App() {
               {/* Protected routes with persistent layout */}
               <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Index />} />
+                <Route path="/insights" element={<Insights />} />
                 <Route path="/project/:projectId" element={<ProjectDetails />} />
               </Route>
 

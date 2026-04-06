@@ -3,10 +3,11 @@
  * Data fetching with caching for sessions.
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchBeats, updateBeat } from "./sessionApi";
+import { fetchBeats, updateBeat, fetchHeatmap, fetchDailyRhythm } from "./sessionApi";
 import { toSession, toApiBeat } from "../model";
 import type { Session, DaySummary, DayProjectBreakdown } from "../model";
 import type { ProjectWithDuration } from "@/entities/project";
+import type { HeatmapDay, RhythmSlot } from "@/shared/api";
 import { parseUtcIso, getCurrentWeekRange, getWeekRange, getDayName, formatDateShort } from "@/shared/lib";
 import { projectKeys } from "@/entities/project";
 
@@ -263,5 +264,109 @@ export function useThisWeekSessions() {
         .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
     },
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Hook to fetch contribution heatmap for a year
+ */
+export function useHeatmap(year: number) {
+  return useQuery({
+    queryKey: [...sessionKeys.all, "heatmap", year],
+    queryFn: (): Promise<HeatmapDay[]> => fetchHeatmap(year),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Hook to fetch daily rhythm chart data
+ */
+export function useDailyRhythm(period: string) {
+  return useQuery({
+    queryKey: [...sessionKeys.all, "rhythm", period],
+    queryFn: (): Promise<RhythmSlot[]> => fetchDailyRhythm(period),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Hook to compute streak data from all beats
+ */
+export function useStreaks() {
+  return useQuery({
+    queryKey: [...sessionKeys.all, "streaks"],
+    queryFn: async () => {
+      const beats = await fetchBeats();
+      const sessions = beats.filter((b) => b.start && b.end);
+
+      // Collect unique dates with sessions
+      const datesSet = new Set<string>();
+      for (const s of sessions) {
+        const d = parseUtcIso(s.start);
+        datesSet.add(d.toDateString());
+      }
+
+      // Sort dates ascending
+      const dates = Array.from(datesSet)
+        .map((d) => new Date(d))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      if (dates.length === 0) return { current: 0, longest: 0 };
+
+      // Calculate current streak (working backwards from today)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let current = 0;
+      const cursor = new Date(today);
+      while (true) {
+        if (datesSet.has(cursor.toDateString())) {
+          current++;
+          cursor.setDate(cursor.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      // Calculate longest streak
+      let longest = 1;
+      let run = 1;
+      for (let i = 1; i < dates.length; i++) {
+        const diff = (dates[i].getTime() - dates[i - 1].getTime()) / (1000 * 60 * 60 * 24);
+        if (Math.round(diff) === 1) {
+          run++;
+          longest = Math.max(longest, run);
+        } else {
+          run = 1;
+        }
+      }
+
+      return { current, longest };
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Hook to fetch last week's total minutes for comparison
+ */
+export function useLastWeekTotal() {
+  return useQuery({
+    queryKey: [...sessionKeys.all, "last-week-total"],
+    queryFn: async () => {
+      const beats = await fetchBeats();
+      const sessions = beats.filter((b) => b.start && b.end).map(toSession);
+      const { start, end } = getWeekRange(-1);
+
+      const lastWeekMinutes = sessions
+        .filter((s) => {
+          const d = parseUtcIso(s.startTime);
+          return d >= start && d <= end;
+        })
+        .reduce((sum, s) => sum + s.duration, 0);
+
+      return { lastWeekMinutes };
+    },
+    staleTime: 60_000,
   });
 }

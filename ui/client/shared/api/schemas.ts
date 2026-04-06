@@ -73,6 +73,29 @@ export const ProjectTotalSchema = z.object({
 export type ProjectTotal = z.infer<typeof ProjectTotalSchema>;
 
 // ============================================================================
+// Analytics schemas
+// ============================================================================
+
+export const HeatmapDaySchema = z.object({
+  date: z.string(),
+  total_minutes: z.number(),
+  session_count: z.number(),
+  project_count: z.number(),
+});
+
+export type HeatmapDay = z.infer<typeof HeatmapDaySchema>;
+
+export const RhythmSlotSchema = z.object({
+  slot: z.number(),
+  minutes: z.number(),
+});
+
+export type RhythmSlot = z.infer<typeof RhythmSlotSchema>;
+
+export const HeatmapDayListSchema = z.array(HeatmapDaySchema);
+export const RhythmSlotListSchema = z.array(RhythmSlotSchema);
+
+// ============================================================================
 // Array schemas for list endpoints
 // ============================================================================
 

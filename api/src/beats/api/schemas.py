@@ -110,3 +110,19 @@ class MonthlyTotalsResponse(BaseModel):
     durations_per_month: dict[str, float]
     total_minutes: int
     warnings: list[str]
+
+
+class HeatmapDayResponse(BaseModel):
+    """Response schema for a single day in the contribution heatmap."""
+
+    date: str
+    total_minutes: int
+    session_count: int
+    project_count: int
+
+
+class RhythmSlotResponse(BaseModel):
+    """Response schema for a half-hour slot in the daily rhythm chart."""
+
+    slot: int
+    minutes: float

@@ -15,5 +15,9 @@ export {
   useRecentSessions,
   useTodaySessions,
   useThisWeekSessions,
+  useHeatmap,
+  useDailyRhythm,
+  useStreaks,
+  useLastWeekTotal,
   calculateDailySummary,
 } from "./queries";

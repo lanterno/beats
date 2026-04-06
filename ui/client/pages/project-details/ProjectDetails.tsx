@@ -182,6 +182,9 @@ export default function ProjectDetails() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 pb-24">
+        {/* Session Stats */}
+        {sessionList.length > 0 && <SessionStatsBar sessions={sessionList} />}
+
         {/* Week History Table */}
         <section className="mt-6" aria-label="Week history">
           <div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
@@ -352,5 +355,37 @@ export default function ProjectDetails() {
         </section>
       </main>
     </div>
+  );
+}
+
+function SessionStatsBar({ sessions }: { sessions: Session[] }) {
+  const completed = sessions.filter((s) => s.duration > 0);
+  if (completed.length === 0) return null;
+
+  const totalDuration = completed.reduce((sum, s) => sum + s.duration, 0);
+  const avgMinutes = totalDuration / completed.length;
+  const longestMinutes = Math.max(...completed.map((s) => s.duration));
+
+  const now = new Date();
+  const thisMonthCount = completed.filter((s) => {
+    const d = parseUtcIso(s.startTime);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1 px-1">
+      <Stat label="Avg session" value={formatDuration(avgMinutes)} />
+      <Stat label="Longest" value={formatDuration(longestMinutes)} />
+      <Stat label="This month" value={`${thisMonthCount} sessions`} />
+      <Stat label="Total" value={`${completed.length} sessions`} />
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="text-xs text-muted-foreground">
+      {label}: <span className="text-foreground font-medium tabular-nums">{value}</span>
+    </span>
   );
 }

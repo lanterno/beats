@@ -1,9 +1,16 @@
 /**
  * Session API Functions
- * Low-level API calls for sessions (beats).
+ * Low-level API calls for sessions (beats) and analytics.
  */
-import { get, put, ApiBeatListSchema, parseApiResponse } from "@/shared/api";
-import type { ApiBeat } from "@/shared/api";
+import {
+  get,
+  put,
+  ApiBeatListSchema,
+  HeatmapDayListSchema,
+  RhythmSlotListSchema,
+  parseApiResponse,
+} from "@/shared/api";
+import type { ApiBeat, HeatmapDay, RhythmSlot } from "@/shared/api";
 
 /**
  * Fetch all beats, optionally filtered by project
@@ -19,4 +26,20 @@ export async function fetchBeats(projectId?: string): Promise<ApiBeat[]> {
  */
 export async function updateBeat(beat: ApiBeat): Promise<void> {
   await put<void>("/api/beats/", beat);
+}
+
+/**
+ * Fetch heatmap data for a given year
+ */
+export async function fetchHeatmap(year: number): Promise<HeatmapDay[]> {
+  const data = await get<unknown>(`/api/analytics/heatmap?year=${year}`);
+  return parseApiResponse(HeatmapDayListSchema, data);
+}
+
+/**
+ * Fetch daily rhythm data for a given period
+ */
+export async function fetchDailyRhythm(period: string): Promise<RhythmSlot[]> {
+  const data = await get<unknown>(`/api/analytics/rhythm?period=${period}`);
+  return parseApiResponse(RhythmSlotListSchema, data);
 }

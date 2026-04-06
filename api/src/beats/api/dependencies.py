@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from beats.domain.analytics import AnalyticsService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
@@ -57,7 +58,15 @@ def get_project_service(
     return ProjectService(project_repo=project_repo, beat_repo=beat_repo)
 
 
+def get_analytics_service(
+    beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+) -> AnalyticsService:
+    """Get the analytics service with injected repository."""
+    return AnalyticsService(beat_repo=beat_repo)
+
+
 # Type aliases for cleaner dependency injection in routes
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager
 from beats.api.routers.auth import router as auth_router
 from beats.api.routers.beats import router as beats_router
@@ -137,6 +138,7 @@ app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
+app.include_router(analytics_router)
 
 # Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)
