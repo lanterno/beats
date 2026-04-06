@@ -26,3 +26,7 @@ export {
   parseTimedeltaToMinutes,
   formatSecondsToTime,
 } from "./format";
+
+// Hooks
+export { useFavicon } from "./useFavicon";
+export { useKeyboardShortcuts } from "./useKeyboardShortcuts";

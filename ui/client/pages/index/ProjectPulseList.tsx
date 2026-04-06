@@ -30,10 +30,13 @@ function MiniSparkline({ data }: { data: DaySummary[] }) {
           <div
             key={i}
             className={cn(
-              "w-1.5 rounded-t-sm",
+              "w-1.5 rounded-t-sm origin-bottom",
               isToday ? "bg-accent" : day.totalMinutes > 0 ? "bg-muted-foreground/35" : "bg-muted-foreground/10"
             )}
-            style={{ height: `${h}px` }}
+            style={{
+              height: `${h}px`,
+              animation: `sparkGrow 300ms ease-out ${i * 40}ms both`,
+            }}
           />
         );
       })}

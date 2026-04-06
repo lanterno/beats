@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, BarChart3 } from "lucide-react";
 import { cn, formatSecondsToTime, parseUtcIso } from "@/shared/lib";
+import { AnimatedDigits } from "@/shared/ui";
 import type { ProjectWithDuration } from "@/entities/project";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
 import { SidebarStats } from "./SidebarStats";
@@ -50,9 +51,10 @@ export function MobileHeader(props: MobileHeaderProps) {
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: selectedProject.color }}
             />
-            <span className="font-mono text-accent text-xs tabular-nums">
-              {formatSecondsToTime(totalSeconds)}
-            </span>
+            <AnimatedDigits
+              value={formatSecondsToTime(totalSeconds)}
+              className="font-mono text-accent text-xs tabular-nums"
+            />
           </div>
         )}
       </header>

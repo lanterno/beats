@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { Play, Square, Calendar } from "lucide-react";
 import { toast } from "sonner";
-import { cn, formatSecondsToTime, parseUtcIso, toLocalDatetimeLocalString } from "@/shared/lib";
+import { cn, formatDuration, formatSecondsToTime, parseUtcIso, toLocalDatetimeLocalString } from "@/shared/lib";
+import { AnimatedDigits } from "@/shared/ui";
 import type { ProjectWithDuration } from "@/entities/project";
 
 export interface TimerProps {
@@ -54,7 +55,7 @@ export function SidebarTimer({
   };
 
   const handleStop = () => {
-    const projectName = selectedProject?.name;
+    const project = selectedProject;
     let minutes = Math.floor(elapsedSeconds / 60);
     if (customStartTime) {
       const startDate = parseUtcIso(customStartTime);
@@ -64,8 +65,20 @@ export function SidebarTimer({
     stopTimer();
     setShowStartTimeInput(false);
     setCustomStartTime(null);
-    if (projectName) {
-      toast.success(`Logged ${minutes}m to ${projectName}`);
+    if (project) {
+      toast(
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-2.5 h-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: project.color }}
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {formatDuration(minutes)} <span className="text-muted-foreground font-normal">logged to</span> {project.name}
+            </p>
+          </div>
+        </div>
+      );
     }
   };
 
@@ -80,14 +93,13 @@ export function SidebarTimer({
     >
       {/* Timer display */}
       <div className="text-center mb-3">
-        <p
+        <AnimatedDigits
+          value={formatSecondsToTime(totalSeconds)}
           className={cn(
             "font-mono text-3xl font-semibold tabular-nums tracking-tight",
             isRunning ? "text-accent" : "text-muted-foreground/60"
           )}
-        >
-          {formatSecondsToTime(totalSeconds)}
-        </p>
+        />
         {isRunning && selectedProject && (
           <div className="flex items-center justify-center gap-1.5 mt-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
