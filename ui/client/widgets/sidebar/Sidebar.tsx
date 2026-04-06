@@ -4,8 +4,8 @@
  * Pinned left on desktop, hidden on mobile (MobileHeader handles mobile).
  */
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3 } from "lucide-react";
-import { cn } from "@/shared/lib";
+import { BarChart3, Download, X } from "lucide-react";
+import { cn, useInstallPrompt, useOnlineStatus } from "@/shared/lib";
 import type { ProjectWithDuration } from "@/entities/project";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
 import { SidebarStats } from "./SidebarStats";
@@ -18,17 +18,27 @@ interface SidebarProps extends TimerProps {
 export function Sidebar(props: SidebarProps) {
   const { projects } = props;
   const location = useLocation();
+  const { canShow: canInstall, install, dismiss: dismissInstall } = useInstallPrompt();
+  const isOnline = useOnlineStatus();
 
   return (
     <aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-64 bg-sidebar border-r border-sidebar-border flex-col z-40">
       {/* Brand + Nav */}
       <div className="px-5 py-4 border-b border-sidebar-border flex items-center justify-between">
-        <Link
-          to="/"
-          className="font-heading text-xl font-bold text-sidebar-foreground hover:text-sidebar-primary transition-colors"
-        >
-          Beats
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/"
+            className="font-heading text-xl font-bold text-sidebar-foreground hover:text-sidebar-primary transition-colors"
+          >
+            Beats
+          </Link>
+          {!isOnline && (
+            <span
+              className="w-2 h-2 rounded-full bg-accent/70 animate-pulse"
+              title="Offline — changes will sync when you reconnect"
+            />
+          )}
+        </div>
         <Link
           to="/insights"
           className={cn(
@@ -49,6 +59,27 @@ export function Sidebar(props: SidebarProps) {
         <SidebarStats />
         <SidebarProjectList projects={projects} />
       </div>
+
+      {/* Install prompt */}
+      {canInstall && (
+        <div className="px-4 py-3 border-t border-sidebar-border">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={install}
+              className="flex-1 flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-primary transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Install Beats
+            </button>
+            <button
+              onClick={dismissInstall}
+              className="p-0.5 text-sidebar-foreground/30 hover:text-sidebar-foreground/60 transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

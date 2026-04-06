@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, BarChart3 } from "lucide-react";
-import { cn, formatSecondsToTime, parseUtcIso } from "@/shared/lib";
+import { cn, formatSecondsToTime, parseUtcIso, useOnlineStatus } from "@/shared/lib";
 import { AnimatedDigits } from "@/shared/ui";
 import type { ProjectWithDuration } from "@/entities/project";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
@@ -18,6 +18,7 @@ interface MobileHeaderProps extends TimerProps {
 
 export function MobileHeader(props: MobileHeaderProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const isOnline = useOnlineStatus();
 
   const { isRunning, elapsedSeconds, customStartTime, selectedProjectId, projects } = props;
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -42,6 +43,9 @@ export function MobileHeader(props: MobileHeaderProps) {
           <Link to="/" className="font-heading text-base font-bold text-sidebar-foreground">
             Beats
           </Link>
+          {!isOnline && (
+            <span className="w-1.5 h-1.5 rounded-full bg-accent/70 animate-pulse" title="Offline" />
+          )}
         </div>
 
         {isRunning && selectedProject && (

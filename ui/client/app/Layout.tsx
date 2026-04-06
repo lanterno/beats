@@ -7,7 +7,7 @@
  */
 import { useState, useCallback, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { useFavicon, useKeyboardShortcuts } from "@/shared/lib";
+import { useFavicon, useKeyboardShortcuts, useTimerNotification } from "@/shared/lib";
 import { CommandPalette } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { useTimer } from "@/features/timer";
@@ -24,6 +24,7 @@ export function Layout() {
   const selectedProject = projectsList.find((p) => p.id === timer.selectedProjectId);
 
   useFavicon(timer.isRunning, selectedProject?.color);
+  useTimerNotification(timer.isRunning, timer.elapsedSeconds, selectedProject?.name);
 
   const toggleTimer = useCallback(() => {
     if (timer.isRunning) {
