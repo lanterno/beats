@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/shared/ui";
 import { useHeatmap } from "@/entities/session";
 import type { HeatmapDay } from "@/shared/api";
 
@@ -37,7 +38,7 @@ function buildGrid(year: number, data: HeatmapDay[]) {
   const gridStart = new Date(year, 0, 1 + mondayOffset);
 
   // Build 53 weeks × 7 days
-  const weeks: Array<Array<{ date: Date; data: HeatmapDay | undefined; inYear: boolean }>> = [];
+  const weeks: Array<Array<{ date: Date; dateStr: string; data: HeatmapDay | undefined; inYear: boolean }>> = [];
   const cursor = new Date(gridStart);
 
   for (let w = 0; w < 53; w++) {
@@ -46,6 +47,7 @@ function buildGrid(year: number, data: HeatmapDay[]) {
       const dateStr = cursor.toISOString().slice(0, 10);
       week.push({
         date: new Date(cursor),
+        dateStr,
         data: dataMap.get(dateStr),
         inYear: cursor.getFullYear() === year,
       });
@@ -67,7 +69,6 @@ function getMonthLabels(weeks: ReturnType<typeof buildGrid>) {
   let lastMonth = -1;
 
   for (let w = 0; w < weeks.length; w++) {
-    // Use the Monday of each week to determine the month
     const monday = weeks[w][0];
     if (monday.inYear) {
       const month = monday.date.getMonth();
@@ -85,16 +86,24 @@ function formatTooltipDate(date: Date): string {
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-export function ContributionHeatmap() {
+interface ContributionHeatmapProps {
+  projectId?: string;
+}
+
+export function ContributionHeatmap({ projectId }: ContributionHeatmapProps) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  const { data: heatmapData, isLoading } = useHeatmap(year);
+  const { data: heatmapData, isLoading } = useHeatmap(year, projectId);
 
   const weeks = buildGrid(year, heatmapData ?? []);
   const monthLabels = getMonthLabels(weeks);
 
   const totalMinutes = (heatmapData ?? []).reduce((sum, d) => sum + d.total_minutes, 0);
   const activeDays = (heatmapData ?? []).filter((d) => d.total_minutes > 0).length;
+  const hasData = activeDays > 0;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isCurrentYear = year === currentYear;
 
   return (
     <div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
@@ -123,7 +132,7 @@ export function ContributionHeatmap() {
         </button>
 
         <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground">
-          {activeDays > 0 && (
+          {hasData && (
             <>
               <span>
                 <span className="text-foreground font-medium tabular-nums">{activeDays}</span> active days
@@ -143,7 +152,7 @@ export function ContributionHeatmap() {
             Loading...
           </div>
         ) : (
-          <div className="inline-flex flex-col gap-0.5">
+          <div className="relative inline-flex flex-col gap-0.5">
             {/* Month labels */}
             <div className="flex ml-8 mb-1">
               {monthLabels.map((label, i) => {
@@ -175,23 +184,31 @@ export function ContributionHeatmap() {
 
                   const minutes = cell.data?.total_minutes ?? 0;
                   const intensity = getIntensity(minutes);
-                  const hours = (minutes / 60).toFixed(1);
-                  const sessions = cell.data?.session_count ?? 0;
-                  const projects = cell.data?.project_count ?? 0;
+                  const isToday = isCurrentYear && cell.dateStr === todayStr;
 
                   return (
-                    <div
-                      key={weekIndex}
-                      className={cn(
-                        "w-[11px] h-[11px] rounded-[2px] transition-colors",
-                        INTENSITY_CLASSES[intensity]
-                      )}
-                      title={
-                        minutes > 0
-                          ? `${formatTooltipDate(cell.date)} — ${hours}h, ${sessions} session${sessions !== 1 ? "s" : ""}, ${projects} project${projects !== 1 ? "s" : ""}`
-                          : `${formatTooltipDate(cell.date)} — No activity`
-                      }
-                    />
+                    <Tooltip key={weekIndex}>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={cn(
+                            "w-[11px] h-[11px] rounded-[2px] transition-colors cursor-default",
+                            INTENSITY_CLASSES[intensity],
+                            isToday && "ring-1 ring-foreground/60"
+                          )}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs px-2.5 py-1.5">
+                        <p className="font-medium text-popover-foreground">{formatTooltipDate(cell.date)}</p>
+                        {minutes > 0 ? (
+                          <p className="text-muted-foreground mt-0.5">
+                            {(minutes / 60).toFixed(1)}h &middot; {cell.data!.session_count} session{cell.data!.session_count !== 1 ? "s" : ""}
+                            {!projectId && <> &middot; {cell.data!.project_count} project{cell.data!.project_count !== 1 ? "s" : ""}</>}
+                          </p>
+                        ) : (
+                          <p className="text-muted-foreground/60 mt-0.5">No activity</p>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>
@@ -205,6 +222,15 @@ export function ContributionHeatmap() {
               ))}
               <span className="text-[10px] text-muted-foreground">More</span>
             </div>
+
+            {/* Empty state overlay */}
+            {!hasData && !isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-xs text-muted-foreground/50 bg-card/80 px-3 py-1.5 rounded-md">
+                  Start tracking to see your activity here
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>

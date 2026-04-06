@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { cn } from "@/shared/lib";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/shared/ui";
 import { useDailyRhythm } from "@/entities/session";
 
 type Period = "week" | "month" | "all";
@@ -16,12 +17,23 @@ const PERIOD_LABELS: Record<Period, string> = {
 
 const HOUR_LABELS = [0, 3, 6, 9, 12, 15, 18, 21];
 
-export function DailyRhythmChart() {
+function formatSlotTime(slot: number): string {
+  const hour = Math.floor(slot / 2);
+  const min = slot % 2 === 0 ? "00" : "30";
+  return `${hour}:${min}`;
+}
+
+interface DailyRhythmChartProps {
+  projectId?: string;
+}
+
+export function DailyRhythmChart({ projectId }: DailyRhythmChartProps) {
   const [period, setPeriod] = useState<Period>("month");
-  const { data: rhythmData, isLoading } = useDailyRhythm(period);
+  const { data: rhythmData, isLoading } = useDailyRhythm(period, projectId);
 
   const slots = rhythmData ?? [];
   const maxMinutes = Math.max(...slots.map((s) => s.minutes), 1);
+  const hasData = slots.some((s) => s.minutes > 0);
 
   return (
     <div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
@@ -53,29 +65,37 @@ export function DailyRhythmChart() {
           <div className="h-28 flex items-center justify-center text-muted-foreground text-xs">
             Loading...
           </div>
+        ) : !hasData ? (
+          <div className="h-28 flex items-center justify-center text-muted-foreground/50 text-xs">
+            No sessions recorded for this period
+          </div>
         ) : (
           <div>
             {/* Bars */}
             <div className="flex items-end gap-px h-28">
               {slots.map((slot) => {
                 const height = slot.minutes > 0 ? Math.max((slot.minutes / maxMinutes) * 100, 2) : 0;
-                const hour = Math.floor(slot.slot / 2);
-                const half = slot.slot % 2 === 0 ? "00" : "30";
 
                 return (
-                  <div
-                    key={slot.slot}
-                    className="flex-1 flex items-end justify-center"
-                    title={`${hour}:${half} — ${slot.minutes.toFixed(1)} min avg`}
-                  >
-                    <div
-                      className={cn(
-                        "w-full rounded-t-sm transition-all",
-                        slot.minutes > 0 ? "bg-accent/60" : "bg-transparent"
-                      )}
-                      style={{ height: `${height}%` }}
-                    />
-                  </div>
+                  <Tooltip key={slot.slot}>
+                    <TooltipTrigger asChild>
+                      <div className="flex-1 flex items-end justify-center cursor-default">
+                        <div
+                          className={cn(
+                            "w-full rounded-t-sm transition-all",
+                            slot.minutes > 0 ? "bg-accent/60 hover:bg-accent/80" : "bg-transparent"
+                          )}
+                          style={{ height: `${height}%` }}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    {slot.minutes > 0 && (
+                      <TooltipContent side="top" className="text-xs px-2.5 py-1.5">
+                        <p className="font-medium">{formatSlotTime(slot.slot)} — {formatSlotTime(slot.slot + 1)}</p>
+                        <p className="text-muted-foreground mt-0.5">{slot.minutes.toFixed(1)} min avg</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 );
               })}
             </div>

@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, X, BarChart3 } from "lucide-react";
 import { cn, formatSecondsToTime, parseUtcIso } from "@/shared/lib";
 import type { ProjectWithDuration } from "@/entities/project";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
@@ -79,12 +79,22 @@ export function MobileHeader(props: MobileHeaderProps) {
               >
                 Beats
               </Link>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <Link
+                  to="/insights"
+                  onClick={() => setDrawerOpen(false)}
+                  className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+                  title="Insights"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                </Link>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 p-4 space-y-5">

@@ -29,17 +29,21 @@ export async function updateBeat(beat: ApiBeat): Promise<void> {
 }
 
 /**
- * Fetch heatmap data for a given year
+ * Fetch heatmap data for a given year, optionally filtered by project
  */
-export async function fetchHeatmap(year: number): Promise<HeatmapDay[]> {
-  const data = await get<unknown>(`/api/analytics/heatmap?year=${year}`);
+export async function fetchHeatmap(year: number, projectId?: string): Promise<HeatmapDay[]> {
+  let url = `/api/analytics/heatmap?year=${year}`;
+  if (projectId) url += `&project_id=${projectId}`;
+  const data = await get<unknown>(url);
   return parseApiResponse(HeatmapDayListSchema, data);
 }
 
 /**
- * Fetch daily rhythm data for a given period
+ * Fetch daily rhythm data for a given period, optionally filtered by project
  */
-export async function fetchDailyRhythm(period: string): Promise<RhythmSlot[]> {
-  const data = await get<unknown>(`/api/analytics/rhythm?period=${period}`);
+export async function fetchDailyRhythm(period: string, projectId?: string): Promise<RhythmSlot[]> {
+  let url = `/api/analytics/rhythm?period=${period}`;
+  if (projectId) url += `&project_id=${projectId}`;
+  const data = await get<unknown>(url);
   return parseApiResponse(RhythmSlotListSchema, data);
 }

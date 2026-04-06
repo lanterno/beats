@@ -26,6 +26,7 @@ export {
   useDailyRhythm,
   useStreaks,
   useLastWeekTotal,
+  useProjectBreakdown,
   calculateDailySummary,
   fetchBeats,
   updateBeat,

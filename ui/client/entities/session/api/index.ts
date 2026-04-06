@@ -19,5 +19,6 @@ export {
   useDailyRhythm,
   useStreaks,
   useLastWeekTotal,
+  useProjectBreakdown,
   calculateDailySummary,
 } from "./queries";

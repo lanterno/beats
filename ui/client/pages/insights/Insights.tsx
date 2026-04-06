@@ -1,16 +1,99 @@
 /**
  * Insights Page
- * Analytics dashboard with contribution heatmap and daily rhythm chart.
+ * Analytics dashboard with summary stats, contribution heatmap,
+ * daily rhythm chart, and top projects breakdown.
  */
+import { useState, useMemo } from "react";
+import { formatDuration } from "@/shared/lib";
+import { useProjects } from "@/entities/project";
+import { useHeatmap } from "@/entities/session";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
+import { TopProjects } from "./TopProjects";
 
 export default function Insights() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+  const { data: projects } = useProjects();
+  const currentYear = new Date().getFullYear();
+  const { data: heatmapData } = useHeatmap(currentYear, selectedProjectId);
+
+  const activeProjects = (projects ?? []).filter((p) => !p.archived);
+
+  // Compute current month summary from heatmap data
+  const monthSummary = useMemo(() => {
+    if (!heatmapData) return null;
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const monthDays = heatmapData.filter((d) => d.date.startsWith(monthPrefix));
+
+    const totalMinutes = monthDays.reduce((sum, d) => sum + d.total_minutes, 0);
+    const totalSessions = monthDays.reduce((sum, d) => sum + d.session_count, 0);
+    const activeDays = monthDays.filter((d) => d.total_minutes > 0).length;
+    const daysElapsed = now.getDate();
+    const avgDailyMinutes = daysElapsed > 0 ? totalMinutes / daysElapsed : 0;
+
+    return { totalMinutes, totalSessions, activeDays, avgDailyMinutes };
+  }, [heatmapData]);
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
-      <h1 className="font-heading text-xl text-foreground">Insights</h1>
-      <ContributionHeatmap />
-      <DailyRhythmChart />
+      {/* Header with project filter */}
+      <div className="flex items-center justify-between">
+        <h1 className="font-heading text-xl text-foreground">Insights</h1>
+        <select
+          value={selectedProjectId ?? ""}
+          onChange={(e) => setSelectedProjectId(e.target.value || undefined)}
+          className="text-xs bg-secondary/50 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <option value="">All Projects</option>
+          {activeProjects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Monthly summary stats */}
+      {monthSummary && monthSummary.totalMinutes > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <SummaryCard
+            label="Hours this month"
+            value={formatDuration(monthSummary.totalMinutes)}
+            accent
+          />
+          <SummaryCard
+            label="Sessions"
+            value={String(monthSummary.totalSessions)}
+          />
+          <SummaryCard
+            label="Active days"
+            value={String(monthSummary.activeDays)}
+          />
+          <SummaryCard
+            label="Daily average"
+            value={formatDuration(monthSummary.avgDailyMinutes)}
+          />
+        </div>
+      )}
+
+      <ContributionHeatmap projectId={selectedProjectId} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <DailyRhythmChart projectId={selectedProjectId} />
+        {!selectedProjectId && <TopProjects />}
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 text-center">
+      <p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1">{label}</p>
+      <p className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent" : "text-foreground"}`}>
+        {value}
+      </p>
     </div>
   );
 }

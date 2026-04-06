@@ -373,19 +373,21 @@ function SessionStatsBar({ sessions }: { sessions: Session[] }) {
   }).length;
 
   return (
-    <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1 px-1">
-      <Stat label="Avg session" value={formatDuration(avgMinutes)} />
-      <Stat label="Longest" value={formatDuration(longestMinutes)} />
-      <Stat label="This month" value={`${thisMonthCount} sessions`} />
-      <Stat label="Total" value={`${completed.length} sessions`} />
+    <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <StatCard label="Avg session" value={formatDuration(avgMinutes)} />
+      <StatCard label="Longest" value={formatDuration(longestMinutes)} />
+      <StatCard label="This month" value={`${thisMonthCount}`} sub="sessions" />
+      <StatCard label="Total" value={`${completed.length}`} sub="sessions" />
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <span className="text-xs text-muted-foreground">
-      {label}: <span className="text-foreground font-medium tabular-nums">{value}</span>
-    </span>
+    <div className="rounded-md border border-border/60 bg-secondary/20 px-3 py-2 text-center">
+      <p className="text-muted-foreground text-[10px] uppercase tracking-[0.12em] mb-0.5">{label}</p>
+      <p className="text-sm font-medium tabular-nums text-foreground">{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+    </div>
   );
 }

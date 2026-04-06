@@ -268,23 +268,62 @@ export function useThisWeekSessions() {
 }
 
 /**
- * Hook to fetch contribution heatmap for a year
+ * Hook to fetch contribution heatmap for a year, optionally filtered by project
  */
-export function useHeatmap(year: number) {
+export function useHeatmap(year: number, projectId?: string) {
   return useQuery({
-    queryKey: [...sessionKeys.all, "heatmap", year],
-    queryFn: (): Promise<HeatmapDay[]> => fetchHeatmap(year),
+    queryKey: [...sessionKeys.all, "heatmap", year, projectId ?? "all"],
+    queryFn: (): Promise<HeatmapDay[]> => fetchHeatmap(year, projectId),
     staleTime: 60_000,
   });
 }
 
 /**
- * Hook to fetch daily rhythm chart data
+ * Hook to fetch daily rhythm chart data, optionally filtered by project
  */
-export function useDailyRhythm(period: string) {
+export function useDailyRhythm(period: string, projectId?: string) {
   return useQuery({
-    queryKey: [...sessionKeys.all, "rhythm", period],
-    queryFn: (): Promise<RhythmSlot[]> => fetchDailyRhythm(period),
+    queryKey: [...sessionKeys.all, "rhythm", period, projectId ?? "all"],
+    queryFn: (): Promise<RhythmSlot[]> => fetchDailyRhythm(period, projectId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Hook to compute per-project time breakdown for a period
+ */
+export function useProjectBreakdown(period: "week" | "month" | "year" | "all") {
+  return useQuery({
+    queryKey: [...sessionKeys.all, "project-breakdown", period],
+    queryFn: async () => {
+      const beats = await fetchBeats();
+      const sessions = beats.filter((b) => b.start && b.end).map(toSession);
+
+      const now = new Date();
+      const filtered = sessions.filter((s) => {
+        const d = parseUtcIso(s.startTime);
+        if (period === "week") {
+          const { start, end } = getCurrentWeekRange();
+          return d >= start && d <= end;
+        }
+        if (period === "month") {
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }
+        if (period === "year") {
+          return d.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
+
+      const byProject = new Map<string, number>();
+      for (const s of filtered) {
+        byProject.set(s.projectId, (byProject.get(s.projectId) || 0) + s.duration);
+      }
+
+      return Array.from(byProject.entries())
+        .map(([projectId, minutes]) => ({ projectId, minutes }))
+        .sort((a, b) => b.minutes - a.minutes);
+    },
     staleTime: 60_000,
   });
 }
