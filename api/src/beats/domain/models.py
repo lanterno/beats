@@ -28,6 +28,8 @@ class Beat(BaseModel):
     project_id: str
     start: datetime = Field(default_factory=lambda: datetime.now(UTC))
     end: datetime | None = None
+    note: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     @computed_field
     @property

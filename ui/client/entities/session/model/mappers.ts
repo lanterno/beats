@@ -19,6 +19,8 @@ export function toSession(beat: ApiBeat): Session {
     startTime: beat.start,
     endTime: beat.end || endTime.toISOString(),
     duration: durationMinutes,
+    note: beat.note ?? undefined,
+    tags: beat.tags ?? [],
   };
 }
 
@@ -31,6 +33,8 @@ export function toApiBeat(session: Session): ApiBeat {
     start: session.startTime,
     end: session.endTime,
     project_id: session.projectId,
+    note: session.note ?? null,
+    tags: session.tags ?? [],
   };
 }
 

@@ -31,6 +31,8 @@ export const ApiBeatSchema = z.object({
   start: z.string(), // ISO datetime
   end: z.string().nullable().optional(), // ISO datetime
   project_id: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional().default([]),
 });
 
 export type ApiBeat = z.infer<typeof ApiBeatSchema>;

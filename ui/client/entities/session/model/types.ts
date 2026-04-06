@@ -12,6 +12,8 @@ export interface Session {
   startTime: string; // ISO string
   endTime: string; // ISO string
   duration: number; // in minutes
+  note?: string;
+  tags: string[];
 }
 
 /**

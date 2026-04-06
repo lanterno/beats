@@ -8,6 +8,7 @@ import { useTodaySessions } from "@/entities/session";
 import { WeekPanel } from "./WeekPanel";
 import { TodayFeed } from "./TodayFeed";
 import { TodaysPlan } from "./TodaysPlan";
+import { QuickLog } from "./QuickLog";
 import { ProjectPulseList } from "./ProjectPulseList";
 
 export default function Index() {
@@ -37,8 +38,9 @@ export default function Index() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-5">
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 space-y-4">
           <TodayFeed />
+          <QuickLog />
         </div>
         <div className="lg:col-span-2">
           <ProjectPulseList />

@@ -26,21 +26,38 @@ function SessionRow({
   return (
     <button
       onClick={() => navigate(`/project/${projectId}`)}
-      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-secondary/30 rounded-md transition-colors text-left"
+      className="w-full flex flex-col px-3 py-1.5 hover:bg-secondary/30 rounded-md transition-colors text-left"
     >
-      <div
-        className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ backgroundColor: projectColor }}
-      />
-      <span className="text-sm text-foreground truncate flex-1 min-w-0">
-        {projectName}
-      </span>
-      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-        {formatTime(session.startTime)} → {formatTime(session.endTime)}
-      </span>
-      <span className="text-sm font-medium tabular-nums text-foreground w-14 text-right shrink-0">
-        {session.duration > 0 ? formatDuration(session.duration) : "—"}
-      </span>
+      <div className="flex items-center gap-2">
+        <div
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ backgroundColor: projectColor }}
+        />
+        <span className="text-sm text-foreground truncate flex-1 min-w-0">
+          {projectName}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+          {formatTime(session.startTime)} → {formatTime(session.endTime)}
+        </span>
+        <span className="text-sm font-medium tabular-nums text-foreground w-14 text-right shrink-0">
+          {session.duration > 0 ? formatDuration(session.duration) : "—"}
+        </span>
+      </div>
+      {(session.note || session.tags.length > 0) && (
+        <div className="flex items-center gap-1.5 ml-4 mt-0.5">
+          {session.note && (
+            <span className="text-[11px] text-muted-foreground/70 truncate">{session.note}</span>
+          )}
+          {session.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent/70"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
     </button>
   );
 }

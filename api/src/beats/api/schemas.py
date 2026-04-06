@@ -40,6 +40,8 @@ class CreateBeatRequest(BaseModel):
     project_id: str
     start: datetime = Field(default_factory=lambda: datetime.now(UTC))
     end: datetime | None = None
+    note: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class UpdateBeatRequest(BaseModel):
@@ -49,6 +51,8 @@ class UpdateBeatRequest(BaseModel):
     project_id: str
     start: datetime
     end: datetime | None = None
+    note: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 # Response schemas
@@ -63,6 +67,8 @@ class BeatResponse(BaseModel):
     end: datetime | None = None
     duration: str
     is_active: bool
+    note: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class ProjectResponse(BaseModel):

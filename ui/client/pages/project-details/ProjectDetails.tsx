@@ -28,6 +28,7 @@ import {
   calculateDailySummary,
 } from "@/entities/session";
 import type { Session } from "@/entities/session";
+import { SessionTimeline } from "./SessionTimeline";
 
 const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
@@ -181,6 +182,11 @@ export default function ProjectDetails() {
         {/* Session Stats */}
         {sessionList.length > 0 && <SessionStatsBar sessions={sessionList} />}
 
+        {/* Session Timeline */}
+        {sessionList.length > 0 && (
+          <SessionTimeline sessions={sessionList} projectColor={project.color || "#d4952a"} />
+        )}
+
         {/* Week History Table */}
         <section className="mt-6" aria-label="Week history">
           <div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
@@ -305,26 +311,38 @@ export default function ProjectDetails() {
                               />
                             </div>
                           ) : (
-                            <div className="flex items-center gap-3 px-3 py-1.5 hover:bg-secondary/30 transition-colors group">
-                              <span className="text-sm tabular-nums text-foreground">
-                                {formatTime(session.startTime)} → {formatTime(session.endTime)}
-                              </span>
-                              <span
-                                className={`text-sm font-medium tabular-nums ml-auto ${
-                                  session.duration > 0
-                                    ? "text-accent"
-                                    : "text-muted-foreground/60"
-                                }`}
-                              >
-                                {session.duration > 0 ? formatDuration(session.duration) : "—"}
-                              </span>
-                              <button
-                                onClick={() => setEditingSessionId(session.id)}
-                                className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent transition-all"
-                                aria-label="Edit session"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
+                            <div className="px-3 py-1.5 hover:bg-secondary/30 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm tabular-nums text-foreground">
+                                  {formatTime(session.startTime)} → {formatTime(session.endTime)}
+                                </span>
+                                <span
+                                  className={`text-sm font-medium tabular-nums ml-auto ${
+                                    session.duration > 0
+                                      ? "text-accent"
+                                      : "text-muted-foreground/60"
+                                  }`}
+                                >
+                                  {session.duration > 0 ? formatDuration(session.duration) : "—"}
+                                </span>
+                                <button
+                                  onClick={() => setEditingSessionId(session.id)}
+                                  className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent transition-all"
+                                  aria-label="Edit session"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {(session.note || session.tags.length > 0) && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {session.note && (
+                                    <span className="text-[11px] text-muted-foreground/60 truncate">{session.note}</span>
+                                  )}
+                                  {session.tags.map((tag) => (
+                                    <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent/70">{tag}</span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
