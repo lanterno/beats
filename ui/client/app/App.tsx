@@ -12,6 +12,7 @@ import Index from "@/pages/index";
 import Insights from "@/pages/insights";
 import ProjectDetails from "@/pages/project-details";
 import NotFound from "@/pages/not-found";
+import Settings from "@/pages/settings";
 import { LoginPage, useAuth, initializeAuth } from "@/features/auth";
 import { Layout } from "./Layout";
 
@@ -63,6 +64,7 @@ export function App() {
                 <Route path="/" element={<Index />} />
                 <Route path="/insights" element={<Insights />} />
                 <Route path="/project/:projectId" element={<ProjectDetails />} />
+                <Route path="/settings" element={<Settings />} />
               </Route>
 
               {/* Fallback */}

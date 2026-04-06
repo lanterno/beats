@@ -4,7 +4,7 @@
  * Pinned left on desktop, hidden on mobile (MobileHeader handles mobile).
  */
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Download, X } from "lucide-react";
+import { BarChart3, Settings, Download, X } from "lucide-react";
 import { cn, useInstallPrompt, useOnlineStatus } from "@/shared/lib";
 import type { ProjectWithDuration } from "@/entities/project";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
@@ -40,18 +40,32 @@ export function Sidebar(props: SidebarProps) {
             />
           )}
         </div>
-        <Link
-          to="/insights"
-          className={cn(
-            "p-1.5 rounded-md transition-colors",
-            location.pathname === "/insights"
-              ? "bg-sidebar-accent text-sidebar-primary"
-              : "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
-          )}
-          title="Insights"
-        >
-          <BarChart3 className="w-4 h-4" />
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            to="/insights"
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              location.pathname === "/insights"
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+            )}
+            title="Insights"
+          >
+            <BarChart3 className="w-4 h-4" />
+          </Link>
+          <Link
+            to="/settings"
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              location.pathname === "/settings"
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+            )}
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
 
       {/* Scrollable content */}

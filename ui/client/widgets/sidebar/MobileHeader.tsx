@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, BarChart3 } from "lucide-react";
+import { Menu, X, BarChart3, Settings } from "lucide-react";
 import { cn, formatSecondsToTime, parseUtcIso, useOnlineStatus } from "@/shared/lib";
 import { AnimatedDigits } from "@/shared/ui";
 import type { ProjectWithDuration } from "@/entities/project";
@@ -93,6 +93,14 @@ export function MobileHeader(props: MobileHeaderProps) {
                   title="Insights"
                 >
                   <BarChart3 className="w-4 h-4" />
+                </Link>
+                <Link
+                  to="/settings"
+                  onClick={() => setDrawerOpen(false)}
+                  className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4" />
                 </Link>
                 <button
                   onClick={() => setDrawerOpen(false)}

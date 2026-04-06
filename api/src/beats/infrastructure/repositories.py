@@ -96,6 +96,11 @@ class BeatRepository(ABC):
         """List all completed beats (with end time set)."""
         ...
 
+    @abstractmethod
+    async def upsert(self, data: dict) -> None:
+        """Upsert a beat by ID for import/restore."""
+        ...
+
 
 class ProjectRepository(ABC):
     """Abstract interface for Project persistence operations."""
@@ -123,6 +128,11 @@ class ProjectRepository(ABC):
     @abstractmethod
     async def list(self, archived: bool = False) -> list[Project]:
         """List projects with optional archived filter."""
+        ...
+
+    @abstractmethod
+    async def upsert(self, data: dict) -> None:
+        """Upsert a project by ID for import/restore."""
         ...
 
 
@@ -197,6 +207,16 @@ class MongoBeatRepository(BeatRepository):
         docs = await cursor.to_list(length=None)
         return [Beat(**serialize_from_document(doc)) for doc in docs]
 
+    async def upsert(self, data: dict) -> None:
+        doc = serialize_to_document(dict(data))
+        doc_id = doc.pop("_id", None)
+        if doc_id:
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
+        else:
+            await self.collection.insert_one(doc)
+
 
 class MongoProjectRepository(ProjectRepository):
     """MongoDB implementation of ProjectRepository using Motor."""
@@ -234,6 +254,16 @@ class MongoProjectRepository(ProjectRepository):
         docs = await cursor.to_list(length=None)
         return [Project(**serialize_from_document(doc)) for doc in docs]
 
+    async def upsert(self, data: dict) -> None:
+        doc = serialize_to_document(dict(data))
+        doc_id = doc.pop("_id", None)
+        if doc_id:
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
+        else:
+            await self.collection.insert_one(doc)
+
 
 # Intention Repository
 
@@ -246,6 +276,10 @@ class IntentionRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_all(self) -> list[Intention]:
+        ...
+
+    @abstractmethod
     async def create(self, intention: Intention) -> Intention:
         ...
 
@@ -255,6 +289,10 @@ class IntentionRepository(ABC):
 
     @abstractmethod
     async def delete(self, intention_id: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def upsert(self, data: dict) -> None:
         ...
 
 
@@ -281,9 +319,24 @@ class MongoIntentionRepository(IntentionRepository):
         await self.collection.replace_one({"_id": ObjectId(intention.id)}, data)
         return intention
 
+    async def list_all(self) -> list[Intention]:
+        cursor = self.collection.find({})
+        docs = await cursor.to_list(length=None)
+        return [Intention(**serialize_from_document(doc)) for doc in docs]
+
     async def delete(self, intention_id: str) -> bool:
         result = await self.collection.delete_one({"_id": ObjectId(intention_id)})
         return result.deleted_count > 0
+
+    async def upsert(self, data: dict) -> None:
+        doc = serialize_to_document(dict(data))
+        doc_id = doc.pop("_id", None)
+        if doc_id:
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
+        else:
+            await self.collection.insert_one(doc)
 
 
 # DailyNote Repository
@@ -297,7 +350,16 @@ class DailyNoteRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_all(self) -> list[DailyNote]:
+        ...
+
+    @abstractmethod
     async def upsert(self, note: DailyNote) -> DailyNote:
+        ...
+
+    @abstractmethod
+    async def upsert_raw(self, data: dict) -> None:
+        """Upsert from raw dict for import/restore."""
         ...
 
 
@@ -313,6 +375,11 @@ class MongoDailyNoteRepository(DailyNoteRepository):
             return None
         return DailyNote(**serialize_from_document(doc))
 
+    async def list_all(self) -> list[DailyNote]:
+        cursor = self.collection.find({})
+        docs = await cursor.to_list(length=None)
+        return [DailyNote(**serialize_from_document(doc)) for doc in docs]
+
     async def upsert(self, note: DailyNote) -> DailyNote:
         data = serialize_to_document(note.model_dump(mode="json", exclude_none=True))
         data.pop("_id", None)
@@ -323,3 +390,13 @@ class MongoDailyNoteRepository(DailyNoteRepository):
             return_document=True,
         )
         return DailyNote(**serialize_from_document(result))
+
+    async def upsert_raw(self, data: dict) -> None:
+        doc = serialize_to_document(dict(data))
+        doc_id = doc.pop("_id", None)
+        if doc_id:
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
+        else:
+            await self.collection.insert_one(doc)
