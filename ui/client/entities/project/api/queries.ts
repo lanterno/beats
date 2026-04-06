@@ -89,16 +89,17 @@ export function useProject(projectId: string | undefined) {
 }
 
 /**
- * Hook to fetch project weekly hours for the last 5 weeks
+ * Hook to fetch project weekly hours for a given number of weeks
  */
-export function useProjectWeeks(projectId: string | undefined) {
+export function useProjectWeeks(projectId: string | undefined, weekCount: number = 5) {
   return useQuery({
-    queryKey: projectKeys.weeks(projectId || ""),
+    queryKey: [...projectKeys.weeks(projectId || ""), weekCount],
     queryFn: async (): Promise<WeekHours[]> => {
       if (!projectId) return [];
 
+      const weeks = Array.from({ length: weekCount }, (_, i) => i);
       const results = await Promise.allSettled(
-        [0, 1, 2, 3, 4].map(async (weeksAgo) => {
+        weeks.map(async (weeksAgo) => {
           const { totalHours, dailyDurations } = await fetchProjectWeek(projectId, weeksAgo);
           return { weeksAgo, hours: totalHours, dailyDurations };
         })

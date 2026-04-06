@@ -36,17 +36,19 @@ export default function ProjectDetails() {
   const { projectId } = useParams<{ projectId: string }>();
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(SESSIONS_PER_PAGE);
+  const [weekCount, setWeekCount] = useState(5);
   const hasSetInitialExpand = useRef(false);
 
   const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
   const { data: allProjects } = useProjects();
   const { data: sessions, refetch: refetchSessions } = useSessions(projectId);
-  const { data: hoursPerWeek } = useProjectWeeks(projectId);
+  const { data: hoursPerWeek } = useProjectWeeks(projectId, weekCount);
   const updateSessionMutation = useUpdateSession();
 
   // Reset visible count when project changes
   useEffect(() => {
     setVisibleCount(SESSIONS_PER_PAGE);
+    setWeekCount(5);
     hasSetInitialExpand.current = false;
   }, [projectId]);
 
@@ -231,6 +233,14 @@ export default function ProjectDetails() {
                 </div>
               </div>
             ))}
+
+            {/* Show more weeks */}
+            <button
+              onClick={() => setWeekCount((c) => c + 5)}
+              className="w-full py-2 text-sm text-accent hover:bg-accent/5 transition-colors border-t border-border/40"
+            >
+              Show 5 more weeks...
+            </button>
           </div>
         </section>
 
