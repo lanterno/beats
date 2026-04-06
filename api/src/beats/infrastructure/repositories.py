@@ -8,7 +8,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
-from beats.domain.models import Beat, Project
+from beats.domain.models import Beat, DailyNote, Intention, Project
 
 
 def serialize_from_document(doc: dict[str, Any]) -> dict[str, Any]:
@@ -233,3 +233,93 @@ class MongoProjectRepository(ProjectRepository):
         cursor = self.collection.find({"archived": archived})
         docs = await cursor.to_list(length=None)
         return [Project(**serialize_from_document(doc)) for doc in docs]
+
+
+# Intention Repository
+
+
+class IntentionRepository(ABC):
+    """Abstract interface for Intention persistence operations."""
+
+    @abstractmethod
+    async def list_by_date(self, target_date: date) -> list[Intention]:
+        ...
+
+    @abstractmethod
+    async def create(self, intention: Intention) -> Intention:
+        ...
+
+    @abstractmethod
+    async def update(self, intention: Intention) -> Intention:
+        ...
+
+    @abstractmethod
+    async def delete(self, intention_id: str) -> bool:
+        ...
+
+
+class MongoIntentionRepository(IntentionRepository):
+    """MongoDB implementation of IntentionRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
+
+    async def list_by_date(self, target_date: date) -> list[Intention]:
+        cursor = self.collection.find({"date": target_date.isoformat()})
+        docs = await cursor.to_list(length=None)
+        return [Intention(**serialize_from_document(doc)) for doc in docs]
+
+    async def create(self, intention: Intention) -> Intention:
+        data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
+        result = await self.collection.insert_one(data)
+        return Intention(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def update(self, intention: Intention) -> Intention:
+        if not intention.id:
+            raise ValueError("Intention ID is required for update")
+        data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
+        await self.collection.replace_one({"_id": ObjectId(intention.id)}, data)
+        return intention
+
+    async def delete(self, intention_id: str) -> bool:
+        result = await self.collection.delete_one({"_id": ObjectId(intention_id)})
+        return result.deleted_count > 0
+
+
+# DailyNote Repository
+
+
+class DailyNoteRepository(ABC):
+    """Abstract interface for DailyNote persistence operations."""
+
+    @abstractmethod
+    async def get_by_date(self, target_date: date) -> DailyNote | None:
+        ...
+
+    @abstractmethod
+    async def upsert(self, note: DailyNote) -> DailyNote:
+        ...
+
+
+class MongoDailyNoteRepository(DailyNoteRepository):
+    """MongoDB implementation of DailyNoteRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
+
+    async def get_by_date(self, target_date: date) -> DailyNote | None:
+        doc = await self.collection.find_one({"date": target_date.isoformat()})
+        if not doc:
+            return None
+        return DailyNote(**serialize_from_document(doc))
+
+    async def upsert(self, note: DailyNote) -> DailyNote:
+        data = serialize_to_document(note.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_update(
+            {"date": note.date.isoformat()},
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return DailyNote(**serialize_from_document(result))

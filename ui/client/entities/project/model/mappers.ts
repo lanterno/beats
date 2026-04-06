@@ -19,6 +19,7 @@ export function toProject(apiProject: ApiProject): Project {
     archived: apiProject.archived ?? false,
     estimation: apiProject.estimation ?? undefined,
     weeklyGoal: apiProject.weekly_goal ?? undefined,
+    goalType: apiProject.goal_type ?? "target",
   };
 }
 
@@ -33,5 +34,6 @@ export function toApiProject(project: Project): ApiProject {
     archived: project.archived,
     estimation: project.estimation ?? null,
     weekly_goal: project.weeklyGoal ?? null,
+    goal_type: project.goalType ?? "target",
   };
 }

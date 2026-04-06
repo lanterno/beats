@@ -1,6 +1,6 @@
 """API request and response schemas."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -31,6 +31,7 @@ class UpdateProjectRequest(BaseModel):
     estimation: str | None = None
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
+    goal_type: str = "target"  # "target" or "cap"
 
 
 class CreateBeatRequest(BaseModel):
@@ -126,3 +127,52 @@ class RhythmSlotResponse(BaseModel):
 
     slot: int
     minutes: float
+
+
+# Intention schemas
+
+
+class CreateIntentionRequest(BaseModel):
+    """Request body for creating a daily intention."""
+
+    project_id: str
+    date: date | None = None
+    planned_minutes: int = 60
+
+
+class UpdateIntentionRequest(BaseModel):
+    """Request body for updating an intention."""
+
+    completed: bool | None = None
+    planned_minutes: int | None = None
+
+
+class IntentionResponse(BaseModel):
+    """Response schema for an intention."""
+
+    id: str
+    project_id: str
+    date: date
+    planned_minutes: int
+    completed: bool
+
+
+# DailyNote schemas
+
+
+class UpsertDailyNoteRequest(BaseModel):
+    """Request body for creating or updating a daily note."""
+
+    date: date | None = None
+    note: str = ""
+    mood: int | None = None  # 1-5
+
+
+class DailyNoteResponse(BaseModel):
+    """Response schema for a daily note."""
+
+    id: str
+    date: date
+    note: str
+    mood: int | None = None
+    created_at: datetime

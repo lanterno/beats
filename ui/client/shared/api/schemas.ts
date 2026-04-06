@@ -18,6 +18,7 @@ export const ApiProjectSchema = z.object({
   estimation: z.string().nullable().optional(),
   archived: z.boolean().optional().default(false),
   weekly_goal: z.number().nullable().optional(),
+  goal_type: z.enum(["target", "cap"]).optional().default("target"),
 });
 
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
@@ -94,6 +95,36 @@ export type RhythmSlot = z.infer<typeof RhythmSlotSchema>;
 
 export const HeatmapDayListSchema = z.array(HeatmapDaySchema);
 export const RhythmSlotListSchema = z.array(RhythmSlotSchema);
+
+// ============================================================================
+// Intention schemas
+// ============================================================================
+
+export const IntentionSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  date: z.string(),
+  planned_minutes: z.number(),
+  completed: z.boolean(),
+});
+
+export type Intention = z.infer<typeof IntentionSchema>;
+
+export const IntentionListSchema = z.array(IntentionSchema);
+
+// ============================================================================
+// DailyNote schemas
+// ============================================================================
+
+export const DailyNoteSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  note: z.string(),
+  mood: z.number().nullable().optional(),
+  created_at: z.string(),
+});
+
+export type DailyNote = z.infer<typeof DailyNoteSchema>;
 
 // ============================================================================
 // Array schemas for list endpoints

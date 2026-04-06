@@ -14,6 +14,7 @@ export interface Project {
   archived: boolean;
   estimation?: string;
   weeklyGoal?: number; // Weekly goal in hours
+  goalType?: "target" | "cap";
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   parseUtcIso,
   getWeekNumberLabel,
 } from "@/shared/lib";
+import { GoalRing } from "@/shared/ui";
 import {
   useProject,
   useProjects,
@@ -163,12 +164,7 @@ export default function ProjectDetails() {
           <div className="ml-auto shrink-0 flex items-center gap-4">
             {goalPct !== null && (
               <div className="hidden sm:flex items-center gap-2">
-                <div className="w-20 h-1.5 rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full ${goalPct >= 100 ? "bg-success" : "bg-accent/80"}`}
-                    style={{ width: `${goalPct}%` }}
-                  />
-                </div>
+                <GoalRing percent={goalPct} size={28} strokeWidth={3} isCap={project.goalType === "cap"} />
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {weeklyHours.toFixed(1)}/{project.weeklyGoal}h
                 </span>

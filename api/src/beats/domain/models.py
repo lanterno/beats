@@ -1,10 +1,18 @@
 """Domain models - pure business entities with no external dependencies."""
 
 from datetime import UTC, date, datetime, timedelta
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from beats.domain.utils import normalize_tz
+
+
+class GoalType(str, Enum):
+    """Type of weekly goal: target to reach or cap to stay under."""
+
+    TARGET = "target"
+    CAP = "cap"
 
 
 class Beat(BaseModel):
@@ -63,3 +71,35 @@ class Project(BaseModel):
     estimation: str | None = None
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
+    goal_type: GoalType = GoalType.TARGET  # target or cap
+
+
+class Intention(BaseModel):
+    """A daily time-boxed intention for a project.
+
+    Users set 1-3 intentions each morning: "2h on API refactor."
+    Auto-checked when tracked time exceeds the planned duration.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    project_id: str
+    date: date = Field(default_factory=lambda: datetime.now(UTC).date())
+    planned_minutes: int = 60
+    completed: bool = False
+
+
+class DailyNote(BaseModel):
+    """An end-of-day reflection with optional mood rating.
+
+    Captures how the day went with a brief text note and mood score.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    date: date = Field(default_factory=lambda: datetime.now(UTC).date())
+    note: str = ""
+    mood: int | None = None  # 1-5 scale
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -6,6 +6,9 @@
 export { AnimatedDigits } from "./animated-digits";
 export { Button, buttonVariants, type ButtonProps } from "./button";
 export { CommandPalette } from "./command-palette";
+export { EndOfDayReview } from "./end-of-day-review";
+export { FocusMode } from "./focus-mode";
+export { GoalRing } from "./goal-ring";
 export { Progress } from "./progress";
 export { Toaster } from "./sonner";
 export {

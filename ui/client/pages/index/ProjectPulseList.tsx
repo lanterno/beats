@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layers } from "lucide-react";
 import { cn, parseUtcIso, getCurrentWeekRange, getDayName } from "@/shared/lib";
+import { GoalRing } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { fetchBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
@@ -173,15 +174,12 @@ export function ProjectPulseList() {
                 </span>
 
                 {goalPct !== null && (
-                  <div className="w-14 h-1.5 rounded-full bg-muted shrink-0">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all",
-                        goalPct >= 100 ? "bg-success" : "bg-accent/80"
-                      )}
-                      style={{ width: `${goalPct}%` }}
-                    />
-                  </div>
+                  <GoalRing
+                    percent={goalPct}
+                    size={22}
+                    strokeWidth={2.5}
+                    isCap={project.goalType === "cap"}
+                  />
                 )}
               </button>
             );

@@ -13,6 +13,8 @@ from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager
 from beats.api.routers.auth import router as auth_router
 from beats.api.routers.beats import router as beats_router
+from beats.api.routers.daily_notes import router as daily_notes_router
+from beats.api.routers.intentions import router as intentions_router
 from beats.api.routers.projects import router as projects_router
 from beats.api.routers.timer import router as timer_router
 from beats.domain.exceptions import DomainException
@@ -139,6 +141,8 @@ app.include_router(projects_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)
+app.include_router(intentions_router)
+app.include_router(daily_notes_router)
 
 # Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)

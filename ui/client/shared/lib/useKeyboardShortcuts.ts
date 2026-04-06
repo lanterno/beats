@@ -8,6 +8,7 @@ interface ShortcutActions {
   toggleTimer: () => void;
   selectProject: (index: number) => void;
   openCommandPalette: () => void;
+  toggleFocusMode: () => void;
 }
 
 function isInputFocused(): boolean {
@@ -46,6 +47,13 @@ export function useKeyboardShortcuts(actions: ShortcutActions) {
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
         actions.toggleTimer();
+        return;
+      }
+
+      // F — toggle focus mode
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        actions.toggleFocusMode();
         return;
       }
 
