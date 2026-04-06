@@ -1,0 +1,52 @@
+---
+description: Project overview and architecture for Beats time tracking system
+alwaysApply: true
+---
+
+# Beats - Time Tracking System
+
+A personal time tracking system that measures time spent on projects. "Because life is a time-series of heart beats."
+
+## Repository Structure
+
+```
+beats/
+├── api/          # Python FastAPI backend
+├── ui/           # React TypeScript frontend
+├── terraform/    # GCP infrastructure as code
+└── wall-clock/   # IoT hardware device (ESP32 + Rust)
+```
+
+## Components
+
+### API (`api/`)
+- **Stack**: Python 3, FastAPI, MongoDB
+- **Package Manager**: uv (pyproject.toml)
+- **Dev**: `make ops` to start shell, runs on port 7999
+- **Deploy**: GCP Cloud Run via Cloud Build (git push triggers CI/CD)
+- **Key files**: `src/beats/routers/` (endpoints), `src/beats/domain.py` (business logic)
+
+### UI (`ui/`)
+- **Stack**: React 19, TypeScript, Vite, TailwindCSS, Radix UI
+- **Package Manager**: pnpm
+- **Dev**: `pnpm dev` (port 8080), requires API running at localhost:7999
+- **Deploy**: GCP Cloud Run
+- **Path aliases**: `@/*` → `client/*`, `@shared/*` → `shared/*`
+- **See**: `ui/AGENTS.md` for detailed UI conventions
+
+### Terraform (`terraform/`)
+- **Provider**: GCP + Cloudflare
+- **Resources**: Cloud Run, Cloud Build, APIs
+
+### Wall Clock (`wall-clock/`)
+- **Purpose**: Physical desk button for one-touch clock in/out
+- **Hardware**: ESP32-C6 DevKitC-1, WS2812B LEDs, LiPo battery
+- **Firmware**: Rust with Embassy async runtime
+- **Config**: `firmware/src/config.rs` for WiFi/API settings
+- **Docs**: MkDocs site in `docs-site/`
+
+## Core Concepts
+
+- **Project**: A named entity to track time against
+- **Timer**: Active work session (start/stop via API or wall-clock button)
+- **Session/Timelog**: Completed time entry with start/end timestamps
