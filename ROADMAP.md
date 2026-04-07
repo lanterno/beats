@@ -125,15 +125,15 @@ Hours tell you *how long*. This phase adds *what* and *why*. Lightweight metadat
 
 ### Features
 
-- **Session notes** — Optional `note` field on beats. When stopping the timer, a small inline input: "What did you work on?" (not required, easily dismissed). Notes appear in session lists and today feed. Searchable via `GET /api/beats/?q=search_term`.
+- [x] **Session notes** — Optional `note` field on beats. When stopping the timer, a small inline input: "What did you work on?" (not required, easily dismissed). Notes appear in session lists and today feed. Searchable via `GET /api/beats/?q=search_term`.
 
-- **Tags** — Freeform tags on sessions: `["deep-work", "meetings", "learning"]`. Autocomplete from previously used tags. Appear as small pills on session rows. Filter the heatmap and insights by tag.
+- [x] **Tags** — Freeform tags on sessions: `["deep-work", "meetings", "learning"]`. Autocomplete from previously used tags. Appear as small pills on session rows. Filter the heatmap and insights by tag.
 
-- **Session timeline view** — A horizontal timeline on the project detail page: sessions as colored blocks on a 24-hour axis, one row per day. At-a-glance view of *when* you worked, not just how much.
+- [x] **Session timeline view** — A horizontal timeline on the project detail page: sessions as colored blocks on a 24-hour axis, one row per day. At-a-glance view of *when* you worked, not just how much.
 
-- **Monthly retrospective** — Auto-generated at `/insights/month/2026-04`: total hours, top project, busiest day, average daily hours, longest session, tag cloud, rhythm chart. "Copy summary" button for journaling or standups.
+- [x] **Monthly retrospective** — Auto-generated at `/insights/month/2026-04`: total hours, top project, busiest day, average daily hours, longest session, tag cloud, rhythm chart. "Copy summary" button for journaling or standups.
 
-- **Quick log** — A "+" button on the dashboard to manually log a past session. Covers the "I forgot to use the timer" case. Project, date, start/end, optional note. Uses the existing `POST /api/beats/` endpoint.
+- [x] **Quick log** — A "+" button on the dashboard to manually log a past session. Covers the "I forgot to use the timer" case. Project, date, start/end, optional note. Uses the existing `POST /api/beats/` endpoint.
 
 ### Why this matters
 
@@ -147,15 +147,15 @@ This is what makes Beats trustworthy. You can leave anytime and take everything 
 
 ### Features
 
-- **CSV export** — Export buttons on project detail and insights pages. Sessions as CSV: `date, project, start, end, duration_minutes, note, tags`. Weekly summaries as a separate CSV. Server-side streaming response.
+- [x] **CSV export** — Export buttons on project detail and insights pages. Sessions as CSV: `date, project, start, end, duration_minutes, note, tags`. Weekly summaries as a separate CSV. Server-side streaming response.
 
-- **Full JSON backup and restore** — `GET /api/export/full` dumps everything: projects, beats, intentions, notes. `POST /api/import/full` restores with upsert-by-ID. Disaster recovery and self-hosted migration in one feature.
+- [x] **Full JSON backup and restore** — `GET /api/export/full` dumps everything: projects, beats, intentions, notes. `POST /api/import/full` restores with upsert-by-ID. Disaster recovery and self-hosted migration in one feature.
 
-- **Webhooks** — Register URLs to receive `timer.start` and `timer.stop` events. Enables IFTTT, Zapier, Home Assistant, or custom automations. Managed via a settings page.
+- [x] **Webhooks** — Register URLs to receive `timer.start` and `timer.stop` events. Enables IFTTT, Zapier, Home Assistant, or custom automations. Managed via a settings page.
 
-- **Shareable weekly card** — A visual summary card (rendered via canvas or SVG): project colors, hours breakdown, streak count, goal completion. Screenshot-friendly. Useful for journaling, standups, or sharing with an accountability partner.
+- [x] **Shareable weekly card** — A visual summary card (rendered via canvas or SVG): project colors, hours breakdown, streak count, goal completion. Screenshot-friendly. Useful for journaling, standups, or sharing with an accountability partner.
 
-- **Developer page** — A `/settings` page showing API base URL, link to OpenAPI docs, curl examples for the toggle endpoint, and wall clock setup instructions.
+- [x] **Developer page** — A `/settings` page showing API base URL, link to OpenAPI docs, curl examples for the toggle endpoint, and wall clock setup instructions.
 
 ### Why this matters
 
@@ -169,17 +169,17 @@ The final layer. After 7 phases of capability, this is pure personality.
 
 ### Features
 
-- **Color themes** — 4-5 dark themes beyond the current warm brown/amber: "Midnight" (cool blue/slate), "Forest" (green/dark), "Mono" (pure grayscale), "Sunset" (warm red/orange). Implemented by swapping CSS custom property values. Preference in localStorage.
+- [x] **Color themes** — 4-5 dark themes beyond the current warm brown/amber: "Midnight" (cool blue/slate), "Forest" (green/dark), "Mono" (pure grayscale), "Sunset" (warm red/orange). Implemented by swapping CSS custom property values. Preference in localStorage.
 
-- **Custom project colors** — User-selectable colors replace the hash-based auto-assignment. A small color picker (8-10 swatches + hex input) in project creation/edit. Falls back to auto-assignment for projects without a chosen color.
+- [x] **Custom project colors** — User-selectable colors replace the hash-based auto-assignment. A small color picker (8-10 swatches + hex input) in project creation/edit. Falls back to auto-assignment for projects without a chosen color.
 
-- **Layout density** — Three options: Comfortable (current), Compact (smaller fonts, tighter spacing, more visible data), Spacious (larger type, more breathing room). A CSS class on the root adjusts spacing custom properties.
+- [x] **Layout density** — Three options: Comfortable (current), Compact (smaller fonts, tighter spacing, more visible data), Spacious (larger type, more breathing room). A CSS class on the root adjusts spacing custom properties.
 
-- **Animated empty states** — Replace "No sessions yet" text with small, tasteful SVG animations. A pulsing clock, a sprouting seedling. Sets a tone without being childish.
+- [x] **Animated empty states** — Replace "No sessions yet" text with small, tasteful SVG animations. A pulsing clock, a sprouting seedling. Sets a tone without being childish.
 
-- **Year-in-review** — Available each January: a scrollable page summarizing the entire previous year. Total hours, project rankings, busiest month, longest streak, work hour distribution. Styled as a typographic poster. Saveable as image.
+- [x] **Year-in-review** — Available each January: a scrollable page summarizing the entire previous year. Total hours, project rankings, busiest month, longest streak, work hour distribution. Styled as a typographic poster. Saveable as image.
 
-- **Wall clock theme sync** — When the web theme changes, the wall clock's LED palette matches. The status endpoint includes `theme_accent_rgb`. Energy meter LEDs use the theme's gradient instead of hardcoded colors.
+- [x] **Wall clock theme sync** — When the web theme changes, the wall clock's LED palette matches. The status endpoint includes `theme_accent_rgb`. Energy meter LEDs use the theme's gradient instead of hardcoded colors.
 
 ### Why this matters
 
@@ -205,4 +205,6 @@ Phase 2 ──┘                  │
 
 ---
 
-*Last updated: 2026-04-06*
+*Last updated: 2026-04-07*
+
+**Status: All 8 phases complete.**
