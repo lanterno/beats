@@ -2,8 +2,8 @@
  * Project TanStack Query Hooks
  * Data fetching with caching, deduplication, and automatic refetching.
  */
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchProjects, fetchProjectWeek, fetchProjectTotal } from "./projectApi";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchProjects, fetchProjectWeek, fetchProjectTotal, updateProject } from "./projectApi";
 import { toProject } from "../model";
 import type { ProjectWithDuration, WeekHours } from "../model";
 
@@ -116,6 +116,19 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
     },
     enabled: !!projectId,
     staleTime: 60_000, // Weekly data doesn't change often
+  });
+}
+
+/**
+ * Hook to update a project (e.g. color change)
+ */
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    },
   });
 }
 

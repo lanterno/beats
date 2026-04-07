@@ -11,5 +11,6 @@ export {
   useProjects,
   useProject,
   useProjectWeeks,
+  useUpdateProject,
   useInvalidateProjects,
 } from "./queries";

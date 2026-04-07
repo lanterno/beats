@@ -16,6 +16,7 @@ export const ApiProjectSchema = z.object({
   name: z.string(),
   description: z.string().nullable().optional(),
   estimation: z.string().nullable().optional(),
+  color: z.string().nullable().optional(),
   archived: z.boolean().optional().default(false),
   weekly_goal: z.number().nullable().optional(),
   goal_type: z.enum(["target", "cap"]).optional().default("target"),

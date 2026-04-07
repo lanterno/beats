@@ -2,7 +2,7 @@
  * Project API Functions
  * Low-level API calls for projects.
  */
-import { get, ApiProjectListSchema, parseApiResponse, WeekBreakdownSchema, ProjectTotalSchema } from "@/shared/api";
+import { get, put, ApiProjectListSchema, ApiProjectSchema, parseApiResponse, WeekBreakdownSchema, ProjectTotalSchema } from "@/shared/api";
 import type { ApiProject } from "@/shared/api";
 
 /**
@@ -37,6 +37,16 @@ export async function fetchProjectWeek(
 /**
  * Fetch project total minutes
  */
+/**
+ * Update a project
+ */
+export async function updateProject(
+  project: { id: string; name: string; description?: string | null; color?: string | null; archived?: boolean; weekly_goal?: number | null; goal_type?: string }
+): Promise<ApiProject> {
+  const data = await put<unknown>("/api/projects/", project);
+  return parseApiResponse(ApiProjectSchema, data);
+}
+
 export async function fetchProjectTotal(projectId: string): Promise<number> {
   try {
     const data = await get<unknown>(`/api/projects/${projectId}/total/`);

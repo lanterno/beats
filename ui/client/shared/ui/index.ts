@@ -5,6 +5,8 @@
 
 export { AnimatedDigits } from "./animated-digits";
 export { Button, buttonVariants, type ButtonProps } from "./button";
+export { ColorPicker } from "./color-picker";
+export { EmptyState } from "./empty-state";
 export { CommandPalette } from "./command-palette";
 export { EndOfDayReview } from "./end-of-day-review";
 export { FocusMode } from "./focus-mode";

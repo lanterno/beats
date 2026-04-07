@@ -71,6 +71,7 @@ class Project(BaseModel):
     name: str
     description: str | None = None
     estimation: str | None = None
+    color: str | None = None  # User-chosen hex color, e.g. "#5B9CF6"
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
     goal_type: GoalType = GoalType.TARGET  # target or cap

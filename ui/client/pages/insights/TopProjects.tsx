@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn, formatDuration } from "@/shared/lib";
+import { EmptyState } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { useProjectBreakdown } from "@/entities/session";
 
@@ -69,9 +70,7 @@ export function TopProjects() {
             Loading...
           </div>
         ) : items.length === 0 ? (
-          <div className="h-20 flex items-center justify-center text-muted-foreground/50 text-xs">
-            Track some time to see your project breakdown
-          </div>
+          <EmptyState variant="seedling" message="Track some time to see your project breakdown" />
         ) : (
           <div className="space-y-2">
             {items.map((item) => {

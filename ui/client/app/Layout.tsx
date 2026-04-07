@@ -7,7 +7,7 @@
  */
 import { useState, useCallback, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { useFavicon, useKeyboardShortcuts, useTimerNotification, parseUtcIso } from "@/shared/lib";
+import { useFavicon, useKeyboardShortcuts, useTimerNotification, useTheme, parseUtcIso } from "@/shared/lib";
 import { CommandPalette, FocusMode, EndOfDayReview } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { useTodaySessions } from "@/entities/session";
@@ -24,6 +24,9 @@ export function Layout() {
   const upsertNote = useUpsertDailyNote();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [focusModeOpen, setFocusModeOpen] = useState(false);
+
+  // Initialize theme + density from localStorage
+  useTheme();
 
   const projectsList = projects || [];
   const activeProjects = projectsList.filter((p) => !p.archived);

@@ -14,11 +14,12 @@ import {
   parseUtcIso,
   getWeekNumberLabel,
 } from "@/shared/lib";
-import { GoalRing } from "@/shared/ui";
+import { GoalRing, ColorPicker, EmptyState } from "@/shared/ui";
 import {
   useProject,
   useProjects,
   useProjectWeeks,
+  useUpdateProject,
   LoadingSpinner,
 } from "@/entities/project";
 import {
@@ -39,6 +40,7 @@ export default function ProjectDetails() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(SESSIONS_PER_PAGE);
   const [weekCount, setWeekCount] = useState(5);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const hasSetInitialExpand = useRef(false);
 
   const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
@@ -46,6 +48,7 @@ export default function ProjectDetails() {
   const { data: sessions, refetch: refetchSessions } = useSessions(projectId);
   const { data: hoursPerWeek } = useProjectWeeks(projectId, weekCount);
   const updateSessionMutation = useUpdateSession();
+  const updateProjectMutation = useUpdateProject();
 
   // Reset visible count when project changes
   useEffect(() => {
@@ -152,10 +155,31 @@ export default function ProjectDetails() {
       {/* Compact header */}
       <header className="border-b border-border/50">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
-          <div
-            className="w-3 h-3 rounded-full shrink-0"
-            style={{ backgroundColor: project.color || "hsl(var(--muted-foreground))" }}
-          />
+          <div className="relative">
+            <button
+              onClick={() => setColorPickerOpen((o) => !o)}
+              className="w-3 h-3 rounded-full shrink-0 hover:ring-2 hover:ring-accent/40 transition-all cursor-pointer"
+              style={{ backgroundColor: project.color || "hsl(var(--muted-foreground))" }}
+              title="Change color"
+            />
+            {colorPickerOpen && (
+              <ColorPicker
+                value={project.color || "#FBBF24"}
+                onChange={(color) => {
+                  updateProjectMutation.mutate({
+                    id: project.id,
+                    name: project.name,
+                    description: project.description,
+                    color,
+                    archived: project.archived,
+                    weekly_goal: project.weeklyGoal,
+                    goal_type: project.goalType,
+                  });
+                }}
+                onClose={() => setColorPickerOpen(false)}
+              />
+            )}
+          </div>
           <h1 className="font-heading text-xl text-foreground truncate">{project.name}</h1>
           {project.description && (
             <span className="text-muted-foreground text-sm hidden md:inline truncate max-w-[200px]">
@@ -265,11 +289,8 @@ export default function ProjectDetails() {
           </h2>
 
           {Object.entries(sessionsByDate).length === 0 ? (
-            <div className="text-center py-12 rounded-lg border border-dashed border-border">
-              <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-muted-foreground text-xs">
-                No sessions yet. Start the timer to begin tracking.
-              </p>
+            <div className="rounded-lg border border-dashed border-border">
+              <EmptyState variant="clock" message="No sessions yet. Start the timer to begin tracking." />
             </div>
           ) : (
             <div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">

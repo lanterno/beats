@@ -23,6 +23,7 @@ export {
   useProjects,
   useProject,
   useProjectWeeks,
+  useUpdateProject,
   useInvalidateProjects,
   fetchProjects,
   fetchProjectWeek,

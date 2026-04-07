@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { cn } from "@/shared/lib";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/shared/ui";
+import { Tooltip, TooltipTrigger, TooltipContent, EmptyState } from "@/shared/ui";
 import { useDailyRhythm } from "@/entities/session";
 
 type Period = "week" | "month" | "all";
@@ -66,9 +66,7 @@ export function DailyRhythmChart({ projectId }: DailyRhythmChartProps) {
             Loading...
           </div>
         ) : !hasData ? (
-          <div className="h-28 flex items-center justify-center text-muted-foreground/50 text-xs">
-            No sessions recorded for this period
-          </div>
+          <EmptyState variant="chart" message="No sessions recorded for this period" />
         ) : (
           <div>
             {/* Bars */}

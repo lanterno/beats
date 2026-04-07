@@ -33,3 +33,5 @@ export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useOnlineStatus } from "./useOnlineStatus";
 export { useTimerNotification } from "./useTimerNotification";
+export { useTheme, THEMES, DENSITIES } from "./useTheme";
+export type { ThemeName, Density } from "./useTheme";

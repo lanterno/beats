@@ -19,6 +19,7 @@ class CreateProjectRequest(BaseModel):
     name: str
     description: str | None = None
     estimation: str | None = None
+    color: str | None = None
     weekly_goal: float | None = None  # Weekly goal in hours
 
 
@@ -29,6 +30,7 @@ class UpdateProjectRequest(BaseModel):
     name: str
     description: str | None = None
     estimation: str | None = None
+    color: str | None = None
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
     goal_type: str = "target"  # "target" or "cap"

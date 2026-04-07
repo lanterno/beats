@@ -35,6 +35,7 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
         name=request.name,
         description=request.description,
         estimation=request.estimation,
+        color=request.color,
         weekly_goal=request.weekly_goal,
     )
     created = await service.create_project(project)
@@ -49,8 +50,10 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         name=request.name,
         description=request.description,
         estimation=request.estimation,
+        color=request.color,
         archived=request.archived,
         weekly_goal=request.weekly_goal,
+        goal_type=request.goal_type,
     )
     updated = await service.update_project(project)
     return updated.model_dump()
