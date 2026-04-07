@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Copy, Check } from "lucide-react";
 import { formatDuration, parseUtcIso } from "@/shared/lib";
+import { EmptyState } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { useDailyRhythm } from "@/entities/session";
 import { fetchBeats } from "@/entities/session";
@@ -191,9 +192,7 @@ export default function MonthlyRetrospective() {
           Loading...
         </div>
       ) : !stats ? (
-        <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">
-          No sessions recorded in {MONTH_NAMES[month]} {year}
-        </div>
+        <EmptyState variant="chart" message={`No sessions recorded in ${MONTH_NAMES[month]} ${year}`} />
       ) : (
         <>
           {/* Stat cards */}

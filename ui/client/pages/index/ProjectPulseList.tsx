@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layers } from "lucide-react";
 import { cn, parseUtcIso, getCurrentWeekRange, getDayName } from "@/shared/lib";
-import { GoalRing } from "@/shared/ui";
+import { GoalRing, EmptyState } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { fetchBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
@@ -118,8 +118,8 @@ export function ProjectPulseList() {
           <Layers className="w-3.5 h-3.5 text-accent/75" />
           Projects
         </h2>
-        <div className="rounded-lg border border-dashed border-border py-8 text-center">
-          <p className="text-muted-foreground text-xs">No projects yet.</p>
+        <div className="rounded-lg border border-dashed border-border">
+          <EmptyState variant="seedling" message="No projects yet. Create one to start tracking." />
         </div>
       </div>
     );

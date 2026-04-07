@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, CalendarDays, List } from "lucide-react";
 import { cn, getWeekRange, formatDateShort, formatDuration } from "@/shared/lib";
+import { EmptyState } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
 import { useWeeklySessionsByProject } from "@/entities/session";
 import type { DayProjectBreakdown } from "@/entities/session";
@@ -127,9 +128,7 @@ export function WeekPanel() {
       ) : weekData && view === "projects" ? (
         <ProjectTotalsView data={weekData} />
       ) : (
-        <div className="h-32 flex items-center justify-center text-muted-foreground/40 text-xs">
-          No data
-        </div>
+        <EmptyState variant="chart" message="No data for this week yet" />
       )}
     </div>
   );

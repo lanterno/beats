@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, Clock } from "lucide-react";
 import { cn, formatTime, formatDuration, parseUtcIso } from "@/shared/lib";
+import { EmptyState } from "@/shared/ui";
 import { useTodaySessions, useThisWeekSessions } from "@/entities/session";
 import { useProjects } from "@/entities/project";
 import type { Session } from "@/entities/session";
@@ -191,10 +192,8 @@ export function TodayFeed() {
               );
             })
           ) : (
-            <div className="px-3 py-4 text-center">
-              <p className="text-muted-foreground/60 text-xs">
-                No sessions yet. Start the timer to begin tracking.
-              </p>
+            <div className="px-3 py-2">
+              <EmptyState variant="clock" message="No sessions yet. Start the timer to begin tracking." />
             </div>
           )}
         </div>
