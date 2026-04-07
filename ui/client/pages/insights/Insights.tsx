@@ -43,7 +43,15 @@ export default function Insights() {
     <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
       {/* Header with project filter */}
       <div className="flex items-center justify-between">
-        <h1 className="font-heading text-xl text-foreground">Insights</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-heading text-xl text-foreground">Insights</h1>
+          <Link
+            to={`/insights/year/${new Date().getFullYear() - 1}`}
+            className="text-[10px] px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+          >
+            {new Date().getFullYear() - 1} Review
+          </Link>
+        </div>
         <div className="flex items-center gap-2">
           {allTags && allTags.length > 0 && (
             <select
