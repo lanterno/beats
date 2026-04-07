@@ -29,21 +29,30 @@ export async function updateBeat(beat: ApiBeat): Promise<void> {
 }
 
 /**
- * Fetch heatmap data for a given year, optionally filtered by project
+ * Fetch heatmap data for a given year, optionally filtered by project and/or tag
  */
-export async function fetchHeatmap(year: number, projectId?: string): Promise<HeatmapDay[]> {
+export async function fetchHeatmap(year: number, projectId?: string, tag?: string): Promise<HeatmapDay[]> {
   let url = `/api/analytics/heatmap?year=${year}`;
   if (projectId) url += `&project_id=${projectId}`;
+  if (tag) url += `&tag=${encodeURIComponent(tag)}`;
   const data = await get<unknown>(url);
   return parseApiResponse(HeatmapDayListSchema, data);
 }
 
 /**
- * Fetch daily rhythm data for a given period, optionally filtered by project
+ * Fetch daily rhythm data for a given period, optionally filtered by project and/or tag
  */
-export async function fetchDailyRhythm(period: string, projectId?: string): Promise<RhythmSlot[]> {
+export async function fetchDailyRhythm(period: string, projectId?: string, tag?: string): Promise<RhythmSlot[]> {
   let url = `/api/analytics/rhythm?period=${period}`;
   if (projectId) url += `&project_id=${projectId}`;
+  if (tag) url += `&tag=${encodeURIComponent(tag)}`;
   const data = await get<unknown>(url);
   return parseApiResponse(RhythmSlotListSchema, data);
+}
+
+/**
+ * Fetch all unique tags used across sessions
+ */
+export async function fetchAllTags(): Promise<string[]> {
+  return get<string[]>("/api/analytics/tags");
 }

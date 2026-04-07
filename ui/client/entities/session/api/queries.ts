@@ -3,7 +3,7 @@
  * Data fetching with caching for sessions.
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchBeats, updateBeat, fetchHeatmap, fetchDailyRhythm } from "./sessionApi";
+import { fetchBeats, updateBeat, fetchHeatmap, fetchDailyRhythm, fetchAllTags } from "./sessionApi";
 import { toSession, toApiBeat } from "../model";
 import type { Session, DaySummary, DayProjectBreakdown } from "../model";
 import type { ProjectWithDuration } from "@/entities/project";
@@ -268,23 +268,23 @@ export function useThisWeekSessions() {
 }
 
 /**
- * Hook to fetch contribution heatmap for a year, optionally filtered by project
+ * Hook to fetch contribution heatmap for a year, optionally filtered by project and/or tag
  */
-export function useHeatmap(year: number, projectId?: string) {
+export function useHeatmap(year: number, projectId?: string, tag?: string) {
   return useQuery({
-    queryKey: [...sessionKeys.all, "heatmap", year, projectId ?? "all"],
-    queryFn: (): Promise<HeatmapDay[]> => fetchHeatmap(year, projectId),
+    queryKey: [...sessionKeys.all, "heatmap", year, projectId ?? "all", tag ?? "all"],
+    queryFn: (): Promise<HeatmapDay[]> => fetchHeatmap(year, projectId, tag),
     staleTime: 60_000,
   });
 }
 
 /**
- * Hook to fetch daily rhythm chart data, optionally filtered by project
+ * Hook to fetch daily rhythm chart data, optionally filtered by project and/or tag
  */
-export function useDailyRhythm(period: string, projectId?: string) {
+export function useDailyRhythm(period: string, projectId?: string, tag?: string) {
   return useQuery({
-    queryKey: [...sessionKeys.all, "rhythm", period, projectId ?? "all"],
-    queryFn: (): Promise<RhythmSlot[]> => fetchDailyRhythm(period, projectId),
+    queryKey: [...sessionKeys.all, "rhythm", period, projectId ?? "all", tag ?? "all"],
+    queryFn: (): Promise<RhythmSlot[]> => fetchDailyRhythm(period, projectId, tag),
     staleTime: 60_000,
   });
 }
@@ -292,15 +292,15 @@ export function useDailyRhythm(period: string, projectId?: string) {
 /**
  * Hook to compute per-project time breakdown for a period
  */
-export function useProjectBreakdown(period: "week" | "month" | "year" | "all") {
+export function useProjectBreakdown(period: "week" | "month" | "year" | "all", tag?: string) {
   return useQuery({
-    queryKey: [...sessionKeys.all, "project-breakdown", period],
+    queryKey: [...sessionKeys.all, "project-breakdown", period, tag ?? "all"],
     queryFn: async () => {
       const beats = await fetchBeats();
       const sessions = beats.filter((b) => b.start && b.end).map(toSession);
 
       const now = new Date();
-      const filtered = sessions.filter((s) => {
+      let filtered = sessions.filter((s) => {
         const d = parseUtcIso(s.startTime);
         if (period === "week") {
           const { start, end } = getCurrentWeekRange();
@@ -314,6 +314,10 @@ export function useProjectBreakdown(period: "week" | "month" | "year" | "all") {
         }
         return true;
       });
+
+      if (tag) {
+        filtered = filtered.filter((s) => s.tags.includes(tag));
+      }
 
       const byProject = new Map<string, number>();
       for (const s of filtered) {
@@ -406,6 +410,17 @@ export function useLastWeekTotal() {
 
       return { lastWeekMinutes };
     },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Hook to fetch all unique tags used across sessions
+ */
+export function useAllTags() {
+  return useQuery({
+    queryKey: [...sessionKeys.all, "tags"],
+    queryFn: fetchAllTags,
     staleTime: 60_000,
   });
 }

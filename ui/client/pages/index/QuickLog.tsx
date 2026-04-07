@@ -7,13 +7,15 @@ import { Plus, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { toLocalDatetimeLocalString } from "@/shared/lib";
 import { post } from "@/shared/api";
+import { TagInput } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
-import { sessionKeys } from "@/entities/session";
+import { sessionKeys, useAllTags } from "@/entities/session";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function QuickLog() {
   const [open, setOpen] = useState(false);
   const { data: projects } = useProjects();
+  const { data: allTags } = useAllTags();
   const queryClient = useQueryClient();
 
   const [projectId, setProjectId] = useState("");
@@ -24,6 +26,7 @@ export function QuickLog() {
     toLocalDatetimeLocalString(new Date())
   );
   const [note, setNote] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const activeProjects = (projects ?? []).filter((p) => !p.archived);
@@ -37,11 +40,13 @@ export function QuickLog() {
         start: new Date(startTime).toISOString(),
         end: new Date(endTime).toISOString(),
         note: note || null,
+        tags,
       });
       queryClient.invalidateQueries({ queryKey: sessionKeys.all });
       toast("Session logged");
       setOpen(false);
       setNote("");
+      setTags([]);
     } catch {
       toast.error("Failed to log session");
     } finally {
@@ -115,6 +120,13 @@ export function QuickLog() {
         onChange={(e) => setNote(e.target.value)}
         placeholder="What did you work on? (optional)"
         className="w-full text-xs bg-secondary/50 border border-border rounded px-2 py-1.5 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-accent"
+      />
+
+      <TagInput
+        tags={tags}
+        onChange={setTags}
+        suggestions={allTags ?? []}
+        placeholder="Tags (optional)"
       />
 
       <button

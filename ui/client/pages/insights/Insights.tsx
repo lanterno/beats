@@ -6,16 +6,18 @@
 import { useState, useMemo } from "react";
 import { formatDuration } from "@/shared/lib";
 import { useProjects } from "@/entities/project";
-import { useHeatmap } from "@/entities/session";
+import { useHeatmap, useAllTags } from "@/entities/session";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
 import { TopProjects } from "./TopProjects";
 
 export default function Insights() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+  const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
   const { data: projects } = useProjects();
+  const { data: allTags } = useAllTags();
   const currentYear = new Date().getFullYear();
-  const { data: heatmapData } = useHeatmap(currentYear, selectedProjectId);
+  const { data: heatmapData } = useHeatmap(currentYear, selectedProjectId, selectedTag);
 
   const activeProjects = (projects ?? []).filter((p) => !p.archived);
 
@@ -40,18 +42,34 @@ export default function Insights() {
       {/* Header with project filter */}
       <div className="flex items-center justify-between">
         <h1 className="font-heading text-xl text-foreground">Insights</h1>
-        <select
-          value={selectedProjectId ?? ""}
-          onChange={(e) => setSelectedProjectId(e.target.value || undefined)}
-          className="text-xs bg-secondary/50 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-        >
-          <option value="">All Projects</option>
-          {activeProjects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          {allTags && allTags.length > 0 && (
+            <select
+              value={selectedTag ?? ""}
+              onChange={(e) => setSelectedTag(e.target.value || undefined)}
+              className="text-xs bg-secondary/50 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              <option value="">All Tags</option>
+              {allTags.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            value={selectedProjectId ?? ""}
+            onChange={(e) => setSelectedProjectId(e.target.value || undefined)}
+            className="text-xs bg-secondary/50 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="">All Projects</option>
+            {activeProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Monthly summary stats */}
@@ -77,11 +95,11 @@ export default function Insights() {
         </div>
       )}
 
-      <ContributionHeatmap projectId={selectedProjectId} />
+      <ContributionHeatmap projectId={selectedProjectId} tag={selectedTag} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <DailyRhythmChart projectId={selectedProjectId} />
-        {!selectedProjectId && <TopProjects />}
+        <DailyRhythmChart projectId={selectedProjectId} tag={selectedTag} />
+        {!selectedProjectId && <TopProjects tag={selectedTag} />}
       </div>
     </div>
   );

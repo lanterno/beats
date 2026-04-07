@@ -25,11 +25,12 @@ function formatSlotTime(slot: number): string {
 
 interface DailyRhythmChartProps {
   projectId?: string;
+  tag?: string;
 }
 
-export function DailyRhythmChart({ projectId }: DailyRhythmChartProps) {
+export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
   const [period, setPeriod] = useState<Period>("month");
-  const { data: rhythmData, isLoading } = useDailyRhythm(period, projectId);
+  const { data: rhythmData, isLoading } = useDailyRhythm(period, projectId, tag);
 
   const slots = rhythmData ?? [];
   const maxMinutes = Math.max(...slots.map((s) => s.minutes), 1);

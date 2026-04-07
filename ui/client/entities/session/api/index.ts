@@ -20,5 +20,6 @@ export {
   useStreaks,
   useLastWeekTotal,
   useProjectBreakdown,
+  useAllTags,
   calculateDailySummary,
 } from "./queries";

@@ -12,6 +12,7 @@ export { EndOfDayReview } from "./end-of-day-review";
 export { FocusMode } from "./focus-mode";
 export { GoalRing } from "./goal-ring";
 export { Progress } from "./progress";
+export { TagInput } from "./tag-input";
 export { Toaster } from "./sonner";
 export {
   Table,

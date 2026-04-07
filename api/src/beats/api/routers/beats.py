@@ -23,6 +23,8 @@ async def create_beat(request: CreateBeatRequest, service: BeatServiceDep):
         project_id=request.project_id,
         start=request.start,
         end=request.end,
+        note=request.note,
+        tags=request.tags,
     )
     created = await service.create_beat(beat)
     return created.model_dump()
@@ -54,6 +56,8 @@ async def update_beat(request: UpdateBeatRequest, service: BeatServiceDep):
         project_id=request.project_id,
         start=request.start,
         end=request.end,
+        note=request.note,
+        tags=request.tags,
     )
     updated = await service.update_beat(beat)
     return updated.model_dump()

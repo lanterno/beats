@@ -88,12 +88,13 @@ function formatTooltipDate(date: Date): string {
 
 interface ContributionHeatmapProps {
   projectId?: string;
+  tag?: string;
 }
 
-export function ContributionHeatmap({ projectId }: ContributionHeatmapProps) {
+export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  const { data: heatmapData, isLoading } = useHeatmap(year, projectId);
+  const { data: heatmapData, isLoading } = useHeatmap(year, projectId, tag);
 
   const weeks = buildGrid(year, heatmapData ?? []);
   const monthLabels = getMonthLabels(weeks);

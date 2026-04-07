@@ -18,10 +18,10 @@ const PERIOD_LABELS: Record<Period, string> = {
   all: "All Time",
 };
 
-export function TopProjects() {
+export function TopProjects({ tag }: { tag?: string }) {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("month");
-  const { data: breakdown, isLoading } = useProjectBreakdown(period);
+  const { data: breakdown, isLoading } = useProjectBreakdown(period, tag);
   const { data: projects } = useProjects();
 
   const projectMap = new Map(

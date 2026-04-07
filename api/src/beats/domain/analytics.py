@@ -12,7 +12,9 @@ class AnalyticsService:
     def __init__(self, beat_repo: BeatRepository):
         self.beat_repo = beat_repo
 
-    async def get_heatmap(self, year: int, project_id: str | None = None) -> list[dict]:
+    async def get_heatmap(
+        self, year: int, project_id: str | None = None, tag: str | None = None
+    ) -> list[dict]:
         """Get daily activity heatmap for a given year.
 
         Returns a list of dicts with date, total_minutes, session_count, project_count
@@ -26,6 +28,8 @@ class AnalyticsService:
 
         for beat in beats:
             if project_id and beat.project_id != project_id:
+                continue
+            if tag and tag not in beat.tags:
                 continue
             beat_date = beat.start.date()
             if beat_date.year != year:
@@ -46,19 +50,22 @@ class AnalyticsService:
         ]
 
     async def get_daily_rhythm(
-        self, period: str = "all", project_id: str | None = None
+        self, period: str = "all", project_id: str | None = None, tag: str | None = None
     ) -> list[dict]:
         """Get average activity by time of day in half-hour slots.
 
         Args:
             period: "week" (current week), "month" (current month), or "all"
             project_id: Optional project filter.
+            tag: Optional tag filter.
 
         Returns list of 48 slots with average minutes per slot.
         """
         beats = await self.beat_repo.list_all_completed()
         if project_id:
             beats = [b for b in beats if b.project_id == project_id]
+        if tag:
+            beats = [b for b in beats if tag in b.tags]
 
         today = date.today()
         if period == "week":
