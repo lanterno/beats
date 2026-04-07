@@ -3,15 +3,14 @@
  * Shareable visual summary card rendered as an SVG-styled div.
  * Shows project breakdown, hours, streak, and goal completion.
  */
-import { useRef, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
-import { formatDuration, getWeekRange, parseUtcIso, getDayName } from "@/shared/lib";
+import { formatDuration, getWeekRange, parseUtcIso } from "@/shared/lib";
 import { useProjects } from "@/entities/project";
 import { useStreaks, useThisWeekSessions } from "@/entities/session";
 
 export function WeeklyCard() {
-  const cardRef = useRef<HTMLDivElement>(null);
   const { data: projects } = useProjects();
   const { data: weekSessions } = useThisWeekSessions();
   const { data: streaks } = useStreaks();
@@ -93,7 +92,6 @@ export function WeeklyCard() {
     <div className="space-y-3">
       {/* The card */}
       <div
-        ref={cardRef}
         className="rounded-xl border border-border/80 bg-card shadow-soft p-6 max-w-sm mx-auto"
       >
         {/* Header */}

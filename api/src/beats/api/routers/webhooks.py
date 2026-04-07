@@ -77,4 +77,4 @@ async def dispatch_webhook_event(
             logger.warning("Webhook delivery failed for %s to %s", event, url)
 
     tasks = [_send(w.url) for w in webhooks]
-    asyncio.gather(*tasks, return_exceptions=True)
+    await asyncio.gather(*tasks, return_exceptions=True)

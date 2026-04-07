@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { formatDuration, parseUtcIso } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
-import { useHeatmap, fetchBeats, toSession, sessionKeys, useStreaks } from "@/entities/session";
+import { useHeatmap, fetchBeats, toSession, sessionKeys } from "@/entities/session";
 import { useQuery } from "@tanstack/react-query";
 
 const MONTH_NAMES = [

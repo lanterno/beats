@@ -9,12 +9,8 @@ import { ChevronLeft, ChevronRight, Copy, Check } from "lucide-react";
 import { formatDuration, parseUtcIso } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
 import { useProjects } from "@/entities/project";
-import { useDailyRhythm } from "@/entities/session";
-import { fetchBeats } from "@/entities/session";
-import { toSession } from "@/entities/session";
+import { fetchBeats, toSession, sessionKeys } from "@/entities/session";
 import { useQuery } from "@tanstack/react-query";
-import { sessionKeys } from "@/entities/session";
-import { DailyRhythmChart } from "./DailyRhythmChart";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
