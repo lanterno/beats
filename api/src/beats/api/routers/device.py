@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from beats.api.dependencies import BeatServiceDep, ProjectServiceDep, TimerServiceDep
@@ -39,6 +39,16 @@ def hex_to_rgb(hex_color: str) -> list[int]:
 # Schemas
 
 
+# Theme accent colors — mirrors ui/client/shared/lib/useTheme.ts
+THEME_ACCENTS = {
+    "ember": "#d4952a",
+    "midnight": "#6699cc",
+    "forest": "#66b366",
+    "mono": "#999999",
+    "sunset": "#e06040",
+}
+
+
 class DeviceStatusResponse(BaseModel):
     clocked_in: bool
     project_name: str | None = None
@@ -47,6 +57,7 @@ class DeviceStatusResponse(BaseModel):
     elapsed_minutes: int = 0
     daily_total_minutes: int = 0
     energy_level: int = 0  # 0-7 for energy meter LEDs
+    theme_accent_rgb: list[int] = [212, 149, 42]  # Default ember
 
 
 class DeviceFavoriteProject(BaseModel):
@@ -76,8 +87,12 @@ _last_heartbeat: dict | None = None
 async def get_device_status(
     timer_service: TimerServiceDep,
     beat_service: BeatServiceDep,
+    theme: str = Query(default="ember"),
 ) -> DeviceStatusResponse:
     """Get timer state optimized for ESP32 wall clock firmware."""
+    theme_hex = THEME_ACCENTS.get(theme, THEME_ACCENTS["ember"])
+    theme_rgb = hex_to_rgb(theme_hex)
+
     active_beat = await timer_service.beat_repo.get_active()
 
     if not active_beat:
@@ -88,6 +103,7 @@ async def get_device_status(
             clocked_in=False,
             daily_total_minutes=daily_minutes,
             energy_level=energy,
+            theme_accent_rgb=theme_rgb,
         )
 
     # Timer is running
@@ -96,7 +112,7 @@ async def get_device_status(
     elapsed_minutes = int(elapsed.total_seconds() / 60)
     daily_minutes = await _get_daily_total_minutes(beat_service)
     energy = min(int(daily_minutes / 60), 7)
-    color_hex = assign_color(project.id or "")
+    color_hex = project.color or assign_color(project.id or "")
 
     return DeviceStatusResponse(
         clocked_in=True,
@@ -106,6 +122,7 @@ async def get_device_status(
         elapsed_minutes=elapsed_minutes,
         daily_total_minutes=daily_minutes,
         energy_level=energy,
+        theme_accent_rgb=theme_rgb,
     )
 
 
@@ -119,7 +136,7 @@ async def get_favorites(
         DeviceFavoriteProject(
             id=p.id or "",
             name=p.name,
-            color_rgb=hex_to_rgb(assign_color(p.id or "")),
+            color_rgb=hex_to_rgb(p.color or assign_color(p.id or "")),
         )
         for p in projects[:9]  # Max 9 for firmware UI
     ]
