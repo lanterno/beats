@@ -11,6 +11,7 @@ import { useHeatmap, useAllTags } from "@/entities/session";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
 import { TopProjects } from "./TopProjects";
+import { WeeklyCard } from "./WeeklyCard";
 
 export default function Insights() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
@@ -112,6 +113,11 @@ export default function Insights() {
         <DailyRhythmChart projectId={selectedProjectId} tag={selectedTag} />
         {!selectedProjectId && <TopProjects tag={selectedTag} />}
       </div>
+
+      {/* Weekly shareable card */}
+      {!selectedProjectId && !selectedTag && (
+        <WeeklyCard />
+      )}
     </div>
   );
 }
