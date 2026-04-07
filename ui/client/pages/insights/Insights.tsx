@@ -4,6 +4,7 @@
  * daily rhythm chart, and top projects breakdown.
  */
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { formatDuration } from "@/shared/lib";
 import { useProjects } from "@/entities/project";
 import { useHeatmap, useAllTags } from "@/entities/session";
@@ -74,6 +75,7 @@ export default function Insights() {
 
       {/* Monthly summary stats */}
       {monthSummary && monthSummary.totalMinutes > 0 && (
+        <div className="space-y-2">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <SummaryCard
             label="Hours this month"
@@ -92,6 +94,15 @@ export default function Insights() {
             label="Daily average"
             value={formatDuration(monthSummary.avgDailyMinutes)}
           />
+        </div>
+        <div className="flex justify-end">
+          <Link
+            to={`/insights/month/${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+            className="text-xs text-accent hover:text-accent/80 transition-colors"
+          >
+            View full monthly retrospective &rarr;
+          </Link>
+        </div>
         </div>
       )}
 

@@ -10,6 +10,7 @@ import { Toaster, TooltipProvider } from "@/shared/ui";
 import { QueryProvider } from "./providers";
 import Index from "@/pages/index";
 import Insights from "@/pages/insights";
+import MonthlyRetrospective from "@/pages/insights/MonthlyRetrospective";
 import ProjectDetails from "@/pages/project-details";
 import NotFound from "@/pages/not-found";
 import Settings from "@/pages/settings";
@@ -63,6 +64,7 @@ export function App() {
               <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Index />} />
                 <Route path="/insights" element={<Insights />} />
+                <Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
                 <Route path="/project/:projectId" element={<ProjectDetails />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
