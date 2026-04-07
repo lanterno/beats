@@ -4,7 +4,8 @@ import http
 
 from fastapi import APIRouter
 
-from beats.api.dependencies import ProjectServiceDep, TimerServiceDep
+from beats.api.dependencies import ProjectServiceDep, TimerServiceDep, WebhookRepoDep
+from beats.api.routers.webhooks import dispatch_webhook_event
 from beats.api.schemas import (
     CreateProjectRequest,
     DurationResponse,
@@ -108,9 +109,16 @@ async def start_project_timer(
     project_id: str,
     time_validator: RecordTimeRequest,
     service: TimerServiceDep,
+    webhook_repo: WebhookRepoDep,
 ):
     """Start a timer for a project."""
     beat = await service.start_timer(project_id, time_validator.time)
+    project = await service.project_repo.get_by_id(project_id)
+    await dispatch_webhook_event(
+        "timer.start",
+        {"project_id": project_id, "project_name": project.name, "beat_id": beat.id},
+        webhook_repo,
+    )
     return beat.model_dump()
 
 
@@ -118,7 +126,17 @@ async def start_project_timer(
 async def end_project_timer(
     time_validator: RecordTimeRequest,
     service: TimerServiceDep,
+    webhook_repo: WebhookRepoDep,
 ):
     """Stop the currently running timer."""
     beat = await service.stop_timer(time_validator.time)
+    await dispatch_webhook_event(
+        "timer.stop",
+        {
+            "project_id": beat.project_id,
+            "beat_id": beat.id,
+            "duration_minutes": int(beat.duration.total_seconds() / 60),
+        },
+        webhook_repo,
+    )
     return beat.model_dump()

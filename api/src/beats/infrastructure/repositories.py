@@ -8,7 +8,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
-from beats.domain.models import Beat, DailyNote, Intention, Project
+from beats.domain.models import Beat, DailyNote, Intention, Project, Webhook
 
 
 def serialize_from_document(doc: dict[str, Any]) -> dict[str, Any]:
@@ -400,3 +400,63 @@ class MongoDailyNoteRepository(DailyNoteRepository):
             )
         else:
             await self.collection.insert_one(doc)
+
+
+# Webhook Repository
+
+
+class WebhookRepository(ABC):
+    """Abstract interface for Webhook persistence operations."""
+
+    @abstractmethod
+    async def list_all(self) -> list[Webhook]:
+        ...
+
+    @abstractmethod
+    async def list_by_event(self, event: str) -> list[Webhook]:
+        ...
+
+    @abstractmethod
+    async def create(self, webhook: Webhook) -> Webhook:
+        ...
+
+    @abstractmethod
+    async def delete(self, webhook_id: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def update(self, webhook: Webhook) -> Webhook:
+        ...
+
+
+class MongoWebhookRepository(WebhookRepository):
+    """MongoDB implementation of WebhookRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
+
+    async def list_all(self) -> list[Webhook]:
+        cursor = self.collection.find({})
+        docs = await cursor.to_list(length=None)
+        return [Webhook(**serialize_from_document(doc)) for doc in docs]
+
+    async def list_by_event(self, event: str) -> list[Webhook]:
+        cursor = self.collection.find({"events": event, "active": True})
+        docs = await cursor.to_list(length=None)
+        return [Webhook(**serialize_from_document(doc)) for doc in docs]
+
+    async def create(self, webhook: Webhook) -> Webhook:
+        data = serialize_to_document(webhook.model_dump(mode="json", exclude_none=True))
+        result = await self.collection.insert_one(data)
+        return Webhook(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def delete(self, webhook_id: str) -> bool:
+        result = await self.collection.delete_one({"_id": ObjectId(webhook_id)})
+        return result.deleted_count > 0
+
+    async def update(self, webhook: Webhook) -> Webhook:
+        if not webhook.id:
+            raise ValueError("Webhook ID is required for update")
+        data = serialize_to_document(webhook.model_dump(mode="json", exclude_none=True))
+        await self.collection.replace_one({"_id": ObjectId(webhook.id)}, data)
+        return webhook

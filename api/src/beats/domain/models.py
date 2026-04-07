@@ -106,3 +106,18 @@ class DailyNote(BaseModel):
     note: str = ""
     mood: int | None = None  # 1-5 scale
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class Webhook(BaseModel):
+    """A registered webhook URL that receives timer events.
+
+    Events: timer.start, timer.stop
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    url: str
+    events: list[str] = Field(default_factory=lambda: ["timer.start", "timer.stop"])
+    active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

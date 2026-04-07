@@ -16,7 +16,9 @@ from beats.infrastructure.repositories import (
     MongoDailyNoteRepository,
     MongoIntentionRepository,
     MongoProjectRepository,
+    MongoWebhookRepository,
     ProjectRepository,
+    WebhookRepository,
 )
 from beats.settings import Settings
 
@@ -81,6 +83,12 @@ def get_daily_note_repository() -> DailyNoteRepository:
     return MongoDailyNoteRepository(db.daily_notes)
 
 
+def get_webhook_repository() -> WebhookRepository:
+    """Get the webhook repository instance."""
+    db = Database.get_db()
+    return MongoWebhookRepository(db.webhooks)
+
+
 # Type aliases for cleaner dependency injection in routes
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
@@ -88,3 +96,4 @@ ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 IntentionRepoDep = Annotated[IntentionRepository, Depends(get_intention_repository)]
 DailyNoteRepoDep = Annotated[DailyNoteRepository, Depends(get_daily_note_repository)]
+WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
