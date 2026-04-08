@@ -2,24 +2,23 @@
  * Session API layer - public API
  */
 
-// Low-level API functions
-export { fetchBeats, updateBeat } from "./sessionApi";
-
 // TanStack Query hooks
 export {
-  sessionKeys,
-  useSessions,
-  useUpdateSession,
-  useAllCurrentWeekSessions,
-  useWeeklySessionsByProject,
-  useRecentSessions,
-  useTodaySessions,
-  useThisWeekSessions,
-  useHeatmap,
-  useDailyRhythm,
-  useStreaks,
-  useLastWeekTotal,
-  useProjectBreakdown,
-  useAllTags,
-  calculateDailySummary,
+	calculateDailySummary,
+	sessionKeys,
+	useAllCurrentWeekSessions,
+	useAllTags,
+	useDailyRhythm,
+	useHeatmap,
+	useLastWeekTotal,
+	useProjectBreakdown,
+	useRecentSessions,
+	useSessions,
+	useStreaks,
+	useThisWeekSessions,
+	useTodaySessions,
+	useUpdateSession,
+	useWeeklySessionsByProject,
 } from "./queries";
+// Low-level API functions
+export { fetchBeats, updateBeat } from "./sessionApi";

@@ -6,12 +6,18 @@ Tests all endpoints: Projects, Beats, and Timer APIs
 import time
 from datetime import UTC, datetime, timedelta
 
-from fastapi.testclient import TestClient
+import pytest
 
 from beats.settings import settings
-from server import app
 
-client = TestClient(app)
+client = None  # Set by fixture before tests run
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _provide_client(test_client):
+    """Inject the session-scoped test_client as the module-level 'client'."""
+    global client
+    client = test_client
 
 
 class TestProjectAPI:

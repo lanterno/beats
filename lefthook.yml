@@ -1,0 +1,23 @@
+pre-commit:
+  parallel: true
+  commands:
+    api-lint:
+      root: api/
+      glob: "*.py"
+      run: uv run ruff check {staged_files} && uv run ruff format --check {staged_files}
+    api-typecheck:
+      root: api/
+      run: uv run ty check src/
+    ui-check:
+      root: ui/
+      glob: "*.{ts,tsx}"
+      run: pnpm biome check client/
+
+pre-push:
+  commands:
+    api-test:
+      root: api/
+      run: uv run pytest src/ -x -q
+    ui-typecheck:
+      root: ui/
+      run: pnpm typecheck

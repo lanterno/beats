@@ -16,24 +16,24 @@ const SESSION_TOKEN_KEY = "beats_session_token";
 // ============================================================================
 
 interface AuthState {
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
+	token: string | null;
+	isAuthenticated: boolean;
+	isLoading: boolean;
 }
 
 let state: AuthState = {
-  token: null,
-  isAuthenticated: false,
-  isLoading: true,
+	token: null,
+	isAuthenticated: false,
+	isLoading: true,
 };
 
 // Subscribers for React's useSyncExternalStore
 const listeners = new Set<() => void>();
 
 function emitChange() {
-  for (const listener of listeners) {
-    listener();
-  }
+	for (const listener of listeners) {
+		listener();
+	}
 }
 
 // ============================================================================
@@ -45,61 +45,61 @@ function emitChange() {
  * Call this on app startup.
  */
 export function initializeAuth(): void {
-  const storedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
-  if (storedToken) {
-    state = {
-      token: storedToken,
-      isAuthenticated: true,
-      isLoading: false,
-    };
-  } else {
-    state = {
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-    };
-  }
-  emitChange();
+	const storedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+	if (storedToken) {
+		state = {
+			token: storedToken,
+			isAuthenticated: true,
+			isLoading: false,
+		};
+	} else {
+		state = {
+			token: null,
+			isAuthenticated: false,
+			isLoading: false,
+		};
+	}
+	emitChange();
 }
 
 /**
  * Set the session token after successful login/registration.
  */
 export function setSessionToken(token: string): void {
-  sessionStorage.setItem(SESSION_TOKEN_KEY, token);
-  state = {
-    token,
-    isAuthenticated: true,
-    isLoading: false,
-  };
-  emitChange();
+	sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+	state = {
+		token,
+		isAuthenticated: true,
+		isLoading: false,
+	};
+	emitChange();
 }
 
 /**
  * Clear the session token (logout).
  */
 export function clearSessionToken(): void {
-  sessionStorage.removeItem(SESSION_TOKEN_KEY);
-  state = {
-    token: null,
-    isAuthenticated: false,
-    isLoading: false,
-  };
-  emitChange();
+	sessionStorage.removeItem(SESSION_TOKEN_KEY);
+	state = {
+		token: null,
+		isAuthenticated: false,
+		isLoading: false,
+	};
+	emitChange();
 }
 
 /**
  * Get the current session token.
  */
 export function getSessionToken(): string | null {
-  return state.token;
+	return state.token;
 }
 
 /**
  * Check if the user is authenticated.
  */
 export function isAuthenticated(): boolean {
-  return state.isAuthenticated;
+	return state.isAuthenticated;
 }
 
 // ============================================================================
@@ -107,12 +107,12 @@ export function isAuthenticated(): boolean {
 // ============================================================================
 
 function subscribe(callback: () => void): () => void {
-  listeners.add(callback);
-  return () => listeners.delete(callback);
+	listeners.add(callback);
+	return () => listeners.delete(callback);
 }
 
 function getSnapshot(): AuthState {
-  return state;
+	return state;
 }
 
 /**
@@ -120,5 +120,5 @@ function getSnapshot(): AuthState {
  * Re-renders when auth state changes.
  */
 export function useAuth(): AuthState {
-  return useSyncExternalStore(subscribe, getSnapshot);
+	return useSyncExternalStore(subscribe, getSnapshot);
 }

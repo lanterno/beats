@@ -3,24 +3,22 @@
  * WebAuthn/Passkey authentication for the Beats app.
  */
 
-// Components
-export { default as LoginPage } from "./components/LoginPage";
-
-// Store
-export {
-  useAuth,
-  initializeAuth,
-  setSessionToken,
-  clearSessionToken,
-  getSessionToken,
-  isAuthenticated,
-} from "./stores/authStore";
-
 // API
 export {
-  getAuthStatus,
-  getRegistrationOptions,
-  verifyRegistration,
-  getLoginOptions,
-  verifyLogin,
+	getAuthStatus,
+	getLoginOptions,
+	getRegistrationOptions,
+	verifyLogin,
+	verifyRegistration,
 } from "./api/authApi";
+// Components
+export { default as LoginPage } from "./components/LoginPage";
+// Store
+export {
+	clearSessionToken,
+	getSessionToken,
+	initializeAuth,
+	isAuthenticated,
+	setSessionToken,
+	useAuth,
+} from "./stores/authStore";

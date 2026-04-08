@@ -8,12 +8,11 @@
  * - UI: timer-related components
  */
 
+// API layer
+export { fetchTimerStatus, startTimerApi, stopTimerApi } from "./api";
 // Model layer
 export type { TimerState, TimerStatus } from "./model";
 export { useTimer } from "./model";
 
-// API layer
-export { fetchTimerStatus, startTimerApi, stopTimerApi } from "./api";
-
 // UI layer
-export { TimerManager, TimerDisplay, ProjectSelector } from "./ui";
+export { ProjectSelector, TimerDisplay, TimerManager } from "./ui";

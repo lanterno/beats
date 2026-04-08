@@ -1,6 +1,6 @@
 /**
  * Project Entity - public API
- * 
+ *
  * This entity represents a project in the time tracking system.
  * Following FSD conventions, this module exports:
  * - Model: types, domain logic, mappers
@@ -8,27 +8,26 @@
  * - UI: presentational components
  */
 
-// Model layer
-export type {
-  Project,
-  ProjectWithDuration,
-  DailySummary,
-  WeekHours,
-} from "./model";
-export { assignColor, toProject } from "./model";
-
 // API layer
 export {
-  projectKeys,
-  useProjects,
-  useProject,
-  useProjectWeeks,
-  useUpdateProject,
-  useInvalidateProjects,
-  fetchProjects,
-  fetchProjectWeek,
-  fetchProjectTotal,
+	fetchProjects,
+	fetchProjectTotal,
+	fetchProjectWeek,
+	projectKeys,
+	useInvalidateProjects,
+	useProject,
+	useProjects,
+	useProjectWeeks,
+	useUpdateProject,
 } from "./api";
+// Model layer
+export type {
+	DailySummary,
+	Project,
+	ProjectWithDuration,
+	WeekHours,
+} from "./model";
+export { assignColor, toProject } from "./model";
 
 // UI layer
 export { LoadingSpinner } from "./ui";

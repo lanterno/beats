@@ -5,78 +5,84 @@
 import "../global.css";
 
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Toaster, TooltipProvider } from "@/shared/ui";
-import { QueryProvider } from "./providers";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { initializeAuth, LoginPage, useAuth } from "@/features/auth";
 import Index from "@/pages/index";
 import Insights from "@/pages/insights";
 import MonthlyRetrospective from "@/pages/insights/MonthlyRetrospective";
 import YearInReview from "@/pages/insights/YearInReview";
-import ProjectDetails from "@/pages/project-details";
 import NotFound from "@/pages/not-found";
+import ProjectDetails from "@/pages/project-details";
 import Settings from "@/pages/settings";
-import { LoginPage, useAuth, initializeAuth } from "@/features/auth";
+import { Toaster, TooltipProvider } from "@/shared/ui";
 import { Layout } from "./Layout";
+import { QueryProvider } from "./providers";
 
 /**
  * Protected Route wrapper that redirects to login if not authenticated.
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+	const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+	if (isLoading) {
+		return (
+			<div className="min-h-screen bg-background flex items-center justify-center">
+				<div className="text-muted-foreground">Loading...</div>
+			</div>
+		);
+	}
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+	if (!isAuthenticated) {
+		return <Navigate to="/login" replace />;
+	}
 
-  return <>{children}</>;
+	return <>{children}</>;
 }
 
 /**
  * Auth initializer component.
  */
 function AuthInitializer({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    initializeAuth();
-  }, []);
+	useEffect(() => {
+		initializeAuth();
+	}, []);
 
-  return <>{children}</>;
+	return <>{children}</>;
 }
 
 export function App() {
-  return (
-    <QueryProvider>
-      <TooltipProvider>
-        <Toaster />
-        <AuthInitializer>
-          <BrowserRouter>
-            <Routes>
-              {/* Public route */}
-              <Route path="/login" element={<LoginPage />} />
+	return (
+		<QueryProvider>
+			<TooltipProvider>
+				<Toaster />
+				<AuthInitializer>
+					<BrowserRouter>
+						<Routes>
+							{/* Public route */}
+							<Route path="/login" element={<LoginPage />} />
 
-              {/* Protected routes with persistent layout */}
-              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/" element={<Index />} />
-                <Route path="/insights" element={<Insights />} />
-                <Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
-                <Route path="/insights/year/:year" element={<YearInReview />} />
-                <Route path="/project/:projectId" element={<ProjectDetails />} />
-                <Route path="/settings" element={<Settings />} />
-              </Route>
+							{/* Protected routes with persistent layout */}
+							<Route
+								element={
+									<ProtectedRoute>
+										<Layout />
+									</ProtectedRoute>
+								}
+							>
+								<Route path="/" element={<Index />} />
+								<Route path="/insights" element={<Insights />} />
+								<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
+								<Route path="/insights/year/:year" element={<YearInReview />} />
+								<Route path="/project/:projectId" element={<ProjectDetails />} />
+								<Route path="/settings" element={<Settings />} />
+							</Route>
 
-              {/* Fallback */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </AuthInitializer>
-      </TooltipProvider>
-    </QueryProvider>
-  );
+							{/* Fallback */}
+							<Route path="*" element={<NotFound />} />
+						</Routes>
+					</BrowserRouter>
+				</AuthInitializer>
+			</TooltipProvider>
+		</QueryProvider>
+	);
 }

@@ -2,8 +2,13 @@
  * Session model - public API
  */
 
-// Types
-export type { Session, DaySummary, DayProjectBreakdown, DayProjectSegment, ProjectOption } from "./types";
-
 // Mappers
-export { toSession, toApiBeat, calculateDuration } from "./mappers";
+export { calculateDuration, toApiBeat, toSession } from "./mappers";
+// Types
+export type {
+	DayProjectBreakdown,
+	DayProjectSegment,
+	DaySummary,
+	ProjectOption,
+	Session,
+} from "./types";

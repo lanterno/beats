@@ -27,6 +27,8 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "httpx>=0.28.1",
+    "testcontainers[mongodb]>=4.10.0",
+    "ty>=0.0.1a10",
 ]
 
 [build-system]
@@ -56,8 +58,15 @@ indent-style = "space"
 line-ending = "lf"
 docstring-code-format = true
 
+[tool.ty.rules]
+# Suppress false positives from Motor/Pydantic dynamic types until ty matures
+unresolved-attribute = "warn"
+invalid-argument-type = "warn"
+invalid-type-form = "warn"
+no-matching-overload = "warn"
+
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q --cov=beats --cov-fail-under=65"
 testpaths = ["src"]
 pythonpath = ["src"]
 asyncio_mode = "auto"

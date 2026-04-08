@@ -3,35 +3,33 @@
  */
 
 // API client and error handling
-export { apiClient, get, post, put, patch, del, ApiError } from "./client";
-
-// Zod schemas for validation
-export {
-  ApiProjectSchema,
-  ApiBeatSchema,
-  TimerStatusSchema,
-  WeekBreakdownSchema,
-  ProjectTotalSchema,
-  ApiProjectListSchema,
-  ApiBeatListSchema,
-  HeatmapDayListSchema,
-  RhythmSlotListSchema,
-  IntentionSchema,
-  IntentionListSchema,
-  DailyNoteSchema,
-  parseApiResponse,
-  safeParseApiResponse,
-} from "./schemas";
-
+export { ApiError, apiClient, del, get, patch, post, put } from "./client";
 // Re-export types
 export type {
-  ApiProject,
-  ApiBeat,
-  TimerStatus,
-  WeekBreakdown,
-  ProjectTotal,
-  HeatmapDay,
-  RhythmSlot,
-  Intention,
-  DailyNote,
+	ApiBeat,
+	ApiProject,
+	DailyNote,
+	HeatmapDay,
+	Intention,
+	ProjectTotal,
+	RhythmSlot,
+	TimerStatus,
+	WeekBreakdown,
+} from "./schemas";
+// Zod schemas for validation
+export {
+	ApiBeatListSchema,
+	ApiBeatSchema,
+	ApiProjectListSchema,
+	ApiProjectSchema,
+	DailyNoteSchema,
+	HeatmapDayListSchema,
+	IntentionListSchema,
+	IntentionSchema,
+	ProjectTotalSchema,
+	parseApiResponse,
+	RhythmSlotListSchema,
+	safeParseApiResponse,
+	TimerStatusSchema,
+	WeekBreakdownSchema,
 } from "./schemas";

@@ -8,30 +8,35 @@
  * - UI: presentational components
  */
 
-// Model layer
-export type { Session, DaySummary, DayProjectBreakdown, DayProjectSegment, ProjectOption } from "./model";
-export { toSession, toApiBeat, calculateDuration } from "./model";
-
 // API layer
 export {
-  sessionKeys,
-  useSessions,
-  useUpdateSession,
-  useAllCurrentWeekSessions,
-  useWeeklySessionsByProject,
-  useRecentSessions,
-  useTodaySessions,
-  useThisWeekSessions,
-  useHeatmap,
-  useDailyRhythm,
-  useStreaks,
-  useLastWeekTotal,
-  useProjectBreakdown,
-  useAllTags,
-  calculateDailySummary,
-  fetchBeats,
-  updateBeat,
+	calculateDailySummary,
+	fetchBeats,
+	sessionKeys,
+	updateBeat,
+	useAllCurrentWeekSessions,
+	useAllTags,
+	useDailyRhythm,
+	useHeatmap,
+	useLastWeekTotal,
+	useProjectBreakdown,
+	useRecentSessions,
+	useSessions,
+	useStreaks,
+	useThisWeekSessions,
+	useTodaySessions,
+	useUpdateSession,
+	useWeeklySessionsByProject,
 } from "./api";
+// Model layer
+export type {
+	DayProjectBreakdown,
+	DayProjectSegment,
+	DaySummary,
+	ProjectOption,
+	Session,
+} from "./model";
+export { calculateDuration, toApiBeat, toSession } from "./model";
 
 // UI layer
-export { SessionCard, SessionEditForm, DailySummaryGrid } from "./ui";
+export { DailySummaryGrid, SessionCard, SessionEditForm } from "./ui";

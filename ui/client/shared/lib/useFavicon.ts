@@ -10,56 +10,56 @@ const DEFAULT_FAVICON = "/favicon.svg";
 const SIZE = 32;
 
 function createTimerFavicon(color: string): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = SIZE;
-  canvas.height = SIZE;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return DEFAULT_FAVICON;
+	const canvas = document.createElement("canvas");
+	canvas.width = SIZE;
+	canvas.height = SIZE;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return DEFAULT_FAVICON;
 
-  // Outer ring
-  ctx.beginPath();
-  ctx.arc(SIZE / 2, SIZE / 2, 13, 0, Math.PI * 2);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+	// Outer ring
+	ctx.beginPath();
+	ctx.arc(SIZE / 2, SIZE / 2, 13, 0, Math.PI * 2);
+	ctx.strokeStyle = color;
+	ctx.lineWidth = 2.5;
+	ctx.stroke();
 
-  // Inner filled dot
-  ctx.beginPath();
-  ctx.arc(SIZE / 2, SIZE / 2, 7, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
+	// Inner filled dot
+	ctx.beginPath();
+	ctx.arc(SIZE / 2, SIZE / 2, 7, 0, Math.PI * 2);
+	ctx.fillStyle = color;
+	ctx.fill();
 
-  return canvas.toDataURL("image/png");
+	return canvas.toDataURL("image/png");
 }
 
 function getOrCreateFaviconLink(): HTMLLinkElement {
-  let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
-  if (!link) {
-    link = document.createElement("link");
-    link.rel = "icon";
-    document.head.appendChild(link);
-  }
-  return link;
+	let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+	if (!link) {
+		link = document.createElement("link");
+		link.rel = "icon";
+		document.head.appendChild(link);
+	}
+	return link;
 }
 
 export function useFavicon(isRunning: boolean, projectColor: string | undefined) {
-  const originalHref = useRef<string | null>(null);
+	const originalHref = useRef<string | null>(null);
 
-  useEffect(() => {
-    const link = getOrCreateFaviconLink();
+	useEffect(() => {
+		const link = getOrCreateFaviconLink();
 
-    if (isRunning && projectColor) {
-      // Save original on first activation
-      if (originalHref.current === null) {
-        originalHref.current = link.href || DEFAULT_FAVICON;
-      }
-      link.type = "image/png";
-      link.href = createTimerFavicon(projectColor);
-    } else if (originalHref.current !== null) {
-      // Restore original
-      link.href = originalHref.current;
-      link.type = originalHref.current.endsWith(".svg") ? "image/svg+xml" : "image/png";
-      originalHref.current = null;
-    }
-  }, [isRunning, projectColor]);
+		if (isRunning && projectColor) {
+			// Save original on first activation
+			if (originalHref.current === null) {
+				originalHref.current = link.href || DEFAULT_FAVICON;
+			}
+			link.type = "image/png";
+			link.href = createTimerFavicon(projectColor);
+		} else if (originalHref.current !== null) {
+			// Restore original
+			link.href = originalHref.current;
+			link.type = originalHref.current.endsWith(".svg") ? "image/svg+xml" : "image/png";
+			originalHref.current = null;
+		}
+	}, [isRunning, projectColor]);
 }

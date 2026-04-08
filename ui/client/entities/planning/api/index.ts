@@ -1,18 +1,18 @@
 export {
-  fetchIntentions,
-  createIntention,
-  updateIntention,
-  deleteIntention,
-  fetchDailyNote,
-  upsertDailyNote,
+	createIntention,
+	deleteIntention,
+	fetchDailyNote,
+	fetchIntentions,
+	updateIntention,
+	upsertDailyNote,
 } from "./planningApi";
 
 export {
-  planningKeys,
-  useIntentions,
-  useCreateIntention,
-  useUpdateIntention,
-  useDeleteIntention,
-  useDailyNote,
-  useUpsertDailyNote,
+	planningKeys,
+	useCreateIntention,
+	useDailyNote,
+	useDeleteIntention,
+	useIntentions,
+	useUpdateIntention,
+	useUpsertDailyNote,
 } from "./queries";
