@@ -165,7 +165,6 @@ layer(base);
 
     --body-glow: 38 20% 12%;
   }
-}
 
   /* Midnight theme — cool blue/slate */
   :root[data-theme="midnight"] {

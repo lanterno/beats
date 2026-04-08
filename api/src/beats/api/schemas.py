@@ -1,6 +1,6 @@
 """API request and response schemas."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date as date_type, datetime
 
 from pydantic import BaseModel, Field
 
@@ -144,7 +144,7 @@ class CreateIntentionRequest(BaseModel):
     """Request body for creating a daily intention."""
 
     project_id: str
-    date: date | None = None
+    date: date_type | None = None
     planned_minutes: int = 60
 
 
@@ -160,7 +160,7 @@ class IntentionResponse(BaseModel):
 
     id: str
     project_id: str
-    date: date
+    date: date_type
     planned_minutes: int
     completed: bool
 
@@ -171,7 +171,7 @@ class IntentionResponse(BaseModel):
 class UpsertDailyNoteRequest(BaseModel):
     """Request body for creating or updating a daily note."""
 
-    date: date | None = None
+    date: date_type | None = None
     note: str = ""
     mood: int | None = None  # 1-5
 
@@ -180,7 +180,7 @@ class DailyNoteResponse(BaseModel):
     """Response schema for a daily note."""
 
     id: str
-    date: date
+    date: date_type
     note: str
     mood: int | None = None
     created_at: datetime

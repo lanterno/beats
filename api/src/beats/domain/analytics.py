@@ -103,23 +103,20 @@ class AnalyticsService:
     @staticmethod
     def _distribute_to_slots(slots: list[float], start: datetime, end: datetime) -> None:
         """Distribute a session's minutes into half-hour slots (0-47)."""
-        # Clamp to same day for simplicity (sessions spanning midnight split at midnight)
+        # Clamp end to midnight of the start day (ignore cross-midnight portion)
+        midnight = start.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        end = min(end, midnight)
+
         cursor = start
         while cursor < end:
             slot_index = cursor.hour * 2 + (1 if cursor.minute >= 30 else 0)
-            # End of this slot
-            slot_end_minute = 30 if cursor.minute < 30 else 60
-            slot_boundary = cursor.replace(minute=slot_end_minute % 60, second=0, microsecond=0)
-            if slot_end_minute == 60:
-                slot_boundary = slot_boundary.replace(hour=cursor.hour + 1, minute=0)
-                if slot_boundary.hour == 0 and cursor.hour == 23:
-                    # Crossed midnight, stop here
-                    slot_boundary = cursor.replace(hour=23, minute=59, second=59)
+            # Next half-hour boundary
+            next_half = cursor.replace(minute=30 if cursor.minute < 30 else 0, second=0, microsecond=0)
+            if cursor.minute >= 30:
+                next_half += timedelta(hours=1)
 
-            chunk_end = min(end, slot_boundary)
+            chunk_end = min(end, next_half)
             minutes = (chunk_end - cursor).total_seconds() / 60
             if 0 <= slot_index < 48:
                 slots[slot_index] += minutes
             cursor = chunk_end
-            if cursor == end:
-                break
