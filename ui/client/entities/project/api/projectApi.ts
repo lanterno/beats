@@ -3,7 +3,7 @@
  * Low-level API calls for projects.
  */
 
-import type { ApiProject } from "@/shared/api";
+import type { ApiGoalOverride, ApiProject } from "@/shared/api";
 import {
 	ApiProjectListSchema,
 	ApiProjectSchema,
@@ -25,10 +25,17 @@ export async function fetchProjects(): Promise<ApiProject[]> {
 /**
  * Fetch project week breakdown
  */
+export interface WeekBreakdownResult {
+	totalHours: number;
+	dailyDurations: Record<string, string>;
+	effectiveGoal?: number;
+	effectiveGoalType?: "target" | "cap";
+}
+
 export async function fetchProjectWeek(
 	projectId: string,
 	weeksAgo: number,
-): Promise<{ totalHours: number; dailyDurations: Record<string, string> }> {
+): Promise<WeekBreakdownResult> {
 	const data = await get<unknown>(`/api/projects/${projectId}/week/?weeks_ago=${weeksAgo}`);
 	const parsed = parseApiResponse(WeekBreakdownSchema, data);
 
@@ -48,6 +55,8 @@ export async function fetchProjectWeek(
 	return {
 		totalHours: parsed.total_hours,
 		dailyDurations,
+		effectiveGoal: parsed.effective_goal ?? undefined,
+		effectiveGoalType: parsed.effective_goal_type ?? undefined,
 	};
 }
 
@@ -67,6 +76,17 @@ export async function updateProject(project: {
 	goal_type?: string;
 }): Promise<ApiProject> {
 	const data = await put<unknown>("/api/projects/", project);
+	return parseApiResponse(ApiProjectSchema, data);
+}
+
+/**
+ * Replace goal overrides for a project
+ */
+export async function updateGoalOverrides(
+	projectId: string,
+	overrides: ApiGoalOverride[],
+): Promise<ApiProject> {
+	const data = await put<unknown>(`/api/projects/${projectId}/goal-overrides`, overrides);
 	return parseApiResponse(ApiProjectSchema, data);
 }
 

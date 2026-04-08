@@ -211,9 +211,7 @@ class MongoBeatRepository(BeatRepository):
         doc = serialize_to_document(dict(data))
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one(
-                {"_id": doc_id}, {"$set": doc}, upsert=True
-            )
+            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
         else:
             await self.collection.insert_one(doc)
 
@@ -238,14 +236,14 @@ class MongoProjectRepository(ProjectRepository):
             return False
 
     async def create(self, project: Project) -> Project:
-        data = serialize_to_document(project.model_dump(exclude_none=True))
+        data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))
         result = await self.collection.insert_one(data)
         return Project(**serialize_from_document({**data, "_id": result.inserted_id}))
 
     async def update(self, project: Project) -> Project:
         if not project.id:
             raise ValueError("Project ID is required for update")
-        data = serialize_to_document(project.model_dump(exclude_none=True))
+        data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))
         await self.collection.replace_one({"_id": ObjectId(project.id)}, data)
         return project
 
@@ -258,9 +256,7 @@ class MongoProjectRepository(ProjectRepository):
         doc = serialize_to_document(dict(data))
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one(
-                {"_id": doc_id}, {"$set": doc}, upsert=True
-            )
+            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
         else:
             await self.collection.insert_one(doc)
 
@@ -272,28 +268,22 @@ class IntentionRepository(ABC):
     """Abstract interface for Intention persistence operations."""
 
     @abstractmethod
-    async def list_by_date(self, target_date: date) -> list[Intention]:
-        ...
+    async def list_by_date(self, target_date: date) -> list[Intention]: ...
 
     @abstractmethod
-    async def list_all(self) -> list[Intention]:
-        ...
+    async def list_all(self) -> list[Intention]: ...
 
     @abstractmethod
-    async def create(self, intention: Intention) -> Intention:
-        ...
+    async def create(self, intention: Intention) -> Intention: ...
 
     @abstractmethod
-    async def update(self, intention: Intention) -> Intention:
-        ...
+    async def update(self, intention: Intention) -> Intention: ...
 
     @abstractmethod
-    async def delete(self, intention_id: str) -> bool:
-        ...
+    async def delete(self, intention_id: str) -> bool: ...
 
     @abstractmethod
-    async def upsert(self, data: dict) -> None:
-        ...
+    async def upsert(self, data: dict) -> None: ...
 
 
 class MongoIntentionRepository(IntentionRepository):
@@ -332,9 +322,7 @@ class MongoIntentionRepository(IntentionRepository):
         doc = serialize_to_document(dict(data))
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one(
-                {"_id": doc_id}, {"$set": doc}, upsert=True
-            )
+            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
         else:
             await self.collection.insert_one(doc)
 
@@ -346,16 +334,13 @@ class DailyNoteRepository(ABC):
     """Abstract interface for DailyNote persistence operations."""
 
     @abstractmethod
-    async def get_by_date(self, target_date: date) -> DailyNote | None:
-        ...
+    async def get_by_date(self, target_date: date) -> DailyNote | None: ...
 
     @abstractmethod
-    async def list_all(self) -> list[DailyNote]:
-        ...
+    async def list_all(self) -> list[DailyNote]: ...
 
     @abstractmethod
-    async def upsert(self, note: DailyNote) -> DailyNote:
-        ...
+    async def upsert(self, note: DailyNote) -> DailyNote: ...
 
     @abstractmethod
     async def upsert_raw(self, data: dict) -> None:
@@ -395,9 +380,7 @@ class MongoDailyNoteRepository(DailyNoteRepository):
         doc = serialize_to_document(dict(data))
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one(
-                {"_id": doc_id}, {"$set": doc}, upsert=True
-            )
+            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
         else:
             await self.collection.insert_one(doc)
 
@@ -409,24 +392,19 @@ class WebhookRepository(ABC):
     """Abstract interface for Webhook persistence operations."""
 
     @abstractmethod
-    async def list_all(self) -> list[Webhook]:
-        ...
+    async def list_all(self) -> list[Webhook]: ...
 
     @abstractmethod
-    async def list_by_event(self, event: str) -> list[Webhook]:
-        ...
+    async def list_by_event(self, event: str) -> list[Webhook]: ...
 
     @abstractmethod
-    async def create(self, webhook: Webhook) -> Webhook:
-        ...
+    async def create(self, webhook: Webhook) -> Webhook: ...
 
     @abstractmethod
-    async def delete(self, webhook_id: str) -> bool:
-        ...
+    async def delete(self, webhook_id: str) -> bool: ...
 
     @abstractmethod
-    async def update(self, webhook: Webhook) -> Webhook:
-        ...
+    async def update(self, webhook: Webhook) -> Webhook: ...
 
 
 class MongoWebhookRepository(WebhookRepository):

@@ -9,11 +9,12 @@ from beats.api.routers.webhooks import dispatch_webhook_event
 from beats.api.schemas import (
     CreateProjectRequest,
     DurationResponse,
+    GoalOverrideRequest,
     MonthlyTotalsResponse,
     RecordTimeRequest,
     UpdateProjectRequest,
 )
-from beats.domain.models import Project
+from beats.domain.models import GoalOverride, Project
 
 router = APIRouter(
     prefix="/api/projects",
@@ -56,6 +57,28 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         weekly_goal=request.weekly_goal,
         goal_type=request.goal_type,
     )
+    updated = await service.update_project(project)
+    return updated.model_dump()
+
+
+@router.put("/{project_id}/goal-overrides")
+async def update_goal_overrides(
+    project_id: str,
+    overrides: list[GoalOverrideRequest],
+    service: ProjectServiceDep,
+):
+    """Replace goal overrides for a project."""
+    project = await service.project_repo.get_by_id(project_id)
+    project.goal_overrides = [
+        GoalOverride(
+            week_of=o.week_of,
+            effective_from=o.effective_from,
+            weekly_goal=o.weekly_goal,
+            goal_type=o.goal_type,
+            note=o.note,
+        )
+        for o in overrides
+    ]
     updated = await service.update_project(project)
     return updated.model_dump()
 

@@ -7,6 +7,7 @@ export { ApiError, apiClient, del, get, patch, post, put } from "./client";
 // Re-export types
 export type {
 	ApiBeat,
+	ApiGoalOverride,
 	ApiProject,
 	DailyNote,
 	HeatmapDay,

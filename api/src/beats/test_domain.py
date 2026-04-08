@@ -1,6 +1,8 @@
 """Tests for domain models and services."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+
+import pytest
 
 from beats.domain.exceptions import (
     DomainException,
@@ -9,7 +11,7 @@ from beats.domain.exceptions import (
     ProjectNotFound,
     TimerAlreadyRunning,
 )
-from beats.domain.models import Beat, Project
+from beats.domain.models import Beat, GoalOverride, GoalType, Project
 
 
 class TestBeatModel:
@@ -145,3 +147,150 @@ class TestDomainExceptions:
         exc = ProjectNotFound()
         assert exc.status_code == 404
         assert exc.message == "Project not found"
+
+
+class TestGoalOverrideValidation:
+    """Tests for GoalOverride model validation."""
+
+    def test_valid_one_off_override(self):
+        o = GoalOverride(week_of=date(2026, 4, 6), weekly_goal=10)  # Monday
+        assert o.week_of == date(2026, 4, 6)
+        assert o.effective_from is None
+
+    def test_valid_permanent_override(self):
+        o = GoalOverride(effective_from=date(2026, 4, 6), weekly_goal=30)
+        assert o.effective_from == date(2026, 4, 6)
+        assert o.week_of is None
+
+    def test_both_fields_set_raises(self):
+        with pytest.raises(ValueError, match="Exactly one"):
+            GoalOverride(week_of=date(2026, 4, 6), effective_from=date(2026, 4, 6), weekly_goal=10)
+
+    def test_neither_field_set_raises(self):
+        with pytest.raises(ValueError, match="Exactly one"):
+            GoalOverride(weekly_goal=10)
+
+    def test_non_monday_week_of_raises(self):
+        with pytest.raises(ValueError, match="Monday"):
+            GoalOverride(week_of=date(2026, 4, 7), weekly_goal=10)  # Tuesday
+
+    def test_non_monday_effective_from_raises(self):
+        with pytest.raises(ValueError, match="Monday"):
+            GoalOverride(effective_from=date(2026, 4, 8), weekly_goal=10)  # Wednesday
+
+    def test_zero_goal_raises(self):
+        with pytest.raises(ValueError, match="positive"):
+            GoalOverride(week_of=date(2026, 4, 6), weekly_goal=0)
+
+    def test_negative_goal_raises(self):
+        with pytest.raises(ValueError, match="positive"):
+            GoalOverride(week_of=date(2026, 4, 6), weekly_goal=-5)
+
+
+class TestGoalOverrideResolution:
+    """Tests for Project.effective_goal() resolution logic."""
+
+    def _project(self, **kwargs: object) -> Project:
+        defaults: dict[str, object] = {
+            "name": "Test",
+            "weekly_goal": 20,
+            "goal_type": GoalType.TARGET,
+        }
+        return Project(**{**defaults, **kwargs})  # type: ignore[arg-type]
+
+    def test_no_overrides_returns_default(self):
+        p = self._project()
+        goal, gtype = p.effective_goal(date(2026, 4, 6))
+        assert goal == 20
+        assert gtype == GoalType.TARGET
+
+    def test_no_goal_set_returns_none(self):
+        p = Project(name="Test")
+        goal, gtype = p.effective_goal(date(2026, 4, 6))
+        assert goal is None
+        assert gtype == GoalType.TARGET
+
+    def test_one_off_override_matches(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(week_of=date(2026, 4, 6), weekly_goal=10, note="holiday"),
+            ]
+        )
+        goal, gtype = p.effective_goal(date(2026, 4, 6))
+        assert goal == 10
+        assert gtype == GoalType.TARGET
+
+    def test_one_off_override_does_not_affect_other_weeks(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(week_of=date(2026, 4, 6), weekly_goal=10),
+            ]
+        )
+        goal, _ = p.effective_goal(date(2026, 4, 13))  # Next week
+        assert goal == 20  # Project default
+
+    def test_permanent_override_applies_from_date(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(effective_from=date(2026, 3, 2), weekly_goal=30),
+            ]
+        )
+        # Before effective_from
+        goal, _ = p.effective_goal(date(2026, 2, 23))
+        assert goal == 20
+        # On effective_from
+        goal, _ = p.effective_goal(date(2026, 3, 2))
+        assert goal == 30
+        # After effective_from
+        goal, _ = p.effective_goal(date(2026, 4, 6))
+        assert goal == 30
+
+    def test_one_off_takes_precedence_over_permanent(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(effective_from=date(2026, 3, 2), weekly_goal=30),
+                GoalOverride(week_of=date(2026, 4, 6), weekly_goal=5, note="vacation"),
+            ]
+        )
+        goal, _ = p.effective_goal(date(2026, 4, 6))
+        assert goal == 5
+        # Other weeks still use permanent
+        goal, _ = p.effective_goal(date(2026, 4, 13))
+        assert goal == 30
+
+    def test_latest_permanent_override_wins(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(effective_from=date(2026, 1, 5), weekly_goal=25),
+                GoalOverride(effective_from=date(2026, 3, 2), weekly_goal=30),
+            ]
+        )
+        # Before both
+        goal, _ = p.effective_goal(date(2025, 12, 29))
+        assert goal == 20
+        # Between
+        goal, _ = p.effective_goal(date(2026, 2, 2))
+        assert goal == 25
+        # After both — latest wins
+        goal, _ = p.effective_goal(date(2026, 4, 6))
+        assert goal == 30
+
+    def test_override_inherits_project_goal_type(self):
+        p = self._project(
+            goal_type=GoalType.CAP,
+            goal_overrides=[
+                GoalOverride(week_of=date(2026, 4, 6), weekly_goal=15),
+            ],
+        )
+        _, gtype = p.effective_goal(date(2026, 4, 6))
+        assert gtype == GoalType.CAP
+
+    def test_override_can_set_own_goal_type(self):
+        p = self._project(
+            goal_type=GoalType.TARGET,
+            goal_overrides=[
+                GoalOverride(week_of=date(2026, 4, 6), weekly_goal=15, goal_type=GoalType.CAP),
+            ],
+        )
+        _, gtype = p.effective_goal(date(2026, 4, 6))
+        assert gtype == GoalType.CAP

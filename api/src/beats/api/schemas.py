@@ -1,8 +1,11 @@
 """API request and response schemas."""
 
-from datetime import UTC, date as date_type, datetime
+from datetime import UTC, datetime
+from datetime import date as date_type
 
 from pydantic import BaseModel, Field
+
+from beats.domain.models import GoalType
 
 # Request schemas
 
@@ -34,6 +37,16 @@ class UpdateProjectRequest(BaseModel):
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
     goal_type: str = "target"  # "target" or "cap"
+
+
+class GoalOverrideRequest(BaseModel):
+    """Request body for a goal override."""
+
+    week_of: date_type | None = None
+    effective_from: date_type | None = None
+    weekly_goal: float
+    goal_type: GoalType | None = None
+    note: str | None = None
 
 
 class CreateBeatRequest(BaseModel):
@@ -111,6 +124,8 @@ class WeekBreakdownResponse(BaseModel):
     Saturday: str | list | None = None
     Sunday: str | list | None = None
     total_hours: float
+    effective_goal: float | None = None
+    effective_goal_type: str | None = None
 
 
 class MonthlyTotalsResponse(BaseModel):

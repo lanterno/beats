@@ -7,10 +7,11 @@ import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from starlette.testclient import TestClient
 
 from beats.settings import settings
 
-client = None  # Set by fixture before tests run
+client: TestClient | None = None  # Set by fixture before tests run
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -292,6 +293,92 @@ class TestProjectAPI:
         )
         # This might be 400 or 200 depending on state, just check it doesn't crash
         assert response.status_code in [200, 400]
+
+
+class TestGoalOverridesAPI:
+    """Test suite for goal override endpoints."""
+
+    def _create_project(self, weekly_goal=20):
+        resp = client.post(
+            "/api/projects/",
+            json={"name": f"goal-test-{time.time()}", "weekly_goal": weekly_goal},
+            headers={"X-API-Token": settings.access_token},
+        )
+        assert resp.status_code == 201
+        return resp.json()
+
+    def test_put_goal_overrides(self):
+        """Test PUT /api/projects/{id}/goal-overrides — add overrides."""
+        project = self._create_project()
+        resp = client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[
+                {"week_of": "2026-04-06", "weekly_goal": 10, "note": "holiday"},
+                {"effective_from": "2026-03-02", "weekly_goal": 30},
+            ],
+            headers={"X-API-Token": settings.access_token},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["goal_overrides"]) == 2
+
+    def test_goal_overrides_persist_on_project(self):
+        """Overrides appear when listing projects."""
+        project = self._create_project()
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"week_of": "2026-04-06", "weekly_goal": 10}],
+            headers={"X-API-Token": settings.access_token},
+        )
+        projects = client.get("/api/projects/").json()
+        found = [p for p in projects if p["id"] == project["id"]][0]
+        assert len(found["goal_overrides"]) == 1
+        assert found["goal_overrides"][0]["weekly_goal"] == 10
+
+    def test_week_breakdown_includes_effective_goal(self):
+        """GET /api/projects/{id}/week/ returns effective_goal."""
+        project = self._create_project(weekly_goal=20)
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["effective_goal"] == 20
+        assert data["effective_goal_type"] == "target"
+
+    def test_week_breakdown_with_override(self):
+        """Effective goal reflects an active override."""
+        project = self._create_project(weekly_goal=20)
+        # Add a permanent override starting well in the past
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"effective_from": "2020-01-06", "weekly_goal": 35}],
+            headers={"X-API-Token": settings.access_token},
+        )
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0")
+        data = resp.json()
+        assert data["effective_goal"] == 35
+
+    def test_replace_overrides(self):
+        """PUT replaces all overrides, not appends."""
+        project = self._create_project()
+        headers = {"X-API-Token": settings.access_token}
+        url = f"/api/projects/{project['id']}/goal-overrides"
+        client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=headers)
+        client.put(url, json=[{"week_of": "2026-04-13", "weekly_goal": 5}], headers=headers)
+        data = client.get("/api/projects/").json()
+        found = [p for p in data if p["id"] == project["id"]][0]
+        assert len(found["goal_overrides"]) == 1
+        assert found["goal_overrides"][0]["week_of"] == "2026-04-13"
+
+    def test_clear_overrides(self):
+        """Sending empty list clears all overrides."""
+        project = self._create_project()
+        headers = {"X-API-Token": settings.access_token}
+        url = f"/api/projects/{project['id']}/goal-overrides"
+        client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=headers)
+        client.put(url, json=[], headers=headers)
+        data = client.get("/api/projects/").json()
+        found = [p for p in data if p["id"] == project["id"]][0]
+        assert len(found["goal_overrides"]) == 0
 
 
 class TestBeatsDirectAPI:

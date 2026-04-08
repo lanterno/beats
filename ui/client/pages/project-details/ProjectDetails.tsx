@@ -7,11 +7,13 @@ import { Clock, Edit2, List } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
+import type { GoalOverride } from "@/entities/project";
 import {
 	LoadingSpinner,
 	useProject,
 	useProjects,
 	useProjectWeeks,
+	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "@/entities/project";
 import type { Session } from "@/entities/session";
@@ -30,6 +32,7 @@ import {
 	parseUtcIso,
 } from "@/shared/lib";
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
+import { GoalOverridePopover } from "./GoalOverridePopover";
 import { SessionTimeline } from "./SessionTimeline";
 
 const SESSIONS_PER_PAGE = 20;
@@ -58,6 +61,8 @@ export default function ProjectDetails() {
 	const { data: hoursPerWeek } = useProjectWeeks(projectId, weekCount);
 	const updateSessionMutation = useUpdateSession();
 	const updateProjectMutation = useUpdateProject();
+	const updateGoalOverridesMutation = useUpdateGoalOverrides();
+	const [overridePopoverWeek, setOverridePopoverWeek] = useState<number | null>(null);
 
 	// Reset visible count when project changes
 	useEffect(() => {
@@ -111,9 +116,9 @@ export default function ProjectDetails() {
 	const totalMinutes = project.totalMinutes || 0;
 	const totalHours = totalMinutes > 0 ? (totalMinutes / 60).toFixed(1) : "0";
 	const weeklyHours = project.weeklyMinutes ? project.weeklyMinutes / 60 : 0;
-	const goalPct = project.weeklyGoal
-		? Math.min((weeklyHours / project.weeklyGoal) * 100, 100)
-		: null;
+	const headerGoal = project.effectiveGoal ?? project.weeklyGoal;
+	const headerGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
+	const goalPct = headerGoal ? Math.min((weeklyHours / headerGoal) * 100, 100) : null;
 
 	const sortedSessions = [...sessionList].sort(
 		(a, b) => parseUtcIso(b.startTime).getTime() - parseUtcIso(a.startTime).getTime(),
@@ -138,26 +143,121 @@ export default function ProjectDetails() {
 	today.setHours(0, 0, 0, 0);
 	const todayDayIndex = (today.getDay() + 6) % 7; // Monday=0 ... Sunday=6
 
+	// Helper: get the Monday ISO string for a given weeksAgo
+	const getMondayIso = (weeksAgo: number): string => {
+		const d = new Date();
+		d.setHours(12, 0, 0, 0); // noon to avoid DST/UTC edge cases
+		d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - weeksAgo * 7);
+		const yyyy = d.getFullYear();
+		const mm = String(d.getMonth() + 1).padStart(2, "0");
+		const dd = String(d.getDate()).padStart(2, "0");
+		return `${yyyy}-${mm}-${dd}`;
+	};
+
+	// Get week-0 effective goal from the weeks data
+	const week0Data = weekList.find((w) => w.weeksAgo === 0);
+	const currentEffectiveGoal = week0Data?.effectiveGoal ?? headerGoal;
+
 	const currentWeekRow = {
 		label: "This wk",
+		weeksAgo: 0,
+		mondayIso: getMondayIso(0),
 		days: WEEKDAYS.map((dayName) => {
 			const day = dailySummary.find((d) => d.dayName === dayName);
 			return day?.totalMinutes ?? 0;
 		}),
 		total: dailySummary.reduce((sum, d) => sum + d.totalMinutes, 0),
+		effectiveGoal: currentEffectiveGoal,
+		effectiveGoalType: (week0Data?.effectiveGoalType ?? headerGoalType) as "target" | "cap",
 	};
 
 	const pastWeekRows = weekList
 		.filter((w) => w.weeksAgo > 0)
 		.map((week) => ({
 			label: getWeekNumberLabel(week.weeksAgo),
+			weeksAgo: week.weeksAgo,
+			mondayIso: getMondayIso(week.weeksAgo),
 			days: WEEKDAYS.map((dayName) =>
 				parseTimedeltaToMinutes(week.dailyDurations[dayName] || "0:00:00"),
 			),
 			total: week.hours * 60,
+			effectiveGoal: week.effectiveGoal ?? project.weeklyGoal,
+			effectiveGoalType: (week.effectiveGoalType ?? project.goalType ?? "target") as
+				| "target"
+				| "cap",
 		}));
 
 	const allWeekRows = [currentWeekRow, ...pastWeekRows];
+	const hasAnyGoal = allWeekRows.some((r) => r.effectiveGoal != null);
+
+	// Save/remove goal override handlers
+	const handleSaveOverride = (
+		mondayIso: string,
+		values: {
+			weeklyGoal: number;
+			goalType: "target" | "cap";
+			scope: "week" | "permanent";
+			note: string;
+		},
+	) => {
+		const overrides = [...(project.goalOverrides || [])];
+
+		if (values.scope === "week") {
+			// Remove any existing one-off for this week
+			const filtered = overrides.filter((o) => o.weekOf !== mondayIso);
+			filtered.push({
+				weekOf: mondayIso,
+				weeklyGoal: values.weeklyGoal,
+				goalType: values.goalType,
+				note: values.note || undefined,
+			});
+			saveOverrides(filtered);
+		} else {
+			// Permanent: remove any existing permanent with the same effective_from
+			const filtered = overrides.filter((o) => o.effectiveFrom !== mondayIso);
+			filtered.push({
+				effectiveFrom: mondayIso,
+				weeklyGoal: values.weeklyGoal,
+				goalType: values.goalType,
+				note: values.note || undefined,
+			});
+			saveOverrides(filtered);
+		}
+	};
+
+	const handleRemoveOverride = (mondayIso: string) => {
+		const overrides = (project.goalOverrides || []).filter(
+			(o) => o.weekOf !== mondayIso && o.effectiveFrom !== mondayIso,
+		);
+		saveOverrides(overrides);
+	};
+
+	const saveOverrides = (overrides: GoalOverride[]) => {
+		updateGoalOverridesMutation.mutate(
+			{
+				projectId: project.id,
+				overrides: overrides.map((o) => ({
+					week_of: o.weekOf ?? null,
+					effective_from: o.effectiveFrom ?? null,
+					weekly_goal: o.weeklyGoal,
+					goal_type: o.goalType ?? null,
+					note: o.note ?? null,
+				})),
+			},
+			{
+				onSuccess: () => {
+					setOverridePopoverWeek(null);
+					toast.success("Goal override saved");
+				},
+				onError: () => toast.error("Failed to save override"),
+			},
+		);
+	};
+
+	const hasOverrideForWeek = (mondayIso: string): boolean =>
+		(project.goalOverrides || []).some(
+			(o) => o.weekOf === mondayIso || o.effectiveFrom === mondayIso,
+		);
 
 	return (
 		<div>
@@ -204,10 +304,10 @@ export default function ProjectDetails() {
 									percent={goalPct}
 									size={28}
 									strokeWidth={3}
-									isCap={project.goalType === "cap"}
+									isCap={headerGoalType === "cap"}
 								/>
 								<span className="text-xs tabular-nums text-muted-foreground">
-									{weeklyHours.toFixed(1)}/{project.weeklyGoal}h
+									{weeklyHours.toFixed(1)}/{headerGoal}h
 								</span>
 							</div>
 						)}
@@ -231,7 +331,9 @@ export default function ProjectDetails() {
 				<section className="mt-6" aria-label="Week history">
 					<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 						{/* Header */}
-						<div className="grid grid-cols-[72px_repeat(7,1fr)_64px] px-3 py-2 border-b border-border/60">
+						<div
+							className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px]"} px-3 py-2 border-b border-border/60`}
+						>
 							<div />
 							{WEEKDAY_SHORT.map((d, i) => (
 								<div
@@ -246,36 +348,118 @@ export default function ProjectDetails() {
 							<div className="text-right text-[10px] uppercase tracking-widest text-muted-foreground">
 								Total
 							</div>
+							{hasAnyGoal && (
+								<div className="text-right text-[10px] uppercase tracking-widest text-muted-foreground">
+									+/-
+								</div>
+							)}
 						</div>
 
 						{/* Week rows */}
-						{allWeekRows.map((row, rowIdx) => (
-							<div
-								key={row.label}
-								className={`grid grid-cols-[72px_repeat(7,1fr)_64px] px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
-									rowIdx === 0 ? "bg-secondary/10" : "hover:bg-secondary/10"
-								}`}
-							>
-								<div className="text-xs text-muted-foreground truncate pr-1">{row.label}</div>
-								{row.days.map((mins, i) => (
-									<div
-										key={i}
-										className={`text-center text-xs tabular-nums ${
-											mins > 0
-												? rowIdx === 0 && i === todayDayIndex
-													? "text-accent font-medium"
-													: "text-foreground"
-												: "text-muted-foreground/30"
-										}`}
-									>
-										{mins > 0 ? `${(mins / 60).toFixed(1)}` : "—"}
-									</div>
-								))}
-								<div className="text-right text-sm font-medium tabular-nums text-accent">
-									{row.total > 0 ? `${(row.total / 60).toFixed(1)}h` : "—"}
+						{allWeekRows.map((row, rowIdx) => {
+							const rowHours = row.total / 60;
+							const rowGoal = row.effectiveGoal;
+							const rowGoalType = row.effectiveGoalType;
+							const goalMet = rowGoal ? rowHours >= rowGoal : false;
+							const goalPctRow = rowGoal ? Math.min((rowHours / rowGoal) * 100, 100) : 0;
+							const isOverridden = rowGoal != null && rowGoal !== project.weeklyGoal;
+
+							return (
+								<div
+									key={row.label}
+									className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px]"} px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
+										rowIdx === 0 ? "bg-secondary/10" : "hover:bg-secondary/10"
+									}`}
+								>
+									<div className="text-xs text-muted-foreground truncate pr-1">{row.label}</div>
+									{row.days.map((mins, i) => (
+										<div
+											key={i}
+											className={`text-center text-xs tabular-nums ${
+												mins > 0
+													? rowIdx === 0 && i === todayDayIndex
+														? "text-accent font-medium"
+														: "text-foreground"
+													: "text-muted-foreground/30"
+											}`}
+										>
+											{mins > 0 ? `${(mins / 60).toFixed(1)}` : "—"}
+										</div>
+									))}
+									{hasAnyGoal ? (
+										<>
+											<div className="relative flex flex-col items-end gap-0.5">
+												<button
+													onClick={() =>
+														setOverridePopoverWeek(
+															overridePopoverWeek === row.weeksAgo ? null : row.weeksAgo,
+														)
+													}
+													className={`text-sm font-medium tabular-nums cursor-pointer hover:underline decoration-dotted underline-offset-2 ${goalMet ? "text-green-400" : "text-accent"} ${isOverridden ? "italic" : ""}`}
+													title={
+														isOverridden
+															? "Goal override active — click to edit"
+															: "Click to set goal override"
+													}
+												>
+													{rowGoal != null
+														? row.total > 0
+															? `${rowHours.toFixed(1)}/${rowGoal}h`
+															: `—/${rowGoal}h`
+														: row.total > 0
+															? `${rowHours.toFixed(1)}h`
+															: "—"}
+												</button>
+												{row.total > 0 && rowGoal != null && (
+													<div className="w-full h-1 rounded-full bg-muted/40 overflow-hidden">
+														<div
+															className={`h-full rounded-full transition-all ${
+																rowGoalType === "cap"
+																	? goalPctRow >= 90
+																		? "bg-red-400"
+																		: "bg-accent/70"
+																	: goalMet
+																		? "bg-green-400"
+																		: "bg-accent/70"
+															}`}
+															style={{ width: `${goalPctRow}%` }}
+														/>
+													</div>
+												)}
+												{overridePopoverWeek === row.weeksAgo && rowGoal != null && (
+													<GoalOverridePopover
+														currentGoal={rowGoal}
+														currentGoalType={rowGoalType}
+														hasExistingOverride={hasOverrideForWeek(row.mondayIso)}
+														onSave={(values) => handleSaveOverride(row.mondayIso, values)}
+														onRemove={() => {
+															handleRemoveOverride(row.mondayIso);
+															setOverridePopoverWeek(null);
+															toast.success("Override removed");
+														}}
+														onClose={() => setOverridePopoverWeek(null)}
+													/>
+												)}
+											</div>
+											<div className="text-right text-xs tabular-nums self-center">
+												{row.total > 0 && rowGoal != null ? (
+													<span className={goalMet ? "text-green-400" : "text-red-400"}>
+														{goalMet ? "+" : ""}
+														{(rowHours - rowGoal).toFixed(1)}h
+													</span>
+												) : (
+													<span className="text-muted-foreground/30">—</span>
+												)}
+											</div>
+										</>
+									) : (
+										<div className="text-right text-sm font-medium tabular-nums text-accent">
+											{row.total > 0 ? `${rowHours.toFixed(1)}h` : "—"}
+										</div>
+									)}
 								</div>
-							</div>
-						))}
+							);
+						})}
 
 						{/* Show more weeks */}
 						<button

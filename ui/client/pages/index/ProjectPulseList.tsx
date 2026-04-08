@@ -146,8 +146,10 @@ export function ProjectPulseList() {
 							0;
 						const todayHours = todayMinutes / 60;
 						const isInactive = project.weeklyMinutes === 0;
-						const goalPct = project.weeklyGoal
-							? Math.min((project.weeklyMinutes / 60 / project.weeklyGoal) * 100, 100)
+						const dashGoal = project.effectiveGoal ?? project.weeklyGoal;
+						const dashGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
+						const goalPct = dashGoal
+							? Math.min((project.weeklyMinutes / 60 / dashGoal) * 100, 100)
 							: null;
 
 						return (
@@ -183,7 +185,7 @@ export function ProjectPulseList() {
 										percent={goalPct}
 										size={22}
 										strokeWidth={2.5}
-										isCap={project.goalType === "cap"}
+										isCap={dashGoalType === "cap"}
 									/>
 								)}
 							</button>

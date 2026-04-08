@@ -16,5 +16,6 @@ export {
 	useProject,
 	useProjects,
 	useProjectWeeks,
+	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "./queries";

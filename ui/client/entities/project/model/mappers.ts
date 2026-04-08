@@ -2,9 +2,9 @@
  * Project Mappers
  * Convert between API types and domain types.
  */
-import type { ApiProject } from "@/shared/api";
+import type { ApiGoalOverride, ApiProject } from "@/shared/api";
 import { assignColor } from "./colors";
-import type { Project } from "./types";
+import type { GoalOverride, Project } from "./types";
 
 /**
  * Convert API project to domain Project
@@ -20,6 +20,7 @@ export function toProject(apiProject: ApiProject): Project {
 		estimation: apiProject.estimation ?? undefined,
 		weeklyGoal: apiProject.weekly_goal ?? undefined,
 		goalType: apiProject.goal_type ?? "target",
+		goalOverrides: (apiProject.goal_overrides ?? []).map(toGoalOverride),
 	};
 }
 
@@ -36,5 +37,26 @@ export function toApiProject(project: Project): ApiProject {
 		estimation: project.estimation ?? null,
 		weekly_goal: project.weeklyGoal ?? null,
 		goal_type: project.goalType ?? "target",
+		goal_overrides: (project.goalOverrides ?? []).map(toApiGoalOverride),
+	};
+}
+
+function toGoalOverride(api: ApiGoalOverride): GoalOverride {
+	return {
+		weekOf: api.week_of ?? undefined,
+		effectiveFrom: api.effective_from ?? undefined,
+		weeklyGoal: api.weekly_goal,
+		goalType: api.goal_type ?? undefined,
+		note: api.note ?? undefined,
+	};
+}
+
+function toApiGoalOverride(o: GoalOverride): ApiGoalOverride {
+	return {
+		week_of: o.weekOf ?? null,
+		effective_from: o.effectiveFrom ?? null,
+		weekly_goal: o.weeklyGoal,
+		goal_type: o.goalType ?? null,
+		note: o.note ?? null,
 	};
 }

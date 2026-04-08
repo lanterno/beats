@@ -4,6 +4,17 @@
  */
 
 /**
+ * A per-week or date-range override of a project's weekly goal.
+ */
+export interface GoalOverride {
+	weekOf?: string; // ISO date string of Monday, for one-off
+	effectiveFrom?: string; // ISO date string, for permanent
+	weeklyGoal: number;
+	goalType?: "target" | "cap";
+	note?: string;
+}
+
+/**
  * Core Project entity
  */
 export interface Project {
@@ -15,6 +26,7 @@ export interface Project {
 	estimation?: string;
 	weeklyGoal?: number; // Weekly goal in hours
 	goalType?: "target" | "cap";
+	goalOverrides: GoalOverride[];
 }
 
 /**
@@ -23,6 +35,8 @@ export interface Project {
 export interface ProjectWithDuration extends Project {
 	totalMinutes: number;
 	weeklyMinutes: number;
+	effectiveGoal?: number; // Resolved goal for current week
+	effectiveGoalType?: "target" | "cap";
 }
 
 /**
@@ -43,4 +57,6 @@ export interface WeekHours {
 	weeksAgo: number;
 	hours: number;
 	dailyDurations: Record<string, string>;
+	effectiveGoal?: number;
+	effectiveGoalType?: "target" | "cap";
 }

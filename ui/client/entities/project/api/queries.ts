@@ -3,9 +3,16 @@
  * Data fetching with caching, deduplication, and automatic refetching.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ApiGoalOverride } from "@/shared/api";
 import type { ProjectWithDuration, WeekHours } from "../model";
 import { toProject } from "../model";
-import { fetchProjects, fetchProjectTotal, fetchProjectWeek, updateProject } from "./projectApi";
+import {
+	fetchProjects,
+	fetchProjectTotal,
+	fetchProjectWeek,
+	updateGoalOverrides,
+	updateProject,
+} from "./projectApi";
 
 /**
  * Query keys for project data
@@ -38,11 +45,22 @@ export function useProjects() {
 
 					const [totalMinutes, weeklyData] = await Promise.all([
 						fetchProjectTotal(project.id),
-						fetchProjectWeek(project.id, 0).catch(() => ({ totalHours: 0 })),
+						fetchProjectWeek(project.id, 0).catch(() => ({
+							totalHours: 0,
+							dailyDurations: {},
+							effectiveGoal: undefined,
+							effectiveGoalType: undefined,
+						})),
 					]);
 
 					const weeklyMinutes = Math.round(weeklyData.totalHours * 60);
-					return { ...project, totalMinutes, weeklyMinutes };
+					return {
+						...project,
+						totalMinutes,
+						weeklyMinutes,
+						effectiveGoal: weeklyData.effectiveGoal,
+						effectiveGoalType: weeklyData.effectiveGoalType,
+					};
 				}),
 			);
 
@@ -78,11 +96,22 @@ export function useProject(projectId: string | undefined) {
 
 			const [totalMinutes, weeklyData] = await Promise.all([
 				fetchProjectTotal(project.id),
-				fetchProjectWeek(project.id, 0).catch(() => ({ totalHours: 0 })),
+				fetchProjectWeek(project.id, 0).catch(() => ({
+					totalHours: 0,
+					dailyDurations: {},
+					effectiveGoal: undefined,
+					effectiveGoalType: undefined,
+				})),
 			]);
 
 			const weeklyMinutes = Math.round(weeklyData.totalHours * 60);
-			return { ...project, totalMinutes, weeklyMinutes };
+			return {
+				...project,
+				totalMinutes,
+				weeklyMinutes,
+				effectiveGoal: weeklyData.effectiveGoal,
+				effectiveGoalType: weeklyData.effectiveGoalType,
+			};
 		},
 		enabled: !!projectId,
 	});
@@ -100,8 +129,9 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 			const weeks = Array.from({ length: weekCount }, (_, i) => i);
 			const results = await Promise.allSettled(
 				weeks.map(async (weeksAgo) => {
-					const { totalHours, dailyDurations } = await fetchProjectWeek(projectId, weeksAgo);
-					return { weeksAgo, hours: totalHours, dailyDurations };
+					const { totalHours, dailyDurations, effectiveGoal, effectiveGoalType } =
+						await fetchProjectWeek(projectId, weeksAgo);
+					return { weeksAgo, hours: totalHours, dailyDurations, effectiveGoal, effectiveGoalType };
 				}),
 			);
 
@@ -126,6 +156,20 @@ export function useUpdateProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: updateProject,
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+		},
+	});
+}
+
+/**
+ * Hook to update goal overrides for a project
+ */
+export function useUpdateGoalOverrides() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ projectId, overrides }: { projectId: string; overrides: ApiGoalOverride[] }) =>
+			updateGoalOverrides(projectId, overrides),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},

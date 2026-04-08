@@ -18,11 +18,13 @@ export {
 	useProject,
 	useProjects,
 	useProjectWeeks,
+	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "./api";
 // Model layer
 export type {
 	DailySummary,
+	GoalOverride,
 	Project,
 	ProjectWithDuration,
 	WeekHours,

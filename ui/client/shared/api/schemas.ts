@@ -9,6 +9,19 @@ import { z } from "zod";
 // ============================================================================
 
 /**
+ * Goal override for a specific week or date range
+ */
+export const GoalOverrideSchema = z.object({
+	week_of: z.string().nullable().optional(),
+	effective_from: z.string().nullable().optional(),
+	weekly_goal: z.number(),
+	goal_type: z.enum(["target", "cap"]).nullable().optional(),
+	note: z.string().nullable().optional(),
+});
+
+export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
+
+/**
  * Project as returned by the API
  */
 export const ApiProjectSchema = z.object({
@@ -20,6 +33,7 @@ export const ApiProjectSchema = z.object({
 	archived: z.boolean().optional().default(false),
 	weekly_goal: z.number().nullable().optional(),
 	goal_type: z.enum(["target", "cap"]).optional().default("target"),
+	goal_overrides: z.array(GoalOverrideSchema).optional().default([]),
 });
 
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
@@ -62,6 +76,8 @@ export const WeekBreakdownSchema = z.object({
 	Saturday: z.string().optional().default("0:00:00"),
 	Sunday: z.string().optional().default("0:00:00"),
 	total_hours: z.number().default(0),
+	effective_goal: z.number().nullable().optional(),
+	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
 });
 
 export type WeekBreakdown = z.infer<typeof WeekBreakdownSchema>;

@@ -9,6 +9,7 @@ export { toProject } from "./mappers";
 // Types
 export type {
 	DailySummary,
+	GoalOverride,
 	Project,
 	ProjectWithDuration,
 	WeekHours,

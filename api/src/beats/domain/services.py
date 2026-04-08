@@ -103,7 +103,7 @@ class TimerService:
                     "since": active.start.isoformat(),
                     "so_far": str(active.duration),
                 }
-        except (NoObjectMatched, ProjectNotFound):
+        except NoObjectMatched, ProjectNotFound:
             pass
 
         # No active timer - try to get last beat info
@@ -243,7 +243,6 @@ class ProjectService:
                 total_duration += per_day_duration.get(day_name, timedelta())
 
             result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
-            return result
         else:
             per_day: dict[str, timedelta] = defaultdict(timedelta)
             for beat in week_beats:
@@ -259,7 +258,15 @@ class ProjectService:
                 total_duration += duration
 
             result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
-            return result
+
+        # Resolve effective goal for this week
+        project = await self.project_repo.get_by_id(project_id)
+        if project:
+            eff_goal, eff_type = project.effective_goal(start_of_week)
+            result["effective_goal"] = eff_goal
+            result["effective_goal_type"] = eff_type.value if eff_type else None
+
+        return result
 
     async def get_monthly_totals(self, project_id: str) -> dict:
         """Get total time per month for a project.
