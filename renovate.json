@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "schedule": ["before 9am on monday"],
+  "timezone": "UTC",
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "description": "Auto-merge minor and patch updates"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "groupName": "Python dependencies",
+      "description": "Group all Python dependency updates"
+    },
+    {
+      "matchManagers": ["npm"],
+      "groupName": "Node dependencies",
+      "description": "Group all Node.js dependency updates"
+    },
+    {
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "groupName": "React",
+      "description": "Keep React packages in sync"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "Beats Dev",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.14",
+      "installTools": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "25"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "biomejs.biome",
+        "charliermarsh.ruff",
+        "bradlc.vscode-tailwindcss",
+        "ms-playwright.playwright",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "biomejs.biome",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "explicit"
+        }
+      }
+    }
+  },
+  "forwardPorts": [7999, 8080],
+  "portsAttributes": {
+    "7999": { "label": "API" },
+    "8080": { "label": "UI" }
+  }
+}
