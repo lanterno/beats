@@ -39,15 +39,23 @@
     "prettier": "^3.6.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.5",
+    "react-router-dom": "^7.14.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.18",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.9.3",
-    "vite": "^7.1.12",
+    "vite": "^7.3.2",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.0.6"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite>rollup": ">=4.59.0",
+      "picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
+      "yaml@>=2.0.0 <2.8.3": ">=2.8.3",
+      "serialize-javascript@<7.0.5": ">=7.0.5"
+    }
   },
   "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748"
 }
