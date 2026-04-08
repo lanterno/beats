@@ -1,0 +1,51 @@
+name: API
+on:
+  push:
+    paths: [api/**]
+  pull_request:
+    paths: [api/**]
+
+jobs:
+  quality:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev
+      - run: uv run ruff check src/
+      - run: uv run ruff format --check src/
+      - run: uv run ty check src/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      mongo:
+        image: mongo:8
+        ports: [27017:27017]
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping:1})' --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DB_DSN: mongodb://localhost:27017
+      DB_NAME: beats_test
+      BEATS_TEST_ENV: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev
+      - run: uv run pytest src/ -v --cov=beats --cov-report=xml
+      - uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          files: api/coverage.xml
+          flags: api
