@@ -11,7 +11,9 @@
     "test": "vitest --run",
     "lint": "biome check client/",
     "lint:fix": "biome check --write client/",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.2.2",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
+    "@playwright/test": "^1.59.1",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
