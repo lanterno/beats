@@ -146,6 +146,142 @@ export const DailyNoteSchema = z.object({
 export type DailyNote = z.infer<typeof DailyNoteSchema>;
 
 // ============================================================================
+// Intelligence schemas
+// ============================================================================
+
+export const ProductivityScoreSchema = z.object({
+	score: z.number(),
+	components: z.object({
+		consistency: z.number(),
+		intentions: z.number(),
+		goals: z.number(),
+		quality: z.number(),
+	}),
+});
+
+export type ProductivityScore = z.infer<typeof ProductivityScoreSchema>;
+
+export const ScoreHistoryItemSchema = z.object({
+	week_of: z.string(),
+	score: z.number(),
+});
+
+export type ScoreHistoryItem = z.infer<typeof ScoreHistoryItemSchema>;
+
+export const ScoreHistorySchema = z.array(ScoreHistoryItemSchema);
+
+export const WeeklyDigestSchema = z.object({
+	id: z.string().nullable().optional(),
+	week_of: z.string(),
+	generated_at: z.string(),
+	total_hours: z.number(),
+	session_count: z.number(),
+	active_days: z.number(),
+	top_project_id: z.string().nullable().optional(),
+	top_project_name: z.string().nullable().optional(),
+	top_project_hours: z.number().default(0),
+	vs_last_week_pct: z.number().nullable().optional(),
+	longest_day: z.string().nullable().optional(),
+	longest_day_hours: z.number().default(0),
+	best_streak: z.number().default(0),
+	observation: z.string().default(""),
+	project_breakdown: z.array(z.record(z.string(), z.unknown())).default([]),
+	productivity_score: z.number().default(0),
+});
+
+export type WeeklyDigest = z.infer<typeof WeeklyDigestSchema>;
+
+export const WeeklyDigestListSchema = z.array(WeeklyDigestSchema);
+
+export const InsightCardSchema = z.object({
+	id: z.string(),
+	type: z.string(),
+	title: z.string(),
+	body: z.string(),
+	data: z.record(z.string(), z.unknown()).default({}),
+	priority: z.number().default(3),
+});
+
+export type InsightCard = z.infer<typeof InsightCardSchema>;
+
+export const PatternsResponseSchema = z.object({
+	insights: z.array(InsightCardSchema),
+	generated_at: z.string(),
+});
+
+export type PatternsResponse = z.infer<typeof PatternsResponseSchema>;
+
+export const SuggestionSchema = z.object({
+	project_id: z.string(),
+	project_name: z.string(),
+	suggested_minutes: z.number(),
+	reasoning: z.string(),
+});
+
+export type Suggestion = z.infer<typeof SuggestionSchema>;
+
+export const SuggestionListSchema = z.array(SuggestionSchema);
+
+export const FocusScoreSchema = z.object({
+	beat_id: z.string(),
+	score: z.number(),
+	components: z.object({
+		length: z.number(),
+		peak_hours: z.number(),
+		fragmentation: z.number(),
+	}),
+});
+
+export type FocusScore = z.infer<typeof FocusScoreSchema>;
+
+export const FocusScoreListSchema = z.array(FocusScoreSchema);
+
+export const MoodCorrelationSchema = z.object({
+	mood_trend: z.array(
+		z.object({
+			date: z.string(),
+			mood_avg: z.number(),
+		}),
+	),
+	correlation: z.object({
+		r: z.number(),
+		description: z.string(),
+	}),
+	high_mood_avg_hours: z.number(),
+	low_mood_avg_hours: z.number(),
+	high_mood_avg_sessions: z.number(),
+	low_mood_avg_sessions: z.number(),
+});
+
+export type MoodCorrelation = z.infer<typeof MoodCorrelationSchema>;
+
+export const EstimationAccuracySchema = z.object({
+	project_id: z.string(),
+	project_name: z.string(),
+	avg_planned_min: z.number(),
+	avg_actual_min: z.number(),
+	accuracy_pct: z.number(),
+	bias: z.string(),
+});
+
+export type EstimationAccuracy = z.infer<typeof EstimationAccuracySchema>;
+
+export const EstimationAccuracyListSchema = z.array(EstimationAccuracySchema);
+
+export const ProjectHealthSchema = z.object({
+	project_id: z.string(),
+	project_name: z.string(),
+	days_since_last: z.number().nullable().optional(),
+	weekly_goal_trend: z.array(z.number()).default([]),
+	avg_session_length_trend: z.array(z.number()).default([]),
+	alert: z.string().nullable().optional(),
+});
+
+export type ProjectHealth = z.infer<typeof ProjectHealthSchema>;
+
+export const ProjectHealthListSchema = z.array(ProjectHealthSchema);
+
+// ============================================================================
 // Array schemas for list endpoints
 // ============================================================================
 

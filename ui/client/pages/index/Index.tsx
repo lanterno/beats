@@ -5,6 +5,7 @@
 import { useMemo } from "react";
 import { LoadingSpinner, useProjects } from "@/entities/project";
 import { useTodaySessions } from "@/entities/session";
+import { ProductivityScore } from "./ProductivityScore";
 import { ProjectPulseList } from "./ProjectPulseList";
 import { QuickLog } from "./QuickLog";
 import { TodayFeed } from "./TodayFeed";
@@ -31,7 +32,14 @@ export default function Index() {
 
 	return (
 		<div className="max-w-6xl mx-auto px-6 py-6">
-			<TodaysPlan trackedMinutesByProject={trackedMinutesByProject} />
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+				<div className="lg:col-span-2">
+					<TodaysPlan trackedMinutesByProject={trackedMinutesByProject} />
+				</div>
+				<div>
+					<ProductivityScore />
+				</div>
+			</div>
 
 			<div className="mt-5">
 				<WeekPanel />

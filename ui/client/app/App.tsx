@@ -9,6 +9,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { initializeAuth, LoginPage, useAuth } from "@/features/auth";
 import Index from "@/pages/index";
 import Insights from "@/pages/insights";
+import Digests from "@/pages/insights/Digests";
 import MonthlyRetrospective from "@/pages/insights/MonthlyRetrospective";
 import YearInReview from "@/pages/insights/YearInReview";
 import NotFound from "@/pages/not-found";
@@ -71,6 +72,7 @@ export function App() {
 							>
 								<Route path="/" element={<Index />} />
 								<Route path="/insights" element={<Insights />} />
+								<Route path="/insights/digests" element={<Digests />} />
 								<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
 								<Route path="/insights/year/:year" element={<YearInReview />} />
 								<Route path="/project/:projectId" element={<ProjectDetails />} />

@@ -199,3 +199,109 @@ class DailyNoteResponse(BaseModel):
     note: str
     mood: int | None = None
     created_at: datetime
+
+
+# Intelligence schemas
+
+
+class ProductivityScoreResponse(BaseModel):
+    """Response schema for productivity score."""
+
+    score: int
+    components: dict[str, int]
+
+
+class ScoreHistoryItem(BaseModel):
+    """A single week's productivity score."""
+
+    week_of: str
+    score: int
+
+
+class WeeklyDigestResponse(BaseModel):
+    """Response schema for a weekly digest."""
+
+    id: str | None = None
+    week_of: date_type
+    generated_at: datetime
+    total_hours: float
+    session_count: int
+    active_days: int
+    top_project_id: str | None = None
+    top_project_name: str | None = None
+    top_project_hours: float = 0
+    vs_last_week_pct: float | None = None
+    longest_day: str | None = None
+    longest_day_hours: float = 0
+    best_streak: int = 0
+    observation: str = ""
+    project_breakdown: list[dict] = Field(default_factory=list)
+    productivity_score: int = 0
+
+
+class InsightCardResponse(BaseModel):
+    """Response schema for a pattern insight card."""
+
+    id: str
+    type: str
+    title: str
+    body: str
+    data: dict = Field(default_factory=dict)
+    priority: int = 3
+
+
+class PatternsResponse(BaseModel):
+    """Response schema for pattern detection results."""
+
+    insights: list[InsightCardResponse]
+    generated_at: datetime
+
+
+class SuggestionResponse(BaseModel):
+    """Response schema for a daily plan suggestion."""
+
+    project_id: str
+    project_name: str
+    suggested_minutes: int
+    reasoning: str
+
+
+class FocusScoreResponse(BaseModel):
+    """Response schema for a focus quality score."""
+
+    beat_id: str
+    score: int
+    components: dict[str, int]
+
+
+class MoodCorrelationResponse(BaseModel):
+    """Response schema for mood-productivity correlation."""
+
+    mood_trend: list[dict]
+    correlation: dict
+    high_mood_avg_hours: float
+    low_mood_avg_hours: float
+    high_mood_avg_sessions: float
+    low_mood_avg_sessions: float
+
+
+class EstimationAccuracyResponse(BaseModel):
+    """Response schema for estimation accuracy per project."""
+
+    project_id: str
+    project_name: str
+    avg_planned_min: float
+    avg_actual_min: float
+    accuracy_pct: float
+    bias: str
+
+
+class ProjectHealthResponse(BaseModel):
+    """Response schema for project health metrics."""
+
+    project_id: str
+    project_name: str
+    days_since_last: int | None = None
+    weekly_goal_trend: list[float] = Field(default_factory=list)
+    avg_session_length_trend: list[float] = Field(default_factory=list)
+    alert: str | None = None

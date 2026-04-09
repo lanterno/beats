@@ -3,8 +3,9 @@
  * Set 1-3 time-boxed daily intentions and track progress.
  */
 
-import { Check, Plus, Target, X } from "lucide-react";
+import { Check, Lightbulb, Plus, Target, X } from "lucide-react";
 import { useState } from "react";
+import { useSuggestions } from "@/entities/intelligence";
 import {
 	useCreateIntention,
 	useDeleteIntention,
@@ -35,6 +36,7 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 	const activeProjects = (projects ?? []).filter((p) => !p.archived);
 	const projectMap = new Map(activeProjects.map((p) => [p.id, p]));
 	const items = intentions ?? [];
+	const { data: suggestions } = useSuggestions();
 
 	const handleAdd = () => {
 		if (!newProjectId) return;
@@ -91,12 +93,72 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 			</div>
 
 			{items.length === 0 && !adding ? (
-				<button
-					onClick={() => setAdding(true)}
-					className="w-full rounded-lg border border-dashed border-border py-4 text-center text-muted-foreground/50 text-xs hover:border-accent/30 hover:text-muted-foreground transition-colors"
-				>
-					Set your intentions for today
-				</button>
+				<div className="space-y-2">
+					{suggestions && suggestions.length > 0 ? (
+						<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
+							<div className="px-3 py-2 flex items-center gap-1.5 border-b border-border/40">
+								<Lightbulb className="w-3 h-3 text-warning" />
+								<span className="text-xs text-muted-foreground">Suggested plan</span>
+								<button
+									onClick={() => {
+										for (const s of suggestions) {
+											createMutation.mutate({
+												projectId: s.project_id,
+												plannedMinutes: s.suggested_minutes,
+											});
+										}
+									}}
+									className="ml-auto text-[11px] text-accent hover:text-accent/80 transition-colors"
+								>
+									Use all
+								</button>
+							</div>
+							{suggestions.map((s) => {
+								const project = projectMap.get(s.project_id);
+								return (
+									<div
+										key={s.project_id}
+										className="flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/30 transition-colors group"
+									>
+										{project && (
+											<div
+												className="w-2 h-2 rounded-full shrink-0"
+												style={{ backgroundColor: project.color }}
+											/>
+										)}
+										<span className="text-sm text-foreground truncate flex-1">
+											{s.project_name}
+										</span>
+										<span className="text-xs text-muted-foreground/70 truncate max-w-40 hidden sm:inline">
+											{s.reasoning}
+										</span>
+										<span className="text-xs tabular-nums text-muted-foreground">
+											{formatDuration(s.suggested_minutes)}
+										</span>
+										<button
+											onClick={() =>
+												createMutation.mutate({
+													projectId: s.project_id,
+													plannedMinutes: s.suggested_minutes,
+												})
+											}
+											className="text-[11px] text-accent hover:text-accent/80 opacity-0 group-hover:opacity-100 transition-all"
+										>
+											Use
+										</button>
+									</div>
+								);
+							})}
+						</div>
+					) : (
+						<button
+							onClick={() => setAdding(true)}
+							className="w-full rounded-lg border border-dashed border-border py-4 text-center text-muted-foreground/50 text-xs hover:border-accent/30 hover:text-muted-foreground transition-colors"
+						>
+							Set your intentions for today
+						</button>
+					)}
+				</div>
 			) : (
 				<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 					<div className="py-1">

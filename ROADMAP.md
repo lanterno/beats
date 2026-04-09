@@ -3,208 +3,139 @@
 > A personal time tracking tool that's more than just a timer.
 > Beats lives on your desk, in your browser, and in your pocket — helping you understand how you spend your time and make better choices about it.
 
-This roadmap covers 8 phases of development, each building on the last. Phases are designed to be completed in 2-4 sessions each.
+---
+
+## What's been built
+
+Beats is a mature, full-featured time tracker with three surfaces: a React SPA, a FastAPI backend, and an ESP32 wall clock. The foundation is strong:
+
+- **Tracking** — Timer with start/stop, manual logging, session notes, tags, project goals (target and cap modes with per-week overrides)
+- **Analytics** — Contribution heatmap, daily rhythm chart, streak tracker, monthly retrospective, year-in-review, weekly comparison, session stats
+- **Planning** — Daily intentions with auto-completion, end-of-day review with mood tracking, focus mode
+- **Hardware** — ESP32 wall clock with single-button toggle, project-colored LEDs, energy meter, device status API
+- **Platform** — PWA with offline timer, install prompt, forgotten-timer notifications, keyboard shortcuts, five themes, three density modes
+- **Integration** — Webhooks, CSV/JSON export and import, developer settings page
+- **Auth** — WebAuthn passkeys, JWT sessions
+- **Infra** — Cloud Run + Firebase Hosting, Cloud Build CI/CD, zero-cost deployment
+
+### Remaining polish from v1
+
+- [ ] Richer stop toast — add daily average comparison
+- [ ] Background sync — offline event queue surviving tab close
+- [ ] Wall clock multi-project switching — firmware double-press cycling
+- [ ] Wall clock ambient progress — firmware periodic status polling
 
 ---
 
-## Phase 1: Self-Awareness — "Know Thyself"
+## What's next
 
-Right now Beats tells you *how many hours* you worked. That's table stakes. This phase makes it tell you *how you work* — your patterns, rhythms, and tendencies.
-
-### Features
-
-- **Contribution heatmap** — A GitHub-style 52-week grid on a new `/insights` page. Each cell is a day, color-coded by total hours (faint at <1h, fully saturated at 6h+). Hoverable: "Mon, Mar 9 — 4.2h across 3 projects." New API endpoint with MongoDB aggregation pipeline for efficient date grouping.
-
-- **Daily rhythm chart** — A 24-hour horizontal visualization showing *when* you work. Aggregate sessions into 30-minute slots across the selected period (week/month/all-time). Answers: "Am I a morning person or a night owl?"
-
-- **Streak tracker** — Current and longest consecutive-day streaks displayed in the sidebar. Days with at least one session count. A quiet motivator that costs nothing to compute.
-
-- **Session stats per project** — On the project detail page: average session length, longest session, session count this month. Computed client-side from already-fetched data.
-
-- **Weekly comparison** — In sidebar stats, show percentage change vs last week with a subtle arrow. "This week: 18.2h (+12%)" tells you more than "18.2h" alone.
-
-### Why this matters
-
-Time tracking without insight is data entry. Users who see their patterns develop a relationship with the tool — it becomes a mirror, not a chore.
+The first eight phases built a complete tool. The next four make it *intelligent*, *connected*, *habitual*, and *tangible*. Each phase is 2-4 sessions.
 
 ---
 
-## Phase 2: Polish and Feel — "Make It Breathe"
+## Phase 9: Intelligence — "What Does It Mean?"
 
-The architecture is clean, the data model is solid. Now make the interface feel *alive*. The difference between "I use this" and "I love this" is mostly in the details.
+Beats has months of data. Right now, you have to stare at charts and draw your own conclusions. This phase makes Beats *tell* you what it sees.
 
 ### Features
 
-- **Animated timer digits** — Odometer-style roll animation on the sidebar timer. Digits count up smoothly, settle with ease-out on stop. The timer already glows amber — now the numbers move.
+- **Weekly digest** — Every Monday morning, a generated summary lands in the app (and optionally email/webhook): total hours, top project, vs-last-week delta, longest day, best streak, one observation ("You worked 3h more on Beats this week — it's been trending up for a month"). Stored as a `WeeklyDigest` document. Viewable at `/insights/digests`.
 
-- **Page transitions** — Subtle cross-fade with slight Y-translate between dashboard and project detail. Framer Motion `AnimatePresence` wrapping the `<Outlet />` in Layout.
+- **Productivity score** — A single 0-100 number on the dashboard, computed from: consistency (did you track every weekday?), intention completion rate, goal progress, session length distribution. Not gamification — calibration. "How aligned was my week with what I planned?" Hoverable breakdown.
 
-- **Keyboard shortcuts** — `Space` to start/stop timer (outside inputs), `1-9` to select project by position. `Cmd+K` or `/` opens a command palette for project search and navigation.
+- **Pattern detection** — Surface non-obvious patterns: "You average 2.3x more deep work on Wednesdays", "Your longest sessions happen between 9-11 AM", "You haven't touched Project X in 3 weeks." Shown as dismissible cards on the insights page. Computed server-side with simple heuristics — no ML needed.
 
-- **Sparkline entrance animation** — The bars in ProjectPulseList grow from zero to target height with staggered delay (30ms per bar). Gives a "filling up" effect on page load.
+- **Smart daily plan** — When creating today's intentions, suggest projects and durations based on: day of week, recent patterns, unmet weekly goals, and what you did yesterday. "Tuesdays you usually spend 2h on API — want to plan that?" Pre-fills, user adjusts.
 
-- **Favicon timer indicator** — When the timer runs, the browser favicon shows a small colored dot matching the project color. Canvas-generated, driven by `useTimer` state.
-
-- **Richer stop toast** — Replace the plain text toast with a custom component: project color dot, duration, and a mini bar showing how this session compares to your daily average.
+- **Focus quality indicator** — For each session, compute a "focus score" based on session length (longer = better), time of day (peak hours = better), and whether it was interrupted (short gaps between sessions = fragmented). Shown as a subtle indicator on session cards.
 
 ### Why this matters
 
-These aren't features — they're feelings. Every micro-interaction signals that someone cared about the details. This is what makes screenshots shareable and the app worth opening.
+Data without interpretation is a spreadsheet. The weekly digest alone transforms Beats from "I should check my time tracking" to "my time tracking checks in on me."
 
 ---
 
-## Phase 3: Progressive Web App — "Always With You"
+## Phase 10: Context — "Where Does Time Go?"
 
-A time tracker you have to open a browser tab for is a time tracker you forget about. This phase makes Beats a real app.
+Right now, Beats knows you worked 3 hours. It doesn't know you were in meetings for 2 of them. This phase connects Beats to the systems where your time actually happens.
 
 ### Features
 
-- **PWA manifest + service worker** — Add `vite-plugin-pwa` to the build. App icons, warm amber theme color, stale-while-revalidate caching. "Add to Home Screen" on mobile and desktop.
+- **Calendar overlay** — Connect Google Calendar (OAuth2, read-only). On the project detail timeline view, calendar events appear as translucent blocks behind your tracked sessions. Instantly see: "I was in meetings from 10-12 but only tracked 30 minutes — the rest was untracked." No auto-logging, just visibility.
 
-- **Offline timer** — When offline, the timer still works. Start/stop actions queue in IndexedDB and replay when connectivity resumes. A subtle amber "offline" dot in the header signals queued state. The existing `useTimer` localStorage persistence is the foundation.
+- **Git activity correlation** — Optional GitHub integration. On project detail, show commit count alongside tracked time. "You made 12 commits during 4.2h of tracked work on this project." Helps calibrate whether tracked time reflects actual output. Configured per-project: link a GitHub repo to a Beats project.
 
-- **Push notifications for forgotten timers** — After the timer runs for 2+ hours (configurable), a browser notification: "You've been working on [Project] for 2 hours. Still going?" Prevents the #1 pain point of time tracking.
+- **Untracked time report** — A new section on the daily view: gaps between sessions, highlighted. "11:00-13:30 — 2.5h untracked." If calendar is connected, show what was scheduled during gaps. Not judgmental — just awareness.
 
-- **Install prompt** — A non-intrusive banner in the sidebar when the browser fires `beforeinstallprompt`. "Install Beats for quick access." Dismissible, preference stored in localStorage.
+- **Auto-start rules** — Simple triggers: "When I push to repo X, start timer on Project Y" (via existing webhook infrastructure, reversed). "Start timer at 9 AM on weekdays for Project Z." Rules engine is just cron + webhook, no daemon.
 
-- **Background sync** — Timer start/stop events reach the server even if the tab closes while offline. Critical for wall clock interop — the device might toggle the timer while the web app is closed.
+- **Daily summary webhook** — At end of day, POST a structured summary to a configured URL. Enables Slack bot integration, daily standup notes, journaling tools. Format: project breakdown, total hours, completed intentions, daily note.
 
 ### Why this matters
 
-PWA transforms Beats from a website into an app that lives in your dock. On your phone without an app store. Offline without anxiety. This is the infrastructure for "always there."
+Time tracking in isolation is only half the picture. Calendar overlay alone answers the question every knowledge worker has: "Where did my day go?" — without requiring you to track meetings separately.
 
 ---
 
-## Phase 4: Planning and Intention — "What Will You Do?"
+## Phase 11: Rituals — "Make It a Practice"
 
-Tracking time is retrospective. This phase makes it *prospective*. You don't just see what you did — you decide what you'll do.
+The best productivity system is the one you actually use. This phase turns Beats into a daily and weekly habit with minimal friction.
 
 ### Features
 
-- **Daily intentions** — A "Today's Plan" section at the top of the dashboard. Set 1-3 time-boxed intentions each morning: "2h on API refactor, 1h on docs." Auto-checks when tracked time for that project exceeds the plan. New `Intention` model and CRUD endpoints.
+- **Weekly planning view** — A new `/plan` page, available Sunday evening or Monday morning. Shows last week's summary side-by-side with an empty week template. Set project-level time budgets for the week. Drag to rebalance. Saves as `WeeklyPlan` and feeds the smart daily plan suggestions.
 
-- **Focus mode** — When the timer runs, toggle a distraction-free view: large centered timer, project name, stop button. Nothing else. Fullscreen optional. Keyboard shortcut: `F`.
+- **Recurring intentions** — Templates for daily intentions: "Every weekday, plan 2h for Deep Work." Auto-creates intentions each morning. Editable per-day. Managed in settings.
 
-- **Goal ring visualization** — Replace the thin progress bars on project pulse with SVG radial arcs. Brief confetti animation when a goal is met. Contextual text: "2.5h to go" or "Goal met! +1.2h extra."
+- **Morning briefing** — When you open Beats for the first time each day, a brief overlay: yesterday's summary (hours, completed intentions, mood), today's auto-created intentions, and any weekly goal warnings ("You need 4h on Project X to hit your weekly target — you have 2 days left").
 
-- **Time budgets** — Extend weekly goals with a "cap" mode: "No more than 10h/week on Project X." Progress bar fills red instead of green as you approach the limit. New `goal_type` field on the project model: `"target"` vs `"cap"`.
+- **Review workflow** — End-of-day review gets a companion: weekly review. Friday/Sunday prompt walks through the week: what went well, what didn't, what to change next week. Stored alongside `WeeklyDigest`. The monthly retrospective pulls from these notes.
 
-- **End-of-day review** — At a configurable time (default 5 PM), a prompt: "How was your day?" Shows today's summary with a text area for a brief note and optional mood (1-5). Stored as `DailyNote` model. The beginning of the qualitative layer.
+- **Intention streaks** — Track consecutive days where you completed all intentions. Separate from activity streaks. "You've hit your daily plan 12 days in a row." A meta-habit for the habit.
 
 ### Why this matters
 
-The moment you set intentions and track against them, time tracking becomes a productivity system. This is what separates a cool gadget from something that changes how you work.
+Features 1-8 built a capable tracker. But a tracker you check once a week isn't a practice. Morning briefing + evening review + weekly planning creates a rhythm. The tool becomes part of how you start and end each day.
 
 ---
 
-## Phase 5: Wall Clock Superpowers — "The Hardware Edge"
+## Phase 12: Presence — "The Desk Companion"
 
-The wall clock is a $35 toggle switch that sends an HTTP POST. This phase makes it an ambient display that reflects your day in light and color.
-
-### Features
-
-- **Device status API** — New `GET /api/device/status` returning timer state optimized for ESP32: `{clocked_in, project_name, elapsed_minutes, daily_total_minutes, energy_level (0-7)}`. The firmware fetches real values instead of hardcoding `SetEnergyMeter(5)`.
-
-- **Project-colored LEDs** — The status LED shows the current project's color from the web UI palette. Status endpoint includes `project_color_rgb: [r, g, b]`. The firmware's `StatusColor` enum gets a `Custom(u8, u8, u8)` variant.
-
-- **Multi-project switching** — Double-press cycles through "favorite" projects (fetched at boot from `GET /api/device/favorites`). LED briefly flashes each project's color before confirming selection.
-
-- **Device dashboard** — Firmware periodically POSTs heartbeats: `POST /api/device/heartbeat {battery_voltage, wifi_rssi, uptime_seconds}`. Sidebar shows: "Wall clock: 78% battery, seen 2m ago."
-
-- **Ambient daily progress** — Every 5 minutes, the firmware fetches the status endpoint and updates the 7 energy meter LEDs to reflect real-time daily hours. A glanceable physical object on your desk that fills up throughout the day.
-
-### Why this matters
-
-The wall clock is the single most unique thing about Beats. Nobody else has a physical desk device that shows your productivity in colored light. This phase makes that real instead of theoretical.
-
----
-
-## Phase 6: Notes, Tags, and Context — "Remember the Why"
-
-Hours tell you *how long*. This phase adds *what* and *why*. Lightweight metadata without turning Beats into a project management tool.
+The wall clock is Beats' most distinctive feature, but it's currently a $35 toggle switch. This phase makes it a desk companion you glance at fifty times a day.
 
 ### Features
 
-- [x] **Session notes** — Optional `note` field on beats. When stopping the timer, a small inline input: "What did you work on?" (not required, easily dismissed). Notes appear in session lists and today feed. Searchable via `GET /api/beats/?q=search_term`.
+- **E-ink daily dashboard** — Add a small e-ink display (2.9" Waveshare, ~$15) to the wall clock. Shows: current project name, elapsed time, today's total, weekly goal progress bar, next calendar event (if connected). Updates every 60 seconds. Readable from across the room. Low power — e-ink holds image without power.
 
-- [x] **Tags** — Freeform tags on sessions: `["deep-work", "meetings", "learning"]`. Autocomplete from previously used tags. Appear as small pills on session rows. Filter the heatmap and insights by tag.
+- **Multi-button interaction** — Replace the single toggle with a 3-button layout: Start/Stop (main), Next Project (cycle through favorites), and Mode (toggle between clock display, today's summary, weekly progress). Physical buttons are faster than reaching for your phone.
 
-- [x] **Session timeline view** — A horizontal timeline on the project detail page: sessions as colored blocks on a 24-hour axis, one row per day. At-a-glance view of *when* you worked, not just how much.
+- **Ambient color coding** — The LED strip becomes a progress bar. LED 1-7 fill up as daily hours accumulate. Color shifts from project color (active) to a muted palette (idle). A long fade animation on stop makes the transition feel intentional.
 
-- [x] **Monthly retrospective** — Auto-generated at `/insights/month/2026-04`: total hours, top project, busiest day, average daily hours, longest session, tag cloud, rhythm chart. "Copy summary" button for journaling or standups.
+- **Pomodoro mode** — Long-press Mode button to enter a 25-minute focused session. E-ink shows a countdown. LEDs pulse gently. At completion, the display shows "Break?" and the button pauses for 5 minutes. Simple, physical, no phone required.
 
-- [x] **Quick log** — A "+" button on the dashboard to manually log a past session. Covers the "I forgot to use the timer" case. Project, date, start/end, optional note. Uses the existing `POST /api/beats/` endpoint.
-
-### Why this matters
-
-After months of use, the most valuable thing in Beats isn't today's timer — it's the history. Notes and tags make that history searchable and meaningful. "What was I working on in February?" becomes answerable.
-
----
-
-## Phase 7: Data Export and Ownership — "Your Data, Your Way"
-
-This is what makes Beats trustworthy. You can leave anytime and take everything with you.
-
-### Features
-
-- [x] **CSV export** — Export buttons on project detail and insights pages. Sessions as CSV: `date, project, start, end, duration_minutes, note, tags`. Weekly summaries as a separate CSV. Server-side streaming response.
-
-- [x] **Full JSON backup and restore** — `GET /api/export/full` dumps everything: projects, beats, intentions, notes. `POST /api/import/full` restores with upsert-by-ID. Disaster recovery and self-hosted migration in one feature.
-
-- [x] **Webhooks** — Register URLs to receive `timer.start` and `timer.stop` events. Enables IFTTT, Zapier, Home Assistant, or custom automations. Managed via a settings page.
-
-- [x] **Shareable weekly card** — A visual summary card (rendered via canvas or SVG): project colors, hours breakdown, streak count, goal completion. Screenshot-friendly. Useful for journaling, standups, or sharing with an accountability partner.
-
-- [x] **Developer page** — A `/settings` page showing API base URL, link to OpenAPI docs, curl examples for the toggle endpoint, and wall clock setup instructions.
+- **Charging dock display** — When plugged in and charging, the e-ink shows a minimal clock face with today's total hours. The wall clock becomes a desk clock at night. Battery percentage shown in corner.
 
 ### Why this matters
 
-Trust is the moat of an indie tool. The moment someone worries "what if I lose my data?" they stop investing. Export, backup, and webhooks turn Beats from a product you use into infrastructure you own.
-
----
-
-## Phase 8: Delight and Identity — "Make It Yours"
-
-The final layer. After 7 phases of capability, this is pure personality.
-
-### Features
-
-- [x] **Color themes** — 4-5 dark themes beyond the current warm brown/amber: "Midnight" (cool blue/slate), "Forest" (green/dark), "Mono" (pure grayscale), "Sunset" (warm red/orange). Implemented by swapping CSS custom property values. Preference in localStorage.
-
-- [x] **Custom project colors** — User-selectable colors replace the hash-based auto-assignment. A small color picker (8-10 swatches + hex input) in project creation/edit. Falls back to auto-assignment for projects without a chosen color.
-
-- [x] **Layout density** — Three options: Comfortable (current), Compact (smaller fonts, tighter spacing, more visible data), Spacious (larger type, more breathing room). A CSS class on the root adjusts spacing custom properties.
-
-- [x] **Animated empty states** — Replace "No sessions yet" text with small, tasteful SVG animations. A pulsing clock, a sprouting seedling. Sets a tone without being childish.
-
-- [x] **Year-in-review** — Available each January: a scrollable page summarizing the entire previous year. Total hours, project rankings, busiest month, longest streak, work hour distribution. Styled as a typographic poster. Saveable as image.
-
-- [x] **Wall clock theme sync** — When the web theme changes, the wall clock's LED palette matches. The status endpoint includes `theme_accent_rgb`. Energy meter LEDs use the theme's gradient instead of hardcoded colors.
-
-### Why this matters
-
-This is the difference between a tool you respect and a tool you have affection for. The annual review becomes something people anticipate. The custom themes make it feel like home.
+The physical device is what makes Beats different from every other time tracker. An e-ink display transforms it from "button that talks to an API" into "ambient information display that happens to have a button." You glance at it like a watch — and it tells you about your day.
 
 ---
 
 ## Phase Dependencies
 
 ```
-Phase 1 ──┐
-           ├── Phase 3 ── Phase 4 ── Phase 6 ── Phase 7
-Phase 2 ──┘                  │
-                             └── Phase 5 ── Phase 8
+v1 (Phases 1-8) ── Phase 9 ── Phase 11
+                       │
+                       └── Phase 10
+                              │
+Phase 12 (independent) ───────┘ (calendar events on e-ink)
 ```
 
-- **1 & 2** can run in parallel (data/API vs UI/animation)
-- **3** builds on both (animations in install prompt, data for offline)
-- **4** needs insights from 1
-- **5 & 6** can overlap (firmware vs web with new API models)
-- **7** needs notes/tags from 6 to include in exports
-- **8** ties everything together
+- **9** (Intelligence) can start immediately — it only needs existing data
+- **10** (Context) benefits from 9's pattern detection for smarter gap analysis
+- **11** (Rituals) needs 9's weekly digest and smart suggestions
+- **12** (Presence) is mostly independent firmware work, but calendar overlay from 10 feeds the e-ink display
 
 ---
 
-*Last updated: 2026-04-07*
-
-**Status: All 8 phases complete.**
+*Last updated: 2026-04-09*

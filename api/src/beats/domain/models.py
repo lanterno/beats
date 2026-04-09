@@ -178,6 +178,51 @@ class DailyNote(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class WeeklyDigest(BaseModel):
+    """A generated weekly summary with insights and productivity score."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    week_of: date_type  # Monday of the week
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    total_hours: float
+    session_count: int
+    active_days: int
+    top_project_id: str | None = None
+    top_project_name: str | None = None
+    top_project_hours: float = 0
+    vs_last_week_pct: float | None = None
+    longest_day: str | None = None  # Day name, e.g. "Wednesday"
+    longest_day_hours: float = 0
+    best_streak: int = 0
+    observation: str = ""
+    project_breakdown: list[dict] = Field(default_factory=list)
+    productivity_score: int = 0
+
+
+class InsightCard(BaseModel):
+    """A single detected pattern or insight."""
+
+    id: str  # uuid for dismiss tracking
+    type: str  # day_pattern, time_pattern, stale_project, mood_correlation, etc.
+    title: str
+    body: str
+    data: dict = Field(default_factory=dict)
+    priority: int = 3  # 1-5, higher = more important
+
+
+class UserInsights(BaseModel):
+    """Cached pattern detection results for a user."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    insights: list[InsightCard] = Field(default_factory=list)
+    dismissed_ids: list[str] = Field(default_factory=list)
+
+
 class Webhook(BaseModel):
     """A registered webhook URL that receives timer events.
 

@@ -6,19 +6,24 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 
 from beats.domain.analytics import AnalyticsService
+from beats.domain.intelligence import IntelligenceService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     BeatRepository,
     DailyNoteRepository,
+    InsightsRepository,
     IntentionRepository,
     MongoBeatRepository,
     MongoDailyNoteRepository,
+    MongoInsightsRepository,
     MongoIntentionRepository,
     MongoProjectRepository,
     MongoWebhookRepository,
+    MongoWeeklyDigestRepository,
     ProjectRepository,
     WebhookRepository,
+    WeeklyDigestRepository,
 )
 from beats.settings import Settings
 
@@ -103,6 +108,33 @@ def get_webhook_repository(user_id: CurrentUserId) -> WebhookRepository:
     return MongoWebhookRepository(db.webhooks, user_id=user_id)
 
 
+def get_weekly_digest_repository(user_id: CurrentUserId) -> WeeklyDigestRepository:
+    """Get the weekly digest repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoWeeklyDigestRepository(db.weekly_digests, user_id=user_id)
+
+
+def get_insights_repository(user_id: CurrentUserId) -> InsightsRepository:
+    """Get the insights repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoInsightsRepository(db.insights, user_id=user_id)
+
+
+def get_intelligence_service(
+    beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    intention_repo: Annotated[IntentionRepository, Depends(get_intention_repository)],
+    daily_note_repo: Annotated[DailyNoteRepository, Depends(get_daily_note_repository)],
+) -> IntelligenceService:
+    """Get the intelligence service with injected repositories."""
+    return IntelligenceService(
+        beat_repo=beat_repo,
+        project_repo=project_repo,
+        intention_repo=intention_repo,
+        daily_note_repo=daily_note_repo,
+    )
+
+
 # Type aliases for cleaner dependency injection in routes
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
@@ -111,3 +143,6 @@ AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)
 IntentionRepoDep = Annotated[IntentionRepository, Depends(get_intention_repository)]
 DailyNoteRepoDep = Annotated[DailyNoteRepository, Depends(get_daily_note_repository)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
+WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]
+InsightsRepoDep = Annotated[InsightsRepository, Depends(get_insights_repository)]
+IntelligenceServiceDep = Annotated[IntelligenceService, Depends(get_intelligence_service)]

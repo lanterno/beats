@@ -6,22 +6,32 @@
 import { ChevronDown, Clock } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useFocusScores } from "@/entities/intelligence";
 import { useProjects } from "@/entities/project";
 import type { Session } from "@/entities/session";
 import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
+import type { FocusScore } from "@/shared/api";
 import { cn, formatDuration, formatTime, parseUtcIso } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
+
+function focusColor(score: number): string {
+	if (score >= 70) return "var(--color-accent)";
+	if (score >= 40) return "var(--color-warning)";
+	return "var(--color-destructive)";
+}
 
 function SessionRow({
 	session,
 	projectName,
 	projectColor,
 	projectId,
+	focusScore,
 }: {
 	session: Session;
 	projectName: string;
 	projectColor: string;
 	projectId: string;
+	focusScore?: FocusScore;
 }) {
 	const navigate = useNavigate();
 
@@ -39,6 +49,13 @@ function SessionRow({
 				<span className="text-xs text-muted-foreground tabular-nums shrink-0">
 					{formatTime(session.startTime)} → {formatTime(session.endTime)}
 				</span>
+				{focusScore && (
+					<div
+						className="w-1.5 h-1.5 rounded-full shrink-0"
+						style={{ backgroundColor: focusColor(focusScore.score) }}
+						title={`Focus: ${focusScore.score}`}
+					/>
+				)}
 				<span className="text-sm font-medium tabular-nums text-foreground w-14 text-right shrink-0">
 					{session.duration > 0 ? formatDuration(session.duration) : "—"}
 				</span>
@@ -68,12 +85,14 @@ function SessionGroup({
 	totalMinutes,
 	projectMap,
 	defaultOpen,
+	focusScoreMap,
 }: {
 	label: string;
 	sessions: Session[];
 	totalMinutes: number;
 	projectMap: Map<string, { name: string; color: string }>;
 	defaultOpen: boolean;
+	focusScoreMap?: Map<string, FocusScore>;
 }) {
 	const [open, setOpen] = useState(defaultOpen);
 
@@ -112,6 +131,7 @@ function SessionGroup({
 								projectName={info?.name || "Unknown"}
 								projectColor={info?.color || "#888"}
 								projectId={session.projectId}
+								focusScore={focusScoreMap?.get(session.id)}
 							/>
 						);
 					})}
@@ -125,8 +145,10 @@ export function TodayFeed() {
 	const { data: todaySessions } = useTodaySessions();
 	const { data: weekSessions } = useThisWeekSessions();
 	const { data: projects } = useProjects();
+	const { data: focusScores } = useFocusScores();
 
 	const projectMap = new Map((projects || []).map((p) => [p.id, { name: p.name, color: p.color }]));
+	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
 
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);
@@ -146,6 +168,10 @@ export function TodayFeed() {
 	});
 
 	const todayTotal = (todaySessions || []).reduce((sum, s) => sum + s.duration, 0);
+	const avgFocus =
+		focusScores && focusScores.length > 0
+			? Math.round(focusScores.reduce((sum, f) => sum + f.score, 0) / focusScores.length)
+			: null;
 	const yesterdayTotal = yesterdaySessions.reduce((sum, s) => sum + s.duration, 0);
 	const earlierTotal = earlierSessions.reduce((sum, s) => sum + s.duration, 0);
 
@@ -170,6 +196,9 @@ export function TodayFeed() {
 								— {todayList.length} session{todayList.length !== 1 ? "s" : ""}
 							</span>
 						)}
+						{avgFocus !== null && (
+							<span className="text-xs text-muted-foreground/60">Focus: {avgFocus}</span>
+						)}
 						<span className="ml-auto text-sm font-medium tabular-nums text-accent">
 							{todayTotal > 0 ? formatDuration(todayTotal) : "0m"}
 						</span>
@@ -185,6 +214,7 @@ export function TodayFeed() {
 									projectName={info?.name || "Unknown"}
 									projectColor={info?.color || "#888"}
 									projectId={session.projectId}
+									focusScore={focusScoreMap.get(session.id)}
 								/>
 							);
 						})

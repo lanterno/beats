@@ -10,6 +10,10 @@ import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
+import { EstimationAccuracy } from "./EstimationAccuracy";
+import { MoodCorrelation } from "./MoodCorrelation";
+import { PatternCards } from "./PatternCards";
+import { ProjectHealth } from "./ProjectHealth";
 import { TopProjects } from "./TopProjects";
 import { WeeklyCard } from "./WeeklyCard";
 
@@ -45,6 +49,12 @@ export default function Insights() {
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-3">
 					<h1 className="font-heading text-xl text-foreground">Insights</h1>
+					<Link
+						to="/insights/digests"
+						className="text-[10px] px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+					>
+						Digests
+					</Link>
 					<Link
 						to={`/insights/year/${new Date().getFullYear() - 1}`}
 						className="text-[10px] px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
@@ -109,12 +119,24 @@ export default function Insights() {
 				</div>
 			)}
 
+			{/* Intelligence: Pattern cards */}
+			{!selectedProjectId && !selectedTag && <PatternCards />}
+
 			<ContributionHeatmap projectId={selectedProjectId} tag={selectedTag} />
 
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 				<DailyRhythmChart projectId={selectedProjectId} tag={selectedTag} />
 				{!selectedProjectId && <TopProjects tag={selectedTag} />}
 			</div>
+
+			{/* Intelligence: Mood, Health, Estimation */}
+			{!selectedProjectId && !selectedTag && (
+				<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+					<MoodCorrelation />
+					<ProjectHealth />
+					<EstimationAccuracy />
+				</div>
+			)}
 
 			{/* Weekly shareable card */}
 			{!selectedProjectId && !selectedTag && <WeeklyCard />}
