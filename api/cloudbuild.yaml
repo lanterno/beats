@@ -7,7 +7,7 @@ steps:
       - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'
       - '-t'
       - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
-      - '.'
+      - './api/'
     id: 'build-image'
 
   # Push image with SHA tag
@@ -24,7 +24,7 @@ steps:
       - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
     id: 'push-image-latest'
 
-  # Deploy to Cloud Run using the commit SHA tag to ensure we deploy the exact image just built
+  # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -40,20 +40,16 @@ steps:
       - '--allow-unauthenticated'
     id: 'deploy-cloud-run'
 
-# Images to store in Artifact Registry
 images:
   - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'
   - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
 
-# Build options
 options:
   machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY
 
-# Timeout for the build
 timeout: '1200s'
 
-# Tags for the build
 tags:
   - 'docker'
   - '${_IMAGE_NAME}'
