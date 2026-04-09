@@ -1,6 +1,6 @@
 /**
  * Auth Store
- * Manages authentication state and session tokens.
+ * Manages authentication state, session tokens, and user info.
  * Uses sessionStorage for token persistence within browser sessions.
  */
 import { useSyncExternalStore } from "react";
@@ -15,16 +15,23 @@ const SESSION_TOKEN_KEY = "beats_session_token";
 // State
 // ============================================================================
 
+export interface UserInfo {
+	email: string;
+	displayName: string | null;
+}
+
 interface AuthState {
 	token: string | null;
 	isAuthenticated: boolean;
 	isLoading: boolean;
+	user: UserInfo | null;
 }
 
 let state: AuthState = {
 	token: null,
 	isAuthenticated: false,
 	isLoading: true,
+	user: null,
 };
 
 // Subscribers for React's useSyncExternalStore
@@ -42,24 +49,41 @@ function emitChange() {
 
 /**
  * Initialize the auth store from sessionStorage.
- * Call this on app startup.
+ * If a token exists, fetches user info from the API.
  */
-export function initializeAuth(): void {
+export async function initializeAuth(): Promise<void> {
 	const storedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
 	if (storedToken) {
 		state = {
 			token: storedToken,
 			isAuthenticated: true,
 			isLoading: false,
+			user: null,
 		};
+		emitChange();
+
+		// Fetch user info in the background
+		try {
+			const { getCurrentUser } = await import("../api/authApi");
+			const userInfo = await getCurrentUser();
+			state = {
+				...state,
+				user: { email: userInfo.email, displayName: userInfo.display_name },
+			};
+			emitChange();
+		} catch {
+			// Token might be expired -- clear it
+			clearSessionToken();
+		}
 	} else {
 		state = {
 			token: null,
 			isAuthenticated: false,
 			isLoading: false,
+			user: null,
 		};
+		emitChange();
 	}
-	emitChange();
 }
 
 /**
@@ -71,7 +95,16 @@ export function setSessionToken(token: string): void {
 		token,
 		isAuthenticated: true,
 		isLoading: false,
+		user: null,
 	};
+	emitChange();
+}
+
+/**
+ * Set user info after fetching from API.
+ */
+export function setUser(user: UserInfo): void {
+	state = { ...state, user };
 	emitChange();
 }
 
@@ -84,6 +117,7 @@ export function clearSessionToken(): void {
 		token: null,
 		isAuthenticated: false,
 		isLoading: false,
+		user: null,
 	};
 	emitChange();
 }

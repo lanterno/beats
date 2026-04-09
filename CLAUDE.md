@@ -59,5 +59,5 @@ Install: `lefthook install` (from repo root)
 
 - Python: Ruff for linting/formatting, ty for type checking, line length 100
 - TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100
-- API auth: `X-API-Token` header for mutations, GETs are public
+- API auth: JWT Bearer token (WebAuthn sessions) for all endpoints; legacy `X-API-Token` supported for backwards compatibility
 - Dates: API sends UTC, UI converts to local timezone on display

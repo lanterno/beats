@@ -7,18 +7,19 @@ import type {
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import { config } from "@/shared/config";
+import { getSessionToken } from "../stores/authStore";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface AuthStatus {
-	is_registered: boolean;
-	credentials_count: number;
+	has_users: boolean;
 }
 
-export interface RegistrationOptions {
+export interface RegisterStartResponse {
 	options: PublicKeyCredentialCreationOptionsJSON;
+	user_id: string;
 }
 
 export interface LoginOptions {
@@ -30,6 +31,11 @@ export interface VerifyResponse {
 	token: string;
 }
 
+export interface UserInfo {
+	email: string;
+	display_name: string | null;
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -37,7 +43,7 @@ export interface VerifyResponse {
 const AUTH_BASE = `${config.apiBaseUrl}/api/auth`;
 
 /**
- * Check if any passkeys are registered.
+ * Check if any users exist.
  */
 export async function getAuthStatus(): Promise<AuthStatus> {
 	const response = await fetch(`${AUTH_BASE}/status`);
@@ -48,13 +54,21 @@ export async function getAuthStatus(): Promise<AuthStatus> {
 }
 
 /**
- * Get registration options from the server.
+ * Start registration: create user and get WebAuthn options.
  */
-export async function getRegistrationOptions(): Promise<RegistrationOptions> {
-	const response = await fetch(`${AUTH_BASE}/register/options`);
+export async function registerStart(
+	email: string,
+	displayName?: string,
+): Promise<RegisterStartResponse> {
+	const response = await fetch(`${AUTH_BASE}/register/start`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ email, display_name: displayName }),
+	});
+
 	if (!response.ok) {
 		const error = await response.json().catch(() => ({}));
-		throw new Error(error.detail || "Failed to get registration options");
+		throw new Error(error.detail || "Failed to start registration");
 	}
 	return response.json();
 }
@@ -68,13 +82,8 @@ export async function verifyRegistration(
 ): Promise<VerifyResponse> {
 	const response = await fetch(`${AUTH_BASE}/register/verify`, {
 		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			credential,
-			device_name: deviceName,
-		}),
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ credential, device_name: deviceName }),
 	});
 
 	if (!response.ok) {
@@ -102,17 +111,28 @@ export async function getLoginOptions(): Promise<LoginOptions> {
 export async function verifyLogin(credential: unknown): Promise<VerifyResponse> {
 	const response = await fetch(`${AUTH_BASE}/login/verify`, {
 		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			credential,
-		}),
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ credential }),
 	});
 
 	if (!response.ok) {
 		const error = await response.json().catch(() => ({}));
 		throw new Error(error.detail || "Login verification failed");
+	}
+	return response.json();
+}
+
+/**
+ * Get current user info.
+ */
+export async function getCurrentUser(): Promise<UserInfo> {
+	const token = getSessionToken();
+	const response = await fetch(`${AUTH_BASE}/me`, {
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+	});
+
+	if (!response.ok) {
+		throw new Error("Failed to get user info");
 	}
 	return response.json();
 }

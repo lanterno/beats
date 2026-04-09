@@ -1,35 +1,57 @@
 """Authentication router for WebAuthn/Passkey endpoints."""
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from beats.auth.session import SessionManager
-from beats.auth.storage import CredentialStorage
+from beats.auth.storage import MongoCredentialStorage
 from beats.auth.webauthn import WebAuthnManager
+from beats.infrastructure.database import Database
+from beats.infrastructure.repositories import MongoUserRepository, UserRepository
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# Initialize auth components (singleton instances)
-_credential_storage = CredentialStorage(settings.credentials_path)
+# Shared singleton for session manager (needed by middleware)
 _session_manager = SessionManager(settings.jwt_secret)
-_webauthn_manager = WebAuthnManager(
-    rp_id=settings.webauthn_rp_id,
-    rp_name=settings.webauthn_rp_name,
-    origin=settings.webauthn_origin,
-    credential_storage=_credential_storage,
-    session_manager=_session_manager,
-)
 
 
 def get_session_manager() -> SessionManager:
     """Get the session manager instance (for use in middleware)."""
     return _session_manager
+
+
+def get_credential_storage() -> MongoCredentialStorage:
+    db = Database.get_db()
+    return MongoCredentialStorage(db.credentials)
+
+
+def get_user_repository() -> UserRepository:
+    db = Database.get_db()
+    return MongoUserRepository(db.users)
+
+
+def get_webauthn_manager(
+    credential_storage: Annotated[MongoCredentialStorage, Depends(get_credential_storage)],
+) -> WebAuthnManager:
+    return WebAuthnManager(
+        rp_id=settings.webauthn_rp_id,
+        rp_name=settings.webauthn_rp_name,
+        origin=settings.webauthn_origin,
+        credential_storage=credential_storage,
+        session_manager=_session_manager,
+    )
+
+
+# Type aliases for dependency injection
+CredentialStorageDep = Annotated[MongoCredentialStorage, Depends(get_credential_storage)]
+UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
+WebAuthnDep = Annotated[WebAuthnManager, Depends(get_webauthn_manager)]
 
 
 # ============================================================================
@@ -38,49 +60,45 @@ def get_session_manager() -> SessionManager:
 
 
 class AuthStatusResponse(BaseModel):
-    """Response for auth status check."""
-
-    is_registered: bool
-    credentials_count: int
+    has_users: bool
 
 
-class RegistrationOptionsResponse(BaseModel):
-    """Response containing WebAuthn registration options."""
+class RegisterStartRequest(BaseModel):
+    email: str
+    display_name: str | None = None
 
+
+class RegisterStartResponse(BaseModel):
     options: dict[str, Any]
+    user_id: str
 
 
 class RegistrationVerifyRequest(BaseModel):
-    """Request to verify a registration response."""
-
     credential: dict[str, Any]
     device_name: str | None = None
 
 
 class RegistrationVerifyResponse(BaseModel):
-    """Response after successful registration."""
-
     verified: bool
     token: str
 
 
 class LoginOptionsResponse(BaseModel):
-    """Response containing WebAuthn authentication options."""
-
     options: dict[str, Any]
 
 
 class LoginVerifyRequest(BaseModel):
-    """Request to verify an authentication response."""
-
     credential: dict[str, Any]
 
 
 class LoginVerifyResponse(BaseModel):
-    """Response after successful authentication."""
-
     verified: bool
     token: str
+
+
+class UserResponse(BaseModel):
+    email: str
+    display_name: str | None
 
 
 # ============================================================================
@@ -89,31 +107,37 @@ class LoginVerifyResponse(BaseModel):
 
 
 @router.get("/status", response_model=AuthStatusResponse)
-async def get_auth_status() -> AuthStatusResponse:
-    """Check if any passkeys are registered.
+async def get_auth_status(user_repo: UserRepoDep) -> AuthStatusResponse:
+    """Check if any users exist (determines register vs login flow)."""
+    count = await user_repo.count()
+    return AuthStatusResponse(has_users=count > 0)
 
-    This endpoint is used by the frontend to determine whether to show
-    the registration or login flow.
-    """
-    is_registered = _webauthn_manager.is_registered()
-    credentials = _webauthn_manager.get_credentials_info()
 
-    return AuthStatusResponse(
-        is_registered=is_registered,
-        credentials_count=len(credentials),
+@router.post("/register/start", response_model=RegisterStartResponse)
+async def register_start(
+    request: RegisterStartRequest,
+    user_repo: UserRepoDep,
+    webauthn: WebAuthnDep,
+) -> RegisterStartResponse:
+    """Start registration: create user and return WebAuthn options."""
+    # Check if email is already taken
+    existing = await user_repo.get_by_email(request.email)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        )
+
+    # Create the user
+    from beats.domain.models import User
+
+    user = await user_repo.create(
+        User(email=request.email, display_name=request.display_name)
     )
 
-
-@router.get("/register/options", response_model=RegistrationOptionsResponse)
-async def get_registration_options() -> RegistrationOptionsResponse:
-    """Get WebAuthn registration options.
-
-    Call this to start the passkey registration ceremony.
-    The returned options should be passed to navigator.credentials.create().
-    """
     try:
-        options = _webauthn_manager.get_registration_options()
-        return RegistrationOptionsResponse(options=options)
+        options = await webauthn.get_registration_options(user)
+        return RegisterStartResponse(options=options, user_id=user.id or "")
     except Exception as e:
         logger.error(f"Failed to generate registration options: {e}")
         raise HTTPException(
@@ -123,15 +147,31 @@ async def get_registration_options() -> RegistrationOptionsResponse:
 
 
 @router.post("/register/verify", response_model=RegistrationVerifyResponse)
-async def verify_registration(request: RegistrationVerifyRequest) -> RegistrationVerifyResponse:
-    """Verify a registration response and store the credential.
+async def verify_registration(
+    request: RegistrationVerifyRequest,
+    user_repo: UserRepoDep,
+    webauthn: WebAuthnDep,
+) -> RegistrationVerifyResponse:
+    """Verify registration response and store the credential."""
+    # Get the pending registration user_id
+    user_id = _session_manager.get_pending_registration_user_id("registration")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No pending registration found",
+        )
 
-    Call this after navigator.credentials.create() succeeds.
-    Returns a session token on success.
-    """
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found for pending registration",
+        )
+
     try:
-        result = _webauthn_manager.verify_registration(
+        result = await webauthn.verify_registration(
             credential=request.credential,
+            user=user,
             device_name=request.device_name,
         )
         return RegistrationVerifyResponse(
@@ -144,47 +184,31 @@ async def verify_registration(request: RegistrationVerifyRequest) -> Registratio
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
-    except Exception as e:
-        logger.error(f"Registration verification error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed",
-        ) from e
 
 
 @router.get("/login/options", response_model=LoginOptionsResponse)
-async def get_login_options() -> LoginOptionsResponse:
-    """Get WebAuthn authentication options.
-
-    Call this to start the passkey login ceremony.
-    The returned options should be passed to navigator.credentials.get().
-    """
+async def get_login_options(webauthn: WebAuthnDep) -> LoginOptionsResponse:
+    """Get WebAuthn authentication options for login."""
     try:
-        options = _webauthn_manager.get_authentication_options()
+        options = await webauthn.get_authentication_options()
         return LoginOptionsResponse(options=options)
     except ValueError as e:
-        # No credentials registered
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from e
-    except Exception as e:
-        logger.error(f"Failed to generate login options: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         ) from e
 
 
 @router.post("/login/verify", response_model=LoginVerifyResponse)
-async def verify_login(request: LoginVerifyRequest) -> LoginVerifyResponse:
-    """Verify an authentication response.
-
-    Call this after navigator.credentials.get() succeeds.
-    Returns a session token on success.
-    """
+async def verify_login(
+    request: LoginVerifyRequest,
+    webauthn: WebAuthnDep,
+) -> LoginVerifyResponse:
+    """Verify an authentication response and return a session token."""
     try:
-        result = _webauthn_manager.verify_authentication(credential=request.credential)
+        result = await webauthn.verify_authentication(
+            credential=request.credential
+        )
         return LoginVerifyResponse(
             verified=result["verified"],
             token=result["token"],
@@ -195,18 +219,41 @@ async def verify_login(request: LoginVerifyRequest) -> LoginVerifyResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
         ) from e
-    except Exception as e:
-        logger.error(f"Login verification error: {e}")
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user(
+    request: Request,
+    user_repo: UserRepoDep,
+) -> UserResponse:
+    """Get the currently authenticated user's info."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication failed",
-        ) from e
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return UserResponse(email=user.email, display_name=user.display_name)
 
 
 @router.get("/credentials")
-async def list_credentials() -> list[dict[str, Any]]:
-    """List registered credentials (for management UI).
-
-    Note: This endpoint should be protected in production.
-    """
-    return _webauthn_manager.get_credentials_info()
+async def list_credentials(
+    request: Request,
+    webauthn: WebAuthnDep,
+) -> list[dict[str, Any]]:
+    """List registered credentials for the current user."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    return await webauthn.get_credentials_info(user_id)

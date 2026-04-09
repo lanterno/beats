@@ -4,9 +4,10 @@
  * Pinned left on desktop, hidden on mobile (MobileHeader handles mobile).
  */
 
-import { BarChart3, Download, Settings, X } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { BarChart3, Download, LogOut, Settings, X } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
+import { clearSessionToken, useAuth } from "@/features/auth";
 import { cn, useInstallPrompt, useOnlineStatus } from "@/shared/lib";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
@@ -20,8 +21,15 @@ interface SidebarProps extends TimerProps {
 export function Sidebar(props: SidebarProps) {
 	const { projects } = props;
 	const location = useLocation();
+	const navigate = useNavigate();
 	const { canShow: canInstall, install, dismiss: dismissInstall } = useInstallPrompt();
 	const isOnline = useOnlineStatus();
+	const { user } = useAuth();
+
+	const handleLogout = () => {
+		clearSessionToken();
+		navigate("/login");
+	};
 
 	return (
 		<aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-64 bg-sidebar border-r border-sidebar-border flex-col z-40">
@@ -97,6 +105,25 @@ export function Sidebar(props: SidebarProps) {
 					</div>
 				</div>
 			)}
+
+			{/* User + Logout */}
+			<div className="px-4 py-3 border-t border-sidebar-border">
+				<div className="flex items-center justify-between">
+					<span
+						className="text-xs text-sidebar-foreground/60 truncate max-w-[160px]"
+						title={user?.email}
+					>
+						{user?.email}
+					</span>
+					<button
+						onClick={handleLogout}
+						className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+						title="Sign out"
+					>
+						<LogOut className="w-3.5 h-3.5" />
+					</button>
+				</div>
+			</div>
 		</aside>
 	);
 }

@@ -79,12 +79,19 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 /**
- * Get headers for read-only requests
+ * Get headers for read-only requests (auth required for all endpoints)
  */
 function getReadHeaders(): Record<string, string> {
-	return {
-		Accept: "application/json",
-	};
+	const sessionToken = getSessionToken();
+	const headers: Record<string, string> = { Accept: "application/json" };
+
+	if (sessionToken) {
+		headers.Authorization = `Bearer ${sessionToken}`;
+	} else if (config.apiToken) {
+		headers["X-API-Token"] = config.apiToken;
+	}
+
+	return headers;
 }
 
 // ============================================================================
@@ -107,6 +114,13 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	});
 
 	if (!response.ok) {
+		// Handle expired/invalid session tokens
+		if (response.status === 401) {
+			const { clearSessionToken } = await import("@/features/auth/stores/authStore");
+			clearSessionToken();
+			window.location.href = "/login";
+		}
+
 		const errorBody = await response.json().catch(() => ({}));
 		const message =
 			errorBody.detail || errorBody.message || `Request failed: ${response.statusText}`;

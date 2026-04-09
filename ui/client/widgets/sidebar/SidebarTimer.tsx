@@ -23,7 +23,7 @@ export interface TimerProps {
 	elapsedSeconds: number;
 	customStartTime: string | null;
 	startTimer: (projectId: string, startTime?: string) => void;
-	stopTimer: () => void;
+	stopTimer: (customStopTime?: string) => void;
 	selectProject: (projectId: string | null) => void;
 	setCustomStartTime: (startTime: string | null) => void;
 }
@@ -40,6 +40,8 @@ export function SidebarTimer({
 	setCustomStartTime,
 }: TimerProps) {
 	const [showStartTimeInput, setShowStartTimeInput] = useState(false);
+	const [showStopTimeInput, setShowStopTimeInput] = useState(false);
+	const [customStopTime, setCustomStopTime] = useState<string | null>(null);
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -63,15 +65,18 @@ export function SidebarTimer({
 
 	const handleStop = () => {
 		const project = selectedProject;
+		const stopTime = showStopTimeInput && customStopTime ? customStopTime : undefined;
+		const endDate = stopTime ? new Date(stopTime) : new Date();
 		let minutes = Math.floor(elapsedSeconds / 60);
 		if (customStartTime) {
 			const startDate = parseUtcIso(customStartTime);
-			const now = new Date();
-			minutes = Math.floor((now.getTime() - startDate.getTime()) / 1000 / 60);
+			minutes = Math.floor((endDate.getTime() - startDate.getTime()) / 1000 / 60);
 		}
-		stopTimer();
+		stopTimer(stopTime);
 		setShowStartTimeInput(false);
+		setShowStopTimeInput(false);
 		setCustomStartTime(null);
+		setCustomStopTime(null);
 		if (project) {
 			toast(
 				<div className="flex items-center gap-2.5">
@@ -140,13 +145,49 @@ export function SidebarTimer({
 
 			{/* Action button */}
 			{isRunning ? (
-				<button
-					onClick={handleStop}
-					className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
-				>
-					<Square className="w-3.5 h-3.5" />
-					Stop
-				</button>
+				<div className="space-y-2">
+					<button
+						onClick={handleStop}
+						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
+					>
+						<Square className="w-3.5 h-3.5" />
+						Stop
+					</button>
+
+					<div className="flex items-center gap-1">
+						<button
+							onClick={() => {
+								setShowStopTimeInput(!showStopTimeInput);
+								if (!showStopTimeInput && !customStopTime) {
+									setCustomStopTime(new Date().toISOString());
+								}
+							}}
+							className={cn(
+								"p-1.5 rounded-md text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors text-xs flex items-center gap-1",
+								showStopTimeInput && "text-accent bg-accent/5",
+							)}
+						>
+							<Calendar className="w-3 h-3" />
+							Custom stop
+						</button>
+					</div>
+
+					{showStopTimeInput && (
+						<input
+							type="datetime-local"
+							value={
+								customStopTime
+									? toLocalDatetimeLocalString(new Date(customStopTime))
+									: toLocalDatetimeLocalString(new Date())
+							}
+							onChange={(e) => {
+								const date = new Date(e.target.value);
+								setCustomStopTime(date.toISOString());
+							}}
+							className="w-full rounded-md border border-border bg-background py-1.5 px-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-accent/30"
+						/>
+					)}
+				</div>
 			) : (
 				<div className="space-y-2">
 					<button

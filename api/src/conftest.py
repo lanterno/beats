@@ -1,8 +1,10 @@
 """Pytest configuration — spins up a MongoDB testcontainer for integration tests."""
 
 import os
+from datetime import UTC, datetime
 
 import pytest
+from bson import ObjectId
 
 _mongo_container = None
 
@@ -58,3 +60,31 @@ def clean_db():
         db[name].drop()
     sync_client.close()
     yield
+
+
+@pytest.fixture(scope="class", autouse=True)
+def auth_info(clean_db):
+    """Create a test user and JWT token after each collection drop."""
+    from pymongo import MongoClient
+
+    from beats.auth.session import SessionManager
+    from beats.settings import settings
+
+    dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+    db_name = os.environ.get("DB_NAME", "beats_test")
+    sync_client = MongoClient(dsn)
+    db = sync_client[db_name]
+
+    user_id = str(ObjectId())
+    db.users.insert_one({
+        "_id": ObjectId(user_id),
+        "email": "test@example.com",
+        "display_name": "Test User",
+        "created_at": datetime.now(UTC),
+    })
+
+    sm = SessionManager(settings.jwt_secret)
+    token = sm.create_session_token(user_id, "test@example.com")
+    sync_client.close()
+
+    yield {"user_id": user_id, "headers": {"Authorization": f"Bearer {token}"}}

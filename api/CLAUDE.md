@@ -40,7 +40,9 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 - `Database` is a singleton; `connect()` is called in the FastAPI lifespan, not at import time
 - Settings use pydantic-settings: env vars override `.env` file values
-- Auth: `X-API-Token` header checked by `require_auth` dependency; GET endpoints are public
+- Auth: All endpoints require authentication (JWT Bearer token preferred, legacy X-API-Token supported). Public paths: `/api/auth/*`, `/health`, `/talk/ding`
+- Multi-user: Each user's data is scoped via `user_id` field on all collections. Repos accept `user_id` in constructor.
+- `auth_info` fixture in conftest.py creates a test user + JWT for integration tests
 - The `date` type from `datetime` is imported as `date_type` to avoid Pydantic field-name clashes
 
 ## Linting

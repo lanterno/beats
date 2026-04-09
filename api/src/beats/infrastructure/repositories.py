@@ -8,7 +8,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
-from beats.domain.models import Beat, DailyNote, Intention, Project, Webhook
+from beats.domain.models import Beat, DailyNote, Intention, Project, User, Webhook
 
 
 def serialize_from_document(doc: dict[str, Any]) -> dict[str, Any]:
@@ -42,6 +42,22 @@ def serialize_to_document(data: dict[str, Any]) -> dict[str, Any]:
 
 
 # Abstract Repository Interfaces
+
+
+class UserRepository(ABC):
+    """Abstract interface for User persistence operations."""
+
+    @abstractmethod
+    async def get_by_id(self, user_id: str) -> User | None: ...
+
+    @abstractmethod
+    async def get_by_email(self, email: str) -> User | None: ...
+
+    @abstractmethod
+    async def create(self, user: User) -> User: ...
+
+    @abstractmethod
+    async def count(self) -> int: ...
 
 
 class BeatRepository(ABC):
@@ -142,29 +158,42 @@ class ProjectRepository(ABC):
 class MongoBeatRepository(BeatRepository):
     """MongoDB implementation of BeatRepository using Motor."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
         self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Build a query dict scoped to the current user."""
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
 
     async def get_by_id(self, beat_id: str) -> Beat:
-        doc = await self.collection.find_one({"_id": ObjectId(beat_id)})
+        doc = await self.collection.find_one(
+            self._q({"_id": ObjectId(beat_id)})
+        )
         if not doc:
             raise BeatNotFound(beat_id)
         return Beat(**serialize_from_document(doc))
 
     async def get_active(self) -> Beat | None:
-        doc = await self.collection.find_one({"end": None})
+        doc = await self.collection.find_one(self._q({"end": None}))
         if not doc:
             return None
         return Beat(**serialize_from_document(doc))
 
     async def get_last(self) -> Beat:
-        doc = await self.collection.find_one(sort=[("start", -1)])
+        doc = await self.collection.find_one(
+            self._q(), sort=[("start", -1)]
+        )
         if not doc:
             raise NoObjectMatched()
         return Beat(**serialize_from_document(doc))
 
     async def create(self, beat: Beat) -> Beat:
         data = serialize_to_document(beat.model_dump(exclude_none=True))
+        data["user_id"] = self.user_id
         result = await self.collection.insert_one(data)
         return Beat(**serialize_from_document({**data, "_id": result.inserted_id}))
 
@@ -172,11 +201,16 @@ class MongoBeatRepository(BeatRepository):
         if not beat.id:
             raise ValueError("Beat ID is required for update")
         data = serialize_to_document(beat.model_dump(exclude_none=True))
-        await self.collection.replace_one({"_id": ObjectId(beat.id)}, data)
+        data["user_id"] = self.user_id
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(beat.id)}), data
+        )
         return beat
 
     async def delete(self, beat_id: str) -> bool:
-        result = await self.collection.delete_one({"_id": ObjectId(beat_id)})
+        result = await self.collection.delete_one(
+            self._q({"_id": ObjectId(beat_id)})
+        )
         return result.deleted_count > 0
 
     async def list(
@@ -184,11 +218,10 @@ class MongoBeatRepository(BeatRepository):
         project_id: str | None = None,
         date_filter: date | None = None,
     ) -> list[Beat]:
-        query: dict[str, Any] = {}
+        query = self._q()
         if project_id:
             query["project_id"] = project_id
         if date_filter:
-            # Filter by date (start of day to end of day)
             start_of_day = datetime.combine(date_filter, datetime.min.time())
             end_of_day = datetime.combine(date_filter, datetime.max.time())
             query["start"] = {"$gte": start_of_day, "$lte": end_of_day}
@@ -198,20 +231,27 @@ class MongoBeatRepository(BeatRepository):
         return [Beat(**serialize_from_document(doc)) for doc in docs]
 
     async def list_by_project(self, project_id: str) -> list[Beat]:
-        cursor = self.collection.find({"project_id": project_id})
+        cursor = self.collection.find(
+            self._q({"project_id": project_id})
+        )
         docs = await cursor.to_list(length=None)
         return [Beat(**serialize_from_document(doc)) for doc in docs]
 
     async def list_all_completed(self) -> list[Beat]:
-        cursor = self.collection.find({"end": {"$ne": None}})
+        cursor = self.collection.find(
+            self._q({"end": {"$ne": None}})
+        )
         docs = await cursor.to_list(length=None)
         return [Beat(**serialize_from_document(doc)) for doc in docs]
 
     async def upsert(self, data: dict) -> None:
         doc = serialize_to_document(dict(data))
+        doc["user_id"] = self.user_id
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
         else:
             await self.collection.insert_one(doc)
 
@@ -219,24 +259,36 @@ class MongoBeatRepository(BeatRepository):
 class MongoProjectRepository(ProjectRepository):
     """MongoDB implementation of ProjectRepository using Motor."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
         self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
 
     async def get_by_id(self, project_id: str) -> Project:
-        doc = await self.collection.find_one({"_id": ObjectId(project_id)})
+        doc = await self.collection.find_one(
+            self._q({"_id": ObjectId(project_id)})
+        )
         if not doc:
             raise ProjectNotFound(project_id)
         return Project(**serialize_from_document(doc))
 
     async def exists(self, project_id: str) -> bool:
         try:
-            doc = await self.collection.find_one({"_id": ObjectId(project_id)})
+            doc = await self.collection.find_one(
+                self._q({"_id": ObjectId(project_id)})
+            )
             return doc is not None
         except Exception:
             return False
 
     async def create(self, project: Project) -> Project:
         data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
         result = await self.collection.insert_one(data)
         return Project(**serialize_from_document({**data, "_id": result.inserted_id}))
 
@@ -244,21 +296,57 @@ class MongoProjectRepository(ProjectRepository):
         if not project.id:
             raise ValueError("Project ID is required for update")
         data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))
-        await self.collection.replace_one({"_id": ObjectId(project.id)}, data)
+        data["user_id"] = self.user_id
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(project.id)}), data
+        )
         return project
 
     async def list(self, archived: bool = False) -> list[Project]:
-        cursor = self.collection.find({"archived": archived})
+        cursor = self.collection.find(self._q({"archived": archived}))
         docs = await cursor.to_list(length=None)
         return [Project(**serialize_from_document(doc)) for doc in docs]
 
     async def upsert(self, data: dict) -> None:
         doc = serialize_to_document(dict(data))
+        doc["user_id"] = self.user_id
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
         else:
             await self.collection.insert_one(doc)
+
+
+# User Repository
+
+
+class MongoUserRepository(UserRepository):
+    """MongoDB implementation of UserRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
+
+    async def get_by_id(self, user_id: str) -> User | None:
+        doc = await self.collection.find_one({"_id": ObjectId(user_id)})
+        if not doc:
+            return None
+        return User(**serialize_from_document(doc))
+
+    async def get_by_email(self, email: str) -> User | None:
+        doc = await self.collection.find_one({"email": email})
+        if not doc:
+            return None
+        return User(**serialize_from_document(doc))
+
+    async def create(self, user: User) -> User:
+        data = serialize_to_document(user.model_dump(mode="json", exclude_none=True))
+        result = await self.collection.insert_one(data)
+        return User(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def count(self) -> int:
+        return await self.collection.count_documents({})
 
 
 # Intention Repository
@@ -289,16 +377,26 @@ class IntentionRepository(ABC):
 class MongoIntentionRepository(IntentionRepository):
     """MongoDB implementation of IntentionRepository."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
         self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
 
     async def list_by_date(self, target_date: date) -> list[Intention]:
-        cursor = self.collection.find({"date": target_date.isoformat()})
+        cursor = self.collection.find(
+            self._q({"date": target_date.isoformat()})
+        )
         docs = await cursor.to_list(length=None)
         return [Intention(**serialize_from_document(doc)) for doc in docs]
 
     async def create(self, intention: Intention) -> Intention:
         data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
         result = await self.collection.insert_one(data)
         return Intention(**serialize_from_document({**data, "_id": result.inserted_id}))
 
@@ -306,23 +404,31 @@ class MongoIntentionRepository(IntentionRepository):
         if not intention.id:
             raise ValueError("Intention ID is required for update")
         data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
-        await self.collection.replace_one({"_id": ObjectId(intention.id)}, data)
+        data["user_id"] = self.user_id
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(intention.id)}), data
+        )
         return intention
 
     async def list_all(self) -> list[Intention]:
-        cursor = self.collection.find({})
+        cursor = self.collection.find(self._q())
         docs = await cursor.to_list(length=None)
         return [Intention(**serialize_from_document(doc)) for doc in docs]
 
     async def delete(self, intention_id: str) -> bool:
-        result = await self.collection.delete_one({"_id": ObjectId(intention_id)})
+        result = await self.collection.delete_one(
+            self._q({"_id": ObjectId(intention_id)})
+        )
         return result.deleted_count > 0
 
     async def upsert(self, data: dict) -> None:
         doc = serialize_to_document(dict(data))
+        doc["user_id"] = self.user_id
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
         else:
             await self.collection.insert_one(doc)
 
@@ -351,25 +457,35 @@ class DailyNoteRepository(ABC):
 class MongoDailyNoteRepository(DailyNoteRepository):
     """MongoDB implementation of DailyNoteRepository."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
         self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
 
     async def get_by_date(self, target_date: date) -> DailyNote | None:
-        doc = await self.collection.find_one({"date": target_date.isoformat()})
+        doc = await self.collection.find_one(
+            self._q({"date": target_date.isoformat()})
+        )
         if not doc:
             return None
         return DailyNote(**serialize_from_document(doc))
 
     async def list_all(self) -> list[DailyNote]:
-        cursor = self.collection.find({})
+        cursor = self.collection.find(self._q())
         docs = await cursor.to_list(length=None)
         return [DailyNote(**serialize_from_document(doc)) for doc in docs]
 
     async def upsert(self, note: DailyNote) -> DailyNote:
         data = serialize_to_document(note.model_dump(mode="json", exclude_none=True))
         data.pop("_id", None)
+        data["user_id"] = self.user_id
         result = await self.collection.find_one_and_update(
-            {"date": note.date.isoformat()},
+            self._q({"date": note.date.isoformat()}),
             {"$set": data},
             upsert=True,
             return_document=True,
@@ -378,9 +494,12 @@ class MongoDailyNoteRepository(DailyNoteRepository):
 
     async def upsert_raw(self, data: dict) -> None:
         doc = serialize_to_document(dict(data))
+        doc["user_id"] = self.user_id
         doc_id = doc.pop("_id", None)
         if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
+            await self.collection.update_one(
+                {"_id": doc_id}, {"$set": doc}, upsert=True
+            )
         else:
             await self.collection.insert_one(doc)
 
@@ -410,31 +529,46 @@ class WebhookRepository(ABC):
 class MongoWebhookRepository(WebhookRepository):
     """MongoDB implementation of WebhookRepository."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
         self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
 
     async def list_all(self) -> list[Webhook]:
-        cursor = self.collection.find({})
+        cursor = self.collection.find(self._q())
         docs = await cursor.to_list(length=None)
         return [Webhook(**serialize_from_document(doc)) for doc in docs]
 
     async def list_by_event(self, event: str) -> list[Webhook]:
-        cursor = self.collection.find({"events": event, "active": True})
+        cursor = self.collection.find(
+            self._q({"events": event, "active": True})
+        )
         docs = await cursor.to_list(length=None)
         return [Webhook(**serialize_from_document(doc)) for doc in docs]
 
     async def create(self, webhook: Webhook) -> Webhook:
         data = serialize_to_document(webhook.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
         result = await self.collection.insert_one(data)
         return Webhook(**serialize_from_document({**data, "_id": result.inserted_id}))
 
     async def delete(self, webhook_id: str) -> bool:
-        result = await self.collection.delete_one({"_id": ObjectId(webhook_id)})
+        result = await self.collection.delete_one(
+            self._q({"_id": ObjectId(webhook_id)})
+        )
         return result.deleted_count > 0
 
     async def update(self, webhook: Webhook) -> Webhook:
         if not webhook.id:
             raise ValueError("Webhook ID is required for update")
         data = serialize_to_document(webhook.model_dump(mode="json", exclude_none=True))
-        await self.collection.replace_one({"_id": ObjectId(webhook.id)}, data)
+        data["user_id"] = self.user_id
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(webhook.id)}), data
+        )
         return webhook

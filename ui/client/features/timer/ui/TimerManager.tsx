@@ -31,6 +31,8 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 	} = useTimer();
 
 	const [showStartTimeInput, setShowStartTimeInput] = useState(false);
+	const [showStopTimeInput, setShowStopTimeInput] = useState(false);
+	const [customStopTime, setCustomStopTime] = useState<string | null>(null);
 
 	// Pre-select project when arriving from project page
 	useEffect(() => {
@@ -54,18 +56,21 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 
 	const handleStop = () => {
 		const projectName = selectedProject?.name;
+		const stopTime = showStopTimeInput && customStopTime ? customStopTime : undefined;
+		const endDate = stopTime ? new Date(stopTime) : new Date();
 
 		let minutes = Math.floor(elapsedSeconds / 60);
 
 		if (customStartTime) {
 			const startDate = parseUtcIso(customStartTime);
-			const now = new Date();
-			minutes = Math.floor((now.getTime() - startDate.getTime()) / 1000 / 60);
+			minutes = Math.floor((endDate.getTime() - startDate.getTime()) / 1000 / 60);
 		}
 
-		stopTimer();
+		stopTimer(stopTime);
 		setShowStartTimeInput(false);
+		setShowStopTimeInput(false);
 		setCustomStartTime(null);
+		setCustomStopTime(null);
 
 		if (projectName) {
 			toast.success(`Logged ${minutes}m to ${projectName}`);
@@ -137,6 +142,16 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 							{showStartTimeInput ? "Hide start time" : "Set start time"}
 						</button>
 					)}
+
+					{isRunning && (
+						<button
+							onClick={() => setShowStopTimeInput(!showStopTimeInput)}
+							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors duration-150"
+						>
+							<Calendar className="w-3.5 h-3.5" />
+							{showStopTimeInput ? "Hide stop time" : "Set stop time"}
+						</button>
+					)}
 				</div>
 			</div>
 
@@ -155,6 +170,27 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 						onChange={(e) => {
 							const date = new Date(e.target.value);
 							setCustomStartTime(date.toISOString());
+						}}
+						className="w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
+					/>
+				</div>
+			)}
+
+			{showStopTimeInput && isRunning && (
+				<div className="mt-4 pt-4 border-t border-border/60">
+					<label className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-2">
+						Stop time
+					</label>
+					<input
+						type="datetime-local"
+						value={
+							customStopTime
+								? toLocalDatetimeLocalString(new Date(customStopTime))
+								: toLocalDatetimeLocalString(new Date())
+						}
+						onChange={(e) => {
+							const date = new Date(e.target.value);
+							setCustomStopTime(date.toISOString());
 						}}
 						className="w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
 					/>

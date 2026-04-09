@@ -1,6 +1,6 @@
 /**
  * Login Page
- * Handles WebAuthn passkey registration and authentication.
+ * Handles email-first registration and passkey authentication.
  */
 
 import {
@@ -14,13 +14,13 @@ import { Button } from "@/shared/ui";
 import {
 	getAuthStatus,
 	getLoginOptions,
-	getRegistrationOptions,
+	registerStart,
 	verifyLogin,
 	verifyRegistration,
 } from "../api/authApi";
 import { setSessionToken, useAuth } from "../stores/authStore";
 
-type AuthMode = "loading" | "register" | "login";
+type AuthMode = "loading" | "register-email" | "register-passkey" | "login";
 
 export default function LoginPage() {
 	const navigate = useNavigate();
@@ -30,20 +30,28 @@ export default function LoginPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [webAuthnSupported, setWebAuthnSupported] = useState(true);
+	const [hasUsers, setHasUsers] = useState(false);
+
+	// Registration state
+	const [email, setEmail] = useState("");
+	const [displayName, setDisplayName] = useState("");
+	const [registrationOptions, setRegistrationOptions] = useState<Awaited<
+		ReturnType<typeof registerStart>
+	> | null>(null);
 
 	// Check WebAuthn support and auth status on mount
 	useEffect(() => {
 		const init = async () => {
-			// Check browser support
 			if (!browserSupportsWebAuthn()) {
 				setWebAuthnSupported(false);
-				setMode("login"); // Will show unsupported message
+				setMode("login");
 				return;
 			}
 
 			try {
 				const status = await getAuthStatus();
-				setMode(status.is_registered ? "login" : "register");
+				setHasUsers(status.has_users);
+				setMode(status.has_users ? "login" : "register-email");
 			} catch (err) {
 				console.error("Failed to check auth status:", err);
 				setError("Failed to connect to server. Please try again.");
@@ -63,18 +71,36 @@ export default function LoginPage() {
 		}
 	}, [isAuthenticated, authLoading, navigate]);
 
-	const handleRegister = async () => {
+	const handleEmailSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
 		setError(null);
 		setIsProcessing(true);
 
 		try {
-			// Get registration options from server
-			const { options } = await getRegistrationOptions();
+			const result = await registerStart(email, displayName || undefined);
+			setRegistrationOptions(result);
+			setMode("register-passkey");
+		} catch (err) {
+			if (err instanceof Error) {
+				setError(err.message);
+			} else {
+				setError("Failed to start registration. Please try again.");
+			}
+		} finally {
+			setIsProcessing(false);
+		}
+	};
 
-			// Start WebAuthn registration ceremony
-			const credential = await startRegistration({ optionsJSON: options });
+	const handleRegisterPasskey = async () => {
+		if (!registrationOptions) return;
+		setError(null);
+		setIsProcessing(true);
 
-			// Verify with server and get session token
+		try {
+			const credential = await startRegistration({
+				optionsJSON: registrationOptions.options,
+			});
+
 			const result = await verifyRegistration(credential, getDeviceName());
 
 			if (result.verified) {
@@ -104,13 +130,8 @@ export default function LoginPage() {
 		setIsProcessing(true);
 
 		try {
-			// Get login options from server
 			const { options } = await getLoginOptions();
-
-			// Start WebAuthn authentication ceremony
 			const credential = await startAuthentication({ optionsJSON: options });
-
-			// Verify with server and get session token
 			const result = await verifyLogin(credential);
 
 			if (result.verified) {
@@ -135,7 +156,6 @@ export default function LoginPage() {
 		}
 	};
 
-	// Get a friendly device name
 	const getDeviceName = (): string => {
 		const ua = navigator.userAgent;
 		if (ua.includes("Mac")) return "Mac";
@@ -179,9 +199,9 @@ export default function LoginPage() {
 					<div className="text-center mb-8">
 						<h1 className="font-heading text-3xl text-foreground tracking-tight">Beats</h1>
 						<p className="mt-2 text-muted-foreground">
-							{mode === "register"
-								? "Set up your passkey to get started"
-								: "Sign in with your passkey"}
+							{mode === "register-email" && "Create your account"}
+							{mode === "register-passkey" && "Set up your passkey"}
+							{mode === "login" && "Sign in with your passkey"}
 						</p>
 					</div>
 
@@ -192,10 +212,59 @@ export default function LoginPage() {
 						</div>
 					)}
 
-					{/* Action button */}
-					{mode === "register" ? (
+					{/* Register: email step */}
+					{mode === "register-email" && (
+						<form onSubmit={handleEmailSubmit} className="space-y-4">
+							<div>
+								<label htmlFor="email" className="block text-sm font-medium text-foreground mb-1.5">
+									Email
+								</label>
+								<input
+									id="email"
+									type="email"
+									required
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									placeholder="you@example.com"
+									className="w-full rounded-md border border-input bg-background py-2.5 px-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
+									autoFocus
+								/>
+							</div>
+							<div>
+								<label
+									htmlFor="displayName"
+									className="block text-sm font-medium text-foreground mb-1.5"
+								>
+									Display name <span className="text-muted-foreground font-normal">(optional)</span>
+								</label>
+								<input
+									id="displayName"
+									type="text"
+									value={displayName}
+									onChange={(e) => setDisplayName(e.target.value)}
+									placeholder="Your name"
+									className="w-full rounded-md border border-input bg-background py-2.5 px-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
+								/>
+							</div>
+							<Button type="submit" className="w-full" size="lg" disabled={isProcessing || !email}>
+								{isProcessing ? "Creating account..." : "Continue"}
+							</Button>
+						</form>
+					)}
+
+					{/* Register: passkey step */}
+					{mode === "register-passkey" && (
 						<div className="space-y-4">
-							<Button className="w-full" size="lg" onClick={handleRegister} disabled={isProcessing}>
+							<p className="text-sm text-muted-foreground text-center">
+								Account created for <span className="text-foreground font-medium">{email}</span>.
+								Now set up your passkey.
+							</p>
+							<Button
+								className="w-full"
+								size="lg"
+								onClick={handleRegisterPasskey}
+								disabled={isProcessing}
+							>
 								{isProcessing ? "Setting up..." : "Set Up Passkey"}
 							</Button>
 							<p className="text-xs text-muted-foreground text-center">
@@ -203,7 +272,10 @@ export default function LoginPage() {
 								in securely.
 							</p>
 						</div>
-					) : (
+					)}
+
+					{/* Login */}
+					{mode === "login" && (
 						<div className="space-y-4">
 							<Button className="w-full" size="lg" onClick={handleLogin} disabled={isProcessing}>
 								{isProcessing ? "Authenticating..." : "Sign In with Passkey"}
@@ -214,17 +286,29 @@ export default function LoginPage() {
 						</div>
 					)}
 
-					{/* Mode switch (for testing/recovery) */}
+					{/* Mode switch */}
 					<div className="mt-8 pt-6 border-t border-border">
-						<button
-							className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
-							onClick={() => setMode(mode === "register" ? "login" : "register")}
-							disabled={isProcessing}
-						>
-							{mode === "register"
-								? "Already have a passkey? Sign in"
-								: "Need to set up a passkey?"}
-						</button>
+						{mode === "login" && (
+							<button
+								className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+								onClick={() => setMode("register-email")}
+								disabled={isProcessing}
+							>
+								Create an account
+							</button>
+						)}
+						{(mode === "register-email" || mode === "register-passkey") && hasUsers && (
+							<button
+								className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+								onClick={() => {
+									setMode("login");
+									setRegistrationOptions(null);
+								}}
+								disabled={isProcessing}
+							>
+								Already have a passkey? Sign in
+							</button>
+						)}
 					</div>
 				</div>
 			</div>

@@ -9,6 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 from beats.domain.utils import normalize_tz
 
 
+class User(BaseModel):
+    """A registered user of the Beats system."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    email: str
+    display_name: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class GoalType(StrEnum):
     """Type of weekly goal: target to reach or cap to stay under."""
 

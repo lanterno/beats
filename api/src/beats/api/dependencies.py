@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request, status
 
 from beats.domain.analytics import AnalyticsService
 from beats.domain.services import BeatService, ProjectService, TimerService
@@ -29,16 +29,30 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def get_beat_repository() -> BeatRepository:
-    """Get the beat repository instance."""
-    db = Database.get_db()
-    return MongoBeatRepository(db.timeLogs)
+async def get_current_user_id(request: Request) -> str:
+    """Extract the current user's ID from request state (set by middleware)."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    return user_id
 
 
-def get_project_repository() -> ProjectRepository:
-    """Get the project repository instance."""
+CurrentUserId = Annotated[str, Depends(get_current_user_id)]
+
+
+def get_beat_repository(user_id: CurrentUserId) -> BeatRepository:
+    """Get the beat repository instance scoped to the current user."""
     db = Database.get_db()
-    return MongoProjectRepository(db.projects)
+    return MongoBeatRepository(db.timeLogs, user_id=user_id)
+
+
+def get_project_repository(user_id: CurrentUserId) -> ProjectRepository:
+    """Get the project repository instance scoped to the current user."""
+    db = Database.get_db()
+    return MongoProjectRepository(db.projects, user_id=user_id)
 
 
 def get_timer_service(
@@ -71,22 +85,22 @@ def get_analytics_service(
     return AnalyticsService(beat_repo=beat_repo)
 
 
-def get_intention_repository() -> IntentionRepository:
-    """Get the intention repository instance."""
+def get_intention_repository(user_id: CurrentUserId) -> IntentionRepository:
+    """Get the intention repository instance scoped to the current user."""
     db = Database.get_db()
-    return MongoIntentionRepository(db.intentions)
+    return MongoIntentionRepository(db.intentions, user_id=user_id)
 
 
-def get_daily_note_repository() -> DailyNoteRepository:
-    """Get the daily note repository instance."""
+def get_daily_note_repository(user_id: CurrentUserId) -> DailyNoteRepository:
+    """Get the daily note repository instance scoped to the current user."""
     db = Database.get_db()
-    return MongoDailyNoteRepository(db.daily_notes)
+    return MongoDailyNoteRepository(db.daily_notes, user_id=user_id)
 
 
-def get_webhook_repository() -> WebhookRepository:
-    """Get the webhook repository instance."""
+def get_webhook_repository(user_id: CurrentUserId) -> WebhookRepository:
+    """Get the webhook repository instance scoped to the current user."""
     db = Database.get_db()
-    return MongoWebhookRepository(db.webhooks)
+    return MongoWebhookRepository(db.webhooks, user_id=user_id)
 
 
 # Type aliases for cleaner dependency injection in routes

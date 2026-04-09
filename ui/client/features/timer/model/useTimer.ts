@@ -158,39 +158,42 @@ export function useTimer() {
 		}
 	}, []);
 
-	const stopTimer = useCallback(async () => {
-		const currentState = timerState;
-		if (!currentState.isRunning || !currentState.selectedProjectId) {
-			return;
-		}
+	const stopTimer = useCallback(
+		async (customStopTime?: string) => {
+			const currentState = timerState;
+			if (!currentState.isRunning || !currentState.selectedProjectId) {
+				return;
+			}
 
-		const stopTime = new Date().toISOString();
+			const stopTime = customStopTime || new Date().toISOString();
 
-		try {
-			await stopTimerApi(stopTime);
+			try {
+				await stopTimerApi(stopTime);
 
-			// Invalidate queries to refetch fresh data
-			queryClient.invalidateQueries({ queryKey: projectKeys.all });
-			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+				// Invalidate queries to refetch fresh data
+				queryClient.invalidateQueries({ queryKey: projectKeys.all });
+				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 
-			setTimerState({
-				isRunning: false,
-				selectedProjectId: null,
-				elapsedSeconds: 0,
-				customStartTime: null,
-			});
-			apiStartTimeRef.current = null;
-		} catch (error) {
-			console.error("Error stopping timer:", error);
-			setTimerState({
-				isRunning: false,
-				selectedProjectId: null,
-				elapsedSeconds: 0,
-				customStartTime: null,
-			});
-			apiStartTimeRef.current = null;
-		}
-	}, [timerState, queryClient]);
+				setTimerState({
+					isRunning: false,
+					selectedProjectId: null,
+					elapsedSeconds: 0,
+					customStartTime: null,
+				});
+				apiStartTimeRef.current = null;
+			} catch (error) {
+				console.error("Error stopping timer:", error);
+				setTimerState({
+					isRunning: false,
+					selectedProjectId: null,
+					elapsedSeconds: 0,
+					customStartTime: null,
+				});
+				apiStartTimeRef.current = null;
+			}
+		},
+		[timerState, queryClient],
+	);
 
 	const selectProject = useCallback((projectId: string | null) => {
 		setTimerState((prev) => ({ ...prev, selectedProjectId: projectId }));

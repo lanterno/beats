@@ -4,6 +4,7 @@ import logging
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import jwt
 from pydantic import BaseModel
@@ -33,6 +34,8 @@ class SessionManager:
         self._session_ttl = session_ttl
         # In-memory challenge storage: challenge_value -> Challenge
         self._challenges: dict[str, Challenge] = {}
+        # Pending registration: challenge_b64 -> user_id
+        self._pending_registrations: dict[str, str] = {}
 
     def generate_challenge(self, challenge_type: str = "authentication") -> bytes:
         """Generate a new WebAuthn challenge and store it."""
@@ -135,15 +138,31 @@ class SessionManager:
         if expired:
             logger.debug(f"Cleaned up {len(expired)} expired challenges")
 
-    def create_session_token(self, user_id: str = "owner") -> str:
+    def store_pending_registration(self, challenge: bytes, user_id: str) -> None:
+        """Store user_id for a pending registration challenge."""
+        import base64
+
+        challenge_b64 = base64.urlsafe_b64encode(challenge).rstrip(b"=").decode("ascii")
+        self._pending_registrations[challenge_b64] = user_id
+
+    def get_pending_registration_user_id(self, challenge_type: str) -> str | None:
+        """Get the user_id for the current pending registration."""
+        challenge_b64 = self.get_current_challenge(challenge_type)
+        if challenge_b64 is None:
+            return None
+        return self._pending_registrations.get(challenge_b64)
+
+    def create_session_token(self, user_id: str, email: str = "") -> str:
         """Create a JWT session token."""
         now = datetime.now(UTC)
-        payload = {
+        payload: dict[str, Any] = {
             "sub": user_id,
             "iat": now,
             "exp": now + timedelta(seconds=self._session_ttl),
             "type": "session",
         }
+        if email:
+            payload["email"] = email
 
         token = jwt.encode(payload, self._jwt_secret, algorithm="HS256")
         logger.info(f"Created session token for user: {user_id}")

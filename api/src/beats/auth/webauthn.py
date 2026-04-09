@@ -18,7 +18,8 @@ from webauthn.helpers.structs import (
 )
 
 from beats.auth.session import SessionManager
-from beats.auth.storage import CredentialStorage
+from beats.auth.storage import MongoCredentialStorage
+from beats.domain.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class WebAuthnManager:
         rp_id: str,
         rp_name: str,
         origin: str,
-        credential_storage: CredentialStorage,
+        credential_storage: MongoCredentialStorage,
         session_manager: SessionManager,
     ):
         self.rp_id = rp_id
@@ -40,28 +41,31 @@ class WebAuthnManager:
         self.storage = credential_storage
         self.session = session_manager
 
-        # Fixed user info for single-user system
-        self.user_id = b"owner"
-        self.user_name = "owner"
-        self.user_display_name = "Beats Owner"
-
-    def get_registration_options(self) -> dict[str, Any]:
+    async def get_registration_options(self, user: User) -> dict[str, Any]:
         """Generate registration options for a new passkey.
+
+        Args:
+            user: The user registering a passkey.
 
         Returns a dict that can be JSON-serialized for the frontend.
         """
-        # Get existing credential IDs to exclude (prevent re-registration)
+        user_id = (user.id or "").encode()
+        user_name = user.email
+        user_display_name = user.display_name or user.email
+
+        # Get existing credential IDs for this user to exclude
+        existing_cred_ids = await self.storage.get_credential_ids(user_id=user.id)
         existing_credentials = [
             PublicKeyCredentialDescriptor(id=base64url_to_bytes(cred_id))
-            for cred_id in self.storage.get_credential_ids()
+            for cred_id in existing_cred_ids
         ]
 
         options = generate_registration_options(
             rp_id=self.rp_id,
             rp_name=self.rp_name,
-            user_id=self.user_id,
-            user_name=self.user_name,
-            user_display_name=self.user_display_name,
+            user_id=user_id,
+            user_name=user_name,
+            user_display_name=user_display_name,
             exclude_credentials=existing_credentials,
             authenticator_selection=AuthenticatorSelectionCriteria(
                 resident_key=ResidentKeyRequirement.REQUIRED,
@@ -69,11 +73,10 @@ class WebAuthnManager:
             ),
         )
 
-        # Store the challenge for later verification
+        # Store the challenge and pending registration user_id
         self.session.store_challenge(options.challenge, "registration")
+        self.session.store_pending_registration(options.challenge, user.id or "")
 
-        # Convert to dict for JSON response
-        # The options object has a model_dump() or we can convert manually
         return {
             "rp": {"id": options.rp.id, "name": options.rp.name},
             "user": {
@@ -104,26 +107,27 @@ class WebAuthnManager:
             "attestation": options.attestation.value if options.attestation else "none",
         }
 
-    def verify_registration(
-        self, credential: dict[str, Any], device_name: str | None = None
+    async def verify_registration(
+        self,
+        credential: dict[str, Any],
+        user: User,
+        device_name: str | None = None,
     ) -> dict[str, Any]:
         """Verify a registration response and store the credential.
 
         Args:
             credential: The credential response from the browser
+            user: The user who is registering
             device_name: Optional friendly name for the device
 
         Returns:
             Dict with success status and session token
         """
-        # Get the stored challenge
         expected_challenge = self.session.get_stored_challenge("registration")
         if expected_challenge is None:
             raise ValueError("No pending registration challenge found")
 
         try:
-            # Pass the credential dict directly to verify_registration_response
-            # The library handles parsing the camelCase keys and base64 decoding
             verification = verify_registration_response(
                 credential=credential,
                 expected_challenge=expected_challenge,
@@ -131,18 +135,20 @@ class WebAuthnManager:
                 expected_origin=self.origin,
             )
 
-            # Store the credential
-            self.storage.save_credential(
+            await self.storage.save_credential(
+                user_id=user.id or "",
                 credential_id=bytes_to_base64url(verification.credential_id),
                 public_key=bytes_to_base64url(verification.credential_public_key),
                 sign_count=verification.sign_count,
                 device_name=device_name,
             )
 
-            # Create a session token
-            token = self.session.create_session_token()
+            token = self.session.create_session_token(
+                user_id=user.id or "",
+                email=user.email,
+            )
 
-            logger.info("Successfully registered new passkey")
+            logger.info("Successfully registered new passkey for user %s", user.email)
             return {
                 "verified": True,
                 "token": token,
@@ -152,13 +158,12 @@ class WebAuthnManager:
             logger.error(f"Registration verification failed: {e}")
             raise ValueError(f"Registration verification failed: {e}") from e
 
-    def get_authentication_options(self) -> dict[str, Any]:
+    async def get_authentication_options(self) -> dict[str, Any]:
         """Generate authentication options for login.
 
         Returns a dict that can be JSON-serialized for the frontend.
         """
-        # Get all registered credentials
-        credentials = self.storage.get_credentials()
+        credentials = await self.storage.get_credentials()
 
         if not credentials:
             raise ValueError("No credentials registered. Please register first.")
@@ -174,7 +179,6 @@ class WebAuthnManager:
             user_verification=UserVerificationRequirement.PREFERRED,
         )
 
-        # Store the challenge for later verification
         self.session.store_challenge(options.challenge, "authentication")
 
         return {
@@ -193,30 +197,33 @@ class WebAuthnManager:
             else "preferred",
         }
 
-    def verify_authentication(self, credential: dict[str, Any]) -> dict[str, Any]:
+    async def verify_authentication(
+        self, credential: dict[str, Any]
+    ) -> dict[str, Any]:
         """Verify an authentication response.
 
         Args:
             credential: The credential response from the browser
 
         Returns:
-            Dict with success status and session token
+            Dict with success status, session token, and user_id
         """
-        # Get the stored challenge
         expected_challenge = self.session.get_stored_challenge("authentication")
         if expected_challenge is None:
             raise ValueError("No pending authentication challenge found")
 
-        # Find the credential in storage
         credential_id = credential["id"]
-        stored_credential = self.storage.get_credential_by_id(credential_id)
+        stored_credential = await self.storage.get_credential_by_id(credential_id)
 
         if stored_credential is None:
             raise ValueError("Credential not found")
 
+        # Look up which user owns this credential
+        user_id = await self.storage.get_user_id_for_credential(credential_id)
+        if not user_id:
+            raise ValueError("No user found for this credential")
+
         try:
-            # Pass the credential dict directly to verify_authentication_response
-            # The library handles parsing the camelCase keys and base64 decoding
             verification = verify_authentication_response(
                 credential=credential,
                 expected_challenge=expected_challenge,
@@ -226,29 +233,32 @@ class WebAuthnManager:
                 credential_current_sign_count=stored_credential.sign_count,
             )
 
-            # Update sign count for replay attack prevention
-            self.storage.update_sign_count(credential_id, verification.new_sign_count)
+            await self.storage.update_sign_count(
+                credential_id, verification.new_sign_count
+            )
 
-            # Create a session token
-            token = self.session.create_session_token()
+            token = self.session.create_session_token(user_id=user_id)
 
-            logger.info("Successfully authenticated with passkey")
+            logger.info("Successfully authenticated user %s with passkey", user_id)
             return {
                 "verified": True,
                 "token": token,
+                "user_id": user_id,
             }
 
         except Exception as e:
             logger.error(f"Authentication verification failed: {e}")
             raise ValueError(f"Authentication verification failed: {e}") from e
 
-    def is_registered(self) -> bool:
+    async def is_registered(self) -> bool:
         """Check if any passkeys are registered."""
-        return self.storage.is_registered()
+        return await self.storage.is_registered()
 
-    def get_credentials_info(self) -> list[dict[str, Any]]:
-        """Get info about registered credentials (for management UI)."""
-        credentials = self.storage.get_credentials()
+    async def get_credentials_info(
+        self, user_id: str
+    ) -> list[dict[str, Any]]:
+        """Get info about registered credentials for a user."""
+        credentials = await self.storage.get_credentials(user_id=user_id)
         return [
             {
                 "id": cred.credential_id[:20] + "...",

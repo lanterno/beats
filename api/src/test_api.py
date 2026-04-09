@@ -9,9 +9,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from starlette.testclient import TestClient
 
-from beats.settings import settings
-
 client: TestClient | None = None  # Set by fixture before tests run
+auth_headers: dict[str, str] = {}  # Set by fixture before each test class
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -21,26 +20,33 @@ def _provide_client(test_client):
     client = test_client
 
 
+@pytest.fixture(autouse=True)
+def _setup_auth(auth_info):
+    """Populate module-level auth_headers from the auth_info fixture."""
+    global auth_headers
+    auth_headers = auth_info["headers"]
+
+
 class TestProjectAPI:
     """Test suite for Project management endpoints"""
 
     def test_projects_list_api(self):
         """Test GET /api/projects/ - List all projects"""
-        response = client.get("/api/projects/")
+        response = client.get("/api/projects/", headers=auth_headers)
         assert response.status_code == 200
         projects = response.json()
         assert isinstance(projects, list)
 
     def test_projects_list_archived(self):
         """Test GET /api/projects/?archived=true - List archived projects"""
-        response = client.get("/api/projects/?archived=true")
+        response = client.get("/api/projects/?archived=true", headers=auth_headers)
         assert response.status_code == 200
         projects = response.json()
         assert isinstance(projects, list)
 
     def test_projects_create_api(self):
         """Test POST /api/projects/ - Create a new project"""
-        projects_count = len(client.get("/api/projects/").json())
+        projects_count = len(client.get("/api/projects/", headers=auth_headers).json())
 
         response = client.post(
             "/api/projects/",
@@ -48,16 +54,13 @@ class TestProjectAPI:
                 "name": f"test-project-{time.time()}",
                 "description": "Test project - delete me",
             },
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Token": settings.access_token,
-            },
+            headers=auth_headers,
         )
         assert response.status_code == 201, response.json()
         project = response.json()
         assert "id" in project
         assert "name" in project
-        assert len(client.get("/api/projects/").json()) == projects_count + 1
+        assert len(client.get("/api/projects/", headers=auth_headers).json()) == projects_count + 1
 
     def test_projects_create_without_auth(self):
         """Test POST /api/projects/ without auth token - Should fail"""
@@ -85,12 +88,9 @@ class TestProjectAPI:
                 "name": f"test-project-{time.time()}",
                 "description": "Test project - delete me",
             },
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Token": settings.access_token,
-            },
+            headers=auth_headers,
         )
-        projects_count = len(client.get("/api/projects/").json())
+        projects_count = len(client.get("/api/projects/", headers=auth_headers).json())
 
         project = response.json()
         project["name"] = "Updated-" + project["name"]
@@ -98,15 +98,12 @@ class TestProjectAPI:
         response = client.put(
             "/api/projects/",
             json=project,
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Token": settings.access_token,
-            },
+            headers=auth_headers,
         )
         assert response.status_code == 200, response.json()
         updated_project = response.json()
         assert "Updated-" in updated_project["name"]
-        assert len(client.get("/api/projects/").json()) == projects_count
+        assert len(client.get("/api/projects/", headers=auth_headers).json()) == projects_count
 
     def test_projects_archive(self):
         """Test POST /api/projects/{project_id}/archive - Archive a project"""
@@ -114,14 +111,14 @@ class TestProjectAPI:
         response = client.post(
             "/api/projects/",
             json={"name": f"test-archive-{time.time()}", "description": "Test archive"},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         project = response.json()
 
         # Archive the project
         response = client.post(
             f"/api/projects/{project['id']}/archive",
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         assert response.status_code == 200
         assert response.json()["status"] == "success"
@@ -135,7 +132,7 @@ class TestProjectAPI:
                 "name": f"test-today-{time.time()}",
                 "description": "Test today time",
             },
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         now = datetime.now(UTC)
@@ -146,9 +143,10 @@ class TestProjectAPI:
                 "start": now.isoformat(),
                 "end": (now + timedelta(hours=1)).isoformat(),
             },
+            headers=auth_headers,
         )
 
-        response = client.get(f"/api/projects/{project['id']}/today/")
+        response = client.get(f"/api/projects/{project['id']}/today/", headers=auth_headers)
         assert response.status_code == 200
         assert "duration" in response.json()
 
@@ -158,10 +156,10 @@ class TestProjectAPI:
         project = client.post(
             "/api/projects/",
             json={"name": f"test-week-{time.time()}", "description": "Test week time"},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
-        response = client.get(f"/api/projects/{project['id']}/week/")
+        response = client.get(f"/api/projects/{project['id']}/week/", headers=auth_headers)
         assert response.status_code == 200
         week_data = response.json()
         assert "total_hours" in week_data
@@ -187,7 +185,7 @@ class TestProjectAPI:
                 "name": f"test-total-{time.time()}",
                 "description": "Test total time",
             },
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         client.post(
@@ -197,9 +195,10 @@ class TestProjectAPI:
                 "start": "2024-01-15T10:00:00",
                 "end": "2024-01-15T12:00:00",
             },
+            headers=auth_headers,
         )
 
-        response = client.get(f"/api/projects/{project['id']}/total/")
+        response = client.get(f"/api/projects/{project['id']}/total/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "durations_per_month" in data
@@ -211,7 +210,7 @@ class TestProjectAPI:
         project = client.post(
             "/api/projects/",
             json={"name": f"test-summary-{time.time()}", "description": "Test summary"},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         client.post(
@@ -221,9 +220,10 @@ class TestProjectAPI:
                 "start": "2024-01-15T10:00:00",
                 "end": "2024-01-15T12:00:00",
             },
+            headers=auth_headers,
         )
 
-        response = client.get(f"/api/projects/{project['id']}/summary/")
+        response = client.get(f"/api/projects/{project['id']}/summary/", headers=auth_headers)
         assert response.status_code == 200
         assert isinstance(response.json(), dict)
 
@@ -236,7 +236,7 @@ class TestProjectAPI:
                 "name": f"test-start-{time.time()}",
                 "description": "Test start timer",
             },
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         # Start timer
@@ -244,12 +244,12 @@ class TestProjectAPI:
         client.post(
             "/api/projects/stop",
             json={"time": datetime.now(UTC).isoformat()},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         response = client.post(
             f"/api/projects/{project['id']}/start",
             json={"time": datetime.now(UTC).isoformat()},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         assert response.status_code == 200
         beat = response.json()
@@ -262,14 +262,14 @@ class TestProjectAPI:
         project = client.post(
             "/api/projects/",
             json={"name": f"test-stop-{time.time()}", "description": "Test stop timer"},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         start_time = datetime.now(UTC)
         client.post(
             f"/api/projects/{project['id']}/start",
             json={"time": start_time.isoformat()},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
 
         # Stop timer
@@ -277,7 +277,7 @@ class TestProjectAPI:
         response = client.post(
             "/api/projects/stop",
             json={"time": end_time.isoformat()},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         assert response.status_code == 200
         beat = response.json()
@@ -289,7 +289,7 @@ class TestProjectAPI:
         response = client.post(
             "/api/projects/stop",
             json={"time": datetime.now(UTC).isoformat()},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         # This might be 400 or 200 depending on state, just check it doesn't crash
         assert response.status_code in [200, 400]
@@ -302,7 +302,7 @@ class TestGoalOverridesAPI:
         resp = client.post(
             "/api/projects/",
             json={"name": f"goal-test-{time.time()}", "weekly_goal": weekly_goal},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         assert resp.status_code == 201
         return resp.json()
@@ -316,7 +316,7 @@ class TestGoalOverridesAPI:
                 {"week_of": "2026-04-06", "weekly_goal": 10, "note": "holiday"},
                 {"effective_from": "2026-03-02", "weekly_goal": 30},
             ],
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -328,9 +328,9 @@ class TestGoalOverridesAPI:
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[{"week_of": "2026-04-06", "weekly_goal": 10}],
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
-        projects = client.get("/api/projects/").json()
+        projects = client.get("/api/projects/", headers=auth_headers).json()
         found = [p for p in projects if p["id"] == project["id"]][0]
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["weekly_goal"] == 10
@@ -338,7 +338,9 @@ class TestGoalOverridesAPI:
     def test_week_breakdown_includes_effective_goal(self):
         """GET /api/projects/{id}/week/ returns effective_goal."""
         project = self._create_project(weekly_goal=20)
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0")
+        resp = client.get(
+            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["effective_goal"] == 20
@@ -351,20 +353,21 @@ class TestGoalOverridesAPI:
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[{"effective_from": "2020-01-06", "weekly_goal": 35}],
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0")
+        resp = client.get(
+            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
+        )
         data = resp.json()
         assert data["effective_goal"] == 35
 
     def test_replace_overrides(self):
         """PUT replaces all overrides, not appends."""
         project = self._create_project()
-        headers = {"X-API-Token": settings.access_token}
         url = f"/api/projects/{project['id']}/goal-overrides"
-        client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=headers)
-        client.put(url, json=[{"week_of": "2026-04-13", "weekly_goal": 5}], headers=headers)
-        data = client.get("/api/projects/").json()
+        client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=auth_headers)
+        client.put(url, json=[{"week_of": "2026-04-13", "weekly_goal": 5}], headers=auth_headers)
+        data = client.get("/api/projects/", headers=auth_headers).json()
         found = [p for p in data if p["id"] == project["id"]][0]
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["week_of"] == "2026-04-13"
@@ -372,11 +375,10 @@ class TestGoalOverridesAPI:
     def test_clear_overrides(self):
         """Sending empty list clears all overrides."""
         project = self._create_project()
-        headers = {"X-API-Token": settings.access_token}
         url = f"/api/projects/{project['id']}/goal-overrides"
-        client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=headers)
-        client.put(url, json=[], headers=headers)
-        data = client.get("/api/projects/").json()
+        client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=auth_headers)
+        client.put(url, json=[], headers=auth_headers)
+        data = client.get("/api/projects/", headers=auth_headers).json()
         found = [p for p in data if p["id"] == project["id"]][0]
         assert len(found["goal_overrides"]) == 0
 
@@ -392,10 +394,7 @@ class TestBeatsDirectAPI:
                 "name": f"test-project-{time.time()}",
                 "description": "Test project - delete me",
             },
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Token": settings.access_token,
-            },
+            headers=auth_headers,
         ).json()
 
         response = client.post(
@@ -405,6 +404,7 @@ class TestBeatsDirectAPI:
                 "start": "2020-04-01T02:00:00",
                 "end": "2020-04-01T03:00:00",
             },
+            headers=auth_headers,
         )
         assert response.status_code == 201, response.json()
         beat = response.json()
@@ -413,7 +413,7 @@ class TestBeatsDirectAPI:
 
     def test_list_api(self):
         """Test GET /api/beats/ - List all beats"""
-        response = client.get("/api/beats/")
+        response = client.get("/api/beats/", headers=auth_headers)
         assert response.status_code == 200
         beats = response.json()
         assert isinstance(beats, list)
@@ -426,10 +426,7 @@ class TestBeatsDirectAPI:
                 "name": f"test-project-{time.time()}",
                 "description": "Test project - delete me",
             },
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Token": settings.access_token,
-            },
+            headers=auth_headers,
         ).json()
 
         client.post(
@@ -439,6 +436,7 @@ class TestBeatsDirectAPI:
                 "start": "2020-04-01T02:00:00",
                 "end": "2020-04-01T03:00:00",
             },
+            headers=auth_headers,
         )
         client.post(
             "/api/beats/",
@@ -447,9 +445,10 @@ class TestBeatsDirectAPI:
                 "start": "2020-04-01T04:00:00",
                 "end": "2020-04-01T05:00:00",
             },
+            headers=auth_headers,
         )
 
-        response = client.get(f"/api/beats/?project_id={project['id']}")
+        response = client.get(f"/api/beats/?project_id={project['id']}", headers=auth_headers)
         assert response.status_code == 200
         beats = response.json()
         assert len(beats) >= 2
@@ -465,7 +464,7 @@ class TestBeatsDirectAPI:
                 "name": f"test-date-filter-{time.time()}",
                 "description": "Test date filter",
             },
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         # Create beat with specific date
@@ -476,9 +475,10 @@ class TestBeatsDirectAPI:
                 "start": "2024-05-15T10:00:00",
                 "end": "2024-05-15T11:00:00",
             },
+            headers=auth_headers,
         )
 
-        response = client.get("/api/beats/?date_filter=2024-05-15")
+        response = client.get("/api/beats/?date_filter=2024-05-15", headers=auth_headers)
         assert response.status_code == 200
         beats = response.json()
         assert isinstance(beats, list)
@@ -491,7 +491,7 @@ class TestBeatsDirectAPI:
                 "name": f"test-get-beat-{time.time()}",
                 "description": "Test get beat",
             },
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         beat = client.post(
@@ -501,9 +501,10 @@ class TestBeatsDirectAPI:
                 "start": "2020-04-01T02:00:00",
                 "end": "2020-04-01T03:00:00",
             },
+            headers=auth_headers,
         ).json()
 
-        response = client.get(f"/api/beats/{beat['id']}")
+        response = client.get(f"/api/beats/{beat['id']}", headers=auth_headers)
         assert response.status_code == 200
         retrieved_beat = response.json()
         assert retrieved_beat["id"] == beat["id"]
@@ -517,10 +518,7 @@ class TestBeatsDirectAPI:
                 "name": f"test-project-{time.time()}",
                 "description": "Test project - delete me",
             },
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Token": settings.access_token,
-            },
+            headers=auth_headers,
         ).json()
 
         beat = client.post(
@@ -530,15 +528,16 @@ class TestBeatsDirectAPI:
                 "start": "2020-04-01T02:00:00",
                 "end": "2020-04-01T03:00:00",
             },
+            headers=auth_headers,
         ).json()
 
         # Update the beat
         beat["end"] = "2020-04-01T04:10:10"
-        response = client.put("/api/beats/", json=beat)
+        response = client.put("/api/beats/", json=beat, headers=auth_headers)
         assert response.status_code == 200, response.json()
 
         # Verify the update
-        response = client.get(f"/api/beats/{beat['id']}")
+        response = client.get(f"/api/beats/{beat['id']}", headers=auth_headers)
         assert response.status_code == 200, response.json()
         assert response.json()["end"] == "2020-04-01T04:10:10"
 
@@ -547,7 +546,7 @@ class TestBeatsDirectAPI:
         project = client.post(
             "/api/projects/",
             json={"name": f"test-delete-{time.time()}", "description": "Test delete"},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         beat = client.post(
@@ -557,9 +556,10 @@ class TestBeatsDirectAPI:
                 "start": "2020-04-01T02:00:00",
                 "end": "2020-04-01T03:00:00",
             },
+            headers=auth_headers,
         ).json()
 
-        response = client.delete(f"/api/beats/{beat['id']}")
+        response = client.delete(f"/api/beats/{beat['id']}", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["deleted"] is True
 
@@ -574,12 +574,12 @@ class TestTimerAPI:
             client.post(
                 "/api/projects/stop",
                 json={"time": datetime.now(UTC).isoformat()},
-                headers={"X-API-Token": settings.access_token},
+                headers=auth_headers,
             )
         except Exception:
             pass
 
-        response = client.get("/api/timer/status")
+        response = client.get("/api/timer/status", headers=auth_headers)
         assert response.status_code == 200
         status = response.json()
         assert "isBeating" in status
@@ -593,18 +593,18 @@ class TestTimerAPI:
                 "name": f"test-timer-status-{time.time()}",
                 "description": "Test timer status",
             },
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         ).json()
 
         # Start timer
         client.post(
             f"/api/projects/{project['id']}/start",
             json={"time": datetime.now(UTC).isoformat()},
-            headers={"X-API-Token": settings.access_token},
+            headers=auth_headers,
         )
 
         # Check status
-        response = client.get("/api/timer/status")
+        response = client.get("/api/timer/status", headers=auth_headers)
         assert response.status_code == 200
         status = response.json()
         assert "isBeating" in status
@@ -616,7 +616,7 @@ class TestTimerAPI:
             client.post(
                 "/api/projects/stop",
                 json={"time": datetime.now(UTC).isoformat()},
-                headers={"X-API-Token": settings.access_token},
+                headers=auth_headers,
             )
 
 
@@ -624,8 +624,8 @@ class TestMiscellaneousEndpoints:
     """Test suite for miscellaneous endpoints"""
 
     def test_ding_endpoint(self):
-        """Test POST /talk/ding - Simple ping endpoint"""
-        response = client.post("/talk/ding", headers={"X-API-Token": settings.access_token})
+        """Test POST /talk/ding - Simple ping endpoint (public)"""
+        response = client.post("/talk/ding")
         assert response.status_code == 200
         assert response.json() == {"message": "dong"}
 
@@ -633,16 +633,15 @@ class TestMiscellaneousEndpoints:
 class TestAuthenticationMiddleware:
     """Test suite for authentication middleware"""
 
-    def test_get_requests_no_auth_required(self):
-        """Test GET requests don't require authentication"""
+    def test_all_requests_require_auth(self):
+        """Test that all requests (including GET) require authentication"""
         response = client.get("/api/projects/")
-        assert response.status_code == 200
+        assert response.status_code == 401
 
     def test_post_requests_require_auth(self):
         """Test POST requests require authentication"""
         response = client.post("/api/projects/", json={"name": "test", "description": "test"})
         assert response.status_code == 401
-        assert "X-API-Token" in response.json()["error"]
 
     def test_put_requests_require_auth(self):
         """Test PUT requests require authentication"""
@@ -652,7 +651,7 @@ class TestAuthenticationMiddleware:
         assert response.status_code == 401
 
     def test_invalid_token(self):
-        """Test invalid token is rejected"""
+        """Test invalid X-API-Token is rejected"""
         response = client.post(
             "/api/projects/",
             json={"name": "test", "description": "test"},
@@ -660,3 +659,79 @@ class TestAuthenticationMiddleware:
         )
         assert response.status_code == 401
         assert "not valid" in response.json()["error"]
+
+    def test_invalid_bearer_token(self):
+        """Test invalid Bearer token is rejected"""
+        response = client.get(
+            "/api/projects/",
+            headers={"Authorization": "Bearer invalid-jwt-token"},
+        )
+        assert response.status_code == 401
+        assert "Invalid or expired" in response.json()["error"]
+
+    def test_public_endpoints_no_auth(self):
+        """Test public endpoints don't require auth"""
+        response = client.get("/health")
+        assert response.status_code == 200
+
+        response = client.post("/talk/ding")
+        assert response.status_code == 200
+
+    def test_auth_endpoints_no_auth(self):
+        """Test auth endpoints are accessible without auth"""
+        response = client.get("/api/auth/status")
+        assert response.status_code == 200
+
+
+class TestMultiUserIsolation:
+    """Test that data is isolated between users."""
+
+    def _make_headers(self, user_id: str, email: str) -> dict[str, str]:
+        from beats.auth.session import SessionManager
+        from beats.settings import settings
+
+        sm = SessionManager(settings.jwt_secret)
+        token = sm.create_session_token(user_id, email)
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_projects_isolated_between_users(self):
+        """Projects created by one user are not visible to another."""
+        import os
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        db = sync_client[db_name]
+
+        # Create two users
+        user1_id = str(ObjectId())
+        user2_id = str(ObjectId())
+        for uid, email in [(user1_id, "user1@test.com"), (user2_id, "user2@test.com")]:
+            db.users.insert_one({
+                "_id": ObjectId(uid),
+                "email": email,
+                "display_name": None,
+            })
+        sync_client.close()
+
+        h1 = self._make_headers(user1_id, "user1@test.com")
+        h2 = self._make_headers(user2_id, "user2@test.com")
+
+        # User 1 creates a project
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "user1-project"},
+            headers=h1,
+        )
+        assert resp.status_code == 201
+
+        # User 1 sees the project
+        projects_u1 = client.get("/api/projects/", headers=h1).json()
+        assert any(p["name"] == "user1-project" for p in projects_u1)
+
+        # User 2 does NOT see it
+        projects_u2 = client.get("/api/projects/", headers=h2).json()
+        assert not any(p["name"] == "user1-project" for p in projects_u2)
