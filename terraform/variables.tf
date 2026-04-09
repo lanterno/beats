@@ -142,8 +142,3 @@ variable "dns_ttl" {
   default     = 1
 }
 
-variable "dns_proxied" {
-  description = "Whether to proxy DNS records through Cloudflare"
-  type        = bool
-  default     = true
-}
