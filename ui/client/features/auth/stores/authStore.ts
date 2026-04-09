@@ -1,7 +1,7 @@
 /**
  * Auth Store
  * Manages authentication state, session tokens, and user info.
- * Uses sessionStorage for token persistence within browser sessions.
+ * Uses localStorage for token persistence across browser sessions.
  */
 import { useSyncExternalStore } from "react";
 
@@ -48,11 +48,11 @@ function emitChange() {
 // ============================================================================
 
 /**
- * Initialize the auth store from sessionStorage.
+ * Initialize the auth store from localStorage.
  * If a token exists, fetches user info from the API.
  */
 export async function initializeAuth(): Promise<void> {
-	const storedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+	const storedToken = localStorage.getItem(SESSION_TOKEN_KEY);
 	if (storedToken) {
 		state = {
 			token: storedToken,
@@ -90,7 +90,7 @@ export async function initializeAuth(): Promise<void> {
  * Set the session token after successful login/registration.
  */
 export function setSessionToken(token: string): void {
-	sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+	localStorage.setItem(SESSION_TOKEN_KEY, token);
 	state = {
 		token,
 		isAuthenticated: true,
@@ -112,7 +112,7 @@ export function setUser(user: UserInfo): void {
  * Clear the session token (logout).
  */
 export function clearSessionToken(): void {
-	sessionStorage.removeItem(SESSION_TOKEN_KEY);
+	localStorage.removeItem(SESSION_TOKEN_KEY);
 	state = {
 		token: null,
 		isAuthenticated: false,
