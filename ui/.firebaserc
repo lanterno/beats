@@ -1,5 +1,15 @@
 {
-	"projects": {
-		"default": "beats-476914"
-	}
+  "projects": {
+    "default": "beats-476914"
+  },
+  "targets": {
+    "beats-476914": {
+      "hosting": {
+        "beats-ui": [
+          "beats-476914"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

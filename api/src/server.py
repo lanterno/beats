@@ -57,7 +57,8 @@ origins = [
     "http://localhost:8000",
     "http://localhost:8080",
     "https://beats.elghareeb.space",
-    "https://api.beats.elghareeb.space/",
+    "https://lifepete.com",
+    "https://api.beats.elghareeb.space",
 ]
 
 
@@ -125,9 +126,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             else:
                 origin = request.headers.get("origin", "unknown")
                 path = request.url.path
-                logger.warning(
-                    "Invalid X-API-Token to %s from origin: %s", path, origin
-                )
+                logger.warning("Invalid X-API-Token to %s from origin: %s", path, origin)
                 return JSONResponse(
                     content={"error": "Your X-API-Token is not valid"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -135,13 +134,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         # No valid authentication provided
         origin = request.headers.get("origin", "unknown")
-        logger.warning(
-            "Unauthorized request to %s from: %s", request.url.path, origin
-        )
+        logger.warning("Unauthorized request to %s from: %s", request.url.path, origin)
         return JSONResponse(
-            content={
-                "error": "Authentication required. Use Bearer token or X-API-Token."
-            },
+            content={"error": "Authentication required. Use Bearer token or X-API-Token."},
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 

@@ -10,3 +10,6 @@
 *.tfstate.backup
 .terraform/
 .terraform.lock.hcl
+
+# Firebase
+.firebase/
