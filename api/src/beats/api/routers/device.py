@@ -169,7 +169,5 @@ async def _get_daily_total_minutes(beat_service: BeatServiceDep) -> int:
 
     today = date.today()
     beats = await beat_service.beat_repo.list(date_filter=today)
-    total_seconds = sum(
-        b.duration.total_seconds() for b in beats if not b.is_active
-    )
+    total_seconds = sum(b.duration.total_seconds() for b in beats if not b.is_active)
     return int(total_seconds / 60)

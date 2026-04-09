@@ -197,9 +197,7 @@ class WebAuthnManager:
             else "preferred",
         }
 
-    async def verify_authentication(
-        self, credential: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def verify_authentication(self, credential: dict[str, Any]) -> dict[str, Any]:
         """Verify an authentication response.
 
         Args:
@@ -233,9 +231,7 @@ class WebAuthnManager:
                 credential_current_sign_count=stored_credential.sign_count,
             )
 
-            await self.storage.update_sign_count(
-                credential_id, verification.new_sign_count
-            )
+            await self.storage.update_sign_count(credential_id, verification.new_sign_count)
 
             token = self.session.create_session_token(user_id=user_id)
 
@@ -254,9 +250,7 @@ class WebAuthnManager:
         """Check if any passkeys are registered."""
         return await self.storage.is_registered()
 
-    async def get_credentials_info(
-        self, user_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_credentials_info(self, user_id: str) -> list[dict[str, Any]]:
         """Get info about registered credentials for a user."""
         credentials = await self.storage.get_credentials(user_id=user_id)
         return [

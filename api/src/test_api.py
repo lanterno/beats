@@ -338,9 +338,7 @@ class TestGoalOverridesAPI:
     def test_week_breakdown_includes_effective_goal(self):
         """GET /api/projects/{id}/week/ returns effective_goal."""
         project = self._create_project(weekly_goal=20)
-        resp = client.get(
-            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
-        )
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["effective_goal"] == 20
@@ -355,9 +353,7 @@ class TestGoalOverridesAPI:
             json=[{"effective_from": "2020-01-06", "weekly_goal": 35}],
             headers=auth_headers,
         )
-        resp = client.get(
-            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
-        )
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
         data = resp.json()
         assert data["effective_goal"] == 35
 
@@ -710,11 +706,13 @@ class TestMultiUserIsolation:
         user1_id = str(ObjectId())
         user2_id = str(ObjectId())
         for uid, email in [(user1_id, "user1@test.com"), (user2_id, "user2@test.com")]:
-            db.users.insert_one({
-                "_id": ObjectId(uid),
-                "email": email,
-                "display_name": None,
-            })
+            db.users.insert_one(
+                {
+                    "_id": ObjectId(uid),
+                    "email": email,
+                    "display_name": None,
+                }
+            )
         sync_client.close()
 
         h1 = self._make_headers(user1_id, "user1@test.com")

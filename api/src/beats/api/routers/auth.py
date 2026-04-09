@@ -131,9 +131,7 @@ async def register_start(
     # Create the user
     from beats.domain.models import User
 
-    user = await user_repo.create(
-        User(email=request.email, display_name=request.display_name)
-    )
+    user = await user_repo.create(User(email=request.email, display_name=request.display_name))
 
     try:
         options = await webauthn.get_registration_options(user)
@@ -206,9 +204,7 @@ async def verify_login(
 ) -> LoginVerifyResponse:
     """Verify an authentication response and return a session token."""
     try:
-        result = await webauthn.verify_authentication(
-            credential=request.credential
-        )
+        result = await webauthn.verify_authentication(credential=request.credential)
         return LoginVerifyResponse(
             verified=result["verified"],
             token=result["token"],

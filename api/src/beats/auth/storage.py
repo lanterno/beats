@@ -87,14 +87,16 @@ class MongoCredentialStorage:
             created_at=datetime.now().isoformat(),
             device_name=device_name,
         )
-        await self.collection.insert_one({
-            "user_id": user_id,
-            "credential_id": credential_id,
-            "public_key": public_key,
-            "sign_count": sign_count,
-            "created_at": credential.created_at,
-            "device_name": device_name,
-        })
+        await self.collection.insert_one(
+            {
+                "user_id": user_id,
+                "credential_id": credential_id,
+                "public_key": public_key,
+                "sign_count": sign_count,
+                "created_at": credential.created_at,
+                "device_name": device_name,
+            }
+        )
         logger.info(f"Saved new credential for user {user_id}: {credential_id[:20]}...")
         return credential
 

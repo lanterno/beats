@@ -76,12 +76,14 @@ def auth_info(clean_db):
     db = sync_client[db_name]
 
     user_id = str(ObjectId())
-    db.users.insert_one({
-        "_id": ObjectId(user_id),
-        "email": "test@example.com",
-        "display_name": "Test User",
-        "created_at": datetime.now(UTC),
-    })
+    db.users.insert_one(
+        {
+            "_id": ObjectId(user_id),
+            "email": "test@example.com",
+            "display_name": "Test User",
+            "created_at": datetime.now(UTC),
+        }
+    )
 
     sm = SessionManager(settings.jwt_secret)
     token = sm.create_session_token(user_id, "test@example.com")

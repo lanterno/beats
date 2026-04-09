@@ -89,11 +89,13 @@ async def run_migration(dsn: str | None = None, db_name: str | None = None) -> N
         logger.info("Created indexes")
 
         # 6. Record migration as complete
-        await db["_migrations"].insert_one({
-            "name": MIGRATION_NAME,
-            "completed_at": datetime.now(UTC).isoformat(),
-            "owner_id": owner_id,
-        })
+        await db["_migrations"].insert_one(
+            {
+                "name": MIGRATION_NAME,
+                "completed_at": datetime.now(UTC).isoformat(),
+                "owner_id": owner_id,
+            }
+        )
         logger.info("Migration '%s' completed successfully.", MIGRATION_NAME)
 
     finally:
@@ -109,7 +111,7 @@ async def _migrate_credentials(db, credentials_path: Path, owner_id: str) -> Non
     try:
         with open(credentials_path) as f:
             data = json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
+    except json.JSONDecodeError, FileNotFoundError:
         logger.warning("Could not read credentials file, skipping credential migration.")
         return
 
@@ -119,14 +121,16 @@ async def _migrate_credentials(db, credentials_path: Path, owner_id: str) -> Non
         return
 
     for cred in creds:
-        await db.credentials.insert_one({
-            "user_id": owner_id,
-            "credential_id": cred["credential_id"],
-            "public_key": cred["public_key"],
-            "sign_count": cred["sign_count"],
-            "created_at": cred.get("created_at", datetime.now(UTC).isoformat()),
-            "device_name": cred.get("device_name"),
-        })
+        await db.credentials.insert_one(
+            {
+                "user_id": owner_id,
+                "credential_id": cred["credential_id"],
+                "public_key": cred["public_key"],
+                "sign_count": cred["sign_count"],
+                "created_at": cred.get("created_at", datetime.now(UTC).isoformat()),
+                "device_name": cred.get("device_name"),
+            }
+        )
 
     logger.info("Migrated %d credentials to MongoDB.", len(creds))
 

@@ -41,15 +41,17 @@ async def export_sessions_csv(
         if beat.end is None:
             continue
         duration_min = int(beat.duration.total_seconds() / 60)
-        writer.writerow([
-            beat.day.isoformat(),
-            project_map.get(beat.project_id, "Unknown"),
-            beat.start.isoformat(),
-            beat.end.isoformat(),
-            duration_min,
-            beat.note or "",
-            ";".join(beat.tags) if beat.tags else "",
-        ])
+        writer.writerow(
+            [
+                beat.day.isoformat(),
+                project_map.get(beat.project_id, "Unknown"),
+                beat.start.isoformat(),
+                beat.end.isoformat(),
+                duration_min,
+                beat.note or "",
+                ";".join(beat.tags) if beat.tags else "",
+            ]
+        )
 
     output.seek(0)
     filename = f"beats_sessions_{datetime.now(UTC).strftime('%Y%m%d')}.csv"
