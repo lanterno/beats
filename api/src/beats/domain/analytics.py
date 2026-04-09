@@ -1,7 +1,7 @@
 """Analytics service — cross-project insights and aggregations."""
 
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from beats.infrastructure.repositories import BeatRepository
 
@@ -95,10 +95,7 @@ class AnalyticsService:
 
         # Average by number of days in the period
         num_days = max(num_days, 1)
-        return [
-            {"slot": i, "minutes": round(slots[i] / num_days, 1)}
-            for i in range(48)
-        ]
+        return [{"slot": i, "minutes": round(slots[i] / num_days, 1)} for i in range(48)]
 
     @staticmethod
     def _distribute_to_slots(slots: list[float], start: datetime, end: datetime) -> None:
@@ -111,7 +108,8 @@ class AnalyticsService:
         while cursor < end:
             slot_index = cursor.hour * 2 + (1 if cursor.minute >= 30 else 0)
             # Next half-hour boundary
-            next_half = cursor.replace(minute=30 if cursor.minute < 30 else 0, second=0, microsecond=0)
+            next_min = 30 if cursor.minute < 30 else 0
+            next_half = cursor.replace(minute=next_min, second=0, microsecond=0)
             if cursor.minute >= 30:
                 next_half += timedelta(hours=1)
 

@@ -31,7 +31,7 @@ class TimerAlreadyRunning(DomainException):
     def __init__(
         self,
         project_name: str | None = None,
-        beat: "dict | None" = None,
+        beat: dict | None = None,
     ):
         msg = (
             f"'{project_name}' already has a beat in progress"

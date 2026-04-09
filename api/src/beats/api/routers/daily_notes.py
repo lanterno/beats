@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 
 from beats.api.dependencies import DailyNoteRepoDep
 from beats.api.schemas import DailyNoteResponse, UpsertDailyNoteRequest
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/daily-notes", tags=["daily-notes"])
 @router.get("", response_model=DailyNoteResponse | None)
 async def get_daily_note(
     repo: DailyNoteRepoDep,
-    target_date: date | None = Query(default=None),
+    target_date: date | None = None,
 ) -> DailyNoteResponse | None:
     """Get the daily note for a given date (defaults to today)."""
     d = target_date or datetime.now(UTC).date()

@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 
 from beats.api.dependencies import IntentionRepoDep
 from beats.api.schemas import (
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/intentions", tags=["intentions"])
 @router.get("", response_model=list[IntentionResponse])
 async def list_intentions(
     repo: IntentionRepoDep,
-    target_date: date | None = Query(default=None),
+    target_date: date | None = None,
 ) -> list[IntentionResponse]:
     """List intentions for a given date (defaults to today)."""
     d = target_date or datetime.now(UTC).date()
