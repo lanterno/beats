@@ -14,6 +14,7 @@ dependencies = [
     "pymongo>=4.16.0",
     "pyjwt>=2.10.0",
     "python-dotenv>=1.0",
+    "httpx>=0.28.1",
     "uvicorn>=0.40.0",
     "webauthn>=2.5.0",
     "python-multipart>=0.0.24",

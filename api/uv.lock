@@ -58,6 +58,7 @@ source = { editable = "." }
 dependencies = [
     { name = "dnspython" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "motor" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -85,6 +86,7 @@ dev = [
 requires-dist = [
     { name = "dnspython", specifier = ">=2.7" },
     { name = "fastapi", specifier = ">=0.128.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "motor", specifier = ">=3.7.1" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
