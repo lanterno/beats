@@ -38,6 +38,8 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      - '--memory'
+      - '512Mi'
     id: 'deploy-cloud-run'
 
 images:
