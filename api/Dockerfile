@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Use uv to run the server with the project virtualenv
-CMD uv run uvicorn server:app --host 0.0.0.0 --port ${PORT} --app-dir src
+CMD uv run --no-dev uvicorn server:app --host 0.0.0.0 --port ${PORT} --app-dir src

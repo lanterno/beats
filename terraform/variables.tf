@@ -32,7 +32,7 @@ variable "cpu_limit" {
 variable "memory_limit" {
   description = "Memory limit per container instance"
   type        = string
-  default     = "256Mi"
+  default     = "512Mi"
 }
 
 variable "container_concurrency" {
