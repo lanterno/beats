@@ -7,10 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from beats.api.routers.analytics import router as analytics_router
-from beats.api.routers.auth import get_session_manager
+from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
 from beats.api.routers.beats import router as beats_router
 from beats.api.routers.daily_notes import router as daily_notes_router
@@ -107,6 +109,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Unified domain exception handler
 @app.exception_handler(DomainException)

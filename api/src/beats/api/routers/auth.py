@@ -5,6 +5,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from beats.auth.session import SessionManager
 from beats.auth.storage import MongoCredentialStorage
@@ -16,6 +18,7 @@ from beats.settings import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 # Shared singleton for session manager (needed by middleware)
 _session_manager = SessionManager(settings.jwt_secret)
@@ -107,14 +110,16 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register/start", response_model=RegisterStartResponse)
+@limiter.limit("5/minute")
 async def register_start(
-    request: RegisterStartRequest,
+    request: Request,
+    body: RegisterStartRequest,
     user_repo: UserRepoDep,
     webauthn: WebAuthnDep,
 ) -> RegisterStartResponse:
     """Start registration: create user and return WebAuthn options."""
     # Check if email is already taken
-    existing = await user_repo.get_by_email(request.email)
+    existing = await user_repo.get_by_email(body.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -124,7 +129,7 @@ async def register_start(
     # Create the user
     from beats.domain.models import User
 
-    user = await user_repo.create(User(email=request.email, display_name=request.display_name))
+    user = await user_repo.create(User(email=body.email, display_name=body.display_name))
 
     try:
         options = await webauthn.get_registration_options(user)
@@ -138,8 +143,10 @@ async def register_start(
 
 
 @router.post("/register/verify", response_model=RegistrationVerifyResponse)
+@limiter.limit("5/minute")
 async def verify_registration(
-    request: RegistrationVerifyRequest,
+    request: Request,
+    body: RegistrationVerifyRequest,
     user_repo: UserRepoDep,
     webauthn: WebAuthnDep,
 ) -> RegistrationVerifyResponse:
@@ -161,9 +168,9 @@ async def verify_registration(
 
     try:
         result = await webauthn.verify_registration(
-            credential=request.credential,
+            credential=body.credential,
             user=user,
-            device_name=request.device_name,
+            device_name=body.device_name,
         )
         return RegistrationVerifyResponse(
             verified=result["verified"],
@@ -178,7 +185,8 @@ async def verify_registration(
 
 
 @router.get("/login/options", response_model=LoginOptionsResponse)
-async def get_login_options(webauthn: WebAuthnDep) -> LoginOptionsResponse:
+@limiter.limit("10/minute")
+async def get_login_options(request: Request, webauthn: WebAuthnDep) -> LoginOptionsResponse:
     """Get WebAuthn authentication options for login."""
     try:
         options = await webauthn.get_authentication_options()
@@ -191,13 +199,15 @@ async def get_login_options(webauthn: WebAuthnDep) -> LoginOptionsResponse:
 
 
 @router.post("/login/verify", response_model=LoginVerifyResponse)
+@limiter.limit("5/minute")
 async def verify_login(
-    request: LoginVerifyRequest,
+    request: Request,
+    body: LoginVerifyRequest,
     webauthn: WebAuthnDep,
 ) -> LoginVerifyResponse:
     """Verify an authentication response and return a session token."""
     try:
-        result = await webauthn.verify_authentication(credential=request.credential)
+        result = await webauthn.verify_authentication(credential=body.credential)
         return LoginVerifyResponse(
             verified=result["verified"],
             token=result["token"],

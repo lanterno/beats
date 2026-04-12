@@ -18,6 +18,7 @@ dependencies = [
     "uvicorn>=0.40.0",
     "webauthn>=2.5.0",
     "python-multipart>=0.0.24",
+    "slowapi>=0.1.9",
 ]
 
 [dependency-groups]
