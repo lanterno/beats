@@ -23,7 +23,6 @@ from beats.api.routers.timer import router as timer_router
 from beats.api.routers.webhooks import router as webhooks_router
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.database import Database
-from beats.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,26 +62,10 @@ origins = [
 ]
 
 
-async def _resolve_owner_id() -> str | None:
-    """Look up the first (owner) user's ID for X-API-Token auth."""
-    try:
-        db = Database.get_db()
-        doc = await db.users.find_one({}, sort=[("created_at", 1)])
-        if doc:
-            return str(doc["_id"])
-    except Exception:
-        pass
-    return None
-
-
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     """Async middleware for API authentication.
 
-    All requests (except public paths) require authentication.
-    Supports two methods:
-    1. JWT Bearer token (WebAuthn sessions) - preferred
-    2. X-API-Token header (legacy, for backwards compatibility)
-
+    All requests (except public paths) require a JWT Bearer token (WebAuthn sessions).
     Sets request.state.user_id on successful auth.
     """
 
@@ -95,7 +78,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         if any(request.url.path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
             return await call_next(request)
 
-        # Try JWT Bearer token first (WebAuthn session)
+        # JWT Bearer token (WebAuthn session)
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
@@ -116,28 +99,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
 
-        # Fall back to legacy X-API-Token header
-        if "X-API-Token" in request.headers:
-            if request.headers["X-API-Token"] == settings.access_token:
-                # Map to owner user
-                owner_id = await _resolve_owner_id()
-                if owner_id:
-                    request.state.user_id = owner_id
-                return await call_next(request)
-            else:
-                origin = request.headers.get("origin", "unknown")
-                path = request.url.path
-                logger.warning("Invalid X-API-Token to %s from origin: %s", path, origin)
-                return JSONResponse(
-                    content={"error": "Your X-API-Token is not valid"},
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                )
-
         # No valid authentication provided
         origin = request.headers.get("origin", "unknown")
         logger.warning("Unauthorized request to %s from: %s", request.url.path, origin)
         return JSONResponse(
-            content={"error": "Authentication required. Use Bearer token or X-API-Token."},
+            content={"error": "Authentication required. Provide a Bearer token."},
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 

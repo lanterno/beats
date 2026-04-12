@@ -27,9 +27,6 @@ class Settings(BaseSettings):
     db_dsn: str = Field(default="mongodb://localhost:27017", validation_alias="DB_DSN")
     db_name: str = Field(default="ptc", validation_alias="DB_NAME")
 
-    # Legacy token auth (kept for backwards compatibility during migration)
-    access_token: str = Field(default="secret", validation_alias="ACCESS_TOKEN")
-
     # WebAuthn settings
     webauthn_rp_id: str = Field(default="localhost", validation_alias="WEBAUTHN_RP_ID")
     webauthn_rp_name: str = Field(default="Beats", validation_alias="WEBAUTHN_RP_NAME")
@@ -39,16 +36,5 @@ class Settings(BaseSettings):
 
     # JWT settings
     jwt_secret: str = Field(default="change-me-in-production", validation_alias="JWT_SECRET")
-
-    # Credentials file path (relative to api/ directory)
-    credentials_file: str = Field(
-        default="data/credentials.json", validation_alias="CREDENTIALS_FILE"
-    )
-
-    @property
-    def credentials_path(self) -> Path:
-        """Get the absolute path to the credentials file."""
-        return _api_dir / self.credentials_file
-
 
 settings = Settings()

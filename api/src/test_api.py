@@ -70,15 +70,6 @@ class TestProjectAPI:
         )
         assert response.status_code == 401
 
-    def test_projects_create_with_invalid_token(self):
-        """Test POST /api/projects/ with invalid token - Should fail"""
-        response = client.post(
-            "/api/projects/",
-            json={"name": f"test-project-{time.time()}", "description": "Test project"},
-            headers={"X-API-Token": "invalid-token"},
-        )
-        assert response.status_code == 401
-
     def test_projects_update_api(self):
         """Test PUT /api/projects/ - Update existing project"""
         # Create a project first
@@ -645,16 +636,6 @@ class TestAuthenticationMiddleware:
             "/api/projects/", json={"id": "test", "name": "test", "description": "test"}
         )
         assert response.status_code == 401
-
-    def test_invalid_token(self):
-        """Test invalid X-API-Token is rejected"""
-        response = client.post(
-            "/api/projects/",
-            json={"name": "test", "description": "test"},
-            headers={"X-API-Token": "wrong-token"},
-        )
-        assert response.status_code == 401
-        assert "not valid" in response.json()["error"]
 
     def test_invalid_bearer_token(self):
         """Test invalid Bearer token is rejected"""
