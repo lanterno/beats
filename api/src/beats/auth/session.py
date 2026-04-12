@@ -1,7 +1,6 @@
 """Session management with JWT tokens and in-memory challenge storage."""
 
 import logging
-import secrets
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -36,24 +35,8 @@ class SessionManager:
         self._challenges: dict[str, Challenge] = {}
         # Pending registration: challenge_b64 -> user_id
         self._pending_registrations: dict[str, str] = {}
-
-    def generate_challenge(self, challenge_type: str = "authentication") -> bytes:
-        """Generate a new WebAuthn challenge and store it."""
-        # Clean up expired challenges first
-        self._cleanup_expired_challenges()
-
-        # Generate 32 random bytes for the challenge
-        challenge_bytes = secrets.token_bytes(32)
-        challenge_b64 = secrets.token_urlsafe(32)
-
-        self._challenges[challenge_b64] = Challenge(
-            value=challenge_b64,
-            created_at=time.time(),
-            challenge_type=challenge_type,
-        )
-
-        logger.debug(f"Generated {challenge_type} challenge: {challenge_b64[:20]}...")
-        return challenge_bytes
+        # Revoked tokens: token -> expiry timestamp (auto-cleaned)
+        self._revoked_tokens: dict[str, float] = {}
 
     def get_current_challenge(self, challenge_type: str) -> str | None:
         """Get the most recent unexpired challenge of the given type."""
@@ -170,6 +153,12 @@ class SessionManager:
 
     def validate_session_token(self, token: str) -> dict | None:
         """Validate a JWT session token and return the payload."""
+        self._cleanup_revoked_tokens()
+
+        if token in self._revoked_tokens:
+            logger.debug("Token has been revoked")
+            return None
+
         try:
             payload = jwt.decode(token, self._jwt_secret, algorithms=["HS256"])
 
@@ -184,6 +173,26 @@ class SessionManager:
         except jwt.InvalidTokenError as e:
             logger.warning(f"Invalid session token: {e}")
             return None
+
+    def revoke_token(self, token: str) -> None:
+        """Add a token to the revocation list. It stays until its natural expiry."""
+        try:
+            # Decode without verification to read the expiry time
+            payload = jwt.decode(
+                token, self._jwt_secret, algorithms=["HS256"], options={"verify_exp": False}
+            )
+            exp = payload.get("exp", time.time())
+            self._revoked_tokens[token] = float(exp)
+            logger.info("Revoked session token for user: %s", payload.get("sub"))
+        except jwt.InvalidTokenError:
+            pass  # Invalid token, nothing to revoke
+
+    def _cleanup_revoked_tokens(self) -> None:
+        """Remove expired entries from the revocation list."""
+        now = time.time()
+        expired = [t for t, exp in self._revoked_tokens.items() if now > exp]
+        for t in expired:
+            del self._revoked_tokens[t]
 
     def get_challenge_count(self) -> int:
         """Get the number of active challenges (for debugging)."""
