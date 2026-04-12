@@ -7,6 +7,7 @@ import "../global.css";
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { initializeAuth, LoginPage, useAuth } from "@/features/auth";
+import HomePage from "@/pages/homepage/HomePage";
 import Index from "@/pages/index";
 import Insights from "@/pages/insights";
 import Digests from "@/pages/insights/Digests";
@@ -41,6 +42,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Public-or-dashboard route: shows homepage if logged out, dashboard if logged in.
+ */
+function HomeOrDashboard() {
+	const { isAuthenticated, isLoading } = useAuth();
+
+	if (isLoading) {
+		return (
+			<div className="min-h-screen bg-background flex items-center justify-center">
+				<div className="text-muted-foreground">Loading...</div>
+			</div>
+		);
+	}
+
+	if (!isAuthenticated) {
+		return <HomePage />;
+	}
+
+	return <Navigate to="/app" replace />;
+}
+
+/**
  * Auth initializer component.
  */
 function AuthInitializer({ children }: { children: React.ReactNode }) {
@@ -59,7 +81,8 @@ export function App() {
 				<AuthInitializer>
 					<BrowserRouter>
 						<Routes>
-							{/* Public route */}
+							{/* Public routes */}
+							<Route path="/" element={<HomeOrDashboard />} />
 							<Route path="/login" element={<LoginPage />} />
 
 							{/* Protected routes with persistent layout */}
@@ -70,7 +93,7 @@ export function App() {
 									</ProtectedRoute>
 								}
 							>
-								<Route path="/" element={<Index />} />
+								<Route path="/app" element={<Index />} />
 								<Route path="/insights" element={<Insights />} />
 								<Route path="/insights/digests" element={<Digests />} />
 								<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />

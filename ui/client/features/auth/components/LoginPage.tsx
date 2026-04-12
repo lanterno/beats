@@ -67,7 +67,7 @@ export default function LoginPage() {
 	// Redirect if already authenticated
 	useEffect(() => {
 		if (isAuthenticated && !authLoading) {
-			navigate("/", { replace: true });
+			navigate("/app", { replace: true });
 		}
 	}, [isAuthenticated, authLoading, navigate]);
 
@@ -105,7 +105,7 @@ export default function LoginPage() {
 
 			if (result.verified) {
 				setSessionToken(result.token);
-				navigate("/", { replace: true });
+				navigate("/app", { replace: true });
 			} else {
 				setError("Registration failed. Please try again.");
 			}
@@ -136,7 +136,7 @@ export default function LoginPage() {
 
 			if (result.verified) {
 				setSessionToken(result.token);
-				navigate("/", { replace: true });
+				navigate("/app", { replace: true });
 			} else {
 				setError("Authentication failed. Please try again.");
 			}

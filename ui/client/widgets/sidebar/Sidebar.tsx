@@ -37,7 +37,7 @@ export function Sidebar(props: SidebarProps) {
 			<div className="px-5 py-4 border-b border-sidebar-border flex items-center justify-between">
 				<div className="flex items-center gap-2">
 					<Link
-						to="/"
+						to="/app"
 						className="font-heading text-xl font-bold text-sidebar-foreground hover:text-sidebar-primary transition-colors"
 					>
 						Beats

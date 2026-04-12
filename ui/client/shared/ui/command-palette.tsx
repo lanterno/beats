@@ -74,10 +74,10 @@ export function CommandPalette({
 	items.push({
 		id: "dashboard",
 		label: "Go to Dashboard",
-		sublabel: "/",
+		sublabel: "/app",
 		icon: <ArrowRight className="w-4 h-4" />,
 		action: () => {
-			navigate("/");
+			navigate("/app");
 			close();
 		},
 	});

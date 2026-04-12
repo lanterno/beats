@@ -2,12 +2,12 @@ import { expect, test } from "@playwright/test";
 
 test.describe("Beats App", () => {
 	test("loads the dashboard", async ({ page }) => {
-		await page.goto("/");
+		await page.goto("/app");
 		await expect(page).toHaveTitle(/Beats/);
 	});
 
 	test("sidebar shows project list", async ({ page }) => {
-		await page.goto("/");
+		await page.goto("/app");
 		// The sidebar should render with at least one project or the empty state
 		const sidebar = page.locator('[class*="sidebar"]').first();
 		await expect(sidebar).toBeVisible();
@@ -24,7 +24,7 @@ test.describe("Beats App", () => {
 	});
 
 	test("project detail page loads", async ({ page }) => {
-		await page.goto("/");
+		await page.goto("/app");
 		// Click the first project link in the sidebar
 		const projectLink = page.locator('a[href^="/projects/"]').first();
 		if (await projectLink.isVisible()) {

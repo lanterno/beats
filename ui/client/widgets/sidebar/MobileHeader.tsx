@@ -41,7 +41,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 					>
 						<Menu className="w-5 h-5" />
 					</button>
-					<Link to="/" className="font-heading text-base font-bold text-sidebar-foreground">
+					<Link to="/app" className="font-heading text-base font-bold text-sidebar-foreground">
 						Beats
 					</Link>
 					{!isOnline && (
@@ -80,7 +80,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 					>
 						<div className="flex items-center justify-between p-4 border-b border-sidebar-border">
 							<Link
-								to="/"
+								to="/app"
 								onClick={() => setDrawerOpen(false)}
 								className="font-heading text-lg font-bold text-sidebar-foreground"
 							>

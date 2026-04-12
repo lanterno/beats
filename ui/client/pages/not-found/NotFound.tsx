@@ -21,7 +21,7 @@ export default function NotFound() {
 				</p>
 				<p className="mt-4 text-muted-foreground/90 text-base">This page does not exist.</p>
 				<Link
-					to="/"
+					to="/app"
 					className="mt-8 inline-block text-foreground/90 text-base hover:text-accent transition-colors duration-150 underline underline-offset-4"
 				>
 					Return home
