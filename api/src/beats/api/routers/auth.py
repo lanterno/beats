@@ -36,8 +36,14 @@ def get_user_repository() -> UserRepository:
     return MongoUserRepository(db.users)
 
 
+# Type aliases for dependency injection
+CredentialStorageDep = Annotated[MongoCredentialStorage, Depends(get_credential_storage)]
+UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
+
+
 def get_webauthn_manager(
-    credential_storage: Annotated[MongoCredentialStorage, Depends(get_credential_storage)],
+    credential_storage: CredentialStorageDep,
+    user_repo: UserRepoDep,
 ) -> WebAuthnManager:
     return WebAuthnManager(
         rp_id=settings.webauthn_rp_id,
@@ -45,12 +51,10 @@ def get_webauthn_manager(
         origin=settings.webauthn_origin,
         credential_storage=credential_storage,
         session_manager=_session_manager,
+        user_repo=user_repo,
     )
 
 
-# Type aliases for dependency injection
-CredentialStorageDep = Annotated[MongoCredentialStorage, Depends(get_credential_storage)]
-UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
 WebAuthnDep = Annotated[WebAuthnManager, Depends(get_webauthn_manager)]
 
 
@@ -204,6 +208,15 @@ async def verify_login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
         ) from e
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(request: Request) -> None:
+    """Revoke the current session token."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        _session_manager.revoke_token(token)
 
 
 @router.get("/me", response_model=UserResponse)

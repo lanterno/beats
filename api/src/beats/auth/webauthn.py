@@ -20,6 +20,7 @@ from webauthn.helpers.structs import (
 from beats.auth.session import SessionManager
 from beats.auth.storage import MongoCredentialStorage
 from beats.domain.models import User
+from beats.infrastructure.repositories import UserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,14 @@ class WebAuthnManager:
         origin: str,
         credential_storage: MongoCredentialStorage,
         session_manager: SessionManager,
+        user_repo: UserRepository,
     ):
         self.rp_id = rp_id
         self.rp_name = rp_name
         self.origin = origin
         self.storage = credential_storage
         self.session = session_manager
+        self.user_repo = user_repo
 
     async def get_registration_options(self, user: User) -> dict[str, Any]:
         """Generate registration options for a new passkey.
@@ -161,21 +164,14 @@ class WebAuthnManager:
     async def get_authentication_options(self) -> dict[str, Any]:
         """Generate authentication options for login.
 
+        Uses an empty allowCredentials list so the browser triggers its native
+        credential picker for discoverable (resident) credentials. This avoids
+        leaking registered credential IDs to unauthenticated callers.
+
         Returns a dict that can be JSON-serialized for the frontend.
         """
-        credentials = await self.storage.get_credentials()
-
-        if not credentials:
-            raise ValueError("No credentials registered. Please register first.")
-
-        allow_credentials = [
-            PublicKeyCredentialDescriptor(id=base64url_to_bytes(cred.credential_id))
-            for cred in credentials
-        ]
-
         options = generate_authentication_options(
             rp_id=self.rp_id,
-            allow_credentials=allow_credentials,
             user_verification=UserVerificationRequirement.PREFERRED,
         )
 
@@ -185,13 +181,7 @@ class WebAuthnManager:
             "challenge": bytes_to_base64url(options.challenge),
             "timeout": options.timeout,
             "rpId": options.rp_id,
-            "allowCredentials": [
-                {
-                    "type": c.type,
-                    "id": bytes_to_base64url(c.id),
-                }
-                for c in (options.allow_credentials or [])
-            ],
+            "allowCredentials": [],
             "userVerification": options.user_verification.value
             if options.user_verification
             else "preferred",
@@ -233,7 +223,11 @@ class WebAuthnManager:
 
             await self.storage.update_sign_count(credential_id, verification.new_sign_count)
 
-            token = self.session.create_session_token(user_id=user_id)
+            user = await self.user_repo.get_by_id(user_id)
+            token = self.session.create_session_token(
+                user_id=user_id,
+                email=user.email if user else "",
+            )
 
             logger.info("Successfully authenticated user %s with passkey", user_id)
             return {
