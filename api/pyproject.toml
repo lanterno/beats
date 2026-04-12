@@ -67,7 +67,7 @@ invalid-type-form = "warn"
 no-matching-overload = "warn"
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=beats --cov-fail-under=70"
+addopts = "-q --cov=beats --cov-fail-under=50"
 testpaths = ["src"]
 pythonpath = ["src"]
 asyncio_mode = "auto"

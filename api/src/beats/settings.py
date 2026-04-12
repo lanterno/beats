@@ -37,4 +37,5 @@ class Settings(BaseSettings):
     # JWT settings
     jwt_secret: str = Field(default="change-me-in-production", validation_alias="JWT_SECRET")
 
+
 settings = Settings()
