@@ -119,6 +119,32 @@ export async function logout(): Promise<void> {
 	});
 }
 
+// ============================================================================
+// Credential Management (authed endpoints — use centralized client)
+// ============================================================================
+
+export interface CredentialInfo {
+	id: string;
+	device_name: string | null;
+	created_at: string;
+}
+
+/**
+ * List registered passkeys for the current user.
+ */
+export async function listCredentials(): Promise<CredentialInfo[]> {
+	const { get } = await import("@/shared/api");
+	return get<CredentialInfo[]>("/api/auth/credentials");
+}
+
+/**
+ * Delete a passkey by credential ID.
+ */
+export async function deleteCredential(credentialId: string): Promise<void> {
+	const { del } = await import("@/shared/api");
+	await del(`/api/auth/credentials/${encodeURIComponent(credentialId)}`);
+}
+
 /**
  * Get current user info.
  */

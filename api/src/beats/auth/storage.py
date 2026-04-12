@@ -111,13 +111,19 @@ class MongoCredentialStorage:
             return True
         return False
 
-    async def delete_credential(self, credential_id: str) -> bool:
-        """Delete a credential by its ID."""
-        result = await self.collection.delete_one({"credential_id": credential_id})
+    async def delete_credential(self, credential_id: str, user_id: str) -> bool:
+        """Delete a credential by its ID, scoped to the owning user."""
+        result = await self.collection.delete_one(
+            {"credential_id": credential_id, "user_id": user_id}
+        )
         if result.deleted_count > 0:
             logger.info(f"Deleted credential: {credential_id[:20]}...")
             return True
         return False
+
+    async def count_credentials(self, user_id: str) -> int:
+        """Count the number of credentials for a user."""
+        return await self.collection.count_documents({"user_id": user_id})
 
     async def get_credential_ids(self, user_id: str | None = None) -> list[str]:
         """Get all credential IDs, optionally filtered by user."""

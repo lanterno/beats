@@ -249,9 +249,16 @@ class WebAuthnManager:
         credentials = await self.storage.get_credentials(user_id=user_id)
         return [
             {
-                "id": cred.credential_id[:20] + "...",
+                "id": cred.credential_id,
                 "device_name": cred.device_name,
                 "created_at": cred.created_at,
             }
             for cred in credentials
         ]
+
+    async def delete_credential(self, credential_id: str, user_id: str) -> bool:
+        """Delete a credential, ensuring the user can't delete their last one."""
+        count = await self.storage.count_credentials(user_id)
+        if count <= 1:
+            raise ValueError("Cannot delete your only passkey. Register another one first.")
+        return await self.storage.delete_credential(credential_id, user_id)

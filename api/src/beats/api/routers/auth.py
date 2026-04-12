@@ -265,3 +265,30 @@ async def list_credentials(
             detail="Not authenticated",
         )
     return await webauthn.get_credentials_info(user_id)
+
+
+@router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_credential(
+    request: Request,
+    credential_id: str,
+    webauthn: WebAuthnDep,
+) -> None:
+    """Delete a registered credential for the current user."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    try:
+        deleted = await webauthn.delete_credential(credential_id, user_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Credential not found",
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e

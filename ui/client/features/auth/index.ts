@@ -5,9 +5,12 @@
 
 export type { UserInfo } from "./api/authApi";
 // API
+export type { CredentialInfo } from "./api/authApi";
 export {
+	deleteCredential,
 	getCurrentUser,
 	getLoginOptions,
+	listCredentials,
 	logout,
 	registerStart,
 	verifyLogin,
