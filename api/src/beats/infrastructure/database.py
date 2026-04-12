@@ -27,6 +27,7 @@ class Database:
         db_name = db_name or settings.db_name
         cls.client = AsyncIOMotorClient(dsn)
         cls.db = cls.client[db_name]
+        await cls._ensure_indexes()
 
     @classmethod
     async def disconnect(cls) -> None:
@@ -35,6 +36,13 @@ class Database:
             cls.client.close()
             cls.client = None
             cls.db = None
+
+    @classmethod
+    async def _ensure_indexes(cls) -> None:
+        """Create required indexes if they don't already exist."""
+        if cls.db is None:
+            return
+        await cls.db.users.create_index("email", unique=True)
 
     @classmethod
     def get_db(cls) -> AsyncIOMotorDatabase:
