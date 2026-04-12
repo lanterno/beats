@@ -51,12 +51,11 @@ export class ApiError extends Error {
 
 /**
  * Get headers for authenticated JSON requests.
- * Uses JWT Bearer token from WebAuthn session, with fallback to legacy X-API-Token.
+ * Uses JWT Bearer token from WebAuthn session.
  */
 function getAuthHeaders(): Record<string, string> {
 	const sessionToken = getSessionToken();
 
-	// Prefer JWT Bearer token (WebAuthn session)
 	if (sessionToken) {
 		return {
 			"Content-Type": "application/json",
@@ -64,15 +63,6 @@ function getAuthHeaders(): Record<string, string> {
 		};
 	}
 
-	// Fallback to legacy X-API-Token (for backwards compatibility)
-	if (config.apiToken) {
-		return {
-			"Content-Type": "application/json",
-			"X-API-Token": config.apiToken,
-		};
-	}
-
-	// No authentication available
 	return {
 		"Content-Type": "application/json",
 	};
@@ -87,8 +77,6 @@ function getReadHeaders(): Record<string, string> {
 
 	if (sessionToken) {
 		headers.Authorization = `Bearer ${sessionToken}`;
-	} else if (config.apiToken) {
-		headers["X-API-Token"] = config.apiToken;
 	}
 
 	return headers;

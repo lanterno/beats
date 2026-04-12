@@ -93,12 +93,7 @@ Type aliases like `BeatServiceDep = Annotated[BeatService, Depends(get_beat_serv
 
 ### Authentication
 
-Two modes, checked by middleware in `server.py`:
-
-1. **WebAuthn/JWT** (primary) — Passkey login, JWT session tokens
-2. **X-API-Token header** (legacy) — Static token for backwards compatibility and wall clock
-
-GET requests are unauthenticated. All mutating requests require auth.
+All requests (except public paths) require a JWT Bearer token from WebAuthn passkey sessions, checked by middleware in `server.py`.
 
 ### Webhook Dispatch
 
@@ -235,7 +230,6 @@ The API uses Pydantic Settings with environment variable overrides:
 |----------|---------|---------|
 | `DB_DSN` | `mongodb://localhost:27017` | MongoDB connection string |
 | `DB_NAME` | `ptc` | Database name |
-| `ACCESS_TOKEN` | `secret` | Legacy API token |
 | `JWT_SECRET` | `change-me-in-production` | JWT signing key |
 | `WEBAUTHN_RP_ID` | `localhost` | WebAuthn relying party ID |
 | `WEBAUTHN_ORIGIN` | `http://localhost:8080` | WebAuthn origin |

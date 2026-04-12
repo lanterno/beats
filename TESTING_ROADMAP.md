@@ -243,7 +243,7 @@ Start with 5-10 tests covering critical paths: create project, start timer, stop
 
 # Create a project
 POST http://localhost:7999/api/projects/
-X-API-Token: secret
+Authorization: Bearer {{jwt_token}}
 {
   "name": "Hurl Test Project",
   "description": "Created by Hurl"

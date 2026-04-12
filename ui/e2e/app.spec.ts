@@ -26,7 +26,7 @@ test.describe("Beats App", () => {
 	test("project detail page loads", async ({ page }) => {
 		await page.goto("/app");
 		// Click the first project link in the sidebar
-		const projectLink = page.locator('a[href^="/projects/"]').first();
+		const projectLink = page.locator('a[href^="/project/"]').first();
 		if (await projectLink.isVisible()) {
 			await projectLink.click();
 			await expect(page.locator("text=This Week")).toBeVisible({ timeout: 10_000 });
