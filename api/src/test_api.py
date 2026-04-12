@@ -656,7 +656,7 @@ class TestAuthenticationMiddleware:
 
     def test_auth_endpoints_no_auth(self):
         """Test auth endpoints are accessible without auth"""
-        response = client.get("/api/auth/status")
+        response = client.get("/api/auth/login/options")
         assert response.status_code == 200
 
 

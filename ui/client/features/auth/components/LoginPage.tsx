@@ -12,7 +12,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/shared/ui";
 import {
-	getAuthStatus,
 	getLoginOptions,
 	registerStart,
 	verifyLogin,
@@ -20,17 +19,16 @@ import {
 } from "../api/authApi";
 import { setSessionToken, useAuth } from "../stores/authStore";
 
-type AuthMode = "loading" | "register-email" | "register-passkey" | "login";
+type AuthMode = "register-email" | "register-passkey" | "login";
 
 export default function LoginPage() {
 	const navigate = useNavigate();
 	const { isAuthenticated, isLoading: authLoading } = useAuth();
 
-	const [mode, setMode] = useState<AuthMode>("loading");
+	const [mode, setMode] = useState<AuthMode>("login");
 	const [error, setError] = useState<string | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [webAuthnSupported, setWebAuthnSupported] = useState(true);
-	const [hasUsers, setHasUsers] = useState(false);
 
 	// Registration state
 	const [email, setEmail] = useState("");
@@ -39,30 +37,12 @@ export default function LoginPage() {
 		ReturnType<typeof registerStart>
 	> | null>(null);
 
-	// Check WebAuthn support and auth status on mount
+	// Check WebAuthn support on mount
 	useEffect(() => {
-		const init = async () => {
-			if (!browserSupportsWebAuthn()) {
-				setWebAuthnSupported(false);
-				setMode("login");
-				return;
-			}
-
-			try {
-				const status = await getAuthStatus();
-				setHasUsers(status.has_users);
-				setMode(status.has_users ? "login" : "register-email");
-			} catch (err) {
-				console.error("Failed to check auth status:", err);
-				setError("Failed to connect to server. Please try again.");
-				setMode("login");
-			}
-		};
-
-		if (!authLoading) {
-			init();
+		if (!browserSupportsWebAuthn()) {
+			setWebAuthnSupported(false);
 		}
-	}, [authLoading]);
+	}, []);
 
 	// Redirect if already authenticated
 	useEffect(() => {
@@ -167,7 +147,7 @@ export default function LoginPage() {
 		return "Unknown Device";
 	};
 
-	if (authLoading || mode === "loading") {
+	if (authLoading) {
 		return (
 			<div className="min-h-screen bg-background flex items-center justify-center">
 				<div className="text-muted-foreground">Loading...</div>
@@ -297,7 +277,7 @@ export default function LoginPage() {
 								Create an account
 							</button>
 						)}
-						{(mode === "register-email" || mode === "register-passkey") && hasUsers && (
+						{(mode === "register-email" || mode === "register-passkey") && (
 							<button
 								className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
 								onClick={() => {

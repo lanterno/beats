@@ -59,10 +59,6 @@ WebAuthnDep = Annotated[WebAuthnManager, Depends(get_webauthn_manager)]
 # ============================================================================
 
 
-class AuthStatusResponse(BaseModel):
-    has_users: bool
-
-
 class RegisterStartRequest(BaseModel):
     email: str
     display_name: str | None = None
@@ -104,13 +100,6 @@ class UserResponse(BaseModel):
 # ============================================================================
 # Endpoints
 # ============================================================================
-
-
-@router.get("/status", response_model=AuthStatusResponse)
-async def get_auth_status(user_repo: UserRepoDep) -> AuthStatusResponse:
-    """Check if any users exist (determines register vs login flow)."""
-    count = await user_repo.count()
-    return AuthStatusResponse(has_users=count > 0)
 
 
 @router.post("/register/start", response_model=RegisterStartResponse)

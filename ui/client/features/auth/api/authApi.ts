@@ -13,10 +13,6 @@ import { getSessionToken } from "../stores/authStore";
 // Types
 // ============================================================================
 
-export interface AuthStatus {
-	has_users: boolean;
-}
-
 export interface RegisterStartResponse {
 	options: PublicKeyCredentialCreationOptionsJSON;
 	user_id: string;
@@ -41,17 +37,6 @@ export interface UserInfo {
 // ============================================================================
 
 const AUTH_BASE = `${config.apiBaseUrl}/api/auth`;
-
-/**
- * Check if any users exist.
- */
-export async function getAuthStatus(): Promise<AuthStatus> {
-	const response = await fetch(`${AUTH_BASE}/status`);
-	if (!response.ok) {
-		throw new Error("Failed to get auth status");
-	}
-	return response.json();
-}
 
 /**
  * Start registration: create user and get WebAuthn options.

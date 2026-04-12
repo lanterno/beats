@@ -3,10 +3,9 @@
  * WebAuthn/Passkey authentication for the Beats app.
  */
 
-export type { AuthStatus, UserInfo } from "./api/authApi";
+export type { UserInfo } from "./api/authApi";
 // API
 export {
-	getAuthStatus,
 	getCurrentUser,
 	getLoginOptions,
 	registerStart,
