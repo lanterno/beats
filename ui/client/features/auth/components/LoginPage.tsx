@@ -11,12 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/shared/ui";
-import {
-	getLoginOptions,
-	registerStart,
-	verifyLogin,
-	verifyRegistration,
-} from "../api/authApi";
+import { getLoginOptions, registerStart, verifyLogin, verifyRegistration } from "../api/authApi";
 import { setSessionToken, useAuth } from "../stores/authStore";
 
 type AuthMode = "register-email" | "register-passkey" | "login";

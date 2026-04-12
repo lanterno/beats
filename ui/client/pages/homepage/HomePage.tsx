@@ -44,7 +44,11 @@ function Reveal({
 	children,
 	className = "",
 	delay = 0,
-}: { children: React.ReactNode; className?: string; delay?: number }) {
+}: {
+	children: React.ReactNode;
+	className?: string;
+	delay?: number;
+}) {
 	const ref = useRef<HTMLDivElement>(null);
 	const [visible, setVisible] = useState(false);
 
@@ -107,7 +111,12 @@ function FeatureCard({
 	title,
 	description,
 	delay = 0,
-}: { icon: React.ReactNode; title: string; description: string; delay?: number }) {
+}: {
+	icon: React.ReactNode;
+	title: string;
+	description: string;
+	delay?: number;
+}) {
 	return (
 		<Reveal delay={delay}>
 			<div className="homepage-feature-card group">
@@ -139,7 +148,12 @@ export default function HomePage() {
 						<div className="homepage-logo-mark">
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none">
 								<circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
-								<path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+								<path
+									d="M12 6v6l4 2"
+									stroke="currentColor"
+									strokeWidth="1.5"
+									strokeLinecap="round"
+								/>
 							</svg>
 						</div>
 						<span className="font-heading text-xl tracking-tight text-foreground">Beats</span>
@@ -191,7 +205,13 @@ export default function HomePage() {
 							className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
 						>
 							See what's inside
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="animate-bounce">
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								className="animate-bounce"
+							>
 								<path
 									d="M12 5v14m0 0l-6-6m6 6l6-6"
 									stroke="currentColor"
@@ -254,10 +274,42 @@ export default function HomePage() {
 						delay={0}
 						icon={
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-								<rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-								<rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-								<rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-								<rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+								<rect
+									x="3"
+									y="3"
+									width="7"
+									height="7"
+									rx="1.5"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
+								<rect
+									x="14"
+									y="3"
+									width="7"
+									height="7"
+									rx="1.5"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
+								<rect
+									x="3"
+									y="14"
+									width="7"
+									height="7"
+									rx="1.5"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
+								<rect
+									x="14"
+									y="14"
+									width="7"
+									height="7"
+									rx="1.5"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
 							</svg>
 						}
 						title="Project-Based Tracking"
@@ -267,8 +319,19 @@ export default function HomePage() {
 						delay={80}
 						icon={
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-								<path d="M3 3v18h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-								<path d="M7 16l4-6 4 3 5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+								<path
+									d="M3 3v18h18"
+									stroke="currentColor"
+									strokeWidth="1.5"
+									strokeLinecap="round"
+								/>
+								<path
+									d="M7 16l4-6 4 3 5-7"
+									stroke="currentColor"
+									strokeWidth="1.5"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								/>
 							</svg>
 						}
 						title="Daily Rhythm Insights"
@@ -279,7 +342,13 @@ export default function HomePage() {
 						icon={
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
 								<circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
-								<path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+								<path
+									d="M9 12l2 2 4-4"
+									stroke="currentColor"
+									strokeWidth="1.5"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								/>
 							</svg>
 						}
 						title="Weekly Goals"
@@ -289,7 +358,15 @@ export default function HomePage() {
 						delay={240}
 						icon={
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-								<rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+								<rect
+									x="3"
+									y="4"
+									width="18"
+									height="16"
+									rx="2"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
 								<path d="M3 10h18" stroke="currentColor" strokeWidth="1.5" />
 								<path d="M9 4v16" stroke="currentColor" strokeWidth="1.5" />
 							</svg>
@@ -302,7 +379,11 @@ export default function HomePage() {
 						icon={
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
 								<circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" />
-								<path d="M12 14c-4.5 0-8 2-8 4.5V20h16v-1.5c0-2.5-3.5-4.5-8-4.5z" stroke="currentColor" strokeWidth="1.5" />
+								<path
+									d="M12 14c-4.5 0-8 2-8 4.5V20h16v-1.5c0-2.5-3.5-4.5-8-4.5z"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
 							</svg>
 						}
 						title="Mood & Energy Tracking"
@@ -312,7 +393,15 @@ export default function HomePage() {
 						delay={400}
 						icon={
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-								<rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+								<rect
+									x="2"
+									y="6"
+									width="20"
+									height="12"
+									rx="2"
+									stroke="currentColor"
+									strokeWidth="1.5"
+								/>
 								<circle cx="12" cy="12" r="2" fill="currentColor" />
 								<path d="M7 6V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 								<path d="M17 6V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -401,8 +490,8 @@ export default function HomePage() {
 				</Reveal>
 				<Reveal delay={100}>
 					<p className="text-muted-foreground text-lg max-w-lg mx-auto mt-4">
-						Free, open-source, and built for people who take their craft seriously.
-						Passkey authentication — no passwords, ever.
+						Free, open-source, and built for people who take their craft seriously. Passkey
+						authentication — no passwords, ever.
 					</p>
 				</Reveal>
 				<Reveal delay={200}>
