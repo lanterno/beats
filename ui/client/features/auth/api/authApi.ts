@@ -108,6 +108,18 @@ export async function verifyLogin(credential: unknown): Promise<VerifyResponse> 
 }
 
 /**
+ * Logout: revoke the session token server-side.
+ */
+export async function logout(): Promise<void> {
+	const token = getSessionToken();
+	if (!token) return;
+	await fetch(`${AUTH_BASE}/logout`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${token}` },
+	});
+}
+
+/**
  * Get current user info.
  */
 export async function getCurrentUser(): Promise<UserInfo> {

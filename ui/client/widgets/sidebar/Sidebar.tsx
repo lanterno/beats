@@ -7,7 +7,7 @@
 import { BarChart3, Download, LogOut, Settings, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
-import { clearSessionToken, useAuth } from "@/features/auth";
+import { clearSessionToken, logout, useAuth } from "@/features/auth";
 import { cn, useInstallPrompt, useOnlineStatus } from "@/shared/lib";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
@@ -26,7 +26,8 @@ export function Sidebar(props: SidebarProps) {
 	const isOnline = useOnlineStatus();
 	const { user } = useAuth();
 
-	const handleLogout = () => {
+	const handleLogout = async () => {
+		await logout().catch(() => {});
 		clearSessionToken();
 		navigate("/login");
 	};

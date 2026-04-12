@@ -11,6 +11,32 @@ import { useSyncExternalStore } from "react";
 
 const SESSION_TOKEN_KEY = "beats_session_token";
 
+// Buffer in seconds — treat token as expired this many seconds early so
+// in-flight requests don't race against the actual expiry.
+const EXPIRY_BUFFER_SECONDS = 60;
+
+/**
+ * Decode a JWT payload without signature verification.
+ * Returns null if the token is malformed.
+ */
+function decodeJwtPayload(token: string): { exp?: number; sub?: string } | null {
+	try {
+		const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+		return JSON.parse(atob(base64));
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Check if a JWT token is expired (or will expire within the buffer window).
+ */
+function isTokenExpired(token: string): boolean {
+	const payload = decodeJwtPayload(token);
+	if (!payload?.exp) return true;
+	return Date.now() / 1000 > payload.exp - EXPIRY_BUFFER_SECONDS;
+}
+
 // ============================================================================
 // State
 // ============================================================================
@@ -53,7 +79,7 @@ function emitChange() {
  */
 export async function initializeAuth(): Promise<void> {
 	const storedToken = localStorage.getItem(SESSION_TOKEN_KEY);
-	if (storedToken) {
+	if (storedToken && !isTokenExpired(storedToken)) {
 		state = {
 			token: storedToken,
 			isAuthenticated: true,
@@ -76,6 +102,7 @@ export async function initializeAuth(): Promise<void> {
 			clearSessionToken();
 		}
 	} else {
+		if (storedToken) localStorage.removeItem(SESSION_TOKEN_KEY);
 		state = {
 			token: null,
 			isAuthenticated: false,
@@ -126,6 +153,10 @@ export function clearSessionToken(): void {
  * Get the current session token.
  */
 export function getSessionToken(): string | null {
+	if (state.token && isTokenExpired(state.token)) {
+		clearSessionToken();
+		return null;
+	}
 	return state.token;
 }
 

@@ -106,7 +106,7 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 		if (response.status === 401) {
 			const { clearSessionToken } = await import("@/features/auth/stores/authStore");
 			clearSessionToken();
-			window.location.href = "/login";
+			window.location.replace("/login");
 		}
 
 		const errorBody = await response.json().catch(() => ({}));

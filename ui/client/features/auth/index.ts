@@ -8,6 +8,7 @@ export type { UserInfo } from "./api/authApi";
 export {
 	getCurrentUser,
 	getLoginOptions,
+	logout,
 	registerStart,
 	verifyLogin,
 	verifyRegistration,
