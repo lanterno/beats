@@ -661,6 +661,87 @@ class TestAuthenticationMiddleware:
         assert response.status_code != 401
 
 
+class TestLogoutAndTokenRevocation:
+    """Test the logout endpoint and token revocation."""
+
+    def _make_token(self, user_id: str, email: str = "test@example.com") -> str:
+        from beats.auth.session import SessionManager
+        from beats.settings import settings
+
+        sm = SessionManager(settings.jwt_secret)
+        return sm.create_session_token(user_id, email)
+
+    def test_logout_revokes_token(self, auth_info):
+        """POST /api/auth/logout revokes the token so it can't be used again."""
+        token = self._make_token(auth_info["user_id"])
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Token works before logout
+        assert client.get("/api/projects/", headers=headers).status_code == 200
+
+        # Logout
+        response = client.post("/api/auth/logout", headers=headers)
+        assert response.status_code == 204
+
+        # Token is now rejected
+        assert client.get("/api/projects/", headers=headers).status_code == 401
+
+    def test_logout_without_token(self):
+        """POST /api/auth/logout without a token is a no-op (still 204)."""
+        response = client.post("/api/auth/logout")
+        assert response.status_code == 204
+
+    def test_other_tokens_unaffected_by_logout(self, auth_info):
+        """Revoking one token doesn't affect other tokens for the same user."""
+        token_a = self._make_token(auth_info["user_id"])
+        token_b = self._make_token(auth_info["user_id"])
+
+        # Revoke token A
+        client.post("/api/auth/logout", headers={"Authorization": f"Bearer {token_a}"})
+
+        # Token B still works
+        assert client.get(
+            "/api/projects/", headers={"Authorization": f"Bearer {token_b}"}
+        ).status_code == 200
+
+
+class TestDuplicateEmailPrevention:
+    """Test that the unique index on users.email prevents duplicates."""
+
+    def test_duplicate_email_rejected(self):
+        """Inserting a user with a duplicate email raises an error."""
+        import os
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+        from pymongo.errors import DuplicateKeyError
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        db = sync_client[db_name]
+
+        email = "unique-test@example.com"
+        db.users.insert_one({"_id": ObjectId(), "email": email})
+
+        with pytest.raises(DuplicateKeyError):
+            db.users.insert_one({"_id": ObjectId(), "email": email})
+
+        sync_client.close()
+
+
+class TestRateLimiting:
+    """Test that auth endpoints are rate-limited."""
+
+    def test_login_options_rate_limited(self):
+        """GET /api/auth/login/options is rate-limited after repeated requests."""
+        for _ in range(10):
+            client.get("/api/auth/login/options")
+
+        response = client.get("/api/auth/login/options")
+        assert response.status_code == 429
+
+
 class TestMultiUserIsolation:
     """Test that data is isolated between users."""
 
