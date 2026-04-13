@@ -75,11 +75,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        # Allow public endpoints without auth
-        if any(request.url.path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
-            return await call_next(request)
+        is_public = any(request.url.path.startswith(prefix) for prefix in PUBLIC_PREFIXES)
 
-        # JWT Bearer token (WebAuthn session)
+        # Try to extract user_id from Bearer token (for both public and protected paths)
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
@@ -88,7 +86,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             if payload is not None:
                 request.state.user_id = payload["sub"]
                 return await call_next(request)
-            else:
+            elif not is_public:
                 origin = request.headers.get("origin", "unknown")
                 logger.warning(
                     "Invalid JWT token to %s from origin: %s",
@@ -100,7 +98,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
 
-        # No valid authentication provided
+        # Public endpoints pass through without auth
+        if is_public:
+            return await call_next(request)
+
+        # No valid authentication provided for protected endpoint
         origin = request.headers.get("origin", "unknown")
         logger.warning("Unauthorized request to %s from: %s", request.url.path, origin)
         return JSONResponse(
