@@ -21,3 +21,6 @@ pre-push:
     ui-typecheck:
       root: ui/
       run: pnpm typecheck
+    ui-test:
+      root: ui/
+      run: pnpm test

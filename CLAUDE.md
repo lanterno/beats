@@ -29,7 +29,7 @@ cd api && just run-locally  # uvicorn on :7999
 ## Git Hooks (Lefthook)
 
 Pre-commit: `ruff check`, `ty check`, `biome check`
-Pre-push: `pytest`, `tsc`
+Pre-push: `pytest`, `tsc`, `vitest`
 
 Install: `lefthook install` (from repo root)
 
