@@ -24,6 +24,8 @@ from beats.infrastructure.repositories import UserRepository
 
 logger = logging.getLogger(__name__)
 
+MAX_CREDENTIALS_PER_USER = 10
+
 
 class WebAuthnManager:
     """Handles WebAuthn registration and authentication operations."""
@@ -126,6 +128,13 @@ class WebAuthnManager:
         Returns:
             Dict with success status and session token
         """
+        count = await self.storage.count_credentials(user.id or "")
+        if count >= MAX_CREDENTIALS_PER_USER:
+            raise ValueError(
+                f"Maximum of {MAX_CREDENTIALS_PER_USER} passkeys reached. "
+                "Remove an existing one before registering a new one."
+            )
+
         expected_challenge = self.session.get_stored_challenge("registration")
         if expected_challenge is None:
             raise ValueError("No pending registration challenge found")

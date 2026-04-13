@@ -43,6 +43,8 @@ class Database:
         if cls.db is None:
             return
         await cls.db.users.create_index("email", unique=True)
+        await cls.db.credentials.create_index("credential_id", unique=True)
+        await cls.db.credentials.create_index("user_id")
 
     @classmethod
     def get_db(cls) -> AsyncIOMotorDatabase:

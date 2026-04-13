@@ -108,7 +108,7 @@ class SessionManager:
         return base64.urlsafe_b64decode(challenge_b64)
 
     def _cleanup_expired_challenges(self) -> None:
-        """Remove expired challenges from memory."""
+        """Remove expired challenges and their pending registrations from memory."""
         now = time.time()
         expired = [
             key
@@ -117,6 +117,7 @@ class SessionManager:
         ]
         for key in expired:
             del self._challenges[key]
+            self._pending_registrations.pop(key, None)
 
         if expired:
             logger.debug(f"Cleaned up {len(expired)} expired challenges")

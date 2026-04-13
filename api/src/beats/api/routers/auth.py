@@ -221,6 +221,7 @@ async def verify_login(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
 async def logout(request: Request) -> None:
     """Revoke the current session token."""
     auth_header = request.headers.get("Authorization", "")
@@ -234,6 +235,7 @@ class RefreshResponse(BaseModel):
 
 
 @router.post("/refresh", response_model=RefreshResponse)
+@limiter.limit("10/minute")
 async def refresh_token(request: Request) -> RefreshResponse:
     """Exchange a valid session token for a new one."""
     auth_header = request.headers.get("Authorization", "")
