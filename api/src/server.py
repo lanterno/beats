@@ -11,6 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from beats.api.routers.account import router as account_router
 from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
@@ -130,6 +131,7 @@ async def domain_exception_handler(request: Request, exc: DomainException):
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(account_router)
 app.include_router(projects_router)
 app.include_router(beats_router)
 app.include_router(timer_router)

@@ -672,7 +672,7 @@ class TestLogoutAndTokenRevocation:
         return sm.create_session_token(user_id, email)
 
     def test_logout_revokes_token(self, auth_info):
-        """POST /api/auth/logout revokes the token so it can't be used again."""
+        """POST /api/account/logout revokes the token so it can't be used again."""
         token = self._make_token(auth_info["user_id"])
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -680,16 +680,16 @@ class TestLogoutAndTokenRevocation:
         assert client.get("/api/projects/", headers=headers).status_code == 200
 
         # Logout
-        response = client.post("/api/auth/logout", headers=headers)
+        response = client.post("/api/account/logout", headers=headers)
         assert response.status_code == 204
 
         # Token is now rejected
         assert client.get("/api/projects/", headers=headers).status_code == 401
 
-    def test_logout_without_token(self):
-        """POST /api/auth/logout without a token is a no-op (still 204)."""
-        response = client.post("/api/auth/logout")
-        assert response.status_code == 204
+    def test_logout_without_token_requires_auth(self):
+        """POST /api/account/logout without a token returns 401."""
+        response = client.post("/api/account/logout")
+        assert response.status_code == 401
 
     def test_other_tokens_unaffected_by_logout(self, auth_info):
         """Revoking one token doesn't affect other tokens for the same user."""
@@ -697,7 +697,7 @@ class TestLogoutAndTokenRevocation:
         token_b = self._make_token(auth_info["user_id"])
 
         # Revoke token A
-        client.post("/api/auth/logout", headers={"Authorization": f"Bearer {token_a}"})
+        client.post("/api/account/logout", headers={"Authorization": f"Bearer {token_a}"})
 
         # Token B still works
         assert client.get(

@@ -112,7 +112,7 @@ export async function verifyLogin(credential: unknown): Promise<VerifyResponse> 
  */
 export async function logout(): Promise<void> {
 	const { post } = await import("@/shared/api");
-	await post("/api/auth/logout");
+	await post("/api/account/logout");
 }
 
 /**
@@ -123,7 +123,7 @@ export async function refreshToken(): Promise<string | null> {
 	if (!token) return null;
 	try {
 		const { post } = await import("@/shared/api");
-		const data = await post<{ token: string }>("/api/auth/refresh");
+		const data = await post<{ token: string }>("/api/account/refresh");
 		return data.token;
 	} catch {
 		return null;
@@ -145,7 +145,7 @@ export interface CredentialInfo {
  */
 export async function listCredentials(): Promise<CredentialInfo[]> {
 	const { get } = await import("@/shared/api");
-	return get<CredentialInfo[]>("/api/auth/credentials");
+	return get<CredentialInfo[]>("/api/account/credentials");
 }
 
 /**
@@ -153,7 +153,7 @@ export async function listCredentials(): Promise<CredentialInfo[]> {
  */
 export async function deleteCredential(credentialId: string): Promise<void> {
 	const { del } = await import("@/shared/api");
-	await del(`/api/auth/credentials/${encodeURIComponent(credentialId)}`);
+	await del(`/api/account/credentials/${encodeURIComponent(credentialId)}`);
 }
 
 /**
@@ -161,5 +161,5 @@ export async function deleteCredential(credentialId: string): Promise<void> {
  */
 export async function getCurrentUser(): Promise<UserInfo> {
 	const { get } = await import("@/shared/api");
-	return get<UserInfo>("/api/auth/me");
+	return get<UserInfo>("/api/account/me");
 }
