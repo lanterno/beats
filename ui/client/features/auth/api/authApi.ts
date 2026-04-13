@@ -111,12 +111,8 @@ export async function verifyLogin(credential: unknown): Promise<VerifyResponse> 
  * Logout: revoke the session token server-side.
  */
 export async function logout(): Promise<void> {
-	const token = getSessionToken();
-	if (!token) return;
-	await fetch(`${AUTH_BASE}/logout`, {
-		method: "POST",
-		headers: { Authorization: `Bearer ${token}` },
-	});
+	const { post } = await import("@/shared/api");
+	await post("/api/auth/logout");
 }
 
 /**
@@ -125,13 +121,13 @@ export async function logout(): Promise<void> {
 export async function refreshToken(): Promise<string | null> {
 	const token = getSessionToken();
 	if (!token) return null;
-	const response = await fetch(`${AUTH_BASE}/refresh`, {
-		method: "POST",
-		headers: { Authorization: `Bearer ${token}` },
-	});
-	if (!response.ok) return null;
-	const data: { token: string } = await response.json();
-	return data.token;
+	try {
+		const { post } = await import("@/shared/api");
+		const data = await post<{ token: string }>("/api/auth/refresh");
+		return data.token;
+	} catch {
+		return null;
+	}
 }
 
 // ============================================================================
@@ -164,13 +160,6 @@ export async function deleteCredential(credentialId: string): Promise<void> {
  * Get current user info.
  */
 export async function getCurrentUser(): Promise<UserInfo> {
-	const token = getSessionToken();
-	const response = await fetch(`${AUTH_BASE}/me`, {
-		headers: token ? { Authorization: `Bearer ${token}` } : {},
-	});
-
-	if (!response.ok) {
-		throw new Error("Failed to get user info");
-	}
-	return response.json();
+	const { get } = await import("@/shared/api");
+	return get<UserInfo>("/api/auth/me");
 }

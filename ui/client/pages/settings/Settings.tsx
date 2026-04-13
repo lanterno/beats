@@ -20,6 +20,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
+import type { CredentialInfo } from "@/features/auth";
 import { del, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
 import { DENSITIES, THEMES, useTheme } from "@/shared/lib";
@@ -289,17 +290,17 @@ export default function Settings() {
 }
 
 function PasskeysSection() {
-	const [credentials, setCredentials] = useState<
-		{ id: string; device_name: string | null; created_at: string }[]
-	>([]);
+	const [credentials, setCredentials] = useState<CredentialInfo[]>([]);
+	const [loadError, setLoadError] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);
 
 	const loadCredentials = useCallback(async () => {
 		try {
+			setLoadError(false);
 			const { listCredentials } = await import("@/features/auth");
 			setCredentials(await listCredentials());
 		} catch {
-			// ignore
+			setLoadError(true);
 		}
 	}, []);
 
@@ -345,8 +346,20 @@ function PasskeysSection() {
 					registered.
 				</p>
 
-				{credentials.length === 0 && (
+				{credentials.length === 0 && !loadError && (
 					<p className="text-xs text-muted-foreground/60 italic">Loading...</p>
+				)}
+
+				{loadError && (
+					<div className="flex items-center gap-2">
+						<p className="text-xs text-destructive">Failed to load passkeys.</p>
+						<button
+							onClick={loadCredentials}
+							className="text-xs text-accent hover:text-accent/80 transition-colors"
+						>
+							Retry
+						</button>
+					</div>
 				)}
 
 				{credentials.length > 0 && (

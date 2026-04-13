@@ -11,8 +11,14 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/shared/ui";
-import { getLoginOptions, registerStart, verifyLogin, verifyRegistration } from "../api/authApi";
-import { setSessionToken, useAuth } from "../stores/authStore";
+import {
+	getCurrentUser,
+	getLoginOptions,
+	registerStart,
+	verifyLogin,
+	verifyRegistration,
+} from "../api/authApi";
+import { setSessionToken, setUser, useAuth } from "../stores/authStore";
 
 type AuthMode = "register-email" | "register-passkey" | "login";
 
@@ -80,6 +86,9 @@ export default function LoginPage() {
 
 			if (result.verified) {
 				setSessionToken(result.token);
+				getCurrentUser()
+					.then((u) => setUser({ email: u.email, displayName: u.display_name }))
+					.catch(() => {});
 				navigate("/app", { replace: true });
 			} else {
 				setError("Registration failed. Please try again.");
@@ -111,6 +120,9 @@ export default function LoginPage() {
 
 			if (result.verified) {
 				setSessionToken(result.token);
+				getCurrentUser()
+					.then((u) => setUser({ email: u.email, displayName: u.display_name }))
+					.catch(() => {});
 				navigate("/app", { replace: true });
 			} else {
 				setError("Authentication failed. Please try again.");

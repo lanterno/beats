@@ -112,6 +112,37 @@ function cancelRefresh(): void {
 	}
 }
 
+/**
+ * On window focus, check if the token is near expiry and refresh proactively.
+ * This handles cases where the user was away and the scheduled refresh missed.
+ */
+if (typeof document !== "undefined") {
+	document.addEventListener("visibilitychange", async () => {
+		if (document.visibilityState !== "visible") return;
+		if (!state.token || !state.isAuthenticated) return;
+
+		const payload = decodeJwtPayload(state.token);
+		if (!payload?.exp) return;
+
+		// Refresh if token expires within 5 minutes (the scheduled refresh may have missed)
+		const timeLeft = payload.exp - Date.now() / 1000;
+		if (timeLeft > 5 * 60) return;
+
+		// Token near expiry or expired — try to refresh
+		try {
+			const { refreshToken } = await import("../api/authApi");
+			const newToken = await refreshToken();
+			if (newToken) {
+				setSessionToken(newToken);
+			} else {
+				clearSessionToken();
+			}
+		} catch {
+			clearSessionToken();
+		}
+	});
+}
+
 // ============================================================================
 // Actions
 // ============================================================================
