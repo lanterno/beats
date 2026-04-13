@@ -1,8 +1,8 @@
 # Terraform Infrastructure for Beats
 
 This Terraform configuration deploys:
-- **Backend API**: FastAPI application on Cloud Run (accessible at `api.beats.elghareeb.space`)
-- **Frontend UI**: React static site on Cloud Storage with Load Balancer + Cloud CDN (accessible at `beats.elghareeb.space`)
+- **Backend API**: FastAPI application on Cloud Run (accessible at `api.lifepete.com`)
+- **Frontend UI**: React static site on Cloud Storage with Load Balancer + Cloud CDN (accessible at `lifepete.com`)
 
 ## File Structure
 
@@ -163,7 +163,7 @@ The UI is deployed as a static site to Google Cloud Storage with Cloud CDN.
    ```
 
 3. **Configure DNS:**
-   - Create an A record for `beats.elghareeb.space` pointing to the IP from step 2
+   - Create an A record for `lifepete.com` pointing to the IP from step 2
    - SSL certificate will be automatically provisioned (takes 10-60 minutes)
 
 4. **Deploy UI files:**
@@ -185,8 +185,8 @@ pnpm run build:client
 
 ### DNS Configuration
 
-- **UI Domain**: `beats.elghareeb.space` → Automatically configured via Cloudflare DNS
-- **API Domain**: `api.beats.elghareeb.space` → Automatically configured via Cloudflare DNS
+- **UI Domain**: `lifepete.com` → Automatically configured via Cloudflare DNS
+- **API Domain**: `api.lifepete.com` → Automatically configured via Cloudflare DNS
 
 DNS records are automatically managed by Terraform using Cloudflare. See the Cloudflare DNS Management section below for setup instructions.
 
@@ -222,8 +222,8 @@ Terraform automatically manages Cloudflare DNS records for your custom domains. 
    ```
 
 Terraform will automatically:
-- Create a CNAME record for `api.beats.elghareeb.space` → `ghs.googlehosted.com` (Cloud Run)
-- Create an A record for `beats.elghareeb.space` → Load Balancer IP address
+- Create a CNAME record for `api.lifepete.com` → `ghs.googlehosted.com` (Cloud Run)
+- Create an A record for `lifepete.com` → Load Balancer IP address
 
 ### Configuration Options
 

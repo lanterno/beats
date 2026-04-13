@@ -58,9 +58,8 @@ origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://localhost:8080",
-    "https://beats.elghareeb.space",
     "https://lifepete.com",
-    "https://api.beats.elghareeb.space",
+    "https://api.lifepete.com",
 ]
 
 

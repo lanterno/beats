@@ -49,7 +49,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
         env:
-          VITE_API_URL: https://api.beats.elghareeb.space
+          VITE_API_URL: https://api.lifepete.com
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

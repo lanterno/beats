@@ -100,7 +100,7 @@ variable "webauthn_origin" {
 
 # Custom Domain Configuration
 variable "api_domain" {
-  description = "Custom domain to attach to the Cloud Run service (e.g., api.beats.elghareeb.space)"
+  description = "Custom domain to attach to the Cloud Run service (e.g., api.lifepete.com)"
   type        = string
 }
 

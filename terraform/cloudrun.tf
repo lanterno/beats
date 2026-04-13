@@ -94,7 +94,7 @@ resource "google_cloud_run_service_iam_member" "public_access" {
   member   = "allUsers"
 }
 
-# Custom domain mapping for API (api.beats.elghareeb.space)
+# Custom domain mapping for API (api.lifepete.com)
 resource "google_cloud_run_domain_mapping" "custom_domain" {
   name     = var.api_domain
   location = var.region
