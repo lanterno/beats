@@ -60,12 +60,55 @@ let state: AuthState = {
 	user: null,
 };
 
+// Auto-refresh timer handle
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
 // Subscribers for React's useSyncExternalStore
 const listeners = new Set<() => void>();
 
 function emitChange() {
 	for (const listener of listeners) {
 		listener();
+	}
+}
+
+// ============================================================================
+// Token Auto-Refresh
+// ============================================================================
+
+/**
+ * Schedule a token refresh 5 minutes before expiry.
+ * If the token has less than 5 minutes left, refresh immediately.
+ */
+function scheduleRefresh(token: string): void {
+	if (refreshTimer) clearTimeout(refreshTimer);
+
+	const payload = decodeJwtPayload(token);
+	if (!payload?.exp) return;
+
+	// Refresh 5 minutes before expiry
+	const refreshAt = payload.exp - 5 * 60;
+	const delayMs = Math.max(0, (refreshAt - Date.now() / 1000) * 1000);
+
+	refreshTimer = setTimeout(async () => {
+		try {
+			const { refreshToken } = await import("../api/authApi");
+			const newToken = await refreshToken();
+			if (newToken) {
+				setSessionToken(newToken);
+			} else {
+				clearSessionToken();
+			}
+		} catch {
+			clearSessionToken();
+		}
+	}, delayMs);
+}
+
+function cancelRefresh(): void {
+	if (refreshTimer) {
+		clearTimeout(refreshTimer);
+		refreshTimer = null;
 	}
 }
 
@@ -87,6 +130,7 @@ export async function initializeAuth(): Promise<void> {
 			user: null,
 		};
 		emitChange();
+		scheduleRefresh(storedToken);
 
 		// Fetch user info in the background
 		try {
@@ -119,12 +163,13 @@ export async function initializeAuth(): Promise<void> {
 export function setSessionToken(token: string): void {
 	localStorage.setItem(SESSION_TOKEN_KEY, token);
 	state = {
+		...state,
 		token,
 		isAuthenticated: true,
 		isLoading: false,
-		user: null,
 	};
 	emitChange();
+	scheduleRefresh(token);
 }
 
 /**
@@ -139,6 +184,7 @@ export function setUser(user: UserInfo): void {
  * Clear the session token (logout).
  */
 export function clearSessionToken(): void {
+	cancelRefresh();
 	localStorage.removeItem(SESSION_TOKEN_KEY);
 	state = {
 		token: null,

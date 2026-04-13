@@ -229,6 +229,29 @@ async def logout(request: Request) -> None:
         _session_manager.revoke_token(token)
 
 
+class RefreshResponse(BaseModel):
+    token: str
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh_token(request: Request) -> RefreshResponse:
+    """Exchange a valid session token for a new one."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bearer token required",
+        )
+    token = auth_header[7:]
+    new_token = _session_manager.refresh_token(token)
+    if new_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+    return RefreshResponse(token=new_token)
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
     request: Request,

@@ -119,6 +119,21 @@ export async function logout(): Promise<void> {
 	});
 }
 
+/**
+ * Refresh the session token before it expires.
+ */
+export async function refreshToken(): Promise<string | null> {
+	const token = getSessionToken();
+	if (!token) return null;
+	const response = await fetch(`${AUTH_BASE}/refresh`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${token}` },
+	});
+	if (!response.ok) return null;
+	const data: { token: string } = await response.json();
+	return data.token;
+}
+
 // ============================================================================
 // Credential Management (authed endpoints — use centralized client)
 // ============================================================================

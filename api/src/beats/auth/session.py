@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 # Challenge TTL in seconds (5 minutes)
 CHALLENGE_TTL = 300
 
-# Session token TTL in seconds (24 hours)
-SESSION_TTL = 86400
+# Session token TTL in seconds (1 hour)
+SESSION_TTL = 3600
 
 
 class Challenge(BaseModel):
@@ -173,6 +173,19 @@ class SessionManager:
         except jwt.InvalidTokenError as e:
             logger.warning(f"Invalid session token: {e}")
             return None
+
+    def refresh_token(self, token: str) -> str | None:
+        """Issue a new token from a valid existing one, revoking the old one."""
+        payload = self.validate_session_token(token)
+        if payload is None:
+            return None
+
+        user_id = payload["sub"]
+        email = payload.get("email", "")
+
+        # Revoke the old token and issue a new one
+        self.revoke_token(token)
+        return self.create_session_token(user_id, email)
 
     def revoke_token(self, token: str) -> None:
         """Add a token to the revocation list. It stays until its natural expiry."""

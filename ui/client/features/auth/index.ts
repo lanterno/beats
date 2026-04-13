@@ -12,6 +12,7 @@ export {
 	getLoginOptions,
 	listCredentials,
 	logout,
+	refreshToken,
 	registerStart,
 	verifyLogin,
 	verifyRegistration,
