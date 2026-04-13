@@ -6,6 +6,7 @@
 export {
 	calculateDailySummary,
 	sessionKeys,
+	useAllBeats,
 	useAllCurrentWeekSessions,
 	useAllTags,
 	useDailyRhythm,

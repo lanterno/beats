@@ -5,10 +5,10 @@
  */
 
 import { Layers } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProjects } from "@/entities/project";
-import { fetchBeats } from "@/entities/session";
+import { useAllBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
 import { cn, getCurrentWeekRange, getDayName, parseUtcIso } from "@/shared/lib";
 import { EmptyState, GoalRing } from "@/shared/ui";
@@ -50,60 +50,52 @@ function MiniSparkline({ data }: { data: DaySummary[] }) {
 	);
 }
 
+function buildSummaries(beats: ApiBeat[]): Record<string, DaySummary[]> {
+	const { start, end } = getCurrentWeekRange();
+	const weeklyBeats = beats.filter((beat) => {
+		if (!beat.start || !beat.end) return false;
+		const startTime = parseUtcIso(beat.start);
+		return startTime >= start && startTime <= end;
+	});
+
+	// Group by project
+	const byProject = new Map<string, Map<string, number>>();
+	for (const beat of weeklyBeats) {
+		if (!beat.start || !beat.end || !beat.project_id) continue;
+		const duration = (new Date(beat.end).getTime() - new Date(beat.start).getTime()) / 1000 / 60;
+		const dayKey = parseUtcIso(beat.start).toDateString();
+		if (!byProject.has(beat.project_id)) byProject.set(beat.project_id, new Map());
+		const dailyTotals = byProject.get(beat.project_id)!;
+		dailyTotals.set(dayKey, (dailyTotals.get(dayKey) || 0) + duration);
+	}
+
+	const { start: weekStart } = getCurrentWeekRange();
+	const result: Record<string, DaySummary[]> = {};
+	for (const [projectId, dailyTotals] of byProject) {
+		result[projectId] = Array.from({ length: 7 }, (_, i) => {
+			const dayDate = new Date(weekStart);
+			dayDate.setDate(weekStart.getDate() + i);
+			dayDate.setHours(0, 0, 0, 0);
+			const minutes = dailyTotals.get(dayDate.toDateString()) || 0;
+			return {
+				day: getDayName(dayDate),
+				hours: minutes / 60,
+				date: dayDate,
+				totalMinutes: minutes,
+			};
+		});
+	}
+	return result;
+}
+
 export function ProjectPulseList() {
 	const navigate = useNavigate();
 	const { data: projects } = useProjects();
-	const [summaries, setSummaries] = useState<Record<string, DaySummary[]>>({});
+	const { data: allBeats } = useAllBeats();
 
-	const fetchSummary = useCallback(async (projectId: string) => {
-		try {
-			const { start, end } = getCurrentWeekRange();
-			const beats = await fetchBeats(projectId);
-			const weeklyBeats = beats.filter((beat: ApiBeat) => {
-				if (!beat.start || !beat.end) return false;
-				const startTime = parseUtcIso(beat.start);
-				return startTime >= start && startTime <= end;
-			});
-
-			const dailyTotals = new Map<string, number>();
-			weeklyBeats.forEach((beat: ApiBeat) => {
-				if (!beat.start || !beat.end) return;
-				const duration =
-					(new Date(beat.end).getTime() - new Date(beat.start).getTime()) / 1000 / 60;
-				const dayKey = parseUtcIso(beat.start).toDateString();
-				dailyTotals.set(dayKey, (dailyTotals.get(dayKey) || 0) + duration);
-			});
-
-			const { start: weekStart } = getCurrentWeekRange();
-			const summary: DaySummary[] = Array.from({ length: 7 }, (_, i) => {
-				const dayDate = new Date(weekStart);
-				dayDate.setDate(weekStart.getDate() + i);
-				dayDate.setHours(0, 0, 0, 0);
-				const dayKey = dayDate.toDateString();
-				const minutes = dailyTotals.get(dayKey) || 0;
-				return {
-					day: getDayName(dayDate),
-					hours: minutes / 60,
-					date: dayDate,
-					totalMinutes: minutes,
-				};
-			});
-
-			setSummaries((prev) => ({ ...prev, [projectId]: summary }));
-		} catch {
-			// silently fail
-		}
-	}, []);
+	const summaries = useMemo(() => (allBeats ? buildSummaries(allBeats) : undefined), [allBeats]);
 
 	const projectsList = projects || [];
-
-	useEffect(() => {
-		for (const p of projectsList) {
-			if (p.weeklyMinutes > 0 && !summaries[p.id]) {
-				fetchSummary(p.id);
-			}
-		}
-	}, [projectsList, summaries, fetchSummary]);
 
 	const active = projectsList
 		.filter((p) => p.weeklyMinutes > 0)
@@ -140,7 +132,7 @@ export function ProjectPulseList() {
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 				<div className="py-1">
 					{sorted.map((project) => {
-						const summary = summaries[project.id];
+						const summary = summaries?.[project.id];
 						const todayMinutes =
 							summary?.find((d) => d.date.toDateString() === today.toDateString())?.totalMinutes ??
 							0;

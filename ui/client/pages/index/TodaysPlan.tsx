@@ -4,7 +4,7 @@
  */
 
 import { Check, Lightbulb, Plus, Target, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSuggestions } from "@/entities/intelligence";
 import {
 	useCreateIntention,
@@ -63,16 +63,24 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 		deleteMutation.mutate(id);
 	};
 
-	// Auto-check: if tracked time exceeds planned, mark as completed
-	items.forEach((intention) => {
-		const tracked = trackedMinutesByProject[intention.project_id] ?? 0;
-		if (tracked >= intention.planned_minutes && !intention.completed) {
-			updateMutation.mutate({
-				intentionId: intention.id,
-				updates: { completed: true },
-			});
+	// Auto-check: if tracked time exceeds planned, mark as completed.
+	// Use refs to avoid re-triggering the effect when mutation state changes.
+	const autoCompletedRef = useRef<Set<string>>(new Set());
+	const mutateRef = useRef(updateMutation.mutate);
+	mutateRef.current = updateMutation.mutate;
+	useEffect(() => {
+		for (const intention of items) {
+			if (autoCompletedRef.current.has(intention.id)) continue;
+			const tracked = trackedMinutesByProject[intention.project_id] ?? 0;
+			if (tracked >= intention.planned_minutes && !intention.completed) {
+				autoCompletedRef.current.add(intention.id);
+				mutateRef.current({
+					intentionId: intention.id,
+					updates: { completed: true },
+				});
+			}
 		}
-	});
+	}, [items, trackedMinutesByProject]);
 
 	return (
 		<div>

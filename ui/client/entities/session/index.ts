@@ -14,6 +14,7 @@ export {
 	fetchBeats,
 	sessionKeys,
 	updateBeat,
+	useAllBeats,
 	useAllCurrentWeekSessions,
 	useAllTags,
 	useDailyRhythm,

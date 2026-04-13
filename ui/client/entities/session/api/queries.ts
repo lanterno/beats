@@ -22,9 +22,22 @@ import { fetchAllTags, fetchBeats, fetchDailyRhythm, fetchHeatmap, updateBeat } 
  */
 export const sessionKeys = {
 	all: ["sessions"] as const,
+	allBeats: () => [...sessionKeys.all, "all-beats"] as const,
 	list: (projectId?: string) => [...sessionKeys.all, "list", projectId ?? "all"] as const,
 	detail: (id: string) => [...sessionKeys.all, "detail", id] as const,
 };
+
+/**
+ * Shared base query: fetches all beats once and caches them.
+ * Other hooks select/derive from this to avoid duplicate HTTP requests.
+ */
+export function useAllBeats() {
+	return useQuery({
+		queryKey: sessionKeys.allBeats(),
+		queryFn: () => fetchBeats(),
+		staleTime: 15_000,
+	});
+}
 
 /**
  * Hook to fetch sessions for a project
@@ -86,13 +99,14 @@ export function useUpdateSession() {
  * Hook to fetch aggregated daily summary across all projects for the current week
  */
 export function useAllCurrentWeekSessions() {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "all-week"],
-		queryFn: async (): Promise<DaySummary[]> => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((beat) => beat.start && beat.end).map(toSession);
+		queryFn: (): DaySummary[] => {
+			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
 			return calculateDailySummary(sessions);
 		},
+		enabled: !!allBeats,
 		staleTime: 30_000,
 	});
 }
@@ -143,6 +157,7 @@ export function useWeeklySessionsByProject(
 	projects: ProjectWithDuration[] | undefined,
 	weekOffset = 0,
 ) {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [
 			...sessionKeys.all,
@@ -150,9 +165,8 @@ export function useWeeklySessionsByProject(
 			weekOffset,
 			projects?.map((p) => p.id).join(","),
 		],
-		queryFn: async (): Promise<DayProjectBreakdown[]> => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((beat) => beat.start && beat.end).map(toSession);
+		queryFn: (): DayProjectBreakdown[] => {
+			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
 
 			const { start: weekStart, end: weekEnd } = getWeekRange(weekOffset);
 			const weeklySessions = sessions.filter((session) => {
@@ -207,7 +221,7 @@ export function useWeeklySessionsByProject(
 				};
 			});
 		},
-		enabled: !!projects?.length,
+		enabled: !!projects?.length && !!allBeats,
 		staleTime: 30_000,
 	});
 }
@@ -216,16 +230,16 @@ export function useWeeklySessionsByProject(
  * Hook to fetch recent sessions across all projects
  */
 export function useRecentSessions(limit = 10) {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "recent", limit],
-		queryFn: async (): Promise<Session[]> => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((beat) => beat.start && beat.end).map(toSession);
-
+		queryFn: (): Session[] => {
+			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
 			return sessions
 				.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
 				.slice(0, limit);
 		},
+		enabled: !!allBeats,
 		staleTime: 30_000,
 	});
 }
@@ -234,17 +248,18 @@ export function useRecentSessions(limit = 10) {
  * Hook to fetch today's sessions across all projects, sorted chronologically
  */
 export function useTodaySessions() {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "today"],
-		queryFn: async (): Promise<Session[]> => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((beat) => beat.start && beat.end).map(toSession);
+		queryFn: (): Session[] => {
+			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
 			const today = new Date();
 			today.setHours(0, 0, 0, 0);
 			return sessions
 				.filter((s) => parseUtcIso(s.startTime) >= today)
 				.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 		},
+		enabled: !!allBeats,
 		staleTime: 15_000,
 	});
 }
@@ -253,11 +268,11 @@ export function useTodaySessions() {
  * Hook to fetch this week's sessions across all projects, sorted desc
  */
 export function useThisWeekSessions() {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "this-week"],
-		queryFn: async (): Promise<Session[]> => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((beat) => beat.start && beat.end).map(toSession);
+		queryFn: (): Session[] => {
+			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
 			const { start, end } = getCurrentWeekRange();
 			return sessions
 				.filter((s) => {
@@ -266,6 +281,7 @@ export function useThisWeekSessions() {
 				})
 				.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 		},
+		enabled: !!allBeats,
 		staleTime: 30_000,
 	});
 }
@@ -296,11 +312,11 @@ export function useDailyRhythm(period: string, projectId?: string, tag?: string)
  * Hook to compute per-project time breakdown for a period
  */
 export function useProjectBreakdown(period: "week" | "month" | "year" | "all", tag?: string) {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "project-breakdown", period, tag ?? "all"],
-		queryFn: async () => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((b) => b.start && b.end).map(toSession);
+		queryFn: () => {
+			const sessions = (allBeats ?? []).filter((b) => b.start && b.end).map(toSession);
 
 			const now = new Date();
 			let filtered = sessions.filter((s) => {
@@ -331,6 +347,7 @@ export function useProjectBreakdown(period: "week" | "month" | "year" | "all", t
 				.map(([projectId, minutes]) => ({ projectId, minutes }))
 				.sort((a, b) => b.minutes - a.minutes);
 		},
+		enabled: !!allBeats,
 		staleTime: 60_000,
 	});
 }
@@ -339,11 +356,11 @@ export function useProjectBreakdown(period: "week" | "month" | "year" | "all", t
  * Hook to compute streak data from all beats
  */
 export function useStreaks() {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "streaks"],
-		queryFn: async () => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((b) => b.start && b.end);
+		queryFn: () => {
+			const sessions = (allBeats ?? []).filter((b) => b.start && b.end);
 
 			// Collect unique dates with sessions
 			const datesSet = new Set<string>();
@@ -389,6 +406,7 @@ export function useStreaks() {
 
 			return { current, longest };
 		},
+		enabled: !!allBeats,
 		staleTime: 60_000,
 	});
 }
@@ -397,11 +415,11 @@ export function useStreaks() {
  * Hook to fetch last week's total minutes for comparison
  */
 export function useLastWeekTotal() {
+	const { data: allBeats } = useAllBeats();
 	return useQuery({
 		queryKey: [...sessionKeys.all, "last-week-total"],
-		queryFn: async () => {
-			const beats = await fetchBeats();
-			const sessions = beats.filter((b) => b.start && b.end).map(toSession);
+		queryFn: () => {
+			const sessions = (allBeats ?? []).filter((b) => b.start && b.end).map(toSession);
 			const { start, end } = getWeekRange(-1);
 
 			const lastWeekMinutes = sessions
@@ -413,6 +431,7 @@ export function useLastWeekTotal() {
 
 			return { lastWeekMinutes };
 		},
+		enabled: !!allBeats,
 		staleTime: 60_000,
 	});
 }

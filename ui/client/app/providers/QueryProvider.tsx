@@ -17,8 +17,8 @@ const queryClient = new QueryClient({
 			gcTime: 5 * 60 * 1000,
 			// Retry failed requests up to 2 times
 			retry: 2,
-			// Refetch on window focus for fresh data
-			refetchOnWindowFocus: true,
+			// Don't refetch every query on window focus — staleTime handles freshness
+			refetchOnWindowFocus: false,
 		},
 		mutations: {
 			// Retry failed mutations once
