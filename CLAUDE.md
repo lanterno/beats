@@ -61,3 +61,31 @@ Install: `lefthook install` (from repo root)
 - TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100
 - API auth: JWT Bearer token (WebAuthn sessions) for all endpoints
 - Dates: API sends UTC, UI converts to local timezone on display
+
+## Infrastructure
+
+- **Deploy**: Terraform owns all Cloud Run config. Cloud Build builds the image and runs `terraform apply`.
+- **State**: GCS backend (`beats-476914-terraform-state`), shared by local and CI.
+- **Secrets**: `terraform.tfvars` stored in Secret Manager (`beats-terraform-tfvars`) for CI.
+- **Integrations**: Google Calendar and GitHub use per-user OAuth (system-wide client ID/secret, per-user tokens in MongoDB).
+
+## API Routes
+
+| Prefix | Purpose |
+|--------|---------|
+| `/api/projects` | Projects CRUD, timer start/stop, git activity |
+| `/api/beats` | Sessions CRUD |
+| `/api/timer` | Timer status |
+| `/api/analytics` | Heatmap, rhythm, gaps, tags |
+| `/api/intentions` | Daily intentions |
+| `/api/daily-notes` | End-of-day notes with mood |
+| `/api/intelligence` | Digests, score, patterns, suggestions, focus scores |
+| `/api/plans` | Weekly plans, recurring intentions, reviews, streaks |
+| `/api/webhooks` | Webhook CRUD, daily summary trigger |
+| `/api/calendar` | Google Calendar OAuth + events |
+| `/api/github` | GitHub OAuth + status |
+| `/api/auto-start` | Auto-start rules + webhook trigger |
+| `/api/device` | Wall clock status, favorites, heartbeat |
+| `/api/export` | CSV/JSON export and import |
+| `/api/account` | User account management |
+| `/api/auth` | WebAuthn registration + login (public) |

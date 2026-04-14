@@ -9,9 +9,9 @@ Feature-Sliced Design (FSD):
 ```
 client/
 ├── app/           Providers, routing (App.tsx)
-├── pages/         Route-level components (dashboard, insights, settings, project-details)
+├── pages/         Route-level components (dashboard, insights, settings, plan, project-details)
 ├── features/      User interactions (timer)
-├── entities/      Business objects (project, session)
+├── entities/      Business objects (project, session, planning, calendar, github, intelligence)
 ├── shared/        No business logic (api client, utils, UI primitives)
 └── main.tsx       Entry point
 ```

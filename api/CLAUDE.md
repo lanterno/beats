@@ -7,17 +7,22 @@ FastAPI + Motor (async MongoDB) — Python 3.14, managed by uv.
 ```
 src/beats/
 ├── api/          Route handlers + Pydantic schemas
-│   ├── routes/   One file per resource (projects, timer, analytics, etc.)
-│   └── schemas.py
+│   ├── routers/  One file per resource (projects, timer, analytics, calendar, github, planning, etc.)
+│   ├── schemas.py
+│   └── dependencies.py
 ├── domain/       Business logic + models (no framework deps)
 │   ├── models.py
 │   ├── analytics.py
-│   └── services/
-├── infra/        Database, settings, auth middleware
-│   ├── database.py   Motor singleton (Database.connect/disconnect)
-│   ├── settings.py   pydantic-settings (reads .env / env vars)
-│   └── auth.py
-└── server.py     FastAPI app + lifespan
+│   ├── intelligence.py
+│   ├── calendar.py   Google Calendar OAuth + event fetching
+│   ├── github.py     GitHub OAuth + commit correlation
+│   └── services.py
+├── infrastructure/
+│   ├── database.py      Motor singleton (Database.connect/disconnect)
+│   └── repositories.py  Abstract + MongoDB repo implementations
+├── settings.py   pydantic-settings (reads .env / env vars)
+├── auth/         WebAuthn + JWT session management
+└── server.py     FastAPI app + lifespan (in src/, not src/beats/)
 ```
 
 ## Running

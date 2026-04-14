@@ -7,7 +7,7 @@ region     = "us-central1"
 
 # MongoDB
 mongodb_connection_string = "mongodb+srv://user:pass@cluster.mongodb.net"
-mongodb_database_name     = "beats"
+mongodb_database_name     = "ptc"
 
 # JWT secret for WebAuthn sessions
 jwt_secret = "your-secure-random-secret"
