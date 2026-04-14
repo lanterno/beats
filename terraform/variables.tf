@@ -98,6 +98,26 @@ variable "webauthn_origin" {
   default     = "https://lifepete.com"
 }
 
+# GitHub OAuth Configuration
+variable "github_client_id" {
+  description = "GitHub OAuth App client ID for per-user integration"
+  type        = string
+  default     = ""
+}
+
+variable "github_client_secret" {
+  description = "GitHub OAuth App client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_redirect_uri" {
+  description = "GitHub OAuth redirect URI"
+  type        = string
+  default     = "https://lifepete.com/settings?github=callback"
+}
+
 # Custom Domain Configuration
 variable "api_domain" {
   description = "Custom domain to attach to the Cloud Run service (e.g., api.lifepete.com)"

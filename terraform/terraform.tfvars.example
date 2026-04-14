@@ -12,6 +12,11 @@ mongodb_database_name     = "beats"
 # API auth
 api_access_token = "your-secure-random-token"
 
+# GitHub OAuth
+github_client_id     = "your-github-oauth-client-id"
+github_client_secret = "your-github-oauth-client-secret"
+github_redirect_uri  = "https://lifepete.com/settings?github=callback"
+
 # Domains
 api_domain = "api.example.com"
 
