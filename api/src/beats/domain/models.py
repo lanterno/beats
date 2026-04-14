@@ -226,7 +226,7 @@ class UserInsights(BaseModel):
 class Webhook(BaseModel):
     """A registered webhook URL that receives timer events.
 
-    Events: timer.start, timer.stop
+    Events: timer.start, timer.stop, daily.summary
     """
 
     model_config = ConfigDict(populate_by_name=True)
