@@ -66,6 +66,7 @@ unresolved-attribute = "warn"
 invalid-argument-type = "warn"
 invalid-type-form = "warn"
 no-matching-overload = "warn"
+missing-argument = "warn"  # pydantic-settings fills required fields from env vars
 
 [tool.pytest.ini_options]
 addopts = "-q --cov=beats --cov-fail-under=50"
