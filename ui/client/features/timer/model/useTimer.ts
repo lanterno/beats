@@ -7,7 +7,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
-import { parseUtcIso } from "@/shared/lib";
+import { parseUtcIso, useOnlineStatus } from "@/shared/lib";
+import { drainQueue, enqueueEvent } from "@/shared/lib/offlineQueue";
 import { fetchTimerStatus, startTimerApi, stopTimerApi } from "../api";
 import type { TimerState } from "./types";
 
@@ -136,25 +137,18 @@ export function useTimer() {
 	const startTimer = useCallback(async (projectId: string, startTime?: string) => {
 		const timerStartTime = startTime || new Date().toISOString();
 
+		setTimerState({
+			isRunning: true,
+			selectedProjectId: projectId,
+			elapsedSeconds: 0,
+			customStartTime: timerStartTime,
+		});
+		apiStartTimeRef.current = timerStartTime;
+
 		try {
 			await startTimerApi(projectId, timerStartTime);
-
-			setTimerState({
-				isRunning: true,
-				selectedProjectId: projectId,
-				elapsedSeconds: 0,
-				customStartTime: timerStartTime,
-			});
-			apiStartTimeRef.current = timerStartTime;
-		} catch (error) {
-			console.error("Error starting timer:", error);
-			// Still update local state even if API call fails
-			setTimerState({
-				isRunning: true,
-				selectedProjectId: projectId,
-				elapsedSeconds: 0,
-				customStartTime: timerStartTime,
-			});
+		} catch {
+			await enqueueEvent({ type: "start", payload: { projectId, time: timerStartTime } });
 		}
 	}, []);
 
@@ -167,29 +161,20 @@ export function useTimer() {
 
 			const stopTime = customStopTime || new Date().toISOString();
 
+			setTimerState({
+				isRunning: false,
+				selectedProjectId: null,
+				elapsedSeconds: 0,
+				customStartTime: null,
+			});
+			apiStartTimeRef.current = null;
+
 			try {
 				await stopTimerApi(stopTime);
-
-				// Invalidate queries to refetch fresh data
 				queryClient.invalidateQueries({ queryKey: projectKeys.all });
 				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-
-				setTimerState({
-					isRunning: false,
-					selectedProjectId: null,
-					elapsedSeconds: 0,
-					customStartTime: null,
-				});
-				apiStartTimeRef.current = null;
-			} catch (error) {
-				console.error("Error stopping timer:", error);
-				setTimerState({
-					isRunning: false,
-					selectedProjectId: null,
-					elapsedSeconds: 0,
-					customStartTime: null,
-				});
-				apiStartTimeRef.current = null;
+			} catch {
+				await enqueueEvent({ type: "stop", payload: { time: stopTime } });
 			}
 		},
 		[timerState, queryClient],
@@ -202,6 +187,23 @@ export function useTimer() {
 	const setCustomStartTime = useCallback((startTime: string | null) => {
 		setTimerState((prev) => ({ ...prev, customStartTime: startTime }));
 	}, []);
+
+	// Drain offline queue when connectivity returns
+	const handleReconnect = useCallback(() => {
+		drainQueue(async (event) => {
+			if (event.type === "start" && event.payload.projectId) {
+				await startTimerApi(event.payload.projectId, event.payload.time);
+			} else if (event.type === "stop") {
+				await stopTimerApi(event.payload.time);
+			}
+		}).then((count) => {
+			if (count > 0) {
+				queryClient.invalidateQueries({ queryKey: projectKeys.all });
+				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+			}
+		});
+	}, [queryClient]);
+	useOnlineStatus(handleReconnect);
 
 	return {
 		isRunning: timerState.isRunning,

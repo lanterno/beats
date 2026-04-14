@@ -27,6 +27,9 @@ export {
 	parseTimedeltaToMinutes,
 } from "./format";
 
+// Offline queue
+export { drainQueue, enqueueEvent, getPendingEvents } from "./offlineQueue";
+
 // Hooks
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";

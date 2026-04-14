@@ -1,14 +1,20 @@
 /**
  * Online Status Hook
  * Tracks browser online/offline state via navigator.onLine and events.
+ * Optionally calls a callback when connectivity is restored.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export function useOnlineStatus(): boolean {
+export function useOnlineStatus(onReconnect?: () => void): boolean {
 	const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+	const onReconnectRef = useRef(onReconnect);
+	onReconnectRef.current = onReconnect;
 
 	useEffect(() => {
-		const goOnline = () => setOnline(true);
+		const goOnline = () => {
+			setOnline(true);
+			onReconnectRef.current?.();
+		};
 		const goOffline = () => setOnline(false);
 		window.addEventListener("online", goOnline);
 		window.addEventListener("offline", goOffline);
