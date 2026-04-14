@@ -40,13 +40,16 @@ class CalendarService:
     async def exchange_code(self, code: str) -> CalendarIntegration:
         """Exchange authorization code for tokens and store them."""
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(GOOGLE_TOKEN_URL, data={
-                "code": code,
-                "client_id": self.settings.google_client_id,
-                "client_secret": self.settings.google_client_secret,
-                "redirect_uri": self.settings.google_redirect_uri,
-                "grant_type": "authorization_code",
-            })
+            resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": self.settings.google_client_id,
+                    "client_secret": self.settings.google_client_secret,
+                    "redirect_uri": self.settings.google_redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
             resp.raise_for_status()
             data = resp.json()
 
@@ -68,12 +71,15 @@ class CalendarService:
             return integration
 
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(GOOGLE_TOKEN_URL, data={
-                "client_id": self.settings.google_client_id,
-                "client_secret": self.settings.google_client_secret,
-                "refresh_token": integration.refresh_token,
-                "grant_type": "refresh_token",
-            })
+            resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "client_id": self.settings.google_client_id,
+                    "client_secret": self.settings.google_client_secret,
+                    "refresh_token": integration.refresh_token,
+                    "grant_type": "refresh_token",
+                },
+            )
             resp.raise_for_status()
             data = resp.json()
 
@@ -83,9 +89,7 @@ class CalendarService:
         )
         return await self.repo.upsert(integration)
 
-    async def fetch_events(
-        self, start: datetime, end: datetime
-    ) -> list[dict]:
+    async def fetch_events(self, start: datetime, end: datetime) -> list[dict]:
         """Fetch calendar events in a time range."""
         integration = await self.repo.get()
         if not integration or not integration.enabled:
@@ -114,12 +118,14 @@ class CalendarService:
                 for item in data.get("items", []):
                     event_start = item.get("start", {})
                     event_end = item.get("end", {})
-                    events.append({
-                        "summary": item.get("summary", "(No title)"),
-                        "start": event_start.get("dateTime") or event_start.get("date", ""),
-                        "end": event_end.get("dateTime") or event_end.get("date", ""),
-                        "all_day": "date" in event_start and "dateTime" not in event_start,
-                    })
+                    events.append(
+                        {
+                            "summary": item.get("summary", "(No title)"),
+                            "start": event_start.get("dateTime") or event_start.get("date", ""),
+                            "end": event_end.get("dateTime") or event_end.get("date", ""),
+                            "all_day": "date" in event_start and "dateTime" not in event_start,
+                        }
+                    )
             except Exception:
                 logger.warning("Failed to fetch events from calendar %s", cal_id)
 

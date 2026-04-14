@@ -48,6 +48,7 @@ async def delete_rule(rule_id: str, repo: AutoStartRuleRepoDep):
 
 class WebhookTriggerPayload(BaseModel):
     """Payload from an external webhook (e.g. GitHub push)."""
+
     repository: str = ""  # "owner/repo"
 
 

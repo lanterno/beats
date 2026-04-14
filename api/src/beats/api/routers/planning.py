@@ -35,9 +35,11 @@ class UpsertWeeklyPlanRequest(BaseModel):
 @router.get("/weekly")
 async def get_weekly_plan(
     repo: WeeklyPlanRepoDep,
-    week_of: date = Query(default_factory=lambda: date.today() - timedelta(days=date.today().weekday())),
+    week_of: date = Query(default=None),
 ):
     """Get the weekly plan for a given week (defaults to current week's Monday)."""
+    if week_of is None:
+        week_of = date.today() - timedelta(days=date.today().weekday())
     plan = await repo.get_by_week(week_of)
     if plan:
         return plan.model_dump(mode="json")
@@ -139,9 +141,11 @@ class UpsertWeeklyReviewRequest(BaseModel):
 @router.get("/reviews/weekly")
 async def get_weekly_review(
     repo: WeeklyReviewRepoDep,
-    week_of: date = Query(default_factory=lambda: date.today() - timedelta(days=date.today().weekday())),
+    week_of: date = Query(default=None),
 ):
     """Get a weekly review for a given week."""
+    if week_of is None:
+        week_of = date.today() - timedelta(days=date.today().weekday())
     review = await repo.get_by_week(week_of)
     if review:
         return review.model_dump(mode="json")

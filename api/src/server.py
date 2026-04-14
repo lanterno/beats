@@ -13,9 +13,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from beats.api.routers.account import router as account_router
 from beats.api.routers.analytics import router as analytics_router
-from beats.api.routers.auto_start import router as auto_start_router
 from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
+from beats.api.routers.auto_start import router as auto_start_router
 from beats.api.routers.beats import router as beats_router
 from beats.api.routers.calendar import router as calendar_router
 from beats.api.routers.daily_notes import router as daily_notes_router
@@ -23,8 +23,8 @@ from beats.api.routers.device import router as device_router
 from beats.api.routers.export import router as export_router
 from beats.api.routers.github import router as github_router
 from beats.api.routers.intelligence import router as intelligence_router
-from beats.api.routers.planning import router as planning_router
 from beats.api.routers.intentions import router as intentions_router
+from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
 from beats.api.routers.timer import router as timer_router
 from beats.api.routers.webhooks import router as webhooks_router
@@ -119,6 +119,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 # Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Unified domain exception handler
 @app.exception_handler(DomainException)

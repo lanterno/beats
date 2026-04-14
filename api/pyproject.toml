@@ -52,7 +52,7 @@ src = ["src"]
 [tool.ruff.lint]
 # A focused, low-noise ruleset: errors (E), pyflakes (F), isort (I), bugbear (B), pyupgrade (UP)
 select = ["E", "F", "I", "B", "UP"]
-ignore = []
+ignore = ["B008"]  # Allow function calls in defaults (FastAPI Query/Depends pattern)
 
 [tool.ruff.format]
 quote-style = "double"

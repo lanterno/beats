@@ -16,22 +16,22 @@ from beats.infrastructure.repositories import (
     BeatRepository,
     CalendarIntegrationRepository,
     DailyNoteRepository,
+    GitHubIntegrationRepository,
     InsightsRepository,
     IntentionRepository,
-    MongoBeatRepository,
     MongoAutoStartRuleRepository,
+    MongoBeatRepository,
     MongoCalendarIntegrationRepository,
-    MongoGitHubIntegrationRepository,
-    MongoRecurringIntentionRepository,
-    MongoWeeklyPlanRepository,
-    MongoWeeklyReviewRepository,
     MongoDailyNoteRepository,
+    MongoGitHubIntegrationRepository,
     MongoInsightsRepository,
     MongoIntentionRepository,
-    GitHubIntegrationRepository,
     MongoProjectRepository,
+    MongoRecurringIntentionRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
+    MongoWeeklyPlanRepository,
+    MongoWeeklyReviewRepository,
     ProjectRepository,
     RecurringIntentionRepository,
     WebhookRepository,
@@ -156,7 +156,9 @@ def get_calendar_integration_repository(user_id: CurrentUserId) -> CalendarInteg
 
 
 def get_calendar_service(
-    cal_repo: Annotated[CalendarIntegrationRepository, Depends(get_calendar_integration_repository)],
+    cal_repo: Annotated[
+        CalendarIntegrationRepository, Depends(get_calendar_integration_repository)
+    ],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CalendarService:
     """Get the calendar service with injected repository."""

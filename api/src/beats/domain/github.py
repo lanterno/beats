@@ -74,9 +74,7 @@ class GitHubService:
         )
         return await self.repo.upsert(integration)
 
-    async def fetch_commit_counts(
-        self, repo_name: str, start: date, end: date
-    ) -> list[dict]:
+    async def fetch_commit_counts(self, repo_name: str, start: date, end: date) -> list[dict]:
         """Fetch daily commit counts for a repo in a date range.
 
         Uses the per-user access token from the stored integration.
@@ -129,8 +127,7 @@ class GitHubService:
                     break
 
         return [
-            {"date": day, "commit_count": count}
-            for day, count in sorted(commits_by_day.items())
+            {"date": day, "commit_count": count} for day, count in sorted(commits_by_day.items())
         ]
 
     async def disconnect(self) -> bool:

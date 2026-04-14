@@ -97,9 +97,7 @@ class AnalyticsService:
         num_days = max(num_days, 1)
         return [{"slot": i, "minutes": round(slots[i] / num_days, 1)} for i in range(48)]
 
-    async def get_untracked_gaps(
-        self, target_date: date, min_gap_minutes: int = 15
-    ) -> list[dict]:
+    async def get_untracked_gaps(self, target_date: date, min_gap_minutes: int = 15) -> list[dict]:
         """Find gaps between sessions on a given date.
 
         Returns list of dicts with start, end, duration_minutes for gaps
@@ -118,11 +116,13 @@ class AnalyticsService:
                 gap_seconds = (next_start - current_end).total_seconds()
                 gap_minutes = round(gap_seconds / 60)
                 if gap_minutes >= min_gap_minutes:
-                    gaps.append({
-                        "start": current_end.isoformat(),
-                        "end": next_start.isoformat(),
-                        "duration_minutes": gap_minutes,
-                    })
+                    gaps.append(
+                        {
+                            "start": current_end.isoformat(),
+                            "end": next_start.isoformat(),
+                            "duration_minutes": gap_minutes,
+                        }
+                    )
         return gaps
 
     @staticmethod

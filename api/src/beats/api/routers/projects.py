@@ -5,7 +5,12 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
 
-from beats.api.dependencies import GitHubServiceDep, ProjectServiceDep, TimerServiceDep, WebhookRepoDep
+from beats.api.dependencies import (
+    GitHubServiceDep,
+    ProjectServiceDep,
+    TimerServiceDep,
+    WebhookRepoDep,
+)
 from beats.api.routers.webhooks import dispatch_webhook_event
 from beats.api.schemas import (
     CreateProjectRequest,

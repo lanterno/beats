@@ -213,5 +213,3 @@ async def verify_login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
         ) from e
-
-

@@ -700,9 +700,10 @@ class TestLogoutAndTokenRevocation:
         client.post("/api/account/logout", headers={"Authorization": f"Bearer {token_a}"})
 
         # Token B still works
-        assert client.get(
-            "/api/projects/", headers={"Authorization": f"Bearer {token_b}"}
-        ).status_code == 200
+        assert (
+            client.get("/api/projects/", headers={"Authorization": f"Bearer {token_b}"}).status_code
+            == 200
+        )
 
 
 class TestDuplicateEmailPrevention:

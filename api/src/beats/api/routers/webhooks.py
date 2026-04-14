@@ -82,8 +82,11 @@ async def trigger_daily_summary(
     project_map = {p.id: p.name for p in projects}
 
     breakdown = [
-        {"project_id": pid, "project_name": project_map.get(pid, "Unknown"),
-         "minutes": round(dur.total_seconds() / 60)}
+        {
+            "project_id": pid,
+            "project_name": project_map.get(pid, "Unknown"),
+            "minutes": round(dur.total_seconds() / 60),
+        }
         for pid, dur in sorted(by_project.items(), key=lambda x: -x[1].total_seconds())
     ]
 
@@ -92,8 +95,7 @@ async def trigger_daily_summary(
     # Intentions
     intentions = await intention_repo.list_by_date(target_date)
     intentions_data = [
-        {"project_id": i.project_id, "planned_minutes": i.planned_minutes,
-         "completed": i.completed}
+        {"project_id": i.project_id, "planned_minutes": i.planned_minutes, "completed": i.completed}
         for i in intentions
     ]
 
