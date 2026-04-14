@@ -35,6 +35,7 @@ import {
 } from "@/entities/github";
 import { useProjects } from "@/entities/project";
 import type { CredentialInfo } from "@/features/auth";
+import { getSessionToken } from "@/features/auth/stores/authStore";
 import { del, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
 import { DENSITIES, THEMES, useTheme } from "@/shared/lib";
@@ -48,7 +49,10 @@ export default function Settings() {
 
 	const downloadFile = async (url: string, filename: string) => {
 		try {
-			const res = await fetch(`${apiBase}${url}`);
+			const token = getSessionToken();
+			const res = await fetch(`${apiBase}${url}`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+			});
 			if (!res.ok) throw new Error("Export failed");
 			const blob = await res.blob();
 			const a = document.createElement("a");
@@ -83,8 +87,10 @@ export default function Settings() {
 		try {
 			const formData = new FormData();
 			formData.append("file", file);
+			const token = getSessionToken();
 			const res = await fetch(`${apiBase}/api/export/import`, {
 				method: "POST",
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
 				body: formData,
 			});
 			if (!res.ok) throw new Error("Import failed");
@@ -276,8 +282,12 @@ export default function Settings() {
 						<p className="text-xs text-muted-foreground mb-2">Quick Start</p>
 						<div className="space-y-2">
 							<CodeBlock
-								label="Toggle timer"
-								code={`curl -X POST ${apiBase}/api/timer/toggle -H "Content-Type: application/json" -d '{"project_id": "YOUR_PROJECT_ID"}'`}
+								label="Start timer"
+								code={`curl -X POST ${apiBase}/api/projects/YOUR_PROJECT_ID/start -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
+							/>
+							<CodeBlock
+								label="Stop timer"
+								code={`curl -X POST ${apiBase}/api/projects/stop -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
 							/>
 							<CodeBlock label="Get timer status" code={`curl ${apiBase}/api/timer/status`} />
 							<CodeBlock
