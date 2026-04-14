@@ -12,7 +12,7 @@ Beats is a mature, full-featured time tracker with three surfaces: a React SPA, 
 - **Tracking** — Timer with start/stop, manual logging, session notes, tags, project goals (target and cap modes with per-week overrides)
 - **Analytics** — Contribution heatmap, daily rhythm chart, streak tracker, monthly retrospective, year-in-review, weekly comparison, session stats
 - **Planning** — Daily intentions with auto-completion, end-of-day review with mood tracking, focus mode
-- **Hardware** — ESP32 wall clock with single-button toggle, project-colored LEDs, energy meter, device status API
+- **Hardware** — Device API endpoints (status, favorites, heartbeat) with RGB color mapping and energy meter logic — firmware not yet implemented
 - **Platform** — PWA with offline timer, install prompt, forgotten-timer notifications, keyboard shortcuts, five themes, three density modes
 - **Integration** — Webhooks, CSV/JSON export and import, developer settings page
 - **Auth** — WebAuthn passkeys, JWT sessions
@@ -33,25 +33,15 @@ The first eight phases built a complete tool. The next four make it *intelligent
 
 ---
 
-## Phase 9: Intelligence — "What Does It Mean?"
+## Phase 9: Intelligence — "What Does It Mean?" ✅ Complete
 
-Beats has months of data. Right now, you have to stare at charts and draw your own conclusions. This phase makes Beats *tell* you what it sees.
+All five features shipped — API endpoints in `intelligence.py`, UI components on the dashboard and insights pages.
 
-### Features
-
-- **Weekly digest** — Every Monday morning, a generated summary lands in the app (and optionally email/webhook): total hours, top project, vs-last-week delta, longest day, best streak, one observation ("You worked 3h more on Beats this week — it's been trending up for a month"). Stored as a `WeeklyDigest` document. Viewable at `/insights/digests`.
-
-- **Productivity score** — A single 0-100 number on the dashboard, computed from: consistency (did you track every weekday?), intention completion rate, goal progress, session length distribution. Not gamification — calibration. "How aligned was my week with what I planned?" Hoverable breakdown.
-
-- **Pattern detection** — Surface non-obvious patterns: "You average 2.3x more deep work on Wednesdays", "Your longest sessions happen between 9-11 AM", "You haven't touched Project X in 3 weeks." Shown as dismissible cards on the insights page. Computed server-side with simple heuristics — no ML needed.
-
-- **Smart daily plan** — When creating today's intentions, suggest projects and durations based on: day of week, recent patterns, unmet weekly goals, and what you did yesterday. "Tuesdays you usually spend 2h on API — want to plan that?" Pre-fills, user adjusts.
-
-- **Focus quality indicator** — For each session, compute a "focus score" based on session length (longer = better), time of day (peak hours = better), and whether it was interrupted (short gaps between sessions = fragmented). Shown as a subtle indicator on session cards.
-
-### Why this matters
-
-Data without interpretation is a spreadsheet. The weekly digest alone transforms Beats from "I should check my time tracking" to "my time tracking checks in on me."
+- **Weekly digest** — `WeeklyDigest` model, `/api/intelligence/digests` endpoints, UI at `/insights/digests`. Includes total hours, top project, vs-last-week delta, streaks, observations.
+- **Productivity score** — 0-100 composite (consistency, intentions, goals, quality). `/api/intelligence/score` + `ProductivityScore` dashboard component with hoverable breakdown.
+- **Pattern detection** — `detect_patterns()` surfaces day-of-week trends, peak-hour analysis, stale projects, mood correlations. Dismissible `PatternCards` on insights page.
+- **Smart daily plan** — `suggest_daily_plan()` recommends up to 3 projects with durations based on day-of-week patterns, recent activity, and unmet weekly goals. Integrated into `TodaysPlan` component.
+- **Focus quality indicator** — `compute_focus_scores()` scores each session on duration, time-of-day, and fragmentation. Shown as color-coded dots on session cards in `TodayFeed`.
 
 ---
 
@@ -124,18 +114,18 @@ The physical device is what makes Beats different from every other time tracker.
 ## Phase Dependencies
 
 ```
-v1 (Phases 1-8) ── Phase 9 ── Phase 11
+v1 (Phases 1-8) ── Phase 9 ✅ ── Phase 11
                        │
                        └── Phase 10
                               │
 Phase 12 (independent) ───────┘ (calendar events on e-ink)
 ```
 
-- **9** (Intelligence) can start immediately — it only needs existing data
+- **9** (Intelligence) — **complete**, unblocks 10 and 11
 - **10** (Context) benefits from 9's pattern detection for smarter gap analysis
 - **11** (Rituals) needs 9's weekly digest and smart suggestions
 - **12** (Presence) is mostly independent firmware work, but calendar overlay from 10 feeds the e-ink display
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-04-14*
