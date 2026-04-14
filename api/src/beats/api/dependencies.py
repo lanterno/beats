@@ -12,12 +12,14 @@ from beats.domain.intelligence import IntelligenceService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
+    AutoStartRuleRepository,
     BeatRepository,
     CalendarIntegrationRepository,
     DailyNoteRepository,
     InsightsRepository,
     IntentionRepository,
     MongoBeatRepository,
+    MongoAutoStartRuleRepository,
     MongoCalendarIntegrationRepository,
     MongoDailyNoteRepository,
     MongoInsightsRepository,
@@ -175,3 +177,12 @@ def get_github_service(
 
 
 GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]
+
+
+def get_auto_start_rule_repository(user_id: CurrentUserId) -> AutoStartRuleRepository:
+    """Get the auto-start rule repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoAutoStartRuleRepository(db.auto_start_rules, user_id=user_id)
+
+
+AutoStartRuleRepoDep = Annotated[AutoStartRuleRepository, Depends(get_auto_start_rule_repository)]

@@ -9,6 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
 from beats.domain.models import (
+    AutoStartRule,
     Beat,
     CalendarIntegration,
     DailyNote,
@@ -686,6 +687,56 @@ class MongoInsightsRepository(InsightsRepository):
 
 
 # Calendar Integration Repository
+
+
+class AutoStartRuleRepository(ABC):
+    """Abstract interface for AutoStartRule persistence."""
+
+    @abstractmethod
+    async def list_all(self) -> list[AutoStartRule]: ...
+
+    @abstractmethod
+    async def list_by_type(self, rule_type: str) -> list[AutoStartRule]: ...
+
+    @abstractmethod
+    async def create(self, rule: AutoStartRule) -> AutoStartRule: ...
+
+    @abstractmethod
+    async def delete(self, rule_id: str) -> bool: ...
+
+
+class MongoAutoStartRuleRepository(AutoStartRuleRepository):
+    """MongoDB implementation of AutoStartRuleRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+    async def list_all(self) -> list[AutoStartRule]:
+        cursor = self.collection.find(self._q())
+        docs = await cursor.to_list(length=None)
+        return [AutoStartRule(**serialize_from_document(doc)) for doc in docs]
+
+    async def list_by_type(self, rule_type: str) -> list[AutoStartRule]:
+        cursor = self.collection.find(self._q({"type": rule_type, "enabled": True}))
+        docs = await cursor.to_list(length=None)
+        return [AutoStartRule(**serialize_from_document(doc)) for doc in docs]
+
+    async def create(self, rule: AutoStartRule) -> AutoStartRule:
+        data = serialize_to_document(rule.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
+        result = await self.collection.insert_one(data)
+        return AutoStartRule(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def delete(self, rule_id: str) -> bool:
+        result = await self.collection.delete_one(self._q({"_id": ObjectId(rule_id)}))
+        return result.deleted_count > 0
 
 
 class CalendarIntegrationRepository(ABC):

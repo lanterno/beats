@@ -13,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from beats.api.routers.account import router as account_router
 from beats.api.routers.analytics import router as analytics_router
+from beats.api.routers.auto_start import router as auto_start_router
 from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
 from beats.api.routers.beats import router as beats_router
@@ -144,6 +145,7 @@ app.include_router(export_router)
 app.include_router(intelligence_router)
 app.include_router(webhooks_router)
 app.include_router(calendar_router)
+app.include_router(auto_start_router)
 
 # Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)
