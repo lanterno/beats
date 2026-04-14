@@ -305,6 +305,21 @@ class ProjectService:
             "warnings": warnings,
         }
 
+    async def get_daily_average(self, project_id: str, days: int = 30) -> dict:
+        """Get average daily session time for a project over the last N days."""
+        beats = await self.beat_repo.list_by_project(project_id)
+        cutoff = date.today() - timedelta(days=days)
+        completed = [b for b in beats if b.end is not None and b.start.date() >= cutoff]
+        if not completed:
+            return {"avg_minutes": 0, "days_tracked": 0}
+        by_day: dict[date, timedelta] = defaultdict(timedelta)
+        for b in completed:
+            by_day[b.start.date()] += b.duration
+        days_tracked = len(by_day)
+        total = sum(by_day.values(), timedelta())
+        avg_minutes = round(total.total_seconds() / 60 / days_tracked)
+        return {"avg_minutes": avg_minutes, "days_tracked": days_tracked}
+
     async def get_daily_summary(self, project_id: str) -> dict[str, str]:
         """Get summary of time per day for a project."""
         beats = await self.beat_repo.list_by_project(project_id)

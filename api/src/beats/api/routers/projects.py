@@ -83,6 +83,12 @@ async def update_goal_overrides(
     return updated.model_dump()
 
 
+@router.get("/{project_id}/daily-average")
+async def get_daily_average(project_id: str, service: ProjectServiceDep):
+    """Get the average daily session time for a project over the last 30 days."""
+    return await service.get_daily_average(project_id)
+
+
 @router.post("/{project_id}/archive")
 async def archive_project(project_id: str, service: ProjectServiceDep):
     """Archive a project."""

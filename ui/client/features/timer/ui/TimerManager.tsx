@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ProjectWithDuration } from "@/entities/project";
 import { cn, parseUtcIso, toLocalDatetimeLocalString } from "@/shared/lib";
+import { fetchDailyAverage } from "../api";
 import { useTimer } from "../model";
 import { ProjectSelector } from "./ProjectSelector";
 import { TimerDisplay } from "./TimerDisplay";
@@ -55,6 +56,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 	};
 
 	const handleStop = () => {
+		const projectId = selectedProjectId;
 		const projectName = selectedProject?.name;
 		const stopTime = showStopTimeInput && customStopTime ? customStopTime : undefined;
 		const endDate = stopTime ? new Date(stopTime) : new Date();
@@ -72,8 +74,27 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 		setCustomStartTime(null);
 		setCustomStopTime(null);
 
-		if (projectName) {
-			toast.success(`Logged ${minutes}m to ${projectName}`);
+		if (projectName && projectId) {
+			// Show immediate toast, then enhance with daily average
+			fetchDailyAverage(projectId)
+				.then(({ avg_minutes, days_tracked }) => {
+					if (days_tracked > 0 && avg_minutes > 0) {
+						const diff = minutes - avg_minutes;
+						const pct = Math.round((Math.abs(diff) / avg_minutes) * 100);
+						const comparison =
+							diff > 0
+								? `${pct}% above your daily avg (${avg_minutes}m)`
+								: diff < 0
+									? `${pct}% below your daily avg (${avg_minutes}m)`
+									: `right at your daily avg`;
+						toast.success(`Logged ${minutes}m to ${projectName} — ${comparison}`);
+					} else {
+						toast.success(`Logged ${minutes}m to ${projectName}`);
+					}
+				})
+				.catch(() => {
+					toast.success(`Logged ${minutes}m to ${projectName}`);
+				});
 			onSessionSaved?.();
 		}
 	};

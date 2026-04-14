@@ -2,4 +2,4 @@
  * Timer API layer - public API
  */
 
-export { fetchTimerStatus, startTimerApi, stopTimerApi } from "./timerApi";
+export { fetchDailyAverage, fetchTimerStatus, startTimerApi, stopTimerApi } from "./timerApi";
