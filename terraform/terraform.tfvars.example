@@ -12,6 +12,9 @@ mongodb_database_name     = "beats"
 # API auth
 api_access_token = "your-secure-random-token"
 
+# Container image tag (CI sets this to commit SHA; use "latest" locally)
+container_image_tag = "latest"
+
 # GitHub OAuth
 github_client_id     = "your-github-oauth-client-id"
 github_client_secret = "your-github-oauth-client-secret"

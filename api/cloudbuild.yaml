@@ -1,5 +1,5 @@
 steps:
-  # Build the Docker image with SHA tag and latest tag
+  # Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -24,23 +24,29 @@ steps:
       - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:latest'
     id: 'push-image-latest'
 
-  # Deploy to Cloud Run
+  # Fetch Terraform variables from Secret Manager
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - 'run'
-      - 'deploy'
-      - '${_IMAGE_NAME}'
-      - '--image'
-      - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'
-      - '--region'
-      - '${_REGION}'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-      - '--memory'
-      - '512Mi'
-    id: 'deploy-cloud-run'
+      - '-c'
+      - |
+        gcloud secrets versions access latest \
+          --secret=beats-terraform-tfvars \
+          --project=${_PROJECT_ID} \
+          > /workspace/terraform/terraform.tfvars
+    id: 'fetch-tfvars'
+
+  # Terraform init + apply
+  - name: 'hashicorp/terraform:1.12'
+    dir: 'terraform'
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        terraform init -input=false && \
+        terraform apply -auto-approve -input=false \
+          -var="container_image_tag=$COMMIT_SHA"
+    id: 'terraform-apply'
 
 images:
   - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'

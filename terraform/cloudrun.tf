@@ -6,7 +6,7 @@ resource "google_cloud_run_service" "beats_api" {
   template {
     spec {
       containers {
-        image = "${local.built_image}:latest"
+        image = "${local.built_image}:${var.container_image_tag}"
 
         ports {
           container_port = var.container_port
@@ -79,7 +79,6 @@ resource "google_cloud_run_service" "beats_api" {
 
   lifecycle {
     ignore_changes = [
-      template[0].spec[0].containers[0].image,
       template[0].metadata[0].annotations["run.googleapis.com/client-name"],
       template[0].metadata[0].annotations["run.googleapis.com/client-version"]
     ]

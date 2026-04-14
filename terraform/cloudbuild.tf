@@ -24,6 +24,35 @@ resource "google_project_iam_member" "cloudbuild_logging" {
   member  = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
 
+# Secret Manager — stores terraform.tfvars for CI/CD.
+# Create the secret shell; you populate it manually:
+#   gcloud secrets versions add beats-terraform-tfvars \
+#     --data-file=terraform.tfvars --project=YOUR_PROJECT_ID
+resource "google_secret_manager_secret" "terraform_tfvars" {
+  secret_id = "beats-terraform-tfvars"
+  project   = var.project_id
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
+# Grant Cloud Build access to read the tfvars secret
+resource "google_secret_manager_secret_iam_member" "cloudbuild_secret_access" {
+  secret_id = google_secret_manager_secret.terraform_tfvars.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloudbuild.email}"
+}
+
+# Storage permissions for Cloud Build to read/write Terraform state bucket
+resource "google_storage_bucket_iam_member" "cloudbuild_state_admin" {
+  bucket = "${var.project_id}-terraform-state"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloudbuild.email}"
+}
+
 # Artifact Registry permissions for Cloud Build to push images
 resource "google_project_iam_member" "cloudbuild_artifactregistry" {
   project = var.project_id
@@ -59,7 +88,7 @@ resource "google_cloudbuild_trigger" "docker_build" {
     }
   }
 
-  included_files = ["api/**"]
+  included_files = ["api/**", "terraform/**"]
   filename       = "api/cloudbuild.yaml"
 
   substitutions = {

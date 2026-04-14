@@ -65,6 +65,13 @@ variable "allow_unauthenticated" {
   default     = true
 }
 
+# Container Image
+variable "container_image_tag" {
+  description = "Docker image tag to deploy (commit SHA or 'latest')"
+  type        = string
+  default     = "latest"
+}
+
 # Database Configuration
 variable "mongodb_connection_string" {
   description = "MongoDB connection string (e.g., mongodb+srv://user:pass@cluster.mongodb.net)"
