@@ -224,6 +224,43 @@ class UserInsights(BaseModel):
     dismissed_ids: list[str] = Field(default_factory=list)
 
 
+class WeeklyPlan(BaseModel):
+    """A weekly time budget plan with per-project allocations."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    week_of: date_type  # Monday of the week
+    budgets: list[dict] = Field(default_factory=list)  # [{project_id, planned_hours}]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class RecurringIntention(BaseModel):
+    """A template for auto-creating daily intentions."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    project_id: str
+    planned_minutes: int = 60
+    days_of_week: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4])  # Mon-Fri
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class WeeklyReview(BaseModel):
+    """A weekly reflection stored alongside the digest."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    week_of: date_type  # Monday of the week
+    went_well: str = ""
+    didnt_go_well: str = ""
+    to_change: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class AutoStartRule(BaseModel):
     """A rule for auto-starting the timer based on webhooks or schedules."""
 

@@ -15,10 +15,13 @@ from beats.domain.models import (
     DailyNote,
     Intention,
     Project,
+    RecurringIntention,
     User,
     UserInsights,
     Webhook,
     WeeklyDigest,
+    WeeklyPlan,
+    WeeklyReview,
 )
 
 
@@ -786,3 +789,146 @@ class MongoCalendarIntegrationRepository(CalendarIntegrationRepository):
     async def delete(self) -> bool:
         result = await self.collection.delete_one(self._q())
         return result.deleted_count > 0
+
+
+# Weekly Plan Repository
+
+
+class WeeklyPlanRepository(ABC):
+    """Abstract interface for WeeklyPlan persistence."""
+
+    @abstractmethod
+    async def get_by_week(self, week_of: date) -> WeeklyPlan | None: ...
+
+    @abstractmethod
+    async def upsert(self, plan: WeeklyPlan) -> WeeklyPlan: ...
+
+
+class MongoWeeklyPlanRepository(WeeklyPlanRepository):
+    """MongoDB implementation of WeeklyPlanRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+    async def get_by_week(self, week_of: date) -> WeeklyPlan | None:
+        doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
+        if not doc:
+            return None
+        return WeeklyPlan(**serialize_from_document(doc))
+
+    async def upsert(self, plan: WeeklyPlan) -> WeeklyPlan:
+        data = serialize_to_document(plan.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q({"week_of": plan.week_of.isoformat()}),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return WeeklyPlan(**serialize_from_document(result))
+
+
+# Recurring Intention Repository
+
+
+class RecurringIntentionRepository(ABC):
+    """Abstract interface for RecurringIntention persistence."""
+
+    @abstractmethod
+    async def list_all(self) -> list[RecurringIntention]: ...
+
+    @abstractmethod
+    async def create(self, intention: RecurringIntention) -> RecurringIntention: ...
+
+    @abstractmethod
+    async def delete(self, intention_id: str) -> bool: ...
+
+
+class MongoRecurringIntentionRepository(RecurringIntentionRepository):
+    """MongoDB implementation of RecurringIntentionRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+    async def list_all(self) -> list[RecurringIntention]:
+        cursor = self.collection.find(self._q())
+        docs = await cursor.to_list(length=None)
+        return [RecurringIntention(**serialize_from_document(doc)) for doc in docs]
+
+    async def create(self, intention: RecurringIntention) -> RecurringIntention:
+        data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
+        result = await self.collection.insert_one(data)
+        return RecurringIntention(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def delete(self, intention_id: str) -> bool:
+        result = await self.collection.delete_one(self._q({"_id": ObjectId(intention_id)}))
+        return result.deleted_count > 0
+
+
+# Weekly Review Repository
+
+
+class WeeklyReviewRepository(ABC):
+    """Abstract interface for WeeklyReview persistence."""
+
+    @abstractmethod
+    async def get_by_week(self, week_of: date) -> WeeklyReview | None: ...
+
+    @abstractmethod
+    async def upsert(self, review: WeeklyReview) -> WeeklyReview: ...
+
+    @abstractmethod
+    async def list_recent(self, limit: int = 12) -> list[WeeklyReview]: ...
+
+
+class MongoWeeklyReviewRepository(WeeklyReviewRepository):
+    """MongoDB implementation of WeeklyReviewRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+    async def get_by_week(self, week_of: date) -> WeeklyReview | None:
+        doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
+        if not doc:
+            return None
+        return WeeklyReview(**serialize_from_document(doc))
+
+    async def upsert(self, review: WeeklyReview) -> WeeklyReview:
+        data = serialize_to_document(review.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q({"week_of": review.week_of.isoformat()}),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return WeeklyReview(**serialize_from_document(result))
+
+    async def list_recent(self, limit: int = 12) -> list[WeeklyReview]:
+        cursor = self.collection.find(self._q()).sort("week_of", -1).limit(limit)
+        docs = await cursor.to_list(length=None)
+        return [WeeklyReview(**serialize_from_document(doc)) for doc in docs]

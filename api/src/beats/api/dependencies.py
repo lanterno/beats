@@ -21,6 +21,9 @@ from beats.infrastructure.repositories import (
     MongoBeatRepository,
     MongoAutoStartRuleRepository,
     MongoCalendarIntegrationRepository,
+    MongoRecurringIntentionRepository,
+    MongoWeeklyPlanRepository,
+    MongoWeeklyReviewRepository,
     MongoDailyNoteRepository,
     MongoInsightsRepository,
     MongoIntentionRepository,
@@ -28,8 +31,11 @@ from beats.infrastructure.repositories import (
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
     ProjectRepository,
+    RecurringIntentionRepository,
     WebhookRepository,
     WeeklyDigestRepository,
+    WeeklyPlanRepository,
+    WeeklyReviewRepository,
 )
 from beats.settings import Settings
 
@@ -186,3 +192,28 @@ def get_auto_start_rule_repository(user_id: CurrentUserId) -> AutoStartRuleRepos
 
 
 AutoStartRuleRepoDep = Annotated[AutoStartRuleRepository, Depends(get_auto_start_rule_repository)]
+
+
+def get_weekly_plan_repository(user_id: CurrentUserId) -> WeeklyPlanRepository:
+    """Get the weekly plan repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoWeeklyPlanRepository(db.weekly_plans, user_id=user_id)
+
+
+def get_recurring_intention_repository(user_id: CurrentUserId) -> RecurringIntentionRepository:
+    """Get the recurring intention repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoRecurringIntentionRepository(db.recurring_intentions, user_id=user_id)
+
+
+def get_weekly_review_repository(user_id: CurrentUserId) -> WeeklyReviewRepository:
+    """Get the weekly review repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoWeeklyReviewRepository(db.weekly_reviews, user_id=user_id)
+
+
+WeeklyPlanRepoDep = Annotated[WeeklyPlanRepository, Depends(get_weekly_plan_repository)]
+RecurringIntentionRepoDep = Annotated[
+    RecurringIntentionRepository, Depends(get_recurring_intention_repository)
+]
+WeeklyReviewRepoDep = Annotated[WeeklyReviewRepository, Depends(get_weekly_review_repository)]
