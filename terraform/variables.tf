@@ -85,9 +85,9 @@ variable "mongodb_database_name" {
   default     = "beats"
 }
 
-# Application Configuration
-variable "api_access_token" {
-  description = "API access token for authentication"
+# JWT Configuration
+variable "jwt_secret" {
+  description = "Secret key for signing JWT session tokens (WebAuthn)"
   type        = string
   sensitive   = true
 }

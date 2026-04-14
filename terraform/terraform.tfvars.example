@@ -9,8 +9,8 @@ region     = "us-central1"
 mongodb_connection_string = "mongodb+srv://user:pass@cluster.mongodb.net"
 mongodb_database_name     = "beats"
 
-# API auth
-api_access_token = "your-secure-random-token"
+# JWT secret for WebAuthn sessions
+jwt_secret = "your-secure-random-secret"
 
 # Container image tag (CI sets this to commit SHA; use "latest" locally)
 container_image_tag = "latest"

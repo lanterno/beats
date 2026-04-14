@@ -23,13 +23,18 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
-          name  = "ACCESS_TOKEN"
-          value = var.api_access_token
+          name  = "JWT_SECRET"
+          value = var.jwt_secret
         }
 
         env {
           name  = "WEBAUTHN_RP_ID"
           value = var.webauthn_rp_id
+        }
+
+        env {
+          name  = "WEBAUTHN_RP_NAME"
+          value = "Beats"
         }
 
         env {
