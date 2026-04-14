@@ -121,6 +121,7 @@ class Project(BaseModel):
     weekly_goal: float | None = None  # Weekly goal in hours
     goal_type: GoalType = GoalType.TARGET  # target or cap
     goal_overrides: list[GoalOverride] = Field(default_factory=list)
+    github_repo: str | None = None  # GitHub repo in "owner/repo" format
 
     def effective_goal(self, week_monday: date_type) -> tuple[float | None, GoalType]:
         """Resolve the effective goal for a given week (identified by its Monday).

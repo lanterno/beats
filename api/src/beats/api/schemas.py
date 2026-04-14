@@ -37,6 +37,7 @@ class UpdateProjectRequest(BaseModel):
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
     goal_type: str = "target"  # "target" or "cap"
+    github_repo: str | None = None  # "owner/repo"
 
 
 class GoalOverrideRequest(BaseModel):

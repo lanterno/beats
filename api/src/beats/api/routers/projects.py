@@ -1,10 +1,11 @@
 """Projects API router - thin controller for project operations."""
 
 import http
+from datetime import date, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
-from beats.api.dependencies import ProjectServiceDep, TimerServiceDep, WebhookRepoDep
+from beats.api.dependencies import GitHubServiceDep, ProjectServiceDep, TimerServiceDep, WebhookRepoDep
 from beats.api.routers.webhooks import dispatch_webhook_event
 from beats.api.schemas import (
     CreateProjectRequest,
@@ -56,6 +57,7 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         archived=request.archived,
         weekly_goal=request.weekly_goal,
         goal_type=request.goal_type,
+        github_repo=request.github_repo,
     )
     updated = await service.update_project(project)
     return updated.model_dump()
@@ -81,6 +83,21 @@ async def update_goal_overrides(
     ]
     updated = await service.update_project(project)
     return updated.model_dump()
+
+
+@router.get("/{project_id}/git-activity")
+async def get_git_activity(
+    project_id: str,
+    service: ProjectServiceDep,
+    github_service: GitHubServiceDep,
+    start: date = Query(default_factory=lambda: date.today() - timedelta(days=30)),
+    end: date = Query(default_factory=date.today),
+):
+    """Get GitHub commit counts correlated with a project's tracked time."""
+    project = await service.project_repo.get_by_id(project_id)
+    if not project.github_repo:
+        return []
+    return await github_service.fetch_commit_counts(project.github_repo, start, end)
 
 
 @router.get("/{project_id}/daily-average")

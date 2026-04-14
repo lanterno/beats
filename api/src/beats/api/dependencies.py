@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from beats.domain.analytics import AnalyticsService
 from beats.domain.calendar import CalendarService
+from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
@@ -164,3 +165,13 @@ WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_diges
 InsightsRepoDep = Annotated[InsightsRepository, Depends(get_insights_repository)]
 IntelligenceServiceDep = Annotated[IntelligenceService, Depends(get_intelligence_service)]
 CalendarServiceDep = Annotated[CalendarService, Depends(get_calendar_service)]
+
+
+def get_github_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> GitHubService:
+    """Get the GitHub service."""
+    return GitHubService(settings=settings)
+
+
+GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]
