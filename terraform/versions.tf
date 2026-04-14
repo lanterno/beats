@@ -6,7 +6,7 @@ terraform {
   # Replace PROJECT_ID with your actual GCP project ID, then run:
   #   terraform init -migrate-state
   backend "gcs" {
-    bucket = "PROJECT_ID-terraform-state" # TODO: replace PROJECT_ID
+    bucket = "beats-476914-terraform-state"
     prefix = "beats"
   }
 
