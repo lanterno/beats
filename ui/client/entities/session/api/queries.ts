@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
-import type { HeatmapDay, RhythmSlot } from "@/shared/api";
+import type { Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -15,7 +15,14 @@ import {
 } from "@/shared/lib";
 import type { DayProjectBreakdown, DaySummary, Session } from "../model";
 import { toApiBeat, toSession } from "../model";
-import { fetchAllTags, fetchBeats, fetchDailyRhythm, fetchHeatmap, updateBeat } from "./sessionApi";
+import {
+	fetchAllTags,
+	fetchBeats,
+	fetchDailyRhythm,
+	fetchGaps,
+	fetchHeatmap,
+	updateBeat,
+} from "./sessionApi";
 
 /**
  * Query keys for session data
@@ -444,5 +451,17 @@ export function useAllTags() {
 		queryKey: [...sessionKeys.all, "tags"],
 		queryFn: fetchAllTags,
 		staleTime: 60_000,
+	});
+}
+
+/**
+ * Hook to fetch untracked gaps for a given date (defaults to today)
+ */
+export function useGaps(targetDate?: string) {
+	const dateStr = targetDate ?? new Date().toISOString().slice(0, 10);
+	return useQuery<Gap[]>({
+		queryKey: [...sessionKeys.all, "gaps", dateStr],
+		queryFn: () => fetchGaps(dateStr),
+		staleTime: 30_000,
 	});
 }

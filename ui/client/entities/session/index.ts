@@ -17,6 +17,7 @@ export {
 	useAllBeats,
 	useAllCurrentWeekSessions,
 	useAllTags,
+	useGaps,
 	useDailyRhythm,
 	useHeatmap,
 	useLastWeekTotal,

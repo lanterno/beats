@@ -282,6 +282,20 @@ export type ProjectHealth = z.infer<typeof ProjectHealthSchema>;
 export const ProjectHealthListSchema = z.array(ProjectHealthSchema);
 
 // ============================================================================
+// Gap schemas
+// ============================================================================
+
+export const GapSchema = z.object({
+	start: z.string(),
+	end: z.string(),
+	duration_minutes: z.number(),
+});
+
+export type Gap = z.infer<typeof GapSchema>;
+
+export const GapListSchema = z.array(GapSchema);
+
+// ============================================================================
 // Array schemas for list endpoints
 // ============================================================================
 

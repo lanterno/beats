@@ -9,8 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { useFocusScores } from "@/entities/intelligence";
 import { useProjects } from "@/entities/project";
 import type { Session } from "@/entities/session";
-import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
-import type { FocusScore } from "@/shared/api";
+import { useGaps, useThisWeekSessions, useTodaySessions } from "@/entities/session";
+import type { FocusScore, Gap } from "@/shared/api";
 import { cn, formatDuration, formatTime, parseUtcIso } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
 
@@ -77,6 +77,36 @@ function SessionRow({
 			)}
 		</button>
 	);
+}
+
+function GapRow({ gap }: { gap: Gap }) {
+	return (
+		<div className="flex items-center gap-2 px-3 py-1 opacity-60">
+			<div className="w-1.5 h-1.5 rounded-full shrink-0 border border-dashed border-muted-foreground/40" />
+			<span className="text-xs text-muted-foreground italic flex-1">Untracked</span>
+			<span className="text-xs text-muted-foreground tabular-nums shrink-0">
+				{formatTime(gap.start)} → {formatTime(gap.end)}
+			</span>
+			<span className="text-xs tabular-nums text-muted-foreground w-14 text-right shrink-0">
+				{formatDuration(gap.duration_minutes)}
+			</span>
+		</div>
+	);
+}
+
+/**
+ * Merge today's sessions and gaps into a single timeline sorted by start time.
+ */
+function buildTimeline(sessions: Session[], gaps: Gap[]): Array<{ type: "session" | "gap"; data: Session | Gap }> {
+	const items: Array<{ type: "session" | "gap"; data: Session | Gap; time: number }> = [];
+	for (const s of sessions) {
+		items.push({ type: "session", data: s, time: new Date(s.startTime).getTime() });
+	}
+	for (const g of gaps) {
+		items.push({ type: "gap", data: g, time: new Date(g.start).getTime() });
+	}
+	items.sort((a, b) => a.time - b.time);
+	return items.map(({ type, data }) => ({ type, data }));
 }
 
 function SessionGroup({
@@ -146,6 +176,7 @@ export function TodayFeed() {
 	const { data: weekSessions } = useThisWeekSessions();
 	const { data: projects } = useProjects();
 	const { data: focusScores } = useFocusScores();
+	const { data: gaps } = useGaps();
 
 	const projectMap = new Map((projects || []).map((p) => [p.id, { name: p.name, color: p.color }]));
 	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
@@ -205,7 +236,12 @@ export function TodayFeed() {
 					</div>
 
 					{todayList.length > 0 ? (
-						todayList.map((session) => {
+						buildTimeline(todayList, gaps ?? []).map((item) => {
+							if (item.type === "gap") {
+								const gap = item.data as Gap;
+								return <GapRow key={`gap-${gap.start}`} gap={gap} />;
+							}
+							const session = item.data as Session;
 							const info = projectMap.get(session.projectId);
 							return (
 								<SessionRow

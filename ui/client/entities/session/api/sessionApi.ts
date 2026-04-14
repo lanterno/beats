@@ -3,9 +3,10 @@
  * Low-level API calls for sessions (beats) and analytics.
  */
 
-import type { ApiBeat, HeatmapDay, RhythmSlot } from "@/shared/api";
+import type { ApiBeat, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
 import {
 	ApiBeatListSchema,
+	GapListSchema,
 	get,
 	HeatmapDayListSchema,
 	parseApiResponse,
@@ -64,4 +65,12 @@ export async function fetchDailyRhythm(
  */
 export async function fetchAllTags(): Promise<string[]> {
 	return get<string[]>("/api/analytics/tags");
+}
+
+/**
+ * Fetch untracked time gaps for a given date
+ */
+export async function fetchGaps(targetDate: string): Promise<Gap[]> {
+	const data = await get<unknown>(`/api/analytics/gaps?target_date=${targetDate}`);
+	return parseApiResponse(GapListSchema, data);
 }

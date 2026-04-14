@@ -32,6 +32,15 @@ async def get_daily_rhythm(
     return await service.get_daily_rhythm(period, project_id=project_id, tag=tag)
 
 
+@router.get("/gaps")
+async def get_untracked_gaps(
+    service: AnalyticsServiceDep,
+    target_date: date = Query(default_factory=date.today),
+):
+    """Get untracked gaps between sessions on a given date."""
+    return await service.get_untracked_gaps(target_date)
+
+
 @router.get("/tags", response_model=list[str])
 async def get_all_tags(beat_service: BeatServiceDep):
     """Get all unique tags used across all sessions, sorted alphabetically."""
