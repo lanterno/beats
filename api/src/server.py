@@ -16,6 +16,7 @@ from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
 from beats.api.routers.beats import router as beats_router
+from beats.api.routers.calendar import router as calendar_router
 from beats.api.routers.daily_notes import router as daily_notes_router
 from beats.api.routers.device import router as device_router
 from beats.api.routers.export import router as export_router
@@ -142,6 +143,7 @@ app.include_router(device_router)
 app.include_router(export_router)
 app.include_router(intelligence_router)
 app.include_router(webhooks_router)
+app.include_router(calendar_router)
 
 # Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)

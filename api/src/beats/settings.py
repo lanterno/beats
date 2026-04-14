@@ -37,5 +37,16 @@ class Settings(BaseSettings):
     # JWT settings
     jwt_secret: str = Field(validation_alias="JWT_SECRET")
 
+    # Google Calendar OAuth (optional)
+    google_client_id: str = Field(default="", validation_alias="GOOGLE_CLIENT_ID")
+    google_client_secret: str = Field(default="", validation_alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: str = Field(
+        default="http://localhost:8080/settings?calendar=callback",
+        validation_alias="GOOGLE_REDIRECT_URI",
+    )
+
+    # GitHub integration (optional)
+    github_token: str = Field(default="", validation_alias="GITHUB_TOKEN")
+
 
 settings = Settings()

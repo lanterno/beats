@@ -223,6 +223,21 @@ class UserInsights(BaseModel):
     dismissed_ids: list[str] = Field(default_factory=list)
 
 
+class CalendarIntegration(BaseModel):
+    """A connected Google Calendar OAuth integration."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    provider: str = "google"
+    access_token: str = ""
+    refresh_token: str = ""
+    token_expiry: datetime | None = None
+    calendar_ids: list[str] = Field(default_factory=lambda: ["primary"])
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Webhook(BaseModel):
     """A registered webhook URL that receives timer events.
 

@@ -4,6 +4,7 @@
  */
 
 import {
+	Calendar,
 	Download,
 	ExternalLink,
 	FileJson,
@@ -19,6 +20,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+	fetchCalendarAuthUrl,
+	useCalendarStatus,
+	useConnectCalendar,
+	useDisconnectCalendar,
+} from "@/entities/calendar";
 import { useProjects } from "@/entities/project";
 import type { CredentialInfo } from "@/features/auth";
 import { del, get, post } from "@/shared/api";
@@ -234,6 +241,9 @@ export default function Settings() {
 					</label>
 				</div>
 			</section>
+
+			{/* Integrations */}
+			<CalendarSection />
 
 			{/* Passkeys */}
 			<PasskeysSection />
@@ -500,6 +510,76 @@ function WebhooksSection() {
 						Add
 					</button>
 				</div>
+			</div>
+		</section>
+	);
+}
+
+function CalendarSection() {
+	const { data: status } = useCalendarStatus();
+	const connectMutation = useConnectCalendar();
+	const disconnectMutation = useDisconnectCalendar();
+
+	// Handle OAuth callback: check URL for calendar=callback&code=...
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		if (params.get("calendar") === "callback" && params.get("code")) {
+			const code = params.get("code")!;
+			connectMutation.mutate(code, {
+				onSuccess: () => {
+					toast.success("Google Calendar connected");
+					window.history.replaceState({}, "", "/settings");
+				},
+				onError: () => toast.error("Failed to connect calendar"),
+			});
+		}
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+	const handleConnect = async () => {
+		try {
+			const url = await fetchCalendarAuthUrl();
+			window.location.href = url;
+		} catch {
+			toast.error("Failed to get auth URL — check Google OAuth credentials");
+		}
+	};
+
+	const handleDisconnect = () => {
+		disconnectMutation.mutate(undefined, {
+			onSuccess: () => toast.success("Calendar disconnected"),
+			onError: () => toast.error("Failed to disconnect"),
+		});
+	};
+
+	return (
+		<section className="mb-8">
+			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+				<Calendar className="w-4 h-4 text-accent" />
+				Google Calendar
+			</h2>
+			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
+				<p className="text-xs text-muted-foreground">
+					Connect Google Calendar to see events alongside your tracked sessions. Read-only access
+					— Beats never modifies your calendar.
+				</p>
+				{status?.connected ? (
+					<div className="flex items-center gap-3">
+						<span className="text-xs text-accent font-medium">Connected</span>
+						<button
+							onClick={handleDisconnect}
+							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+						>
+							Disconnect
+						</button>
+					</div>
+				) : (
+					<button
+						onClick={handleConnect}
+						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
+					>
+						Connect Google Calendar
+					</button>
+				)}
 			</div>
 		</section>
 	);

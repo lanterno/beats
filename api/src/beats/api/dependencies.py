@@ -6,15 +6,18 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 
 from beats.domain.analytics import AnalyticsService
+from beats.domain.calendar import CalendarService
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     BeatRepository,
+    CalendarIntegrationRepository,
     DailyNoteRepository,
     InsightsRepository,
     IntentionRepository,
     MongoBeatRepository,
+    MongoCalendarIntegrationRepository,
     MongoDailyNoteRepository,
     MongoInsightsRepository,
     MongoIntentionRepository,
@@ -135,6 +138,20 @@ def get_intelligence_service(
     )
 
 
+def get_calendar_integration_repository(user_id: CurrentUserId) -> CalendarIntegrationRepository:
+    """Get the calendar integration repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoCalendarIntegrationRepository(db.calendar_integrations, user_id=user_id)
+
+
+def get_calendar_service(
+    cal_repo: Annotated[CalendarIntegrationRepository, Depends(get_calendar_integration_repository)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> CalendarService:
+    """Get the calendar service with injected repository."""
+    return CalendarService(settings=settings, repo=cal_repo)
+
+
 # Type aliases for cleaner dependency injection in routes
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
@@ -146,3 +163,4 @@ WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]
 InsightsRepoDep = Annotated[InsightsRepository, Depends(get_insights_repository)]
 IntelligenceServiceDep = Annotated[IntelligenceService, Depends(get_intelligence_service)]
+CalendarServiceDep = Annotated[CalendarService, Depends(get_calendar_service)]

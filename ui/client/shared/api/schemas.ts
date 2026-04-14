@@ -282,6 +282,28 @@ export type ProjectHealth = z.infer<typeof ProjectHealthSchema>;
 export const ProjectHealthListSchema = z.array(ProjectHealthSchema);
 
 // ============================================================================
+// Calendar schemas
+// ============================================================================
+
+export const CalendarEventSchema = z.object({
+	summary: z.string(),
+	start: z.string(),
+	end: z.string(),
+	all_day: z.boolean(),
+});
+
+export type CalendarEvent = z.infer<typeof CalendarEventSchema>;
+
+export const CalendarEventListSchema = z.array(CalendarEventSchema);
+
+export const CalendarStatusSchema = z.object({
+	connected: z.boolean(),
+	provider: z.string().nullable().optional(),
+});
+
+export type CalendarStatus = z.infer<typeof CalendarStatusSchema>;
+
+// ============================================================================
 // Gap schemas
 // ============================================================================
 

@@ -10,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
 from beats.domain.models import (
     Beat,
+    CalendarIntegration,
     DailyNote,
     Intention,
     Project,
@@ -682,3 +683,55 @@ class MongoInsightsRepository(InsightsRepository):
             self._q(),
             {"$addToSet": {"dismissed_ids": insight_id}},
         )
+
+
+# Calendar Integration Repository
+
+
+class CalendarIntegrationRepository(ABC):
+    """Abstract interface for CalendarIntegration persistence."""
+
+    @abstractmethod
+    async def get(self) -> CalendarIntegration | None: ...
+
+    @abstractmethod
+    async def upsert(self, integration: CalendarIntegration) -> CalendarIntegration: ...
+
+    @abstractmethod
+    async def delete(self) -> bool: ...
+
+
+class MongoCalendarIntegrationRepository(CalendarIntegrationRepository):
+    """MongoDB implementation of CalendarIntegrationRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+    async def get(self) -> CalendarIntegration | None:
+        doc = await self.collection.find_one(self._q())
+        if not doc:
+            return None
+        return CalendarIntegration(**serialize_from_document(doc))
+
+    async def upsert(self, integration: CalendarIntegration) -> CalendarIntegration:
+        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q(),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return CalendarIntegration(**serialize_from_document(result))
+
+    async def delete(self) -> bool:
+        result = await self.collection.delete_one(self._q())
+        return result.deleted_count > 0
