@@ -76,9 +76,7 @@ export function WeeklyReviewDialog() {
 				<div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
 					<div className="flex items-center gap-2">
 						<BookOpen className="w-5 h-5 text-accent" />
-						<h2 className="text-base font-heading font-semibold text-foreground">
-							Weekly Review
-						</h2>
+						<h2 className="text-base font-heading font-semibold text-foreground">Weekly Review</h2>
 					</div>
 					<button
 						onClick={dismiss}

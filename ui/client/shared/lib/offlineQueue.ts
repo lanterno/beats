@@ -63,9 +63,7 @@ async function clearEvents(): Promise<void> {
  * Replay all queued events in order, then clear the store.
  * Returns the number of events successfully replayed.
  */
-export async function drainQueue(
-	replay: (event: OfflineEvent) => Promise<void>,
-): Promise<number> {
+export async function drainQueue(replay: (event: OfflineEvent) => Promise<void>): Promise<number> {
 	const events = await getPendingEvents();
 	if (events.length === 0) return 0;
 

@@ -3,7 +3,7 @@
  */
 
 import type { GitHubStatus } from "@/shared/api";
-import { del, get, GitHubStatusSchema, parseApiResponse, post } from "@/shared/api";
+import { del, GitHubStatusSchema, get, parseApiResponse, post } from "@/shared/api";
 
 export async function fetchGitHubAuthUrl(): Promise<string> {
 	const data = await get<{ url: string }>("/api/github/auth-url");

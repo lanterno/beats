@@ -138,12 +138,15 @@ class SessionManager:
 
     def create_session_token(self, user_id: str, email: str = "") -> str:
         """Create a JWT session token."""
+        import uuid
+
         now = datetime.now(UTC)
         payload: dict[str, Any] = {
             "sub": user_id,
             "iat": now,
             "exp": now + timedelta(seconds=self._session_ttl),
             "type": "session",
+            "jti": str(uuid.uuid4()),
         }
         if email:
             payload["email"] = email

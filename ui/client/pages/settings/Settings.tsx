@@ -527,13 +527,14 @@ function CalendarSection() {
 	const { data: status } = useCalendarStatus();
 	const connectMutation = useConnectCalendar();
 	const disconnectMutation = useDisconnectCalendar();
+	const connectCalendar = connectMutation.mutate;
 
 	// Handle OAuth callback: check URL for calendar=callback&code=...
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		if (params.get("calendar") === "callback" && params.get("code")) {
 			const code = params.get("code")!;
-			connectMutation.mutate(code, {
+			connectCalendar(code, {
 				onSuccess: () => {
 					toast.success("Google Calendar connected");
 					window.history.replaceState({}, "", "/settings");
@@ -541,7 +542,7 @@ function CalendarSection() {
 				onError: () => toast.error("Failed to connect calendar"),
 			});
 		}
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [connectCalendar]);
 
 	const handleConnect = async () => {
 		try {
@@ -567,8 +568,8 @@ function CalendarSection() {
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
 				<p className="text-xs text-muted-foreground">
-					Connect Google Calendar to see events alongside your tracked sessions. Read-only access
-					— Beats never modifies your calendar.
+					Connect Google Calendar to see events alongside your tracked sessions. Read-only access —
+					Beats never modifies your calendar.
 				</p>
 				{status?.connected ? (
 					<div className="flex items-center gap-3">
@@ -597,13 +598,14 @@ function GitHubSection() {
 	const { data: status } = useGitHubStatus();
 	const connectMutation = useConnectGitHub();
 	const disconnectMutation = useDisconnectGitHub();
+	const connectGitHub = connectMutation.mutate;
 
 	// Handle OAuth callback: check URL for github=callback&code=...
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		if (params.get("github") === "callback" && params.get("code")) {
 			const code = params.get("code")!;
-			connectMutation.mutate(code, {
+			connectGitHub(code, {
 				onSuccess: () => {
 					toast.success("GitHub connected");
 					window.history.replaceState({}, "", "/settings");
@@ -611,7 +613,7 @@ function GitHubSection() {
 				onError: () => toast.error("Failed to connect GitHub"),
 			});
 		}
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [connectGitHub]);
 
 	const handleConnect = async () => {
 		try {

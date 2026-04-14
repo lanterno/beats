@@ -97,7 +97,10 @@ function GapRow({ gap }: { gap: Gap }) {
 /**
  * Merge today's sessions and gaps into a single timeline sorted by start time.
  */
-function buildTimeline(sessions: Session[], gaps: Gap[]): Array<{ type: "session" | "gap"; data: Session | Gap }> {
+function buildTimeline(
+	sessions: Session[],
+	gaps: Gap[],
+): Array<{ type: "session" | "gap"; data: Session | Gap }> {
 	const items: Array<{ type: "session" | "gap"; data: Session | Gap; time: number }> = [];
 	for (const s of sessions) {
 		items.push({ type: "session", data: s, time: new Date(s.startTime).getTime() });

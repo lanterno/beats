@@ -51,9 +51,7 @@ export function MorningBriefing({
 				<div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
 					<div className="flex items-center gap-2">
 						<Sunrise className="w-5 h-5 text-accent" />
-						<h2 className="text-base font-heading font-semibold text-foreground">
-							Good morning
-						</h2>
+						<h2 className="text-base font-heading font-semibold text-foreground">Good morning</h2>
 					</div>
 					<button
 						onClick={dismiss}
@@ -87,9 +85,7 @@ export function MorningBriefing({
 
 					{/* Today's intentions */}
 					<div>
-						<p className="text-xs uppercase tracking-[0.1em] text-muted-foreground mb-1.5">
-							Today
-						</p>
+						<p className="text-xs uppercase tracking-[0.1em] text-muted-foreground mb-1.5">Today</p>
 						<p className="text-sm text-foreground">
 							{todayIntentionCount > 0
 								? `${todayIntentionCount} intention${todayIntentionCount !== 1 ? "s" : ""} set`
@@ -100,9 +96,7 @@ export function MorningBriefing({
 					{/* Goal warnings */}
 					{goalWarnings.length > 0 && (
 						<div>
-							<p className="text-xs uppercase tracking-[0.1em] text-accent mb-1.5">
-								Goal alerts
-							</p>
+							<p className="text-xs uppercase tracking-[0.1em] text-accent mb-1.5">Goal alerts</p>
 							<div className="space-y-1">
 								{goalWarnings.map((w) => (
 									<p key={w.projectName} className="text-sm text-foreground">

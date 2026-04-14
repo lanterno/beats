@@ -25,10 +25,10 @@ export {
 	TableRow,
 } from "./table";
 export { TagInput } from "./tag-input";
-export { WeeklyReviewDialog } from "./weekly-review";
 export {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "./tooltip";
+export { WeeklyReviewDialog } from "./weekly-review";

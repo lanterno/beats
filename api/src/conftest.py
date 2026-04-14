@@ -49,7 +49,7 @@ def test_client():
 
 @pytest.fixture(scope="class", autouse=True)
 def clean_db():
-    """Drop all test collections before each test class."""
+    """Drop all test collections before each test class, then recreate indexes."""
     from pymongo import MongoClient
 
     dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
@@ -58,6 +58,10 @@ def clean_db():
     db = sync_client[db_name]
     for name in db.list_collection_names():
         db[name].drop()
+    # Recreate unique indexes (matches Database._ensure_indexes)
+    db.users.create_index("email", unique=True)
+    db.credentials.create_index("credential_id", unique=True)
+    db.credentials.create_index("user_id")
     sync_client.close()
     yield
 
