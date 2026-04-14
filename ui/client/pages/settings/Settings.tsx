@@ -10,6 +10,7 @@ import {
 	FileJson,
 	FileSpreadsheet,
 	Fingerprint,
+	Github,
 	Palette,
 	Plus,
 	Rows3,
@@ -26,6 +27,12 @@ import {
 	useConnectCalendar,
 	useDisconnectCalendar,
 } from "@/entities/calendar";
+import {
+	fetchGitHubAuthUrl,
+	useConnectGitHub,
+	useDisconnectGitHub,
+	useGitHubStatus,
+} from "@/entities/github";
 import { useProjects } from "@/entities/project";
 import type { CredentialInfo } from "@/features/auth";
 import { del, get, post } from "@/shared/api";
@@ -244,6 +251,7 @@ export default function Settings() {
 
 			{/* Integrations */}
 			<CalendarSection />
+			<GitHubSection />
 
 			{/* Passkeys */}
 			<PasskeysSection />
@@ -578,6 +586,78 @@ function CalendarSection() {
 						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 					>
 						Connect Google Calendar
+					</button>
+				)}
+			</div>
+		</section>
+	);
+}
+
+function GitHubSection() {
+	const { data: status } = useGitHubStatus();
+	const connectMutation = useConnectGitHub();
+	const disconnectMutation = useDisconnectGitHub();
+
+	// Handle OAuth callback: check URL for github=callback&code=...
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		if (params.get("github") === "callback" && params.get("code")) {
+			const code = params.get("code")!;
+			connectMutation.mutate(code, {
+				onSuccess: () => {
+					toast.success("GitHub connected");
+					window.history.replaceState({}, "", "/settings");
+				},
+				onError: () => toast.error("Failed to connect GitHub"),
+			});
+		}
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+	const handleConnect = async () => {
+		try {
+			const url = await fetchGitHubAuthUrl();
+			window.location.href = url;
+		} catch {
+			toast.error("Failed to get auth URL — check GitHub OAuth credentials");
+		}
+	};
+
+	const handleDisconnect = () => {
+		disconnectMutation.mutate(undefined, {
+			onSuccess: () => toast.success("GitHub disconnected"),
+			onError: () => toast.error("Failed to disconnect"),
+		});
+	};
+
+	return (
+		<section className="mb-8">
+			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+				<Github className="w-4 h-4 text-accent" />
+				GitHub
+			</h2>
+			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
+				<p className="text-xs text-muted-foreground">
+					Connect GitHub to see commit activity alongside your tracked sessions. Link a repo to a
+					project in its settings to enable correlation.
+				</p>
+				{status?.connected ? (
+					<div className="flex items-center gap-3">
+						<span className="text-xs text-accent font-medium">
+							Connected as {status.github_username}
+						</span>
+						<button
+							onClick={handleDisconnect}
+							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+						>
+							Disconnect
+						</button>
+					</div>
+				) : (
+					<button
+						onClick={handleConnect}
+						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
+					>
+						Connect GitHub
 					</button>
 				)}
 			</div>

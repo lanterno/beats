@@ -21,6 +21,7 @@ from beats.api.routers.calendar import router as calendar_router
 from beats.api.routers.daily_notes import router as daily_notes_router
 from beats.api.routers.device import router as device_router
 from beats.api.routers.export import router as export_router
+from beats.api.routers.github import router as github_router
 from beats.api.routers.intelligence import router as intelligence_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.intentions import router as intentions_router
@@ -146,6 +147,7 @@ app.include_router(export_router)
 app.include_router(intelligence_router)
 app.include_router(webhooks_router)
 app.include_router(calendar_router)
+app.include_router(github_router)
 app.include_router(auto_start_router)
 app.include_router(planning_router)
 

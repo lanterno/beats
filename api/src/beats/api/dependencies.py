@@ -21,12 +21,14 @@ from beats.infrastructure.repositories import (
     MongoBeatRepository,
     MongoAutoStartRuleRepository,
     MongoCalendarIntegrationRepository,
+    MongoGitHubIntegrationRepository,
     MongoRecurringIntentionRepository,
     MongoWeeklyPlanRepository,
     MongoWeeklyReviewRepository,
     MongoDailyNoteRepository,
     MongoInsightsRepository,
     MongoIntentionRepository,
+    GitHubIntegrationRepository,
     MongoProjectRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
@@ -175,11 +177,18 @@ IntelligenceServiceDep = Annotated[IntelligenceService, Depends(get_intelligence
 CalendarServiceDep = Annotated[CalendarService, Depends(get_calendar_service)]
 
 
+def get_github_integration_repository(user_id: CurrentUserId) -> GitHubIntegrationRepository:
+    """Get the GitHub integration repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoGitHubIntegrationRepository(db.github_integrations, user_id=user_id)
+
+
 def get_github_service(
+    gh_repo: Annotated[GitHubIntegrationRepository, Depends(get_github_integration_repository)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> GitHubService:
-    """Get the GitHub service."""
-    return GitHubService(settings=settings)
+    """Get the GitHub service with injected repository."""
+    return GitHubService(settings=settings, repo=gh_repo)
 
 
 GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]

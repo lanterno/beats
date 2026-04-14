@@ -303,6 +303,13 @@ export const CalendarStatusSchema = z.object({
 
 export type CalendarStatus = z.infer<typeof CalendarStatusSchema>;
 
+export const GitHubStatusSchema = z.object({
+	connected: z.boolean(),
+	github_username: z.string().nullable().optional(),
+});
+
+export type GitHubStatus = z.infer<typeof GitHubStatusSchema>;
+
 // ============================================================================
 // Gap schemas
 // ============================================================================

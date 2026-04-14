@@ -274,6 +274,18 @@ class AutoStartRule(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class GitHubIntegration(BaseModel):
+    """A connected GitHub OAuth integration (per-user)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    access_token: str = ""
+    github_username: str = ""
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class CalendarIntegration(BaseModel):
     """A connected Google Calendar OAuth integration."""
 

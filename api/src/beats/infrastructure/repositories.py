@@ -13,6 +13,7 @@ from beats.domain.models import (
     Beat,
     CalendarIntegration,
     DailyNote,
+    GitHubIntegration,
     Intention,
     Project,
     RecurringIntention,
@@ -690,6 +691,55 @@ class MongoInsightsRepository(InsightsRepository):
 
 
 # Calendar Integration Repository
+
+
+class GitHubIntegrationRepository(ABC):
+    """Abstract interface for GitHubIntegration persistence."""
+
+    @abstractmethod
+    async def get(self) -> GitHubIntegration | None: ...
+
+    @abstractmethod
+    async def upsert(self, integration: GitHubIntegration) -> GitHubIntegration: ...
+
+    @abstractmethod
+    async def delete(self) -> bool: ...
+
+
+class MongoGitHubIntegrationRepository(GitHubIntegrationRepository):
+    """MongoDB implementation of GitHubIntegrationRepository."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+    async def get(self) -> GitHubIntegration | None:
+        doc = await self.collection.find_one(self._q())
+        if not doc:
+            return None
+        return GitHubIntegration(**serialize_from_document(doc))
+
+    async def upsert(self, integration: GitHubIntegration) -> GitHubIntegration:
+        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q(),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return GitHubIntegration(**serialize_from_document(result))
+
+    async def delete(self) -> bool:
+        result = await self.collection.delete_one(self._q())
+        return result.deleted_count > 0
 
 
 class AutoStartRuleRepository(ABC):

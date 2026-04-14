@@ -45,8 +45,13 @@ class Settings(BaseSettings):
         validation_alias="GOOGLE_REDIRECT_URI",
     )
 
-    # GitHub integration (optional)
-    github_token: str = Field(default="", validation_alias="GITHUB_TOKEN")
+    # GitHub OAuth (optional)
+    github_client_id: str = Field(default="", validation_alias="GITHUB_CLIENT_ID")
+    github_client_secret: str = Field(default="", validation_alias="GITHUB_CLIENT_SECRET")
+    github_redirect_uri: str = Field(
+        default="http://localhost:8080/settings?github=callback",
+        validation_alias="GITHUB_REDIRECT_URI",
+    )
 
 
 settings = Settings()
