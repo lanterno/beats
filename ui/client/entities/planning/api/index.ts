@@ -1,4 +1,5 @@
 export {
+	applyRecurringIntentions,
 	createIntention,
 	deleteIntention,
 	fetchDailyNote,
@@ -9,10 +10,19 @@ export {
 
 export {
 	planningKeys,
+	useApplyRecurring,
 	useCreateIntention,
+	useCreateRecurringIntention,
 	useDailyNote,
 	useDeleteIntention,
+	useDeleteRecurringIntention,
+	useIntentionStreaks,
 	useIntentions,
+	useRecurringIntentions,
 	useUpdateIntention,
 	useUpsertDailyNote,
+	useUpsertWeeklyPlan,
+	useUpsertWeeklyReview,
+	useWeeklyPlan,
+	useWeeklyReview,
 } from "./queries";

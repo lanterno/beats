@@ -3,12 +3,13 @@
  * Set 1-3 time-boxed daily intentions and track progress.
  */
 
-import { Check, Lightbulb, Plus, Target, X } from "lucide-react";
+import { Check, Flame, Lightbulb, Plus, Target, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSuggestions } from "@/entities/intelligence";
 import {
 	useCreateIntention,
 	useDeleteIntention,
+	useIntentionStreaks,
 	useIntentions,
 	useUpdateIntention,
 } from "@/entities/planning";
@@ -37,6 +38,7 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 	const projectMap = new Map(activeProjects.map((p) => [p.id, p]));
 	const items = intentions ?? [];
 	const { data: suggestions } = useSuggestions();
+	const { data: streaks } = useIntentionStreaks();
 
 	const handleAdd = () => {
 		if (!newProjectId) return;
@@ -88,6 +90,15 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm">
 					<Target className="w-3.5 h-3.5 text-accent/75" />
 					Today's Plan
+					{streaks && streaks.current_streak > 0 && (
+						<span
+							className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium"
+							title={`${streaks.current_streak}-day intention streak (best: ${streaks.best_streak})`}
+						>
+							<Flame className="w-2.5 h-2.5" />
+							{streaks.current_streak}
+						</span>
+					)}
 				</h2>
 				{items.length < 3 && !adding && (
 					<button

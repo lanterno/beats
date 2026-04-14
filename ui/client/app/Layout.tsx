@@ -5,11 +5,16 @@
  * Mobile: sticky header with hamburger drawer.
  * Handles favicon indicator, keyboard shortcuts, command palette, and focus mode.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { useDailyNote, useUpsertDailyNote } from "@/entities/planning";
+import {
+	applyRecurringIntentions,
+	useDailyNote,
+	useIntentions,
+	useUpsertDailyNote,
+} from "@/entities/planning";
 import { useProjects } from "@/entities/project";
-import { useTodaySessions } from "@/entities/session";
+import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
 import { useTimer } from "@/features/timer";
 import {
 	parseUtcIso,
@@ -18,7 +23,13 @@ import {
 	useTheme,
 	useTimerNotification,
 } from "@/shared/lib";
-import { CommandPalette, EndOfDayReview, FocusMode } from "@/shared/ui";
+import {
+	CommandPalette,
+	EndOfDayReview,
+	FocusMode,
+	MorningBriefing,
+	WeeklyReviewDialog,
+} from "@/shared/ui";
 import { MobileHeader, Sidebar } from "@/widgets/sidebar";
 
 export function Layout() {
@@ -26,13 +37,26 @@ export function Layout() {
 	const timer = useTimer();
 	const location = useLocation();
 	const { data: todaySessions } = useTodaySessions();
+	const { data: weekSessions } = useThisWeekSessions();
 	const { data: dailyNote } = useDailyNote();
 	const upsertNote = useUpsertDailyNote();
+	const { data: todayIntentions } = useIntentions();
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 	const [focusModeOpen, setFocusModeOpen] = useState(false);
 
 	// Initialize theme + density from localStorage
 	useTheme();
+
+	// Apply recurring intentions on first load each day
+	useEffect(() => {
+		const key = "beats_recurring_applied";
+		const today = new Date().toISOString().slice(0, 10);
+		if (localStorage.getItem(key) !== today) {
+			applyRecurringIntentions()
+				.then(() => localStorage.setItem(key, today))
+				.catch(() => {});
+		}
+	}, []);
 
 	const projectsList = projects || [];
 	const activeProjects = projectsList.filter((p) => !p.archived);
@@ -151,6 +175,39 @@ export function Layout() {
 					setFocusModeOpen(false);
 				}}
 			/>
+
+			{/* Morning briefing */}
+			<MorningBriefing
+				yesterdayMinutes={(() => {
+					const yesterday = new Date();
+					yesterday.setDate(yesterday.getDate() - 1);
+					yesterday.setHours(0, 0, 0, 0);
+					const today = new Date();
+					today.setHours(0, 0, 0, 0);
+					return (weekSessions ?? [])
+						.filter((s) => {
+							const d = parseUtcIso(s.startTime);
+							return d >= yesterday && d < today;
+						})
+						.reduce((sum, s) => sum + s.duration, 0);
+				})()}
+				yesterdaySessionCount={(() => {
+					const yesterday = new Date();
+					yesterday.setDate(yesterday.getDate() - 1);
+					yesterday.setHours(0, 0, 0, 0);
+					const today = new Date();
+					today.setHours(0, 0, 0, 0);
+					return (weekSessions ?? []).filter((s) => {
+						const d = parseUtcIso(s.startTime);
+						return d >= yesterday && d < today;
+					}).length;
+				})()}
+				todayIntentionCount={(todayIntentions ?? []).length}
+				goalWarnings={[]}
+			/>
+
+			{/* Weekly review */}
+			<WeeklyReviewDialog />
 
 			{/* End-of-day review */}
 			<EndOfDayReview

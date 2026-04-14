@@ -14,6 +14,7 @@ import Digests from "@/pages/insights/Digests";
 import MonthlyRetrospective from "@/pages/insights/MonthlyRetrospective";
 import YearInReview from "@/pages/insights/YearInReview";
 import NotFound from "@/pages/not-found";
+import PlanPage from "@/pages/plan";
 import ProjectDetails from "@/pages/project-details";
 import Settings from "@/pages/settings";
 import { Toaster, TooltipProvider } from "@/shared/ui";
@@ -99,6 +100,7 @@ export function App() {
 								<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
 								<Route path="/insights/year/:year" element={<YearInReview />} />
 								<Route path="/project/:projectId" element={<ProjectDetails />} />
+								<Route path="/plan" element={<PlanPage />} />
 								<Route path="/settings" element={<Settings />} />
 							</Route>
 

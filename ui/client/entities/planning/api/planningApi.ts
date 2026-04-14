@@ -68,3 +68,74 @@ export async function upsertDailyNote(
 	const data = await put<unknown>("/api/daily-notes", body);
 	return parseApiResponse(DailyNoteSchema, data);
 }
+
+// Weekly Plans
+
+export async function fetchWeeklyPlan(weekOf: string) {
+	return get<{ week_of: string; budgets: Array<{ project_id: string; planned_hours: number }> }>(
+		`/api/plans/weekly?week_of=${weekOf}`,
+	);
+}
+
+export async function upsertWeeklyPlan(
+	weekOf: string,
+	budgets: Array<{ project_id: string; planned_hours: number }>,
+) {
+	return put<unknown>("/api/plans/weekly", { week_of: weekOf, budgets });
+}
+
+// Recurring Intentions
+
+export async function fetchRecurringIntentions() {
+	return get<
+		Array<{
+			id: string;
+			project_id: string;
+			planned_minutes: number;
+			days_of_week: number[];
+			enabled: boolean;
+		}>
+	>("/api/plans/recurring");
+}
+
+export async function createRecurringIntention(body: {
+	project_id: string;
+	planned_minutes: number;
+	days_of_week: number[];
+}) {
+	return post<unknown>("/api/plans/recurring", body);
+}
+
+export async function deleteRecurringIntention(id: string) {
+	return del<unknown>(`/api/plans/recurring/${id}`);
+}
+
+export async function applyRecurringIntentions() {
+	return post<{ created: number; date: string }>("/api/plans/recurring/apply");
+}
+
+// Weekly Reviews
+
+export async function fetchWeeklyReview(weekOf: string) {
+	return get<{
+		week_of: string;
+		went_well: string;
+		didnt_go_well: string;
+		to_change: string;
+	}>(`/api/plans/reviews/weekly?week_of=${weekOf}`);
+}
+
+export async function upsertWeeklyReview(body: {
+	week_of: string;
+	went_well: string;
+	didnt_go_well: string;
+	to_change: string;
+}) {
+	return put<unknown>("/api/plans/reviews/weekly", body);
+}
+
+// Intention Streaks
+
+export async function fetchIntentionStreaks() {
+	return get<{ current_streak: number; best_streak: number }>("/api/plans/intention-streaks");
+}
