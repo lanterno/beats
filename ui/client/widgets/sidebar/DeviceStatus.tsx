@@ -18,6 +18,7 @@ function useDeviceHeartbeat() {
 		queryKey: ["device", "heartbeat"],
 		queryFn: () => get<DeviceHeartbeat | null>("/api/device/heartbeat"),
 		refetchInterval: 30_000,
+		refetchIntervalInBackground: false,
 	});
 }
 
