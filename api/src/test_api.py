@@ -607,6 +607,60 @@ class TestTimerAPI:
             )
 
 
+class TestCoachEndpoints:
+    """Smoke tests for coach endpoints. Since we can't call the real Anthropic
+    API in tests, we only test endpoints that don't require LLM calls (usage,
+    brief retrieval, review retrieval, memory read) and verify auth/shape."""
+
+    def test_brief_today_returns_null_when_empty(self):
+        response = client.get("/api/coach/brief/today", headers=auth_headers)
+        assert response.status_code == 200
+        # No brief generated yet — should return null
+        assert response.json() is None
+
+    def test_brief_history_returns_empty_list(self):
+        response = client.get("/api/coach/brief/history", headers=auth_headers)
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_review_today_returns_null_when_empty(self):
+        response = client.get("/api/coach/review/today", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_memory_returns_empty_content(self):
+        response = client.get("/api/coach/memory", headers=auth_headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert "content" in body
+
+    def test_usage_returns_shape(self):
+        response = client.get("/api/coach/usage", headers=auth_headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert "days" in body
+        assert "month_total_usd" in body
+        assert "budget_usd" in body
+        assert isinstance(body["days"], list)
+        assert body["budget_usd"] > 0
+
+    def test_coach_endpoints_require_auth(self):
+        for path in [
+            "/api/coach/brief/today",
+            "/api/coach/brief/history",
+            "/api/coach/review/today",
+            "/api/coach/memory",
+            "/api/coach/usage",
+        ]:
+            assert client.get(path).status_code == 401, f"{path} should require auth"
+
+    def test_chat_requires_auth(self):
+        response = client.post(
+            "/api/coach/chat", json={"message": "hello"}
+        )
+        assert response.status_code == 401
+
+
 class TestMiscellaneousEndpoints:
     """Test suite for miscellaneous endpoints"""
 

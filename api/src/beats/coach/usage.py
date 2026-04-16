@@ -7,10 +7,13 @@ ceiling is exceeded.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from beats.infrastructure.database import Database
 from beats.settings import settings
+
+logger = logging.getLogger(__name__)
 
 COLLECTION = "llm_usage"
 
@@ -70,6 +73,10 @@ class UsageTracker:
             return
         spent = await self.month_spend()
         if spent >= limit:
+            logger.info(
+                "Budget exceeded for user=%s: $%.2f / $%.2f",
+                self._user_id, spent, limit,
+            )
             raise BudgetExceeded(spent, limit)
 
     async def usage_summary(self, days: int = 30) -> list[dict]:

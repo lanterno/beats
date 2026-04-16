@@ -2,14 +2,16 @@
  * Coach page — AI chat with streaming + tool-use visualization.
  */
 
-import { Loader2, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
+import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ChatMessage, useCoachChat } from "@/entities/coach";
 import { cn } from "@/shared/lib";
+import { ReviewFlow } from "./ReviewFlow";
 
 export default function Coach() {
 	const { messages, streaming, currentTool, sendMessage, stop, reset } = useCoachChat();
 	const [input, setInput] = useState("");
+	const [reviewOpen, setReviewOpen] = useState(false);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -45,16 +47,26 @@ export default function Coach() {
 			<header className="flex items-center gap-2 mb-4">
 				<Sparkles className="w-5 h-5 text-accent" />
 				<h1 className="text-lg font-heading font-bold text-foreground">Coach</h1>
-				{messages.length > 0 && (
+				<div className="ml-auto flex items-center gap-1">
 					<button
 						type="button"
-						onClick={reset}
-						className="ml-auto p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
-						title="New conversation"
+						onClick={() => setReviewOpen(true)}
+						className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
+						title="End-of-day review"
 					>
-						<RotateCcw className="w-4 h-4" />
+						<MessageCircle className="w-4 h-4" />
 					</button>
-				)}
+					{messages.length > 0 && (
+						<button
+							type="button"
+							onClick={reset}
+							className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
+							title="New conversation"
+						>
+							<RotateCcw className="w-4 h-4" />
+						</button>
+					)}
+				</div>
 			</header>
 
 			{/* Messages */}
@@ -121,6 +133,7 @@ export default function Coach() {
 					)}
 				</div>
 			</div>
+			<ReviewFlow open={reviewOpen} onClose={() => setReviewOpen(false)} />
 		</div>
 	);
 }

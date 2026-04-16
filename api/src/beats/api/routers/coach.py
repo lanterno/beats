@@ -67,6 +67,28 @@ class ChatMessageResponse(BaseModel):
     created_at: datetime
 
 
+class ReviewQuestionResponse(BaseModel):
+    question: str
+    derived_from: dict | None = None
+
+
+class ReviewResponse(BaseModel):
+    date: str
+    questions: list[ReviewQuestionResponse]
+    answers: list[dict | None] = []
+
+
+class ReviewAnswerRequest(BaseModel):
+    date: str
+    question_index: int
+    answer: str
+
+
+class MemoryResponse(BaseModel):
+    content: str | None = None
+    updated_at: datetime | None = None
+
+
 # ── Briefs ───────────────────────────────────────────────────────────
 
 
@@ -210,3 +232,126 @@ async def get_usage(
         month_total_usd=month_total,
         budget_usd=settings.coach_monthly_budget_usd,
     )
+
+
+# ── Reviews ──────────────────────────────────────────────────────────
+
+
+@router.post("/review/start", response_model=ReviewResponse)
+async def start_review(user_id: CurrentUserId):
+    """Generate 3 end-of-day review questions from today's data."""
+    from beats.coach.review import generate_review_questions, get_review
+
+    try:
+        await generate_review_questions(user_id)
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Review generation failed for user=%s", user_id)
+        raise HTTPException(
+            status_code=502,
+            detail="Review generation failed — the coach is resting.",
+        ) from exc
+
+    doc = await get_review(user_id)
+    if not doc:
+        raise HTTPException(status_code=500, detail="Review not found after generation")
+    return ReviewResponse(
+        date=doc["date"],
+        questions=[ReviewQuestionResponse(**q) for q in doc.get("questions", [])],
+        answers=doc.get("answers", []),
+    )
+
+
+@router.post("/review/answer")
+async def answer_review(user_id: CurrentUserId, request: ReviewAnswerRequest):
+    """Save an answer to a review question."""
+    from beats.coach.review import save_answer
+
+    try:
+        target = date.fromisoformat(request.date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await save_answer(user_id, target, request.question_index, request.answer)
+    return {"status": "ok"}
+
+
+@router.get("/review/today", response_model=ReviewResponse | None)
+async def get_today_review(user_id: CurrentUserId):
+    """Get today's review if it exists."""
+    from beats.coach.review import get_review
+
+    doc = await get_review(user_id)
+    if not doc:
+        return None
+    return ReviewResponse(
+        date=doc["date"],
+        questions=[ReviewQuestionResponse(**q) for q in doc.get("questions", [])],
+        answers=doc.get("answers", []),
+    )
+
+
+# ── Memory ───────────────────────────────────────────────────────────
+
+
+@router.get("/memory", response_model=MemoryResponse)
+async def get_memory(user_id: CurrentUserId):
+    """Get the current coach memory for this user."""
+    from beats.coach.memory import MemoryStore
+    from beats.infrastructure.database import Database
+
+    db = Database.get_db()
+    store = MemoryStore(db, user_id)
+    content = await store.read()
+    doc = await db.coach_memory.find_one({"user_id": user_id})
+    return MemoryResponse(
+        content=content,
+        updated_at=doc.get("updated_at") if doc else None,
+    )
+
+
+@router.delete("/memory")
+async def delete_memory(user_id: CurrentUserId):
+    """Delete the coach memory for this user."""
+    from beats.infrastructure.database import Database
+
+    db = Database.get_db()
+    await db.coach_memory.delete_one({"user_id": user_id})
+    return {"status": "ok"}
+
+
+@router.delete("/data")
+async def delete_all_coach_data(user_id: CurrentUserId):
+    """Delete ALL coach data for this user: memory, briefs, reviews,
+    conversations, and usage logs. Irreversible."""
+    from beats.infrastructure.database import Database
+
+    db = Database.get_db()
+    for col_name in [
+        "coach_memory",
+        "daily_briefs",
+        "review_answers",
+        "coach_conversations",
+        "llm_usage",
+    ]:
+        await db[col_name].delete_many({"user_id": user_id})
+    return {"status": "ok", "deleted": "all coach data"}
+
+
+@router.post("/memory/rewrite", response_model=MemoryResponse)
+async def rewrite_memory(user_id: CurrentUserId):
+    """Trigger the coach to rewrite its memory from the last 7 days."""
+    from beats.coach.memory_rewrite import rewrite_coach_memory
+
+    try:
+        content = await rewrite_coach_memory(user_id)
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Memory rewrite failed for user=%s", user_id)
+        raise HTTPException(
+            status_code=502, detail="Memory rewrite failed."
+        ) from exc
+
+    return MemoryResponse(content=content)

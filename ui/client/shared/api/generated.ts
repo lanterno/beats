@@ -582,6 +582,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/coach/data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete All Coach Data
+         * @description Delete ALL coach data for this user: memory, briefs, reviews,
+         *     conversations, and usage logs. Irreversible.
+         */
+        delete: operations["delete_all_coach_data_api_coach_data_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coach/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Memory
+         * @description Get the current coach memory for this user.
+         */
+        get: operations["get_memory_api_coach_memory_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Memory
+         * @description Delete the coach memory for this user.
+         */
+        delete: operations["delete_memory_api_coach_memory_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coach/memory/rewrite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rewrite Memory
+         * @description Trigger the coach to rewrite its memory from the last 7 days.
+         */
+        post: operations["rewrite_memory_api_coach_memory_rewrite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coach/review/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Review
+         * @description Save an answer to a review question.
+         */
+        post: operations["answer_review_api_coach_review_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coach/review/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Review
+         * @description Generate 3 end-of-day review questions from today's data.
+         */
+        post: operations["start_review_api_coach_review_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coach/review/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Today Review
+         * @description Get today's review if it exists.
+         */
+        get: operations["get_today_review_api_coach_review_today_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/coach/usage": {
         parameters: {
             query?: never;
@@ -2142,6 +2267,13 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
+        /** MemoryResponse */
+        MemoryResponse: {
+            /** Content */
+            content?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
         /**
          * MonthlyTotalsResponse
          * @description Response schema for monthly totals.
@@ -2268,6 +2400,38 @@ export interface components {
             token: string;
             /** Verified */
             verified: boolean;
+        };
+        /** ReviewAnswerRequest */
+        ReviewAnswerRequest: {
+            /** Answer */
+            answer: string;
+            /** Date */
+            date: string;
+            /** Question Index */
+            question_index: number;
+        };
+        /** ReviewQuestionResponse */
+        ReviewQuestionResponse: {
+            /** Derived From */
+            derived_from?: {
+                [key: string]: unknown;
+            } | null;
+            /** Question */
+            question: string;
+        };
+        /** ReviewResponse */
+        ReviewResponse: {
+            /**
+             * Answers
+             * @default []
+             */
+            answers: ({
+                [key: string]: unknown;
+            } | null)[];
+            /** Date */
+            date: string;
+            /** Questions */
+            questions: components["schemas"]["ReviewQuestionResponse"][];
         };
         /**
          * RhythmSlotResponse
@@ -3483,6 +3647,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_all_coach_data_api_coach_data_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_memory_api_coach_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryResponse"];
+                };
+            };
+        };
+    };
+    delete_memory_api_coach_memory_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    rewrite_memory_api_coach_memory_rewrite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryResponse"];
+                };
+            };
+        };
+    };
+    answer_review_api_coach_review_answer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_review_api_coach_review_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResponse"];
+                };
+            };
+        };
+    };
+    get_today_review_api_coach_review_today_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResponse"] | null;
                 };
             };
         };

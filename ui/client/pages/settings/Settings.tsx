@@ -39,6 +39,7 @@ import { getSessionToken } from "@/features/auth/stores/authStore";
 import { del, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
 import { DENSITIES, THEMES, useTheme } from "@/shared/lib";
+import { CoachUsage } from "./CoachUsage";
 
 export default function Settings() {
 	const { data: projects } = useProjects();
@@ -264,6 +265,9 @@ export default function Settings() {
 
 			{/* Webhooks */}
 			<WebhooksSection />
+
+			{/* Coach Usage */}
+			<CoachUsage />
 
 			{/* API Info */}
 			<section className="mb-8">

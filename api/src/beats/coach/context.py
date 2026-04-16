@@ -10,18 +10,21 @@ The blocks are composed into messages by the brief/chat/review callers.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from beats.coach.memory import MemoryStore
-
-if TYPE_CHECKING:
-    from beats.coach.gateway import CacheSpec
 from beats.coach.prompts import COACH_PERSONA
 from beats.coach.repos import build_repos, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.services import BeatService
 from beats.infrastructure.database import Database
+
+if TYPE_CHECKING:
+    from beats.coach.gateway import CacheSpec
+
+logger = logging.getLogger(__name__)
 
 
 def build_system_block() -> str:
@@ -81,6 +84,7 @@ async def build_user_context(user_id: str) -> str:
             f"quality={score_data['components']['quality']})"
         )
     except Exception:
+        logger.debug("Productivity score unavailable", exc_info=True)
         score_line = "Productivity score: unavailable"
 
     # Goals
@@ -181,7 +185,7 @@ async def build_day_context(user_id: str, target_date: date | None = None) -> st
             for ev in events[:5]:
                 calendar_lines.append(f"  {ev['start'][:5]}–{ev['end'][:5]} {ev['summary']}")
     except Exception:
-        pass
+        logger.debug("Calendar fetch failed for day context", exc_info=True)
 
     lines = [
         f"## Today: {today.isoformat()} ({today.strftime('%A')})",

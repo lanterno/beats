@@ -992,6 +992,35 @@
         "title": "LoginVerifyResponse",
         "type": "object"
       },
+      "MemoryResponse": {
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "title": "MemoryResponse",
+        "type": "object"
+      },
       "MonthlyTotalsResponse": {
         "description": "Response schema for monthly totals.",
         "properties": {
@@ -1275,6 +1304,91 @@
           "token"
         ],
         "title": "RegistrationVerifyResponse",
+        "type": "object"
+      },
+      "ReviewAnswerRequest": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "question_index": {
+            "title": "Question Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "question_index",
+          "answer"
+        ],
+        "title": "ReviewAnswerRequest",
+        "type": "object"
+      },
+      "ReviewQuestionResponse": {
+        "properties": {
+          "derived_from": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "ReviewQuestionResponse",
+        "type": "object"
+      },
+      "ReviewResponse": {
+        "properties": {
+          "answers": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Answers",
+            "type": "array"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQuestionResponse"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date",
+          "questions"
+        ],
+        "title": "ReviewResponse",
         "type": "object"
       },
       "RhythmSlotResponse": {
@@ -3172,6 +3286,180 @@
           }
         },
         "summary": "Get Chat History",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/data": {
+      "delete": {
+        "description": "Delete ALL coach data for this user: memory, briefs, reviews,\nconversations, and usage logs. Irreversible.",
+        "operationId": "delete_all_coach_data_api_coach_data_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete All Coach Data",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/memory": {
+      "delete": {
+        "description": "Delete the coach memory for this user.",
+        "operationId": "delete_memory_api_coach_memory_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Memory",
+        "tags": [
+          "coach"
+        ]
+      },
+      "get": {
+        "description": "Get the current coach memory for this user.",
+        "operationId": "get_memory_api_coach_memory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Memory",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/memory/rewrite": {
+      "post": {
+        "description": "Trigger the coach to rewrite its memory from the last 7 days.",
+        "operationId": "rewrite_memory_api_coach_memory_rewrite_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Rewrite Memory",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/review/answer": {
+      "post": {
+        "description": "Save an answer to a review question.",
+        "operationId": "answer_review_api_coach_review_answer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer Review",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/review/start": {
+      "post": {
+        "description": "Generate 3 end-of-day review questions from today's data.",
+        "operationId": "start_review_api_coach_review_start_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Start Review",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/review/today": {
+      "get": {
+        "description": "Get today's review if it exists.",
+        "operationId": "get_today_review_api_coach_review_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ReviewResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Today Review Api Coach Review Today Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Today Review",
         "tags": [
           "coach"
         ]

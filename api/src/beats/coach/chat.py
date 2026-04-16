@@ -136,8 +136,9 @@ async def handle_chat_turn(
                 )
 
         if not tool_use_blocks:
-            # Final text response — persist and done
             full_text = "".join(text_parts)
+            if not full_text and not tool_calls_made:
+                logger.warning("LLM returned empty content for user=%s", user_id)
             await _persist_message(
                 user_id, conv_id, "assistant", full_text, tool_calls_made or None
             )
