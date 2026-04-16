@@ -53,5 +53,14 @@ class Settings(BaseSettings):
         validation_alias="GITHUB_REDIRECT_URI",
     )
 
+    # AI Coach (Stage 2)
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    coach_model: str = Field(
+        default="claude-sonnet-4-20250514", validation_alias="COACH_MODEL"
+    )
+    coach_monthly_budget_usd: float = Field(
+        default=10.0, validation_alias="COACH_MONTHLY_BUDGET_USD"
+    )
+
 
 settings = Settings()

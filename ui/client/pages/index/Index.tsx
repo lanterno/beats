@@ -5,6 +5,7 @@
 import { useMemo } from "react";
 import { LoadingSpinner, useProjects } from "@/entities/project";
 import { useTodaySessions } from "@/entities/session";
+import { DailyBrief } from "./DailyBrief";
 import { Inbox } from "./Inbox";
 import { ProductivityScore } from "./ProductivityScore";
 import { ProjectPulseList } from "./ProjectPulseList";
@@ -42,7 +43,8 @@ export default function Index() {
 				</div>
 			</div>
 
-			<div className="mt-5">
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+				<DailyBrief />
 				<Inbox />
 			</div>
 

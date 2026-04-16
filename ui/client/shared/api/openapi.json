@@ -29,6 +29,115 @@
         "title": "Body_import_sqlite_api_export_sqlite_import_post",
         "type": "object"
       },
+      "BriefResponse": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "cache_read": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Read"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          }
+        },
+        "required": [
+          "date",
+          "body"
+        ],
+        "title": "BriefResponse",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
       "CreateAutoStartRuleRequest": {
         "properties": {
           "config": {
@@ -550,6 +659,23 @@
           "components"
         ],
         "title": "FocusScoreResponse",
+        "type": "object"
+      },
+      "GenerateBriefRequest": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "title": "GenerateBriefRequest",
         "type": "object"
       },
       "GoalOverrideRequest": {
@@ -1469,6 +1595,75 @@
           "week_of"
         ],
         "title": "UpsertWeeklyReviewRequest",
+        "type": "object"
+      },
+      "UsageDayResponse": {
+        "properties": {
+          "cache_creation": {
+            "title": "Cache Creation",
+            "type": "integer"
+          },
+          "cache_read": {
+            "title": "Cache Read",
+            "type": "integer"
+          },
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "cost_usd",
+          "input_tokens",
+          "output_tokens",
+          "cache_read",
+          "cache_creation",
+          "calls"
+        ],
+        "title": "UsageDayResponse",
+        "type": "object"
+      },
+      "UsageSummaryResponse": {
+        "properties": {
+          "budget_usd": {
+            "title": "Budget Usd",
+            "type": "number"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/UsageDayResponse"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "month_total_usd": {
+            "title": "Month Total Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "days",
+          "month_total_usd",
+          "budget_usd"
+        ],
+        "title": "UsageSummaryResponse",
         "type": "object"
       },
       "UserResponse": {
@@ -2750,6 +2945,281 @@
         "summary": "Calendar Status",
         "tags": [
           "calendar"
+        ]
+      }
+    },
+    "/api/coach/brief/generate": {
+      "post": {
+        "description": "Generate (or regenerate) a daily brief. Defaults to today.",
+        "operationId": "trigger_brief_generation_api_coach_brief_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GenerateBriefRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Brief Generation",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/brief/history": {
+      "get": {
+        "description": "List recent briefs, newest first.",
+        "operationId": "get_brief_history_api_coach_brief_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BriefResponse"
+                  },
+                  "title": "Response Get Brief History Api Coach Brief History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Brief History",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/brief/today": {
+      "get": {
+        "description": "Get today's brief if it exists.",
+        "operationId": "get_today_brief_api_coach_brief_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BriefResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Today Brief Api Coach Brief Today Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Today Brief",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/chat": {
+      "post": {
+        "description": "Streaming chat with tool use. Returns SSE.",
+        "operationId": "coach_chat_api_coach_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coach Chat",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/chat/history": {
+      "get": {
+        "description": "Get chat message history for a conversation.",
+        "operationId": "get_chat_history_api_coach_chat_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Chat History",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/usage": {
+      "get": {
+        "description": "Usage breakdown for the cost dashboard.",
+        "operationId": "get_usage_api_coach_usage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Usage",
+        "tags": [
+          "coach"
         ]
       }
     },

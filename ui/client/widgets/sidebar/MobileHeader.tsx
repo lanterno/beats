@@ -3,7 +3,7 @@
  * Sticky top bar for mobile with hamburger menu and mini timer indicator.
  */
 
-import { BarChart3, Menu, Settings, X } from "lucide-react";
+import { BarChart3, Menu, Settings, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
@@ -84,6 +84,14 @@ export function MobileHeader(props: MobileHeaderProps) {
 								Beats
 							</Link>
 							<div className="flex items-center gap-1">
+								<Link
+									to="/coach"
+									onClick={() => setDrawerOpen(false)}
+									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+									title="Coach"
+								>
+									<Sparkles className="w-4 h-4" />
+								</Link>
 								<Link
 									to="/insights"
 									onClick={() => setDrawerOpen(false)}

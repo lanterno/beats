@@ -19,6 +19,7 @@ from beats.api.routers.auth import router as auth_router
 from beats.api.routers.auto_start import router as auto_start_router
 from beats.api.routers.beats import router as beats_router
 from beats.api.routers.calendar import router as calendar_router
+from beats.api.routers.coach import router as coach_router
 from beats.api.routers.daily_notes import router as daily_notes_router
 from beats.api.routers.device import router as device_router
 from beats.api.routers.export import router as export_router
@@ -153,6 +154,7 @@ app.include_router(calendar_router)
 app.include_router(github_router)
 app.include_router(auto_start_router)
 app.include_router(planning_router)
+app.include_router(coach_router)
 
 # Idempotency runs INSIDE authentication (it needs request.state.user_id), so
 # it is added to the stack first — add_middleware wraps from inside out.

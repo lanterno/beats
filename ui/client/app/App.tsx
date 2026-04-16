@@ -7,6 +7,7 @@ import "../global.css";
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { initializeAuth, LoginPage, useAuth } from "@/features/auth";
+import Coach from "@/pages/coach/Coach";
 import HomePage from "@/pages/homepage/HomePage";
 import Index from "@/pages/index";
 import Insights from "@/pages/insights";
@@ -101,6 +102,7 @@ export function App() {
 								<Route path="/insights/year/:year" element={<YearInReview />} />
 								<Route path="/project/:projectId" element={<ProjectDetails />} />
 								<Route path="/plan" element={<PlanPage />} />
+								<Route path="/coach" element={<Coach />} />
 								<Route path="/settings" element={<Settings />} />
 							</Route>
 
