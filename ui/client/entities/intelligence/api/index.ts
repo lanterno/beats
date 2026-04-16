@@ -16,6 +16,7 @@ export {
 	useEstimationAccuracy,
 	useFocusScores,
 	useGenerateDigest,
+	useInbox,
 	useMoodCorrelation,
 	usePatterns,
 	useProductivityScore,

@@ -13,7 +13,10 @@
     "lint:fix": "biome check --write client/",
     "typecheck": "tsc",
     "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed"
+    "e2e:headed": "playwright test --headed",
+    "gen:openapi": "cd ../api && uv run python scripts/dump_openapi.py ../ui/client/shared/api/openapi.json",
+    "gen:types": "pnpm gen:openapi && openapi-typescript client/shared/api/openapi.json -o client/shared/api/generated.ts",
+    "gen:types:check": "pnpm gen:types && git diff --exit-code client/shared/api/openapi.json client/shared/api/generated.ts"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.2.2",
@@ -37,8 +40,10 @@
     "@vitejs/plugin-react-swc": "^4.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.0.2",
     "lucide-react": "^0.563.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

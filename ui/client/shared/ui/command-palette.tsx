@@ -1,18 +1,25 @@
 /**
  * Command Palette Component
- * Cmd+K overlay for quick project search and navigation.
+ *
+ * Presentational Cmd+K overlay. Callers pass the full list of available
+ * commands via `items`; the palette handles fuzzy filtering, recency boosts,
+ * keyboard navigation, and invocation. Each invocation is reported via
+ * `onInvoke(item.id)` so the caller can record it in a recency store.
  */
 
-import { ArrowRight, BarChart3, Clock, Search } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { cn } from "@/shared/lib";
+import { Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cn, fuzzyRank } from "@/shared/lib";
 
-interface CommandItem {
+export interface CommandItem {
 	id: string;
 	label: string;
+	/** Optional secondary text shown on the right (e.g. shortcut or path). */
 	sublabel?: string;
+	/** Keywords included in match text beyond `label`. */
+	keywords?: string[];
 	icon?: React.ReactNode;
+	/** Project-style colored dot rendered in place of `icon`. */
 	color?: string;
 	action: () => void;
 }
@@ -20,19 +27,20 @@ interface CommandItem {
 interface CommandPaletteProps {
 	open: boolean;
 	onClose: () => void;
-	projects: Array<{ id: string; name: string; color: string }>;
-	isTimerRunning: boolean;
-	onToggleTimer: () => void;
+	items: CommandItem[];
+	/** Called with the item id after its action runs; use for recency tracking. */
+	onInvoke?: (id: string) => void;
+	/** Optional per-item boost [0, 1] added to fuzzy score before sorting. */
+	recencyBoost?: (id: string) => number;
 }
 
 export function CommandPalette({
 	open,
 	onClose,
-	projects,
-	isTimerRunning,
-	onToggleTimer,
+	items,
+	onInvoke,
+	recencyBoost,
 }: CommandPaletteProps) {
-	const navigate = useNavigate();
 	const [query, setQuery] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -43,77 +51,22 @@ export function CommandPalette({
 		onClose();
 	}, [onClose]);
 
-	// Build command items
-	const items: CommandItem[] = [];
+	const filtered = useMemo(() => {
+		const matchText = (item: CommandItem) => [item.label, ...(item.keywords ?? [])].join(" ");
+		const boost = recencyBoost ? (item: CommandItem) => recencyBoost(item.id) : undefined;
+		return fuzzyRank(items, query, matchText, boost).map((r) => r.item);
+	}, [items, query, recencyBoost]);
 
-	// Timer action
-	items.push({
-		id: "timer",
-		label: isTimerRunning ? "Stop timer" : "Start timer",
-		sublabel: "Space",
-		icon: <Clock className="w-4 h-4" />,
-		action: () => {
-			onToggleTimer();
-			close();
-		},
-	});
-
-	// Navigate to insights
-	items.push({
-		id: "insights",
-		label: "Go to Insights",
-		sublabel: "/insights",
-		icon: <BarChart3 className="w-4 h-4" />,
-		action: () => {
-			navigate("/insights");
-			close();
-		},
-	});
-
-	// Navigate to dashboard
-	items.push({
-		id: "dashboard",
-		label: "Go to Dashboard",
-		sublabel: "/app",
-		icon: <ArrowRight className="w-4 h-4" />,
-		action: () => {
-			navigate("/app");
-			close();
-		},
-	});
-
-	// Projects
-	projects.forEach((p, i) => {
-		items.push({
-			id: `project-${p.id}`,
-			label: p.name,
-			sublabel: i < 9 ? `${i + 1}` : undefined,
-			color: p.color,
-			action: () => {
-				navigate(`/project/${p.id}`);
-				close();
-			},
-		});
-	});
-
-	// Filter by query
-	const filtered = query
-		? items.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
-		: items;
-
-	// Clamp selected index
 	useEffect(() => {
 		setSelectedIndex(0);
 	}, []);
 
-	// Focus input when opened
 	useEffect(() => {
 		if (open) {
 			requestAnimationFrame(() => inputRef.current?.focus());
 		}
 	}, [open]);
 
-	// Keyboard navigation inside palette
 	useEffect(() => {
 		if (!open) return;
 
@@ -129,20 +82,29 @@ export function CommandPalette({
 				setSelectedIndex((i) => Math.max(i - 1, 0));
 			} else if (e.key === "Enter") {
 				e.preventDefault();
-				filtered[selectedIndex]?.action();
+				const item = filtered[selectedIndex];
+				if (item) {
+					item.action();
+					onInvoke?.(item.id);
+				}
 			}
 		}
 
 		window.addEventListener("keydown", handleKey);
 		return () => window.removeEventListener("keydown", handleKey);
-	}, [open, close, filtered, selectedIndex]);
+	}, [open, close, filtered, selectedIndex, onInvoke]);
 
 	if (!open) return null;
 
 	return (
 		<div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh]">
 			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={close} />
+			<button
+				type="button"
+				aria-label="Close command palette"
+				className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+				onClick={close}
+			/>
 
 			{/* Palette */}
 			<div
@@ -173,8 +135,12 @@ export function CommandPalette({
 					) : (
 						filtered.map((item, i) => (
 							<button
+								type="button"
 								key={item.id}
-								onClick={item.action}
+								onClick={() => {
+									item.action();
+									onInvoke?.(item.id);
+								}}
 								onMouseEnter={() => setSelectedIndex(i)}
 								className={cn(
 									"w-full flex items-center gap-3 px-4 py-2 text-left transition-colors",

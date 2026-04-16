@@ -617,6 +617,204 @@ class TestMiscellaneousEndpoints:
         assert response.json() == {"message": "dong"}
 
 
+class TestIdempotentReplay:
+    """Timer start/stop must be idempotent under retries keyed by X-Client-Id."""
+
+    def _create_project(self) -> str:
+        res = client.post(
+            "/api/projects/",
+            json={"name": "Idempotency Probe", "description": "test"},
+            headers=auth_headers,
+        )
+        assert res.status_code == 201, res.text
+        return res.json()["id"]
+
+    def test_repeated_start_with_same_client_id_is_replayed(self):
+        """Second POST with same X-Client-Id returns the cached response + replay flag."""
+        project_id = self._create_project()
+        headers = {**auth_headers, "X-Client-Id": "test-client-start-1"}
+        first = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-16T10:00:00Z"},
+            headers=headers,
+        )
+        assert first.status_code in (200, 201), first.text
+        assert first.headers.get("X-Idempotent-Replay") is None
+
+        # Retry with same id — should NOT produce a second timer start.
+        second = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-16T10:00:05Z"},  # different time ignored
+            headers=headers,
+        )
+        assert second.status_code == first.status_code
+        assert second.headers.get("X-Idempotent-Replay") == "true"
+        assert second.content == first.content
+
+        # Clean up the running timer.
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-16T10:00:30Z"},
+            headers=auth_headers,
+        )
+
+    def test_different_client_id_is_not_replayed(self):
+        """A fresh client id is treated as a new write and not served from cache."""
+        project_id = self._create_project()
+        start_a = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-16T11:00:00Z"},
+            headers={**auth_headers, "X-Client-Id": "unique-a"},
+        )
+        assert start_a.status_code in (200, 201)
+
+        # Stop, then re-start with a different client id — the second start
+        # should execute (new row in the log), not replay.
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-16T11:00:10Z"},
+            headers=auth_headers,
+        )
+        start_b = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-16T11:00:20Z"},
+            headers={**auth_headers, "X-Client-Id": "unique-b"},
+        )
+        assert start_b.status_code in (200, 201)
+        assert start_b.headers.get("X-Idempotent-Replay") is None
+
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-16T11:00:30Z"},
+            headers=auth_headers,
+        )
+
+
+class TestSignedSqliteExport:
+    """The signed SQLite export must round-trip cleanly and reject tampering."""
+
+    def _create_project(self, name: str) -> str:
+        res = client.post(
+            "/api/projects/",
+            json={"name": name, "description": "export probe"},
+            headers=auth_headers,
+        )
+        assert res.status_code == 201, res.text
+        return res.json()["id"]
+
+    def test_export_roundtrip(self):
+        """Export produces a signed zip; re-importing it is accepted."""
+        import io
+        import zipfile
+
+        # Seed some data so counts are non-zero.
+        self._create_project("Export Roundtrip A")
+        self._create_project("Export Roundtrip B")
+
+        res = client.get("/api/export/sqlite", headers=auth_headers)
+        assert res.status_code == 200, res.text
+        assert res.headers["content-type"].startswith("application/zip")
+
+        with zipfile.ZipFile(io.BytesIO(res.content)) as zf:
+            names = set(zf.namelist())
+            assert {"data.sqlite", "manifest.json", "manifest.sig", "public_key.bin"}.issubset(
+                names
+            )
+            manifest = zf.read("manifest.json")
+            assert b'"projects"' in manifest  # deterministic sorted-keys payload
+
+        # Re-upload the untouched bundle. Verify succeeds, writers run.
+        imported = client.post(
+            "/api/export/sqlite/import",
+            files={"file": ("backup.zip", res.content, "application/zip")},
+            headers=auth_headers,
+        )
+        assert imported.status_code == 200, imported.text
+        body = imported.json()
+        assert body["status"] == "ok"
+        assert body["version"] == "sqlite-1"
+        assert body["imported"]["projects"] >= 2
+
+    def test_import_rejects_tampered_manifest(self):
+        """Flipping a byte in the manifest must trip the signature check."""
+        import io
+        import zipfile
+
+        self._create_project("Tamper Probe")
+        res = client.get("/api/export/sqlite", headers=auth_headers)
+        assert res.status_code == 200
+
+        # Build a new zip with a mutated manifest but the original signature.
+        bad_zip = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(res.content)) as src:
+            with zipfile.ZipFile(bad_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+                for name in src.namelist():
+                    data = src.read(name)
+                    if name == "manifest.json":
+                        # Replace the version string — changes canonical bytes.
+                        data = data.replace(b'"sqlite-1"', b'"sqlite-evil"')
+                    dst.writestr(name, data)
+
+        imported = client.post(
+            "/api/export/sqlite/import",
+            files={"file": ("tampered.zip", bad_zip.getvalue(), "application/zip")},
+            headers=auth_headers,
+        )
+        assert imported.status_code == 400
+        assert "signature" in imported.text.lower()
+
+    def test_import_rejects_swapped_sqlite_payload(self):
+        """Swapping the SQLite body (manifest + signature untouched) is rejected
+        by the sha256 check even though the Ed25519 signature is intact."""
+        import io
+        import zipfile
+
+        self._create_project("Swap Probe")
+        res = client.get("/api/export/sqlite", headers=auth_headers)
+        assert res.status_code == 200
+
+        bad_zip = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(res.content)) as src:
+            with zipfile.ZipFile(bad_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+                for name in src.namelist():
+                    data = src.read(name)
+                    if name == "data.sqlite":
+                        data = data + b"\x00"  # extra byte breaks sha256
+                    dst.writestr(name, data)
+
+        imported = client.post(
+            "/api/export/sqlite/import",
+            files={"file": ("swapped.zip", bad_zip.getvalue(), "application/zip")},
+            headers=auth_headers,
+        )
+        assert imported.status_code == 400
+        assert "match manifest" in imported.text.lower()
+
+
+class TestIntelligenceInbox:
+    """Smoke tests for the aggregated Intelligence Inbox endpoint."""
+
+    def test_inbox_returns_ok_shape_for_empty_user(self):
+        """GET /api/intelligence/inbox returns the expected envelope for a fresh user."""
+        response = client.get("/api/intelligence/inbox", headers=auth_headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert "items" in body
+        assert isinstance(body["items"], list)
+        assert "generated_at" in body
+        # A brand-new user has no patterns and no health alerts, but the suggestions
+        # path may still produce low-severity items if default projects exist.
+        for item in body["items"]:
+            assert set(item.keys()) >= {"id", "kind", "severity", "title", "body"}
+            assert item["kind"] in {"pattern", "suggestion", "project_health"}
+            assert item["severity"] in {"high", "medium", "low"}
+
+    def test_inbox_requires_auth(self):
+        """GET /api/intelligence/inbox rejects unauthenticated requests."""
+        response = client.get("/api/intelligence/inbox")
+        assert response.status_code == 401
+
+
 class TestAuthenticationMiddleware:
     """Test suite for authentication middleware"""
 

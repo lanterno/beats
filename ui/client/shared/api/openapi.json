@@ -1,0 +1,5167 @@
+{
+  "components": {
+    "schemas": {
+      "Body_import_full_json_api_export_import_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_full_json_api_export_import_post",
+        "type": "object"
+      },
+      "Body_import_sqlite_api_export_sqlite_import_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_sqlite_api_export_sqlite_import_post",
+        "type": "object"
+      },
+      "CreateAutoStartRuleRequest": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Config",
+            "type": "object"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "project_id"
+        ],
+        "title": "CreateAutoStartRuleRequest",
+        "type": "object"
+      },
+      "CreateBeatRequest": {
+        "description": "Request body for creating a beat.",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "CreateBeatRequest",
+        "type": "object"
+      },
+      "CreateIntentionRequest": {
+        "description": "Request body for creating a daily intention.",
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "planned_minutes": {
+            "default": 60,
+            "title": "Planned Minutes",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "CreateIntentionRequest",
+        "type": "object"
+      },
+      "CreateProjectRequest": {
+        "description": "Request body for creating a project.",
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "estimation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimation"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "weekly_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateProjectRequest",
+        "type": "object"
+      },
+      "CreateRecurringIntentionRequest": {
+        "properties": {
+          "days_of_week": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days Of Week",
+            "type": "array"
+          },
+          "planned_minutes": {
+            "default": 60,
+            "title": "Planned Minutes",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "CreateRecurringIntentionRequest",
+        "type": "object"
+      },
+      "CreateWebhookRequest": {
+        "properties": {
+          "events": {
+            "default": [
+              "timer.start",
+              "timer.stop"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "CreateWebhookRequest",
+        "type": "object"
+      },
+      "DailyNoteResponse": {
+        "description": "Response schema for a daily note.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "note",
+          "created_at"
+        ],
+        "title": "DailyNoteResponse",
+        "type": "object"
+      },
+      "DeviceFavoriteProject": {
+        "properties": {
+          "color_rgb": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Color Rgb",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "color_rgb"
+        ],
+        "title": "DeviceFavoriteProject",
+        "type": "object"
+      },
+      "DeviceHeartbeatRequest": {
+        "properties": {
+          "battery_voltage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Voltage"
+          },
+          "uptime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uptime Seconds"
+          },
+          "wifi_rssi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wifi Rssi"
+          }
+        },
+        "title": "DeviceHeartbeatRequest",
+        "type": "object"
+      },
+      "DeviceHeartbeatResponse": {
+        "properties": {
+          "battery_voltage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Voltage"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          },
+          "uptime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uptime Seconds"
+          },
+          "wifi_rssi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wifi Rssi"
+          }
+        },
+        "title": "DeviceHeartbeatResponse",
+        "type": "object"
+      },
+      "DeviceStatusResponse": {
+        "properties": {
+          "clocked_in": {
+            "title": "Clocked In",
+            "type": "boolean"
+          },
+          "daily_total_minutes": {
+            "default": 0,
+            "title": "Daily Total Minutes",
+            "type": "integer"
+          },
+          "elapsed_minutes": {
+            "default": 0,
+            "title": "Elapsed Minutes",
+            "type": "integer"
+          },
+          "energy_level": {
+            "default": 0,
+            "title": "Energy Level",
+            "type": "integer"
+          },
+          "project_color_rgb": {
+            "default": [
+              0,
+              0,
+              0
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Project Color Rgb",
+            "type": "array"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
+          },
+          "theme_accent_rgb": {
+            "default": [
+              212,
+              149,
+              42
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Theme Accent Rgb",
+            "type": "array"
+          }
+        },
+        "required": [
+          "clocked_in"
+        ],
+        "title": "DeviceStatusResponse",
+        "type": "object"
+      },
+      "DurationResponse": {
+        "description": "Response schema for duration queries.",
+        "properties": {
+          "duration": {
+            "title": "Duration",
+            "type": "string"
+          }
+        },
+        "required": [
+          "duration"
+        ],
+        "title": "DurationResponse",
+        "type": "object"
+      },
+      "EstimationAccuracyResponse": {
+        "description": "Response schema for estimation accuracy per project.",
+        "properties": {
+          "accuracy_pct": {
+            "title": "Accuracy Pct",
+            "type": "number"
+          },
+          "avg_actual_min": {
+            "title": "Avg Actual Min",
+            "type": "number"
+          },
+          "avg_planned_min": {
+            "title": "Avg Planned Min",
+            "type": "number"
+          },
+          "bias": {
+            "title": "Bias",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "avg_planned_min",
+          "avg_actual_min",
+          "accuracy_pct",
+          "bias"
+        ],
+        "title": "EstimationAccuracyResponse",
+        "type": "object"
+      },
+      "FocusScoreResponse": {
+        "description": "Response schema for a focus quality score.",
+        "properties": {
+          "beat_id": {
+            "title": "Beat Id",
+            "type": "string"
+          },
+          "components": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Components",
+            "type": "object"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "beat_id",
+          "score",
+          "components"
+        ],
+        "title": "FocusScoreResponse",
+        "type": "object"
+      },
+      "GoalOverrideRequest": {
+        "description": "Request body for a goal override.",
+        "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "goal_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "week_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Of"
+          },
+          "weekly_goal": {
+            "title": "Weekly Goal",
+            "type": "number"
+          }
+        },
+        "required": [
+          "weekly_goal"
+        ],
+        "title": "GoalOverrideRequest",
+        "type": "object"
+      },
+      "GoalType": {
+        "description": "Type of weekly goal: target to reach or cap to stay under.",
+        "enum": [
+          "target",
+          "cap"
+        ],
+        "title": "GoalType",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HeatmapDayResponse": {
+        "description": "Response schema for a single day in the contribution heatmap.",
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "project_count": {
+            "title": "Project Count",
+            "type": "integer"
+          },
+          "session_count": {
+            "title": "Session Count",
+            "type": "integer"
+          },
+          "total_minutes": {
+            "title": "Total Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "total_minutes",
+          "session_count",
+          "project_count"
+        ],
+        "title": "HeatmapDayResponse",
+        "type": "object"
+      },
+      "InboxItemResponse": {
+        "description": "A single card in the unified Inbox.\n\nNormalizes outputs from the intelligence module (patterns, suggestions,\nproject health alerts) into one shape the dashboard can render.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "cta_href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cta Href"
+          },
+          "cta_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cta Label"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "severity",
+          "title",
+          "body"
+        ],
+        "title": "InboxItemResponse",
+        "type": "object"
+      },
+      "InboxResponse": {
+        "description": "Response schema for the aggregated intelligence Inbox.",
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "generated_at"
+        ],
+        "title": "InboxResponse",
+        "type": "object"
+      },
+      "InsightCardResponse": {
+        "description": "Response schema for a pattern insight card.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "priority": {
+            "default": 3,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "body"
+        ],
+        "title": "InsightCardResponse",
+        "type": "object"
+      },
+      "IntentionResponse": {
+        "description": "Response schema for an intention.",
+        "properties": {
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "planned_minutes": {
+            "title": "Planned Minutes",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "date",
+          "planned_minutes",
+          "completed"
+        ],
+        "title": "IntentionResponse",
+        "type": "object"
+      },
+      "LoginOptionsResponse": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "title": "LoginOptionsResponse",
+        "type": "object"
+      },
+      "LoginVerifyRequest": {
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "LoginVerifyRequest",
+        "type": "object"
+      },
+      "LoginVerifyResponse": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified",
+          "token"
+        ],
+        "title": "LoginVerifyResponse",
+        "type": "object"
+      },
+      "MonthlyTotalsResponse": {
+        "description": "Response schema for monthly totals.",
+        "properties": {
+          "durations_per_month": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Durations Per Month",
+            "type": "object"
+          },
+          "total_minutes": {
+            "title": "Total Minutes",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "durations_per_month",
+          "total_minutes",
+          "warnings"
+        ],
+        "title": "MonthlyTotalsResponse",
+        "type": "object"
+      },
+      "MoodCorrelationResponse": {
+        "description": "Response schema for mood-productivity correlation.",
+        "properties": {
+          "correlation": {
+            "additionalProperties": true,
+            "title": "Correlation",
+            "type": "object"
+          },
+          "high_mood_avg_hours": {
+            "title": "High Mood Avg Hours",
+            "type": "number"
+          },
+          "high_mood_avg_sessions": {
+            "title": "High Mood Avg Sessions",
+            "type": "number"
+          },
+          "low_mood_avg_hours": {
+            "title": "Low Mood Avg Hours",
+            "type": "number"
+          },
+          "low_mood_avg_sessions": {
+            "title": "Low Mood Avg Sessions",
+            "type": "number"
+          },
+          "mood_trend": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Mood Trend",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mood_trend",
+          "correlation",
+          "high_mood_avg_hours",
+          "low_mood_avg_hours",
+          "high_mood_avg_sessions",
+          "low_mood_avg_sessions"
+        ],
+        "title": "MoodCorrelationResponse",
+        "type": "object"
+      },
+      "PatternsResponse": {
+        "description": "Response schema for pattern detection results.",
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "insights": {
+            "items": {
+              "$ref": "#/components/schemas/InsightCardResponse"
+            },
+            "title": "Insights",
+            "type": "array"
+          }
+        },
+        "required": [
+          "insights",
+          "generated_at"
+        ],
+        "title": "PatternsResponse",
+        "type": "object"
+      },
+      "ProductivityScoreResponse": {
+        "description": "Response schema for productivity score.",
+        "properties": {
+          "components": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Components",
+            "type": "object"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "score",
+          "components"
+        ],
+        "title": "ProductivityScoreResponse",
+        "type": "object"
+      },
+      "ProjectHealthResponse": {
+        "description": "Response schema for project health metrics.",
+        "properties": {
+          "alert": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert"
+          },
+          "avg_session_length_trend": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Avg Session Length Trend",
+            "type": "array"
+          },
+          "days_since_last": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Since Last"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "weekly_goal_trend": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Weekly Goal Trend",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name"
+        ],
+        "title": "ProjectHealthResponse",
+        "type": "object"
+      },
+      "RecordTimeRequest": {
+        "description": "Request body for recording time (start/stop timer).",
+        "properties": {
+          "time": {
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "title": "RecordTimeRequest",
+        "type": "object"
+      },
+      "RefreshResponse": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "RefreshResponse",
+        "type": "object"
+      },
+      "RegisterStartRequest": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "RegisterStartRequest",
+        "type": "object"
+      },
+      "RegisterStartResponse": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "options",
+          "user_id"
+        ],
+        "title": "RegisterStartResponse",
+        "type": "object"
+      },
+      "RegistrationVerifyRequest": {
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "RegistrationVerifyRequest",
+        "type": "object"
+      },
+      "RegistrationVerifyResponse": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified",
+          "token"
+        ],
+        "title": "RegistrationVerifyResponse",
+        "type": "object"
+      },
+      "RhythmSlotResponse": {
+        "description": "Response schema for a half-hour slot in the daily rhythm chart.",
+        "properties": {
+          "minutes": {
+            "title": "Minutes",
+            "type": "number"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot",
+          "minutes"
+        ],
+        "title": "RhythmSlotResponse",
+        "type": "object"
+      },
+      "ScoreHistoryItem": {
+        "description": "A single week's productivity score.",
+        "properties": {
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "week_of": {
+            "title": "Week Of",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_of",
+          "score"
+        ],
+        "title": "ScoreHistoryItem",
+        "type": "object"
+      },
+      "SuggestionResponse": {
+        "description": "Response schema for a daily plan suggestion.",
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "reasoning": {
+            "title": "Reasoning",
+            "type": "string"
+          },
+          "suggested_minutes": {
+            "title": "Suggested Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "suggested_minutes",
+          "reasoning"
+        ],
+        "title": "SuggestionResponse",
+        "type": "object"
+      },
+      "UpdateBeatRequest": {
+        "description": "Request body for updating a beat.",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "start"
+        ],
+        "title": "UpdateBeatRequest",
+        "type": "object"
+      },
+      "UpdateIntentionRequest": {
+        "description": "Request body for updating an intention.",
+        "properties": {
+          "completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed"
+          },
+          "planned_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Minutes"
+          }
+        },
+        "title": "UpdateIntentionRequest",
+        "type": "object"
+      },
+      "UpdateProjectRequest": {
+        "description": "Request body for updating a project.",
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "estimation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimation"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "goal_type": {
+            "default": "target",
+            "title": "Goal Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "weekly_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "UpdateProjectRequest",
+        "type": "object"
+      },
+      "UpsertDailyNoteRequest": {
+        "description": "Request body for creating or updating a daily note.",
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "title": "UpsertDailyNoteRequest",
+        "type": "object"
+      },
+      "UpsertWeeklyPlanRequest": {
+        "properties": {
+          "budgets": {
+            "items": {
+              "$ref": "#/components/schemas/WeeklyPlanBudget"
+            },
+            "title": "Budgets",
+            "type": "array"
+          },
+          "week_of": {
+            "format": "date",
+            "title": "Week Of",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_of"
+        ],
+        "title": "UpsertWeeklyPlanRequest",
+        "type": "object"
+      },
+      "UpsertWeeklyReviewRequest": {
+        "properties": {
+          "didnt_go_well": {
+            "default": "",
+            "title": "Didnt Go Well",
+            "type": "string"
+          },
+          "to_change": {
+            "default": "",
+            "title": "To Change",
+            "type": "string"
+          },
+          "week_of": {
+            "format": "date",
+            "title": "Week Of",
+            "type": "string"
+          },
+          "went_well": {
+            "default": "",
+            "title": "Went Well",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_of"
+        ],
+        "title": "UpsertWeeklyReviewRequest",
+        "type": "object"
+      },
+      "UserResponse": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "display_name"
+        ],
+        "title": "UserResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WebhookResponse": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "events",
+          "active",
+          "created_at"
+        ],
+        "title": "WebhookResponse",
+        "type": "object"
+      },
+      "WebhookTriggerPayload": {
+        "description": "Payload from an external webhook (e.g. GitHub push).",
+        "properties": {
+          "repository": {
+            "default": "",
+            "title": "Repository",
+            "type": "string"
+          }
+        },
+        "title": "WebhookTriggerPayload",
+        "type": "object"
+      },
+      "WeeklyDigestResponse": {
+        "description": "Response schema for a weekly digest.",
+        "properties": {
+          "active_days": {
+            "title": "Active Days",
+            "type": "integer"
+          },
+          "best_streak": {
+            "default": 0,
+            "title": "Best Streak",
+            "type": "integer"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "longest_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longest Day"
+          },
+          "longest_day_hours": {
+            "default": 0,
+            "title": "Longest Day Hours",
+            "type": "number"
+          },
+          "observation": {
+            "default": "",
+            "title": "Observation",
+            "type": "string"
+          },
+          "productivity_score": {
+            "default": 0,
+            "title": "Productivity Score",
+            "type": "integer"
+          },
+          "project_breakdown": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Project Breakdown",
+            "type": "array"
+          },
+          "session_count": {
+            "title": "Session Count",
+            "type": "integer"
+          },
+          "top_project_hours": {
+            "default": 0,
+            "title": "Top Project Hours",
+            "type": "number"
+          },
+          "top_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Project Id"
+          },
+          "top_project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Project Name"
+          },
+          "total_hours": {
+            "title": "Total Hours",
+            "type": "number"
+          },
+          "vs_last_week_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vs Last Week Pct"
+          },
+          "week_of": {
+            "format": "date",
+            "title": "Week Of",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_of",
+          "generated_at",
+          "total_hours",
+          "session_count",
+          "active_days"
+        ],
+        "title": "WeeklyDigestResponse",
+        "type": "object"
+      },
+      "WeeklyPlanBudget": {
+        "properties": {
+          "planned_hours": {
+            "title": "Planned Hours",
+            "type": "number"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "planned_hours"
+        ],
+        "title": "WeeklyPlanBudget",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "A time tracking application",
+    "title": "Beats API",
+    "version": "0.5.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/account/credentials": {
+      "get": {
+        "description": "List registered credentials for the current user.",
+        "operationId": "list_credentials_api_account_credentials_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Credentials Api Account Credentials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Credentials",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/credentials/{credential_id}": {
+      "delete": {
+        "description": "Delete a registered credential for the current user.",
+        "operationId": "delete_credential_api_account_credentials__credential_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Credential",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/logout": {
+      "post": {
+        "description": "Revoke the current session token.",
+        "operationId": "logout_api_account_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/me": {
+      "get": {
+        "description": "Get the currently authenticated user's info.",
+        "operationId": "get_current_user_api_account_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Current User",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/refresh": {
+      "post": {
+        "description": "Exchange a valid session token for a new one.",
+        "operationId": "refresh_token_api_account_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh Token",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/analytics/gaps": {
+      "get": {
+        "description": "Get untracked gaps between sessions on a given date.",
+        "operationId": "get_untracked_gaps_api_analytics_gaps_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_date",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "Target Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Untracked Gaps",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/analytics/heatmap": {
+      "get": {
+        "description": "Get daily activity heatmap for a given year.",
+        "operationId": "get_heatmap_api_analytics_heatmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HeatmapDayResponse"
+                  },
+                  "title": "Response Get Heatmap Api Analytics Heatmap Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Heatmap",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/analytics/rhythm": {
+      "get": {
+        "description": "Get average activity by time of day in half-hour slots.",
+        "operationId": "get_daily_rhythm_api_analytics_rhythm_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "pattern": "^(week|month|all)$",
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RhythmSlotResponse"
+                  },
+                  "title": "Response Get Daily Rhythm Api Analytics Rhythm Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Rhythm",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/analytics/tags": {
+      "get": {
+        "description": "Get all unique tags used across all sessions, sorted alphabetically.",
+        "operationId": "get_all_tags_api_analytics_tags_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Get All Tags Api Analytics Tags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get All Tags",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/auth/login/options": {
+      "get": {
+        "description": "Get WebAuthn authentication options for login.",
+        "operationId": "get_login_options_api_auth_login_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginOptionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Login Options",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/login/verify": {
+      "post": {
+        "description": "Verify an authentication response and return a session token.",
+        "operationId": "verify_login_api_auth_login_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/register/start": {
+      "post": {
+        "description": "Start registration: create user and return WebAuthn options.",
+        "operationId": "register_start_api_auth_register_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Start",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/register/verify": {
+      "post": {
+        "description": "Verify registration response and store the credential.",
+        "operationId": "verify_registration_api_auth_register_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Registration",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auto-start/": {
+      "get": {
+        "description": "List all auto-start rules.",
+        "operationId": "list_rules_api_auto_start__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Rules",
+        "tags": [
+          "auto-start"
+        ]
+      },
+      "post": {
+        "description": "Create a new auto-start rule.",
+        "operationId": "create_rule_api_auto_start__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAutoStartRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Rule",
+        "tags": [
+          "auto-start"
+        ]
+      }
+    },
+    "/api/auto-start/trigger": {
+      "post": {
+        "description": "Receive an external webhook and start the timer if a matching rule exists.\n\nCall this from GitHub webhook, Zapier, etc. with {\"repository\": \"owner/repo\"}.",
+        "operationId": "trigger_auto_start_api_auto_start_trigger_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookTriggerPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Auto Start",
+        "tags": [
+          "auto-start"
+        ]
+      }
+    },
+    "/api/auto-start/{rule_id}": {
+      "delete": {
+        "description": "Delete an auto-start rule.",
+        "operationId": "delete_rule_api_auto_start__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Rule",
+        "tags": [
+          "auto-start"
+        ]
+      }
+    },
+    "/api/beats/": {
+      "get": {
+        "description": "List beats with optional filters.",
+        "operationId": "list_beats_api_beats__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_filter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date Filter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Beats",
+        "tags": [
+          "Beats"
+        ]
+      },
+      "post": {
+        "description": "Create a new beat (time log entry).",
+        "operationId": "create_beat_api_beats__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Beat",
+        "tags": [
+          "Beats"
+        ]
+      },
+      "put": {
+        "description": "Update an existing beat.",
+        "operationId": "update_beat_api_beats__put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Beat",
+        "tags": [
+          "Beats"
+        ]
+      }
+    },
+    "/api/beats/{beat_id}": {
+      "delete": {
+        "description": "Delete a beat by ID.",
+        "operationId": "delete_beat_api_beats__beat_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "beat_id",
+            "required": true,
+            "schema": {
+              "title": "Beat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Beat",
+        "tags": [
+          "Beats"
+        ]
+      },
+      "get": {
+        "description": "Get a specific beat by ID.",
+        "operationId": "get_beat_api_beats__beat_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "beat_id",
+            "required": true,
+            "schema": {
+              "title": "Beat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Beat",
+        "tags": [
+          "Beats"
+        ]
+      }
+    },
+    "/api/calendar/auth-url": {
+      "get": {
+        "description": "Get the Google OAuth consent URL to start the connection flow.",
+        "operationId": "get_auth_url_api_calendar_auth_url_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Auth Url",
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
+    "/api/calendar/connect": {
+      "post": {
+        "description": "Exchange an OAuth authorization code for tokens and store the integration.",
+        "operationId": "connect_calendar_api_calendar_connect_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect Calendar",
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
+    "/api/calendar/disconnect": {
+      "delete": {
+        "description": "Remove the Google Calendar integration.",
+        "operationId": "disconnect_calendar_api_calendar_disconnect_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Disconnect Calendar",
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
+    "/api/calendar/events": {
+      "get": {
+        "description": "Fetch calendar events in a time range.",
+        "operationId": "get_calendar_events_api_calendar_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Calendar Events",
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
+    "/api/calendar/status": {
+      "get": {
+        "description": "Check if a calendar integration is connected.",
+        "operationId": "calendar_status_api_calendar_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Calendar Status",
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
+    "/api/daily-notes": {
+      "get": {
+        "description": "Get the daily note for a given date (defaults to today).",
+        "operationId": "get_daily_note_api_daily_notes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DailyNoteResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Daily Note Api Daily Notes Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Note",
+        "tags": [
+          "daily-notes"
+        ]
+      },
+      "put": {
+        "description": "Create or update the daily note for a date.",
+        "operationId": "upsert_daily_note_api_daily_notes_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertDailyNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyNoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Daily Note",
+        "tags": [
+          "daily-notes"
+        ]
+      }
+    },
+    "/api/device/favorites": {
+      "get": {
+        "description": "Get favorite (non-archived) projects for multi-project switching.",
+        "operationId": "get_favorites_api_device_favorites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceFavoriteProject"
+                  },
+                  "title": "Response Get Favorites Api Device Favorites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Favorites",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/device/heartbeat": {
+      "get": {
+        "description": "Get the last heartbeat from the wall clock device.",
+        "operationId": "get_heartbeat_api_device_heartbeat_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DeviceHeartbeatResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Heartbeat Api Device Heartbeat Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Heartbeat",
+        "tags": [
+          "device"
+        ]
+      },
+      "post": {
+        "description": "Receive a heartbeat from the wall clock device.",
+        "operationId": "post_heartbeat_api_device_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceHeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceHeartbeatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Heartbeat",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/device/status": {
+      "get": {
+        "description": "Get timer state optimized for ESP32 wall clock firmware.",
+        "operationId": "get_device_status_api_device_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "theme",
+            "required": false,
+            "schema": {
+              "default": "ember",
+              "title": "Theme",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Device Status",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/export/csv/sessions": {
+      "get": {
+        "description": "Export sessions as CSV.",
+        "operationId": "export_sessions_csv_api_export_csv_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Sessions Csv",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/full": {
+      "get": {
+        "description": "Export everything as JSON for backup.",
+        "operationId": "export_full_json_api_export_full_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Full Json",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/import": {
+      "post": {
+        "description": "Import a full JSON backup. Upserts by ID \u2014 safe to re-import.",
+        "operationId": "import_full_json_api_export_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_full_json_api_export_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Full Json",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/sqlite": {
+      "get": {
+        "description": "Export a signed SQLite snapshot as a `.zip` bundle.\n\nBundle contents:\n    - data.sqlite       \u2014 normalized, queryable snapshot\n    - manifest.json     \u2014 version, counts, sha256(data.sqlite)\n    - manifest.sig      \u2014 Ed25519 signature over the canonical manifest\n    - public_key.bin    \u2014 raw 32-byte Ed25519 public key for verification\n\nThe private key lives only in Mongo and is never served \u2014 the public key\nships with the bundle so a user can run the verify path entirely offline.",
+        "operationId": "export_sqlite_api_export_sqlite_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Sqlite",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/sqlite/import": {
+      "post": {
+        "description": "Import a previously signed SQLite bundle. The signature is verified\nagainst the signing user's stored public key before any mutation runs \u2014\na tampered bundle never reaches the writers.\n\nCross-account restores are rejected: the bundle must be signed by THIS\nuser. Sharing exports between accounts is out of scope for v1.",
+        "operationId": "import_sqlite_api_export_sqlite_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_sqlite_api_export_sqlite_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Sqlite",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/github/auth-url": {
+      "get": {
+        "description": "Get the GitHub OAuth consent URL to start the connection flow.",
+        "operationId": "get_auth_url_api_github_auth_url_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Auth Url",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/connect": {
+      "post": {
+        "description": "Exchange an OAuth authorization code for a token and store the integration.",
+        "operationId": "connect_github_api_github_connect_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect Github",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/disconnect": {
+      "delete": {
+        "description": "Remove the GitHub integration.",
+        "operationId": "disconnect_github_api_github_disconnect_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Disconnect Github",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/status": {
+      "get": {
+        "description": "Check if a GitHub integration is connected.",
+        "operationId": "github_status_api_github_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Github Status",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/intelligence/digests": {
+      "get": {
+        "description": "List recent weekly digests.",
+        "operationId": "list_digests_api_intelligence_digests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 52,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WeeklyDigestResponse"
+                  },
+                  "title": "Response List Digests Api Intelligence Digests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Digests",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/digests/generate": {
+      "post": {
+        "description": "Generate (or regenerate) a weekly digest. Defaults to last completed week.",
+        "operationId": "generate_digest_api_intelligence_digests_generate_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "week_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Week Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeeklyDigestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Digest",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/digests/{week_of}": {
+      "get": {
+        "description": "Get a specific weekly digest by its Monday date.",
+        "operationId": "get_digest_api_intelligence_digests__week_of__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "week_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Week Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeeklyDigestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Digest",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/estimation": {
+      "get": {
+        "description": "Get per-project estimation accuracy (planned vs actual).",
+        "operationId": "get_estimation_accuracy_api_intelligence_estimation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EstimationAccuracyResponse"
+                  },
+                  "title": "Response Get Estimation Accuracy Api Intelligence Estimation Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Estimation Accuracy",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/focus-scores": {
+      "get": {
+        "description": "Get focus quality scores for all sessions on a date (defaults to today).",
+        "operationId": "get_focus_scores_api_intelligence_focus_scores_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FocusScoreResponse"
+                  },
+                  "title": "Response Get Focus Scores Api Intelligence Focus Scores Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Focus Scores",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/inbox": {
+      "get": {
+        "description": "Aggregated Inbox: patterns, top suggestions for today, and project-health alerts.\n\nA read-model over existing intelligence outputs \u2014 no new computation, just a\nnormalized view so the dashboard can surface everything in one place. Pattern\ndismiss state is honored via the existing insights repo.",
+        "operationId": "get_inbox_api_intelligence_inbox_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit_suggestions",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Limit Suggestions",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Inbox",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/mood": {
+      "get": {
+        "description": "Get mood-productivity correlation analysis.",
+        "operationId": "get_mood_correlation_api_intelligence_mood_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoodCorrelationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Mood Correlation",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/patterns": {
+      "get": {
+        "description": "Get cached pattern detection results.",
+        "operationId": "get_patterns_api_intelligence_patterns_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatternsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Patterns",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/patterns/refresh": {
+      "post": {
+        "description": "Refresh pattern detection \u2014 recomputes all insights.",
+        "operationId": "refresh_patterns_api_intelligence_patterns_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatternsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh Patterns",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/patterns/{insight_id}/dismiss": {
+      "post": {
+        "description": "Dismiss a pattern insight card.",
+        "operationId": "dismiss_pattern_api_intelligence_patterns__insight_id__dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "insight_id",
+            "required": true,
+            "schema": {
+              "title": "Insight Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Pattern",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/project-health": {
+      "get": {
+        "description": "Get health metrics for each active project.",
+        "operationId": "get_project_health_api_intelligence_project_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectHealthResponse"
+                  },
+                  "title": "Response Get Project Health Api Intelligence Project Health Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Project Health",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/score": {
+      "get": {
+        "description": "Get current productivity score (0-100) with component breakdown.",
+        "operationId": "get_productivity_score_api_intelligence_score_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductivityScoreResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Productivity Score",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/score/history": {
+      "get": {
+        "description": "Get weekly productivity score history for sparkline.",
+        "operationId": "get_score_history_api_intelligence_score_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "weeks",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "maximum": 52,
+              "minimum": 1,
+              "title": "Weeks",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScoreHistoryItem"
+                  },
+                  "title": "Response Get Score History Api Intelligence Score History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Score History",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intelligence/suggestions": {
+      "get": {
+        "description": "Get smart daily plan suggestions for a date (defaults to today).",
+        "operationId": "get_suggestions_api_intelligence_suggestions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SuggestionResponse"
+                  },
+                  "title": "Response Get Suggestions Api Intelligence Suggestions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Suggestions",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
+    "/api/intentions": {
+      "get": {
+        "description": "List intentions for a given date (defaults to today).",
+        "operationId": "list_intentions_api_intentions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IntentionResponse"
+                  },
+                  "title": "Response List Intentions Api Intentions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Intentions",
+        "tags": [
+          "intentions"
+        ]
+      },
+      "post": {
+        "description": "Create a daily intention.",
+        "operationId": "create_intention_api_intentions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIntentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Intention",
+        "tags": [
+          "intentions"
+        ]
+      }
+    },
+    "/api/intentions/{intention_id}": {
+      "delete": {
+        "description": "Delete an intention.",
+        "operationId": "delete_intention_api_intentions__intention_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intention_id",
+            "required": true,
+            "schema": {
+              "title": "Intention Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Intention",
+        "tags": [
+          "intentions"
+        ]
+      },
+      "patch": {
+        "description": "Update an intention (toggle completion or change planned minutes).",
+        "operationId": "update_intention_api_intentions__intention_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intention_id",
+            "required": true,
+            "schema": {
+              "title": "Intention Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIntentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Intention",
+        "tags": [
+          "intentions"
+        ]
+      }
+    },
+    "/api/plans/intention-streaks": {
+      "get": {
+        "description": "Compute consecutive days with all intentions completed.",
+        "operationId": "get_intention_streaks_api_plans_intention_streaks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Intention Streaks",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/plans/recurring": {
+      "get": {
+        "description": "List all recurring intention templates.",
+        "operationId": "list_recurring_intentions_api_plans_recurring_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Recurring Intentions",
+        "tags": [
+          "planning"
+        ]
+      },
+      "post": {
+        "description": "Create a new recurring intention template.",
+        "operationId": "create_recurring_intention_api_plans_recurring_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecurringIntentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Recurring Intention",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/plans/recurring/apply": {
+      "post": {
+        "description": "Apply recurring intentions for today \u2014 creates intentions that don't already exist.",
+        "operationId": "apply_recurring_intentions_api_plans_recurring_apply_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Apply Recurring Intentions",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/plans/recurring/{intention_id}": {
+      "delete": {
+        "description": "Delete a recurring intention template.",
+        "operationId": "delete_recurring_intention_api_plans_recurring__intention_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intention_id",
+            "required": true,
+            "schema": {
+              "title": "Intention Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Recurring Intention",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/plans/reviews/weekly": {
+      "get": {
+        "description": "Get a weekly review for a given week.",
+        "operationId": "get_weekly_review_api_plans_reviews_weekly_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "week_of",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "Week Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Weekly Review",
+        "tags": [
+          "planning"
+        ]
+      },
+      "put": {
+        "description": "Create or update a weekly review.",
+        "operationId": "upsert_weekly_review_api_plans_reviews_weekly_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertWeeklyReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Weekly Review",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/plans/reviews/weekly/recent": {
+      "get": {
+        "description": "List recent weekly reviews.",
+        "operationId": "list_recent_reviews_api_plans_reviews_weekly_recent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Recent Reviews",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/plans/weekly": {
+      "get": {
+        "description": "Get the weekly plan for a given week (defaults to current week's Monday).",
+        "operationId": "get_weekly_plan_api_plans_weekly_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "week_of",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "Week Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Weekly Plan",
+        "tags": [
+          "planning"
+        ]
+      },
+      "put": {
+        "description": "Create or update a weekly plan.",
+        "operationId": "upsert_weekly_plan_api_plans_weekly_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertWeeklyPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Weekly Plan",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/api/projects/": {
+      "get": {
+        "description": "List all projects, optionally filtering by archived status.",
+        "operationId": "list_projects_api_projects__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "post": {
+        "description": "Create a new project.",
+        "operationId": "create_project_api_projects__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Project",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "put": {
+        "description": "Update an existing project.",
+        "operationId": "update_project_api_projects__put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/stop": {
+      "post": {
+        "description": "Stop the currently running timer.",
+        "operationId": "end_project_timer_api_projects_stop_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordTimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "End Project Timer",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/archive": {
+      "post": {
+        "description": "Archive a project.",
+        "operationId": "archive_project_api_projects__project_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/daily-average": {
+      "get": {
+        "description": "Get the average daily session time for a project over the last 30 days.",
+        "operationId": "get_daily_average_api_projects__project_id__daily_average_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily Average",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/git-activity": {
+      "get": {
+        "description": "Get GitHub commit counts correlated with a project's tracked time.",
+        "operationId": "get_git_activity_api_projects__project_id__git_activity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Git Activity",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/goal-overrides": {
+      "put": {
+        "description": "Replace goal overrides for a project.",
+        "operationId": "update_goal_overrides_api_projects__project_id__goal_overrides_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/GoalOverrideRequest"
+                },
+                "title": "Overrides",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Goal Overrides",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/start": {
+      "post": {
+        "description": "Start a timer for a project.",
+        "operationId": "start_project_timer_api_projects__project_id__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordTimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Project Timer",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/summary/": {
+      "get": {
+        "description": "Get daily summary for a project.",
+        "operationId": "get_project_summary_api_projects__project_id__summary__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project Summary",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/today/": {
+      "get": {
+        "description": "Get total time spent on project today.",
+        "operationId": "today_time_for_project_api_projects__project_id__today__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DurationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Today Time For Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/total/": {
+      "get": {
+        "description": "Get total time per month for a project.",
+        "operationId": "total_work_time_per_month_on_project_api_projects__project_id__total__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlyTotalsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Total Work Time Per Month On Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/week/": {
+      "get": {
+        "description": "Get time breakdown for a week.",
+        "operationId": "current_week_time_for_project_api_projects__project_id__week__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "weeks_ago",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Weeks Ago",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "display_each_log_duration",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Display Each Log Duration",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Current Week Time For Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/timer/status": {
+      "get": {
+        "description": "Get the current timer status.\n\nReturns whether a timer is running, and if so, details about the active beat.",
+        "operationId": "get_timer_status_api_timer_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Timer Status",
+        "tags": [
+          "Timer"
+        ]
+      }
+    },
+    "/api/webhooks/": {
+      "get": {
+        "description": "List all registered webhooks.",
+        "operationId": "list_webhooks_api_webhooks__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookResponse"
+                  },
+                  "title": "Response List Webhooks Api Webhooks  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Webhooks",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "post": {
+        "description": "Register a new webhook URL.",
+        "operationId": "create_webhook_api_webhooks__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Webhook",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/daily-summary/trigger": {
+      "post": {
+        "description": "Trigger a daily summary webhook for a given date (defaults to today).",
+        "operationId": "trigger_daily_summary_api_webhooks_daily_summary_trigger_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target_date",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "Target Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Daily Summary",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/{webhook_id}": {
+      "delete": {
+        "description": "Delete a webhook by ID.",
+        "operationId": "delete_webhook_api_webhooks__webhook_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "webhook_id",
+            "required": true,
+            "schema": {
+              "title": "Webhook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Webhook",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Health check endpoint for Docker and monitoring.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Check"
+      }
+    },
+    "/talk/ding": {
+      "get": {
+        "description": "Test endpoint.",
+        "operationId": "ding_get_talk_ding_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ding Get"
+      },
+      "post": {
+        "description": "Test endpoint.",
+        "operationId": "ding_post_talk_ding_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ding Post"
+      }
+    }
+  }
+}

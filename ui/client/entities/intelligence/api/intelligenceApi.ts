@@ -10,10 +10,15 @@ import type {
 	PatternsResponse,
 	ProductivityScore,
 	ProjectHealth,
+	Schemas,
 	ScoreHistoryItem,
 	Suggestion,
 	WeeklyDigest,
 } from "@/shared/api";
+
+export type InboxResponse = Schemas["InboxResponse"];
+export type InboxItem = Schemas["InboxItemResponse"];
+
 import {
 	EstimationAccuracyListSchema,
 	FocusScoreListSchema,
@@ -99,4 +104,12 @@ export async function fetchEstimationAccuracy(): Promise<EstimationAccuracy[]> {
 export async function fetchProjectHealth(): Promise<ProjectHealth[]> {
 	const data = await get<unknown>("/api/intelligence/project-health");
 	return parseApiResponse(ProjectHealthListSchema, data);
+}
+
+/**
+ * Fetch the aggregated intelligence Inbox (patterns + suggestions + health alerts).
+ * Uses the generated OpenAPI type directly — the server owns the shape contract.
+ */
+export async function fetchInbox(): Promise<InboxResponse> {
+	return get<InboxResponse>("/api/intelligence/inbox");
 }

@@ -18,8 +18,10 @@ import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
 import { useTimer } from "@/features/timer";
 import {
 	parseUtcIso,
+	useCommandActions,
 	useFavicon,
 	useKeyboardShortcuts,
+	useSyncEngine,
 	useTheme,
 	useTimerNotification,
 } from "@/shared/lib";
@@ -46,6 +48,9 @@ export function Layout() {
 
 	// Initialize theme + density from localStorage
 	useTheme();
+
+	// Start the offline mutation sync engine exactly once.
+	useSyncEngine();
 
 	// Apply recurring intentions on first load each day
 	useEffect(() => {
@@ -122,6 +127,16 @@ export function Layout() {
 
 	useKeyboardShortcuts(shortcutActions);
 
+	const {
+		items: commandItems,
+		recencyBoost,
+		recordInvocation,
+	} = useCommandActions({
+		projects: activeProjects.map((p) => ({ id: p.id, name: p.name, color: p.color })),
+		isTimerRunning: timer.isRunning,
+		onToggleTimer: toggleTimer,
+	});
+
 	const timerProps = {
 		projects: projectsList,
 		isRunning: timer.isRunning,
@@ -153,13 +168,12 @@ export function Layout() {
 			<CommandPalette
 				open={commandPaletteOpen}
 				onClose={() => setCommandPaletteOpen(false)}
-				projects={activeProjects.map((p) => ({
-					id: p.id,
-					name: p.name,
-					color: p.color,
-				}))}
-				isTimerRunning={timer.isRunning}
-				onToggleTimer={toggleTimer}
+				items={commandItems}
+				onInvoke={(id) => {
+					recordInvocation(id);
+					setCommandPaletteOpen(false);
+				}}
+				recencyBoost={recencyBoost}
 			/>
 
 			{/* Focus mode */}

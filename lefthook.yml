@@ -24,3 +24,6 @@ pre-push:
     ui-test:
       root: ui/
       run: pnpm test
+    ui-api-types:
+      root: ui/
+      run: pnpm gen:types:check

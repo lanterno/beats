@@ -1,7 +1,12 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
 	"files": {
-		"includes": ["**/client/**", "!**/*.css"]
+		"includes": [
+			"**/client/**",
+			"!**/*.css",
+			"!**/client/shared/api/generated.ts",
+			"!**/client/shared/api/openapi.json"
+		]
 	},
 	"formatter": {
 		"indentStyle": "tab",

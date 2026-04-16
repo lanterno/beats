@@ -8,6 +8,7 @@ import {
 	fetchDigests,
 	fetchEstimationAccuracy,
 	fetchFocusScores,
+	fetchInbox,
 	fetchMoodCorrelation,
 	fetchPatterns,
 	fetchProductivityScore,
@@ -34,6 +35,7 @@ export const intelligenceKeys = {
 	mood: () => [...intelligenceKeys.all, "mood"] as const,
 	estimation: () => [...intelligenceKeys.all, "estimation"] as const,
 	projectHealth: () => [...intelligenceKeys.all, "project-health"] as const,
+	inbox: () => [...intelligenceKeys.all, "inbox"] as const,
 };
 
 /**
@@ -174,5 +176,16 @@ export function useProjectHealth() {
 		queryKey: intelligenceKeys.projectHealth(),
 		queryFn: fetchProjectHealth,
 		staleTime: 30 * 60_000, // 30 minutes
+	});
+}
+
+/**
+ * Fetch the aggregated intelligence Inbox for the dashboard
+ */
+export function useInbox() {
+	return useQuery({
+		queryKey: intelligenceKeys.inbox(),
+		queryFn: fetchInbox,
+		staleTime: 5 * 60_000, // 5 minutes
 	});
 }

@@ -7,9 +7,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
-import { parseUtcIso, useOnlineStatus } from "@/shared/lib";
-import { drainQueue, enqueueEvent } from "@/shared/lib/offlineQueue";
-import { fetchTimerStatus, startTimerApi, stopTimerApi } from "../api";
+import { apiMutate } from "@/shared/api";
+import { notifySyncWork, parseUtcIso } from "@/shared/lib";
+import { fetchTimerStatus } from "../api";
 import type { TimerState } from "./types";
 
 const STORAGE_KEY = "project_hours_timer";
@@ -138,11 +138,13 @@ export function useTimer() {
 			});
 			apiStartTimeRef.current = timerStartTime;
 
-			try {
-				await startTimerApi(projectId, timerStartTime);
+			const result = await apiMutate<void>("POST", `/api/projects/${projectId}/start`, {
+				time: timerStartTime,
+			});
+			if (result.status === "sent") {
 				queryClient.invalidateQueries({ queryKey: TIMER_STATUS_KEY });
-			} catch {
-				await enqueueEvent({ type: "start", payload: { projectId, time: timerStartTime } });
+			} else {
+				notifySyncWork();
 			}
 		},
 		[queryClient],
@@ -165,13 +167,13 @@ export function useTimer() {
 			});
 			apiStartTimeRef.current = null;
 
-			try {
-				await stopTimerApi(stopTime);
+			const result = await apiMutate<void>("POST", "/api/projects/stop", { time: stopTime });
+			if (result.status === "sent") {
 				queryClient.invalidateQueries({ queryKey: TIMER_STATUS_KEY });
 				queryClient.invalidateQueries({ queryKey: projectKeys.all });
 				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-			} catch {
-				await enqueueEvent({ type: "stop", payload: { time: stopTime } });
+			} else {
+				notifySyncWork();
 			}
 		},
 		[timerState, queryClient],
@@ -185,22 +187,10 @@ export function useTimer() {
 		setTimerState((prev) => ({ ...prev, customStartTime: startTime }));
 	}, []);
 
-	// Drain offline queue when connectivity returns
-	const handleReconnect = useCallback(() => {
-		drainQueue(async (event) => {
-			if (event.type === "start" && event.payload.projectId) {
-				await startTimerApi(event.payload.projectId, event.payload.time);
-			} else if (event.type === "stop") {
-				await stopTimerApi(event.payload.time);
-			}
-		}).then((count) => {
-			if (count > 0) {
-				queryClient.invalidateQueries({ queryKey: projectKeys.all });
-				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-			}
-		});
-	}, [queryClient]);
-	useOnlineStatus(handleReconnect);
+	// The central sync engine (useSyncEngine in Layout) drains the queue on
+	// reconnect; timer invalidation happens below when that drain completes.
+	// We watch the server-side timer status query — it refetches on reconnect
+	// via TanStack Query and restores the authoritative state.
 
 	return {
 		isRunning: timerState.isRunning,

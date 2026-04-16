@@ -11,6 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from beats.api.middleware import IdempotencyMiddleware, ensure_mutation_log_indexes
 from beats.api.routers.account import router as account_router
 from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager, limiter
@@ -44,6 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Connecting to database...")
     await Database.connect()
     logger.info("Database connected.")
+    await ensure_mutation_log_indexes()
     yield
     # Shutdown: Disconnect from database
     logger.info("Disconnecting from database...")
@@ -152,6 +154,10 @@ app.include_router(github_router)
 app.include_router(auto_start_router)
 app.include_router(planning_router)
 
+# Idempotency runs INSIDE authentication (it needs request.state.user_id), so
+# it is added to the stack first — add_middleware wraps from inside out.
+app.add_middleware(IdempotencyMiddleware)
+
 # Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)
 
@@ -162,8 +168,14 @@ async def health_check():
     return {"status": "healthy", "service": "beats-api"}
 
 
-@app.api_route("/talk/ding", methods=["GET", "POST"])
-async def ding():
+@app.get("/talk/ding")
+async def ding_get():
+    """Test endpoint."""
+    return {"message": "dong"}
+
+
+@app.post("/talk/ding")
+async def ding_post():
     """Test endpoint."""
     return {"message": "dong"}
 

@@ -4,7 +4,6 @@
 
 // Class name utility
 export { cn } from "./cn";
-
 // Date utilities
 export {
 	formatDate,
@@ -18,7 +17,6 @@ export {
 	parseUtcIso,
 	toLocalDatetimeLocalString,
 } from "./date";
-
 // Format utilities
 export {
 	calculateDurationMinutes,
@@ -26,15 +24,24 @@ export {
 	formatSecondsToTime,
 	parseTimedeltaToMinutes,
 } from "./format";
+// Fuzzy matching (command palette)
+export { fuzzyRank, score as fuzzyScore } from "./fuzzyMatch";
 
-// Offline queue
-export { drainQueue, enqueueEvent, getPendingEvents } from "./offlineQueue";
+// Offline mutation queue
+export {
+	drainPending,
+	enqueueMutation,
+	type HttpMethod,
+	newClientId,
+	type PendingMutation,
+} from "./mutationQueue";
 
 // Hooks
+export { type CommandContext, useCommandActions } from "./useCommandActions";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
-export { useOnlineStatus } from "./useOnlineStatus";
+export { notifySyncWork, type SyncSnapshot, useSyncEngine, useSyncStatus } from "./useSyncEngine";
 export type { Density, ThemeName } from "./useTheme";
 export { DENSITIES, THEMES, useTheme } from "./useTheme";
 export { useTimerNotification } from "./useTimerNotification";

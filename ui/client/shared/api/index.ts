@@ -3,7 +3,21 @@
  */
 
 // API client and error handling
-export { ApiError, apiClient, del, get, patch, post, put } from "./client";
+export {
+	ApiError,
+	apiClient,
+	apiMutate,
+	del,
+	get,
+	type MutateOptions,
+	type MutateResult,
+	patch,
+	post,
+	put,
+	replayMutation,
+} from "./client";
+// Generated OpenAPI types (see ./schema.ts for ergonomic re-exports)
+export type { Paths, Schemas } from "./schema";
 // Re-export types
 export type {
 	ApiBeat,

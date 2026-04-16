@@ -6,6 +6,12 @@
 
 import { getSessionToken } from "@/features/auth/stores/authStore";
 import { config } from "../config";
+import {
+	enqueueMutation,
+	type HttpMethod,
+	newClientId,
+	type PendingMutation,
+} from "../lib/mutationQueue";
 
 // ============================================================================
 // Error Types
@@ -169,4 +175,95 @@ export function patch<T>(endpoint: string, body: unknown): Promise<T> {
  */
 export function del<T>(endpoint: string): Promise<T> {
 	return apiClient<T>(endpoint, { method: "DELETE" });
+}
+
+// ============================================================================
+// Offline-aware mutation wrapper (Stage 1.4)
+// ============================================================================
+
+/**
+ * Signals a network-layer failure so callers can branch on "queue vs throw".
+ * Does not wrap 4xx/5xx responses — those indicate the request reached the
+ * server, and queueing them would compound user-facing errors.
+ */
+function isNetworkError(err: unknown): boolean {
+	if (err instanceof TypeError) return true; // fetch throws TypeError on network failure
+	if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+	return false;
+}
+
+export interface MutateOptions {
+	/** Attach an X-Client-Id for server-side idempotency. Defaults to true. */
+	idempotent?: boolean;
+	/** Override the auto-generated client id (useful for retries). */
+	clientId?: string;
+	/** Opt out of queuing on network failure. Defaults to true. */
+	queueOnFailure?: boolean;
+}
+
+export interface MutateResult<T> {
+	status: "sent" | "queued";
+	data?: T;
+	clientId: string;
+	queueError?: string;
+}
+
+/**
+ * Perform a mutation with offline queueing + idempotency.
+ *
+ * - Attaches `X-Client-Id` so the server can de-dupe replays.
+ * - On a TypeError (network failure) or navigator.onLine === false, writes the
+ *   mutation to IndexedDB and returns `{status: "queued"}`. The sync engine
+ *   drains the queue on reconnect.
+ * - HTTP errors (4xx/5xx) propagate as `ApiError` and are NOT queued.
+ */
+export async function apiMutate<T>(
+	method: HttpMethod,
+	path: string,
+	body: unknown,
+	options: MutateOptions = {},
+): Promise<MutateResult<T>> {
+	const { idempotent = true, queueOnFailure = true } = options;
+	const clientId = options.clientId ?? newClientId();
+
+	const headers: Record<string, string> = {};
+	if (idempotent) headers["X-Client-Id"] = clientId;
+
+	try {
+		const data = await apiClient<T>(path, {
+			method,
+			body: body === undefined ? undefined : JSON.stringify(body),
+			headers,
+		});
+		return { status: "sent", data, clientId };
+	} catch (err) {
+		if (queueOnFailure && isNetworkError(err)) {
+			try {
+				const pending: Omit<PendingMutation, "id" | "enqueuedAt" | "attempts"> = {
+					method,
+					path,
+					body,
+					clientId,
+				};
+				await enqueueMutation(pending);
+				return { status: "queued", clientId };
+			} catch (queueErr) {
+				const message = queueErr instanceof Error ? queueErr.message : String(queueErr);
+				return { status: "queued", clientId, queueError: message };
+			}
+		}
+		throw err;
+	}
+}
+
+/**
+ * Replay a queued mutation exactly once. Used by the sync engine.
+ * Does not re-queue on failure — the engine decides whether to retry.
+ */
+export async function replayMutation(pending: PendingMutation): Promise<void> {
+	await apiClient(pending.path, {
+		method: pending.method,
+		body: pending.body === undefined ? undefined : JSON.stringify(pending.body),
+		headers: { "X-Client-Id": pending.clientId },
+	});
 }

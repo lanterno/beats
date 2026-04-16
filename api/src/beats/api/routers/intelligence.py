@@ -13,6 +13,8 @@ from beats.api.dependencies import (
 from beats.api.schemas import (
     EstimationAccuracyResponse,
     FocusScoreResponse,
+    InboxItemResponse,
+    InboxResponse,
     InsightCardResponse,
     MoodCorrelationResponse,
     PatternsResponse,
@@ -236,3 +238,96 @@ async def get_project_health(
     """Get health metrics for each active project."""
     results = await service.get_project_health()
     return [ProjectHealthResponse(**r) for r in results]
+
+
+def _pattern_severity(priority: int) -> str:
+    if priority <= 1:
+        return "high"
+    if priority == 2:
+        return "medium"
+    return "low"
+
+
+@router.get("/inbox", response_model=InboxResponse)
+async def get_inbox(
+    service: IntelligenceServiceDep,
+    insights_repo: InsightsRepoDep,
+    limit_suggestions: int = Query(default=3, ge=0, le=10),
+) -> InboxResponse:
+    """Aggregated Inbox: patterns, top suggestions for today, and project-health alerts.
+
+    A read-model over existing intelligence outputs — no new computation, just a
+    normalized view so the dashboard can surface everything in one place. Pattern
+    dismiss state is honored via the existing insights repo.
+    """
+
+    items: list[InboxItemResponse] = []
+
+    # Patterns (honor dismissed)
+    user_insights = await insights_repo.get()
+    if user_insights:
+        for insight in user_insights.insights:
+            if insight.id in user_insights.dismissed_ids:
+                continue
+            items.append(
+                InboxItemResponse(
+                    id=f"pattern:{insight.id}",
+                    kind="pattern",
+                    severity=_pattern_severity(insight.priority),
+                    title=insight.title,
+                    body=insight.body,
+                    data=insight.model_dump().get("data", {}),
+                )
+            )
+
+    # Daily suggestions (top N by suggested_minutes)
+    today = datetime.now(UTC).date()
+    suggestions = await service.suggest_daily_plan(today)
+    suggestions_sorted = sorted(
+        suggestions, key=lambda s: s.get("suggested_minutes", 0), reverse=True
+    )
+    for suggestion in suggestions_sorted[:limit_suggestions]:
+        project_id = suggestion.get("project_id", "")
+        project_name = suggestion.get("project_name", "")
+        minutes = suggestion.get("suggested_minutes", 0)
+        items.append(
+            InboxItemResponse(
+                id=f"suggestion:{project_id}:{today.isoformat()}",
+                kind="suggestion",
+                severity="low",
+                title=f"Plan {minutes} min on {project_name}",
+                body=suggestion.get("reasoning", ""),
+                cta_label="Open project",
+                cta_href=f"/project/{project_id}",
+                data={"project_id": project_id, "suggested_minutes": minutes},
+            )
+        )
+
+    # Project health alerts
+    health = await service.get_project_health()
+    for entry in health:
+        alert = entry.get("alert")
+        if not alert:
+            continue
+        project_id = entry.get("project_id", "")
+        items.append(
+            InboxItemResponse(
+                id=f"project_health:{project_id}",
+                kind="project_health",
+                severity="medium",
+                title=f"{entry.get('project_name', 'Project')} needs attention",
+                body=alert,
+                cta_label="Open project",
+                cta_href=f"/project/{project_id}",
+                data={
+                    "project_id": project_id,
+                    "days_since_last": entry.get("days_since_last"),
+                },
+            )
+        )
+
+    # Order: high → medium → low, preserving within-group order
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    items.sort(key=lambda it: severity_rank.get(it.severity, 3))
+
+    return InboxResponse(items=items, generated_at=datetime.now(UTC))

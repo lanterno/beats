@@ -5,6 +5,7 @@
 import { useMemo } from "react";
 import { LoadingSpinner, useProjects } from "@/entities/project";
 import { useTodaySessions } from "@/entities/session";
+import { Inbox } from "./Inbox";
 import { ProductivityScore } from "./ProductivityScore";
 import { ProjectPulseList } from "./ProjectPulseList";
 import { QuickLog } from "./QuickLog";
@@ -39,6 +40,10 @@ export default function Index() {
 				<div>
 					<ProductivityScore />
 				</div>
+			</div>
+
+			<div className="mt-5">
+				<Inbox />
 			</div>
 
 			<div className="mt-5">

@@ -306,3 +306,27 @@ class ProjectHealthResponse(BaseModel):
     weekly_goal_trend: list[float] = Field(default_factory=list)
     avg_session_length_trend: list[float] = Field(default_factory=list)
     alert: str | None = None
+
+
+class InboxItemResponse(BaseModel):
+    """A single card in the unified Inbox.
+
+    Normalizes outputs from the intelligence module (patterns, suggestions,
+    project health alerts) into one shape the dashboard can render.
+    """
+
+    id: str
+    kind: str  # "pattern" | "suggestion" | "project_health"
+    severity: str  # "high" | "medium" | "low"
+    title: str
+    body: str
+    cta_label: str | None = None
+    cta_href: str | None = None
+    data: dict = Field(default_factory=dict)
+
+
+class InboxResponse(BaseModel):
+    """Response schema for the aggregated intelligence Inbox."""
+
+    items: list[InboxItemResponse]
+    generated_at: datetime

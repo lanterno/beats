@@ -7,8 +7,8 @@ import { BarChart3, Menu, Settings, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
-import { cn, formatSecondsToTime, parseUtcIso, useOnlineStatus } from "@/shared/lib";
-import { AnimatedDigits } from "@/shared/ui";
+import { cn, formatSecondsToTime, parseUtcIso } from "@/shared/lib";
+import { AnimatedDigits, SyncStatus } from "@/shared/ui";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
@@ -19,7 +19,6 @@ interface MobileHeaderProps extends TimerProps {
 
 export function MobileHeader(props: MobileHeaderProps) {
 	const [drawerOpen, setDrawerOpen] = useState(false);
-	const isOnline = useOnlineStatus();
 
 	const { isRunning, elapsedSeconds, customStartTime, selectedProjectId, projects } = props;
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -44,9 +43,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 					<Link to="/app" className="font-heading text-base font-bold text-sidebar-foreground">
 						Beats
 					</Link>
-					{!isOnline && (
-						<span className="w-1.5 h-1.5 rounded-full bg-accent/70 animate-pulse" title="Offline" />
-					)}
+					<SyncStatus />
 				</div>
 
 				{isRunning && selectedProject && (

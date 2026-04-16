@@ -8,7 +8,8 @@ import { BarChart3, CalendarDays, Download, LogOut, Settings, X } from "lucide-r
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
 import { clearSessionToken, logout, useAuth } from "@/features/auth";
-import { cn, useInstallPrompt, useOnlineStatus } from "@/shared/lib";
+import { cn, useInstallPrompt } from "@/shared/lib";
+import { SyncStatus } from "@/shared/ui";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
@@ -23,7 +24,6 @@ export function Sidebar(props: SidebarProps) {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const { canShow: canInstall, install, dismiss: dismissInstall } = useInstallPrompt();
-	const isOnline = useOnlineStatus();
 	const { user } = useAuth();
 
 	const handleLogout = async () => {
@@ -43,12 +43,7 @@ export function Sidebar(props: SidebarProps) {
 					>
 						Beats
 					</Link>
-					{!isOnline && (
-						<span
-							className="w-2 h-2 rounded-full bg-accent/70 animate-pulse"
-							title="Offline — changes will sync when you reconnect"
-						/>
-					)}
+					<SyncStatus />
 				</div>
 				<div className="flex items-center gap-1">
 					<Link

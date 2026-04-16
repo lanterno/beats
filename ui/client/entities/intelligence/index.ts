@@ -1,6 +1,7 @@
 /**
  * Intelligence entity - public API
  */
+
 export {
 	intelligenceKeys,
 	useDigests,
@@ -8,6 +9,7 @@ export {
 	useEstimationAccuracy,
 	useFocusScores,
 	useGenerateDigest,
+	useInbox,
 	useMoodCorrelation,
 	usePatterns,
 	useProductivityScore,
@@ -16,3 +18,4 @@ export {
 	useScoreHistory,
 	useSuggestions,
 } from "./api";
+export type { InboxItem, InboxResponse } from "./api/intelligenceApi";
