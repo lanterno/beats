@@ -125,6 +125,14 @@ variable "github_redirect_uri" {
   default     = "https://lifepete.com/settings?github=callback"
 }
 
+# AI Coach (Anthropic API)
+variable "anthropic_api_key" {
+  description = "Anthropic API key for the AI Coach (Claude)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # Custom Domain Configuration
 variable "api_domain" {
   description = "Custom domain to attach to the Cloud Run service (e.g., api.lifepete.com)"

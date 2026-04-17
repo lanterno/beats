@@ -43,6 +43,11 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
+          name  = "ANTHROPIC_API_KEY"
+          value = var.anthropic_api_key
+        }
+
+        env {
           name  = "GITHUB_CLIENT_ID"
           value = var.github_client_id
         }
