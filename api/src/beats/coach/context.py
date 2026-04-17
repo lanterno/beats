@@ -40,7 +40,8 @@ async def build_user_context(user_id: str) -> str:
     active = [p for p in projects if not p.archived]
     project_map = {p.id: p.name for p in projects}
 
-    now = datetime.now(UTC)
+    # MongoDB returns naive datetimes (UTC without tzinfo), so compare naive-to-naive.
+    now = datetime.now(UTC).replace(tzinfo=None)
     thirty_days_ago = now - timedelta(days=30)
 
     beats = await beat_repo.list_all_completed()
