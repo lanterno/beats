@@ -29,7 +29,7 @@ export function Sidebar(props: SidebarProps) {
 	const handleLogout = async () => {
 		await logout().catch(() => {});
 		clearSessionToken();
-		navigate("/login");
+		navigate("/");
 	};
 
 	return (

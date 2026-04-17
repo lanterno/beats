@@ -210,7 +210,7 @@ function buildItems(
 				.catch(() => {})
 				.finally(() => {
 					clearSessionToken();
-					window.location.replace("/login");
+					window.location.replace("/");
 				});
 		},
 	});

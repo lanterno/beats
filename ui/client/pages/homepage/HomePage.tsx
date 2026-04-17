@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import AuthModal from "@/features/auth/components/AuthModal";
 import { Button } from "@/shared/ui";
 
 /* ─── Animated counter hook ─── */
@@ -130,10 +130,20 @@ function FeatureCard({
 
 /* ─── Main Homepage ─── */
 export default function HomePage() {
-	const navigate = useNavigate();
+	const [authOpen, setAuthOpen] = useState(false);
+	const [authMode, setAuthMode] = useState<"login" | "register-email">("login");
 	const hoursCounter = useCountUp(2847);
 	const sessionsCounter = useCountUp(14203);
 	const projectsCounter = useCountUp(312);
+
+	const openLogin = () => {
+		setAuthMode("login");
+		setAuthOpen(true);
+	};
+	const openRegister = () => {
+		setAuthMode("register-email");
+		setAuthOpen(true);
+	};
 
 	return (
 		<div className="homepage-root">
@@ -161,11 +171,11 @@ export default function HomePage() {
 					<div className="flex items-center gap-3">
 						<button
 							className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-							onClick={() => navigate("/login")}
+							onClick={openLogin}
 						>
 							Sign in
 						</button>
-						<Button size="sm" onClick={() => navigate("/login")}>
+						<Button size="sm" onClick={openRegister}>
 							Get Started
 						</Button>
 					</div>
@@ -195,7 +205,7 @@ export default function HomePage() {
 				</Reveal>
 				<Reveal delay={300}>
 					<div className="flex flex-col sm:flex-row items-center gap-4 mt-10">
-						<Button size="lg" onClick={() => navigate("/login")} className="homepage-cta-primary">
+						<Button size="lg" onClick={openRegister} className="homepage-cta-primary">
 							Start Tracking — It's Free
 						</Button>
 						<button
@@ -496,7 +506,7 @@ export default function HomePage() {
 				</Reveal>
 				<Reveal delay={200}>
 					<div className="mt-10">
-						<Button size="lg" onClick={() => navigate("/login")} className="homepage-cta-primary">
+						<Button size="lg" onClick={openRegister} className="homepage-cta-primary">
 							Get Started Now
 						</Button>
 					</div>
@@ -516,6 +526,8 @@ export default function HomePage() {
 					Built with intention. Every second counts.
 				</p>
 			</footer>
+
+			<AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialMode={authMode} />
 		</div>
 	);
 }

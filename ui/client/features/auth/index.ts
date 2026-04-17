@@ -17,7 +17,7 @@ export {
 	verifyRegistration,
 } from "./api/authApi";
 // Components
-export { default as LoginPage } from "./components/LoginPage";
+export { default as AuthModal } from "./components/AuthModal";
 export type { UserInfo as UserState } from "./stores/authStore";
 // Store
 export {

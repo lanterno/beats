@@ -6,7 +6,7 @@ import "../global.css";
 
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { initializeAuth, LoginPage, useAuth } from "@/features/auth";
+import { initializeAuth, useAuth } from "@/features/auth";
 import Coach from "@/pages/coach/Coach";
 import HomePage from "@/pages/homepage/HomePage";
 import Index from "@/pages/index";
@@ -37,7 +37,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 	}
 
 	if (!isAuthenticated) {
-		return <Navigate to="/login" replace />;
+		return <Navigate to="/" replace />;
 	}
 
 	return <>{children}</>;
@@ -85,8 +85,6 @@ export function App() {
 						<Routes>
 							{/* Public routes */}
 							<Route path="/" element={<HomeOrDashboard />} />
-							<Route path="/login" element={<LoginPage />} />
-
 							{/* Protected routes with persistent layout */}
 							<Route
 								element={
