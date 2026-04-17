@@ -38,10 +38,11 @@ export {
 
 // Hooks
 export { type CommandContext, useCommandActions } from "./useCommandActions";
+export { useCountUp } from "./useCountUp";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 export { notifySyncWork, type SyncSnapshot, useSyncEngine, useSyncStatus } from "./useSyncEngine";
-export type { Density, ThemeName } from "./useTheme";
-export { DENSITIES, THEMES, useTheme } from "./useTheme";
+export type { ColorMode, Density, ThemeName } from "./useTheme";
+export { COLOR_MODES, DENSITIES, THEMES, useTheme } from "./useTheme";
 export { useTimerNotification } from "./useTimerNotification";

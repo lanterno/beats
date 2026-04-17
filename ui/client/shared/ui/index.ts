@@ -13,6 +13,7 @@ export { FocusMode } from "./focus-mode";
 export { GoalRing } from "./goal-ring";
 export { MorningBriefing } from "./morning-briefing";
 export { Progress } from "./progress";
+export { Reveal } from "./reveal";
 export { Toaster } from "./sonner";
 export { SyncStatus } from "./sync-status";
 export {

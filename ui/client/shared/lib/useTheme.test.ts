@@ -34,6 +34,7 @@ describe("useTheme", () => {
 		mockStorage.clear();
 		vi.clearAllMocks();
 		document.documentElement.removeAttribute("data-theme");
+		document.documentElement.removeAttribute("data-mode");
 		document.documentElement.removeAttribute("data-density");
 	});
 
@@ -97,5 +98,34 @@ describe("useTheme", () => {
 		const { result } = renderHook(() => useTheme());
 		act(() => result.current.setDensity("spacious"));
 		expect(result.current.density).toBe("spacious");
+	});
+
+	it("defaults to dark mode", () => {
+		const { result } = renderHook(() => useTheme());
+		expect(result.current.mode).toBe("dark");
+	});
+
+	it("reads mode from localStorage", () => {
+		store.beats_mode = "light";
+		const { result } = renderHook(() => useTheme());
+		expect(result.current.mode).toBe("light");
+	});
+
+	it("persists mode to localStorage on change", () => {
+		const { result } = renderHook(() => useTheme());
+		act(() => result.current.setMode("light"));
+		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_mode", "light");
+	});
+
+	it("applies data-mode attribute on <html>", () => {
+		const { result } = renderHook(() => useTheme());
+		act(() => result.current.setMode("light"));
+		expect(document.documentElement.getAttribute("data-mode")).toBe("light");
+	});
+
+	it("updates state when mode changes", () => {
+		const { result } = renderHook(() => useTheme());
+		act(() => result.current.setMode("light"));
+		expect(result.current.mode).toBe("light");
 	});
 });

@@ -11,9 +11,11 @@ import {
 	FileSpreadsheet,
 	Fingerprint,
 	Github,
+	Moon,
 	Palette,
 	Plus,
 	Rows3,
+	Sun,
 	Terminal,
 	Trash2,
 	Upload,
@@ -38,13 +40,13 @@ import type { CredentialInfo } from "@/features/auth";
 import { getSessionToken } from "@/features/auth/stores/authStore";
 import { del, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
-import { DENSITIES, THEMES, useTheme } from "@/shared/lib";
+import { COLOR_MODES, DENSITIES, THEMES, useTheme } from "@/shared/lib";
 import { CoachUsage } from "./CoachUsage";
 
 export default function Settings() {
 	const { data: projects } = useProjects();
 	const [importing, setImporting] = useState(false);
-	const { theme, setTheme, density, setDensity } = useTheme();
+	const { theme, setTheme, mode, setMode, density, setDensity } = useTheme();
 
 	const apiBase = config.apiBaseUrl;
 
@@ -140,6 +142,36 @@ export default function Settings() {
 									style={{ backgroundColor: t.accent }}
 								/>
 								{t.label}
+							</button>
+						))}
+					</div>
+				</div>
+			</section>
+
+			{/* Appearance — Color Mode */}
+			<section className="mb-8">
+				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+					{mode === "dark" ? (
+						<Moon className="w-4 h-4 text-accent" />
+					) : (
+						<Sun className="w-4 h-4 text-accent" />
+					)}
+					Color Mode
+				</h2>
+				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
+					<div className="flex flex-wrap gap-2">
+						{COLOR_MODES.map((m) => (
+							<button
+								key={m.id}
+								onClick={() => setMode(m.id)}
+								className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
+									mode === m.id
+										? "border-accent bg-accent/10 text-accent"
+										: "border-border bg-secondary/20 text-foreground hover:bg-secondary/40"
+								}`}
+							>
+								{m.id === "dark" ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
+								{m.label}
 							</button>
 						))}
 					</div>

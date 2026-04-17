@@ -16,12 +16,20 @@ import {
 	Moon,
 	Palette,
 	Settings as SettingsIcon,
+	Sun,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { type NavigateFunction, useNavigate } from "react-router-dom";
 import { clearSessionToken, logout } from "@/features/auth";
 import type { CommandItem } from "@/shared/ui";
-import { DENSITIES, type Density, THEMES, type ThemeName, useTheme } from "./useTheme";
+import {
+	type ColorMode,
+	DENSITIES,
+	type Density,
+	THEMES,
+	type ThemeName,
+	useTheme,
+} from "./useTheme";
 
 const RECENCY_KEY = "beats_command_recency";
 const RECENCY_MAX = 20;
@@ -61,11 +69,11 @@ export function useCommandActions(ctx: CommandContext): {
 	recordInvocation: (id: string) => void;
 } {
 	const navigate = useNavigate();
-	const { theme, setTheme, density, setDensity } = useTheme();
+	const { theme, setTheme, mode, setMode, density, setDensity } = useTheme();
 
 	const items = useMemo<CommandItem[]>(
-		() => buildItems(ctx, navigate, theme, setTheme, density, setDensity),
-		[ctx, navigate, theme, setTheme, density, setDensity],
+		() => buildItems(ctx, navigate, theme, setTheme, mode, setMode, density, setDensity),
+		[ctx, navigate, theme, setTheme, mode, setMode, density, setDensity],
 	);
 
 	const recencyBoost = useCallback((id: string) => {
@@ -97,6 +105,8 @@ function buildItems(
 	navigate: NavigateFunction,
 	theme: ThemeName,
 	setTheme: (t: ThemeName) => void,
+	mode: ColorMode,
+	setMode: (m: ColorMode) => void,
 	density: Density,
 	setDensity: (d: Density) => void,
 ): CommandItem[] {
@@ -184,6 +194,15 @@ function buildItems(
 			const next = order[(order.indexOf(theme) + 1) % order.length];
 			setTheme(next);
 		},
+	});
+
+	// Mode toggle
+	items.push({
+		id: "mode.toggle",
+		label: `Mode: ${mode === "dark" ? "Dark" : "Light"} (toggle)`,
+		keywords: ["dark", "light", "mode", "brightness"],
+		icon: mode === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />,
+		action: () => setMode(mode === "dark" ? "light" : "dark"),
 	});
 
 	// Density cycle
