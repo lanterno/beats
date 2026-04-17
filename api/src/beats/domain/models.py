@@ -6,10 +6,10 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from beats.domain.utils import normalize_tz
+from beats.domain.utils import TzNormalizedModel, normalize_tz
 
 
-class User(BaseModel):
+class User(TzNormalizedModel):
     """A registered user of the Beats system."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -60,7 +60,7 @@ class GoalOverride(BaseModel):
         return self
 
 
-class Beat(BaseModel):
+class Beat(TzNormalizedModel):
     """A time tracking entry (heartbeat) for a project.
 
     Represents a work session with a start time and optional end time.
@@ -164,7 +164,7 @@ class Intention(BaseModel):
     completed: bool = False
 
 
-class DailyNote(BaseModel):
+class DailyNote(TzNormalizedModel):
     """An end-of-day reflection with optional mood rating.
 
     Captures how the day went with a brief text note and mood score.
@@ -179,7 +179,7 @@ class DailyNote(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class WeeklyDigest(BaseModel):
+class WeeklyDigest(TzNormalizedModel):
     """A generated weekly summary with insights and productivity score."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -213,7 +213,7 @@ class InsightCard(BaseModel):
     priority: int = 3  # 1-5, higher = more important
 
 
-class UserInsights(BaseModel):
+class UserInsights(TzNormalizedModel):
     """Cached pattern detection results for a user."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -286,7 +286,7 @@ class GitHubIntegration(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class CalendarIntegration(BaseModel):
+class CalendarIntegration(TzNormalizedModel):
     """A connected Google Calendar OAuth integration."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -301,7 +301,7 @@ class CalendarIntegration(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class Webhook(BaseModel):
+class Webhook(TzNormalizedModel):
     """A registered webhook URL that receives timer events.
 
     Events: timer.start, timer.stop, daily.summary

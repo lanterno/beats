@@ -526,7 +526,8 @@ class TestBeatsDirectAPI:
         # Verify the update
         response = client.get(f"/api/beats/{beat['id']}", headers=auth_headers)
         assert response.status_code == 200, response.json()
-        assert response.json()["end"] == "2020-04-01T04:10:10"
+        end = response.json()["end"]
+        assert end.startswith("2020-04-01T04:10:10")
 
     def test_delete_beat(self):
         """Test DELETE /api/beats/{beat_id} - Delete a beat"""
