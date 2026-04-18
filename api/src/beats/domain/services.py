@@ -103,7 +103,7 @@ class TimerService:
                     "since": active.start.isoformat(),
                     "so_far": str(active.duration),
                 }
-        except NoObjectMatched, ProjectNotFound:
+        except (NoObjectMatched, ProjectNotFound):
             pass
 
         # No active timer - try to get last beat info
@@ -218,12 +218,13 @@ class ProjectService:
             b for b in beats if b.end is not None and start_of_week <= b.start.date() <= end_of_week
         ]
 
-        if include_log_details:
-            per_day_logs: dict[str, list] = defaultdict(list)
-            per_day_duration: dict[str, timedelta] = defaultdict(timedelta)
+        per_day_logs: dict[str, list] = defaultdict(list)
+        per_day_duration: dict[str, timedelta] = defaultdict(timedelta)
 
-            for beat in week_beats:
-                day_name = beat.start.strftime("%A")
+        for beat in week_beats:
+            day_name = beat.start.strftime("%A")
+            per_day_duration[day_name] += beat.duration
+            if include_log_details:
                 per_day_logs[day_name].append(
                     {
                         "id": beat.id,
@@ -232,32 +233,19 @@ class ProjectService:
                         "duration": str(beat.duration),
                     }
                 )
-                per_day_duration[day_name] += beat.duration
 
-            result = {}
-            total_duration = timedelta()
-            for i in range(7):
-                day_date = start_of_week + timedelta(days=i)
-                day_name = day_date.strftime("%A")
-                result[day_name] = per_day_logs.get(day_name, [])
-                total_duration += per_day_duration.get(day_name, timedelta())
+        result = {}
+        total_duration = timedelta()
+        for i in range(7):
+            day_date = start_of_week + timedelta(days=i)
+            day_name = day_date.strftime("%A")
+            duration = per_day_duration.get(day_name, timedelta())
+            total_duration += duration
+            result[day_name] = (
+                per_day_logs.get(day_name, []) if include_log_details else str(duration)
+            )
 
-            result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
-        else:
-            per_day: dict[str, timedelta] = defaultdict(timedelta)
-            for beat in week_beats:
-                per_day[beat.start.strftime("%A")] += beat.duration
-
-            result = {}
-            total_duration = timedelta()
-            for i in range(7):
-                day_date = start_of_week + timedelta(days=i)
-                day_name = day_date.strftime("%A")
-                duration = per_day.get(day_name, timedelta())
-                result[day_name] = str(duration)
-                total_duration += duration
-
-            result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
+        result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
 
         # Resolve effective goal for this week
         project = await self.project_repo.get_by_id(project_id)

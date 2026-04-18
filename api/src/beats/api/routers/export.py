@@ -32,6 +32,7 @@ from beats.infrastructure.export_key_repo import ExportKeyRepository
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
+_COMPUTED_FIELDS = ("is_active", "duration", "day")
 EXPORT_VERSION = "sqlite-1"
 ZIP_SQLITE_NAME = "data.sqlite"
 ZIP_MANIFEST_NAME = "manifest.json"
@@ -238,13 +239,13 @@ async def import_sqlite(
         try:
             for row in conn.execute("SELECT data FROM projects"):
                 proj = json.loads(row["data"])
-                for k in ("is_active", "duration", "day"):
+                for k in _COMPUTED_FIELDS:
                     proj.pop(k, None)
                 await project_service.project_repo.upsert(proj)
                 counts["projects"] += 1
             for row in conn.execute("SELECT data FROM beats"):
                 beat = json.loads(row["data"])
-                for k in ("is_active", "duration", "day"):
+                for k in _COMPUTED_FIELDS:
                     beat.pop(k, None)
                 await beat_service.beat_repo.upsert(beat)
                 counts["beats"] += 1
@@ -275,16 +276,14 @@ async def import_full_json(
     counts = {"projects": 0, "beats": 0, "intentions": 0, "daily_notes": 0}
 
     for proj in data.get("projects", []):
-        proj.pop("is_active", None)
-        proj.pop("duration", None)
-        proj.pop("day", None)
+        for k in _COMPUTED_FIELDS:
+            proj.pop(k, None)
         await project_service.project_repo.upsert(proj)
         counts["projects"] += 1
 
     for beat in data.get("beats", []):
-        beat.pop("is_active", None)
-        beat.pop("duration", None)
-        beat.pop("day", None)
+        for k in _COMPUTED_FIELDS:
+            beat.pop(k, None)
         await beat_service.beat_repo.upsert(beat)
         counts["beats"] += 1
 

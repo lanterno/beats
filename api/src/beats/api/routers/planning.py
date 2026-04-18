@@ -187,7 +187,7 @@ async def get_intention_streaks(intention_repo: IntentionRepoDep):
     # Group by date
     by_date: dict[str, list] = {}
     for i in all_intentions:
-        d = i.date.isoformat() if hasattr(i.date, "isoformat") else str(i.date)
+        d = i.date.isoformat()
         by_date.setdefault(d, []).append(i)
 
     # Find dates where ALL intentions are completed
