@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # Database settings
     db_dsn: str = Field(default="mongodb://localhost:27017", validation_alias="DB_DSN")
-    db_name: str = Field(default="ptc", validation_alias="DB_NAME")
+    db_name: str = Field(default="beats", validation_alias="DB_NAME")
 
     # WebAuthn settings
     webauthn_rp_id: str = Field(default="localhost", validation_alias="WEBAUTHN_RP_ID")
