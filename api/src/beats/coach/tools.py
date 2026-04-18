@@ -11,7 +11,6 @@ from typing import Any
 
 from beats.coach.repos import build_repos, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
-from beats.domain.services import BeatService
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -134,11 +133,10 @@ class _ToolContext:
 
     def _build_intel(self):
         return IntelligenceService(
-            beat_service=BeatService(beat_repo=self.beat_repo),
+            beat_repo=self.beat_repo,
             project_repo=self.project_repo,
             intention_repo=self.intention_repo,
             daily_note_repo=self.note_repo,
-            digest_repo=self.digest_repo,
         )
 
 

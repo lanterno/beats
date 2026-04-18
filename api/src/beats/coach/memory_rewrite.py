@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from anthropic.types import TextBlock
+
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.memory import MemoryStore
@@ -101,7 +103,7 @@ async def rewrite_coach_memory(user_id: str) -> str:
 
     content = ""
     for block in result.content:
-        if hasattr(block, "text"):
+        if isinstance(block, TextBlock):
             content += block.text
 
     content = content.strip()

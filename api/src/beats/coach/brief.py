@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+from anthropic.types import TextBlock
+
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.prompts import BRIEF_PROMPT
@@ -35,7 +37,7 @@ async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
 
     body = ""
     for block in result.content:
-        if hasattr(block, "text"):
+        if isinstance(block, TextBlock):
             body += block.text
 
     doc = {

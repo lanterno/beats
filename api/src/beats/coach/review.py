@@ -11,6 +11,8 @@ import json
 import logging
 from datetime import UTC, date, datetime
 
+from anthropic.types import TextBlock
+
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.prompts import REVIEW_PROMPT
@@ -41,7 +43,7 @@ async def generate_review_questions(user_id: str, target_date: date | None = Non
 
     text = ""
     for block in result.content:
-        if hasattr(block, "text"):
+        if isinstance(block, TextBlock):
             text += block.text
 
     try:
