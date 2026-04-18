@@ -56,6 +56,20 @@ def serialize_to_document(data: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+class MongoUserScoped:
+    """Mixin: user-scoped query builder shared by all Mongo repositories."""
+
+    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+        self.collection = collection
+        self.user_id = user_id
+
+    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        q: dict[str, Any] = {"user_id": self.user_id}
+        if extra:
+            q.update(extra)
+        return q
+
+
 # Abstract Repository Interfaces
 
 
@@ -175,19 +189,8 @@ class ProjectRepository(ABC):
 # MongoDB Implementations
 
 
-class MongoBeatRepository(BeatRepository):
+class MongoBeatRepository(MongoUserScoped, BeatRepository):
     """MongoDB implementation of BeatRepository using Motor."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Build a query dict scoped to the current user."""
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get_by_id(self, beat_id: str) -> Beat:
         doc = await self.collection.find_one(self._q({"_id": ObjectId(beat_id)}))
@@ -271,18 +274,8 @@ class MongoBeatRepository(BeatRepository):
             await self.collection.insert_one(doc)
 
 
-class MongoProjectRepository(ProjectRepository):
+class MongoProjectRepository(MongoUserScoped, ProjectRepository):
     """MongoDB implementation of ProjectRepository using Motor."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get_by_id(self, project_id: str) -> Project:
         doc = await self.collection.find_one(self._q({"_id": ObjectId(project_id)}))
@@ -384,18 +377,8 @@ class IntentionRepository(ABC):
     async def upsert(self, data: dict) -> None: ...
 
 
-class MongoIntentionRepository(IntentionRepository):
+class MongoIntentionRepository(MongoUserScoped, IntentionRepository):
     """MongoDB implementation of IntentionRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def list_by_date(self, target_date: date) -> list[Intention]:
         cursor = self.collection.find(self._q({"date": target_date.isoformat()}))
@@ -466,18 +449,8 @@ class DailyNoteRepository(ABC):
         ...
 
 
-class MongoDailyNoteRepository(DailyNoteRepository):
+class MongoDailyNoteRepository(MongoUserScoped, DailyNoteRepository):
     """MongoDB implementation of DailyNoteRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get_by_date(self, target_date: date) -> DailyNote | None:
         doc = await self.collection.find_one(self._q({"date": target_date.isoformat()}))
@@ -541,18 +514,8 @@ class WebhookRepository(ABC):
     async def update(self, webhook: Webhook) -> Webhook: ...
 
 
-class MongoWebhookRepository(WebhookRepository):
+class MongoWebhookRepository(MongoUserScoped, WebhookRepository):
     """MongoDB implementation of WebhookRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def list_all(self) -> list[Webhook]:
         cursor = self.collection.find(self._q())
@@ -599,18 +562,8 @@ class WeeklyDigestRepository(ABC):
     async def upsert(self, digest: WeeklyDigest) -> WeeklyDigest: ...
 
 
-class MongoWeeklyDigestRepository(WeeklyDigestRepository):
+class MongoWeeklyDigestRepository(MongoUserScoped, WeeklyDigestRepository):
     """MongoDB implementation of WeeklyDigestRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get_by_week(self, week_of: date) -> WeeklyDigest | None:
         doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
@@ -652,18 +605,8 @@ class InsightsRepository(ABC):
     async def dismiss_insight(self, insight_id: str) -> None: ...
 
 
-class MongoInsightsRepository(InsightsRepository):
+class MongoInsightsRepository(MongoUserScoped, InsightsRepository):
     """MongoDB implementation of InsightsRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get(self) -> UserInsights | None:
         doc = await self.collection.find_one(self._q())
@@ -706,18 +649,8 @@ class GitHubIntegrationRepository(ABC):
     async def delete(self) -> bool: ...
 
 
-class MongoGitHubIntegrationRepository(GitHubIntegrationRepository):
+class MongoGitHubIntegrationRepository(MongoUserScoped, GitHubIntegrationRepository):
     """MongoDB implementation of GitHubIntegrationRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get(self) -> GitHubIntegration | None:
         doc = await self.collection.find_one(self._q())
@@ -758,18 +691,8 @@ class AutoStartRuleRepository(ABC):
     async def delete(self, rule_id: str) -> bool: ...
 
 
-class MongoAutoStartRuleRepository(AutoStartRuleRepository):
+class MongoAutoStartRuleRepository(MongoUserScoped, AutoStartRuleRepository):
     """MongoDB implementation of AutoStartRuleRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def list_all(self) -> list[AutoStartRule]:
         cursor = self.collection.find(self._q())
@@ -805,18 +728,8 @@ class CalendarIntegrationRepository(ABC):
     async def delete(self) -> bool: ...
 
 
-class MongoCalendarIntegrationRepository(CalendarIntegrationRepository):
+class MongoCalendarIntegrationRepository(MongoUserScoped, CalendarIntegrationRepository):
     """MongoDB implementation of CalendarIntegrationRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get(self) -> CalendarIntegration | None:
         doc = await self.collection.find_one(self._q())
@@ -854,18 +767,8 @@ class WeeklyPlanRepository(ABC):
     async def upsert(self, plan: WeeklyPlan) -> WeeklyPlan: ...
 
 
-class MongoWeeklyPlanRepository(WeeklyPlanRepository):
+class MongoWeeklyPlanRepository(MongoUserScoped, WeeklyPlanRepository):
     """MongoDB implementation of WeeklyPlanRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get_by_week(self, week_of: date) -> WeeklyPlan | None:
         doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
@@ -902,18 +805,8 @@ class RecurringIntentionRepository(ABC):
     async def delete(self, intention_id: str) -> bool: ...
 
 
-class MongoRecurringIntentionRepository(RecurringIntentionRepository):
+class MongoRecurringIntentionRepository(MongoUserScoped, RecurringIntentionRepository):
     """MongoDB implementation of RecurringIntentionRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def list_all(self) -> list[RecurringIntention]:
         cursor = self.collection.find(self._q())
@@ -947,18 +840,8 @@ class WeeklyReviewRepository(ABC):
     async def list_recent(self, limit: int = 12) -> list[WeeklyReview]: ...
 
 
-class MongoWeeklyReviewRepository(WeeklyReviewRepository):
+class MongoWeeklyReviewRepository(MongoUserScoped, WeeklyReviewRepository):
     """MongoDB implementation of WeeklyReviewRepository."""
-
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
-        self.collection = collection
-        self.user_id = user_id
-
-    def _q(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        q: dict[str, Any] = {"user_id": self.user_id}
-        if extra:
-            q.update(extra)
-        return q
 
     async def get_by_week(self, week_of: date) -> WeeklyReview | None:
         doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
