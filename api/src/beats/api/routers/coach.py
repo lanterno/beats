@@ -127,9 +127,7 @@ async def trigger_brief_generation(
         try:
             target = date.fromisoformat(request.date)
         except ValueError as exc:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid date: {request.date}"
-            ) from exc
+            raise HTTPException(status_code=400, detail=f"Invalid date: {request.date}") from exc
 
     try:
         doc = await generate_brief(user_id, target_date=target)
@@ -199,11 +197,7 @@ async def get_chat_history(
     if conversation_id:
         query["conversation_id"] = conversation_id
 
-    cursor = (
-        db.coach_conversations.find(query, {"_id": 0})
-        .sort("created_at", -1)
-        .limit(limit)
-    )
+    cursor = db.coach_conversations.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
     messages = await cursor.to_list(limit)
     messages.reverse()
     return messages
@@ -341,8 +335,6 @@ async def rewrite_memory(user_id: CurrentUserId):
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Memory rewrite failed for user=%s", user_id)
-        raise HTTPException(
-            status_code=502, detail="Memory rewrite failed."
-        ) from exc
+        raise HTTPException(status_code=502, detail="Memory rewrite failed.") from exc
 
     return MemoryResponse(content=content)

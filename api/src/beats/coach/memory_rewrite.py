@@ -39,10 +39,7 @@ async def _recent_data_summary(user_id: str) -> str:
 
     lines = ["## Last 7 days of sessions"]
     for d in sorted(by_day.keys()):
-        total = sum(
-            b.duration.total_seconds() / 3600
-            for b in recent if b.day == d
-        )
+        total = sum(b.duration.total_seconds() / 3600 for b in recent if b.day == d)
         lines.append(f"**{d.isoformat()}** ({total:.1f}h): {', '.join(by_day[d])}")
     if not by_day:
         lines.append("(No sessions in the last 7 days)")
@@ -66,7 +63,7 @@ async def _recent_data_summary(user_id: str) -> str:
         d = today - timedelta(days=offset)
         note = await note_repo.get_by_date(d)
         if note and note.mood:
-            text = f" — \"{note.note[:80]}\"" if note.note else ""
+            text = f' — "{note.note[:80]}"' if note.note else ""
             lines.append(f"**{d.isoformat()}**: {note.mood}/5{text}")
 
     # Reviews

@@ -34,9 +34,7 @@ CONVERSATIONS = "coach_conversations"
 MAX_HISTORY_TURNS = 20
 
 
-async def _load_history(
-    user_id: str, conversation_id: str
-) -> list[dict[str, Any]]:
+async def _load_history(user_id: str, conversation_id: str) -> list[dict[str, Any]]:
     db = Database.get_db()
     cursor = (
         db[CONVERSATIONS]
@@ -89,9 +87,7 @@ async def handle_chat_turn(
     conv_id = conversation_id or str(uuid.uuid4())
     history = await _load_history(user_id, conv_id)
 
-    system, all_messages, spec = await build_coach_messages(
-        user_id, message, history=history
-    )
+    system, all_messages, spec = await build_coach_messages(user_id, message, history=history)
 
     await _persist_message(user_id, conv_id, "user", message)
 
@@ -118,9 +114,7 @@ async def handle_chat_turn(
                 text_parts.append(block.text)
                 yield {"type": "text", "text": block.text}
             elif block.type == "tool_use":
-                tool_calls_made.append(
-                    {"name": block.name, "input": block.input}
-                )
+                tool_calls_made.append({"name": block.name, "input": block.input})
                 yield {
                     "type": "tool_use",
                     "name": block.name,
@@ -165,9 +159,7 @@ async def handle_chat_turn(
         tool_results: list[dict[str, Any]] = []
         for tb in tool_use_blocks:
             try:
-                result_text = await execute_tool(
-                    user_id, tb["name"], tb["input"]
-                )
+                result_text = await execute_tool(user_id, tb["name"], tb["input"])
             except Exception as exc:
                 result_text = f"Error: {exc}"
 

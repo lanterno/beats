@@ -222,9 +222,7 @@ async def stream(
         usage = final.usage
         cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
         cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-        cost = _estimate_cost(
-            usage.input_tokens, usage.output_tokens, cache_creation, cache_read
-        )
+        cost = _estimate_cost(usage.input_tokens, usage.output_tokens, cache_creation, cache_read)
         await tracker.record(
             model=final.model,
             input_tokens=usage.input_tokens,

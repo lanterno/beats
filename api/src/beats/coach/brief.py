@@ -21,9 +21,7 @@ async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
     """Generate and persist a daily brief. Returns the stored document."""
     today = target_date or datetime.now(UTC).date()
     prompt = BRIEF_PROMPT.format(today=today.isoformat())
-    system, messages, spec = await build_coach_messages(
-        user_id, prompt, target_date=today
-    )
+    system, messages, spec = await build_coach_messages(user_id, prompt, target_date=today)
 
     result = await complete(
         user_id=user_id,
@@ -73,10 +71,5 @@ async def get_brief(user_id: str, target_date: date | None = None) -> dict | Non
 
 async def list_briefs(user_id: str, limit: int = 14) -> list[dict]:
     db = Database.get_db()
-    cursor = (
-        db[COLLECTION]
-        .find({"user_id": user_id}, {"_id": 0})
-        .sort("date", -1)
-        .limit(limit)
-    )
+    cursor = db[COLLECTION].find({"user_id": user_id}, {"_id": 0}).sort("date", -1).limit(limit)
     return await cursor.to_list(limit)

@@ -75,7 +75,9 @@ class UsageTracker:
         if spent >= limit:
             logger.info(
                 "Budget exceeded for user=%s: $%.2f / $%.2f",
-                self._user_id, spent, limit,
+                self._user_id,
+                spent,
+                limit,
             )
             raise BudgetExceeded(spent, limit)
 

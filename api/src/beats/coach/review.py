@@ -21,17 +21,13 @@ logger = logging.getLogger(__name__)
 REVIEWS_COLLECTION = "review_answers"
 
 
-async def generate_review_questions(
-    user_id: str, target_date: date | None = None
-) -> list[dict]:
+async def generate_review_questions(user_id: str, target_date: date | None = None) -> list[dict]:
     """Generate 3 review questions from the day's data. Returns list of
     {question, derived_from: {kind, data}}.
     """
     today = target_date or datetime.now(UTC).date()
     prompt = REVIEW_PROMPT.format(today=today.isoformat())
-    system, messages, spec = await build_coach_messages(
-        user_id, prompt, target_date=today
-    )
+    system, messages, spec = await build_coach_messages(user_id, prompt, target_date=today)
 
     result = await complete(
         user_id=user_id,
@@ -52,7 +48,7 @@ async def generate_review_questions(
         questions = json.loads(text.strip())
         if not isinstance(questions, list):
             questions = []
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         logger.warning("Failed to parse review questions: %s", text[:200])
         questions = [
             {
@@ -127,9 +123,6 @@ async def get_review(user_id: str, target_date: date | None = None) -> dict | No
 async def list_reviews(user_id: str, limit: int = 14) -> list[dict]:
     db = Database.get_db()
     cursor = (
-        db[REVIEWS_COLLECTION]
-        .find({"user_id": user_id}, {"_id": 0})
-        .sort("date", -1)
-        .limit(limit)
+        db[REVIEWS_COLLECTION].find({"user_id": user_id}, {"_id": 0}).sort("date", -1).limit(limit)
     )
     return await cursor.to_list(limit)

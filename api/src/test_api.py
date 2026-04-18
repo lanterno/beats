@@ -656,9 +656,7 @@ class TestCoachEndpoints:
             assert client.get(path).status_code == 401, f"{path} should require auth"
 
     def test_chat_requires_auth(self):
-        response = client.post(
-            "/api/coach/chat", json={"message": "hello"}
-        )
+        response = client.post("/api/coach/chat", json={"message": "hello"})
         assert response.status_code == 401
 
 

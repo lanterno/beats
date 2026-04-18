@@ -122,8 +122,13 @@ class _ToolContext:
     )
 
     def __init__(self, repos, projects):
-        (self.project_repo, self.beat_repo, self.intention_repo,
-         self.note_repo, self.digest_repo) = repos
+        (
+            self.project_repo,
+            self.beat_repo,
+            self.intention_repo,
+            self.note_repo,
+            self.digest_repo,
+        ) = repos
         self.projects = projects
         self.project_map = {p.id: p.name for p in projects}
 
@@ -161,8 +166,7 @@ async def _handle_get_beats(ctx: _ToolContext, tool_input: dict) -> str:
     proj_filter = tool_input.get("project_name", "").lower()
     if proj_filter:
         filtered = [
-            b for b in filtered
-            if ctx.project_map.get(b.project_id, "").lower() == proj_filter
+            b for b in filtered if ctx.project_map.get(b.project_id, "").lower() == proj_filter
         ]
 
     filtered.sort(key=lambda b: b.start)
@@ -228,9 +232,9 @@ async def _handle_search_beats(ctx: _ToolContext, tool_input: dict) -> str:
         return "No search query provided."
     beats = await ctx.beat_repo.list_all_completed()
     matched = [
-        b for b in beats
-        if (b.note and query in b.note.lower())
-        or any(query in t.lower() for t in (b.tags or []))
+        b
+        for b in beats
+        if (b.note and query in b.note.lower()) or any(query in t.lower() for t in (b.tags or []))
     ]
     matched.sort(key=lambda b: b.start, reverse=True)
     lines = []

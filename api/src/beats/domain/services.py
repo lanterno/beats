@@ -103,7 +103,7 @@ class TimerService:
                     "since": active.start.isoformat(),
                     "so_far": str(active.duration),
                 }
-        except (NoObjectMatched, ProjectNotFound):
+        except NoObjectMatched, ProjectNotFound:
             pass
 
         # No active timer - try to get last beat info

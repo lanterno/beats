@@ -92,9 +92,7 @@ async def export_full_json(
     daily_note_repo: DailyNoteRepoDep,
 ):
     """Export everything as JSON for backup."""
-    payload = await _gather_payload(
-        beat_service, project_service, intention_repo, daily_note_repo
-    )
+    payload = await _gather_payload(beat_service, project_service, intention_repo, daily_note_repo)
     data = {
         "exported_at": datetime.now(UTC).isoformat(),
         "version": "1.0",
@@ -150,9 +148,7 @@ async def export_sqlite(
     The private key lives only in Mongo and is never served — the public key
     ships with the bundle so a user can run the verify path entirely offline.
     """
-    payload = await _gather_payload(
-        beat_service, project_service, intention_repo, daily_note_repo
-    )
+    payload = await _gather_payload(beat_service, project_service, intention_repo, daily_note_repo)
     sqlite_bytes = build_sqlite_bytes(payload)
     manifest = build_manifest(payload, sqlite_bytes, EXPORT_VERSION)
     manifest_bytes = canonical_manifest_bytes(manifest)

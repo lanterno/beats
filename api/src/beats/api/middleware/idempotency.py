@@ -124,9 +124,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         "client_id": client_id,
                         "status_code": response.status_code,
                         "body": body,
-                        "media_type": response.headers.get(
-                            "content-type", "application/json"
-                        ),
+                        "media_type": response.headers.get("content-type", "application/json"),
                         "created_at": datetime.now(UTC),
                     },
                 )

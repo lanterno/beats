@@ -57,9 +57,7 @@ async def build_user_context(user_id: str) -> str:
         start = now - timedelta(days=now.weekday() + 7 * (w + 1))
         end = start + timedelta(days=7)
         week_hours = sum(
-            b.duration.total_seconds() / 3600
-            for b in recent_beats
-            if start <= b.start < end
+            b.duration.total_seconds() / 3600 for b in recent_beats if start <= b.start < end
         )
         week_label = start.strftime("%b %d")
         week_totals.append(f"  Week of {week_label}: {week_hours:.1f}h")
@@ -93,9 +91,7 @@ async def build_user_context(user_id: str) -> str:
     # Coach memory
     memory_store = MemoryStore(db, user_id)
     memory = await memory_store.read()
-    memory_section = (
-        memory if memory else "(No coach memory yet — generated after first week.)"
-    )
+    memory_section = memory if memory else "(No coach memory yet — generated after first week.)"
 
     lines = [
         "## User profile (30-day window)",
@@ -163,7 +159,7 @@ async def build_day_context(user_id: str, target_date: date | None = None) -> st
     if yesterday_note:
         mood = yesterday_note.mood
         note_text = yesterday_note.note
-        note_part = f" — \"{note_text[:100]}\"" if note_text else ""
+        note_part = f' — "{note_text[:100]}"' if note_text else ""
         mood_line = f"Yesterday's mood: {mood}/5{note_part}"
 
     # Calendar events (if connected)

@@ -27,8 +27,8 @@ class TestBeatModel:
 
     def test_beat_creation_with_explicit_times(self):
         """Test creating a beat with explicit start and end times."""
-        start = datetime.fromisoformat("2020-01-11T04:30:00")
-        end = datetime.fromisoformat("2020-01-11T05:30:00")
+        start = datetime.fromisoformat("2020-01-11T04:30:00+00:00")
+        end = datetime.fromisoformat("2020-01-11T05:30:00+00:00")
         beat = Beat(project_id="test-project", start=start, end=end)
 
         assert beat.start == start
