@@ -16,11 +16,10 @@ from anthropic.types import TextBlock
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.prompts import REVIEW_PROMPT
+from beats.coach.repos import REVIEW_ANSWERS_COLLECTION
 from beats.infrastructure.database import Database
 
 logger = logging.getLogger(__name__)
-
-REVIEWS_COLLECTION = "review_answers"
 
 
 async def generate_review_questions(user_id: str, target_date: date | None = None) -> list[dict]:
@@ -50,7 +49,7 @@ async def generate_review_questions(user_id: str, target_date: date | None = Non
         questions = json.loads(text.strip())
         if not isinstance(questions, list):
             questions = []
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):  # fmt: skip
         logger.warning("Failed to parse review questions: %s", text[:200])
         questions = [
             {
@@ -68,7 +67,7 @@ async def generate_review_questions(user_id: str, target_date: date | None = Non
         ]
 
     db = Database.get_db()
-    await db[REVIEWS_COLLECTION].update_one(
+    await db[REVIEW_ANSWERS_COLLECTION].update_one(
         {"user_id": user_id, "date": today.isoformat()},
         {
             "$set": {
@@ -77,7 +76,10 @@ async def generate_review_questions(user_id: str, target_date: date | None = Non
                 "questions": questions,
                 "updated_at": datetime.now(UTC),
             },
-            "$setOnInsert": {"created_at": datetime.now(UTC), "answers": []},
+            "$setOnInsert": {
+                "created_at": datetime.now(UTC),
+                "answers": [None, None, None],
+            },
         },
         upsert=True,
     )
@@ -91,32 +93,26 @@ async def save_answer(
     question_index: int,
     answer: str,
 ) -> None:
-    """Persist a single answer for a review question."""
+    """Persist a single answer for a review question (atomic update)."""
     db = Database.get_db()
-    doc = await db[REVIEWS_COLLECTION].find_one(
-        {"user_id": user_id, "date": target_date.isoformat()}
-    )
-    if not doc:
-        return
-
-    answers = doc.get("answers", [])
-    while len(answers) <= question_index:
-        answers.append(None)
-    answers[question_index] = {
-        "text": answer,
-        "answered_at": datetime.now(UTC).isoformat(),
-    }
-
-    await db[REVIEWS_COLLECTION].update_one(
-        {"_id": doc["_id"]},
-        {"$set": {"answers": answers, "updated_at": datetime.now(UTC)}},
+    await db[REVIEW_ANSWERS_COLLECTION].update_one(
+        {"user_id": user_id, "date": target_date.isoformat()},
+        {
+            "$set": {
+                f"answers.{question_index}": {
+                    "text": answer,
+                    "answered_at": datetime.now(UTC).isoformat(),
+                },
+                "updated_at": datetime.now(UTC),
+            }
+        },
     )
 
 
 async def get_review(user_id: str, target_date: date | None = None) -> dict | None:
     today = target_date or datetime.now(UTC).date()
     db = Database.get_db()
-    return await db[REVIEWS_COLLECTION].find_one(
+    return await db[REVIEW_ANSWERS_COLLECTION].find_one(
         {"user_id": user_id, "date": today.isoformat()},
         {"_id": 0},
     )
@@ -125,6 +121,9 @@ async def get_review(user_id: str, target_date: date | None = None) -> dict | No
 async def list_reviews(user_id: str, limit: int = 14) -> list[dict]:
     db = Database.get_db()
     cursor = (
-        db[REVIEWS_COLLECTION].find({"user_id": user_id}, {"_id": 0}).sort("date", -1).limit(limit)
+        db[REVIEW_ANSWERS_COLLECTION]
+        .find({"user_id": user_id}, {"_id": 0})
+        .sort("date", -1)
+        .limit(limit)
     )
     return await cursor.to_list(limit)

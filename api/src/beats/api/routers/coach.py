@@ -16,6 +16,13 @@ from beats.coach.brief import generate_brief, get_brief, list_briefs
 from beats.coach.chat import handle_chat_turn
 from beats.coach.memory import MemoryStore
 from beats.coach.memory_rewrite import rewrite_coach_memory
+from beats.coach.repos import (
+    COACH_CONVERSATIONS_COLLECTION,
+    COACH_MEMORY_COLLECTION,
+    DAILY_BRIEFS_COLLECTION,
+    LLM_USAGE_COLLECTION,
+    REVIEW_ANSWERS_COLLECTION,
+)
 from beats.coach.review import generate_review_questions, get_review, save_answer
 from beats.coach.usage import BudgetExceeded, UsageTracker
 from beats.infrastructure.database import Database
@@ -197,7 +204,12 @@ async def get_chat_history(
     if conversation_id:
         query["conversation_id"] = conversation_id
 
-    cursor = db.coach_conversations.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    cursor = (
+        db[COACH_CONVERSATIONS_COLLECTION]
+        .find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
     messages = await cursor.to_list(limit)
     messages.reverse()
     return messages
@@ -295,7 +307,7 @@ async def get_memory(user_id: CurrentUserId):
     db = Database.get_db()
     store = MemoryStore(db, user_id)
     content = await store.read()
-    doc = await db.coach_memory.find_one({"user_id": user_id})
+    doc = await db[COACH_MEMORY_COLLECTION].find_one({"user_id": user_id})
     return MemoryResponse(
         content=content,
         updated_at=doc.get("updated_at") if doc else None,
@@ -306,7 +318,7 @@ async def get_memory(user_id: CurrentUserId):
 async def delete_memory(user_id: CurrentUserId):
     """Delete the coach memory for this user."""
     db = Database.get_db()
-    await db.coach_memory.delete_one({"user_id": user_id})
+    await db[COACH_MEMORY_COLLECTION].delete_one({"user_id": user_id})
     return {"status": "ok"}
 
 
@@ -316,11 +328,11 @@ async def delete_all_coach_data(user_id: CurrentUserId):
     conversations, and usage logs. Irreversible."""
     db = Database.get_db()
     for col_name in [
-        "coach_memory",
-        "daily_briefs",
-        "review_answers",
-        "coach_conversations",
-        "llm_usage",
+        COACH_MEMORY_COLLECTION,
+        DAILY_BRIEFS_COLLECTION,
+        REVIEW_ANSWERS_COLLECTION,
+        COACH_CONVERSATIONS_COLLECTION,
+        LLM_USAGE_COLLECTION,
     ]:
         await db[col_name].delete_many({"user_id": user_id})
     return {"status": "ok", "deleted": "all coach data"}

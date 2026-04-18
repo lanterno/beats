@@ -10,12 +10,11 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
+from beats.coach.repos import LLM_USAGE_COLLECTION
 from beats.infrastructure.database import Database
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)
-
-COLLECTION = "llm_usage"
 
 
 class BudgetExceeded(Exception):
@@ -28,7 +27,7 @@ class BudgetExceeded(Exception):
 class UsageTracker:
     def __init__(self, user_id: str) -> None:
         self._user_id = user_id
-        self._col = Database.get_db()[COLLECTION]
+        self._col = Database.get_db()[LLM_USAGE_COLLECTION]
 
     async def record(
         self,

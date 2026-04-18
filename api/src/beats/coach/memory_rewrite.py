@@ -23,13 +23,13 @@ from beats.infrastructure.database import Database
 
 async def _recent_data_summary(user_id: str) -> str:
     """Build a textual summary of the last 7 days for the rewrite prompt."""
-    project_repo, beat_repo, intention_repo, note_repo, _ = await build_repos(user_id)
-    project_map = {p.id: p.name for p in await project_repo.list()}
+    repos = await build_repos(user_id)
+    project_map = {p.id: p.name for p in await repos.project.list()}
 
     today = datetime.now(UTC).date()
     week_ago = today - timedelta(days=7)
 
-    beats = await beat_repo.list_all_completed()
+    beats = await repos.beat.list_all_completed()
     recent = [b for b in beats if b.day >= week_ago]
 
     # Per-day summary
@@ -50,7 +50,7 @@ async def _recent_data_summary(user_id: str) -> str:
     lines.append("\n## Recent intentions")
     for offset in range(7):
         d = today - timedelta(days=offset)
-        intentions = await intention_repo.list_by_date(d)
+        intentions = await repos.intention.list_by_date(d)
         if intentions:
             items = []
             for i in intentions:
@@ -63,7 +63,7 @@ async def _recent_data_summary(user_id: str) -> str:
     lines.append("\n## Mood")
     for offset in range(7):
         d = today - timedelta(days=offset)
-        note = await note_repo.get_by_date(d)
+        note = await repos.note.get_by_date(d)
         if note and note.mood:
             text = f' — "{note.note[:80]}"' if note.note else ""
             lines.append(f"**{d.isoformat()}**: {note.mood}/5{text}")

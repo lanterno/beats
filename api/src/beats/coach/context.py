@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
-from beats.coach.repos import build_repos, fmt_minutes
+from beats.coach.repos import CoachRepos, build_repos, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
 from beats.infrastructure.database import Database
 
@@ -30,19 +30,18 @@ def build_system_block() -> str:
     return COACH_PERSONA
 
 
-async def build_user_context(user_id: str) -> str:
+async def build_user_context(user_id: str, repos: CoachRepos) -> str:
     """30-day aggregates + coach memory. Designed to be cached."""
-    project_repo, beat_repo, intention_repo, note_repo, digest_repo = await build_repos(user_id)
     db = Database.get_db()
 
-    projects = await project_repo.list()
+    projects = await repos.project.list()
     active = [p for p in projects if not p.archived]
     project_map = {p.id: p.name for p in projects}
 
     now = datetime.now(UTC)
     thirty_days_ago = now - timedelta(days=30)
 
-    beats = await beat_repo.list_all_completed()
+    beats = await repos.beat.list_all_completed()
     recent_beats = [b for b in beats if b.start >= thirty_days_ago]
 
     # Per-project hours (last 30 days)
@@ -64,10 +63,10 @@ async def build_user_context(user_id: str) -> str:
 
     # Productivity score
     intel = IntelligenceService(
-        beat_repo=beat_repo,
-        project_repo=project_repo,
-        intention_repo=intention_repo,
-        daily_note_repo=note_repo,
+        beat_repo=repos.beat,
+        project_repo=repos.project,
+        intention_repo=repos.intention,
+        daily_note_repo=repos.note,
     )
     try:
         score_data = await intel.compute_productivity_score()
@@ -118,16 +117,17 @@ async def build_user_context(user_id: str) -> str:
     return "\n".join(lines)
 
 
-async def build_day_context(user_id: str, target_date: date | None = None) -> str:
+async def build_day_context(
+    user_id: str, repos: CoachRepos, target_date: date | None = None
+) -> str:
     """Today's raw signals. Small and NOT cached."""
-    project_repo, beat_repo, intention_repo, note_repo, _ = await build_repos(user_id)
-    project_map = {p.id: p.name for p in await project_repo.list()}
+    project_map = {p.id: p.name for p in await repos.project.list()}
 
     today = target_date or datetime.now(UTC).date()
     yesterday = today - timedelta(days=1)
 
     # Today's beats
-    all_beats = await beat_repo.list_all_completed()
+    all_beats = await repos.beat.list_all_completed()
     today_beats = [b for b in all_beats if b.day == today]
     yesterday_beats = [b for b in all_beats if b.day == yesterday]
 
@@ -146,7 +146,7 @@ async def build_day_context(user_id: str, target_date: date | None = None) -> st
         return lines
 
     # Intentions
-    today_intentions = await intention_repo.list_by_date(today)
+    today_intentions = await repos.intention.list_by_date(today)
     intention_lines = []
     for i in today_intentions:
         name = project_map.get(i.project_id, "?")
@@ -154,7 +154,7 @@ async def build_day_context(user_id: str, target_date: date | None = None) -> st
         intention_lines.append(f"  {name}: {i.planned_minutes}min [{status}]")
 
     # Yesterday's mood
-    yesterday_note = await note_repo.get_by_date(yesterday)
+    yesterday_note = await repos.note.get_by_date(yesterday)
     mood_line = ""
     if yesterday_note:
         mood = yesterday_note.mood
@@ -214,9 +214,11 @@ async def build_coach_messages(
     """
     from beats.coach.gateway import CacheSpec
 
+    repos = await build_repos(user_id)
+
     system = build_system_block()
-    user_ctx = await build_user_context(user_id)
-    day_ctx = await build_day_context(user_id, target_date)
+    user_ctx = await build_user_context(user_id, repos)
+    day_ctx = await build_day_context(user_id, repos, target_date)
 
     preamble = [
         {"role": "user", "content": user_ctx},

@@ -14,9 +14,8 @@ from anthropic.types import TextBlock
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.prompts import BRIEF_PROMPT
+from beats.coach.repos import DAILY_BRIEFS_COLLECTION
 from beats.infrastructure.database import Database
-
-COLLECTION = "daily_briefs"
 
 
 async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
@@ -53,7 +52,7 @@ async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
     }
 
     db = Database.get_db()
-    await db[COLLECTION].update_one(
+    await db[DAILY_BRIEFS_COLLECTION].update_one(
         {"user_id": user_id, "date": today.isoformat()},
         {"$set": doc},
         upsert=True,
@@ -65,7 +64,7 @@ async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
 async def get_brief(user_id: str, target_date: date | None = None) -> dict | None:
     today = target_date or datetime.now(UTC).date()
     db = Database.get_db()
-    return await db[COLLECTION].find_one(
+    return await db[DAILY_BRIEFS_COLLECTION].find_one(
         {"user_id": user_id, "date": today.isoformat()},
         {"_id": 0},
     )
@@ -73,5 +72,10 @@ async def get_brief(user_id: str, target_date: date | None = None) -> dict | Non
 
 async def list_briefs(user_id: str, limit: int = 14) -> list[dict]:
     db = Database.get_db()
-    cursor = db[COLLECTION].find({"user_id": user_id}, {"_id": 0}).sort("date", -1).limit(limit)
+    cursor = (
+        db[DAILY_BRIEFS_COLLECTION]
+        .find({"user_id": user_id}, {"_id": 0})
+        .sort("date", -1)
+        .limit(limit)
+    )
     return await cursor.to_list(limit)

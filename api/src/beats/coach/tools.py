@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from beats.coach.repos import build_repos, fmt_minutes
+from beats.coach.repos import CoachRepos, build_repos, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
@@ -110,33 +110,17 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 class _ToolContext:
     """Shared state for a single tool execution round."""
 
-    __slots__ = (
-        "project_repo",
-        "beat_repo",
-        "intention_repo",
-        "note_repo",
-        "digest_repo",
-        "projects",
-        "project_map",
-    )
-
-    def __init__(self, repos, projects):
-        (
-            self.project_repo,
-            self.beat_repo,
-            self.intention_repo,
-            self.note_repo,
-            self.digest_repo,
-        ) = repos
+    def __init__(self, repos: CoachRepos, projects: list) -> None:
+        self.repos = repos
         self.projects = projects
         self.project_map = {p.id: p.name for p in projects}
 
     def _build_intel(self):
         return IntelligenceService(
-            beat_repo=self.beat_repo,
-            project_repo=self.project_repo,
-            intention_repo=self.intention_repo,
-            daily_note_repo=self.note_repo,
+            beat_repo=self.repos.beat,
+            project_repo=self.repos.project,
+            intention_repo=self.repos.intention,
+            daily_note_repo=self.repos.note,
         )
 
 
@@ -158,7 +142,7 @@ async def _handle_get_beats(ctx: _ToolContext, tool_input: dict) -> str:
     start_d = date.fromisoformat(start_str) if start_str else today - timedelta(days=7)
     end_d = date.fromisoformat(end_str) if end_str else today
 
-    beats = await ctx.beat_repo.list_all_completed()
+    beats = await ctx.repos.beat.list_all_completed()
     filtered = [b for b in beats if start_d <= b.day <= end_d]
 
     proj_filter = tool_input.get("project_name", "").lower()
@@ -199,7 +183,7 @@ async def _handle_get_productivity_score(ctx: _ToolContext, _tool_input: dict) -
 async def _handle_get_intentions(ctx: _ToolContext, tool_input: dict) -> str:
     date_str = tool_input.get("date")
     target = date.fromisoformat(date_str) if date_str else datetime.now(UTC).date()
-    intentions = await ctx.intention_repo.list_by_date(target)
+    intentions = await ctx.repos.intention.list_by_date(target)
     if not intentions:
         return f"No intentions set for {target.isoformat()}."
     lines = []
@@ -228,7 +212,7 @@ async def _handle_search_beats(ctx: _ToolContext, tool_input: dict) -> str:
     query = tool_input.get("query", "").lower()
     if not query:
         return "No search query provided."
-    beats = await ctx.beat_repo.list_all_completed()
+    beats = await ctx.repos.beat.list_all_completed()
     matched = [
         b
         for b in beats
@@ -254,10 +238,19 @@ _TOOL_HANDLERS = {
 }
 
 
-async def execute_tool(user_id: str, tool_name: str, tool_input: dict) -> str:
+async def execute_tool(
+    user_id: str,
+    tool_name: str,
+    tool_input: dict,
+    *,
+    repos: CoachRepos | None = None,
+    projects: list | None = None,
+) -> str:
     """Execute a tool and return the result as a string for the LLM."""
-    repos = await build_repos(user_id)
-    projects = await repos[0].list()
+    if repos is None:
+        repos = await build_repos(user_id)
+    if projects is None:
+        projects = await repos.project.list()
     ctx = _ToolContext(repos, projects)
 
     handler = _TOOL_HANDLERS.get(tool_name)

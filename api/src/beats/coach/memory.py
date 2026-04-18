@@ -11,12 +11,12 @@ from datetime import UTC, datetime
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-COLLECTION = "coach_memory"
+from beats.coach.repos import COACH_MEMORY_COLLECTION
 
 
 class MemoryStore:
     def __init__(self, db: AsyncIOMotorDatabase, user_id: str) -> None:
-        self._col = db[COLLECTION]
+        self._col = db[COACH_MEMORY_COLLECTION]
         self._user_id = user_id
 
     async def read(self) -> str | None:
