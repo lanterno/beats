@@ -136,7 +136,7 @@ variable "anthropic_api_key" {
 variable "coach_model" {
   description = "Claude model ID for the AI coach"
   type        = string
-  default     = "claude-sonnet-4-20250514"
+  default     = "claude-sonnet-4-6-latest"
 }
 
 variable "coach_monthly_budget_usd" {
