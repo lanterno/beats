@@ -72,10 +72,12 @@ export async function rewriteMemory(): Promise<MemoryResponse> {
 // ── Chat SSE ────────────────────────────────────────────────────────
 
 export interface ChatSSEEvent {
-	type: "text" | "tool_use" | "tool_result" | "done";
+	type: "text" | "tool_use" | "tool_result" | "done" | "error";
 	text?: string;
 	name?: string;
 	input?: Record<string, unknown>;
 	result?: string;
 	conversation_id?: string;
+	error?: string;
+	code?: number;
 }

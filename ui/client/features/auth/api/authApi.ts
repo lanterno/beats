@@ -38,73 +38,43 @@ export interface UserInfo {
 
 const AUTH_BASE = `${config.apiBaseUrl}/api/auth`;
 
-/**
- * Start registration: create user and get WebAuthn options.
- */
-export async function registerStart(
-	email: string,
-	displayName?: string,
-): Promise<RegisterStartResponse> {
-	const response = await fetch(`${AUTH_BASE}/register/start`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ email, display_name: displayName }),
-	});
-
+async function authPost<T>(path: string, body?: unknown): Promise<T> {
+	const init: RequestInit = { method: "POST", headers: { "Content-Type": "application/json" } };
+	if (body !== undefined) init.body = JSON.stringify(body);
+	const response = await fetch(`${AUTH_BASE}${path}`, init);
 	if (!response.ok) {
 		const error = await response.json().catch(() => ({}));
-		throw new Error(error.detail || "Failed to start registration");
+		throw new Error(error.detail || `Request to ${path} failed`);
 	}
 	return response.json();
 }
 
-/**
- * Verify registration with the server.
- */
-export async function verifyRegistration(
+async function authGet<T>(path: string): Promise<T> {
+	const response = await fetch(`${AUTH_BASE}${path}`);
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({}));
+		throw new Error(error.detail || `Request to ${path} failed`);
+	}
+	return response.json();
+}
+
+export function registerStart(email: string, displayName?: string): Promise<RegisterStartResponse> {
+	return authPost("/register/start", { email, display_name: displayName });
+}
+
+export function verifyRegistration(
 	credential: unknown,
 	deviceName?: string,
 ): Promise<VerifyResponse> {
-	const response = await fetch(`${AUTH_BASE}/register/verify`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ credential, device_name: deviceName }),
-	});
-
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({}));
-		throw new Error(error.detail || "Registration verification failed");
-	}
-	return response.json();
+	return authPost("/register/verify", { credential, device_name: deviceName });
 }
 
-/**
- * Get login options from the server.
- */
-export async function getLoginOptions(): Promise<LoginOptions> {
-	const response = await fetch(`${AUTH_BASE}/login/options`);
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({}));
-		throw new Error(error.detail || "Failed to get login options");
-	}
-	return response.json();
+export function getLoginOptions(): Promise<LoginOptions> {
+	return authGet("/login/options");
 }
 
-/**
- * Verify login with the server.
- */
-export async function verifyLogin(credential: unknown): Promise<VerifyResponse> {
-	const response = await fetch(`${AUTH_BASE}/login/verify`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ credential }),
-	});
-
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({}));
-		throw new Error(error.detail || "Login verification failed");
-	}
-	return response.json();
+export function verifyLogin(credential: unknown): Promise<VerifyResponse> {
+	return authPost("/login/verify", { credential });
 }
 
 /**

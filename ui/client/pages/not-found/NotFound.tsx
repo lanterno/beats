@@ -3,16 +3,9 @@
  * 404 error page.
  */
 
-import { useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export default function NotFound() {
-	const location = useLocation();
-
-	useEffect(() => {
-		console.error("404 Error: User attempted to access non-existent route:", location.pathname);
-	}, [location.pathname]);
-
 	return (
 		<div className="min-h-screen bg-background flex items-center justify-center">
 			<div className="text-center px-6">

@@ -141,6 +141,25 @@ export function useCoachChat() {
 								setState((prev) => ({ ...prev, currentTool: null }));
 							}
 
+							if (event.type === "error") {
+								assistantText += `\n\n${event.error ?? "Something went wrong."}`;
+								setState((prev) => {
+									const msgs = [...prev.messages];
+									const existing = msgs.findIndex((m) => m.id === assistantId);
+									const msg: ChatMessage = {
+										id: assistantId,
+										role: "assistant",
+										content: assistantText,
+									};
+									if (existing >= 0) {
+										msgs[existing] = msg;
+									} else {
+										msgs.push(msg);
+									}
+									return { ...prev, messages: msgs, streaming: false };
+								});
+							}
+
 							if (event.type === "done" && event.conversation_id) {
 								setState((prev) => ({
 									...prev,

@@ -42,12 +42,12 @@ export function useCoachBriefHistory(limit = 14) {
 }
 
 export function useGenerateBrief() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (date?: string) => generateBrief(date),
 		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: coachKeys.brief() });
-			qc.invalidateQueries({ queryKey: coachKeys.briefHistory(14) });
+			queryClient.invalidateQueries({ queryKey: coachKeys.brief() });
+			queryClient.invalidateQueries({ queryKey: coachKeys.briefHistory(14) });
 		},
 	});
 }
@@ -69,19 +69,19 @@ export function useCoachReview() {
 }
 
 export function useStartReview() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: () => startReview(),
-		onSuccess: () => qc.invalidateQueries({ queryKey: coachKeys.review() }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.review() }),
 	});
 }
 
 export function useSubmitReviewAnswer() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (vars: { date: string; questionIndex: number; answer: string }) =>
 			submitReviewAnswer(vars.date, vars.questionIndex, vars.answer),
-		onSuccess: () => qc.invalidateQueries({ queryKey: coachKeys.review() }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.review() }),
 	});
 }
 
@@ -94,9 +94,9 @@ export function useCoachMemory() {
 }
 
 export function useRewriteMemory() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: () => rewriteMemory(),
-		onSuccess: () => qc.invalidateQueries({ queryKey: coachKeys.memory() }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.memory() }),
 	});
 }

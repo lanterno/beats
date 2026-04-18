@@ -38,30 +38,30 @@ export function useIntentions(date?: string) {
 }
 
 export function useCreateIntention() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (args: { projectId: string; plannedMinutes: number; date?: string }) =>
 			createIntention(args.projectId, args.plannedMinutes, args.date),
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
 export function useUpdateIntention() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (args: {
 			intentionId: string;
 			updates: { completed?: boolean; planned_minutes?: number };
 		}) => updateIntention(args.intentionId, args.updates),
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
 export function useDeleteIntention() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (intentionId: string) => deleteIntention(intentionId),
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
@@ -73,11 +73,11 @@ export function useDailyNote(date?: string) {
 }
 
 export function useUpsertDailyNote() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (args: { note: string; mood?: number; date?: string }) =>
 			upsertDailyNote(args.note, args.mood, args.date),
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
@@ -91,13 +91,13 @@ export function useWeeklyPlan(weekOf: string) {
 }
 
 export function useUpsertWeeklyPlan() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (args: {
 			weekOf: string;
 			budgets: Array<{ project_id: string; planned_hours: number }>;
 		}) => upsertWeeklyPlan(args.weekOf, args.budgets),
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
@@ -111,26 +111,26 @@ export function useRecurringIntentions() {
 }
 
 export function useCreateRecurringIntention() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: createRecurringIntention,
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
 export function useDeleteRecurringIntention() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: deleteRecurringIntention,
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
 export function useApplyRecurring() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: applyRecurringIntentions,
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 
@@ -144,10 +144,10 @@ export function useWeeklyReview(weekOf: string) {
 }
 
 export function useUpsertWeeklyReview() {
-	const qc = useQueryClient();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: upsertWeeklyReview,
-		onSuccess: () => qc.invalidateQueries({ queryKey: planningKeys.all }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: planningKeys.all }),
 	});
 }
 

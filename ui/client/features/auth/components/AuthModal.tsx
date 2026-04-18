@@ -107,7 +107,6 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				setError("Registration failed. Please try again.");
 			}
 		} catch (err) {
-			console.error("Registration error:", err);
 			if (err instanceof Error) {
 				if (err.name === "NotAllowedError") {
 					setError("Registration was cancelled or timed out.");
@@ -141,7 +140,6 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				setError("Authentication failed. Please try again.");
 			}
 		} catch (err) {
-			console.error("Login error:", err);
 			if (err instanceof Error) {
 				if (err.name === "NotAllowedError") {
 					setError("Authentication was cancelled or timed out.");
