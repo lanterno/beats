@@ -133,6 +133,18 @@ variable "anthropic_api_key" {
   default     = ""
 }
 
+variable "coach_model" {
+  description = "Claude model ID for the AI coach"
+  type        = string
+  default     = "claude-sonnet-4-20250514"
+}
+
+variable "coach_monthly_budget_usd" {
+  description = "Per-user monthly spend ceiling for coach LLM calls"
+  type        = number
+  default     = 10.0
+}
+
 # Custom Domain Configuration
 variable "api_domain" {
   description = "Custom domain to attach to the Cloud Run service (e.g., api.lifepete.com)"

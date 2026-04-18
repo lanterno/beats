@@ -48,6 +48,16 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
+          name  = "COACH_MODEL"
+          value = var.coach_model
+        }
+
+        env {
+          name  = "COACH_MONTHLY_BUDGET_USD"
+          value = tostring(var.coach_monthly_budget_usd)
+        }
+
+        env {
           name  = "GITHUB_CLIENT_ID"
           value = var.github_client_id
         }

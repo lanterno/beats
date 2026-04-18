@@ -15,7 +15,6 @@ The Terraform configuration is organized into logical modules for better maintai
 - **`apis.tf`** - GCP API enablement (Cloud Build, Artifact Registry, Storage, Compute)
 - **`cloudbuild.tf`** - Cloud Build resources (service account, IAM, artifact registry, build triggers)
 - **`cloudrun.tf`** - Cloud Run service, domain mapping, and IAM policies
-- **`ui.tf`** - UI infrastructure (Cloud Storage bucket, Load Balancer, SSL certificates)
 - **`cloudflare.tf`** - Cloudflare DNS record management (optional)
 - **`outputs.tf`** - Output values for accessing created resources
 
