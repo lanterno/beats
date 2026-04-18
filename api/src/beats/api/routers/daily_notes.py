@@ -21,13 +21,7 @@ async def get_daily_note(
     note = await repo.get_by_date(d)
     if not note:
         return None
-    return DailyNoteResponse(
-        id=note.id,
-        date=note.date,
-        note=note.note,
-        mood=note.mood,
-        created_at=note.created_at,
-    )
+    return DailyNoteResponse.model_validate(note, from_attributes=True)
 
 
 @router.put("", response_model=DailyNoteResponse)
@@ -42,10 +36,4 @@ async def upsert_daily_note(
         mood=body.mood,
     )
     saved = await repo.upsert(note)
-    return DailyNoteResponse(
-        id=saved.id,
-        date=saved.date,
-        note=saved.note,
-        mood=saved.mood,
-        created_at=saved.created_at,
-    )
+    return DailyNoteResponse.model_validate(saved, from_attributes=True)
