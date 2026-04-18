@@ -18,7 +18,6 @@ from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
 from beats.coach.repos import build_repos, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
-from beats.domain.services import BeatService
 from beats.infrastructure.database import Database
 
 if TYPE_CHECKING:
@@ -66,13 +65,11 @@ async def build_user_context(user_id: str) -> str:
         week_totals.append(f"  Week of {week_label}: {week_hours:.1f}h")
 
     # Productivity score
-    beat_service = BeatService(beat_repo=beat_repo)
     intel = IntelligenceService(
-        beat_service=beat_service,
+        beat_repo=beat_repo,
         project_repo=project_repo,
         intention_repo=intention_repo,
         daily_note_repo=note_repo,
-        digest_repo=digest_repo,
     )
     try:
         score_data = await intel.compute_productivity_score()
