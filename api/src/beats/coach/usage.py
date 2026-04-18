@@ -8,7 +8,7 @@ ceiling is exceeded.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from beats.infrastructure.database import Database
 from beats.settings import settings
@@ -81,8 +81,6 @@ class UsageTracker:
 
     async def usage_summary(self, days: int = 30) -> list[dict]:
         """Daily usage breakdown for the cost dashboard."""
-        from datetime import timedelta
-
         since = datetime.now(UTC) - timedelta(days=days)
         pipeline = [
             {"$match": {"user_id": self._user_id, "ts": {"$gte": since}}},

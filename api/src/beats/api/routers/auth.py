@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 from beats.auth.session import SessionManager
 from beats.auth.storage import MongoCredentialStorage
 from beats.auth.webauthn import WebAuthnManager
+from beats.domain.models import User
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import MongoUserRepository, UserRepository
 from beats.settings import settings
@@ -120,9 +121,6 @@ async def register_start(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
-
-    # Create the user
-    from beats.domain.models import User
 
     user = await user_repo.create(User(email=body.email, display_name=body.display_name))
 

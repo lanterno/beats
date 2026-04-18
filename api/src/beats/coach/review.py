@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime
 
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
+from beats.coach.prompts import REVIEW_PROMPT
 from beats.infrastructure.database import Database
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,6 @@ async def generate_review_questions(
     """Generate 3 review questions from the day's data. Returns list of
     {question, derived_from: {kind, data}}.
     """
-    from beats.coach.prompts import REVIEW_PROMPT
-
     today = target_date or datetime.now(UTC).date()
     prompt = REVIEW_PROMPT.format(today=today.isoformat())
     system, messages, spec = await build_coach_messages(

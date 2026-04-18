@@ -13,7 +13,12 @@ from pydantic import BaseModel
 
 from beats.api.dependencies import CurrentUserId
 from beats.coach.brief import generate_brief, get_brief, list_briefs
+from beats.coach.chat import handle_chat_turn
+from beats.coach.memory import MemoryStore
+from beats.coach.memory_rewrite import rewrite_coach_memory
+from beats.coach.review import generate_review_questions, get_review, save_answer
 from beats.coach.usage import BudgetExceeded, UsageTracker
+from beats.infrastructure.database import Database
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -149,31 +154,34 @@ async def coach_chat(
     request: ChatRequest,
 ):
     """Streaming chat with tool use. Returns SSE."""
-    from beats.coach.chat import handle_chat_turn
+    event_stream = handle_chat_turn(
+        user_id=user_id,
+        message=request.message,
+        conversation_id=request.conversation_id,
+    )
 
-    try:
-        event_stream = handle_chat_turn(
-            user_id=user_id,
-            message=request.message,
-            conversation_id=request.conversation_id,
-        )
-
-        async def sse_generator():
+    async def sse_generator():
+        try:
             async for event in event_stream:
                 yield f"data: {json.dumps(event)}\n\n"
-            yield "data: [DONE]\n\n"
+        except BudgetExceeded as exc:
+            error = {"type": "error", "error": str(exc), "code": 429}
+            yield f"data: {json.dumps(error)}\n\n"
+        except Exception:
+            logger.exception("Chat stream failed for user=%s", user_id)
+            error = {"type": "error", "error": "Coach is temporarily unavailable.", "code": 502}
+            yield f"data: {json.dumps(error)}\n\n"
+        yield "data: [DONE]\n\n"
 
-        return StreamingResponse(
-            sse_generator(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-    except BudgetExceeded as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ── Chat history ─────────────────────────────────────────────────────
@@ -186,8 +194,6 @@ async def get_chat_history(
     limit: int = Query(default=50, ge=1, le=200),
 ):
     """Get chat message history for a conversation."""
-    from beats.infrastructure.database import Database
-
     db = Database.get_db()
     query: dict = {"user_id": user_id}
     if conversation_id:
@@ -240,8 +246,6 @@ async def get_usage(
 @router.post("/review/start", response_model=ReviewResponse)
 async def start_review(user_id: CurrentUserId):
     """Generate 3 end-of-day review questions from today's data."""
-    from beats.coach.review import generate_review_questions, get_review
-
     try:
         await generate_review_questions(user_id)
     except BudgetExceeded as exc:
@@ -266,8 +270,6 @@ async def start_review(user_id: CurrentUserId):
 @router.post("/review/answer")
 async def answer_review(user_id: CurrentUserId, request: ReviewAnswerRequest):
     """Save an answer to a review question."""
-    from beats.coach.review import save_answer
-
     try:
         target = date.fromisoformat(request.date)
     except ValueError as exc:
@@ -280,8 +282,6 @@ async def answer_review(user_id: CurrentUserId, request: ReviewAnswerRequest):
 @router.get("/review/today", response_model=ReviewResponse | None)
 async def get_today_review(user_id: CurrentUserId):
     """Get today's review if it exists."""
-    from beats.coach.review import get_review
-
     doc = await get_review(user_id)
     if not doc:
         return None
@@ -298,9 +298,6 @@ async def get_today_review(user_id: CurrentUserId):
 @router.get("/memory", response_model=MemoryResponse)
 async def get_memory(user_id: CurrentUserId):
     """Get the current coach memory for this user."""
-    from beats.coach.memory import MemoryStore
-    from beats.infrastructure.database import Database
-
     db = Database.get_db()
     store = MemoryStore(db, user_id)
     content = await store.read()
@@ -314,8 +311,6 @@ async def get_memory(user_id: CurrentUserId):
 @router.delete("/memory")
 async def delete_memory(user_id: CurrentUserId):
     """Delete the coach memory for this user."""
-    from beats.infrastructure.database import Database
-
     db = Database.get_db()
     await db.coach_memory.delete_one({"user_id": user_id})
     return {"status": "ok"}
@@ -325,8 +320,6 @@ async def delete_memory(user_id: CurrentUserId):
 async def delete_all_coach_data(user_id: CurrentUserId):
     """Delete ALL coach data for this user: memory, briefs, reviews,
     conversations, and usage logs. Irreversible."""
-    from beats.infrastructure.database import Database
-
     db = Database.get_db()
     for col_name in [
         "coach_memory",
@@ -342,8 +335,6 @@ async def delete_all_coach_data(user_id: CurrentUserId):
 @router.post("/memory/rewrite", response_model=MemoryResponse)
 async def rewrite_memory(user_id: CurrentUserId):
     """Trigger the coach to rewrite its memory from the last 7 days."""
-    from beats.coach.memory_rewrite import rewrite_coach_memory
-
     try:
         content = await rewrite_coach_memory(user_id)
     except BudgetExceeded as exc:

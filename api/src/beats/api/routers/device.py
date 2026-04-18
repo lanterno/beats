@@ -1,6 +1,6 @@
 """Device API router — endpoints optimized for ESP32 wall clock firmware."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -165,8 +165,6 @@ async def get_heartbeat() -> DeviceHeartbeatResponse | None:
 
 async def _get_daily_total_minutes(beat_service: BeatServiceDep) -> int:
     """Calculate total tracked minutes for today."""
-    from datetime import date
-
     today = date.today()
     beats = await beat_service.beat_repo.list(date_filter=today)
     total_seconds = sum(b.duration.total_seconds() for b in beats if not b.is_active)

@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.memory import MemoryStore
+from beats.coach.prompts import MEMORY_REWRITE_PROMPT
 from beats.coach.repos import build_repos, fmt_minutes
 from beats.coach.review import list_reviews
 from beats.infrastructure.database import Database
@@ -85,7 +86,6 @@ async def _recent_data_summary(user_id: str) -> str:
 
 async def rewrite_coach_memory(user_id: str) -> str:
     """Rewrite the coach memory from the last 7 days of data."""
-    from beats.coach.prompts import MEMORY_REWRITE_PROMPT
 
     recent = await _recent_data_summary(user_id)
     prompt = f"{recent}\n\n---\n\n{MEMORY_REWRITE_PROMPT}"

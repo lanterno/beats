@@ -17,6 +17,7 @@ from beats.api.dependencies import (
     ProjectServiceDep,
     WebhookRepoDep,
 )
+from beats.domain.models import Webhook
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,6 @@ async def list_webhooks(repo: WebhookRepoDep):
 @router.post("/", status_code=http.HTTPStatus.CREATED, response_model=WebhookResponse)
 async def create_webhook(request: CreateWebhookRequest, repo: WebhookRepoDep):
     """Register a new webhook URL."""
-    from beats.domain.models import Webhook
-
     webhook = Webhook(url=request.url, events=request.events)
     created = await repo.create(webhook)
     return created.model_dump(mode="json")

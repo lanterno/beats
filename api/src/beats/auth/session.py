@@ -1,7 +1,9 @@
 """Session management with JWT tokens and in-memory challenge storage."""
 
+import base64
 import logging
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -78,9 +80,6 @@ class SessionManager:
         """Store a challenge that was generated externally (e.g., by py_webauthn)."""
         self._cleanup_expired_challenges()
 
-        # Convert bytes to base64url string for storage key
-        import base64
-
         challenge_b64 = base64.urlsafe_b64encode(challenge).rstrip(b"=").decode("ascii")
 
         self._challenges[challenge_b64] = Challenge(
@@ -94,8 +93,6 @@ class SessionManager:
 
     def get_stored_challenge(self, challenge_type: str) -> bytes | None:
         """Get the raw bytes of the most recent challenge of the given type."""
-        import base64
-
         challenge_b64 = self.get_current_challenge(challenge_type)
         if challenge_b64 is None:
             return None
@@ -124,8 +121,6 @@ class SessionManager:
 
     def store_pending_registration(self, challenge: bytes, user_id: str) -> None:
         """Store user_id for a pending registration challenge."""
-        import base64
-
         challenge_b64 = base64.urlsafe_b64encode(challenge).rstrip(b"=").decode("ascii")
         self._pending_registrations[challenge_b64] = user_id
 
@@ -138,8 +133,6 @@ class SessionManager:
 
     def create_session_token(self, user_id: str, email: str = "") -> str:
         """Create a JWT session token."""
-        import uuid
-
         now = datetime.now(UTC)
         payload: dict[str, Any] = {
             "sub": user_id,

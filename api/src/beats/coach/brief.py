@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime
 
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
+from beats.coach.prompts import BRIEF_PROMPT
 from beats.infrastructure.database import Database
 
 COLLECTION = "daily_briefs"
@@ -18,8 +19,6 @@ COLLECTION = "daily_briefs"
 
 async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
     """Generate and persist a daily brief. Returns the stored document."""
-    from beats.coach.prompts import BRIEF_PROMPT
-
     today = target_date or datetime.now(UTC).date()
     prompt = BRIEF_PROMPT.format(today=today.isoformat())
     system, messages, spec = await build_coach_messages(

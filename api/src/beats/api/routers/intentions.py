@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from beats.api.dependencies import IntentionRepoDep
 from beats.api.schemas import (
@@ -23,16 +23,7 @@ async def list_intentions(
     """List intentions for a given date (defaults to today)."""
     d = target_date or datetime.now(UTC).date()
     intentions = await repo.list_by_date(d)
-    return [
-        IntentionResponse(
-            id=i.id,
-            project_id=i.project_id,
-            date=i.date,
-            planned_minutes=i.planned_minutes,
-            completed=i.completed,
-        )
-        for i in intentions
-    ]
+    return [IntentionResponse.model_validate(i, from_attributes=True) for i in intentions]
 
 
 @router.post("", response_model=IntentionResponse, status_code=201)
@@ -47,13 +38,7 @@ async def create_intention(
         planned_minutes=body.planned_minutes,
     )
     created = await repo.create(intention)
-    return IntentionResponse(
-        id=created.id,
-        project_id=created.project_id,
-        date=created.date,
-        planned_minutes=created.planned_minutes,
-        completed=created.completed,
-    )
+    return IntentionResponse.model_validate(created, from_attributes=True)
 
 
 @router.patch("/{intention_id}", response_model=IntentionResponse)
@@ -66,8 +51,6 @@ async def update_intention(
     intentions = await repo.list_by_date(datetime.now(UTC).date())
     intention = next((i for i in intentions if i.id == intention_id), None)
     if not intention:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Intention not found")
 
     if body.completed is not None:
@@ -76,13 +59,7 @@ async def update_intention(
         intention.planned_minutes = body.planned_minutes
 
     updated = await repo.update(intention)
-    return IntentionResponse(
-        id=updated.id,
-        project_id=updated.project_id,
-        date=updated.date,
-        planned_minutes=updated.planned_minutes,
-        completed=updated.completed,
-    )
+    return IntentionResponse.model_validate(updated, from_attributes=True)
 
 
 @router.delete("/{intention_id}", status_code=204)

@@ -10,6 +10,8 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from beats.coach.repos import build_repos, fmt_minutes
+from beats.domain.intelligence import IntelligenceService
+from beats.domain.services import BeatService
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -126,9 +128,6 @@ class _ToolContext:
         self.project_map = {p.id: p.name for p in projects}
 
     def _build_intel(self):
-        from beats.domain.intelligence import IntelligenceService
-        from beats.domain.services import BeatService
-
         return IntelligenceService(
             beat_service=BeatService(beat_repo=self.beat_repo),
             project_repo=self.project_repo,

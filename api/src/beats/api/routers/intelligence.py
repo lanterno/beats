@@ -3,7 +3,7 @@
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from beats.api.dependencies import (
     InsightsRepoDep,
@@ -24,6 +24,7 @@ from beats.api.schemas import (
     SuggestionResponse,
     WeeklyDigestResponse,
 )
+from beats.domain.models import UserInsights
 
 router = APIRouter(prefix="/api/intelligence", tags=["intelligence"])
 
@@ -54,27 +55,7 @@ async def list_digests(
 ) -> list[WeeklyDigestResponse]:
     """List recent weekly digests."""
     digests = await digest_repo.list_recent(limit=limit)
-    return [
-        WeeklyDigestResponse(
-            id=d.id,
-            week_of=d.week_of,
-            generated_at=d.generated_at,
-            total_hours=d.total_hours,
-            session_count=d.session_count,
-            active_days=d.active_days,
-            top_project_id=d.top_project_id,
-            top_project_name=d.top_project_name,
-            top_project_hours=d.top_project_hours,
-            vs_last_week_pct=d.vs_last_week_pct,
-            longest_day=d.longest_day,
-            longest_day_hours=d.longest_day_hours,
-            best_streak=d.best_streak,
-            observation=d.observation,
-            project_breakdown=d.project_breakdown,
-            productivity_score=d.productivity_score,
-        )
-        for d in digests
-    ]
+    return [WeeklyDigestResponse.model_validate(d, from_attributes=True) for d in digests]
 
 
 @router.get("/digests/{week_of}", response_model=WeeklyDigestResponse)
@@ -83,29 +64,10 @@ async def get_digest(
     week_of: date,
 ) -> WeeklyDigestResponse:
     """Get a specific weekly digest by its Monday date."""
-    from fastapi import HTTPException
-
     digest = await digest_repo.get_by_week(week_of)
     if not digest:
         raise HTTPException(status_code=404, detail="Digest not found for this week")
-    return WeeklyDigestResponse(
-        id=digest.id,
-        week_of=digest.week_of,
-        generated_at=digest.generated_at,
-        total_hours=digest.total_hours,
-        session_count=digest.session_count,
-        active_days=digest.active_days,
-        top_project_id=digest.top_project_id,
-        top_project_name=digest.top_project_name,
-        top_project_hours=digest.top_project_hours,
-        vs_last_week_pct=digest.vs_last_week_pct,
-        longest_day=digest.longest_day,
-        longest_day_hours=digest.longest_day_hours,
-        best_streak=digest.best_streak,
-        observation=digest.observation,
-        project_breakdown=digest.project_breakdown,
-        productivity_score=digest.productivity_score,
-    )
+    return WeeklyDigestResponse.model_validate(digest, from_attributes=True)
 
 
 @router.post("/digests/generate", response_model=WeeklyDigestResponse)
@@ -122,24 +84,7 @@ async def generate_digest(
 
     digest = await service.generate_weekly_digest(week_of)
     await digest_repo.upsert(digest)
-    return WeeklyDigestResponse(
-        id=digest.id,
-        week_of=digest.week_of,
-        generated_at=digest.generated_at,
-        total_hours=digest.total_hours,
-        session_count=digest.session_count,
-        active_days=digest.active_days,
-        top_project_id=digest.top_project_id,
-        top_project_name=digest.top_project_name,
-        top_project_hours=digest.top_project_hours,
-        vs_last_week_pct=digest.vs_last_week_pct,
-        longest_day=digest.longest_day,
-        longest_day_hours=digest.longest_day_hours,
-        best_streak=digest.best_streak,
-        observation=digest.observation,
-        project_breakdown=digest.project_breakdown,
-        productivity_score=digest.productivity_score,
-    )
+    return WeeklyDigestResponse.model_validate(digest, from_attributes=True)
 
 
 @router.get("/patterns", response_model=PatternsResponse)
@@ -166,8 +111,6 @@ async def refresh_patterns(
     insights_repo: InsightsRepoDep,
 ) -> PatternsResponse:
     """Refresh pattern detection — recomputes all insights."""
-    from beats.domain.models import UserInsights
-
     insights = await service.detect_patterns()
     user_insights = await insights_repo.get()
     dismissed = user_insights.dismissed_ids if user_insights else []
