@@ -11,7 +11,7 @@ import { useProjects } from "@/entities/project";
 import type { Session } from "@/entities/session";
 import { useGaps, useThisWeekSessions, useTodaySessions } from "@/entities/session";
 import type { FocusScore, Gap } from "@/shared/api";
-import { cn, formatDuration, formatTime, parseUtcIso } from "@/shared/lib";
+import { cn, formatDuration, formatTime, parseUtcIso, startOfDay } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
 
 function focusColor(score: number): string {
@@ -184,8 +184,7 @@ export function TodayFeed() {
 	const projectMap = new Map((projects || []).map((p) => [p.id, { name: p.name, color: p.color }]));
 	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
 
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const today = startOfDay();
 
 	const yesterday = new Date(today);
 	yesterday.setDate(yesterday.getDate() - 1);

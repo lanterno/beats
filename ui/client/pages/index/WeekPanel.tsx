@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useProjects } from "@/entities/project";
 import type { DayProjectBreakdown } from "@/entities/session";
 import { useWeeklySessionsByProject } from "@/entities/session";
-import { cn, formatDateShort, formatDuration, getWeekRange } from "@/shared/lib";
+import { cn, formatDateShort, formatDuration, getWeekRange, startOfDay } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
 
 type ViewMode = "daily" | "projects";
@@ -136,8 +136,7 @@ export function WeekPanel() {
 }
 
 function DailyView({ data }: { data: DayProjectBreakdown[] }) {
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const today = startOfDay();
 
 	return (
 		<div className="grid grid-cols-7 gap-px bg-border/30">

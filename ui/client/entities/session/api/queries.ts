@@ -12,6 +12,7 @@ import {
 	getDayName,
 	getWeekRange,
 	parseUtcIso,
+	startOfDay,
 } from "@/shared/lib";
 import type { DayProjectBreakdown, DaySummary, Session } from "../model";
 import { toApiBeat, toSession } from "../model";
@@ -185,8 +186,7 @@ export function useWeeklySessionsByProject(
 				(projects || []).map((p) => [p.id, { name: p.name, color: p.color }]),
 			);
 
-			const today = new Date();
-			today.setHours(0, 0, 0, 0);
+			const today = startOfDay();
 
 			return Array.from({ length: 7 }, (_, i) => {
 				const dayDate = new Date(weekStart);
@@ -260,8 +260,7 @@ export function useTodaySessions() {
 		queryKey: [...sessionKeys.all, "today"],
 		queryFn: (): Session[] => {
 			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
-			const today = new Date();
-			today.setHours(0, 0, 0, 0);
+			const today = startOfDay();
 			return sessions
 				.filter((s) => parseUtcIso(s.startTime) >= today)
 				.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -384,8 +383,7 @@ export function useStreaks() {
 			if (dates.length === 0) return { current: 0, longest: 0 };
 
 			// Calculate current streak (working backwards from today)
-			const today = new Date();
-			today.setHours(0, 0, 0, 0);
+			const today = startOfDay();
 
 			let current = 0;
 			const cursor = new Date(today);

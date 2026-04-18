@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useProjects } from "@/entities/project";
 import { useAllBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
-import { cn, getCurrentWeekRange, getDayName, parseUtcIso } from "@/shared/lib";
+import { cn, getCurrentWeekRange, getDayName, parseUtcIso, startOfDay } from "@/shared/lib";
 import { EmptyState, GoalRing } from "@/shared/ui";
 
 interface DaySummary {
@@ -105,8 +105,7 @@ export function ProjectPulseList() {
 		.sort((a, b) => a.name.localeCompare(b.name));
 	const sorted = [...active, ...inactive];
 
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const today = startOfDay();
 
 	if (sorted.length === 0) {
 		return (

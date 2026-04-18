@@ -40,7 +40,7 @@ import type { CredentialInfo } from "@/features/auth";
 import { getSessionToken } from "@/features/auth/stores/authStore";
 import { del, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
-import { COLOR_MODES, DENSITIES, THEMES, useTheme } from "@/shared/lib";
+import { COLOR_MODES, DENSITIES, THEMES, useOAuthCallback, useTheme } from "@/shared/lib";
 import { CoachUsage } from "./CoachUsage";
 
 export default function Settings() {
@@ -575,20 +575,12 @@ function CalendarSection() {
 	const disconnectMutation = useDisconnectCalendar();
 	const connectCalendar = connectMutation.mutate;
 
-	// Handle OAuth callback: check URL for calendar=callback&code=...
-	useEffect(() => {
-		const params = new URLSearchParams(window.location.search);
-		if (params.get("calendar") === "callback" && params.get("code")) {
-			const code = params.get("code")!;
-			connectCalendar(code, {
-				onSuccess: () => {
-					toast.success("Google Calendar connected");
-					window.history.replaceState({}, "", "/settings");
-				},
-				onError: () => toast.error("Failed to connect calendar"),
-			});
-		}
-	}, [connectCalendar]);
+	useOAuthCallback(
+		"calendar",
+		connectCalendar,
+		() => toast.success("Google Calendar connected"),
+		() => toast.error("Failed to connect calendar"),
+	);
 
 	const handleConnect = async () => {
 		try {
@@ -646,20 +638,12 @@ function GitHubSection() {
 	const disconnectMutation = useDisconnectGitHub();
 	const connectGitHub = connectMutation.mutate;
 
-	// Handle OAuth callback: check URL for github=callback&code=...
-	useEffect(() => {
-		const params = new URLSearchParams(window.location.search);
-		if (params.get("github") === "callback" && params.get("code")) {
-			const code = params.get("code")!;
-			connectGitHub(code, {
-				onSuccess: () => {
-					toast.success("GitHub connected");
-					window.history.replaceState({}, "", "/settings");
-				},
-				onError: () => toast.error("Failed to connect GitHub"),
-			});
-		}
-	}, [connectGitHub]);
+	useOAuthCallback(
+		"github",
+		connectGitHub,
+		() => toast.success("GitHub connected"),
+		() => toast.error("Failed to connect GitHub"),
+	);
 
 	const handleConnect = async () => {
 		try {

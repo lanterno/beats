@@ -30,6 +30,7 @@ import {
 	getWeekNumberLabel,
 	parseTimedeltaToMinutes,
 	parseUtcIso,
+	startOfDay,
 } from "@/shared/lib";
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
@@ -139,8 +140,7 @@ export default function ProjectDetails() {
 	);
 
 	// Build week history rows: current week + past weeks
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const today = startOfDay();
 	const todayDayIndex = (today.getDay() + 6) % 7; // Monday=0 ... Sunday=6
 
 	// Helper: get the Monday ISO string for a given weeksAgo

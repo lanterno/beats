@@ -15,6 +15,7 @@ export {
 	getWeekNumberLabel,
 	getWeekRange,
 	parseUtcIso,
+	startOfDay,
 	toLocalDatetimeLocalString,
 } from "./date";
 // Format utilities
@@ -42,6 +43,7 @@ export { useCountUp } from "./useCountUp";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+export { useOAuthCallback } from "./useOAuthCallback";
 export { notifySyncWork, type SyncSnapshot, useSyncEngine, useSyncStatus } from "./useSyncEngine";
 export type { ColorMode, Density, ThemeName } from "./useTheme";
 export { COLOR_MODES, DENSITIES, THEMES, useTheme } from "./useTheme";

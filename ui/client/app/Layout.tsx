@@ -18,6 +18,7 @@ import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
 import { useTimer } from "@/features/timer";
 import {
 	parseUtcIso,
+	startOfDay,
 	useCommandActions,
 	useFavicon,
 	useKeyboardShortcuts,
@@ -193,24 +194,19 @@ export function Layout() {
 			{/* Morning briefing */}
 			<MorningBriefing
 				yesterdayMinutes={(() => {
-					const yesterday = new Date();
+					const today = startOfDay();
+					const yesterday = startOfDay();
 					yesterday.setDate(yesterday.getDate() - 1);
-					yesterday.setHours(0, 0, 0, 0);
-					const today = new Date();
-					today.setHours(0, 0, 0, 0);
-					return (weekSessions ?? [])
-						.filter((s) => {
-							const d = parseUtcIso(s.startTime);
-							return d >= yesterday && d < today;
-						})
-						.reduce((sum, s) => sum + s.duration, 0);
+					const ySessions = (weekSessions ?? []).filter((s) => {
+						const d = parseUtcIso(s.startTime);
+						return d >= yesterday && d < today;
+					});
+					return ySessions.reduce((sum, s) => sum + s.duration, 0);
 				})()}
 				yesterdaySessionCount={(() => {
-					const yesterday = new Date();
+					const today = startOfDay();
+					const yesterday = startOfDay();
 					yesterday.setDate(yesterday.getDate() - 1);
-					yesterday.setHours(0, 0, 0, 0);
-					const today = new Date();
-					today.setHours(0, 0, 0, 0);
 					return (weekSessions ?? []).filter((s) => {
 						const d = parseUtcIso(s.startTime);
 						return d >= yesterday && d < today;

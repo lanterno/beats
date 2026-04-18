@@ -4,14 +4,14 @@
  */
 import { Flame } from "lucide-react";
 import { useAllCurrentWeekSessions, useLastWeekTotal, useStreaks } from "@/entities/session";
+import { startOfDay } from "@/shared/lib";
 
 export function SidebarStats() {
 	const { data: dailySummary } = useAllCurrentWeekSessions();
 	const { data: streaks } = useStreaks();
 	const { data: lastWeek } = useLastWeekTotal();
 
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const today = startOfDay();
 
 	const todayMinutes =
 		dailySummary?.find((d) => d.date.toDateString() === today.toDateString())?.totalMinutes ?? 0;

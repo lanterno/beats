@@ -3,6 +3,13 @@
  * All date handling follows UTC-first principle: API sends UTC, we display in local timezone.
  */
 
+/** Return a new Date set to midnight (00:00:00.000) of the same calendar day. */
+export function startOfDay(d: Date = new Date()): Date {
+	const copy = new Date(d);
+	copy.setHours(0, 0, 0, 0);
+	return copy;
+}
+
 /**
  * Parse an ISO string from the API as UTC (append Z if no timezone).
  * Use when the API sends UTC timestamps; ensures correct instant for comparison and local display.
