@@ -5,15 +5,19 @@
 
 import {
 	Calendar,
+	Cpu,
 	Download,
+	Eye,
 	ExternalLink,
 	FileJson,
 	FileSpreadsheet,
 	Fingerprint,
 	Github,
+	Heart,
 	Moon,
 	Palette,
 	Plus,
+	Ring,
 	Rows3,
 	Sun,
 	Terminal,
@@ -291,6 +295,12 @@ export default function Settings() {
 			{/* Integrations */}
 			<CalendarSection />
 			<GitHubSection />
+			<FitbitSection />
+			<OuraSection />
+
+			{/* Daemon */}
+			<DaemonSection />
+			<DaemonPrivacySection />
 
 			{/* Passkeys */}
 			<PasskeysSection />
@@ -692,6 +702,500 @@ function GitHubSection() {
 						Connect GitHub
 					</button>
 				)}
+			</div>
+		</section>
+	);
+}
+
+function FitbitSection() {
+	const [status, setStatus] = useState<{ connected: boolean; fitbit_user_id?: string } | null>(
+		null,
+	);
+	const [loading, setLoading] = useState(false);
+
+	const fetchStatus = useCallback(async () => {
+		try {
+			const data = await get<{ connected: boolean; fitbit_user_id?: string }>(
+				"/api/fitbit/status",
+			);
+			setStatus(data);
+		} catch {
+			// non-critical
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchStatus();
+	}, [fetchStatus]);
+
+	// Handle OAuth callback
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		if (params.get("fitbit") === "callback") {
+			const code = params.get("code");
+			if (code) {
+				post(`/api/fitbit/connect?code=${encodeURIComponent(code)}`)
+					.then(() => {
+						toast.success("Fitbit connected");
+						fetchStatus();
+						window.history.replaceState({}, "", window.location.pathname);
+					})
+					.catch(() => toast.error("Failed to connect Fitbit"));
+			}
+		}
+	}, [fetchStatus]);
+
+	const handleConnect = async () => {
+		setLoading(true);
+		try {
+			const data = await get<{ url: string }>("/api/fitbit/auth-url");
+			window.location.href = data.url;
+		} catch {
+			toast.error("Failed to get Fitbit auth URL");
+			setLoading(false);
+		}
+	};
+
+	const handleDisconnect = async () => {
+		try {
+			await del("/api/fitbit/disconnect");
+			setStatus({ connected: false });
+			toast.success("Fitbit disconnected");
+		} catch {
+			toast.error("Failed to disconnect Fitbit");
+		}
+	};
+
+	return (
+		<section className="mb-8">
+			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+				<Heart className="w-4 h-4 text-accent" />
+				Fitbit
+			</h2>
+			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
+				<p className="text-xs text-muted-foreground">
+					Connect Fitbit to sync sleep, HRV, resting heart rate, and activity data for
+					recovery-aware coaching.
+				</p>
+				{status?.connected ? (
+					<div className="flex items-center gap-3">
+						<span className="text-xs text-accent font-medium">
+							Connected{status.fitbit_user_id ? ` (${status.fitbit_user_id})` : ""}
+						</span>
+						<button
+							type="button"
+							onClick={handleDisconnect}
+							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+						>
+							Disconnect
+						</button>
+					</div>
+				) : (
+					<button
+						type="button"
+						onClick={handleConnect}
+						disabled={loading}
+						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors disabled:opacity-50"
+					>
+						{loading ? "Connecting..." : "Connect Fitbit"}
+					</button>
+				)}
+			</div>
+		</section>
+	);
+}
+
+function OuraSection() {
+	const [status, setStatus] = useState<{ connected: boolean; oura_user_id?: string } | null>(
+		null,
+	);
+	const [pat, setPat] = useState("");
+	const [connecting, setConnecting] = useState(false);
+
+	const fetchStatus = useCallback(async () => {
+		try {
+			const data = await get<{ connected: boolean; oura_user_id?: string }>(
+				"/api/oura/status",
+			);
+			setStatus(data);
+		} catch {
+			// non-critical
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchStatus();
+	}, [fetchStatus]);
+
+	const handleConnect = async () => {
+		if (!pat.trim()) return;
+		setConnecting(true);
+		try {
+			await post("/api/oura/connect", { access_token: pat.trim() });
+			setPat("");
+			toast.success("Oura connected");
+			fetchStatus();
+		} catch {
+			toast.error("Invalid Oura token — check and try again");
+		} finally {
+			setConnecting(false);
+		}
+	};
+
+	const handleDisconnect = async () => {
+		try {
+			await del("/api/oura/disconnect");
+			setStatus({ connected: false });
+			toast.success("Oura disconnected");
+		} catch {
+			toast.error("Failed to disconnect Oura");
+		}
+	};
+
+	return (
+		<section className="mb-8">
+			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+				<Ring className="w-4 h-4 text-accent" />
+				Oura
+			</h2>
+			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
+				<p className="text-xs text-muted-foreground">
+					Connect your Oura Ring to sync sleep, readiness, and HRV data. Get a personal
+					access token from{" "}
+					<a
+						href="https://cloud.ouraring.com/personal-access-tokens"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-accent hover:underline"
+					>
+						cloud.ouraring.com
+					</a>
+					.
+				</p>
+				{status?.connected ? (
+					<div className="flex items-center gap-3">
+						<span className="text-xs text-accent font-medium">Connected</span>
+						<button
+							type="button"
+							onClick={handleDisconnect}
+							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+						>
+							Disconnect
+						</button>
+					</div>
+				) : (
+					<div className="flex gap-2">
+						<input
+							type="password"
+							value={pat}
+							onChange={(e) => setPat(e.target.value)}
+							placeholder="Oura personal access token"
+							className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/20 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-accent"
+						/>
+						<button
+							type="button"
+							onClick={handleConnect}
+							disabled={connecting || !pat.trim()}
+							className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors disabled:opacity-50"
+						>
+							{connecting ? "Connecting..." : "Connect"}
+						</button>
+					</div>
+				)}
+			</div>
+		</section>
+	);
+}
+
+interface DeviceRegistrationInfo {
+	id: string;
+	device_id: string;
+	device_name: string | null;
+	created_at: string;
+	last_seen: string | null;
+}
+
+function DaemonSection() {
+	const [code, setCode] = useState<string | null>(null);
+	const [loading, setLoading] = useState(false);
+	const [devices, setDevices] = useState<DeviceRegistrationInfo[]>([]);
+	const [revoking, setRevoking] = useState<string | null>(null);
+
+	const fetchDevices = useCallback(async () => {
+		try {
+			const data = await get<DeviceRegistrationInfo[]>("/api/device/registrations");
+			setDevices(data);
+		} catch {
+			// Silently ignore — devices list is non-critical
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchDevices();
+	}, [fetchDevices]);
+
+	const handleGenerateCode = async () => {
+		setLoading(true);
+		try {
+			const data = await post<{ code: string; expires_in_seconds: number }>(
+				"/api/device/pair/code",
+			);
+			setCode(data.code);
+			toast.success("Pairing code generated");
+		} catch {
+			toast.error("Failed to generate pairing code");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleRevoke = async (deviceId: string) => {
+		setRevoking(deviceId);
+		try {
+			await del(`/api/device/registrations/${deviceId}`);
+			setDevices((prev) => prev.filter((d) => d.device_id !== deviceId));
+			toast.success("Device revoked");
+		} catch {
+			toast.error("Failed to revoke device");
+		} finally {
+			setRevoking(null);
+		}
+	};
+
+	return (
+		<section className="mb-8">
+			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+				<Cpu className="w-4 h-4 text-accent" />
+				Daemon
+			</h2>
+			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">
+				<p className="text-xs text-muted-foreground">
+					Pair the <code className="text-accent">beatsd</code> daemon to this account for
+					ambient flow tracking. Run{" "}
+					<code className="text-accent">beatsd pair &lt;code&gt;</code> within 5 minutes.
+				</p>
+
+				{code ? (
+					<div className="space-y-2">
+						<div className="font-mono text-2xl tracking-[0.3em] text-accent font-bold">
+							{code}
+						</div>
+						<p className="text-[10px] text-muted-foreground">
+							Expires in 5 minutes. One-time use.
+						</p>
+						<button
+							type="button"
+							onClick={() => setCode(null)}
+							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/50 transition-colors"
+						>
+							Dismiss
+						</button>
+					</div>
+				) : (
+					<button
+						type="button"
+						onClick={handleGenerateCode}
+						disabled={loading}
+						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors disabled:opacity-50"
+					>
+						{loading ? "Generating..." : "Pair new device"}
+					</button>
+				)}
+
+				{devices.length > 0 && (
+					<div className="space-y-2 pt-2 border-t border-border/50">
+						<p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+							Paired devices
+						</p>
+						{devices.map((d) => (
+							<div
+								key={d.device_id}
+								className="flex items-center justify-between text-xs"
+							>
+								<div>
+									<span className="text-foreground">
+										{d.device_name || "Unnamed device"}
+									</span>
+									{d.last_seen && (
+										<span className="text-muted-foreground ml-2">
+											last seen{" "}
+											{new Date(d.last_seen).toLocaleDateString()}
+										</span>
+									)}
+								</div>
+								<button
+									type="button"
+									onClick={() => handleRevoke(d.device_id)}
+									disabled={revoking === d.device_id}
+									className="px-2 py-1 text-[10px] rounded border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors disabled:opacity-50"
+								>
+									{revoking === d.device_id ? "Revoking..." : "Revoke"}
+								</button>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		</section>
+	);
+}
+
+interface SignalSummaryInfo {
+	id: string;
+	hour: string;
+	categories: Record<string, number>;
+	total_samples: number;
+	idle_samples: number;
+}
+
+function DaemonPrivacySection() {
+	const [summaries, setSummaries] = useState<SignalSummaryInfo[]>([]);
+	const [deleting, setDeleting] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState(false);
+
+	const fetchSummaries = useCallback(async () => {
+		try {
+			const now = new Date();
+			const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+			const data = await get<SignalSummaryInfo[]>(
+				`/api/signals/summaries?start=${dayAgo.toISOString()}&end=${now.toISOString()}`,
+			);
+			setSummaries(data);
+		} catch {
+			// non-critical
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchSummaries();
+	}, [fetchSummaries]);
+
+	// Aggregate categories across all summaries
+	const categoryTotals: Record<string, number> = {};
+	let totalSamples = 0;
+	let idleSamples = 0;
+	for (const s of summaries) {
+		totalSamples += s.total_samples;
+		idleSamples += s.idle_samples;
+		for (const [cat, count] of Object.entries(s.categories)) {
+			categoryTotals[cat] = (categoryTotals[cat] || 0) + count;
+		}
+	}
+
+	const handleDeleteAll = async () => {
+		setDeleting(true);
+		try {
+			await del("/api/signals/all");
+			setSummaries([]);
+			setConfirmDelete(false);
+			toast.success("All signal data deleted");
+		} catch {
+			toast.error("Failed to delete signals");
+		} finally {
+			setDeleting(false);
+		}
+	};
+
+	const handleExport = async () => {
+		try {
+			const now = new Date();
+			const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+			const data = await get<SignalSummaryInfo[]>(
+				`/api/signals/summaries?start=${dayAgo.toISOString()}&end=${now.toISOString()}`,
+			);
+			const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `beats-signals-${now.toISOString().slice(0, 10)}.json`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch {
+			toast.error("Failed to export signals");
+		}
+	};
+
+	const sortedCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+
+	return (
+		<section className="mb-8">
+			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+				<Eye className="w-4 h-4 text-accent" />
+				Signal Privacy
+			</h2>
+			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">
+				<p className="text-xs text-muted-foreground">
+					The daemon sends only aggregated category counts and flow scores. No raw content,
+					keystrokes, or window titles are ever transmitted.
+				</p>
+
+				{totalSamples > 0 ? (
+					<div className="space-y-3">
+						<p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+							Last 24 hours
+						</p>
+						<div className="grid grid-cols-2 gap-2">
+							{sortedCategories.map(([cat, count]) => (
+								<div key={cat} className="flex items-center justify-between text-xs">
+									<span className="text-foreground capitalize">{cat}</span>
+									<span className="text-muted-foreground tabular-nums">
+										{count} samples
+									</span>
+								</div>
+							))}
+							<div className="flex items-center justify-between text-xs">
+								<span className="text-foreground">Idle</span>
+								<span className="text-muted-foreground tabular-nums">
+									{idleSamples} samples
+								</span>
+							</div>
+						</div>
+						<p className="text-[10px] text-muted-foreground">
+							Total: {totalSamples} samples across {summaries.length} hours
+						</p>
+					</div>
+				) : (
+					<p className="text-xs text-muted-foreground/60">
+						No signal data in the last 24 hours.
+					</p>
+				)}
+
+				<div className="flex gap-2 pt-2 border-t border-border/50">
+					<button
+						type="button"
+						onClick={handleExport}
+						className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/50 transition-colors"
+					>
+						Export 24h (JSON)
+					</button>
+					{confirmDelete ? (
+						<div className="flex items-center gap-2">
+							<button
+								type="button"
+								onClick={handleDeleteAll}
+								disabled={deleting}
+								className="px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
+							>
+								{deleting ? "Deleting..." : "Confirm delete"}
+							</button>
+							<button
+								type="button"
+								onClick={() => setConfirmDelete(false)}
+								className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/50 transition-colors"
+							>
+								Cancel
+							</button>
+						</div>
+					) : (
+						<button
+							type="button"
+							onClick={() => setConfirmDelete(true)}
+							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+						>
+							Delete all signals
+						</button>
+					)}
+				</div>
 			</div>
 		</section>
 	);

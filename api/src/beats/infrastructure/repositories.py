@@ -1,7 +1,7 @@
 """Repository implementations for MongoDB using Motor async driver."""
 
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from bson import ObjectId
@@ -11,12 +11,19 @@ from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFou
 from beats.domain.models import (
     AutoStartRule,
     Beat,
+    BiometricDay,
     CalendarIntegration,
     DailyNote,
+    DeviceRegistration,
+    FitbitIntegration,
+    FlowWindow,
     GitHubIntegration,
     Intention,
+    OuraIntegration,
+    PairingCode,
     Project,
     RecurringIntention,
+    SignalSummary,
     User,
     UserInsights,
     Webhook,
@@ -865,3 +872,321 @@ class MongoWeeklyReviewRepository(MongoUserScoped, WeeklyReviewRepository):
         cursor = self.collection.find(self._q()).sort("week_of", -1).limit(limit)
         docs = await cursor.to_list(length=None)
         return [WeeklyReview(**serialize_from_document(doc)) for doc in docs]
+
+
+# Pairing Code Repository
+
+
+class PairingCodeRepository(ABC):
+    """Abstract interface for PairingCode persistence (not user-scoped)."""
+
+    @abstractmethod
+    async def create(self, code: PairingCode) -> PairingCode: ...
+
+    @abstractmethod
+    async def find_by_hash(self, code_hash: str) -> PairingCode | None: ...
+
+    @abstractmethod
+    async def delete(self, code_id: str) -> bool: ...
+
+
+class MongoPairingCodeRepository(PairingCodeRepository):
+    """MongoDB implementation of PairingCodeRepository.
+
+    Not user-scoped: the exchange endpoint is public and looks up by code_hash.
+    """
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
+
+    async def create(self, code: PairingCode) -> PairingCode:
+        data = serialize_to_document(code.model_dump(mode="json", exclude_none=True))
+        result = await self.collection.insert_one(data)
+        return PairingCode(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def find_by_hash(self, code_hash: str) -> PairingCode | None:
+        doc = await self.collection.find_one({
+            "code_hash": code_hash,
+            "expires_at": {"$gt": datetime.now(UTC).isoformat()},
+        })
+        if not doc:
+            return None
+        return PairingCode(**serialize_from_document(doc))
+
+    async def delete(self, code_id: str) -> bool:
+        result = await self.collection.delete_one({"_id": ObjectId(code_id)})
+        return result.deleted_count > 0
+
+
+# Device Registration Repository
+
+
+class DeviceRegistrationRepository(ABC):
+    """Abstract interface for DeviceRegistration persistence (not user-scoped)."""
+
+    @abstractmethod
+    async def create(self, reg: DeviceRegistration) -> DeviceRegistration: ...
+
+    @abstractmethod
+    async def get_by_device_id(self, device_id: str) -> DeviceRegistration | None: ...
+
+    @abstractmethod
+    async def list_by_user(self, user_id: str) -> list[DeviceRegistration]: ...
+
+    @abstractmethod
+    async def revoke(self, device_id: str, user_id: str) -> bool: ...
+
+    @abstractmethod
+    async def update_last_seen(self, device_id: str) -> None: ...
+
+
+class MongoDeviceRegistrationRepository(DeviceRegistrationRepository):
+    """MongoDB implementation of DeviceRegistrationRepository.
+
+    Not user-scoped: device token validation looks up by device_id across all users.
+    """
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
+
+    async def create(self, reg: DeviceRegistration) -> DeviceRegistration:
+        data = serialize_to_document(reg.model_dump(mode="json", exclude_none=True))
+        result = await self.collection.insert_one(data)
+        return DeviceRegistration(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def get_by_device_id(self, device_id: str) -> DeviceRegistration | None:
+        doc = await self.collection.find_one({"device_id": device_id})
+        if not doc:
+            return None
+        return DeviceRegistration(**serialize_from_document(doc))
+
+    async def list_by_user(self, user_id: str) -> list[DeviceRegistration]:
+        cursor = self.collection.find({"user_id": user_id, "revoked": False})
+        docs = await cursor.to_list(length=None)
+        return [DeviceRegistration(**serialize_from_document(doc)) for doc in docs]
+
+    async def revoke(self, device_id: str, user_id: str) -> bool:
+        result = await self.collection.update_one(
+            {"device_id": device_id, "user_id": user_id},
+            {"$set": {"revoked": True}},
+        )
+        return result.modified_count > 0
+
+    async def update_last_seen(self, device_id: str) -> None:
+        await self.collection.update_one(
+            {"device_id": device_id},
+            {"$set": {"last_seen": datetime.now(UTC).isoformat()}},
+        )
+
+
+# Flow Window Repository
+
+
+class FlowWindowRepository(ABC):
+    """Abstract interface for FlowWindow persistence."""
+
+    @abstractmethod
+    async def create(self, window: FlowWindow) -> FlowWindow: ...
+
+    @abstractmethod
+    async def list_by_range(
+        self, start: datetime, end: datetime
+    ) -> list[FlowWindow]: ...
+
+
+class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
+    """MongoDB implementation of FlowWindowRepository."""
+
+    async def create(self, window: FlowWindow) -> FlowWindow:
+        data = serialize_to_document(window.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
+        result = await self.collection.insert_one(data)
+        return FlowWindow(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def list_by_range(
+        self, start: datetime, end: datetime
+    ) -> list[FlowWindow]:
+        cursor = self.collection.find(
+            self._q({"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
+        ).sort("window_start", 1)
+        docs = await cursor.to_list(length=None)
+        return [FlowWindow(**serialize_from_document(doc)) for doc in docs]
+
+
+# Signal Summary Repository
+
+
+class SignalSummaryRepository(ABC):
+    """Abstract interface for SignalSummary persistence."""
+
+    @abstractmethod
+    async def upsert(self, summary: SignalSummary) -> SignalSummary: ...
+
+    @abstractmethod
+    async def list_by_range(
+        self, start: datetime, end: datetime
+    ) -> list[SignalSummary]: ...
+
+    @abstractmethod
+    async def delete_all(self) -> int: ...
+
+
+class MongoSignalSummaryRepository(MongoUserScoped, SignalSummaryRepository):
+    """MongoDB implementation of SignalSummaryRepository."""
+
+    async def upsert(self, summary: SignalSummary) -> SignalSummary:
+        data = serialize_to_document(summary.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        # Use the serialized hour value for the filter to avoid isoformat mismatch
+        # (e.g. "2026-04-18T14:00:00Z" vs "2026-04-18T14:00:00+00:00")
+        result = await self.collection.find_one_and_update(
+            self._q({
+                "device_id": data["device_id"],
+                "hour": data["hour"],
+            }),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return SignalSummary(**serialize_from_document(result))
+
+    async def list_by_range(
+        self, start: datetime, end: datetime
+    ) -> list[SignalSummary]:
+        cursor = self.collection.find(
+            self._q({"hour": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
+        ).sort("hour", 1)
+        docs = await cursor.to_list(length=None)
+        return [SignalSummary(**serialize_from_document(doc)) for doc in docs]
+
+    async def delete_all(self) -> int:
+        result = await self.collection.delete_many(self._q())
+        return result.deleted_count
+
+
+# Biometric Day Repository
+
+
+class BiometricDayRepository(ABC):
+    """Abstract interface for BiometricDay persistence."""
+
+    @abstractmethod
+    async def upsert(self, day: BiometricDay) -> BiometricDay: ...
+
+    @abstractmethod
+    async def list_by_range(self, start: date, end: date) -> list[BiometricDay]: ...
+
+    @abstractmethod
+    async def delete_all(self) -> int: ...
+
+
+class MongoBiometricDayRepository(MongoUserScoped, BiometricDayRepository):
+    """MongoDB implementation of BiometricDayRepository."""
+
+    async def upsert(self, day: BiometricDay) -> BiometricDay:
+        data = serialize_to_document(day.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q({"date": data["date"], "source": data["source"]}),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return BiometricDay(**serialize_from_document(result))
+
+    async def list_by_range(self, start: date, end: date) -> list[BiometricDay]:
+        cursor = self.collection.find(
+            self._q({"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
+        ).sort("date", 1)
+        docs = await cursor.to_list(length=None)
+        return [BiometricDay(**serialize_from_document(doc)) for doc in docs]
+
+    async def delete_all(self) -> int:
+        result = await self.collection.delete_many(self._q())
+        return result.deleted_count
+
+
+# Fitbit Integration Repository
+
+
+class FitbitIntegrationRepository(ABC):
+    """Abstract interface for FitbitIntegration persistence."""
+
+    @abstractmethod
+    async def get(self) -> FitbitIntegration | None: ...
+
+    @abstractmethod
+    async def upsert(self, integration: FitbitIntegration) -> FitbitIntegration: ...
+
+    @abstractmethod
+    async def delete(self) -> bool: ...
+
+
+class MongoFitbitIntegrationRepository(MongoUserScoped, FitbitIntegrationRepository):
+    """MongoDB implementation of FitbitIntegrationRepository."""
+
+    async def get(self) -> FitbitIntegration | None:
+        doc = await self.collection.find_one(self._q())
+        if not doc:
+            return None
+        return FitbitIntegration(**serialize_from_document(doc))
+
+    async def upsert(self, integration: FitbitIntegration) -> FitbitIntegration:
+        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q(),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return FitbitIntegration(**serialize_from_document(result))
+
+    async def delete(self) -> bool:
+        result = await self.collection.delete_one(self._q())
+        return result.deleted_count > 0
+
+
+# Oura Integration Repository
+
+
+class OuraIntegrationRepository(ABC):
+    """Abstract interface for OuraIntegration persistence."""
+
+    @abstractmethod
+    async def get(self) -> OuraIntegration | None: ...
+
+    @abstractmethod
+    async def upsert(self, integration: OuraIntegration) -> OuraIntegration: ...
+
+    @abstractmethod
+    async def delete(self) -> bool: ...
+
+
+class MongoOuraIntegrationRepository(MongoUserScoped, OuraIntegrationRepository):
+    """MongoDB implementation of OuraIntegrationRepository."""
+
+    async def get(self) -> OuraIntegration | None:
+        doc = await self.collection.find_one(self._q())
+        if not doc:
+            return None
+        return OuraIntegration(**serialize_from_document(doc))
+
+    async def upsert(self, integration: OuraIntegration) -> OuraIntegration:
+        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
+        data.pop("_id", None)
+        data["user_id"] = self.user_id
+        result = await self.collection.find_one_and_update(
+            self._q(),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return OuraIntegration(**serialize_from_document(result))
+
+    async def delete(self) -> bool:
+        result = await self.collection.delete_one(self._q())
+        return result.deleted_count > 0

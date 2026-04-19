@@ -53,6 +53,14 @@ class Settings(BaseSettings):
         validation_alias="GITHUB_REDIRECT_URI",
     )
 
+    # Fitbit OAuth (optional)
+    fitbit_client_id: str = Field(default="", validation_alias="FITBIT_CLIENT_ID")
+    fitbit_client_secret: str = Field(default="", validation_alias="FITBIT_CLIENT_SECRET")
+    fitbit_redirect_uri: str = Field(
+        default="http://localhost:8080/settings?fitbit=callback",
+        validation_alias="FITBIT_REDIRECT_URI",
+    )
+
     # AI Coach (Stage 2)
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     coach_model: str = Field(default="claude-sonnet-4-6", validation_alias="COACH_MODEL")

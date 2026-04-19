@@ -148,6 +148,36 @@ class SessionManager:
         logger.info(f"Created session token for user: {user_id}")
         return token
 
+    def create_device_token(self, user_id: str, device_id: str) -> str:
+        """Create a long-lived JWT device token for daemon authentication."""
+        now = datetime.now(UTC)
+        payload: dict[str, Any] = {
+            "sub": user_id,
+            "iat": now,
+            "type": "device",
+            "jti": str(uuid.uuid4()),
+            "device_id": device_id,
+        }
+        token = jwt.encode(payload, self._jwt_secret, algorithm="HS256")
+        logger.info(f"Created device token for user: {user_id}, device: {device_id}")
+        return token
+
+    def validate_device_token(self, token: str) -> dict | None:
+        """Validate a JWT device token and return the payload."""
+        try:
+            payload = jwt.decode(
+                token,
+                self._jwt_secret,
+                algorithms=["HS256"],
+                options={"verify_exp": False},
+            )
+            if payload.get("type") != "device":
+                return None
+            return payload
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Invalid device token: {e}")
+            return None
+
     def validate_session_token(self, token: str) -> dict | None:
         """Validate a JWT session token and return the payload."""
         self._cleanup_revoked_tokens()

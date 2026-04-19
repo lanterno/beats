@@ -1048,3 +1048,444 @@ class TestMultiUserIsolation:
         # User 2 does NOT see it
         projects_u2 = client.get("/api/projects/", headers=h2).json()
         assert not any(p["name"] == "user1-project" for p in projects_u2)
+
+
+class TestDevicePairingAPI:
+    """Test suite for daemon device pairing and device token auth."""
+
+    def test_generate_pair_code_requires_auth(self):
+        """POST /api/device/pair/code without token returns 401."""
+        resp = client.post("/api/device/pair/code")
+        assert resp.status_code == 401
+
+    def test_generate_pair_code_success(self):
+        """POST /api/device/pair/code returns a 6-char code."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["code"]) == 6
+        assert data["expires_in_seconds"] == 300
+
+    def test_exchange_code_success(self):
+        """Full pairing flow: generate code, exchange for device token."""
+        # Generate code
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+
+        # Exchange (public, no auth)
+        resp = client.post(
+            "/api/device/pair/exchange",
+            json={"code": code, "device_name": "test-daemon"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "device_token" in data
+        assert "device_id" in data
+
+    def test_exchange_code_invalid(self):
+        """Exchange with bad code returns 404."""
+        resp = client.post(
+            "/api/device/pair/exchange",
+            json={"code": "BADCOD"},
+        )
+        assert resp.status_code == 404
+
+    def test_exchange_code_one_time_use(self):
+        """Same code can only be exchanged once."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+
+        # First exchange succeeds
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        assert resp.status_code == 200
+
+        # Second exchange fails
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        assert resp.status_code == 404
+
+    def test_device_token_allows_heartbeat(self):
+        """Device token can POST to /api/device/heartbeat."""
+        # Pair a device
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_token = resp.json()["device_token"]
+        device_headers = {"Authorization": f"Bearer {device_token}"}
+
+        # Use device token on heartbeat
+        resp = client.post(
+            "/api/device/heartbeat",
+            json={"battery_voltage": 3.7},
+            headers=device_headers,
+        )
+        assert resp.status_code == 200
+
+    def test_device_token_blocked_on_projects(self):
+        """Device token is rejected on non-allowed endpoints."""
+        # Pair a device
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_token = resp.json()["device_token"]
+        device_headers = {"Authorization": f"Bearer {device_token}"}
+
+        # Try accessing projects (not in DEVICE_ALLOWED_PREFIXES)
+        resp = client.get("/api/projects/", headers=device_headers)
+        assert resp.status_code == 403
+
+    def test_list_registrations(self):
+        """GET /api/device/registrations lists paired devices."""
+        # Pair a device
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post(
+            "/api/device/pair/exchange",
+            json={"code": code, "device_name": "my-mac"},
+        )
+        device_id = resp.json()["device_id"]
+
+        # List registrations
+        resp = client.get("/api/device/registrations", headers=auth_headers)
+        assert resp.status_code == 200
+        regs = resp.json()
+        assert any(r["device_id"] == device_id for r in regs)
+        matched = next(r for r in regs if r["device_id"] == device_id)
+        assert matched["device_name"] == "my-mac"
+
+    def test_revoke_device(self):
+        """DELETE /api/device/registrations/{device_id} revokes the device."""
+        # Pair a device
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        data = resp.json()
+        device_id = data["device_id"]
+        device_token = data["device_token"]
+        device_headers = {"Authorization": f"Bearer {device_token}"}
+
+        # Revoke
+        resp = client.delete(
+            f"/api/device/registrations/{device_id}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 204
+
+        # Device token should now be rejected on allowed paths
+        resp = client.post(
+            "/api/device/heartbeat",
+            json={"battery_voltage": 3.7},
+            headers=device_headers,
+        )
+        assert resp.status_code == 403
+        assert "revoked" in resp.json()["error"]
+
+    def test_revoked_device_not_in_list(self):
+        """Revoked devices don't appear in the registrations list."""
+        # Pair and revoke
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_id = resp.json()["device_id"]
+        client.delete(f"/api/device/registrations/{device_id}", headers=auth_headers)
+
+        # Should not appear in list
+        resp = client.get("/api/device/registrations", headers=auth_headers)
+        assert not any(r["device_id"] == device_id for r in resp.json())
+
+
+class TestSignalsAPI:
+    """Test suite for signals (flow windows + signal summaries) endpoints."""
+
+    def _pair_device(self):
+        """Helper: pair a device and return (device_token, device_headers)."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        data = resp.json()
+        return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}
+
+    def test_post_flow_window_with_device_token(self):
+        """Device token can POST a flow window."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        resp = client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": (now - timedelta(minutes=1)).isoformat(),
+                "window_end": now.isoformat(),
+                "flow_score": 0.75,
+                "cadence_score": 0.5,
+                "coherence_score": 1.0,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.apple.dt.Xcode",
+                "dominant_category": "coding",
+                "context_switches": 2,
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 201
+        assert "id" in resp.json()
+
+    def test_read_flow_windows_with_session_token(self):
+        """Session token can read flow windows posted by the device."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+
+        # Post a window
+        client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": (now - timedelta(minutes=1)).isoformat(),
+                "window_end": now.isoformat(),
+                "flow_score": 0.8,
+                "cadence_score": 0.5,
+                "coherence_score": 1.0,
+                "category_fit_score": 1.0,
+                "idle_fraction": 0.0,
+                "dominant_bundle_id": "com.microsoft.VSCode",
+                "dominant_category": "coding",
+            },
+            headers=device_headers,
+        )
+
+        # Read back with session token
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        windows = resp.json()
+        assert len(windows) >= 1
+        assert any(w["flow_score"] == 0.8 for w in windows)
+
+    def test_post_signal_summary(self):
+        """Device token can POST signal summaries."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+
+        resp = client.post(
+            "/api/signals/summaries",
+            json={
+                "hour": now.isoformat(),
+                "categories": {"coding": 50, "browser": 10},
+                "total_samples": 60,
+                "idle_samples": 5,
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200
+        assert "id" in resp.json()
+
+    def test_read_signal_summaries(self):
+        """Session token can read signal summaries."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+
+        # Post a summary
+        client.post(
+            "/api/signals/summaries",
+            json={
+                "hour": now.isoformat(),
+                "categories": {"coding": 42},
+                "total_samples": 42,
+                "idle_samples": 0,
+            },
+            headers=device_headers,
+        )
+
+        # Read back
+        resp = client.get(
+            "/api/signals/summaries",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        summaries = resp.json()
+        assert len(summaries) >= 1
+
+    def test_summary_upsert(self):
+        """Posting the same hour twice upserts (updates, not duplicates)."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+
+        # First post
+        client.post(
+            "/api/signals/summaries",
+            json={"hour": now.isoformat(), "categories": {"coding": 10}, "total_samples": 10},
+            headers=device_headers,
+        )
+        # Second post (same hour, different data)
+        client.post(
+            "/api/signals/summaries",
+            json={"hour": now.isoformat(), "categories": {"coding": 20}, "total_samples": 20},
+            headers=device_headers,
+        )
+
+        # Should have exactly one summary for this hour
+        resp = client.get(
+            "/api/signals/summaries",
+            params={
+                "start": (now - timedelta(minutes=1)).isoformat(),
+                "end": (now + timedelta(minutes=1)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        summaries = resp.json()
+        matching = [s for s in summaries if s["total_samples"] == 20]
+        assert len(matching) == 1
+
+    def test_delete_all_signals(self):
+        """DELETE /api/signals/all removes all summaries."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+
+        client.post(
+            "/api/signals/summaries",
+            json={"hour": now.isoformat(), "categories": {"coding": 5}, "total_samples": 5},
+            headers=device_headers,
+        )
+
+        resp = client.delete("/api/signals/all", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["deleted_summaries"] >= 1
+
+    def test_device_token_blocked_on_non_signal_paths(self):
+        """Device token cannot access project endpoints."""
+        _, device_headers = self._pair_device()
+        resp = client.get("/api/projects/", headers=device_headers)
+        assert resp.status_code == 403
+
+    def test_flow_window_validation(self):
+        """Flow score values are validated to [0, 1]."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        resp = client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": now.isoformat(),
+                "window_end": now.isoformat(),
+                "flow_score": 1.5,  # out of range
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.5,
+                "idle_fraction": 0.0,
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 422
+
+
+class TestBiometricsAPI:
+    """Test suite for biometrics endpoints."""
+
+    def _pair_device(self):
+        """Helper: pair a device and return device_headers."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        return {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+    def test_post_biometric_day(self):
+        """POST biometric data with device token."""
+        device_headers = self._pair_device()
+        resp = client.post(
+            "/api/biometrics/daily",
+            json={
+                "date": "2026-04-18",
+                "source": "healthkit",
+                "sleep_minutes": 420,
+                "sleep_efficiency": 0.88,
+                "hrv_ms": 45.5,
+                "resting_hr_bpm": 58,
+                "steps": 8500,
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200
+        assert "id" in resp.json()
+
+    def test_post_biometric_day_session_token(self):
+        """POST biometric data also works with session token."""
+        resp = client.post(
+            "/api/biometrics/daily",
+            json={
+                "date": "2026-04-17",
+                "source": "oura",
+                "sleep_minutes": 390,
+                "readiness_score": 82,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+
+    def test_read_biometrics(self):
+        """GET biometrics by date range."""
+        # Post some data first
+        client.post(
+            "/api/biometrics/daily",
+            json={"date": "2026-04-18", "source": "fitbit", "steps": 10000},
+            headers=auth_headers,
+        )
+
+        resp = client.get(
+            "/api/biometrics/",
+            params={"start": "2026-04-01", "end": "2026-04-30"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        days = resp.json()
+        assert len(days) >= 1
+
+    def test_biometric_upsert(self):
+        """Same (date, source) twice updates, not duplicates."""
+        client.post(
+            "/api/biometrics/daily",
+            json={"date": "2026-04-15", "source": "fitbit", "steps": 5000},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/biometrics/daily",
+            json={"date": "2026-04-15", "source": "fitbit", "steps": 9000},
+            headers=auth_headers,
+        )
+
+        resp = client.get(
+            "/api/biometrics/",
+            params={"start": "2026-04-15", "end": "2026-04-15"},
+            headers=auth_headers,
+        )
+        days = resp.json()
+        fitbit_days = [d for d in days if d["source"] == "fitbit" and d["date"] == "2026-04-15"]
+        assert len(fitbit_days) == 1
+        assert fitbit_days[0]["steps"] == 9000
+
+    def test_delete_biometrics(self):
+        """DELETE removes all biometric data."""
+        client.post(
+            "/api/biometrics/daily",
+            json={"date": "2026-04-14", "source": "healthkit", "steps": 3000},
+            headers=auth_headers,
+        )
+        resp = client.delete("/api/biometrics/", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] >= 1
+
+    def test_fitbit_status_disconnected(self):
+        """GET /api/fitbit/status returns disconnected by default."""
+        resp = client.get("/api/fitbit/status", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["connected"] is False
+
+    def test_oura_status_disconnected(self):
+        """GET /api/oura/status returns disconnected by default."""
+        resp = client.get("/api/oura/status", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["connected"] is False

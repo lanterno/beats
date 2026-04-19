@@ -38,6 +38,8 @@ class UpdateProjectRequest(BaseModel):
     weekly_goal: float | None = None  # Weekly goal in hours
     goal_type: str = "target"  # "target" or "cap"
     github_repo: str | None = None  # "owner/repo"
+    category: str | None = None  # Activity category for flow score matching
+    autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths
 
 
 class GoalOverrideRequest(BaseModel):

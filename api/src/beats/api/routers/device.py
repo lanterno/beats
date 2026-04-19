@@ -1,11 +1,24 @@
-"""Device API router — endpoints optimized for ESP32 wall clock firmware."""
+"""Device API router — endpoints for ESP32 wall clock and daemon pairing."""
 
+import base64
+import hashlib
+import os
+import uuid
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from beats.api.dependencies import BeatServiceDep, ProjectServiceDep, TimerServiceDep
+from beats.api.dependencies import (
+    BeatServiceDep,
+    CurrentUserId,
+    DeviceRegistrationRepoDep,
+    PairingCodeRepoDep,
+    ProjectServiceDep,
+    TimerServiceDep,
+)
+from beats.api.routers.auth import get_session_manager
+from beats.domain.models import DeviceRegistration, PairingCode
 
 router = APIRouter(prefix="/api/device", tags=["device"])
 
@@ -161,6 +174,119 @@ async def get_heartbeat() -> DeviceHeartbeatResponse | None:
     if not _last_heartbeat:
         return None
     return DeviceHeartbeatResponse(**_last_heartbeat)
+
+
+# --- Pairing schemas ---
+
+
+class PairCodeResponse(BaseModel):
+    code: str
+    expires_in_seconds: int = 300
+
+
+class PairExchangeRequest(BaseModel):
+    code: str
+    device_name: str | None = None
+
+
+class PairExchangeResponse(BaseModel):
+    device_token: str
+    device_id: str
+
+
+class DeviceRegistrationResponse(BaseModel):
+    id: str
+    device_id: str
+    device_name: str | None
+    created_at: datetime
+    last_seen: datetime | None
+
+
+def _generate_pair_code() -> tuple[str, str]:
+    """Generate a 6-char base-32 pairing code and its SHA-256 hash."""
+    raw = base64.b32encode(os.urandom(4))[:6].decode()
+    code_hash = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, code_hash
+
+
+@router.post("/pair/code", response_model=PairCodeResponse)
+async def generate_pair_code(
+    user_id: CurrentUserId,
+    pairing_repo: PairingCodeRepoDep,
+) -> PairCodeResponse:
+    """Generate a short-lived pairing code for daemon authentication."""
+    raw_code, code_hash = _generate_pair_code()
+    pairing_code = PairingCode(user_id=user_id, code_hash=code_hash)
+    await pairing_repo.create(pairing_code)
+    return PairCodeResponse(code=raw_code)
+
+
+@router.post("/pair/exchange", response_model=PairExchangeResponse)
+async def exchange_pair_code(
+    body: PairExchangeRequest,
+    pairing_repo: PairingCodeRepoDep,
+    device_repo: DeviceRegistrationRepoDep,
+) -> PairExchangeResponse:
+    """Exchange a pairing code for a long-lived device token (public endpoint)."""
+    code_hash = hashlib.sha256(body.code.encode()).hexdigest()
+    pairing_code = await pairing_repo.find_by_hash(code_hash)
+    if not pairing_code:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired pairing code",
+        )
+
+    # One-time use: delete immediately
+    await pairing_repo.delete(pairing_code.id)  # type: ignore[arg-type]
+
+    # Create device registration
+    device_id = str(uuid.uuid4())
+    registration = DeviceRegistration(
+        user_id=pairing_code.user_id,
+        device_id=device_id,
+        device_name=body.device_name,
+    )
+    await device_repo.create(registration)
+
+    # Issue device token
+    session_manager = get_session_manager()
+    device_token = session_manager.create_device_token(pairing_code.user_id, device_id)
+
+    return PairExchangeResponse(device_token=device_token, device_id=device_id)
+
+
+@router.get("/registrations", response_model=list[DeviceRegistrationResponse])
+async def list_registrations(
+    user_id: CurrentUserId,
+    device_repo: DeviceRegistrationRepoDep,
+) -> list[DeviceRegistrationResponse]:
+    """List all active (non-revoked) device registrations for the current user."""
+    registrations = await device_repo.list_by_user(user_id)
+    return [
+        DeviceRegistrationResponse(
+            id=r.id or "",
+            device_id=r.device_id,
+            device_name=r.device_name,
+            created_at=r.created_at,
+            last_seen=r.last_seen,
+        )
+        for r in registrations
+    ]
+
+
+@router.delete("/registrations/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_registration(
+    device_id: str,
+    user_id: CurrentUserId,
+    device_repo: DeviceRegistrationRepoDep,
+) -> None:
+    """Revoke a device registration, invalidating its device token."""
+    revoked = await device_repo.revoke(device_id, user_id)
+    if not revoked:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device registration not found",
+        )
 
 
 async def _get_daily_total_minutes(beat_service: BeatServiceDep) -> int:

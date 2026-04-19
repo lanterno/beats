@@ -7,33 +7,49 @@ from fastapi import Depends, HTTPException, Request, status
 
 from beats.domain.analytics import AnalyticsService
 from beats.domain.calendar import CalendarService
+from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
+from beats.domain.oura import OuraService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     AutoStartRuleRepository,
     BeatRepository,
+    BiometricDayRepository,
     CalendarIntegrationRepository,
     DailyNoteRepository,
+    DeviceRegistrationRepository,
+    FitbitIntegrationRepository,
+    FlowWindowRepository,
     GitHubIntegrationRepository,
     InsightsRepository,
     IntentionRepository,
     MongoAutoStartRuleRepository,
     MongoBeatRepository,
+    MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
     MongoDailyNoteRepository,
+    MongoDeviceRegistrationRepository,
+    MongoFitbitIntegrationRepository,
+    MongoFlowWindowRepository,
     MongoGitHubIntegrationRepository,
     MongoInsightsRepository,
     MongoIntentionRepository,
+    MongoOuraIntegrationRepository,
+    MongoPairingCodeRepository,
     MongoProjectRepository,
     MongoRecurringIntentionRepository,
+    MongoSignalSummaryRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
     MongoWeeklyPlanRepository,
     MongoWeeklyReviewRepository,
+    OuraIntegrationRepository,
+    PairingCodeRepository,
     ProjectRepository,
     RecurringIntentionRepository,
+    SignalSummaryRepository,
     WebhookRepository,
     WeeklyDigestRepository,
     WeeklyPlanRepository,
@@ -228,3 +244,83 @@ RecurringIntentionRepoDep = Annotated[
     RecurringIntentionRepository, Depends(get_recurring_intention_repository)
 ]
 WeeklyReviewRepoDep = Annotated[WeeklyReviewRepository, Depends(get_weekly_review_repository)]
+
+
+def get_pairing_code_repository() -> PairingCodeRepository:
+    """Get the pairing code repository (not user-scoped)."""
+    db = Database.get_db()
+    return MongoPairingCodeRepository(db.pairing_codes)
+
+
+def get_device_registration_repository() -> DeviceRegistrationRepository:
+    """Get the device registration repository (not user-scoped)."""
+    db = Database.get_db()
+    return MongoDeviceRegistrationRepository(db.device_registrations)
+
+
+PairingCodeRepoDep = Annotated[PairingCodeRepository, Depends(get_pairing_code_repository)]
+DeviceRegistrationRepoDep = Annotated[
+    DeviceRegistrationRepository, Depends(get_device_registration_repository)
+]
+
+
+def get_flow_window_repository(user_id: CurrentUserId) -> FlowWindowRepository:
+    """Get the flow window repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoFlowWindowRepository(db.flow_windows, user_id=user_id)
+
+
+def get_signal_summary_repository(user_id: CurrentUserId) -> SignalSummaryRepository:
+    """Get the signal summary repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoSignalSummaryRepository(db.signal_summaries, user_id=user_id)
+
+
+FlowWindowRepoDep = Annotated[FlowWindowRepository, Depends(get_flow_window_repository)]
+SignalSummaryRepoDep = Annotated[SignalSummaryRepository, Depends(get_signal_summary_repository)]
+
+
+def get_biometric_repository(user_id: CurrentUserId) -> BiometricDayRepository:
+    """Get the biometric day repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoBiometricDayRepository(db.biometric_days, user_id=user_id)
+
+
+def get_fitbit_integration_repository(user_id: CurrentUserId) -> FitbitIntegrationRepository:
+    """Get the Fitbit integration repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoFitbitIntegrationRepository(db.fitbit_integrations, user_id=user_id)
+
+
+def get_oura_integration_repository(user_id: CurrentUserId) -> OuraIntegrationRepository:
+    """Get the Oura integration repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoOuraIntegrationRepository(db.oura_integrations, user_id=user_id)
+
+
+BiometricRepoDep = Annotated[BiometricDayRepository, Depends(get_biometric_repository)]
+FitbitIntegrationRepoDep = Annotated[
+    FitbitIntegrationRepository, Depends(get_fitbit_integration_repository)
+]
+OuraIntegrationRepoDep = Annotated[
+    OuraIntegrationRepository, Depends(get_oura_integration_repository)
+]
+
+
+def get_fitbit_service(
+    repo: Annotated[FitbitIntegrationRepository, Depends(get_fitbit_integration_repository)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> FitbitService:
+    """Get the Fitbit service with injected repository and settings."""
+    return FitbitService(settings=settings, repo=repo)
+
+
+def get_oura_service(
+    repo: Annotated[OuraIntegrationRepository, Depends(get_oura_integration_repository)],
+) -> OuraService:
+    """Get the Oura service with injected repository."""
+    return OuraService(repo=repo)
+
+
+FitbitServiceDep = Annotated[FitbitService, Depends(get_fitbit_service)]
+OuraServiceDep = Annotated[OuraService, Depends(get_oura_service)]

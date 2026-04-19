@@ -122,6 +122,8 @@ class Project(BaseModel):
     goal_type: GoalType = GoalType.TARGET  # target or cap
     goal_overrides: list[GoalOverride] = Field(default_factory=list)
     github_repo: str | None = None  # GitHub repo in "owner/repo" format
+    category: str | None = None  # Activity category: coding, design, writing, etc.
+    autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths for auto-timer
 
     def effective_goal(self, week_monday: date_type) -> tuple[float | None, GoalType]:
         """Resolve the effective goal for a given week (identified by its Monday).
@@ -274,6 +276,42 @@ class AutoStartRule(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class PairingCode(BaseModel):
+    """A short-lived pairing code for daemon-to-API authentication.
+
+    The raw code is shown to the user once; only its SHA-256 hash is stored.
+    Expires after 5 minutes via MongoDB TTL index on expires_at.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    user_id: str
+    code_hash: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC) + timedelta(minutes=5)
+    )
+
+
+class DeviceRegistration(BaseModel):
+    """A registered daemon device paired to a user account.
+
+    Created when a daemon exchanges a pairing code for a long-lived device token.
+    The device token is a JWT with type="device" scoped to signal-writing endpoints.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    user_id: str
+    device_id: str
+    device_name: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_seen: datetime | None = None
+    revoked: bool = False
+
+
 class GitHubIntegration(BaseModel):
     """A connected GitHub OAuth integration (per-user)."""
 
@@ -298,6 +336,97 @@ class CalendarIntegration(TzNormalizedModel):
     token_expiry: datetime | None = None
     calendar_ids: list[str] = Field(default_factory=lambda: ["primary"])
     enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class FitbitIntegration(BaseModel):
+    """A connected Fitbit OAuth integration (per-user)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    access_token: str = ""
+    refresh_token: str = ""
+    token_expiry: datetime | None = None
+    fitbit_user_id: str = ""
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class OuraIntegration(BaseModel):
+    """A connected Oura integration using a personal access token."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    access_token: str = ""
+    oura_user_id: str = ""
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class BiometricDay(TzNormalizedModel):
+    """A single day of biometric data from any source.
+
+    Keyed by (user_id, date, source) for upsert. Multiple sources per day
+    are allowed (e.g. HealthKit + Oura). Priority: HealthKit > Oura > Fitbit.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    date: date_type = Field(default_factory=lambda: datetime.now(UTC).date())
+    source: str = ""  # healthkit, health_connect, fitbit, oura
+    sleep_minutes: int | None = None
+    sleep_efficiency: float | None = None  # 0.0–1.0
+    hrv_ms: float | None = None
+    resting_hr_bpm: int | None = None
+    steps: int | None = None
+    readiness_score: int | None = None  # Oura 0–100
+    workouts: list[dict] = Field(default_factory=list)  # [{kind, minutes, avg_hr}]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class FlowWindow(TzNormalizedModel):
+    """A computed flow-state window from the daemon's signal collector.
+
+    Represents a 1-minute window of aggregated desktop activity. The daemon
+    computes the flow score locally and sends only the aggregate to the API.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    device_id: str = ""
+    window_start: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    window_end: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    flow_score: float = 0.0
+    cadence_score: float = 0.0
+    coherence_score: float = 0.0
+    category_fit_score: float = 0.0
+    idle_fraction: float = 0.0
+    dominant_bundle_id: str = ""
+    dominant_category: str = ""
+    context_switches: int = 0
+    active_project_id: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class SignalSummary(TzNormalizedModel):
+    """Hourly aggregation of signal categories for the privacy dashboard.
+
+    Stores per-category sample counts without any raw signal data.
+    Keyed by (user_id, device_id, hour) for upsert.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    device_id: str = ""
+    hour: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    categories: dict[str, int] = Field(default_factory=dict)
+    total_samples: int = 0
+    idle_samples: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
