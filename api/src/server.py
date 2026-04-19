@@ -44,7 +44,14 @@ logger = logging.getLogger(__name__)
 PUBLIC_PREFIXES = ("/api/auth", "/health", "/talk/ding", "/api/device/pair/exchange")
 
 # Paths that device tokens (daemon) are allowed to access
-DEVICE_ALLOWED_PREFIXES = ("/api/device/heartbeat", "/api/signals", "/api/biometrics/daily")
+DEVICE_ALLOWED_PREFIXES = (
+    "/api/device/heartbeat",
+    "/api/device/favorites",
+    "/api/signals",
+    "/api/biometrics/daily",
+    "/api/timer",
+    "/api/projects",
+)
 
 
 @asynccontextmanager

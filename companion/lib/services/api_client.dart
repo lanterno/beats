@@ -124,6 +124,55 @@ class ApiClient {
       throw ApiException(resp.statusCode, 'Fitbit disconnect failed');
     }
   }
+
+  // ---- Timer ----
+
+  Future<Map<String, dynamic>> getTimerStatus() async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/timer/status'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Timer status failed: ${resp.body}');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  Future<Map<String, dynamic>> startTimer(String projectId) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/api/projects/$projectId/start'),
+      headers: _headers,
+      body: jsonEncode({}),
+    );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Start timer failed: ${resp.body}');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  Future<Map<String, dynamic>> stopTimer() async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/api/projects/stop'),
+      headers: _headers,
+      body: jsonEncode({}),
+    );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Stop timer failed: ${resp.body}');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  Future<List<Map<String, dynamic>>> getProjects() async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/device/favorites'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Projects failed: ${resp.body}');
+    }
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
 }
 
 class ApiException implements Exception {
