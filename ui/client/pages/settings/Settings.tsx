@@ -1017,10 +1017,7 @@ function DaemonSection() {
 										{d.device_name || "Unnamed device"}
 									</span>
 									{d.last_seen && (
-										<span className="text-muted-foreground ml-2">
-											last seen{" "}
-											{new Date(d.last_seen).toLocaleDateString()}
-										</span>
+										<span className="text-muted-foreground ml-2">last seen {new Date(d.last_seen).toLocaleDateString()}</span>
 									)}
 								</div>
 								<button
@@ -1138,16 +1135,12 @@ function DaemonPrivacySection() {
 							{sortedCategories.map(([cat, count]) => (
 								<div key={cat} className="flex items-center justify-between text-xs">
 									<span className="text-foreground capitalize">{cat}</span>
-									<span className="text-muted-foreground tabular-nums">
-										{count} samples
-									</span>
+									<span className="text-muted-foreground tabular-nums">{count} samples</span>
 								</div>
 							))}
 							<div className="flex items-center justify-between text-xs">
 								<span className="text-foreground">Idle</span>
-								<span className="text-muted-foreground tabular-nums">
-									{idleSamples} samples
-								</span>
+								<span className="text-muted-foreground tabular-nums">{idleSamples} samples</span>
 							</div>
 						</div>
 						<p className="text-[10px] text-muted-foreground">
@@ -1155,9 +1148,7 @@ function DaemonPrivacySection() {
 						</p>
 					</div>
 				) : (
-					<p className="text-xs text-muted-foreground/60">
-						No signal data in the last 24 hours.
-					</p>
+					<p className="text-xs text-muted-foreground/60">No signal data in the last 24 hours.</p>
 				)}
 
 				<div className="flex gap-2 pt-2 border-t border-border/50">
