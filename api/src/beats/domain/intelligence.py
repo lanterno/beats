@@ -1192,7 +1192,8 @@ def _pearson_r(pairs: list[tuple[float, float]]) -> float:
 
 
 def detect_biometric_correlations(
-    bio_days: list[BiometricDay], notes: list,
+    bio_days: list[BiometricDay],
+    notes: list,
 ) -> list[InsightCard]:
     """Detect correlations between biometric data and mood scores."""
     insights: list[InsightCard] = []
@@ -1207,17 +1208,19 @@ def detect_biometric_correlations(
     r = _pearson_r(hrv_mood_pairs)
     if abs(r) >= 0.4:
         direction = "higher" if r > 0 else "lower"
-        insights.append(InsightCard(
-            id=str(uuid.uuid4()),
-            type="hrv_mood_correlation",
-            title="HRV and mood are linked",
-            body=(
-                f"Days with {direction} HRV tend to come with better mood scores (r={r:.2f}). "
-                f"Your heart rate variability may be a useful recovery signal."
-            ),
-            data={"r": round(r, 2), "n": len(hrv_mood_pairs)},
-            priority=3,
-        ))
+        insights.append(
+            InsightCard(
+                id=str(uuid.uuid4()),
+                type="hrv_mood_correlation",
+                title="HRV and mood are linked",
+                body=(
+                    f"Days with {direction} HRV tend to come with better mood scores (r={r:.2f}). "
+                    f"Your heart rate variability may be a useful recovery signal."
+                ),
+                data={"r": round(r, 2), "n": len(hrv_mood_pairs)},
+                priority=3,
+            )
+        )
 
     # Sleep × mood
     sleep_mood_pairs = [
@@ -1228,16 +1231,18 @@ def detect_biometric_correlations(
     r = _pearson_r(sleep_mood_pairs)
     if abs(r) >= 0.4:
         direction = "more" if r > 0 else "less"
-        insights.append(InsightCard(
-            id=str(uuid.uuid4()),
-            type="sleep_mood_correlation",
-            title="Sleep and mood are connected",
-            body=(
-                f"On days after {direction} sleep, your mood tends higher (r={r:.2f}). "
-                f"Prioritizing sleep may directly improve how you feel."
-            ),
-            data={"r": round(r, 2), "n": len(sleep_mood_pairs)},
-            priority=3,
-        ))
+        insights.append(
+            InsightCard(
+                id=str(uuid.uuid4()),
+                type="sleep_mood_correlation",
+                title="Sleep and mood are connected",
+                body=(
+                    f"On days after {direction} sleep, your mood tends higher (r={r:.2f}). "
+                    f"Prioritizing sleep may directly improve how you feel."
+                ),
+                data={"r": round(r, 2), "n": len(sleep_mood_pairs)},
+                priority=3,
+            )
+        )
 
     return insights

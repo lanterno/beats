@@ -66,12 +66,8 @@ def clean_db():
     db.device_registrations.create_index("device_id", unique=True)
     db.device_registrations.create_index("user_id")
     db.flow_windows.create_index([("user_id", 1), ("window_start", -1)])
-    db.signal_summaries.create_index(
-        [("user_id", 1), ("device_id", 1), ("hour", 1)], unique=True
-    )
-    db.biometric_days.create_index(
-        [("user_id", 1), ("date", 1), ("source", 1)], unique=True
-    )
+    db.signal_summaries.create_index([("user_id", 1), ("device_id", 1), ("hour", 1)], unique=True)
+    db.biometric_days.create_index([("user_id", 1), ("date", 1), ("source", 1)], unique=True)
     db.fitbit_integrations.create_index("user_id", unique=True)
     db.oura_integrations.create_index("user_id", unique=True)
     sync_client.close()

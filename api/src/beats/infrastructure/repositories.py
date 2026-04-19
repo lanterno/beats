@@ -905,10 +905,12 @@ class MongoPairingCodeRepository(PairingCodeRepository):
         return PairingCode(**serialize_from_document({**data, "_id": result.inserted_id}))
 
     async def find_by_hash(self, code_hash: str) -> PairingCode | None:
-        doc = await self.collection.find_one({
-            "code_hash": code_hash,
-            "expires_at": {"$gt": datetime.now(UTC).isoformat()},
-        })
+        doc = await self.collection.find_one(
+            {
+                "code_hash": code_hash,
+                "expires_at": {"$gt": datetime.now(UTC).isoformat()},
+            }
+        )
         if not doc:
             return None
         return PairingCode(**serialize_from_document(doc))
@@ -989,9 +991,7 @@ class FlowWindowRepository(ABC):
     async def create(self, window: FlowWindow) -> FlowWindow: ...
 
     @abstractmethod
-    async def list_by_range(
-        self, start: datetime, end: datetime
-    ) -> list[FlowWindow]: ...
+    async def list_by_range(self, start: datetime, end: datetime) -> list[FlowWindow]: ...
 
 
 class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
@@ -1003,9 +1003,7 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
         result = await self.collection.insert_one(data)
         return FlowWindow(**serialize_from_document({**data, "_id": result.inserted_id}))
 
-    async def list_by_range(
-        self, start: datetime, end: datetime
-    ) -> list[FlowWindow]:
+    async def list_by_range(self, start: datetime, end: datetime) -> list[FlowWindow]:
         cursor = self.collection.find(
             self._q({"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
         ).sort("window_start", 1)
@@ -1023,9 +1021,7 @@ class SignalSummaryRepository(ABC):
     async def upsert(self, summary: SignalSummary) -> SignalSummary: ...
 
     @abstractmethod
-    async def list_by_range(
-        self, start: datetime, end: datetime
-    ) -> list[SignalSummary]: ...
+    async def list_by_range(self, start: datetime, end: datetime) -> list[SignalSummary]: ...
 
     @abstractmethod
     async def delete_all(self) -> int: ...
@@ -1041,19 +1037,19 @@ class MongoSignalSummaryRepository(MongoUserScoped, SignalSummaryRepository):
         # Use the serialized hour value for the filter to avoid isoformat mismatch
         # (e.g. "2026-04-18T14:00:00Z" vs "2026-04-18T14:00:00+00:00")
         result = await self.collection.find_one_and_update(
-            self._q({
-                "device_id": data["device_id"],
-                "hour": data["hour"],
-            }),
+            self._q(
+                {
+                    "device_id": data["device_id"],
+                    "hour": data["hour"],
+                }
+            ),
             {"$set": data},
             upsert=True,
             return_document=True,
         )
         return SignalSummary(**serialize_from_document(result))
 
-    async def list_by_range(
-        self, start: datetime, end: datetime
-    ) -> list[SignalSummary]:
+    async def list_by_range(self, start: datetime, end: datetime) -> list[SignalSummary]:
         cursor = self.collection.find(
             self._q({"hour": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
         ).sort("hour", 1)

@@ -289,9 +289,7 @@ class PairingCode(BaseModel):
     user_id: str
     code_hash: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    expires_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC) + timedelta(minutes=5)
-    )
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(UTC) + timedelta(minutes=5))
 
 
 class DeviceRegistration(BaseModel):

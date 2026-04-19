@@ -25,9 +25,7 @@ class OuraService:
         headers = {"Authorization": f"Bearer {personal_access_token}"}
 
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                f"{OURA_API}/usercollection/personal_info", headers=headers
-            )
+            resp = await client.get(f"{OURA_API}/usercollection/personal_info", headers=headers)
             if resp.status_code != 200:
                 raise DomainException("Invalid Oura personal access token")
             user_info = resp.json()
@@ -61,9 +59,7 @@ class OuraService:
                     if sleep_items:
                         day = sleep_items[0]
                         # Oura reports total_sleep_duration in seconds
-                        total_sleep_sec = day.get("contributors", {}).get(
-                            "total_sleep", 0
-                        )
+                        total_sleep_sec = day.get("contributors", {}).get("total_sleep", 0)
                         if total_sleep_sec:
                             result["sleep_minutes"] = total_sleep_sec // 60
                         result["sleep_efficiency"] = (
@@ -99,9 +95,7 @@ class OuraService:
                         hrv = sleep_periods[0].get("average_hrv")
                         if hrv:
                             result["hrv_ms"] = float(hrv)
-                        result["resting_hr_bpm"] = sleep_periods[0].get(
-                            "lowest_heart_rate"
-                        )
+                        result["resting_hr_bpm"] = sleep_periods[0].get("lowest_heart_rate")
             except httpx.HTTPError:
                 logger.debug("Oura HRV fetch failed", exc_info=True)
 
