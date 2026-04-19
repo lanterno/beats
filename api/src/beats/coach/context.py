@@ -197,6 +197,31 @@ async def build_day_context(
     if calendar_lines:
         lines += ["", "### Calendar today", *calendar_lines]
 
+    # Biometric data (if available)
+    try:
+        db = Database.get_db()
+        yesterday_str = yesterday.isoformat()
+        bio_doc = await db.biometric_days.find_one(
+            {"user_id": user_id, "date": yesterday_str},
+            sort=[("created_at", -1)],
+        )
+        if bio_doc:
+            bio_lines = [""]
+            if bio_doc.get("sleep_minutes"):
+                efficiency = bio_doc.get("sleep_efficiency")
+                eff_str = f" (efficiency {efficiency * 100:.0f}%)" if efficiency else ""
+                bio_lines.append(f"  Sleep: {bio_doc['sleep_minutes'] / 60:.1f}h{eff_str}")
+            if bio_doc.get("hrv_ms"):
+                bio_lines.append(f"  HRV: {bio_doc['hrv_ms']:.0f}ms")
+            if bio_doc.get("resting_hr_bpm"):
+                bio_lines.append(f"  Resting HR: {bio_doc['resting_hr_bpm']} bpm")
+            if bio_doc.get("readiness_score"):
+                bio_lines.append(f"  Readiness: {bio_doc['readiness_score']}/100")
+            if len(bio_lines) > 1:
+                lines += ["", "### Last night's biometrics", *bio_lines]
+    except Exception:
+        logger.debug("Biometric fetch failed for day context", exc_info=True)
+
     return "\n".join(lines)
 
 

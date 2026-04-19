@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from statistics import median
 
-from beats.domain.models import Beat, InsightCard, WeeklyDigest
+from beats.domain.models import Beat, BiometricDay, FlowWindow, InsightCard, WeeklyDigest
 from beats.infrastructure.repositories import (
     BeatRepository,
     DailyNoteRepository,
@@ -1083,3 +1083,161 @@ class IntelligenceService:
         # Sort: projects with alerts first
         results.sort(key=lambda x: (x["alert"] is None, x["project_name"]))
         return results
+
+
+# =========================================================================
+# Chronotype Detection (Stage 4)
+# =========================================================================
+
+CHRONOTYPE_LABELS = {
+    "early": (6, 10),
+    "midday": (10, 14),
+    "afternoon": (14, 18),
+    "evening": (18, 22),
+    "night": (22, 26),  # wraps: 22-2 AM
+}
+
+
+def detect_chronotype(flow_windows: list[FlowWindow]) -> list[InsightCard]:
+    """Detect the user's chronotype from Flow Score × time-of-day data.
+
+    Requires at least 14 days of flow window data.
+    """
+    if len(flow_windows) < 50:  # ~14 days × ~4 windows/day minimum
+        return []
+
+    # Bin flow scores by hour of day
+    hour_scores: dict[int, list[float]] = defaultdict(list)
+    for w in flow_windows:
+        hour = w.window_start.hour
+        hour_scores[hour].append(w.flow_score)
+
+    if len(hour_scores) < 4:
+        return []
+
+    # Compute hourly medians
+    hourly_medians = {h: median(scores) for h, scores in hour_scores.items() if scores}
+
+    # 3-hour rolling average (smoothing)
+    smoothed: dict[int, float] = {}
+    for h in range(24):
+        neighbors = [hourly_medians.get((h + d) % 24, 0) for d in [-1, 0, 1]]
+        valid = [v for v in neighbors if v > 0]
+        smoothed[h] = sum(valid) / len(valid) if valid else 0
+
+    if not any(v > 0 for v in smoothed.values()):
+        return []
+
+    # Find peak: hours where smoothed >= 75th percentile
+    all_values = [v for v in smoothed.values() if v > 0]
+    if not all_values:
+        return []
+    p75 = sorted(all_values)[int(len(all_values) * 0.75)]
+
+    peak_hours = sorted(h for h, v in smoothed.items() if v >= p75)
+    if not peak_hours:
+        return []
+
+    # Label chronotype by where the peak center falls
+    peak_center = sum(peak_hours) / len(peak_hours)
+    label = "midday"
+    for name, (start, end) in CHRONOTYPE_LABELS.items():
+        is_night = name == "night" and (peak_center >= 22 or peak_center < 2)
+        if start <= peak_center < end or is_night:
+            label = name
+            break
+
+    peak_start = min(peak_hours)
+    peak_end = max(peak_hours) + 1  # inclusive hour
+
+    return [
+        InsightCard(
+            id=str(uuid.uuid4()),
+            type="chronotype",
+            title=f"You're a {label} person",
+            body=(
+                f"Your Flow Score peaks between {peak_start}:00–{peak_end}:00. "
+                f"Protect this window for deep work — it's when you're naturally most focused."
+            ),
+            data={
+                "label": label,
+                "peak_hours": peak_hours,
+                "peak_start": peak_start,
+                "peak_end": peak_end,
+            },
+            priority=4,
+        )
+    ]
+
+
+# =========================================================================
+# Biometric × Mood Correlation (Stage 4)
+# =========================================================================
+
+
+def _pearson_r(pairs: list[tuple[float, float]]) -> float:
+    """Compute Pearson correlation coefficient for a list of (x, y) pairs."""
+    n = len(pairs)
+    if n < 7:
+        return 0.0
+    sx = sum(p[0] for p in pairs)
+    sy = sum(p[1] for p in pairs)
+    sxy = sum(p[0] * p[1] for p in pairs)
+    sx2 = sum(p[0] ** 2 for p in pairs)
+    sy2 = sum(p[1] ** 2 for p in pairs)
+    denom = math.sqrt((n * sx2 - sx**2) * (n * sy2 - sy**2))
+    if denom == 0:
+        return 0.0
+    return (n * sxy - sx * sy) / denom
+
+
+def detect_biometric_correlations(
+    bio_days: list[BiometricDay], notes: list,
+) -> list[InsightCard]:
+    """Detect correlations between biometric data and mood scores."""
+    insights: list[InsightCard] = []
+    mood_by_date = {n.date: n.mood for n in notes if n.mood is not None}
+
+    # HRV × mood
+    hrv_mood_pairs = [
+        (b.hrv_ms, float(mood_by_date[b.date]))
+        for b in bio_days
+        if b.hrv_ms is not None and b.date in mood_by_date
+    ]
+    r = _pearson_r(hrv_mood_pairs)
+    if abs(r) >= 0.4:
+        direction = "higher" if r > 0 else "lower"
+        insights.append(InsightCard(
+            id=str(uuid.uuid4()),
+            type="hrv_mood_correlation",
+            title="HRV and mood are linked",
+            body=(
+                f"Days with {direction} HRV tend to come with better mood scores (r={r:.2f}). "
+                f"Your heart rate variability may be a useful recovery signal."
+            ),
+            data={"r": round(r, 2), "n": len(hrv_mood_pairs)},
+            priority=3,
+        ))
+
+    # Sleep × mood
+    sleep_mood_pairs = [
+        (float(b.sleep_minutes), float(mood_by_date[b.date]))
+        for b in bio_days
+        if b.sleep_minutes is not None and b.date in mood_by_date
+    ]
+    r = _pearson_r(sleep_mood_pairs)
+    if abs(r) >= 0.4:
+        direction = "more" if r > 0 else "less"
+        insights.append(InsightCard(
+            id=str(uuid.uuid4()),
+            type="sleep_mood_correlation",
+            title="Sleep and mood are connected",
+            body=(
+                f"On days after {direction} sleep, your mood tends higher (r={r:.2f}). "
+                f"Prioritizing sleep may directly improve how you feel."
+            ),
+            data={"r": round(r, 2), "n": len(sleep_mood_pairs)},
+            priority=3,
+        ))
+
+    return insights
