@@ -7,8 +7,8 @@ import {
 	Calendar,
 	Cpu,
 	Download,
-	Eye,
 	ExternalLink,
+	Eye,
 	FileJson,
 	FileSpreadsheet,
 	Fingerprint,
@@ -708,16 +708,12 @@ function GitHubSection() {
 }
 
 function FitbitSection() {
-	const [status, setStatus] = useState<{ connected: boolean; fitbit_user_id?: string } | null>(
-		null,
-	);
+	const [status, setStatus] = useState<{ connected: boolean; fitbit_user_id?: string } | null>(null);
 	const [loading, setLoading] = useState(false);
 
 	const fetchStatus = useCallback(async () => {
 		try {
-			const data = await get<{ connected: boolean; fitbit_user_id?: string }>(
-				"/api/fitbit/status",
-			);
+			const data = await get<{ connected: boolean; fitbit_user_id?: string }>("/api/fitbit/status");
 			setStatus(data);
 		} catch {
 			// non-critical
@@ -806,9 +802,7 @@ function FitbitSection() {
 }
 
 function OuraSection() {
-	const [status, setStatus] = useState<{ connected: boolean; oura_user_id?: string } | null>(
-		null,
-	);
+	const [status, setStatus] = useState<{ connected: boolean; oura_user_id?: string } | null>(null);
 	const [pat, setPat] = useState("");
 	const [connecting, setConnecting] = useState(false);
 
