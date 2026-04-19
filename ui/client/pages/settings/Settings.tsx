@@ -708,7 +708,9 @@ function GitHubSection() {
 }
 
 function FitbitSection() {
-	const [status, setStatus] = useState<{ connected: boolean; fitbit_user_id?: string } | null>(null);
+	const [status, setStatus] = useState<{ connected: boolean; fitbit_user_id?: string } | null>(
+		null,
+	);
 	const [loading, setLoading] = useState(false);
 
 	const fetchStatus = useCallback(async () => {
@@ -808,9 +810,7 @@ function OuraSection() {
 
 	const fetchStatus = useCallback(async () => {
 		try {
-			const data = await get<{ connected: boolean; oura_user_id?: string }>(
-				"/api/oura/status",
-			);
+			const data = await get<{ connected: boolean; oura_user_id?: string }>("/api/oura/status");
 			setStatus(data);
 		} catch {
 			// non-critical
@@ -854,8 +854,8 @@ function OuraSection() {
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
 				<p className="text-xs text-muted-foreground">
-					Connect your Oura Ring to sync sleep, readiness, and HRV data. Get a personal
-					access token from{" "}
+					Connect your Oura Ring to sync sleep, readiness, and HRV data. Get a personal access token
+					from{" "}
 					<a
 						href="https://cloud.ouraring.com/personal-access-tokens"
 						target="_blank"
@@ -964,19 +964,15 @@ function DaemonSection() {
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">
 				<p className="text-xs text-muted-foreground">
-					Pair the <code className="text-accent">beatsd</code> daemon to this account for
-					ambient flow tracking. Run{" "}
-					<code className="text-accent">beatsd pair &lt;code&gt;</code> within 5 minutes.
+					Pair the <code className="text-accent">beatsd</code> daemon to this account for ambient
+					flow tracking. Run <code className="text-accent">beatsd pair &lt;code&gt;</code> within 5
+					minutes.
 				</p>
 
 				{code ? (
 					<div className="space-y-2">
-						<div className="font-mono text-2xl tracking-[0.3em] text-accent font-bold">
-							{code}
-						</div>
-						<p className="text-[10px] text-muted-foreground">
-							Expires in 5 minutes. One-time use.
-						</p>
+						<div className="font-mono text-2xl tracking-[0.3em] text-accent font-bold">{code}</div>
+						<p className="text-[10px] text-muted-foreground">Expires in 5 minutes. One-time use.</p>
 						<button
 							type="button"
 							onClick={() => setCode(null)}
@@ -1002,16 +998,13 @@ function DaemonSection() {
 							Paired devices
 						</p>
 						{devices.map((d) => (
-							<div
-								key={d.device_id}
-								className="flex items-center justify-between text-xs"
-							>
+							<div key={d.device_id} className="flex items-center justify-between text-xs">
 								<div>
-									<span className="text-foreground">
-										{d.device_name || "Unnamed device"}
-									</span>
+									<span className="text-foreground">{d.device_name || "Unnamed device"}</span>
 									{d.last_seen && (
-										<span className="text-muted-foreground ml-2">last seen {new Date(d.last_seen).toLocaleDateString()}</span>
+										<span className="text-muted-foreground ml-2">
+											last seen {new Date(d.last_seen).toLocaleDateString()}
+										</span>
 									)}
 								</div>
 								<button
