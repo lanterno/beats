@@ -166,7 +166,7 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> getProjects() async {
     final resp = await http.get(
-      Uri.parse('$baseUrl/api/device/favorites'),
+      Uri.parse('$baseUrl/api/projects/'),
       headers: _headers,
     );
     if (resp.statusCode != 200) {

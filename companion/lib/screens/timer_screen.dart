@@ -3,6 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
 
+List<int> _hexToRgb(String? hex) {
+  if (hex == null || hex.isEmpty) return [150, 150, 150];
+  hex = hex.replaceFirst('#', '');
+  if (hex.length != 6) return [150, 150, 150];
+  return [
+    int.parse(hex.substring(0, 2), radix: 16),
+    int.parse(hex.substring(2, 4), radix: 16),
+    int.parse(hex.substring(4, 6), radix: 16),
+  ];
+}
+
 // Beats ember theme (matching web hsl values)
 const _bgColor = Color(0xFF161210); // hsl(25 15% 8%)
 const _cardColor = Color(0xFF1F1B15); // hsl(25 12% 11%)
@@ -76,7 +87,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             // Match project color from favorites list
             final proj = projects.where((p) => p['id'] == _selectedProjectId).firstOrNull;
             if (proj != null) {
-              final rgb = (proj['color_rgb'] as List?)?.cast<int>() ?? [212, 149, 42];
+              final rgb = _hexToRgb(proj['color'] as String?);
               _selectedProjectColor = rgb;
             }
             _startTicker();
@@ -764,7 +775,7 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
                     itemCount: filtered.length,
                     itemBuilder: (_, i) {
                       final p = filtered[i];
-                      final rgb = (p['color_rgb'] as List?)?.cast<int>() ?? [150, 150, 150];
+                      final rgb = _hexToRgb(p['color'] as String?);
                       final color = Color.fromARGB(255, rgb[0], rgb[1], rgb[2]);
                       final name = p['name'] as String? ?? 'Unnamed';
                       final selected = p['id'] == widget.selectedId;
