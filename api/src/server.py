@@ -51,6 +51,10 @@ DEVICE_ALLOWED_PREFIXES = (
     "/api/biometrics/daily",
     "/api/timer",
     "/api/projects",
+    "/api/coach/brief",
+    "/api/coach/review",
+    "/api/intentions",
+    "/api/daily-notes",
 )
 
 

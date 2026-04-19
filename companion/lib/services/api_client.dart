@@ -173,6 +173,103 @@ class ApiClient {
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
+
+  // ---- Flow Score ----
+
+  Future<List<Map<String, dynamic>>> getFlowWindows(String start, String end) async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/signals/flow-windows?start=$start&end=$end'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getSignalSummaries(String start, String end) async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/signals/summaries?start=$start&end=$end'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  // ---- Coach ----
+
+  Future<Map<String, dynamic>?> getTodayBrief() async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/coach/brief/today'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return null;
+    final body = resp.body;
+    if (body.isEmpty || body == 'null') return null;
+    return jsonDecode(body);
+  }
+
+  Future<Map<String, dynamic>?> getTodayReview() async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/coach/review/today'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return null;
+    final body = resp.body;
+    if (body.isEmpty || body == 'null') return null;
+    return jsonDecode(body);
+  }
+
+  Future<void> answerReview(String questionId, String answer) async {
+    await http.post(
+      Uri.parse('$baseUrl/api/coach/review/answer'),
+      headers: _headers,
+      body: jsonEncode({'question_id': questionId, 'answer': answer}),
+    );
+  }
+
+  // ---- Intentions ----
+
+  Future<List<Map<String, dynamic>>> getIntentions({String? date}) async {
+    final query = date != null ? '?target_date=$date' : '';
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/intentions$query'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createIntention(String projectId, int plannedMinutes) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/api/intentions'),
+      headers: _headers,
+      body: jsonEncode({'project_id': projectId, 'planned_minutes': plannedMinutes}),
+    );
+    if (resp.statusCode != 201) {
+      throw ApiException(resp.statusCode, 'Create intention failed: ${resp.body}');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  Future<void> toggleIntention(String id, bool completed) async {
+    await http.patch(
+      Uri.parse('$baseUrl/api/intentions/$id'),
+      headers: _headers,
+      body: jsonEncode({'completed': completed}),
+    );
+  }
+
+  // ---- Daily Notes ----
+
+  Future<void> postDailyNote(int mood, {String note = ''}) async {
+    await http.post(
+      Uri.parse('$baseUrl/api/daily-notes'),
+      headers: _headers,
+      body: jsonEncode({'mood': mood, 'note': note}),
+    );
+  }
 }
 
 class ApiException implements Exception {

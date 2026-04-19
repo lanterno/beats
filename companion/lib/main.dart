@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'screens/coach_screen.dart';
+import 'screens/flow_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/intentions_screen.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/timer_screen.dart';
 import 'services/api_client.dart';
@@ -93,14 +96,21 @@ class _AppShellState extends State<AppShell> {
         index: _currentTab,
         children: [
           TimerScreen(client: _client!),
+          FlowScreen(client: _client!),
+          IntentionsScreen(client: _client!),
+          CoachScreen(client: _client!),
           HomeScreen(onUnpaired: _onUnpaired),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentTab,
         onDestinationSelected: (i) => setState(() => _currentTab = i),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.timer), label: 'Timer'),
+          NavigationDestination(icon: Icon(Icons.insights), label: 'Flow'),
+          NavigationDestination(icon: Icon(Icons.checklist), label: 'Plan'),
+          NavigationDestination(icon: Icon(Icons.assistant), label: 'Coach'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
