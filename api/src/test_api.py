@@ -1120,8 +1120,8 @@ class TestDevicePairingAPI:
         )
         assert resp.status_code == 200
 
-    def test_device_token_blocked_on_projects(self):
-        """Device token is rejected on non-allowed endpoints."""
+    def test_device_token_blocked_on_non_allowed_endpoints(self):
+        """Device token is rejected on endpoints not in DEVICE_ALLOWED_PREFIXES."""
         # Pair a device
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
@@ -1129,8 +1129,8 @@ class TestDevicePairingAPI:
         device_token = resp.json()["device_token"]
         device_headers = {"Authorization": f"Bearer {device_token}"}
 
-        # Try accessing projects (not in DEVICE_ALLOWED_PREFIXES)
-        resp = client.get("/api/projects/", headers=device_headers)
+        # Try accessing analytics (not in DEVICE_ALLOWED_PREFIXES)
+        resp = client.get("/api/analytics/heatmap", headers=device_headers)
         assert resp.status_code == 403
 
     def test_list_registrations(self):
@@ -1357,10 +1357,10 @@ class TestSignalsAPI:
         assert resp.status_code == 200
         assert resp.json()["deleted_summaries"] >= 1
 
-    def test_device_token_blocked_on_non_signal_paths(self):
-        """Device token cannot access project endpoints."""
+    def test_device_token_blocked_on_non_allowed_paths(self):
+        """Device token cannot access endpoints outside DEVICE_ALLOWED_PREFIXES."""
         _, device_headers = self._pair_device()
-        resp = client.get("/api/projects/", headers=device_headers)
+        resp = client.get("/api/analytics/heatmap", headers=device_headers)
         assert resp.status_code == 403
 
     def test_flow_window_validation(self):
