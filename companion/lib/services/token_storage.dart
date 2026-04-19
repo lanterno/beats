@@ -1,19 +1,31 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TokenStorage {
   static const _key = 'beats_device_token';
   static const _apiUrlKey = 'beats_api_url';
-  final _storage = const FlutterSecureStorage();
 
-  Future<String?> loadToken() => _storage.read(key: _key);
-
-  Future<void> saveToken(String token) => _storage.write(key: _key, value: token);
-
-  Future<void> deleteToken() => _storage.delete(key: _key);
-
-  Future<String> loadApiUrl() async {
-    return await _storage.read(key: _apiUrlKey) ?? 'http://localhost:7999';
+  Future<String?> loadToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_key);
   }
 
-  Future<void> saveApiUrl(String url) => _storage.write(key: _apiUrlKey, value: url);
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, token);
+  }
+
+  Future<void> deleteToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
+
+  Future<String> loadApiUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_apiUrlKey) ?? 'http://localhost:7999';
+  }
+
+  Future<void> saveApiUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_apiUrlKey, url);
+  }
 }
