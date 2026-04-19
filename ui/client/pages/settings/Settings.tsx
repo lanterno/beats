@@ -17,7 +17,7 @@ import {
 	Moon,
 	Palette,
 	Plus,
-	Ring,
+	CircleDot,
 	Rows3,
 	Sun,
 	Terminal,
@@ -849,12 +849,12 @@ function OuraSection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Ring className="w-4 h-4 text-accent" />
+				<CircleDot className="w-4 h-4 text-accent" />
 				Oura
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
 				<p className="text-xs text-muted-foreground">
-					Connect your Oura Ring to sync sleep, readiness, and HRV data. Get a personal access token
+					Connect your Oura CircleDot to sync sleep, readiness, and HRV data. Get a personal access token
 					from{" "}
 					<a
 						href="https://cloud.ouraring.com/personal-access-tokens"
