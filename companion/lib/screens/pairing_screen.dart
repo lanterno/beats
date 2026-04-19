@@ -63,7 +63,7 @@ class _PairingScreenState extends State<PairingScreen> {
           ? 'Invalid or expired pairing code'
           : 'Pairing failed: ${e.message}');
     } catch (e) {
-      setState(() => _error = 'Connection failed. Check the API URL.');
+      setState(() => _error = 'Connection failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
