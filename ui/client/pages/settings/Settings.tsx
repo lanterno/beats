@@ -5,6 +5,7 @@
 
 import {
 	Calendar,
+	CircleDot,
 	Cpu,
 	Download,
 	ExternalLink,
@@ -17,7 +18,6 @@ import {
 	Moon,
 	Palette,
 	Plus,
-	CircleDot,
 	Rows3,
 	Sun,
 	Terminal,
@@ -854,7 +854,7 @@ function OuraSection() {
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
 				<p className="text-xs text-muted-foreground">
-					Connect your Oura CircleDot to sync sleep, readiness, and HRV data. Get a personal access token
+					Connect your Oura Ring to sync sleep, readiness, and HRV data. Get a personal access token
 					from{" "}
 					<a
 						href="https://cloud.ouraring.com/personal-access-tokens"
