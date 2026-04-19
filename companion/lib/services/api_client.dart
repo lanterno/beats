@@ -138,11 +138,12 @@ class ApiClient {
     return jsonDecode(resp.body);
   }
 
-  Future<Map<String, dynamic>> startTimer(String projectId) async {
+  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime}) async {
+    final time = startTime ?? DateTime.now().toUtc().toIso8601String();
     final resp = await http.post(
       Uri.parse('$baseUrl/api/projects/$projectId/start'),
       headers: _headers,
-      body: jsonEncode({}),
+      body: jsonEncode({'time': time}),
     );
     if (resp.statusCode != 200) {
       throw ApiException(resp.statusCode, 'Start timer failed: ${resp.body}');
@@ -150,11 +151,12 @@ class ApiClient {
     return jsonDecode(resp.body);
   }
 
-  Future<Map<String, dynamic>> stopTimer() async {
+  Future<Map<String, dynamic>> stopTimer({String? stopTime}) async {
+    final time = stopTime ?? DateTime.now().toUtc().toIso8601String();
     final resp = await http.post(
       Uri.parse('$baseUrl/api/projects/stop'),
       headers: _headers,
-      body: jsonEncode({}),
+      body: jsonEncode({'time': time}),
     );
     if (resp.statusCode != 200) {
       throw ApiException(resp.statusCode, 'Stop timer failed: ${resp.body}');

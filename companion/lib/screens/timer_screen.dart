@@ -49,7 +49,11 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _refresh();
+    // Auto-refresh every 15s to sync with web/API changes
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
   }
+
+  Timer? _syncTimer;
 
   Future<void> _refresh() async {
     try {
@@ -58,15 +62,18 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       if (mounted) {
         setState(() {
           _projects = projects;
-          _running = status['running'] == true;
+          // API returns { isBeating: bool, project: {...}, since: "iso" }
+          final isBeating = status['isBeating'] == true;
           _error = null;
-          if (_running && status['beat'] != null) {
-            final beat = status['beat'];
-            _selectedProjectId = beat['project_id'];
-            _selectedProjectName = status['project_name'] ?? beat['project_id'];
-            _startTime = DateTime.parse(beat['start']);
+
+          if (isBeating && status['since'] != null) {
+            final project = status['project'] as Map<String, dynamic>?;
+            _running = true;
+            _selectedProjectId = project?['id'];
+            _selectedProjectName = project?['name'] ?? _selectedProjectId;
+            _startTime = DateTime.parse(status['since']);
             _elapsed = DateTime.now().toUtc().difference(_startTime!);
-            // Find project color
+            // Match project color from favorites list
             final proj = projects.where((p) => p['id'] == _selectedProjectId).firstOrNull;
             if (proj != null) {
               final rgb = (proj['color_rgb'] as List?)?.cast<int>() ?? [212, 149, 42];
@@ -74,6 +81,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             }
             _startTicker();
           } else {
+            _running = false;
             _stopTicker();
             _startTime = null;
             _elapsed = Duration.zero;
@@ -99,16 +107,21 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
 
   Future<void> _handleStart() async {
     if (_selectedProjectId == null) return;
+    final startTime = _showStartTimeInput && _customStartTime != null
+        ? _customStartTime!.toUtc().toIso8601String()
+        : null;
     setState(() {
       _running = true;
-      _startTime = _customStartTime ?? DateTime.now().toUtc();
+      _startTime = _customStartTime?.toUtc() ?? DateTime.now().toUtc();
       _elapsed = DateTime.now().toUtc().difference(_startTime!);
       _error = null;
       _showStartTimeInput = false;
     });
     _startTicker();
-    try { await widget.client.startTimer(_selectedProjectId!); }
-    catch (e) { setState(() => _error = '$e'); await _refresh(); }
+    try {
+      await widget.client.startTimer(_selectedProjectId!, startTime: startTime);
+      await _refresh(); // Sync with API
+    } catch (e) { setState(() => _error = '$e'); await _refresh(); }
   }
 
   Future<void> _handleStop() async {
@@ -116,6 +129,9 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     final projectName = _selectedProjectName ?? '';
     final minutes = _elapsed.inMinutes;
     final was = _running;
+    final stopTime = _showStopTimeInput && _customStopTime != null
+        ? _customStopTime!.toUtc().toIso8601String()
+        : null;
     setState(() {
       _running = false;
       _error = null;
@@ -124,7 +140,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       _customStartTime = null;
     });
     try {
-      await widget.client.stopTimer();
+      await widget.client.stopTimer(stopTime: stopTime);
       setState(() { _startTime = null; _elapsed = Duration.zero; });
       if (mounted && projectName.isNotEmpty) {
         final dur = minutes >= 60
@@ -150,6 +166,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
           ),
         );
       }
+      await _refresh(); // Sync with API
     } catch (e) { setState(() => _error = '$e'); if (was) await _refresh(); }
   }
 
@@ -186,6 +203,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   @override
   void dispose() {
     _stopTicker();
+    _syncTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
