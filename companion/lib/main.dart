@@ -2,12 +2,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'screens/coach_screen.dart';
 import 'screens/flow_screen.dart';
+import 'screens/health_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/intentions_screen.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/timer_screen.dart';
 import 'services/api_client.dart';
 import 'services/token_storage.dart';
+import 'services/tray_service.dart';
 import 'theme/beats_theme.dart';
 
 void main() {
@@ -40,6 +42,7 @@ class _AppShellState extends State<AppShell> {
   bool _loading = true;
   bool _paired = false;
   ApiClient? _client;
+  TrayService? _tray;
   int _currentTab = 0;
 
   @override
@@ -53,6 +56,13 @@ class _AppShellState extends State<AppShell> {
     if (token != null) {
       final apiUrl = await _storage.loadApiUrl();
       _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+    }
+    if (token != null && _client != null) {
+      _tray = TrayService(
+        client: _client!,
+        onShowWindow: () {}, // TODO: bring window to front
+      );
+      _tray!.init();
     }
     setState(() {
       _paired = token != null;
@@ -127,7 +137,8 @@ class _AppShellState extends State<AppShell> {
       case 1: return FlowScreen(client: _client!);
       case 2: return IntentionsScreen(client: _client!);
       case 3: return CoachScreen(client: _client!);
-      case 4: return HomeScreen(onUnpaired: _onUnpaired);
+      case 4: return HealthScreen(client: _client!);
+      case 5: return HomeScreen(onUnpaired: _onUnpaired);
       default: return TimerScreen(client: _client!);
     }
   }
@@ -145,6 +156,7 @@ class _BeatsNavBar extends StatelessWidget {
     (icon: Icons.insights_outlined, activeIcon: Icons.insights, label: 'Flow'),
     (icon: Icons.checklist_outlined, activeIcon: Icons.checklist, label: 'Plan'),
     (icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome, label: 'Coach'),
+    (icon: Icons.monitor_heart_outlined, activeIcon: Icons.monitor_heart, label: 'Health'),
     (icon: Icons.tune_outlined, activeIcon: Icons.tune, label: 'Settings'),
   ];
 

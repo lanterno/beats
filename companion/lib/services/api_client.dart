@@ -272,6 +272,18 @@ class ApiClient {
       body: jsonEncode({'mood': mood, 'note': note}),
     );
   }
+
+  // ---- Biometrics ----
+
+  Future<List<Map<String, dynamic>>> getBiometrics(String start, String end) async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/biometrics/?start=$start&end=$end'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
 }
 
 class ApiException implements Exception {
