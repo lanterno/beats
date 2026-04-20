@@ -119,8 +119,10 @@ class TrayService {
       }
     }
 
-    // Always show Open
+    // Always show Open + Quit
     items.add(MenuItemLabel(label: 'Open Beats', onClicked: (_) => onShowWindow()));
+    items.add(MenuSeparator());
+    items.add(MenuItemLabel(label: 'Quit', onClicked: (_) => exit(0)));
 
     await menu.buildFrom(items);
     await _tray.setContextMenu(menu);
