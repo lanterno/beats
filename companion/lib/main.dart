@@ -10,9 +10,12 @@ import 'screens/timer_screen.dart';
 import 'services/api_client.dart';
 import 'services/token_storage.dart';
 import 'services/tray_service.dart';
+import 'package:window_manager/window_manager.dart';
 import 'theme/beats_theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
   runApp(const BeatsCompanionApp());
 }
 
@@ -60,7 +63,10 @@ class _AppShellState extends State<AppShell> {
     if (token != null && _client != null) {
       _tray = TrayService(
         client: _client!,
-        onShowWindow: () {}, // TODO: bring window to front
+        onShowWindow: () async {
+          await windowManager.show();
+          await windowManager.focus();
+        },
       );
       _tray!.init();
     }
