@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
+import '../theme/beats_theme.dart';
 
 class IntentionsScreen extends StatefulWidget {
   final ApiClient client;
@@ -80,7 +81,7 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
     final theme = Theme.of(context);
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: BeatsColors.amber));
     }
 
     return Scaffold(

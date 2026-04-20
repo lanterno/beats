@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
+import '../theme/beats_theme.dart';
 
 List<int> _hexToRgb(String? hex) {
   if (hex == null || hex.isEmpty) return [150, 150, 150];
@@ -14,15 +15,15 @@ List<int> _hexToRgb(String? hex) {
   ];
 }
 
-// Beats ember theme (matching web hsl values)
-const _bgColor = Color(0xFF161210); // hsl(25 15% 8%)
-const _cardColor = Color(0xFF1F1B15); // hsl(25 12% 11%)
-const _cardRunning = Color(0xFF1E1A11); // bg-accent/5
-const _borderColor = Color(0xFF2E2A23);
-const _accent = Color(0xFFD4952A); // hsl(38 80% 52%)
-const _destructive = Color(0xFFBF4040); // hsl(0 55% 50%)
-const _mutedFg = Color(0xFF8A7E6E);
-const _labelColor = Color(0xFF6B6155); // muted-foreground for labels
+// Shorthand aliases from centralized theme
+const _bgColor = BeatsColors.background;
+const _cardColor = BeatsColors.surface;
+const _cardRunning = BeatsColors.surfaceAlt;
+const _borderColor = BeatsColors.border;
+const _accent = BeatsColors.amber;
+const _destructive = BeatsColors.red;
+const _mutedFg = BeatsColors.textSecondary;
+const _labelColor = BeatsColors.textTertiary;
 
 class TimerScreen extends StatefulWidget {
   final ApiClient client;

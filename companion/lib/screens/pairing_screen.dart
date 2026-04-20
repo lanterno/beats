@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/token_storage.dart';
+import '../theme/beats_theme.dart';
 
 class PairingScreen extends StatefulWidget {
   final VoidCallback onPaired;
@@ -81,6 +82,7 @@ class _PairingScreenState extends State<PairingScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: BeatsColors.background,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
