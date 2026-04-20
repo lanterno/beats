@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
@@ -26,12 +27,8 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
     try {
       final intentions = await widget.client.getIntentions();
       final projects = await widget.client.getProjects();
-      if (mounted) {
-        setState(() { _intentions = intentions; _projects = projects; _loading = false; });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
+      if (mounted) setState(() { _intentions = intentions; _projects = projects; _loading = false; });
+    } catch (_) { if (mounted) setState(() => _loading = false); }
   }
 
   Future<void> _toggle(String id, bool completed) async {
@@ -48,31 +45,24 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
       context: context,
       backgroundColor: BeatsColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _AddIntentionSheet(projects: _projects),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _AddSheet(projects: _projects),
     );
     if (result == null) return;
     try {
       await widget.client.createIntention(result['project_id'], result['planned_minutes']);
       await _refresh();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e')));
     }
   }
 
-  String _projectName(String projectId) {
-    final p = _projects.where((p) => p['id'] == projectId).firstOrNull;
-    return p?['name'] ?? projectId;
-  }
+  String _projectName(String id) =>
+      (_projects.where((p) => p['id'] == id).firstOrNull)?['name'] ?? id;
 
-  Color _projectColor(String projectId) {
-    final p = _projects.where((p) => p['id'] == projectId).firstOrNull;
-    final hex = p?['color'] as String?;
+  Color _projectColor(String id) {
+    final hex = (_projects.where((p) => p['id'] == id).firstOrNull)?['color'] as String?;
     if (hex == null || hex.length < 7) return BeatsColors.textTertiary;
     final h = hex.replaceFirst('#', '');
     return Color.fromARGB(255,
@@ -81,7 +71,7 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
         int.parse(h.substring(4, 6), radix: 16));
   }
 
-  String _formatMinutes(int m) => m >= 60 ? '${m ~/ 60}h${m % 60 > 0 ? ' ${m % 60}m' : ''}' : '${m}m';
+  String _fmt(int m) => m >= 60 ? '${m ~/ 60}h${m % 60 > 0 ? ' ${m % 60}m' : ''}' : '${m}m';
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +82,7 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
       );
     }
 
-    final completed = _intentions.where((i) => i['completed'] == true).length;
+    final done = _intentions.where((i) => i['completed'] == true).length;
     final total = _intentions.length;
 
     return Scaffold(
@@ -103,116 +93,135 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
           color: BeatsColors.amber,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 100),
             children: [
-              // Header with progress
+              // ── Header ──
               StaggeredEntrance(
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(
-                      child: Text("Today's plan",
-                          style: BeatsType.displayMedium.copyWith(fontSize: 24)),
-                    ),
-                    if (total > 0)
-                      _ProgressRing(completed: completed, total: total),
+                    Text('Plan',
+                      style: GoogleFonts.dmSerifDisplay(
+                        fontSize: 32, color: BeatsColors.textPrimary)),
+                    const Spacer(),
+                    if (total > 0) ...[
+                      Text('$done', style: GoogleFonts.jetBrainsMono(
+                        fontSize: 24, fontWeight: FontWeight.w300, color: BeatsColors.amber)),
+                      Text(' / $total', style: GoogleFonts.jetBrainsMono(
+                        fontSize: 24, fontWeight: FontWeight.w300, color: BeatsColors.textTertiary)),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
 
+              // ── Progress bar ──
+              if (total > 0) ...[
+                const SizedBox(height: 12),
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 40),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: done / total),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, val, _) => Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: BeatsColors.border,
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: val.clamp(0, 1),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(2),
+                            color: BeatsColors.amber,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
+
+              // ── Intentions ──
               if (_intentions.isEmpty)
                 StaggeredEntrance(
-                  delay: const Duration(milliseconds: 60),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: BeatsColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: BeatsColors.border),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(Icons.checklist, size: 32,
-                            color: BeatsColors.textTertiary.withValues(alpha: 0.3)),
-                        const SizedBox(height: 12),
-                        Text('No intentions set for today',
-                            style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary)),
-                        const SizedBox(height: 4),
-                        Text('Tap + to plan your day',
+                  delay: const Duration(milliseconds: 80),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 32),
+                      child: Column(
+                        children: [
+                          Icon(Icons.wb_twilight, size: 32,
+                            color: BeatsColors.textTertiary.withValues(alpha: 0.2)),
+                          const SizedBox(height: 16),
+                          Text('No intentions today',
+                            style: BeatsType.bodyMedium.copyWith(
+                              color: BeatsColors.textTertiary)),
+                          const SizedBox(height: 4),
+                          Text('Tap + to plan your day',
                             style: BeatsType.bodySmall.copyWith(
-                                color: BeatsColors.textTertiary.withValues(alpha: 0.6))),
-                      ],
+                              color: BeatsColors.textTertiary.withValues(alpha: 0.5))),
+                        ],
+                      ),
                     ),
                   ),
                 ),
 
               ..._intentions.asMap().entries.map((entry) {
                 final i = entry.key;
-                final intention = entry.value;
-                final done = intention['completed'] == true;
-                final minutes = intention['planned_minutes'] ?? 60;
-                final name = _projectName(intention['project_id'] ?? '');
-                final color = _projectColor(intention['project_id'] ?? '');
+                final item = entry.value;
+                final isDone = item['completed'] == true;
+                final minutes = item['planned_minutes'] ?? 60;
+                final name = _projectName(item['project_id'] ?? '');
+                final color = _projectColor(item['project_id'] ?? '');
 
                 return StaggeredEntrance(
-                  delay: Duration(milliseconds: 60 + i * 50),
+                  delay: Duration(milliseconds: 80 + i * 60),
                   child: Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: BeatsColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: BeatsColors.border),
-                      ),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GestureDetector(
+                      onTap: () => _toggle(item['id'], !isDone),
                       child: Row(
                         children: [
-                          // Project color bar
-                          Container(
-                            width: 3,
-                            height: 56,
+                          // Color bar
+                          Container(width: 3, height: 44,
                             decoration: BoxDecoration(
-                              color: done ? color.withValues(alpha: 0.3) : color,
-                              borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                              color: isDone ? color.withValues(alpha: 0.2) : color,
+                              borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(width: 16),
+                          // Check circle
+                          Container(
+                            width: 22, height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDone ? BeatsColors.amber.withValues(alpha: 0.15) : Colors.transparent,
+                              border: Border.all(
+                                color: isDone ? BeatsColors.amber : BeatsColors.border,
+                                width: 1.5),
                             ),
+                            child: isDone
+                                ? const Icon(Icons.check, size: 14, color: BeatsColors.amber)
+                                : null,
                           ),
-                          // Checkbox
-                          Checkbox(
-                            value: done,
-                            onChanged: (v) => _toggle(intention['id'], v ?? false),
-                            activeColor: BeatsColors.amber,
-                            side: BorderSide(color: BeatsColors.border),
-                          ),
+                          const SizedBox(width: 14),
                           // Content
                           Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    style: BeatsType.bodyMedium.copyWith(
-                                      decoration: done ? TextDecoration.lineThrough : null,
-                                      color: done
-                                          ? BeatsColors.textTertiary
-                                          : BeatsColors.textPrimary,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_formatMinutes(minutes)} planned',
-                                    style: BeatsType.bodySmall.copyWith(
-                                        color: BeatsColors.textTertiary),
-                                  ),
-                                ],
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name, style: BeatsType.bodyMedium.copyWith(
+                                  color: isDone ? BeatsColors.textTertiary : BeatsColors.textPrimary,
+                                  decoration: isDone ? TextDecoration.lineThrough : null,
+                                  decorationColor: BeatsColors.textTertiary,
+                                )),
+                                Text(_fmt(minutes), style: BeatsType.bodySmall.copyWith(
+                                  fontSize: 11, color: BeatsColors.textTertiary)),
+                              ],
                             ),
                           ),
-                          if (done)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: Icon(Icons.check_circle,
-                                  size: 18, color: BeatsColors.green),
-                            ),
                         ],
                       ),
                     ),
@@ -223,131 +232,86 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.small(
         onPressed: _addIntention,
         backgroundColor: BeatsColors.amber,
         foregroundColor: const Color(0xFF1A1408),
-        child: const Icon(Icons.add),
+        elevation: 0,
+        child: const Icon(Icons.add, size: 20),
       ),
     );
   }
 }
 
-// Circular progress ring
-class _ProgressRing extends StatelessWidget {
-  final int completed;
-  final int total;
-  const _ProgressRing({required this.completed, required this.total});
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = total > 0 ? completed / total : 0.0;
-    return SizedBox(
-      width: 40, height: 40,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CircularProgressIndicator(
-            value: progress,
-            strokeWidth: 3,
-            backgroundColor: BeatsColors.border,
-            color: BeatsColors.amber,
-          ),
-          Text(
-            '$completed/$total',
-            style: BeatsType.label.copyWith(fontSize: 9, color: BeatsColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Add intention bottom sheet
-class _AddIntentionSheet extends StatefulWidget {
+class _AddSheet extends StatefulWidget {
   final List<Map<String, dynamic>> projects;
-  const _AddIntentionSheet({required this.projects});
-
+  const _AddSheet({required this.projects});
   @override
-  State<_AddIntentionSheet> createState() => _AddIntentionSheetState();
+  State<_AddSheet> createState() => _AddSheetState();
 }
 
-class _AddIntentionSheetState extends State<_AddIntentionSheet> {
-  String? _selectedProjectId;
-  int _minutes = 60;
-  final _durations = [15, 30, 45, 60, 90, 120];
+class _AddSheetState extends State<_AddSheet> {
+  String? _pid;
+  int _min = 60;
+  final _durs = [15, 30, 45, 60, 90, 120];
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: BeatsColors.textTertiary.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
+            color: BeatsColors.textTertiary.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 24),
+          Text('ADD INTENTION', style: BeatsType.label.copyWith(
+            color: BeatsColors.amber, letterSpacing: 2)),
           const SizedBox(height: 20),
-          Text('ADD INTENTION', style: BeatsType.label.copyWith(color: BeatsColors.amber)),
-          const SizedBox(height: 16),
 
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          // Projects
+          Wrap(spacing: 8, runSpacing: 8,
             children: widget.projects.map((p) {
-              final selected = _selectedProjectId == p['id'];
+              final sel = _pid == p['id'];
               return GestureDetector(
-                onTap: () => setState(() => _selectedProjectId = p['id']),
+                onTap: () => setState(() => _pid = p['id']),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: selected ? BeatsColors.amber.withValues(alpha: 0.15) : BeatsColors.surfaceAlt,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: selected ? BeatsColors.amber : BeatsColors.border,
-                    ),
+                    color: sel ? BeatsColors.amber.withValues(alpha: 0.12) : Colors.transparent,
+                    border: Border.all(color: sel ? BeatsColors.amber : BeatsColors.border),
                   ),
-                  child: Text(
-                    p['name'] ?? 'Unnamed',
-                    style: BeatsType.bodySmall.copyWith(
-                      color: selected ? BeatsColors.amber : BeatsColors.textSecondary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                  ),
+                  child: Text(p['name'] ?? '', style: BeatsType.bodySmall.copyWith(
+                    color: sel ? BeatsColors.amber : BeatsColors.textSecondary,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
                 ),
               );
-            }).toList(),
-          ),
+            }).toList()),
           const SizedBox(height: 20),
 
-          Wrap(
-            spacing: 8,
-            children: _durations.map((d) {
-              final selected = _minutes == d;
+          // Durations
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: _durs.map((d) {
+              final sel = _min == d;
               return GestureDetector(
-                onTap: () => setState(() => _minutes = d),
+                onTap: () => setState(() => _min = d),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: selected ? BeatsColors.amber : BeatsColors.surfaceAlt,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
+                    color: sel ? BeatsColors.amber : Colors.transparent,
                     border: Border.all(
-                      color: selected ? BeatsColors.amber : BeatsColors.border,
-                    ),
+                      color: sel ? BeatsColors.amber : BeatsColors.border),
                   ),
                   child: Text(
-                    d >= 60 ? '${d ~/ 60}h${d % 60 > 0 ? ' ${d % 60}m' : ''}' : '${d}m',
+                    d >= 60 ? '${d ~/ 60}h' : '${d}m',
                     style: BeatsType.bodySmall.copyWith(
-                      color: selected ? const Color(0xFF1A1408) : BeatsColors.textSecondary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    ),
+                      color: sel ? const Color(0xFF1A1408) : BeatsColors.textTertiary,
+                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400),
                   ),
                 ),
               );
@@ -356,29 +320,18 @@ class _AddIntentionSheetState extends State<_AddIntentionSheet> {
           const SizedBox(height: 24),
 
           GestureDetector(
-            onTap: _selectedProjectId != null
-                ? () => Navigator.pop(context, {
-                      'project_id': _selectedProjectId,
-                      'planned_minutes': _minutes,
-                    })
+            onTap: _pid != null
+                ? () => Navigator.pop(context, {'project_id': _pid, 'planned_minutes': _min})
                 : null,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: _selectedProjectId != null ? BeatsColors.amber : BeatsColors.textTertiary.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  'Add',
-                  style: BeatsType.button.copyWith(
-                    color: _selectedProjectId != null ? const Color(0xFF1A1408) : BeatsColors.textTertiary,
-                  ),
-                ),
-              ),
+                color: _pid != null ? BeatsColors.amber : BeatsColors.border,
+                borderRadius: BorderRadius.circular(12)),
+              child: Center(child: Text('Add', style: BeatsType.button.copyWith(
+                color: _pid != null ? const Color(0xFF1A1408) : BeatsColors.textTertiary))),
             ),
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );

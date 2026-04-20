@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
 import '../theme/beats_theme.dart';
@@ -15,16 +16,6 @@ List<int> _hexToRgb(String? hex) {
     int.parse(hex.substring(4, 6), radix: 16),
   ];
 }
-
-// Shorthand aliases from centralized theme
-const _bgColor = BeatsColors.background;
-const _cardColor = BeatsColors.surface;
-const _cardRunning = BeatsColors.surfaceAlt;
-const _borderColor = BeatsColors.border;
-const _accent = BeatsColors.amber;
-const _destructive = BeatsColors.red;
-const _mutedFg = BeatsColors.textSecondary;
-const _labelColor = BeatsColors.textTertiary;
 
 class TimerScreen extends StatefulWidget {
   final ApiClient client;
@@ -43,10 +34,9 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   DateTime? _startTime;
   Duration _elapsed = Duration.zero;
   Timer? _ticker;
+  Timer? _syncTimer;
   String? _error;
   List<Map<String, dynamic>> _projects = [];
-
-  // Custom time inputs
   bool _showStartTimeInput = false;
   bool _showStopTimeInput = false;
   DateTime? _customStartTime;
@@ -58,15 +48,11 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      vsync: this, duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
     _refresh();
-    // Auto-refresh every 15s to sync with web/API changes
     _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
   }
-
-  Timer? _syncTimer;
 
   Future<void> _refresh() async {
     try {
@@ -75,10 +61,8 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       if (mounted) {
         setState(() {
           _projects = projects;
-          // API returns { isBeating: bool, project: {...}, since: "iso" }
           final isBeating = status['isBeating'] == true;
           _error = null;
-
           if (isBeating && status['since'] != null) {
             final project = status['project'] as Map<String, dynamic>?;
             _running = true;
@@ -86,12 +70,8 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             _selectedProjectName = project?['name'] ?? _selectedProjectId;
             _startTime = DateTime.parse(status['since']);
             _elapsed = DateTime.now().toUtc().difference(_startTime!);
-            // Match project color from favorites list
             final proj = projects.where((p) => p['id'] == _selectedProjectId).firstOrNull;
-            if (proj != null) {
-              final rgb = _hexToRgb(proj['color'] as String?);
-              _selectedProjectColor = rgb;
-            }
+            if (proj != null) _selectedProjectColor = _hexToRgb(proj['color'] as String?);
             _startTicker();
           } else {
             _running = false;
@@ -121,8 +101,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   Future<void> _handleStart() async {
     if (_selectedProjectId == null) return;
     final startTime = _showStartTimeInput && _customStartTime != null
-        ? _customStartTime!.toUtc().toIso8601String()
-        : null;
+        ? _customStartTime!.toUtc().toIso8601String() : null;
     setState(() {
       _running = true;
       _startTime = _customStartTime?.toUtc() ?? DateTime.now().toUtc();
@@ -133,7 +112,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     _startTicker();
     try {
       await widget.client.startTimer(_selectedProjectId!, startTime: startTime);
-      await _refresh(); // Sync with API
+      await _refresh();
     } catch (e) { setState(() => _error = '$e'); await _refresh(); }
   }
 
@@ -143,53 +122,40 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     final minutes = _elapsed.inMinutes;
     final was = _running;
     final stopTime = _showStopTimeInput && _customStopTime != null
-        ? _customStopTime!.toUtc().toIso8601String()
-        : null;
+        ? _customStopTime!.toUtc().toIso8601String() : null;
     setState(() {
-      _running = false;
-      _error = null;
-      _showStopTimeInput = false;
-      _customStopTime = null;
-      _customStartTime = null;
+      _running = false; _error = null;
+      _showStopTimeInput = false; _customStopTime = null; _customStartTime = null;
     });
     try {
       await widget.client.stopTimer(stopTime: stopTime);
       setState(() { _startTime = null; _elapsed = Duration.zero; });
       if (mounted && projectName.isNotEmpty) {
-        final dur = minutes >= 60
-            ? '${minutes ~/ 60}h ${minutes % 60}m'
-            : '${minutes}m';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Container(
-                  width: 10, height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color.fromARGB(255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text('$dur logged to $projectName'),
-              ],
-            ),
-            backgroundColor: _cardColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        final dur = minutes >= 60 ? '${minutes ~/ 60}h ${minutes % 60}m' : '${minutes}m';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            Container(width: 10, height: 10, decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color.fromARGB(255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]),
+            )),
+            const SizedBox(width: 10),
+            Text('$dur logged to $projectName', style: BeatsType.bodyMedium),
+          ]),
+          backgroundColor: BeatsColors.surfaceAlt,
+          behavior: SnackBarBehavior.floating,
+        ));
       }
-      await _refresh(); // Sync with API
+      await _refresh();
     } catch (e) { setState(() => _error = '$e'); if (was) await _refresh(); }
   }
 
   void _showProjectPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _cardColor,
+      backgroundColor: BeatsColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => _ProjectPickerSheet(
         projects: _projects,
@@ -206,18 +172,9 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     );
   }
 
-  String _formatDigits(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
-
   @override
   void dispose() {
-    _stopTicker();
-    _syncTimer?.cancel();
-    _pulseController.dispose();
+    _stopTicker(); _syncTimer?.cancel(); _pulseController.dispose();
     super.dispose();
   }
 
@@ -225,448 +182,360 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: _bgColor,
-        body: Center(child: CircularProgressIndicator(color: _accent)),
+        backgroundColor: BeatsColors.background,
+        body: Center(child: CircularProgressIndicator(color: BeatsColors.amber)),
       );
     }
 
+    final projColor = Color.fromARGB(
+        255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]);
+
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: BeatsColors.background,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: _running
-              ? const RadialGradient(
-                  center: Alignment(0, -0.3),
-                  radius: 1.2,
+        decoration: _running
+            ? BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.5),
+                  radius: 1.5,
                   colors: [
-                    Color(0xFF1E1710), // warm amber center
-                    Color(0xFF0E0C0A), // fade to background
+                    projColor.withValues(alpha: 0.07),
+                    BeatsColors.background,
                   ],
-                )
-              : null,
-        ),
+                ),
+              )
+            : null,
         child: SafeArea(
           child: RefreshIndicator(
             onRefresh: _refresh,
-            color: _accent,
+            color: BeatsColors.amber,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 80),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
               children: [
-                // ── Timer Card ──
+                // ── Status chip ──
                 StaggeredEntrance(
-                  delay: Duration.zero,
-                  child: _buildTimerCard(),
+                  child: Center(
+                    child: _running
+                        ? _buildRunningChip(projColor)
+                        : Text(_greeting(),
+                            style: GoogleFonts.dmSerifDisplay(
+                              fontSize: 22, color: BeatsColors.textSecondary,
+                            )),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                // ── Stats Row ──
+                SizedBox(height: _running ? 40 : 48),
+
+                // ── The Time ──
                 StaggeredEntrance(
-                  delay: const Duration(milliseconds: 80),
-                  child: _buildStatsRow(),
+                  delay: const Duration(milliseconds: 60),
+                  child: _buildTimeDisplay(),
+                ),
+
+                // ── Project name (running) ──
+                if (_running) ...[
+                  const SizedBox(height: 12),
+                  StaggeredEntrance(
+                    delay: const Duration(milliseconds: 100),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(width: 8, height: 8,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: projColor)),
+                          const SizedBox(width: 10),
+                          Text(_selectedProjectName ?? '',
+                            style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_startTime != null) ...[
+                    const SizedBox(height: 4),
+                    Center(
+                      child: Text(
+                        'since ${DateFormat.jm().format(_startTime!.toLocal())}',
+                        style: BeatsType.bodySmall.copyWith(
+                          color: BeatsColors.textTertiary, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ],
+
+                SizedBox(height: _running ? 48 : 32),
+
+                // ── Action area ──
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 120),
+                  child: _running ? _buildStopSection() : _buildStartSection(),
                 ),
 
                 if (_error != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(_error!, style: const TextStyle(color: _destructive, fontSize: 11), textAlign: TextAlign.center),
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(_error!, style: const TextStyle(
+                      color: BeatsColors.red, fontSize: 11), textAlign: TextAlign.center),
                   ),
               ],
+            ),
           ),
-        ),
         ),
       ),
     );
   }
 
-  Widget _buildTimerCard() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOut,
+  Widget _buildRunningChip(Color projColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: _running ? _cardRunning : _cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _running ? _accent.withValues(alpha: 0.3) : _borderColor,
-        ),
-        boxShadow: _running
-            ? [BoxShadow(color: _accent.withValues(alpha: 0.15), blurRadius: 20, spreadRadius: -4)]
-            : [],
+        borderRadius: BorderRadius.circular(20),
+        color: projColor.withValues(alpha: 0.1),
+        border: Border.all(color: projColor.withValues(alpha: 0.2)),
       ),
-      child: Stack(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Project color accent bar (left edge, visible when running)
-          if (_running)
-            Positioned(
-              left: 0, top: 16, bottom: 16,
-              child: Container(
-                width: 3,
-                decoration: BoxDecoration(
-                  color: Color.fromARGB(255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (_, _) => Container(
+              width: 6, height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: projColor.withValues(alpha: 0.3 + _pulseController.value * 0.7),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── PROJECT section ──
-                if (!_running) ...[
-                  const _SectionLabel(text: 'PROJECT'),
-                  const SizedBox(height: 8),
-                  _buildProjectSelector(),
-                  const SizedBox(height: 16),
-                  Divider(height: 1, color: _borderColor.withValues(alpha: 0.5)),
-                  const SizedBox(height: 16),
-                ],
-
-                // ── TIMER section ──
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.access_time, size: 14, color: _labelColor),
-                    SizedBox(width: 6),
-                    _SectionLabel(text: 'TIMER'),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Digits
-                Center(
-                  child: Text(
-                    _formatDigits(_elapsed),
-                    style: TextStyle(
-                      fontFamily: 'JetBrains Mono',
-                      fontFamilyFallback: const ['monospace', 'Courier'],
-                      fontSize: 40,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 1,
-                      color: _running ? _accent : Colors.white.withValues(alpha: 0.85),
-                      fontFeatures: [const FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-
-                // Project name + started time (when running)
-                if (_running) ...[
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      _selectedProjectName ?? '',
-                      style: TextStyle(fontSize: 14, color: _mutedFg),
-                    ),
-                  ),
-                  if (_startTime != null)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          'Started ${DateFormat.jms().format(_startTime!.toLocal())}',
-                          style: TextStyle(fontSize: 12, color: _mutedFg.withValues(alpha: 0.6)),
-                        ),
-                      ),
-                    ),
-                ],
-                const SizedBox(height: 20),
-
-                // ── Buttons ──
-                Row(
-                  children: [
-                    // Start
-                    Expanded(
-                      child: _TimerButton(
-                        label: 'Start',
-                        icon: Icons.play_arrow_rounded,
-                        color: (_selectedProjectId != null && !_running) ? _accent : _mutedFg.withValues(alpha: 0.2),
-                        textColor: (_selectedProjectId != null && !_running) ? const Color(0xFF1A1408) : _mutedFg.withValues(alpha: 0.5),
-                        enabled: _selectedProjectId != null && !_running,
-                        onTap: _handleStart,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // Stop
-                    Expanded(
-                      child: _TimerButton(
-                        label: 'Stop',
-                        icon: Icons.stop_rounded,
-                        color: _running ? _destructive : _mutedFg.withValues(alpha: 0.2),
-                        textColor: _running ? Colors.white : _mutedFg.withValues(alpha: 0.5),
-                        enabled: _running,
-                        onTap: _handleStop,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // ── Custom time toggles ──
-                if (_selectedProjectId != null && !_running) ...[
-                  const SizedBox(height: 8),
-                  _CustomTimeToggle(
-                    label: _showStartTimeInput ? 'Hide start time' : 'Set start time',
-                    active: _showStartTimeInput,
-                    onTap: () {
-                      setState(() {
-                        _showStartTimeInput = !_showStartTimeInput;
-                        if (_showStartTimeInput && _customStartTime == null) {
-                          _customStartTime = DateTime.now().subtract(const Duration(hours: 1));
-                        }
-                      });
-                    },
-                  ),
-                ],
-                if (_running) ...[
-                  const SizedBox(height: 8),
-                  _CustomTimeToggle(
-                    label: _showStopTimeInput ? 'Hide stop time' : 'Set stop time',
-                    active: _showStopTimeInput,
-                    onTap: () {
-                      setState(() {
-                        _showStopTimeInput = !_showStopTimeInput;
-                        if (_showStopTimeInput && _customStopTime == null) {
-                          _customStopTime = DateTime.now();
-                        }
-                      });
-                    },
-                  ),
-                ],
-
-                // ── Custom start time input ──
-                if (_showStartTimeInput && !_running) ...[
-                  const SizedBox(height: 12),
-                  Divider(height: 1, color: _borderColor.withValues(alpha: 0.4)),
-                  const SizedBox(height: 12),
-                  const _SectionLabel(text: 'START TIME'),
-                  const SizedBox(height: 8),
-                  _DateTimePicker(
-                    value: _customStartTime ?? DateTime.now().subtract(const Duration(hours: 1)),
-                    onChanged: (dt) => setState(() => _customStartTime = dt),
-                  ),
-                ],
-
-                // ── Custom stop time input ──
-                if (_showStopTimeInput && _running) ...[
-                  const SizedBox(height: 12),
-                  Divider(height: 1, color: _borderColor.withValues(alpha: 0.4)),
-                  const SizedBox(height: 12),
-                  const _SectionLabel(text: 'STOP TIME'),
-                  const SizedBox(height: 8),
-                  _DateTimePicker(
-                    value: _customStopTime ?? DateTime.now(),
-                    onChanged: (dt) => setState(() => _customStopTime = dt),
-                  ),
-                ],
-              ],
             ),
           ),
-
-          // ── RUNNING badge ──
-          if (_running)
-            Positioned(
-              top: 16, right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: _accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _accent.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (_, _) => Container(
-                        width: 6, height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _accent.withValues(alpha: 0.4 + _pulseController.value * 0.6),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'RUNNING',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: _accent,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          const SizedBox(width: 8),
+          Text('RECORDING', style: BeatsType.label.copyWith(
+            color: projColor, letterSpacing: 2)),
         ],
       ),
     );
   }
 
-  Widget _buildProjectSelector() {
-    final hasSelection = _selectedProjectId != null;
-    final projColor = hasSelection
-        ? Color.fromARGB(255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2])
-        : null;
+  Widget _buildTimeDisplay() {
+    final h = _elapsed.inHours;
+    final m = _elapsed.inMinutes.remainder(60);
+    final s = _elapsed.inSeconds.remainder(60);
 
-    return GestureDetector(
-      onTap: _showProjectPicker,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        decoration: BoxDecoration(
-          color: _bgColor,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _borderColor),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.search, size: 16, color: _mutedFg.withValues(alpha: 0.4)),
-            const SizedBox(width: 10),
-            if (hasSelection) ...[
-              Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: projColor)),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(
-                hasSelection ? (_selectedProjectName ?? '') : 'Search projects...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: hasSelection ? Colors.white : _mutedFg.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-            if (hasSelection)
-              GestureDetector(
-                onTap: () => setState(() {
-                  _selectedProjectId = null;
-                  _selectedProjectName = null;
-                }),
-                child: Icon(Icons.close, size: 16, color: _mutedFg.withValues(alpha: 0.5)),
-              ),
-          ],
-        ),
+    final color = _running ? BeatsColors.textPrimary : BeatsColors.textTertiary;
+    final colonColor = _running
+        ? BeatsColors.textPrimary.withValues(alpha: 0.3)
+        : BeatsColors.textTertiary.withValues(alpha: 0.3);
+
+    // Massive brutalist time display
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          // Hours
+          _TimeUnit(value: h.toString().padLeft(2, '0'), label: 'HR', color: color),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(':', style: GoogleFonts.jetBrainsMono(
+              fontSize: 56, fontWeight: FontWeight.w100, color: colonColor)),
+          ),
+          // Minutes
+          _TimeUnit(value: m.toString().padLeft(2, '0'), label: 'MIN', color: color),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(':', style: GoogleFonts.jetBrainsMono(
+              fontSize: 56, fontWeight: FontWeight.w100, color: colonColor)),
+          ),
+          // Seconds
+          _TimeUnit(value: s.toString().padLeft(2, '0'), label: 'SEC',
+            color: _running
+                ? BeatsColors.textPrimary.withValues(alpha: 0.4)
+                : BeatsColors.textTertiary.withValues(alpha: 0.4)),
+        ],
       ),
     );
   }
 
-  Widget _buildStatsRow() {
-    // Today's hours from elapsed (simple: current session only for now)
-    final todayMinutes = _running ? _elapsed.inMinutes : 0;
-    final todayStr = todayMinutes >= 60
-        ? '${(todayMinutes / 60).toStringAsFixed(1)}h'
-        : '${todayMinutes}m';
-
-    return Row(
+  Widget _buildStartSection() {
+    return Column(
       children: [
-        Expanded(
-          child: _StatCard(label: 'Today', value: _running ? todayStr : '0.0h'),
+        // Project selector
+        GestureDetector(
+          onTap: _showProjectPicker,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: BeatsColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: BeatsColors.border),
+            ),
+            child: Row(
+              children: [
+                if (_selectedProjectId != null) ...[
+                  Container(width: 10, height: 10, decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color.fromARGB(255, _selectedProjectColor[0],
+                        _selectedProjectColor[1], _selectedProjectColor[2]),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(_selectedProjectName ?? '',
+                    style: BeatsType.bodyMedium)),
+                ] else ...[
+                  Icon(Icons.search, size: 18, color: BeatsColors.textTertiary),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Select a project...',
+                    style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary))),
+                ],
+                Icon(Icons.unfold_more, size: 18, color: BeatsColors.textTertiary),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(label: 'This week', value: '—', accent: true),
+        const SizedBox(height: 16),
+
+        // Start button
+        GestureDetector(
+          onTap: _selectedProjectId != null ? _handleStart : null,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: _selectedProjectId != null
+                  ? BeatsColors.amber
+                  : BeatsColors.textTertiary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text('Start',
+                style: BeatsType.button.copyWith(
+                  fontSize: 16,
+                  color: _selectedProjectId != null
+                      ? const Color(0xFF1A1408)
+                      : BeatsColors.textTertiary,
+                )),
+            ),
+          ),
         ),
+
+        // Custom start time
+        if (_selectedProjectId != null) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => setState(() {
+              _showStartTimeInput = !_showStartTimeInput;
+              if (_showStartTimeInput && _customStartTime == null) {
+                _customStartTime = DateTime.now().subtract(const Duration(hours: 1));
+              }
+            }),
+            child: Text(
+              _showStartTimeInput ? 'Hide start time' : 'Set start time',
+              style: BeatsType.bodySmall.copyWith(
+                color: _showStartTimeInput ? BeatsColors.amber : BeatsColors.textTertiary,
+              ),
+            ),
+          ),
+          if (_showStartTimeInput) ...[
+            const SizedBox(height: 12),
+            _DateTimePicker(
+              value: _customStartTime ?? DateTime.now().subtract(const Duration(hours: 1)),
+              onChanged: (dt) => setState(() => _customStartTime = dt),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStopSection() {
+    return Column(
+      children: [
+        // Stop button
+        GestureDetector(
+          onTap: _handleStop,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: BeatsColors.red,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(width: 14, height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 10),
+                Text('Stop', style: BeatsType.button.copyWith(
+                  fontSize: 16, color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+
+        // Custom stop time
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: () => setState(() {
+            _showStopTimeInput = !_showStopTimeInput;
+            if (_showStopTimeInput && _customStopTime == null) {
+              _customStopTime = DateTime.now();
+            }
+          }),
+          child: Text(
+            _showStopTimeInput ? 'Hide stop time' : 'Set stop time',
+            style: BeatsType.bodySmall.copyWith(
+              color: _showStopTimeInput ? BeatsColors.amber : BeatsColors.textTertiary),
+          ),
+        ),
+        if (_showStopTimeInput) ...[
+          const SizedBox(height: 12),
+          _DateTimePicker(
+            value: _customStopTime ?? DateTime.now(),
+            onChanged: (dt) => setState(() => _customStopTime = dt),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+}
+
+// ─── Time unit with label ───────────────────────────────────────────
+
+class _TimeUnit extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  const _TimeUnit({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(value,
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 64, fontWeight: FontWeight.w200, color: color, height: 1,
+            fontFeatures: [const FontFeature.tabularFigures()],
+          )),
+        const SizedBox(height: 4),
+        Text(label, style: BeatsType.label.copyWith(
+          fontSize: 9, color: color.withValues(alpha: 0.4), letterSpacing: 3)),
       ],
     );
   }
 }
 
-// ─── Sub-components ─────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w500,
-        color: _labelColor,
-        letterSpacing: 1.5,
-      ),
-    );
-  }
-}
-
-class _TimerButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final Color textColor;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _TimerButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.textColor,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: textColor),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textColor)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CustomTimeToggle extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _CustomTimeToggle({required this.label, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.calendar_today, size: 13,
-                color: active ? _accent : _mutedFg.withValues(alpha: 0.5)),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: active ? _accent : _mutedFg.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// ─── DateTime Picker ────────────────────────────────────────────────
 
 class _DateTimePicker extends StatelessWidget {
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
-
   const _DateTimePicker({required this.value, required this.onChanged});
 
   @override
@@ -674,81 +543,43 @@ class _DateTimePicker extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         final date = await showDatePicker(
-          context: context,
-          initialDate: value,
+          context: context, initialDate: value,
           firstDate: DateTime.now().subtract(const Duration(days: 7)),
           lastDate: DateTime.now().add(const Duration(days: 1)),
         );
-        if (date == null) return;
-        if (!context.mounted) return;
+        if (date == null || !context.mounted) return;
         final time = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.fromDateTime(value),
+          context: context, initialTime: TimeOfDay.fromDateTime(value),
         );
         if (time == null) return;
         onChanged(DateTime(date.year, date.month, date.day, time.hour, time.minute));
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: _bgColor,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _borderColor),
+          color: BeatsColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: BeatsColors.border),
         ),
-        child: Text(
-          DateFormat('MMM d, yyyy  h:mm a').format(value),
-          style: const TextStyle(fontSize: 14, color: Colors.white),
+        child: Row(
+          children: [
+            Icon(Icons.schedule, size: 16, color: BeatsColors.textTertiary),
+            const SizedBox(width: 10),
+            Text(DateFormat('MMM d, h:mm a').format(value),
+              style: BeatsType.bodyMedium),
+          ],
         ),
       ),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool accent;
-
-  const _StatCard({required this.label, required this.value, this.accent = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1714),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 10, color: _labelColor, letterSpacing: 1.2, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: accent ? _accent : Colors.white,
-              fontFeatures: [const FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Project Picker Bottom Sheet ────────────────────────────────────
+// ─── Project Picker Sheet ───────────────────────────────────────────
 
 class _ProjectPickerSheet extends StatefulWidget {
   final List<Map<String, dynamic>> projects;
   final String? selectedId;
   final void Function(String id, String name, List<int> color) onSelected;
-
   const _ProjectPickerSheet({required this.projects, this.selectedId, required this.onSelected});
 
   @override
@@ -770,39 +601,46 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: 8),
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: _mutedFg.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          const _SectionLabel(text: 'SELECT PROJECT'),
           const SizedBox(height: 12),
+          Container(width: 40, height: 4, decoration: BoxDecoration(
+            color: BeatsColors.textTertiary.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 20),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: TextField(
               autofocus: true,
               onChanged: (v) => setState(() => _query = v),
-              style: const TextStyle(fontSize: 15, color: Colors.white),
+              style: BeatsType.bodyMedium,
               decoration: InputDecoration(
                 hintText: 'Search projects...',
-                hintStyle: TextStyle(color: _mutedFg.withValues(alpha: 0.5)),
-                prefixIcon: Icon(Icons.search, size: 20, color: _mutedFg.withValues(alpha: 0.4)),
+                hintStyle: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary),
+                prefixIcon: Icon(Icons.search, size: 20, color: BeatsColors.textTertiary),
                 filled: true,
-                fillColor: _bgColor,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _borderColor)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _borderColor)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _accent.withValues(alpha: 0.4))),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                fillColor: BeatsColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: BeatsColors.border)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: BeatsColors.border)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.4))),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
           ),
           const SizedBox(height: 8),
 
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 320),
+            constraints: const BoxConstraints(maxHeight: 360),
             child: filtered.isEmpty
                 ? Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Text('No projects found', style: TextStyle(color: _mutedFg.withValues(alpha: 0.5))),
+                    padding: const EdgeInsets.all(24),
+                    child: Text('No projects found',
+                      style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary)),
                   )
                 : ListView.builder(
                     shrinkWrap: true,
@@ -817,23 +655,23 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
                       return GestureDetector(
                         onTap: () => widget.onSelected(p['id'], name, rgb),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           decoration: BoxDecoration(
-                            color: selected ? _accent.withValues(alpha: 0.08) : Colors.transparent,
-                            border: Border(bottom: BorderSide(color: _borderColor.withValues(alpha: 0.4))),
+                            color: selected ? BeatsColors.amber.withValues(alpha: 0.08) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
                             children: [
-                              Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(name, style: TextStyle(
-                                  fontSize: 15,
-                                  color: selected ? Colors.white : Colors.white.withValues(alpha: 0.8),
-                                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                                )),
-                              ),
-                              if (selected) const Icon(Icons.check, size: 18, color: _accent),
+                              Container(
+                                width: 4, height: 24,
+                                decoration: BoxDecoration(
+                                  color: color, borderRadius: BorderRadius.circular(2))),
+                              const SizedBox(width: 14),
+                              Expanded(child: Text(name, style: BeatsType.bodyMedium.copyWith(
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.w400))),
+                              if (selected)
+                                Icon(Icons.check, size: 18, color: BeatsColors.amber),
                             ],
                           ),
                         ),
@@ -841,7 +679,7 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
                     },
                   ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
         ],
       ),
     );
