@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
 import '../theme/beats_theme.dart';
+import '../theme/staggered_entrance.dart';
 
 class CoachScreen extends StatefulWidget {
   final ApiClient client;
@@ -42,154 +44,242 @@ class _CoachScreenState extends State<CoachScreen> {
     setState(() => _todayMood = mood);
     try {
       await widget.client.postDailyNote(mood);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Mood logged: ${'😫😕😐🙂😊'[mood - 1]}')),
-        );
-      }
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: BeatsColors.amber));
+      return const Scaffold(
+        backgroundColor: BeatsColors.background,
+        body: Center(child: CircularProgressIndicator(color: BeatsColors.amber)),
+      );
     }
 
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        children: [
-          // Morning brief
-          _SectionTitle(icon: Icons.wb_sunny, title: 'Morning Brief'),
-          const SizedBox(height: 8),
-          if (_brief != null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _brief!['body'] ?? 'No brief available.',
-                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+    return Scaffold(
+      backgroundColor: BeatsColors.background,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          color: BeatsColors.amber,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
+            children: [
+              // Morning Brief
+              StaggeredEntrance(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.wb_sunny_outlined, size: 16, color: BeatsColors.amber),
+                        const SizedBox(width: 8),
+                        Text('MORNING BRIEF', style: BeatsType.label.copyWith(color: BeatsColors.amber)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: BeatsColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: BeatsColors.border),
+                      ),
+                      child: Stack(
+                        children: [
+                          // Sunrise gradient overlay
+                          Positioned(
+                            top: 0, left: 0, right: 0,
+                            child: Container(
+                              height: 40,
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    BeatsColors.amber.withValues(alpha: 0.06),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: _brief != null
+                                ? Text(
+                                    _brief!['body'] ?? 'No brief available.',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 14,
+                                      height: 1.7,
+                                      color: BeatsColors.textPrimary,
+                                    ),
+                                  )
+                                : Text(
+                                    'No brief generated today.\nThe coach creates one each morning.',
+                                    style: BeatsType.bodySmall.copyWith(
+                                      color: BeatsColors.textTertiary,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            )
-          else
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'No brief generated today. The coach generates briefs automatically each morning.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 24),
+              const SizedBox(height: 28),
 
-          // Evening review
-          _SectionTitle(icon: Icons.nightlight_round, title: 'Evening Review'),
-          const SizedBox(height: 8),
-          if (_review != null && _review!['questions'] != null)
-            ..._buildReviewQuestions(theme)
-          else
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'No review questions yet. They appear after your work day.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
+              // Evening Review
+              StaggeredEntrance(
+                delay: const Duration(milliseconds: 80),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.nightlight_outlined, size: 16, color: BeatsColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Text('EVENING REVIEW', style: BeatsType.label),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_review != null && _review!['questions'] != null)
+                      ..._buildNumberedQuestions()
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: BeatsColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: BeatsColors.border),
+                        ),
+                        child: Text(
+                          'Review questions appear after your work day.',
+                          style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-          const SizedBox(height: 24),
+              const SizedBox(height: 28),
 
-          // Mood picker
-          _SectionTitle(icon: Icons.emoji_emotions, title: 'How was your day?'),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(5, (i) {
-              final mood = i + 1;
-              final emojis = ['😫', '😕', '😐', '🙂', '😊'];
-              final selected = _todayMood == mood;
-              return GestureDetector(
-                onTap: () => _submitMood(mood),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? theme.colorScheme.primary.withValues(alpha: 0.2)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: selected
-                        ? Border.all(color: theme.colorScheme.primary, width: 2)
-                        : null,
-                  ),
-                  child: Text(emojis[i], style: const TextStyle(fontSize: 32)),
+              // Mood Picker
+              StaggeredEntrance(
+                delay: const Duration(milliseconds: 160),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.emoji_emotions_outlined, size: 16, color: BeatsColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Text('HOW WAS YOUR DAY?', style: BeatsType.label),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(5, (i) {
+                        final mood = i + 1;
+                        final emojis = ['😫', '😕', '😐', '🙂', '😊'];
+                        final selected = _todayMood == mood;
+                        return GestureDetector(
+                          onTap: () => _submitMood(mood),
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 1.0, end: selected ? 1.15 : 1.0),
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutBack,
+                            builder: (_, scale, child) => Transform.scale(
+                              scale: scale,
+                              child: child,
+                            ),
+                            child: Container(
+                              width: 52, height: 52,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: selected
+                                    ? BeatsColors.amber.withValues(alpha: 0.15)
+                                    : BeatsColors.surface,
+                                border: Border.all(
+                                  color: selected ? BeatsColors.amber : BeatsColors.border,
+                                  width: selected ? 2 : 1,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(emojis[i], style: const TextStyle(fontSize: 24)),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
                 ),
-              );
-            }),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  List<Widget> _buildReviewQuestions(ThemeData theme) {
+  List<Widget> _buildNumberedQuestions() {
     final questions = _review!['questions'] as List? ?? [];
-    return questions.map<Widget>((q) {
+    return questions.asMap().entries.map<Widget>((entry) {
+      final i = entry.key;
+      final q = entry.value;
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  q['question'] ?? '',
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: BeatsColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: BeatsColors.border),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Large numbered circle
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: BeatsColors.amber.withValues(alpha: 0.1),
                 ),
-                if (q['answer'] != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    q['answer'],
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
+                child: Center(
+                  child: Text(
+                    '${i + 1}',
+                    style: BeatsType.monoSmall.copyWith(
+                        fontSize: 13, color: BeatsColors.amber),
                   ),
-                ],
-              ],
-            ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      q['question'] ?? '',
+                      style: BeatsType.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                    if (q['answer'] != null) ...[
+                      const SizedBox(height: 8),
+                      Text(q['answer'],
+                          style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       );
     }).toList();
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  const _SectionTitle({required this.icon, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(title, style: theme.textTheme.titleSmall),
-      ],
-    );
   }
 }

@@ -1,7 +1,20 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
 import '../theme/beats_theme.dart';
+import '../theme/staggered_entrance.dart';
+
+// Category colors matching web UI
+const _catColors = {
+  'coding': Color(0xFF5B9CF6),
+  'communication': Color(0xFFA78BFA),
+  'browser': Color(0xFF22D3EE),
+  'design': Color(0xFFF472B6),
+  'writing': Color(0xFFFBBF24),
+  'social': Color(0xFFFB923C),
+  'other': Color(0xFF6B6155),
+};
 
 class FlowScreen extends StatefulWidget {
   final ApiClient client;
@@ -27,14 +40,12 @@ class _FlowScreenState extends State<FlowScreen> {
   Future<void> _refresh() async {
     final now = DateTime.now().toUtc();
     final startOfDay = DateTime.utc(now.year, now.month, now.day);
-    final start = startOfDay.toIso8601String();
-    final end = now.toIso8601String();
-
     try {
-      final windows = await widget.client.getFlowWindows(start, end);
-      final summaries = await widget.client.getSignalSummaries(start, end);
+      final windows = await widget.client.getFlowWindows(
+          startOfDay.toIso8601String(), now.toIso8601String());
+      final summaries = await widget.client.getSignalSummaries(
+          startOfDay.toIso8601String(), now.toIso8601String());
 
-      // Aggregate categories
       final cats = <String, int>{};
       var total = 0;
       for (final s in summaries) {
@@ -44,9 +55,9 @@ class _FlowScreenState extends State<FlowScreen> {
         }
         total += (s['total_samples'] as int?) ?? 0;
       }
-
-      // Latest score
-      final latest = windows.isNotEmpty ? (windows.last['flow_score'] as num).toDouble() : 0.0;
+      final latest = windows.isNotEmpty
+          ? (windows.last['flow_score'] as num).toDouble()
+          : 0.0;
 
       if (mounted) {
         setState(() {
@@ -62,148 +73,180 @@ class _FlowScreenState extends State<FlowScreen> {
     }
   }
 
-  Color _scoreColor(double score) {
-    if (score >= 0.7) return Colors.green;
-    if (score >= 0.3) return Colors.amber;
-    return Colors.red.shade400;
+  Color _scoreColor(double s) {
+    if (s >= 0.7) return BeatsColors.green;
+    if (s >= 0.3) return BeatsColors.amber;
+    return BeatsColors.red;
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (_loading) {
       return const Center(child: CircularProgressIndicator(color: BeatsColors.amber));
     }
 
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        children: [
-          // Flow score gauge
-          Center(
-            child: SizedBox(
-              width: 180,
-              height: 180,
-              child: CustomPaint(
-                painter: _ScoreGaugePainter(_currentScore, _scoreColor(_currentScore)),
+    return Scaffold(
+      backgroundColor: BeatsColors.background,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          color: BeatsColors.amber,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
+            children: [
+              // Score gauge
+              StaggeredEntrance(
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${(_currentScore * 100).round()}',
-                        style: theme.textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w200,
+                  child: SizedBox(
+                    width: 200, height: 200,
+                    child: CustomPaint(
+                      painter: _GradientGaugePainter(_currentScore, _scoreColor(_currentScore)),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${(_currentScore * 100).round()}',
+                              style: GoogleFonts.dmSerifDisplay(
+                                fontSize: 48,
+                                color: BeatsColors.textPrimary,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            Text('/ 100',
+                                style: BeatsType.bodySmall.copyWith(
+                                    color: BeatsColors.textTertiary, fontSize: 13)),
+                          ],
                         ),
                       ),
-                      Text(
-                        'Flow Score',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              StaggeredEntrance(
+                delay: const Duration(milliseconds: 60),
+                child: Center(
+                  child: Text('FLOW SCORE', style: BeatsType.label),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Timeline
+              if (_windows.isNotEmpty) ...[
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Today's flow", style: BeatsType.titleSmall),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 64,
+                        child: CustomPaint(
+                          size: Size(double.infinity, 64),
+                          painter: _AreaChartPainter(_windows),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
+                const SizedBox(height: 28),
+              ],
 
-          // Today's flow timeline
-          if (_windows.isNotEmpty) ...[
-            Text('Today\'s flow', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 60,
-              child: Row(
-                children: _windows.map((w) {
-                  final score = (w['flow_score'] as num).toDouble();
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 1),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Flexible(
-                            child: FractionallySizedBox(
-                              heightFactor: score.clamp(0.05, 1.0),
-                              child: Container(
+              // Categories
+              if (_categoryTotals.isNotEmpty) ...[
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 180),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Activity breakdown', style: BeatsType.titleSmall),
+                      const SizedBox(height: 14),
+                      ..._sortedCategories().asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final e = entry.value;
+                        final fraction = _totalSamples > 0 ? e.value / _totalSamples : 0.0;
+                        final color = _catColors[e.key] ?? BeatsColors.textTertiary;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4, height: 16,
                                 decoration: BoxDecoration(
-                                  color: _scoreColor(score),
+                                  color: color,
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              SizedBox(
+                                width: 85,
+                                child: Text(e.key,
+                                    style: BeatsType.bodySmall.copyWith(
+                                        color: BeatsColors.textSecondary)),
+                              ),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween(begin: 0, end: fraction),
+                                    duration: Duration(milliseconds: 400 + i * 100),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (_, val, _) => LinearProgressIndicator(
+                                      value: val,
+                                      minHeight: 6,
+                                      backgroundColor: BeatsColors.border,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              SizedBox(
+                                width: 36,
+                                child: Text(
+                                  '${(fraction * 100).round()}%',
+                                  style: BeatsType.monoSmall.copyWith(
+                                      fontSize: 12, color: BeatsColors.textSecondary),
+                                  textAlign: TextAlign.right,
+                                ),
+                              ),
+                            ],
                           ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+
+              if (_windows.isEmpty && _categoryTotals.isEmpty)
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 120),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Column(
+                        children: [
+                          Icon(Icons.insights, size: 40,
+                              color: BeatsColors.textTertiary.withValues(alpha: 0.3)),
+                          const SizedBox(height: 12),
+                          Text('No flow data today yet',
+                              style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary)),
+                          const SizedBox(height: 4),
+                          Text('Start the daemon to begin collecting',
+                              style: BeatsType.bodySmall.copyWith(
+                                  color: BeatsColors.textTertiary.withValues(alpha: 0.6))),
                         ],
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // Category breakdown
-          if (_categoryTotals.isNotEmpty) ...[
-            Text('Activity breakdown', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 12),
-            ..._sortedCategories().map((e) {
-              final fraction = _totalSamples > 0 ? e.value / _totalSamples : 0.0;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 90,
-                      child: Text(
-                        e.key,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: fraction,
-                          minHeight: 8,
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${(fraction * 100).round()}%',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-
-          if (_windows.isEmpty && _categoryTotals.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 48),
-                child: Text(
-                  'No flow data today yet.\nStart the daemon to begin collecting.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -215,48 +258,121 @@ class _FlowScreenState extends State<FlowScreen> {
   }
 }
 
-class _ScoreGaugePainter extends CustomPainter {
+// Full-circle gradient gauge
+class _GradientGaugePainter extends CustomPainter {
   final double score;
   final Color color;
-  _ScoreGaugePainter(this.score, this.color);
+  _GradientGaugePainter(this.score, this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 8;
+    final radius = size.width / 2 - 10;
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Background arc
-    final bgPaint = Paint()
-      ..color = color.withValues(alpha: 0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -pi * 0.75,
-      pi * 1.5,
-      false,
-      bgPaint,
+    // Background ring
+    canvas.drawCircle(
+      center, radius,
+      Paint()
+        ..color = color.withValues(alpha: 0.06)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 8,
     );
 
-    // Score arc
-    final scorePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round;
+    // Score arc with gradient
+    if (score > 0) {
+      final sweep = 2 * pi * score.clamp(0.0, 1.0);
+      final gradient = SweepGradient(
+        startAngle: -pi / 2,
+        endAngle: -pi / 2 + sweep,
+        colors: [color.withValues(alpha: 0.4), color],
+      );
+      canvas.drawArc(
+        rect, -pi / 2, sweep, false,
+        Paint()
+          ..shader = gradient.createShader(rect)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8
+          ..strokeCap = StrokeCap.round,
+      );
+    }
 
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -pi * 0.75,
-      pi * 1.5 * score.clamp(0.0, 1.0),
-      false,
-      scorePaint,
+    // Glow at score > 0.7
+    if (score >= 0.7) {
+      canvas.drawCircle(
+        center, radius,
+        Paint()
+          ..color = color.withValues(alpha: 0.08)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GradientGaugePainter old) =>
+      old.score != score || old.color != color;
+}
+
+// Smooth area chart for flow timeline
+class _AreaChartPainter extends CustomPainter {
+  final List<Map<String, dynamic>> windows;
+  _AreaChartPainter(this.windows);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (windows.isEmpty) return;
+
+    final points = <Offset>[];
+    for (var i = 0; i < windows.length; i++) {
+      final score = (windows[i]['flow_score'] as num).toDouble().clamp(0.0, 1.0);
+      final x = windows.length == 1
+          ? size.width / 2
+          : i / (windows.length - 1) * size.width;
+      final y = size.height - score * size.height;
+      points.add(Offset(x, y));
+    }
+
+    // Area fill
+    final areaPath = Path()..moveTo(0, size.height);
+    for (final p in points) {
+      areaPath.lineTo(p.dx, p.dy);
+    }
+    areaPath.lineTo(size.width, size.height);
+    areaPath.close();
+
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        BeatsColors.amber.withValues(alpha: 0.25),
+        BeatsColors.amber.withValues(alpha: 0.02),
+      ],
+    );
+    canvas.drawPath(
+      areaPath,
+      Paint()..shader = gradient.createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+    );
+
+    // Line
+    final linePath = Path();
+    for (var i = 0; i < points.length; i++) {
+      if (i == 0) {
+        linePath.moveTo(points[i].dx, points[i].dy);
+      } else {
+        linePath.lineTo(points[i].dx, points[i].dy);
+      }
+    }
+    canvas.drawPath(
+      linePath,
+      Paint()
+        ..color = BeatsColors.amber
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _ScoreGaugePainter old) =>
-      old.score != score || old.color != color;
+  bool shouldRepaint(covariant _AreaChartPainter old) => true;
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
 import '../theme/beats_theme.dart';
+import '../theme/staggered_entrance.dart';
 
 List<int> _hexToRgb(String? hex) {
   if (hex == null || hex.isEmpty) return [150, 150, 150];
@@ -231,27 +232,47 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
 
     return Scaffold(
       backgroundColor: _bgColor,
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          color: _accent,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-            children: [
-              // ── Timer Card ──
-              _buildTimerCard(),
-              const SizedBox(height: 16),
-              // ── Stats Row ──
-              _buildStatsRow(),
-
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(_error!, style: const TextStyle(color: _destructive, fontSize: 11), textAlign: TextAlign.center),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: _running
+              ? const RadialGradient(
+                  center: Alignment(0, -0.3),
+                  radius: 1.2,
+                  colors: [
+                    Color(0xFF1E1710), // warm amber center
+                    Color(0xFF0E0C0A), // fade to background
+                  ],
+                )
+              : null,
+        ),
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            color: _accent,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 80),
+              children: [
+                // ── Timer Card ──
+                StaggeredEntrance(
+                  delay: Duration.zero,
+                  child: _buildTimerCard(),
                 ),
-            ],
+                const SizedBox(height: 16),
+                // ── Stats Row ──
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 80),
+                  child: _buildStatsRow(),
+                ),
+
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(_error!, style: const TextStyle(color: _destructive, fontSize: 11), textAlign: TextAlign.center),
+                  ),
+              ],
           ),
+        ),
         ),
       ),
     );
@@ -273,8 +294,20 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       ),
       child: Stack(
         children: [
+          // Project color accent bar (left edge, visible when running)
+          if (_running)
+            Positioned(
+              left: 0, top: 16, bottom: 16,
+              child: Container(
+                width: 3,
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
