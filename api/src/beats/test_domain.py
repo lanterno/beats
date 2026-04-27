@@ -294,3 +294,42 @@ class TestGoalOverrideResolution:
         )
         _, gtype = p.effective_goal(date(2026, 4, 6))
         assert gtype == GoalType.CAP
+
+    def test_one_off_null_override_clears_week(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(week_of=date(2026, 4, 6), weekly_goal=None, note="holiday"),
+            ]
+        )
+        goal, _ = p.effective_goal(date(2026, 4, 6))
+        assert goal is None
+        # Other weeks unaffected
+        goal, _ = p.effective_goal(date(2026, 4, 13))
+        assert goal == 20
+
+    def test_permanent_null_override_clears_forward(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(effective_from=date(2026, 3, 2), weekly_goal=None),
+            ]
+        )
+        # Before effective_from: default
+        goal, _ = p.effective_goal(date(2026, 2, 23))
+        assert goal == 20
+        # From effective_from onward: cleared
+        goal, _ = p.effective_goal(date(2026, 3, 2))
+        assert goal is None
+        goal, _ = p.effective_goal(date(2026, 4, 6))
+        assert goal is None
+
+    def test_later_permanent_override_can_restore_goal(self):
+        p = self._project(
+            goal_overrides=[
+                GoalOverride(effective_from=date(2026, 3, 2), weekly_goal=None),
+                GoalOverride(effective_from=date(2026, 4, 6), weekly_goal=25),
+            ]
+        )
+        goal, _ = p.effective_goal(date(2026, 3, 9))
+        assert goal is None
+        goal, _ = p.effective_goal(date(2026, 4, 6))
+        assert goal == 25

@@ -33,11 +33,14 @@ class GoalOverride(BaseModel):
     Exactly one of week_of or effective_from must be set:
     - week_of: one-off override for a single week (identified by its Monday)
     - effective_from: permanent override from a date forward (must be a Monday)
+
+    weekly_goal=None means "no goal applies for this window" (e.g. a holiday
+    week, or the user giving up on a target from a given Monday forward).
     """
 
     week_of: date_type | None = None
     effective_from: date_type | None = None
-    weekly_goal: float
+    weekly_goal: float | None = None
     goal_type: GoalType | None = None  # None = inherit project default
     note: str | None = None
 
@@ -54,7 +57,7 @@ class GoalOverride(BaseModel):
         if self.effective_from is not None and self.effective_from.weekday() != 0:
             msg = "effective_from must be a Monday"
             raise ValueError(msg)
-        if self.weekly_goal <= 0:
+        if self.weekly_goal is not None and self.weekly_goal <= 0:
             msg = "weekly_goal must be positive"
             raise ValueError(msg)
         return self

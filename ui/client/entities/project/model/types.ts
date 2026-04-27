@@ -9,7 +9,7 @@
 export interface GoalOverride {
 	weekOf?: string; // ISO date string of Monday, for one-off
 	effectiveFrom?: string; // ISO date string, for permanent
-	weeklyGoal: number;
+	weeklyGoal: number | null; // null = no goal for this window
 	goalType?: "target" | "cap";
 	note?: string;
 }

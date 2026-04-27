@@ -369,6 +369,50 @@ class TestGoalOverridesAPI:
         found = [p for p in data if p["id"] == project["id"]][0]
         assert len(found["goal_overrides"]) == 0
 
+    def test_one_off_null_override_clears_week(self):
+        """A one-off override with weekly_goal=null makes that week have no goal."""
+        project = self._create_project(weekly_goal=20)
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"week_of": "2020-01-06", "weekly_goal": None, "note": "holiday"}],
+            headers=auth_headers,
+        )
+        # Past week (same Monday as the override): no goal
+        # weeks_ago for 2020-01-06 is well into the past; compute by hitting the
+        # endpoint directly via the week_of Monday. The breakdown uses weeks_ago,
+        # so we verify via project list instead.
+        projects = client.get("/api/projects/", headers=auth_headers).json()
+        found = [p for p in projects if p["id"] == project["id"]][0]
+        overrides = found["goal_overrides"]
+        assert len(overrides) == 1
+        assert overrides[0]["weekly_goal"] is None
+        assert overrides[0]["note"] == "holiday"
+
+    def test_permanent_null_override_clears_forward(self):
+        """A permanent null override clears the goal from that Monday forward."""
+        project = self._create_project(weekly_goal=20)
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
+            headers=auth_headers,
+        )
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["effective_goal"] is None
+
+    def test_null_override_does_not_affect_earlier_weeks(self):
+        """A permanent null override starting on a future Monday leaves earlier
+        weeks with the project default goal."""
+        project = self._create_project(weekly_goal=20)
+        # effective_from far in the future (next decade Monday)
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"effective_from": "2099-01-05", "weekly_goal": None}],
+            headers=auth_headers,
+        )
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
+        assert resp.json()["effective_goal"] == 20
+
 
 class TestBeatsDirectAPI:
     """Test suite for Beat (time log) management endpoints"""

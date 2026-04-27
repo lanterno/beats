@@ -188,13 +188,16 @@ export default function ProjectDetails() {
 		}));
 
 	const allWeekRows = [currentWeekRow, ...pastWeekRows];
-	const hasAnyGoal = allWeekRows.some((r) => r.effectiveGoal != null);
+	const hasAnyGoal =
+		project.weeklyGoal != null ||
+		(project.goalOverrides || []).length > 0 ||
+		allWeekRows.some((r) => r.effectiveGoal != null);
 
 	// Save/remove goal override handlers
 	const handleSaveOverride = (
 		mondayIso: string,
 		values: {
-			weeklyGoal: number;
+			weeklyGoal: number | null;
 			goalType: "target" | "cap";
 			scope: "week" | "permanent";
 			note: string;
@@ -254,8 +257,8 @@ export default function ProjectDetails() {
 		);
 	};
 
-	const hasOverrideForWeek = (mondayIso: string): boolean =>
-		(project.goalOverrides || []).some(
+	const findDirectOverride = (mondayIso: string): GoalOverride | undefined =>
+		(project.goalOverrides || []).find(
 			(o) => o.weekOf === mondayIso || o.effectiveFrom === mondayIso,
 		);
 
@@ -362,7 +365,10 @@ export default function ProjectDetails() {
 							const rowGoalType = row.effectiveGoalType;
 							const goalMet = rowGoal ? rowHours >= rowGoal : false;
 							const goalPctRow = rowGoal ? Math.min((rowHours / rowGoal) * 100, 100) : 0;
-							const isOverridden = rowGoal != null && rowGoal !== project.weeklyGoal;
+							const directOverride = findDirectOverride(row.mondayIso);
+							const hasDirectOverride = directOverride !== undefined;
+							const directOverrideIsNull = hasDirectOverride && directOverride?.weeklyGoal == null;
+							const isOverridden = rowGoal !== (project.weeklyGoal ?? null);
 
 							return (
 								<div
@@ -395,7 +401,15 @@ export default function ProjectDetails() {
 															overridePopoverWeek === row.weeksAgo ? null : row.weeksAgo,
 														)
 													}
-													className={`text-sm font-medium tabular-nums cursor-pointer hover:underline decoration-dotted underline-offset-2 ${goalMet ? "text-green-400" : "text-accent"} ${isOverridden ? "italic" : ""}`}
+													className={`text-sm font-medium tabular-nums cursor-pointer hover:underline decoration-dotted underline-offset-2 ${
+														rowGoal != null
+															? goalMet
+																? "text-green-400"
+																: "text-accent"
+															: isOverridden
+																? "text-muted-foreground"
+																: "text-muted-foreground/50"
+													} ${isOverridden ? "italic" : ""}`}
 													title={
 														isOverridden
 															? "Goal override active — click to edit"
@@ -406,9 +420,11 @@ export default function ProjectDetails() {
 														? row.total > 0
 															? `${rowHours.toFixed(1)}/${rowGoal}h`
 															: `—/${rowGoal}h`
-														: row.total > 0
-															? `${rowHours.toFixed(1)}h`
-															: "—"}
+														: isOverridden
+															? "No goal"
+															: row.total > 0
+																? `${rowHours.toFixed(1)}h`
+																: "—"}
 												</button>
 												{row.total > 0 && rowGoal != null && (
 													<div className="w-full h-1 rounded-full bg-muted/40 overflow-hidden">
@@ -426,11 +442,12 @@ export default function ProjectDetails() {
 														/>
 													</div>
 												)}
-												{overridePopoverWeek === row.weeksAgo && rowGoal != null && (
+												{overridePopoverWeek === row.weeksAgo && (
 													<GoalOverridePopover
-														currentGoal={rowGoal}
+														currentGoal={rowGoal ?? project.weeklyGoal ?? null}
 														currentGoalType={rowGoalType}
-														hasExistingOverride={hasOverrideForWeek(row.mondayIso)}
+														hasExistingOverride={hasDirectOverride}
+														existingOverrideIsNull={directOverrideIsNull}
 														onSave={(values) => handleSaveOverride(row.mondayIso, values)}
 														onRemove={() => {
 															handleRemoveOverride(row.mondayIso);

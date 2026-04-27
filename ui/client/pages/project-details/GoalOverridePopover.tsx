@@ -5,15 +5,17 @@
 import { useEffect, useRef, useState } from "react";
 
 interface GoalOverridePopoverProps {
-	/** Current effective goal for this week */
-	currentGoal: number;
+	/** Current effective goal for this week; null when no goal applies */
+	currentGoal: number | null;
 	/** Current goal type */
 	currentGoalType: "target" | "cap";
 	/** Whether an override already exists for this week */
 	hasExistingOverride: boolean;
+	/** True when the existing override for this scope is itself a null-goal override */
+	existingOverrideIsNull?: boolean;
 	/** Called with the new override values */
 	onSave: (values: {
-		weeklyGoal: number;
+		weeklyGoal: number | null;
 		goalType: "target" | "cap";
 		scope: "week" | "permanent";
 		note: string;
@@ -27,20 +29,22 @@ export function GoalOverridePopover({
 	currentGoal,
 	currentGoalType,
 	hasExistingOverride,
+	existingOverrideIsNull = false,
 	onSave,
 	onRemove,
 	onClose,
 }: GoalOverridePopoverProps) {
-	const [hours, setHours] = useState(String(currentGoal));
+	const [hours, setHours] = useState(currentGoal != null ? String(currentGoal) : "");
 	const [goalType, setGoalType] = useState<"target" | "cap">(currentGoalType);
 	const [scope, setScope] = useState<"week" | "permanent">("week");
 	const [note, setNote] = useState("");
+	const [noGoal, setNoGoal] = useState(existingOverrideIsNull);
 	const ref = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
-		inputRef.current?.select();
-	}, []);
+		if (!noGoal) inputRef.current?.select();
+	}, [noGoal]);
 
 	useEffect(() => {
 		const handler = (e: MouseEvent) => {
@@ -51,6 +55,10 @@ export function GoalOverridePopover({
 	}, [onClose]);
 
 	const handleSave = () => {
+		if (noGoal) {
+			onSave({ weeklyGoal: null, goalType, scope, note });
+			return;
+		}
 		const val = Number.parseFloat(hours);
 		if (Number.isNaN(val) || val <= 0) return;
 		onSave({ weeklyGoal: val, goalType, scope, note });
@@ -66,47 +74,74 @@ export function GoalOverridePopover({
 				Override goal
 			</div>
 
-			{/* Hours input */}
-			<div className="flex items-center gap-2 mb-2">
-				<input
-					ref={inputRef}
-					type="number"
-					min="0.5"
-					step="0.5"
-					value={hours}
-					onChange={(e) => setHours(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") handleSave();
-						if (e.key === "Escape") onClose();
-					}}
-					className="w-20 text-sm font-mono bg-secondary/50 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-				/>
-				<span className="text-xs text-muted-foreground">h/week</span>
-			</div>
-
-			{/* Goal type toggle */}
+			{/* Has goal / No goal toggle */}
 			<div className="flex gap-1 mb-2">
 				<button
-					onClick={() => setGoalType("target")}
+					onClick={() => setNoGoal(false)}
 					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
-						goalType === "target"
+						!noGoal
 							? "bg-accent text-accent-foreground"
 							: "bg-secondary/50 text-muted-foreground hover:text-foreground"
 					}`}
 				>
-					Target
+					Has goal
 				</button>
 				<button
-					onClick={() => setGoalType("cap")}
+					onClick={() => setNoGoal(true)}
 					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
-						goalType === "cap"
+						noGoal
 							? "bg-accent text-accent-foreground"
 							: "bg-secondary/50 text-muted-foreground hover:text-foreground"
 					}`}
 				>
-					Cap
+					No goal
 				</button>
 			</div>
+
+			{/* Hours input + goal type (hidden when No goal) */}
+			{!noGoal && (
+				<>
+					<div className="flex items-center gap-2 mb-2">
+						<input
+							ref={inputRef}
+							type="number"
+							min="0.5"
+							step="0.5"
+							value={hours}
+							onChange={(e) => setHours(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") handleSave();
+								if (e.key === "Escape") onClose();
+							}}
+							className="w-20 text-sm font-mono bg-secondary/50 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+						/>
+						<span className="text-xs text-muted-foreground">h/week</span>
+					</div>
+
+					<div className="flex gap-1 mb-2">
+						<button
+							onClick={() => setGoalType("target")}
+							className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+								goalType === "target"
+									? "bg-accent text-accent-foreground"
+									: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+							}`}
+						>
+							Target
+						</button>
+						<button
+							onClick={() => setGoalType("cap")}
+							className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+								goalType === "cap"
+									? "bg-accent text-accent-foreground"
+									: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+							}`}
+						>
+							Cap
+						</button>
+					</div>
+				</>
+			)}
 
 			{/* Scope selector */}
 			<div className="flex gap-1 mb-2">
@@ -132,7 +167,6 @@ export function GoalOverridePopover({
 				</button>
 			</div>
 
-			{/* Note */}
 			<input
 				type="text"
 				value={note}
@@ -145,13 +179,12 @@ export function GoalOverridePopover({
 				className="w-full text-xs bg-secondary/50 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-accent mb-2"
 			/>
 
-			{/* Actions */}
 			<div className="flex gap-1">
 				<button
 					onClick={handleSave}
 					className="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 				>
-					Save
+					{noGoal ? "Save (no goal)" : "Save"}
 				</button>
 				{hasExistingOverride && (
 					<button

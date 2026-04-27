@@ -14,7 +14,7 @@ import { z } from "zod";
 export const GoalOverrideSchema = z.object({
 	week_of: z.string().nullable().optional(),
 	effective_from: z.string().nullable().optional(),
-	weekly_goal: z.number(),
+	weekly_goal: z.number().nullable(),
 	goal_type: z.enum(["target", "cap"]).nullable().optional(),
 	note: z.string().nullable().optional(),
 });

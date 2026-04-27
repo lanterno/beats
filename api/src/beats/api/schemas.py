@@ -43,11 +43,14 @@ class UpdateProjectRequest(BaseModel):
 
 
 class GoalOverrideRequest(BaseModel):
-    """Request body for a goal override."""
+    """Request body for a goal override.
+
+    weekly_goal=None means "no goal for this window" (one-off or permanent).
+    """
 
     week_of: date_type | None = None
     effective_from: date_type | None = None
-    weekly_goal: float
+    weekly_goal: float | None = None
     goal_type: GoalType | None = None
     note: str | None = None
 
