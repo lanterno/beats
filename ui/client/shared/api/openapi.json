@@ -1,6 +1,239 @@
 {
   "components": {
     "schemas": {
+      "AutoTimerSuggestion": {
+        "properties": {
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
+          },
+          "should_suggest": {
+            "title": "Should Suggest",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "should_suggest"
+        ],
+        "title": "AutoTimerSuggestion",
+        "type": "object"
+      },
+      "BiometricDayRequest": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "hrv_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hrv Ms"
+          },
+          "readiness_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readiness Score"
+          },
+          "resting_hr_bpm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resting Hr Bpm"
+          },
+          "sleep_efficiency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Efficiency"
+          },
+          "sleep_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Minutes"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "workouts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Workouts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date",
+          "source"
+        ],
+        "title": "BiometricDayRequest",
+        "type": "object"
+      },
+      "BiometricDayResponse": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "hrv_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hrv Ms"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "readiness_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readiness Score"
+          },
+          "resting_hr_bpm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resting Hr Bpm"
+          },
+          "sleep_efficiency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Efficiency"
+          },
+          "sleep_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Minutes"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "workouts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Workouts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "source",
+          "sleep_minutes",
+          "sleep_efficiency",
+          "hrv_ms",
+          "resting_hr_bpm",
+          "steps",
+          "readiness_score",
+          "workouts"
+        ],
+        "title": "BiometricDayResponse",
+        "type": "object"
+      },
       "Body_import_full_json_api_export_import_post": {
         "properties": {
           "file": {
@@ -391,6 +624,19 @@
         "title": "DailyNoteResponse",
         "type": "object"
       },
+      "DeleteSignalsResponse": {
+        "properties": {
+          "deleted_summaries": {
+            "title": "Deleted Summaries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted_summaries"
+        ],
+        "title": "DeleteSignalsResponse",
+        "type": "object"
+      },
       "DeviceFavoriteProject": {
         "properties": {
           "color_rgb": {
@@ -505,6 +751,55 @@
           }
         },
         "title": "DeviceHeartbeatResponse",
+        "type": "object"
+      },
+      "DeviceRegistrationResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "string"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "device_name",
+          "created_at",
+          "last_seen"
+        ],
+        "title": "DeviceRegistrationResponse",
         "type": "object"
       },
       "DeviceStatusResponse": {
@@ -634,6 +929,83 @@
         "title": "EstimationAccuracyResponse",
         "type": "object"
       },
+      "FlowWindowResponse": {
+        "properties": {
+          "active_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Project Id"
+          },
+          "cadence_score": {
+            "title": "Cadence Score",
+            "type": "number"
+          },
+          "category_fit_score": {
+            "title": "Category Fit Score",
+            "type": "number"
+          },
+          "coherence_score": {
+            "title": "Coherence Score",
+            "type": "number"
+          },
+          "context_switches": {
+            "title": "Context Switches",
+            "type": "integer"
+          },
+          "dominant_bundle_id": {
+            "title": "Dominant Bundle Id",
+            "type": "string"
+          },
+          "dominant_category": {
+            "title": "Dominant Category",
+            "type": "string"
+          },
+          "flow_score": {
+            "title": "Flow Score",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "idle_fraction": {
+            "title": "Idle Fraction",
+            "type": "number"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "window_start",
+          "window_end",
+          "flow_score",
+          "cadence_score",
+          "coherence_score",
+          "category_fit_score",
+          "idle_fraction",
+          "dominant_bundle_id",
+          "dominant_category",
+          "context_switches",
+          "active_project_id"
+        ],
+        "title": "FlowWindowResponse",
+        "type": "object"
+      },
       "FocusScoreResponse": {
         "description": "Response schema for a focus quality score.",
         "properties": {
@@ -679,7 +1051,7 @@
         "type": "object"
       },
       "GoalOverrideRequest": {
-        "description": "Request body for a goal override.",
+        "description": "Request body for a goal override.\n\nweekly_goal=None means \"no goal for this window\" (one-off or permanent).",
         "properties": {
           "effective_from": {
             "anyOf": [
@@ -727,13 +1099,17 @@
             "title": "Week Of"
           },
           "weekly_goal": {
-            "title": "Weekly Goal",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal"
           }
         },
-        "required": [
-          "weekly_goal"
-        ],
         "title": "GoalOverrideRequest",
         "type": "object"
       },
@@ -1095,6 +1471,79 @@
         "title": "MoodCorrelationResponse",
         "type": "object"
       },
+      "OuraConnectRequest": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token"
+        ],
+        "title": "OuraConnectRequest",
+        "type": "object"
+      },
+      "PairCodeResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "default": 300,
+            "title": "Expires In Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "PairCodeResponse",
+        "type": "object"
+      },
+      "PairExchangeRequest": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "PairExchangeRequest",
+        "type": "object"
+      },
+      "PairExchangeResponse": {
+        "properties": {
+          "device_id": {
+            "title": "Device Id",
+            "type": "string"
+          },
+          "device_token": {
+            "title": "Device Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_token",
+          "device_id"
+        ],
+        "title": "PairExchangeResponse",
+        "type": "object"
+      },
       "PatternsResponse": {
         "description": "Response schema for pattern detection results.",
         "properties": {
@@ -1116,6 +1565,142 @@
           "generated_at"
         ],
         "title": "PatternsResponse",
+        "type": "object"
+      },
+      "PostDriftEventRequest": {
+        "properties": {
+          "bundle_id": {
+            "title": "Bundle Id",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "started_at",
+          "duration_seconds",
+          "bundle_id"
+        ],
+        "title": "PostDriftEventRequest",
+        "type": "object"
+      },
+      "PostFlowWindowRequest": {
+        "properties": {
+          "active_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Project Id"
+          },
+          "cadence_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Cadence Score",
+            "type": "number"
+          },
+          "category_fit_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Category Fit Score",
+            "type": "number"
+          },
+          "coherence_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Coherence Score",
+            "type": "number"
+          },
+          "context_switches": {
+            "default": 0,
+            "title": "Context Switches",
+            "type": "integer"
+          },
+          "dominant_bundle_id": {
+            "default": "",
+            "title": "Dominant Bundle Id",
+            "type": "string"
+          },
+          "dominant_category": {
+            "default": "",
+            "title": "Dominant Category",
+            "type": "string"
+          },
+          "flow_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Flow Score",
+            "type": "number"
+          },
+          "idle_fraction": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Idle Fraction",
+            "type": "number"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "window_start",
+          "window_end",
+          "flow_score",
+          "cadence_score",
+          "coherence_score",
+          "category_fit_score",
+          "idle_fraction"
+        ],
+        "title": "PostFlowWindowRequest",
+        "type": "object"
+      },
+      "PostSignalSummaryRequest": {
+        "properties": {
+          "categories": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Categories",
+            "type": "object"
+          },
+          "hour": {
+            "format": "date-time",
+            "title": "Hour",
+            "type": "string"
+          },
+          "idle_samples": {
+            "default": 0,
+            "title": "Idle Samples",
+            "type": "integer"
+          },
+          "total_samples": {
+            "default": 0,
+            "title": "Total Samples",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hour"
+        ],
+        "title": "PostSignalSummaryRequest",
         "type": "object"
       },
       "ProductivityScoreResponse": {
@@ -1429,6 +2014,43 @@
         "title": "ScoreHistoryItem",
         "type": "object"
       },
+      "SignalSummaryResponse": {
+        "properties": {
+          "categories": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Categories",
+            "type": "object"
+          },
+          "hour": {
+            "format": "date-time",
+            "title": "Hour",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "idle_samples": {
+            "title": "Idle Samples",
+            "type": "integer"
+          },
+          "total_samples": {
+            "title": "Total Samples",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "hour",
+          "categories",
+          "total_samples",
+          "idle_samples"
+        ],
+        "title": "SignalSummaryResponse",
+        "type": "object"
+      },
       "SuggestionResponse": {
         "description": "Response schema for a daily plan suggestion.",
         "properties": {
@@ -1456,6 +2078,41 @@
           "reasoning"
         ],
         "title": "SuggestionResponse",
+        "type": "object"
+      },
+      "TimerStatusResponse": {
+        "properties": {
+          "project_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Category"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "timer_running": {
+            "title": "Timer Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "timer_running"
+        ],
+        "title": "TimerStatusResponse",
         "type": "object"
       },
       "UpdateBeatRequest": {
@@ -1549,6 +2206,24 @@
             "default": false,
             "title": "Archived",
             "type": "boolean"
+          },
+          "autostart_repos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Autostart Repos",
+            "type": "array"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
           },
           "color": {
             "anyOf": [
@@ -2911,6 +3586,134 @@
         ]
       }
     },
+    "/api/biometrics/": {
+      "delete": {
+        "description": "Delete all biometric data for the current user (privacy).",
+        "operationId": "delete_all_biometrics_api_biometrics__delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Delete All Biometrics Api Biometrics  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete All Biometrics",
+        "tags": [
+          "biometrics"
+        ]
+      },
+      "get": {
+        "description": "List biometric data for a date range.",
+        "operationId": "list_biometrics_api_biometrics__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BiometricDayResponse"
+                  },
+                  "title": "Response List Biometrics Api Biometrics  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Biometrics",
+        "tags": [
+          "biometrics"
+        ]
+      }
+    },
+    "/api/biometrics/daily": {
+      "post": {
+        "description": "Upsert a day of biometric data (device token or session token).",
+        "operationId": "post_biometric_day_api_biometrics_daily_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiometricDayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Biometric Day Api Biometrics Daily Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Biometric Day",
+        "tags": [
+          "biometrics"
+        ]
+      }
+    },
     "/api/calendar/auth-url": {
       "get": {
         "description": "Get the Google OAuth consent URL to start the connection flow.",
@@ -3706,6 +4509,132 @@
         ]
       }
     },
+    "/api/device/pair/code": {
+      "post": {
+        "description": "Generate a short-lived pairing code for daemon authentication.",
+        "operationId": "generate_pair_code_api_device_pair_code_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairCodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Generate Pair Code",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/device/pair/exchange": {
+      "post": {
+        "description": "Exchange a pairing code for a long-lived device token (public endpoint).",
+        "operationId": "exchange_pair_code_api_device_pair_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairExchangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairExchangeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange Pair Code",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/device/registrations": {
+      "get": {
+        "description": "List all active (non-revoked) device registrations for the current user.",
+        "operationId": "list_registrations_api_device_registrations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceRegistrationResponse"
+                  },
+                  "title": "Response List Registrations Api Device Registrations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Registrations",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/device/registrations/{device_id}": {
+      "delete": {
+        "description": "Revoke a device registration, invalidating its device token.",
+        "operationId": "revoke_registration_api_device_registrations__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Registration",
+        "tags": [
+          "device"
+        ]
+      }
+    },
     "/api/device/status": {
       "get": {
         "description": "Get timer state optimized for ESP32 wall clock firmware.",
@@ -3915,6 +4844,127 @@
         "summary": "Import Sqlite",
         "tags": [
           "export"
+        ]
+      }
+    },
+    "/api/fitbit/auth-url": {
+      "get": {
+        "description": "Get the Fitbit OAuth consent URL.",
+        "operationId": "get_auth_url_api_fitbit_auth_url_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Auth Url Api Fitbit Auth Url Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Auth Url",
+        "tags": [
+          "fitbit"
+        ]
+      }
+    },
+    "/api/fitbit/connect": {
+      "post": {
+        "description": "Exchange an OAuth code for Fitbit tokens.",
+        "operationId": "connect_api_fitbit_connect_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Connect Api Fitbit Connect Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect",
+        "tags": [
+          "fitbit"
+        ]
+      }
+    },
+    "/api/fitbit/disconnect": {
+      "delete": {
+        "description": "Remove the Fitbit integration.",
+        "operationId": "disconnect_api_fitbit_disconnect_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Disconnect Api Fitbit Disconnect Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Disconnect",
+        "tags": [
+          "fitbit"
+        ]
+      }
+    },
+    "/api/fitbit/status": {
+      "get": {
+        "description": "Check if Fitbit is connected.",
+        "operationId": "get_status_api_fitbit_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Status Api Fitbit Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "fitbit"
         ]
       }
     },
@@ -4725,6 +5775,100 @@
         "summary": "Update Intention",
         "tags": [
           "intentions"
+        ]
+      }
+    },
+    "/api/oura/connect": {
+      "post": {
+        "description": "Connect Oura by validating a personal access token.",
+        "operationId": "connect_api_oura_connect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OuraConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Connect Api Oura Connect Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect",
+        "tags": [
+          "oura"
+        ]
+      }
+    },
+    "/api/oura/disconnect": {
+      "delete": {
+        "description": "Remove the Oura integration.",
+        "operationId": "disconnect_api_oura_disconnect_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Disconnect Api Oura Disconnect Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Disconnect",
+        "tags": [
+          "oura"
+        ]
+      }
+    },
+    "/api/oura/status": {
+      "get": {
+        "description": "Check if Oura is connected.",
+        "operationId": "get_status_api_oura_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Status Api Oura Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "oura"
         ]
       }
     },
@@ -5700,6 +6844,342 @@
         "summary": "Current Week Time For Project",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/api/signals/all": {
+      "delete": {
+        "description": "Delete all signal summaries for the current user (privacy dashboard).",
+        "operationId": "delete_all_signals_api_signals_all_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteSignalsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete All Signals",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/drift": {
+      "post": {
+        "description": "Record a distraction drift event from the daemon.",
+        "operationId": "post_drift_event_api_signals_drift_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostDriftEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Drift Event Api Signals Drift Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Drift Event",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/flow-windows": {
+      "get": {
+        "description": "List flow windows for the current user within a date range.",
+        "operationId": "list_flow_windows_api_signals_flow_windows_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FlowWindowResponse"
+                  },
+                  "title": "Response List Flow Windows Api Signals Flow Windows Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Flow Windows",
+        "tags": [
+          "signals"
+        ]
+      },
+      "post": {
+        "description": "Store a computed flow window from the daemon (device token required).",
+        "operationId": "post_flow_window_api_signals_flow_windows_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostFlowWindowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Flow Window Api Signals Flow Windows Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Flow Window",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/suggest-timer": {
+      "post": {
+        "description": "Check if a timer should be auto-started based on flow state.\n\nCalled by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.\nMatches the dominant app category against projects with autostart_repos.",
+        "operationId": "suggest_timer_api_signals_suggest_timer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostFlowWindowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoTimerSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest Timer",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/summaries": {
+      "get": {
+        "description": "List signal summaries for the current user within a date range.",
+        "operationId": "list_signal_summaries_api_signals_summaries_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SignalSummaryResponse"
+                  },
+                  "title": "Response List Signal Summaries Api Signals Summaries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Signal Summaries",
+        "tags": [
+          "signals"
+        ]
+      },
+      "post": {
+        "description": "Upsert an hourly signal summary from the daemon (device token required).",
+        "operationId": "post_signal_summary_api_signals_summaries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostSignalSummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Signal Summary Api Signals Summaries Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Signal Summary",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/timer-context": {
+      "get": {
+        "description": "Get current timer context for the daemon's flow score computation.",
+        "operationId": "get_timer_context_api_signals_timer_context_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimerStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Timer Context",
+        "tags": [
+          "signals"
         ]
       }
     },

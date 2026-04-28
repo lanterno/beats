@@ -382,6 +382,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/biometrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Biometrics
+         * @description List biometric data for a date range.
+         */
+        get: operations["list_biometrics_api_biometrics__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete All Biometrics
+         * @description Delete all biometric data for the current user (privacy).
+         */
+        delete: operations["delete_all_biometrics_api_biometrics__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/biometrics/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Biometric Day
+         * @description Upsert a day of biometric data (device token or session token).
+         */
+        post: operations["post_biometric_day_api_biometrics_daily_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/calendar/auth-url": {
         parameters: {
             query?: never;
@@ -795,6 +839,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/device/pair/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Pair Code
+         * @description Generate a short-lived pairing code for daemon authentication.
+         */
+        post: operations["generate_pair_code_api_device_pair_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/pair/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange Pair Code
+         * @description Exchange a pairing code for a long-lived device token (public endpoint).
+         */
+        post: operations["exchange_pair_code_api_device_pair_exchange_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Registrations
+         * @description List all active (non-revoked) device registrations for the current user.
+         */
+        get: operations["list_registrations_api_device_registrations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/registrations/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Registration
+         * @description Revoke a device registration, invalidating its device token.
+         */
+        delete: operations["revoke_registration_api_device_registrations__device_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/device/status": {
         parameters: {
             query?: never;
@@ -923,6 +1047,86 @@ export interface paths {
          *     user. Sharing exports between accounts is out of scope for v1.
          */
         post: operations["import_sqlite_api_export_sqlite_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitbit/auth-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Auth Url
+         * @description Get the Fitbit OAuth consent URL.
+         */
+        get: operations["get_auth_url_api_fitbit_auth_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitbit/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect
+         * @description Exchange an OAuth code for Fitbit tokens.
+         */
+        post: operations["connect_api_fitbit_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitbit/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect
+         * @description Remove the Fitbit integration.
+         */
+        delete: operations["disconnect_api_fitbit_disconnect_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitbit/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description Check if Fitbit is connected.
+         */
+        get: operations["get_status_api_fitbit_status_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1341,6 +1545,66 @@ export interface paths {
         patch: operations["update_intention_api_intentions__intention_id__patch"];
         trace?: never;
     };
+    "/api/oura/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect
+         * @description Connect Oura by validating a personal access token.
+         */
+        post: operations["connect_api_oura_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oura/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect
+         * @description Remove the Oura integration.
+         */
+        delete: operations["disconnect_api_oura_disconnect_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oura/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description Check if Oura is connected.
+         */
+        get: operations["get_status_api_oura_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plans/intention-streaks": {
         parameters: {
             query?: never;
@@ -1721,6 +1985,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/signals/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete All Signals
+         * @description Delete all signal summaries for the current user (privacy dashboard).
+         */
+        delete: operations["delete_all_signals_api_signals_all_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signals/drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Drift Event
+         * @description Record a distraction drift event from the daemon.
+         */
+        post: operations["post_drift_event_api_signals_drift_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signals/flow-windows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Flow Windows
+         * @description List flow windows for the current user within a date range.
+         */
+        get: operations["list_flow_windows_api_signals_flow_windows_get"];
+        put?: never;
+        /**
+         * Post Flow Window
+         * @description Store a computed flow window from the daemon (device token required).
+         */
+        post: operations["post_flow_window_api_signals_flow_windows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signals/suggest-timer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Timer
+         * @description Check if a timer should be auto-started based on flow state.
+         *
+         *     Called by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.
+         *     Matches the dominant app category against projects with autostart_repos.
+         */
+        post: operations["suggest_timer_api_signals_suggest_timer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signals/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Signal Summaries
+         * @description List signal summaries for the current user within a date range.
+         */
+        get: operations["list_signal_summaries_api_signals_summaries_get"];
+        put?: never;
+        /**
+         * Post Signal Summary
+         * @description Upsert an hourly signal summary from the daemon (device token required).
+         */
+        post: operations["post_signal_summary_api_signals_summaries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signals/timer-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timer Context
+         * @description Get current timer context for the daemon's flow score computation.
+         */
+        get: operations["get_timer_context_api_signals_timer_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/timer/status": {
         parameters: {
             query?: never;
@@ -1855,6 +2250,69 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AutoTimerSuggestion */
+        AutoTimerSuggestion: {
+            /** Project Id */
+            project_id?: string | null;
+            /** Project Name */
+            project_name?: string | null;
+            /** Should Suggest */
+            should_suggest: boolean;
+        };
+        /** BiometricDayRequest */
+        BiometricDayRequest: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hrv Ms */
+            hrv_ms?: number | null;
+            /** Readiness Score */
+            readiness_score?: number | null;
+            /** Resting Hr Bpm */
+            resting_hr_bpm?: number | null;
+            /** Sleep Efficiency */
+            sleep_efficiency?: number | null;
+            /** Sleep Minutes */
+            sleep_minutes?: number | null;
+            /** Source */
+            source: string;
+            /** Steps */
+            steps?: number | null;
+            /** Workouts */
+            workouts?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** BiometricDayResponse */
+        BiometricDayResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hrv Ms */
+            hrv_ms: number | null;
+            /** Id */
+            id: string;
+            /** Readiness Score */
+            readiness_score: number | null;
+            /** Resting Hr Bpm */
+            resting_hr_bpm: number | null;
+            /** Sleep Efficiency */
+            sleep_efficiency: number | null;
+            /** Sleep Minutes */
+            sleep_minutes: number | null;
+            /** Source */
+            source: string;
+            /** Steps */
+            steps: number | null;
+            /** Workouts */
+            workouts: {
+                [key: string]: unknown;
+            }[];
+        };
         /** Body_import_full_json_api_export_import_post */
         Body_import_full_json_api_export_import_post: {
             /**
@@ -2008,6 +2466,11 @@ export interface components {
             /** Note */
             note: string;
         };
+        /** DeleteSignalsResponse */
+        DeleteSignalsResponse: {
+            /** Deleted Summaries */
+            deleted_summaries: number;
+        };
         /** DeviceFavoriteProject */
         DeviceFavoriteProject: {
             /** Color Rgb */
@@ -2036,6 +2499,22 @@ export interface components {
             uptime_seconds?: number | null;
             /** Wifi Rssi */
             wifi_rssi?: number | null;
+        };
+        /** DeviceRegistrationResponse */
+        DeviceRegistrationResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Device Id */
+            device_id: string;
+            /** Device Name */
+            device_name: string | null;
+            /** Id */
+            id: string;
+            /** Last Seen */
+            last_seen: string | null;
         };
         /** DeviceStatusResponse */
         DeviceStatusResponse: {
@@ -2105,6 +2584,39 @@ export interface components {
             /** Project Name */
             project_name: string;
         };
+        /** FlowWindowResponse */
+        FlowWindowResponse: {
+            /** Active Project Id */
+            active_project_id: string | null;
+            /** Cadence Score */
+            cadence_score: number;
+            /** Category Fit Score */
+            category_fit_score: number;
+            /** Coherence Score */
+            coherence_score: number;
+            /** Context Switches */
+            context_switches: number;
+            /** Dominant Bundle Id */
+            dominant_bundle_id: string;
+            /** Dominant Category */
+            dominant_category: string;
+            /** Flow Score */
+            flow_score: number;
+            /** Id */
+            id: string;
+            /** Idle Fraction */
+            idle_fraction: number;
+            /**
+             * Window End
+             * Format: date-time
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date-time
+             */
+            window_start: string;
+        };
         /**
          * FocusScoreResponse
          * @description Response schema for a focus quality score.
@@ -2127,6 +2639,8 @@ export interface components {
         /**
          * GoalOverrideRequest
          * @description Request body for a goal override.
+         *
+         *     weekly_goal=None means "no goal for this window" (one-off or permanent).
          */
         GoalOverrideRequest: {
             /** Effective From */
@@ -2137,7 +2651,7 @@ export interface components {
             /** Week Of */
             week_of?: string | null;
             /** Weekly Goal */
-            weekly_goal: number;
+            weekly_goal?: number | null;
         };
         /**
          * GoalType
@@ -2310,6 +2824,35 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** OuraConnectRequest */
+        OuraConnectRequest: {
+            /** Access Token */
+            access_token: string;
+        };
+        /** PairCodeResponse */
+        PairCodeResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Expires In Seconds
+             * @default 300
+             */
+            expires_in_seconds: number;
+        };
+        /** PairExchangeRequest */
+        PairExchangeRequest: {
+            /** Code */
+            code: string;
+            /** Device Name */
+            device_name?: string | null;
+        };
+        /** PairExchangeResponse */
+        PairExchangeResponse: {
+            /** Device Id */
+            device_id: string;
+            /** Device Token */
+            device_token: string;
+        };
         /**
          * PatternsResponse
          * @description Response schema for pattern detection results.
@@ -2322,6 +2865,80 @@ export interface components {
             generated_at: string;
             /** Insights */
             insights: components["schemas"]["InsightCardResponse"][];
+        };
+        /** PostDriftEventRequest */
+        PostDriftEventRequest: {
+            /** Bundle Id */
+            bundle_id: string;
+            /** Duration Seconds */
+            duration_seconds: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+        };
+        /** PostFlowWindowRequest */
+        PostFlowWindowRequest: {
+            /** Active Project Id */
+            active_project_id?: string | null;
+            /** Cadence Score */
+            cadence_score: number;
+            /** Category Fit Score */
+            category_fit_score: number;
+            /** Coherence Score */
+            coherence_score: number;
+            /**
+             * Context Switches
+             * @default 0
+             */
+            context_switches: number;
+            /**
+             * Dominant Bundle Id
+             * @default
+             */
+            dominant_bundle_id: string;
+            /**
+             * Dominant Category
+             * @default
+             */
+            dominant_category: string;
+            /** Flow Score */
+            flow_score: number;
+            /** Idle Fraction */
+            idle_fraction: number;
+            /**
+             * Window End
+             * Format: date-time
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date-time
+             */
+            window_start: string;
+        };
+        /** PostSignalSummaryRequest */
+        PostSignalSummaryRequest: {
+            /** Categories */
+            categories?: {
+                [key: string]: number;
+            };
+            /**
+             * Hour
+             * Format: date-time
+             */
+            hour: string;
+            /**
+             * Idle Samples
+             * @default 0
+             */
+            idle_samples: number;
+            /**
+             * Total Samples
+             * @default 0
+             */
+            total_samples: number;
         };
         /**
          * ProductivityScoreResponse
@@ -2453,6 +3070,24 @@ export interface components {
             /** Week Of */
             week_of: string;
         };
+        /** SignalSummaryResponse */
+        SignalSummaryResponse: {
+            /** Categories */
+            categories: {
+                [key: string]: number;
+            };
+            /**
+             * Hour
+             * Format: date-time
+             */
+            hour: string;
+            /** Id */
+            id: string;
+            /** Idle Samples */
+            idle_samples: number;
+            /** Total Samples */
+            total_samples: number;
+        };
         /**
          * SuggestionResponse
          * @description Response schema for a daily plan suggestion.
@@ -2466,6 +3101,15 @@ export interface components {
             reasoning: string;
             /** Suggested Minutes */
             suggested_minutes: number;
+        };
+        /** TimerStatusResponse */
+        TimerStatusResponse: {
+            /** Project Category */
+            project_category?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Timer Running */
+            timer_running: boolean;
         };
         /**
          * UpdateBeatRequest
@@ -2508,6 +3152,10 @@ export interface components {
              * @default false
              */
             archived: boolean;
+            /** Autostart Repos */
+            autostart_repos?: string[];
+            /** Category */
+            category?: string | null;
             /** Color */
             color?: string | null;
             /** Description */
@@ -3379,6 +4027,95 @@ export interface operations {
             };
         };
     };
+    list_biometrics_api_biometrics__get: {
+        parameters: {
+            query?: {
+                start?: string;
+                end?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiometricDayResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_all_biometrics_api_biometrics__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+        };
+    };
+    post_biometric_day_api_biometrics_daily_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BiometricDayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_auth_url_api_calendar_auth_url_get: {
         parameters: {
             query?: never;
@@ -3972,6 +4709,108 @@ export interface operations {
             };
         };
     };
+    generate_pair_code_api_device_pair_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairCodeResponse"];
+                };
+            };
+        };
+    };
+    exchange_pair_code_api_device_pair_exchange_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairExchangeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_registrations_api_device_registrations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceRegistrationResponse"][];
+                };
+            };
+        };
+    };
+    revoke_registration_api_device_registrations__device_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_device_status_api_device_status_get: {
         parameters: {
             query?: {
@@ -4136,6 +4975,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_auth_url_api_fitbit_auth_url_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    connect_api_fitbit_connect_post: {
+        parameters: {
+            query: {
+                code: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_fitbit_disconnect_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+        };
+    };
+    get_status_api_fitbit_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -4721,6 +5659,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_api_oura_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OuraConnectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_oura_disconnect_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+        };
+    };
+    get_status_api_oura_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -5518,6 +6535,248 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_all_signals_api_signals_all_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteSignalsResponse"];
+                };
+            };
+        };
+    };
+    post_drift_event_api_signals_drift_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostDriftEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_flow_windows_api_signals_flow_windows_get: {
+        parameters: {
+            query?: {
+                start?: string;
+                end?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlowWindowResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_flow_window_api_signals_flow_windows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostFlowWindowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_timer_api_signals_suggest_timer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostFlowWindowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoTimerSuggestion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signal_summaries_api_signals_summaries_get: {
+        parameters: {
+            query?: {
+                start?: string;
+                end?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalSummaryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_signal_summary_api_signals_summaries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostSignalSummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_timer_context_api_signals_timer_context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimerStatusResponse"];
                 };
             };
         };
