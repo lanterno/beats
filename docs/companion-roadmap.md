@@ -96,10 +96,7 @@ Native platform integration for glanceable info.
 
 ### macOS Menu Bar Polish
 
-The tray (`tray_service.dart`) already shows live elapsed time + project, a Start Timer submenu of recent projects, Stop Timer, Open Beats, and Quit. Remaining polish:
-
-- Color the tray icon to match the running project (currently text-only `●` glyph in the menu)
-- Tray icon goes gray when idle
+The tray (`tray_service.dart`) shows live elapsed time + project, a Start Timer submenu of recent projects, Stop Timer, Open Beats, and Quit. The icon now renders a colored dot matching the running project (gray when idle), via PNGs cached under the OS temp dir by `TrayIconRenderer`. No further menu-bar polish pending.
 
 ---
 
@@ -139,6 +136,6 @@ The tray (`tray_service.dart`) already shows live elapsed time + project, a Star
 |-------|------|-------|--------|
 | **3** | Coach notifications | The coach reaches users proactively | 1.5 weeks |
 | **4** | Quick entry polish | Frictionless capture around timer events | 0.5 week |
-| **5** | Widgets + watch + menu bar | Ambient presence on home screen / wrist | 2 weeks |
+| **5** | Widgets + watch (menu bar polish ✅) | Ambient presence on home screen / wrist | ~1.5 weeks |
 
-**Total: ~4 weeks for the remaining vision.**
+**Total: ~3.5 weeks for the remaining vision.**

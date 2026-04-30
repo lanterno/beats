@@ -3,6 +3,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:system_tray/system_tray.dart';
 import 'api_client.dart';
+import 'tray_icon.dart';
+
+List<int> _hexToRgb(String? hex) {
+  if (hex == null || hex.isEmpty) return [122, 122, 122];
+  final cleaned = hex.replaceFirst('#', '');
+  if (cleaned.length != 6) return [122, 122, 122];
+  return [
+    int.tryParse(cleaned.substring(0, 2), radix: 16) ?? 122,
+    int.tryParse(cleaned.substring(2, 4), radix: 16) ?? 122,
+    int.tryParse(cleaned.substring(4, 6), radix: 16) ?? 122,
+  ];
+}
 
 /// macOS menu bar integration — live timer, quick-start, today's stats.
 class TrayService {
@@ -10,12 +22,15 @@ class TrayService {
   final VoidCallback onShowWindow;
 
   final SystemTray _tray = SystemTray();
+  final TrayIconRenderer _iconRenderer = TrayIconRenderer();
   Timer? _pollTimer;
   Timer? _tickTimer;
 
   // State
   bool _running = false;
   String? _projectName;
+  String? _projectColorHex;
+  String? _currentIconHex;
   DateTime? _startTime;
   List<Map<String, dynamic>> _projects = [];
 
@@ -24,11 +39,13 @@ class TrayService {
   Future<void> init() async {
     if (!Platform.isMacOS && !Platform.isWindows && !Platform.isLinux) return;
 
+    final idlePath = await _iconRenderer.idleIcon();
     await _tray.initSystemTray(
       title: '',
-      iconPath: '',
+      iconPath: idlePath,
       toolTip: 'Beats Companion',
     );
+    _currentIconHex = '7A7A7A';
 
     _tray.registerSystemTrayEventHandler((eventName) {
       if (eventName == kSystemTrayEventClick) {
@@ -63,11 +80,33 @@ class TrayService {
       _projectName = name;
       _startTime = since != null ? DateTime.tryParse(since) : null;
 
-      // Compute today's total from the so_far field or estimate
-      // For now, show current session duration as "today"
+      // Resolve the running project's color from the projects list so the
+      // tray icon can match it. Status payload doesn't carry color today.
+      _projectColorHex = null;
+      if (isBeating && project != null) {
+        final id = project['id'];
+        final match = projects.where((p) => p['id'] == id).firstOrNull;
+        final hex = match?['color'] as String?;
+        if (hex != null) _projectColorHex = hex;
+      }
+
+      await _updateIcon();
       await _updateMenu();
       _tick();
     } catch (_) {}
+  }
+
+  Future<void> _updateIcon() async {
+    final targetHex = _running && _projectColorHex != null
+        ? _projectColorHex!.replaceFirst('#', '').toUpperCase()
+        : '7A7A7A';
+    if (targetHex == _currentIconHex) return;
+    final rgb = _running && _projectColorHex != null
+        ? _hexToRgb(_projectColorHex)
+        : null;
+    final path = await _iconRenderer.iconForProject(rgb);
+    await _tray.setImage(path);
+    _currentIconHex = targetHex;
   }
 
   void _tick() {
@@ -133,7 +172,10 @@ class TrayService {
       await client.startTimer(projectId);
       _running = true;
       _projectName = projectName;
+      final match = _projects.where((p) => p['id'] == projectId).firstOrNull;
+      _projectColorHex = match?['color'] as String?;
       _startTime = DateTime.now().toUtc();
+      await _updateIcon();
       await _updateMenu();
       _tick();
     } catch (_) {}
@@ -144,7 +186,9 @@ class TrayService {
       await client.stopTimer();
       _running = false;
       _projectName = null;
+      _projectColorHex = null;
       _startTime = null;
+      await _updateIcon();
       await _updateMenu();
       _tray.setTitle('');
     } catch (_) {}
