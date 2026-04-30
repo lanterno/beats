@@ -704,6 +704,75 @@ class TestCoachEndpoints:
         assert response.status_code == 401
 
 
+class TestDailyNotes:
+    """Daily-notes endpoints: upsert (PUT + POST alias), single-day get,
+    and the date-range list used by mood sparklines."""
+
+    def test_upsert_via_put(self):
+        resp = client.put(
+            "/api/daily-notes",
+            json={"date": "2026-04-30", "mood": 4, "note": "good day"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["date"] == "2026-04-30"
+        assert body["mood"] == 4
+        assert body["note"] == "good day"
+
+    def test_upsert_via_post_alias(self):
+        # POST is exposed as an alias to keep older clients working.
+        resp = client.post(
+            "/api/daily-notes",
+            json={"date": "2026-04-29", "mood": 3, "note": ""},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["mood"] == 3
+
+    def test_get_single_day(self):
+        client.put(
+            "/api/daily-notes",
+            json={"date": "2026-04-28", "mood": 5},
+            headers=auth_headers,
+        )
+        resp = client.get(
+            "/api/daily-notes",
+            params={"target_date": "2026-04-28"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["mood"] == 5
+
+    def test_list_by_range(self):
+        # Seed a few days, fetch a window that covers them.
+        for d, m in [("2026-04-25", 2), ("2026-04-26", 3), ("2026-04-27", 4)]:
+            client.put(
+                "/api/daily-notes",
+                json={"date": d, "mood": m, "note": ""},
+                headers=auth_headers,
+            )
+        resp = client.get(
+            "/api/daily-notes/range",
+            params={"start": "2026-04-25", "end": "2026-04-27"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert isinstance(rows, list)
+        moods = {row["date"]: row["mood"] for row in rows}
+        assert moods["2026-04-25"] == 2
+        assert moods["2026-04-26"] == 3
+        assert moods["2026-04-27"] == 4
+
+    def test_range_requires_auth(self):
+        resp = client.get(
+            "/api/daily-notes/range",
+            params={"start": "2026-04-25", "end": "2026-04-27"},
+        )
+        assert resp.status_code == 401
+
+
 class TestMiscellaneousEndpoints:
     """Test suite for miscellaneous endpoints"""
 
