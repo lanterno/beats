@@ -1173,9 +1173,20 @@ class TestDevicePairingAPI:
         device_token = resp.json()["device_token"]
         device_headers = {"Authorization": f"Bearer {device_token}"}
 
-        # Try accessing analytics (not in DEVICE_ALLOWED_PREFIXES)
-        resp = client.get("/api/analytics/heatmap", headers=device_headers)
+        # Try accessing rhythm (not in DEVICE_ALLOWED_PREFIXES — only /heatmap is)
+        resp = client.get("/api/analytics/rhythm", headers=device_headers)
         assert resp.status_code == 403
+
+    def test_device_token_allowed_on_analytics_heatmap(self):
+        """Device tokens can read the heatmap (companion timer-screen totals)."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_token = resp.json()["device_token"]
+        device_headers = {"Authorization": f"Bearer {device_token}"}
+
+        resp = client.get("/api/analytics/heatmap", headers=device_headers)
+        assert resp.status_code == 200
 
     def test_list_registrations(self):
         """GET /api/device/registrations lists paired devices."""
@@ -1404,7 +1415,7 @@ class TestSignalsAPI:
     def test_device_token_blocked_on_non_allowed_paths(self):
         """Device token cannot access endpoints outside DEVICE_ALLOWED_PREFIXES."""
         _, device_headers = self._pair_device()
-        resp = client.get("/api/analytics/heatmap", headers=device_headers)
+        resp = client.get("/api/analytics/rhythm", headers=device_headers)
         assert resp.status_code == 403
 
     def test_flow_window_validation(self):

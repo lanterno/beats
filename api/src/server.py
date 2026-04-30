@@ -55,6 +55,9 @@ DEVICE_ALLOWED_PREFIXES = (
     "/api/coach/review",
     "/api/intentions",
     "/api/daily-notes",
+    # Companion timer screen renders today/week totals + streak from the heatmap.
+    # Other /api/analytics/* endpoints remain off-limits.
+    "/api/analytics/heatmap",
 )
 
 
