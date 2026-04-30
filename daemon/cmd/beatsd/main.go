@@ -216,6 +216,41 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "stats":
+		// Same flag surface as `recent` minus the table — this is the
+		// one-line headline mode, useful for shell prompts/status bars.
+		minutes := 60
+		var filter client.FlowWindowsFilter
+		var asJSON bool
+		for i := 1; i < len(args); i++ {
+			switch args[i] {
+			case "--minutes":
+				if i+1 < len(args) {
+					if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+						minutes = v
+					}
+				}
+			case "--repo":
+				if i+1 < len(args) {
+					filter.EditorRepo = args[i+1]
+				}
+			case "--language":
+				if i+1 < len(args) {
+					filter.EditorLanguage = args[i+1]
+				}
+			case "--bundle":
+				if i+1 < len(args) {
+					filter.BundleID = args[i+1]
+				}
+			case "--json":
+				asJSON = true
+			}
+		}
+		if err := runStats(cfg, minutes, filter, asJSON); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "top":
 		// Same `--minutes N` parsing as `recent`. No filter flags here:
 		// the whole point of `top` is to discover which repo / language /
@@ -324,6 +359,12 @@ Commands:
                   --json           emit raw windows as a JSON array (for piping into jq)
   top           Print top-5 leaderboards by repo / language / app for the recent window
                   --minutes N      override the window (default 60)
+  stats         Print a one-line headline summary (count · avg · peak · best repo)
+                  --minutes N      override the window (default 60)
+                  --repo PATH      narrow to a specific editor workspace
+                  --language ID    narrow to a VS Code language id
+                  --bundle ID      narrow to a macOS bundle id
+                  --json           emit the FlowWindowSummary object as JSON
   unpair        Remove the device token from the keychain
   version       Print version info
 

@@ -220,6 +220,74 @@ func (c *Client) GetFlowWindowsFiltered(
 	return out, nil
 }
 
+// FlowWindowSummary mirrors the API's FlowWindowSummaryResponse — a
+// single-round-trip aggregate for the same slice GetFlowWindowsFiltered
+// would page through. PeakAt is a pointer so the empty-slice case
+// (count=0) is distinguishable from "peak at the zero time".
+type FlowWindowSummary struct {
+	Count       int          `json:"count"`
+	Avg         float64      `json:"avg"`
+	Peak        float64      `json:"peak"`
+	PeakAt      *time.Time   `json:"peak_at"`
+	TopRepo     *FlowTopItem `json:"top_repo"`
+	TopLanguage *FlowTopItem `json:"top_language"`
+	TopBundle   *FlowTopItem `json:"top_bundle"`
+}
+
+// FlowTopItem is one bucket inside a FlowWindowSummary axis. Same shape
+// as the API's TopBucket — the highest-count entry on its grouping axis.
+type FlowTopItem struct {
+	Key   string  `json:"key"`
+	Avg   float64 `json:"avg"`
+	Count int     `json:"count"`
+}
+
+// GetFlowWindowsSummary fetches single round-trip aggregate stats for
+// the slice [start, end] under the given filter. Used by `beatsd stats`
+// to render a one-line headline without paginating every row.
+func (c *Client) GetFlowWindowsSummary(
+	ctx context.Context,
+	start, end time.Time,
+	filter FlowWindowsFilter,
+) (*FlowWindowSummary, error) {
+	q := url.Values{}
+	q.Set("start", start.UTC().Format(time.RFC3339))
+	q.Set("end", end.UTC().Format(time.RFC3339))
+	if filter.EditorRepo != "" {
+		q.Set("editor_repo", filter.EditorRepo)
+	}
+	if filter.EditorLanguage != "" {
+		q.Set("editor_language", filter.EditorLanguage)
+	}
+	if filter.BundleID != "" {
+		q.Set("bundle_id", filter.BundleID)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/api/signals/flow-windows/summary?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.deviceToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("flow-windows summary GET failed (HTTP %d)", resp.StatusCode)
+	}
+
+	var out FlowWindowSummary
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // TimerContextResponse is the response from GET /api/signals/timer-context.
 type TimerContextResponse struct {
 	TimerRunning    bool   `json:"timer_running"`
