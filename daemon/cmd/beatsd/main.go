@@ -180,7 +180,7 @@ func main() {
 		}
 
 	case "version":
-		fmt.Printf("beatsd %s\n", version)
+		fmt.Print(collectVersionInfo())
 
 	case "unpair":
 		if err := pair.DeleteToken(); err != nil {
