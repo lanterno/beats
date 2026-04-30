@@ -68,21 +68,44 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
     overlay.insert(entry);
   }
 
+  /// The last 3 distinct (project_id, planned_minutes) combinations from
+  /// today's intentions list, newest first. Used by the add sheet's
+  /// quick-add row so common intentions take one tap to recreate.
+  List<Map<String, dynamic>> _recentCombos() {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final i in _intentions) {
+      final pid = i['project_id'] as String?;
+      final mins = (i['planned_minutes'] as num?)?.toInt();
+      if (pid == null || mins == null) continue;
+      final key = '$pid::$mins';
+      if (!seen.add(key)) continue;
+      out.add({'project_id': pid, 'planned_minutes': mins});
+      if (out.length == 3) break;
+    }
+    return out;
+  }
+
   Future<void> _addIntention() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       backgroundColor: BeatsColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _AddSheet(projects: _projects),
+      builder: (ctx) => _AddSheet(
+        projects: _projects,
+        recentCombos: _recentCombos(),
+      ),
     );
     if (result == null) return;
     try {
       await widget.client.createIntention(result['project_id'], result['planned_minutes']);
       await _refresh();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')));
+      }
     }
   }
 
@@ -296,7 +319,8 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
 
 class _AddSheet extends StatefulWidget {
   final List<Map<String, dynamic>> projects;
-  const _AddSheet({required this.projects});
+  final List<Map<String, dynamic>> recentCombos;
+  const _AddSheet({required this.projects, this.recentCombos = const []});
   @override
   State<_AddSheet> createState() => _AddSheetState();
 }
@@ -306,8 +330,27 @@ class _AddSheetState extends State<_AddSheet> {
   int _min = 60;
   final _durs = [15, 30, 45, 60, 90, 120];
 
+  Map<String, dynamic>? _projectById(String id) =>
+      widget.projects.where((p) => p['id'] == id).firstOrNull;
+
+  Color _projectColor(String? id) {
+    if (id == null) return BeatsColors.textTertiary;
+    final hex = (_projectById(id))?['color'] as String?;
+    if (hex == null || hex.length < 7) return BeatsColors.textTertiary;
+    final h = hex.replaceFirst('#', '');
+    return Color.fromARGB(255,
+        int.parse(h.substring(0, 2), radix: 16),
+        int.parse(h.substring(2, 4), radix: 16),
+        int.parse(h.substring(4, 6), radix: 16));
+  }
+
+  String _formatDuration(int minutes) =>
+      minutes >= 60 ? '${minutes ~/ 60}h${minutes % 60 > 0 ? ' ${minutes % 60}m' : ''}' : '${minutes}m';
+
   @override
   Widget build(BuildContext context) {
+    final selectedName = _pid != null ? (_projectById(_pid!)?['name'] as String?) : null;
+    final selectedColor = _projectColor(_pid);
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
@@ -320,6 +363,69 @@ class _AddSheetState extends State<_AddSheet> {
           const SizedBox(height: 24),
           Text('ADD INTENTION', style: BeatsType.label.copyWith(
             color: BeatsColors.amber, letterSpacing: 2)),
+          const SizedBox(height: 16),
+
+          // Live preview — updates as the user picks project + duration.
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: BeatsColors.background,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _pid != null
+                    ? BeatsColors.amber.withValues(alpha: 0.3)
+                    : BeatsColors.border,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 4, height: 24,
+                  decoration: BoxDecoration(
+                    color: _pid != null ? selectedColor : BeatsColors.border,
+                    borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    selectedName ?? 'Pick a project below',
+                    style: BeatsType.bodyMedium.copyWith(
+                      color: _pid != null
+                          ? BeatsColors.textPrimary
+                          : BeatsColors.textTertiary,
+                    ),
+                  ),
+                ),
+                Text(
+                  _formatDuration(_min),
+                  style: BeatsType.label.copyWith(
+                    fontSize: 11,
+                    letterSpacing: 1.5,
+                    color: BeatsColors.amber,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Quick-add row — last 3 distinct combos from today.
+          if (widget.recentCombos.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('QUICK ADD', style: BeatsType.label.copyWith(
+              fontSize: 9, letterSpacing: 2, color: BeatsColors.textTertiary)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (var i = 0; i < widget.recentCombos.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(child: _buildQuickAddTile(widget.recentCombos[i])),
+                ],
+              ],
+            ),
+          ],
+
           const SizedBox(height: 20),
 
           // Projects
@@ -384,6 +490,47 @@ class _AddSheetState extends State<_AddSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAddTile(Map<String, dynamic> combo) {
+    final pid = combo['project_id'] as String;
+    final mins = combo['planned_minutes'] as int;
+    final name = (_projectById(pid))?['name'] as String? ?? '';
+    final color = _projectColor(pid);
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(context, {'project_id': pid, 'planned_minutes': mins});
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: BeatsColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 6, height: 6,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                name,
+                overflow: TextOverflow.ellipsis,
+                style: BeatsType.bodySmall.copyWith(fontSize: 12),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _formatDuration(mins),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 10, color: BeatsColors.textTertiary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

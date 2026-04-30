@@ -312,12 +312,26 @@ class _CoachScreenState extends State<CoachScreen> {
                         final selected = _todayMood == mood;
                         return GestureDetector(
                           onTap: () => _submitMood(mood),
+                          // Bounce: 1.0 → 1.2 → 1.0 on selection. The
+                          // ValueKey keyed off (mood, selected) restarts the
+                          // tween every time the user re-selects so the
+                          // bounce fires even on repeat taps.
                           child: TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 1.0, end: selected ? 1.1 : 1.0),
-                            duration: const Duration(milliseconds: 250),
+                            key: ValueKey('mood-$mood-$selected'),
+                            tween: Tween(begin: selected ? 0.0 : 1.0, end: 1.0),
+                            duration: const Duration(milliseconds: 360),
                             curve: Curves.easeOutBack,
-                            builder: (_, scale, child) =>
-                                Transform.scale(scale: scale, child: child),
+                            builder: (_, t, child) {
+                              // For the selected emoji, scale through a peak
+                              // at t≈0.6 (1.2) and settle back to 1.0; for
+                              // others, just hold at 1.0.
+                              final scale = selected
+                                  ? (t < 0.6
+                                      ? 1.0 + (t / 0.6) * 0.2
+                                      : 1.2 - ((t - 0.6) / 0.4) * 0.2)
+                                  : 1.0;
+                              return Transform.scale(scale: scale, child: child);
+                            },
                             child: Column(
                               children: [
                                 Container(

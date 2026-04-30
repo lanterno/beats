@@ -14,8 +14,9 @@ What's left is detail polish across individual screens.
 
 Tab transitions and stagger entries already work. Project card and Start/Stop buttons now use the shared `PressScale` widget for a tactile press-down. The Stop button shakes (elastic-in, ±8px) on the first tap inside a sub-5s session and only stops on the second tap. Outstanding micro-interactions:
 
-- **Mood emoji tap**: extend the existing scale to a true 1.0 → 1.2 → 1.0 bounce
 - **Pull-to-refresh**: custom indicator (currently the default with `BeatsColors.amber`)
+
+Mood emoji tap now does a true 1.0 → 1.2 → 1.0 bounce (peaks at t≈0.6 on `easeOutBack`) — shipped.
 
 ### Running State Ambient Motion
 
@@ -73,14 +74,9 @@ A "What went well?" text input now sits below the picker and debounce-saves to `
 
 ---
 
-## Phase 6 — Intentions Screen Polish (remaining)
+## Phase 6 — Intentions Screen Polish
 
-Color-bar accent, strikethrough completion, top progress bar, and pill-shaped duration chips are in place. Still missing:
-
-### Add Intention Sheet
-
-- **Visual preview** of the intention being created (project dot + name + duration) that updates live as the user selects options
-- **Quick-add row** at the top: last 3 project+duration combinations as one-tap shortcuts
+Color-bar accent, strikethrough completion, top progress bar, pill-shaped duration chips, the live visual preview of the intention being created (project dot + name + duration), and a QUICK ADD row of the last 3 distinct (project, duration) combinations from today are all in place. Nothing pending here.
 
 ### Completion Animation
 
@@ -106,11 +102,10 @@ Rewritten to drop the Material `Card`/`ListTile`/`Chip` defaults: section header
 
 | Phase | Impact | Effort |
 |-------|--------|--------|
-| **2 — Mood emoji bounce + custom pull-to-refresh** | Low-Medium | 0.5 day |
-| **6 — Intentions add-sheet polish (visual preview, quick-add row)** | Low-Medium | 0.5 day |
+| **2 — Custom pull-to-refresh indicator** | Low | 0.25 day |
 | **7 — Pairing background ember animation** | Low | 0.25 day |
 
-**Total: ~1.25 days of polish remaining.**
+**Total: ~0.5 days of polish remaining.**
 
 ---
 
