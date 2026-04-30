@@ -32,7 +32,8 @@ as they're identified.
 - Inner radial gradient and sweep-gradient (amber → warm-white → amber)
   ring stroke
 - Tap/drag-to-inspect timeline with vertical guide and detail row showing
-  time, exact score, and dominant category
+  time, exact score, dominant category, and the editor's repo + branch
+  when a VS Code heartbeat covered that window
 - Animated category bars
 
 ## Shipped — Coach

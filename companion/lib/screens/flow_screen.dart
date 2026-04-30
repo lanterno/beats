@@ -138,6 +138,13 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
         ? (_catColors[topName] ?? BeatsColors.textTertiary)
         : BeatsColors.textTertiary;
 
+    // Editor context — present when the VS Code extension was sending
+    // heartbeats during this window. We render the last two segments of
+    // the path to keep the row width sane on long workspace paths.
+    final repo = w['editor_repo'] as String?;
+    final branch = w['editor_branch'] as String?;
+    final repoShort = repo != null && repo.isNotEmpty ? _shortRepo(repo) : null;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -145,35 +152,76 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: BeatsColors.border.withValues(alpha: 0.6)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            timeStr,
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 12, color: BeatsColors.textTertiary, letterSpacing: 1,
-            ),
+          Row(
+            children: [
+              Text(
+                timeStr,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 12, color: BeatsColors.textTertiary, letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Text('$scoreInt',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16, color: _scoreColor(score), fontWeight: FontWeight.w400,
+                )),
+              Text(' / 100',
+                style: BeatsType.bodySmall.copyWith(
+                  fontSize: 11, color: BeatsColors.textTertiary)),
+              const Spacer(),
+              if (topName != null) ...[
+                Container(width: 6, height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle, color: topColor)),
+                const SizedBox(width: 6),
+                Text(topName.toUpperCase(),
+                  style: BeatsType.label.copyWith(
+                    fontSize: 9, color: BeatsColors.textSecondary, letterSpacing: 1.5)),
+              ],
+            ],
           ),
-          const SizedBox(width: 14),
-          Text('$scoreInt',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 16, color: _scoreColor(score), fontWeight: FontWeight.w400,
-            )),
-          Text(' / 100',
-            style: BeatsType.bodySmall.copyWith(
-              fontSize: 11, color: BeatsColors.textTertiary)),
-          const Spacer(),
-          if (topName != null) ...[
-            Container(width: 6, height: 6,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle, color: topColor)),
-            const SizedBox(width: 6),
-            Text(topName.toUpperCase(),
-              style: BeatsType.label.copyWith(
-                fontSize: 9, color: BeatsColors.textSecondary, letterSpacing: 1.5)),
+          if (repoShort != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.folder_outlined,
+                    size: 11, color: BeatsColors.textTertiary.withValues(alpha: 0.7)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    repoShort,
+                    overflow: TextOverflow.ellipsis,
+                    style: BeatsType.bodySmall.copyWith(
+                      fontSize: 11,
+                      color: BeatsColors.textSecondary,
+                    ),
+                  ),
+                ),
+                if (branch != null && branch.isNotEmpty) ...[
+                  Text(' · ',
+                    style: BeatsType.bodySmall.copyWith(
+                      fontSize: 11, color: BeatsColors.textTertiary)),
+                  Text(branch,
+                    style: BeatsType.bodySmall.copyWith(
+                      fontSize: 11, color: BeatsColors.textTertiary)),
+                ],
+              ],
+            ),
           ],
         ],
       ),
     );
+  }
+
+  /// Returns the last two segments of a path so a 60-char workspace
+  /// stays readable in the inspector row.
+  String _shortRepo(String path) {
+    final parts = path.split(RegExp(r'[\\/]')).where((s) => s.isNotEmpty).toList();
+    if (parts.length <= 2) return path;
+    return parts.sublist(parts.length - 2).join('/');
   }
 
   @override
