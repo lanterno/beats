@@ -102,8 +102,8 @@ The Settings tab still uses Material defaults (`Card`, `Chip`, `ListTile`) — o
 
 ### Pairing Screen
 
-- The code input should have **individual character boxes** (6 separate boxes) instead of a single text field — like a verification code input
-- Each box highlights amber when receiving input
+The code input now renders as 6 individual character boxes (`_CodeInput`); the active box highlights amber, filled boxes show a softer amber border, and a transparent backing TextField preserves keyboard, paste, and autofill. Remaining nice-to-have:
+
 - Add a **subtle particle/ember animation** in the background — floating dots that drift upward slowly
 
 ### Settings Screen

@@ -16,6 +16,7 @@ class PairingScreen extends StatefulWidget {
 
 class _PairingScreenState extends State<PairingScreen> {
   final _codeController = TextEditingController();
+  final _codeFocus = FocusNode();
   final _apiUrlController = TextEditingController();
   final _storage = TokenStorage();
   bool _loading = false;
@@ -64,6 +65,7 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   void dispose() {
     _codeController.dispose();
+    _codeFocus.dispose();
     _apiUrlController.dispose();
     super.dispose();
   }
@@ -148,19 +150,10 @@ class _PairingScreenState extends State<PairingScreen> {
                     children: [
                       Text('CODE', style: BeatsType.label),
                       const SizedBox(height: 8),
-                      TextField(
+                      _CodeInput(
                         controller: _codeController,
-                        textCapitalization: TextCapitalization.characters,
-                        textAlign: TextAlign.center,
-                        maxLength: 6,
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 28, fontWeight: FontWeight.w400,
-                          color: BeatsColors.textPrimary, letterSpacing: 12,
-                        ),
-                        decoration: _inputDecoration('ABC123').copyWith(
-                          counterText: '',
-                        ),
-                        onSubmitted: (_) => _pair(),
+                        focusNode: _codeFocus,
+                        onSubmitted: _pair,
                       ),
                     ],
                   ),
@@ -220,4 +213,144 @@ class _PairingScreenState extends State<PairingScreen> {
       borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.4))),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
   );
+}
+
+/// 6-character code input rendered as individual boxes.
+///
+/// Backed by a single TextField (so paste, autofill, and keyboard navigation
+/// all keep working) with its visible text/cursor stripped to transparent.
+/// Six boxes float on top, reading off the controller — the active box (the
+/// next empty slot) highlights amber.
+class _CodeInput extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onSubmitted;
+  const _CodeInput({
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmitted,
+  });
+
+  @override
+  State<_CodeInput> createState() => _CodeInputState();
+}
+
+class _CodeInputState extends State<_CodeInput> {
+  static const _length = 6;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onChanged);
+    widget.focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChanged);
+    widget.focusNode.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    final raw = widget.controller.text;
+    final upper = raw.toUpperCase();
+    if (upper != raw) {
+      // Force-uppercase without losing the user's place in the field.
+      widget.controller.value = TextEditingValue(
+        text: upper,
+        selection: TextSelection.collapsed(offset: upper.length),
+      );
+    }
+    setState(() {});
+  }
+
+  void _onFocusChanged() => setState(() {});
+
+  Widget _box({required String char, required bool isActive}) {
+    final isFilled = char.isNotEmpty;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      height: 56,
+      decoration: BoxDecoration(
+        color: BeatsColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isActive
+              ? BeatsColors.amber
+              : isFilled
+                  ? BeatsColors.amber.withValues(alpha: 0.4)
+                  : BeatsColors.border,
+          width: isActive ? 1.6 : 1,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        char,
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 24,
+          fontWeight: FontWeight.w400,
+          color: BeatsColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.controller.text;
+    final focused = widget.focusNode.hasFocus;
+    final activeIndex = text.length.clamp(0, _length - 1);
+
+    return GestureDetector(
+      onTap: () => widget.focusNode.requestFocus(),
+      child: Stack(
+        children: [
+          // Visible boxes — non-interactive, painted underneath.
+          IgnorePointer(
+            child: Row(
+              children: [
+                for (var i = 0; i < _length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(child: _box(
+                    char: i < text.length ? text[i] : '',
+                    isActive: focused && i == activeIndex,
+                  )),
+                ],
+              ],
+            ),
+          ),
+          // Invisible TextField sits on top to capture keystrokes / paste.
+          // Sized to fill the box row.
+          Positioned.fill(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: widget.focusNode,
+              autofocus: false,
+              textCapitalization: TextCapitalization.characters,
+              textAlign: TextAlign.center,
+              maxLength: _length,
+              showCursor: false,
+              keyboardType: TextInputType.text,
+              onSubmitted: (_) => widget.onSubmitted(),
+              style: const TextStyle(
+                color: Colors.transparent,
+                height: 1,
+              ),
+              decoration: const InputDecoration(
+                counterText: '',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                fillColor: Colors.transparent,
+                filled: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
