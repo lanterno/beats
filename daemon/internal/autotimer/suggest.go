@@ -5,11 +5,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os/exec"
-	"runtime"
 
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/collector"
+	"github.com/ahmedElghable/beats/daemon/internal/notify"
 )
 
 const (
@@ -79,21 +78,9 @@ func (t *Tracker) OnFlowWindow(ctx context.Context, w collector.FlowWindow) {
 	t.lastSuggestedCategory = w.DominantCategory
 	log.Printf("autotimer: suggesting timer for %q (project: %s)", suggestion.ProjectName, suggestion.ProjectID)
 
-	sendNotification(
+	notify.Send(
 		"Start timer?",
 		fmt.Sprintf("You've been focused on %s for %d minutes. Start tracking \"%s\"?",
 			w.DominantCategory, t.consecutiveHighFlow, suggestion.ProjectName),
 	)
-}
-
-// sendNotification shows a macOS notification.
-func sendNotification(title, body string) {
-	if runtime.GOOS != "darwin" {
-		log.Printf("autotimer: notification: %s — %s", title, body)
-		return
-	}
-	script := fmt.Sprintf(`display notification %q with title %q`, body, title)
-	if err := exec.Command("osascript", "-e", script).Run(); err != nil {
-		log.Printf("autotimer: notification failed: %v", err)
-	}
 }

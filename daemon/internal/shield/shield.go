@@ -3,12 +3,10 @@ package shield
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
-	"runtime"
 	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/collector"
+	"github.com/ahmedElghable/beats/daemon/internal/notify"
 )
 
 // DefaultDistractionBundles are bundle IDs considered distracting during work.
@@ -107,14 +105,8 @@ func (t *Tracker) reset() {
 }
 
 func sendDriftNotification(bundleID string) {
-	if runtime.GOOS != "darwin" {
-		log.Printf("shield: drift detected on %s", bundleID)
-		return
-	}
-	script := fmt.Sprintf(
-		`display notification "You've been on a distraction app for 30s while your timer is running." with title "Drift detected"`,
+	notify.Send(
+		"Drift detected",
+		fmt.Sprintf("You've been on %s for 30s while your timer is running.", bundleID),
 	)
-	if err := exec.Command("osascript", "-e", script).Run(); err != nil {
-		log.Printf("shield: notification failed: %v", err)
-	}
 }
