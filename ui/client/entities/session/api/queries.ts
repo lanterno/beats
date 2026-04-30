@@ -310,6 +310,25 @@ export function useFlowWindows(start?: string, end?: string) {
 }
 
 /**
+ * Hook to fetch the last [days] days of flow windows. Used by FlowThisWeek
+ * to plot a daily-trend bar chart. Defaults to 7 days, anchored to "now"
+ * so the freshness varies smoothly throughout the day.
+ */
+export function useFlowWindowsLastDays(days = 7) {
+	const now = new Date();
+	const start = new Date(now);
+	start.setDate(start.getDate() - days);
+	start.setHours(0, 0, 0, 0);
+	const startIso = start.toISOString();
+	const endIso = now.toISOString();
+	return useQuery({
+		queryKey: [...sessionKeys.all, "flow-windows-range", days, startIso, endIso],
+		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(startIso, endIso),
+		staleTime: 5 * 60_000,
+	});
+}
+
+/**
  * Hook to fetch contribution heatmap for a year, optionally filtered by project and/or tag
  */
 export function useHeatmap(year: number, projectId?: string, tag?: string) {

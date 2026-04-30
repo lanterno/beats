@@ -13,6 +13,7 @@ import { DailyRhythmChart } from "./DailyRhythmChart";
 import { EstimationAccuracy } from "./EstimationAccuracy";
 import { FlowByLanguage } from "./FlowByLanguage";
 import { FlowByRepo } from "./FlowByRepo";
+import { FlowThisWeek } from "./FlowThisWeek";
 import { FlowToday } from "./FlowToday";
 import { MoodCorrelation } from "./MoodCorrelation";
 import { PatternCards } from "./PatternCards";
@@ -129,6 +130,7 @@ export default function Insights() {
 			{!selectedProjectId && !selectedTag && (
 				<>
 					<FlowToday />
+					<FlowThisWeek />
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 						<FlowByRepo />
 						<FlowByLanguage />

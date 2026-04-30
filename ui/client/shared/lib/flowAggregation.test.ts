@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { FlowWindow } from "@/shared/api";
 import {
 	aggregateFlowBy,
+	aggregateFlowByDay,
 	aggregateFlowByRepo,
+	localDateKey,
 	shortRepoPath,
 	summarizeFlow,
 } from "./flowAggregation";
@@ -126,6 +128,55 @@ describe("aggregateFlowBy (generic)", () => {
 		const stats = aggregateFlowBy(windows, (win) => win.editor_language);
 		expect(stats).toHaveLength(1);
 		expect(stats[0].key).toBe("go");
+	});
+});
+
+describe("aggregateFlowByDay", () => {
+	it("returns an empty array for no windows", () => {
+		expect(aggregateFlowByDay([])).toEqual([]);
+	});
+
+	it("groups windows by local date and averages within each", () => {
+		// Three windows on Apr 30 (avg 0.6), two on Apr 29 (avg 0.5). Use
+		// noon-local to avoid timezone-flip ambiguity.
+		const windows = [
+			w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.4 }),
+			w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.6 }),
+			w({ window_start: "2026-04-30T12:00:00Z", flow_score: 0.5 }),
+			w({ window_start: "2026-04-30T12:00:00Z", flow_score: 0.6 }),
+			w({ window_start: "2026-04-30T12:00:00Z", flow_score: 0.7 }),
+		];
+		const byDay = aggregateFlowByDay(windows);
+		expect(byDay).toHaveLength(2);
+		// Sorted by date ascending — older first.
+		expect(byDay[0].count).toBe(2);
+		expect(byDay[0].avg).toBeCloseTo(0.5);
+		expect(byDay[1].count).toBe(3);
+		expect(byDay[1].avg).toBeCloseTo(0.6);
+	});
+
+	it("does NOT backfill empty days — caller decides", () => {
+		const windows = [
+			w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.5 }),
+			w({ window_start: "2026-05-01T12:00:00Z", flow_score: 0.7 }),
+		];
+		const byDay = aggregateFlowByDay(windows);
+		// Apr 30 is missing — that's intentional so a 7-day chart can choose
+		// to render it as "0" or as a gap.
+		expect(byDay).toHaveLength(2);
+	});
+});
+
+describe("localDateKey", () => {
+	it("returns YYYY-MM-DD in local time", () => {
+		// Use a time mid-afternoon UTC so the local date can't possibly
+		// flip across timezones — Apr 30 12:00 UTC is Apr 30 in every
+		// reasonable runner timezone.
+		expect(localDateKey("2026-04-30T12:00:00Z")).toBe("2026-04-30");
+	});
+
+	it("zero-pads month and day", () => {
+		expect(localDateKey("2026-01-05T12:00:00Z")).toBe("2026-01-05");
 	});
 });
 

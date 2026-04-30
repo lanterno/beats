@@ -19,6 +19,7 @@ export {
 	useAllTags,
 	useDailyRhythm,
 	useFlowWindows,
+	useFlowWindowsLastDays,
 	useGaps,
 	useHeatmap,
 	useLastWeekTotal,

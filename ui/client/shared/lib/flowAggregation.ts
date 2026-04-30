@@ -94,6 +94,52 @@ export interface FlowSummary {
 	peakIndex: number;
 }
 
+export interface DailyFlow {
+	/** Local-date key in YYYY-MM-DD form. */
+	date: string;
+	avg: number;
+	count: number;
+}
+
+/**
+ * Buckets flow windows into per-day summaries keyed by local YYYY-MM-DD.
+ * Used by the Flow this week card to show daily averages over a date
+ * range. Days with no windows are NOT inserted — caller decides whether
+ * to backfill empty days for a fixed-width chart.
+ */
+export function aggregateFlowByDay(windows: FlowWindow[]): DailyFlow[] {
+	if (windows.length === 0) return [];
+	const byDay = new Map<string, { sum: number; count: number }>();
+	for (const w of windows) {
+		const date = localDateKey(w.window_start);
+		const cur = byDay.get(date) ?? { sum: 0, count: 0 };
+		cur.sum += w.flow_score;
+		cur.count += 1;
+		byDay.set(date, cur);
+	}
+	return Array.from(byDay.entries())
+		.map(([date, { sum, count }]) => ({
+			date,
+			avg: sum / count,
+			count,
+		}))
+		.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Returns the local YYYY-MM-DD for an ISO timestamp. We deliberately
+ * key by *local* date (not UTC) so a session at 23:30 and another at
+ * 00:30 the same evening don't end up on different days from the user's
+ * perspective.
+ */
+export function localDateKey(iso: string): string {
+	const d = new Date(iso);
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+}
+
 /**
  * Aggregate score statistics across the given windows. Returns null when
  * there's nothing to summarize, so callers can render an empty state
