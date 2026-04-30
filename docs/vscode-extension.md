@@ -33,7 +33,10 @@
 > headline without fetching every row. The home page renders a
 > "Flow today" headline card backed by this endpoint, and the
 > daemon's `beatsd stats` command prints the same summary as a
-> one-liner for shell prompts.
+> one-liner for shell prompts. The Insights page's "Flow trend"
+> card fans out 12 parallel summary calls (one per ISO week) to
+> render a quarterly trend line — answering "is my flow heading
+> up or down?" at a glance.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score

@@ -23,6 +23,7 @@ export {
 	useThisWeekSessions,
 	useTodaySessions,
 	useUpdateSession,
+	useWeeklyFlowTrend,
 	useWeeklySessionsByProject,
 } from "./queries";
 // Low-level API functions

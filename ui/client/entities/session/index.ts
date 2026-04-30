@@ -31,6 +31,7 @@ export {
 	useThisWeekSessions,
 	useTodaySessions,
 	useUpdateSession,
+	useWeeklyFlowTrend,
 	useWeeklySessionsByProject,
 } from "./api";
 // Model layer

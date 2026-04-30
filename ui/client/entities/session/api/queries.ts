@@ -395,6 +395,97 @@ export function useFlowWindowsSummary(start?: string, end?: string, filter: Flow
 	});
 }
 
+/** One week of the trend series — start of the ISO week (Monday 00:00
+ * local) plus the avg + count from /summary. */
+export interface WeeklyFlowPoint {
+	weekStart: string; // YYYY-MM-DD
+	avg: number;
+	count: number;
+}
+
+/**
+ * Hook to fetch a flow-score trend over the last [weeks] ISO weeks.
+ * Fans out one /summary call per week in parallel and returns the
+ * chronological series — used by the FlowTrend card to plot "are
+ * you trending up or down?" over the quarter.
+ *
+ * Returns nulls for any week the API call fails so the chart can
+ * still render the rest of the series rather than failing globally.
+ *
+ * Why per-week round-trips instead of a single bucketed endpoint:
+ * /summary already exists and 12 lightweight calls cost less than
+ * fetching the full window list and reducing client-side. If this
+ * grows to many users we'll move it server-side.
+ */
+export function useWeeklyFlowTrend(weeks = 12, filter: FlowFilter = {}) {
+	const ranges = computeWeekRanges(weeks);
+	return useQuery({
+		queryKey: [
+			...sessionKeys.all,
+			"flow-windows-weekly-trend",
+			weeks,
+			ranges[0]?.start ?? "",
+			filter.projectId ?? "all",
+			filter.editorRepo ?? "all",
+			filter.editorLanguage ?? "all",
+			filter.bundleId ?? "all",
+		],
+		queryFn: async (): Promise<WeeklyFlowPoint[]> => {
+			const summaries = await Promise.all(
+				ranges.map(async (r) => {
+					try {
+						return await fetchFlowWindowsSummary(r.start, r.end, filter);
+					} catch {
+						return null;
+					}
+				}),
+			);
+			return ranges.map((r, i) => ({
+				weekStart: r.weekStartKey,
+				avg: summaries[i]?.avg ?? 0,
+				count: summaries[i]?.count ?? 0,
+			}));
+		},
+		staleTime: 5 * 60_000,
+	});
+}
+
+/** Build [weeks] consecutive ISO-week ranges ending at the current
+ * week. Each range is the local Monday 00:00 → following Monday 00:00,
+ * sorted oldest-first so the trend reads left-to-right. Exported only
+ * for tests; callers should use useWeeklyFlowTrend. */
+export function computeWeekRanges(
+	weeks: number,
+	now: Date = new Date(),
+): { start: string; end: string; weekStartKey: string }[] {
+	const monday = new Date(now);
+	const dow = monday.getDay(); // 0 = Sunday, 1 = Monday
+	const daysToMonday = dow === 0 ? 6 : dow - 1;
+	monday.setDate(monday.getDate() - daysToMonday);
+	monday.setHours(0, 0, 0, 0);
+
+	const out: { start: string; end: string; weekStartKey: string }[] = [];
+	for (let i = weeks - 1; i >= 0; i--) {
+		const start = new Date(monday);
+		start.setDate(monday.getDate() - i * 7);
+		const end = new Date(start);
+		end.setDate(start.getDate() + 7);
+		out.push({
+			start: start.toISOString(),
+			end: end.toISOString(),
+			weekStartKey: weekKey(start),
+		});
+	}
+	return out;
+}
+
+function weekKey(d: Date): string {
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+}
+
 /**
  * Hook to fetch contribution heatmap for a year, optionally filtered by project and/or tag
  */

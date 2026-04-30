@@ -21,6 +21,7 @@ import { FlowByWeekday } from "./FlowByWeekday";
 import { FlowRhythm } from "./FlowRhythm";
 import { FlowThisWeek } from "./FlowThisWeek";
 import { FlowToday } from "./FlowToday";
+import { FlowTrend } from "./FlowTrend";
 import { MoodCorrelation } from "./MoodCorrelation";
 import { PatternCards } from "./PatternCards";
 import { ProjectHealth } from "./ProjectHealth";
@@ -167,6 +168,12 @@ export default function Insights() {
 						bundleId={selectedBundleId}
 					/>
 					<FlowThisWeek
+						projectId={selectedProjectId}
+						editorRepo={selectedRepo}
+						editorLanguage={selectedLanguage}
+						bundleId={selectedBundleId}
+					/>
+					<FlowTrend
 						projectId={selectedProjectId}
 						editorRepo={selectedRepo}
 						editorLanguage={selectedLanguage}
