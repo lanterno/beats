@@ -88,7 +88,7 @@ dependencies:
 
 ### Phase 4: Desktop Features (~1 day)
 
-6. **Fitbit OAuth on desktop**: open system browser for OAuth, handle redirect via deep link or localhost callback. (Oura PAT is already done; Fitbit currently directs users to the web UI.)
+6. ✅ **Fitbit OAuth on desktop** — shipped. Settings → Integrations → Fitbit "Connect" opens the consent URL in the system browser via `url_launcher`. The Fitbit redirect lands on the existing web UI callback (`/settings?fitbit=callback`), which exchanges the code for tokens. The companion's wait sheet polls `/api/fitbit/status` every 4s for up to 3 minutes and dismisses itself the instant `connected` flips to true. A "Check now" button lets the user force a refresh if the auto-poll misses.
 7. **QR pairing on mobile**: replace the code-entry input with `mobile_scanner` on iOS/Android (keep code entry as fallback).
 
 ## Data Flow

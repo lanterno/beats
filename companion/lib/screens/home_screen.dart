@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../services/notifications.dart';
 import '../services/token_storage.dart';
@@ -273,6 +275,64 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  /// Opens the Fitbit OAuth consent URL in the system browser, then polls
+  /// `/api/fitbit/status` every 4 seconds for up to 3 minutes. The actual
+  /// code-for-token exchange happens via the existing web UI callback at
+  /// `/settings?fitbit=callback`, which is what the Fitbit consent screen
+  /// redirects to — the companion just needs to detect that "connected"
+  /// flips to true so it can refresh the row + congratulate the user.
+  Future<void> _connectFitbit() async {
+    final client = _client;
+    if (client == null) return;
+
+    final Uri? url;
+    try {
+      final res = await client.getFitbitAuthUrl();
+      final raw = res['url'] as String?;
+      url = (raw != null && raw.isNotEmpty) ? Uri.tryParse(raw) : null;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Couldn\'t fetch Fitbit auth URL: $e'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    if (url == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Couldn\'t fetch Fitbit auth URL'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Couldn\'t open browser'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: BeatsColors.surface,
+      isScrollControlled: true,
+      isDismissible: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _FitbitWaitSheet(client: client),
+    );
+    // The sheet returns once it observes connected=true, the user dismisses
+    // it, or the timeout elapses. Refresh either way so the UI matches truth.
+    await _refreshIntegrations();
+  }
+
   @override
   void dispose() {
     _ouraPatController.dispose();
@@ -350,10 +410,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   connected: _fitbitConnected,
                   detail: _fitbitConnected
                       ? (_fitbitUser ?? 'Connected')
-                      : 'Connect via Beats web Settings',
+                      : 'Authorize in your browser',
                   trailing: _fitbitConnected
                       ? _LinkAction(label: 'Disconnect', onTap: _disconnectFitbit)
-                      : null,
+                      : _LinkAction(label: 'Connect', onTap: _connectFitbit),
                 ),
               ),
               const SizedBox(height: 8),
@@ -746,6 +806,157 @@ class _NotificationsRow extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Modal that waits for the user to complete the Fitbit OAuth flow in the
+/// browser they were just sent to. Polls /api/fitbit/status every 4s for up
+/// to 3 minutes; closes itself the moment `connected` flips to true.
+class _FitbitWaitSheet extends StatefulWidget {
+  final ApiClient client;
+  const _FitbitWaitSheet({required this.client});
+
+  @override
+  State<_FitbitWaitSheet> createState() => _FitbitWaitSheetState();
+}
+
+class _FitbitWaitSheetState extends State<_FitbitWaitSheet> {
+  static const _pollEvery = Duration(seconds: 4);
+  static const _timeout = Duration(minutes: 3);
+  Timer? _timer;
+  Timer? _deadlineTimer;
+  bool _connected = false;
+  bool _gaveUp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Poll immediately in case the user came back fast, then on a 4s loop.
+    unawaited(_check());
+    _timer = Timer.periodic(_pollEvery, (_) => _check());
+    _deadlineTimer = Timer(_timeout, _giveUp);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _deadlineTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _check() async {
+    try {
+      final s = await widget.client.getFitbitStatus();
+      if (s['connected'] != true) return;
+    } catch (_) {
+      return; // silent retry on transient errors
+    }
+    if (!mounted) return;
+    setState(() => _connected = true);
+    _timer?.cancel();
+    _deadlineTimer?.cancel();
+    // Give the success indicator a beat to register before closing.
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  void _giveUp() {
+    if (!mounted) return;
+    setState(() => _gaveUp = true);
+    _timer?.cancel();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _connected
+        ? BeatsColors.green
+        : _gaveUp
+            ? BeatsColors.red
+            : BeatsColors.amber;
+    final title = _connected
+        ? 'Fitbit connected'
+        : _gaveUp
+            ? 'Still waiting?'
+            : 'Authorize in your browser';
+    final body = _connected
+        ? 'You\'re all set.'
+        : _gaveUp
+            ? 'No callback yet. If you authorized, tap Check now. Otherwise close this sheet and try Connect again.'
+            : 'A Fitbit consent page just opened. After you tap Authorize, this sheet will close on its own.';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
+            color: BeatsColors.textTertiary.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.4),
+                      blurRadius: 8, spreadRadius: 1,
+                    ),
+                  ],
+                )),
+              const SizedBox(width: 12),
+              Expanded(child: Text(title,
+                style: GoogleFonts.dmSerifDisplay(
+                  fontSize: 20, color: BeatsColors.textPrimary))),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(body, style: BeatsType.bodySmall.copyWith(
+            color: BeatsColors.textTertiary, height: 1.6)),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(child: PressScale(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: BeatsColors.border),
+                  ),
+                  child: Text(_connected ? 'Done' : 'Close',
+                    style: BeatsType.button.copyWith(
+                      color: BeatsColors.textTertiary)),
+                ),
+              )),
+              if (!_connected) ...[
+                const SizedBox(width: 10),
+                Expanded(child: PressScale(
+                  onTap: _check,
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: BeatsColors.amber,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('Check now',
+                      style: BeatsType.button.copyWith(
+                        color: const Color(0xFF1A1408))),
+                  ),
+                )),
+              ],
+            ],
+          ),
         ],
       ),
     );
