@@ -1,6 +1,14 @@
 # Homebrew Tap — `homebrew-beats`
 
-> Distributes the `beatsd` daemon binary via `brew install ahmed/beats/beatsd`.
+> **Status: ready to publish.** The release workflow at
+> `.github/workflows/release-daemon.yml` builds and uploads
+> darwin/linux × arm64/amd64 tarballs on every `v*` tag. The canonical
+> formula lives at `integrations/homebrew-formula/beatsd.rb`. The only
+> step left is creating the public `homebrew-beats` tap repo and
+> mirroring the formula there — see
+> `integrations/homebrew-formula/README.md` for the one-time wiring.
+
+Distributes the `beatsd` daemon binary via `brew install <user>/beats/beatsd`.
 
 ## Why
 

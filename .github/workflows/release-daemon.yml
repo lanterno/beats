@@ -1,0 +1,108 @@
+name: Release Daemon
+# Triggers on tag push (e.g. `git tag v0.1.0 && git push --tags`).
+# Cross-compiles the daemon for darwin and linux on both arm64 and amd64,
+# packages each as a tar.gz, and attaches them to a GitHub release.
+#
+# These binaries are what the Homebrew formula at
+# integrations/homebrew-formula/beatsd.rb downloads — once the
+# homebrew-beats tap repo exists, bumping the formula's URL + sha256 to
+# a new release here is the entire upgrade path for users.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the GitHub release
+
+jobs:
+  build:
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+    defaults:
+      run:
+        working-directory: daemon
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: "0" # statically link; the cadence cgo tap is darwin-only
+                       # and we override CGO_ENABLED=1 for that target below.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build
+        run: |
+          # CGEventTap requires cgo, and we only ship it on darwin. Toggle
+          # CGO_ENABLED back on when targeting darwin so the cadence path
+          # links; everywhere else stays statically linked.
+          if [ "${{ matrix.goos }}" = "darwin" ]; then
+            export CGO_ENABLED=1
+          fi
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+            -o beatsd ./cmd/beatsd/
+
+      - name: Package
+        run: |
+          tar czf "beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" beatsd
+          shasum -a 256 "beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
+            > "beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beatsd-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        # actions/download-artifact restores each upload to its own subdir;
+        # the release action wants a flat list of files.
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.sha256" \) \
+            -exec mv {} dist/ \;
+          ls -la dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            Cross-compiled `beatsd` binaries for darwin and linux
+            (arm64 + amd64). SHA256 sums next to each tarball.
+
+            Homebrew users: `brew upgrade beatsd` once the tap formula is
+            bumped. Manual install:
+
+            ```bash
+            curl -L -o beatsd.tar.gz \
+              https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/beatsd-darwin-arm64.tar.gz
+            tar xzf beatsd.tar.gz
+            ./beatsd version
+            ```
