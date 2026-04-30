@@ -7,8 +7,10 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: PairingScreen(onPaired: () {}),
     ));
+    // Drain StaggeredEntrance timers and entrance animation.
+    await tester.pumpAndSettle();
 
-    expect(find.text('Pair with Beats'), findsOneWidget);
+    expect(find.text('Beats'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(2)); // API URL + code
   });
@@ -17,6 +19,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: PairingScreen(onPaired: () {}),
     ));
+    await tester.pumpAndSettle();
 
     // Enter a short code and tap Pair
     final codeField = find.byType(TextField).last;
@@ -24,6 +27,6 @@ void main() {
     await tester.tap(find.text('Pair'));
     await tester.pump();
 
-    expect(find.text('Enter a 6-character pairing code'), findsOneWidget);
+    expect(find.text('Enter a 6-character code'), findsOneWidget);
   });
 }
