@@ -38,6 +38,7 @@ For background use, install via [Homebrew](../docs/homebrew-tap.md) and
 | `beatsd run` | Start the collector loop. Polls desktop state every 5 s, flushes a flow window every 60 s. |
 | `beatsd doctor` | Diagnostics — checks pairing, API reachability, editor-listener port, and Accessibility permission. Exit 1 on any failure for use in startup scripts. |
 | `beatsd status` | Snapshot of right-now state — pair, daemon-running probe, current timer state from the API. |
+| `beatsd recent [--minutes N]` | Print the last hour (default) of flow windows in a small terminal-friendly table — time, score, dominant app, repo. Useful for "what was the daemon seeing the last hour?" without opening the web UI. |
 | `beatsd version` | Print version, git SHA (with `-dirty` marker if built off uncommitted changes), build date, Go version, OS/arch, and cgo flag. |
 | `beatsd unpair` | Remove the device token from the keychain. |
 

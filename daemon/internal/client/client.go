@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -134,6 +135,60 @@ type FlowWindowRequest struct {
 // PostFlowWindow sends a computed flow window to the API. Requires a device token.
 func (c *Client) PostFlowWindow(ctx context.Context, w FlowWindowRequest) error {
 	return c.postJSON(ctx, "/api/signals/flow-windows", w)
+}
+
+// FlowWindowRecord is the shape returned by GET /api/signals/flow-windows.
+// Mirrors the API's FlowWindowResponse — superset of FlowWindowRequest
+// because the API stamps an id on persistence.
+type FlowWindowRecord struct {
+	ID               string    `json:"id"`
+	WindowStart      time.Time `json:"window_start"`
+	WindowEnd        time.Time `json:"window_end"`
+	FlowScore        float64   `json:"flow_score"`
+	CadenceScore     float64   `json:"cadence_score"`
+	CoherenceScore   float64   `json:"coherence_score"`
+	CategoryFitScore float64   `json:"category_fit_score"`
+	IdleFraction     float64   `json:"idle_fraction"`
+	DominantBundleID string    `json:"dominant_bundle_id"`
+	DominantCategory string    `json:"dominant_category"`
+	ContextSwitches  int       `json:"context_switches"`
+	ActiveProjectID  string    `json:"active_project_id,omitempty"`
+	EditorRepo       string    `json:"editor_repo,omitempty"`
+	EditorBranch     string    `json:"editor_branch,omitempty"`
+	EditorLanguage   string    `json:"editor_language,omitempty"`
+}
+
+// GetFlowWindows lists flow windows for the device's user in [start, end].
+// Used by `beatsd recent` to show the last N minutes of activity without
+// the user having to open the web UI.
+func (c *Client) GetFlowWindows(ctx context.Context, start, end time.Time) ([]FlowWindowRecord, error) {
+	q := url.Values{}
+	q.Set("start", start.UTC().Format(time.RFC3339))
+	q.Set("end", end.UTC().Format(time.RFC3339))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/api/signals/flow-windows?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.deviceToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("flow-windows GET failed (HTTP %d)", resp.StatusCode)
+	}
+
+	var out []FlowWindowRecord
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // TimerContextResponse is the response from GET /api/signals/timer-context.

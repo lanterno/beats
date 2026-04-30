@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -179,6 +180,23 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "recent":
+		// Optional `--minutes N` after the subcommand. We parse it
+		// inline rather than reaching for the flag package — there's
+		// only one option and the help text is a one-liner.
+		minutes := 60
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--minutes" && i+1 < len(args) {
+				if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+					minutes = v
+				}
+			}
+		}
+		if err := runRecent(cfg, minutes); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "version":
 		fmt.Print(collectVersionInfo())
 
@@ -261,6 +279,7 @@ Commands:
   run           Start the signal collector daemon
   doctor        Check pairing, API reachability, Accessibility permission, ports
   status        Print whether a daemon is running, timer state, and API reachability
+  recent        Print the last hour of flow windows in a small table (--minutes N to override)
   unpair        Remove the device token from the keychain
   version       Print version info
 
