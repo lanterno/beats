@@ -8,17 +8,15 @@ Goal: To become your time-aware assistant. *To record even your heart beats.*
 
 See `CLAUDE.md` for the architecture, runtime, and testing conventions, and the repo-root `README.md` for the broader system overview.
 
-## Open Roadmap
+## Infrastructure
 
-- [ ] Per-environment database isolation. Constraint: stay on Atlas M0 free
-  tier (one cluster). Plan: namespace by database name within the same
-  cluster (`beats_dev`, `beats_staging`, `beats_prod`) and thread a
-  `BEATS_ENV` setting through `pydantic-settings` so each env auto-picks
-  its database. Less isolated than separate clusters, but free.
+API, Artifact Registry, and the MongoDB Atlas M0 cluster all live in
+`europe-west1` (Belgium) on GCP — already intra-region, so API↔DB
+latency is ~2 ms.
 
-API, Artifact Registry, and the MongoDB Atlas cluster all live in
-`europe-west1` (Belgium) on GCP — already intra-region with each other,
-so API↔DB latency is ~2 ms and the Eurozone proximity item is closed.
+Local dev uses the `db` service in `compose.yml` (`mongo:8`, isolated
+from prod). Tests use `testcontainers` (ephemeral). Atlas only sees
+production traffic.
 
 ## Error Shape
 
