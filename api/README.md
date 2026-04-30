@@ -11,7 +11,10 @@ See `CLAUDE.md` for the architecture, runtime, and testing conventions, and the 
 ## Open Roadmap
 
 - [ ] Per-environment databases (dev / staging / prod isolation)
-- [ ] Move Cloud Run region closer to the user (Eurozone) to reduce round-trip latency
+
+API, Artifact Registry, and the MongoDB Atlas cluster all live in
+`europe-west1` (Belgium) on GCP — already intra-region with each other,
+so API↔DB latency is ~2 ms and the Eurozone proximity item is closed.
 
 ## Error Shape
 
