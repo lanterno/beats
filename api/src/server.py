@@ -64,6 +64,9 @@ DEVICE_ALLOWED_PREFIXES = (
     # Companion timer screen renders today/week totals + streak from the heatmap.
     # Other /api/analytics/* endpoints remain off-limits.
     "/api/analytics/heatmap",
+    # Companion's post-stop "How did it go?" sheet uses the user's prior tags
+    # as one-tap chips alongside the freeform input.
+    "/api/analytics/tags",
 )
 
 

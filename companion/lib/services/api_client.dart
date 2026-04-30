@@ -192,6 +192,18 @@ class ApiClient {
 
   // ---- Analytics ----
 
+  /// Returns the union of all tags this user has ever attached to a beat,
+  /// alphabetized. Used by the post-stop sheet to surface chips.
+  Future<List<String>> getTags() async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/analytics/tags'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<String>();
+  }
+
   /// Returns one entry per day in the given year (default: current year).
   /// Each entry: {date: 'YYYY-MM-DD', total_minutes: int, session_count: int, project_count: int}.
   Future<List<Map<String, dynamic>>> getHeatmap({int? year}) async {

@@ -289,7 +289,10 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _PostStopSheet(projectName: _selectedProjectName ?? ''),
+      builder: (_) => _PostStopSheet(
+        projectName: _selectedProjectName ?? '',
+        client: widget.client,
+      ),
     );
     if (result == null) return; // skipped
     final updated = Map<String, dynamic>.from(beat)
@@ -1004,7 +1007,8 @@ class _PostStopResult {
 
 class _PostStopSheet extends StatefulWidget {
   final String projectName;
-  const _PostStopSheet({required this.projectName});
+  final ApiClient client;
+  const _PostStopSheet({required this.projectName, required this.client});
 
   @override
   State<_PostStopSheet> createState() => _PostStopSheetState();
@@ -1013,6 +1017,28 @@ class _PostStopSheet extends StatefulWidget {
 class _PostStopSheetState extends State<_PostStopSheet> {
   final _noteController = TextEditingController();
   final _tagsController = TextEditingController();
+
+  /// All historical tags fetched from /api/analytics/tags. Surfaced as chips
+  /// above the freeform input — tapping a chip toggles it in/out of the
+  /// current selection without the user having to retype.
+  List<String> _allTags = const [];
+  final Set<String> _selectedChips = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTags();
+  }
+
+  Future<void> _loadTags() async {
+    try {
+      final tags = await widget.client.getTags();
+      if (!mounted) return;
+      setState(() => _allTags = tags);
+    } catch (_) {
+      // Tag suggestions are non-critical; the freeform input still works.
+    }
+  }
 
   @override
   void dispose() {
@@ -1028,12 +1054,25 @@ class _PostStopSheetState extends State<_PostStopSheet> {
           .toSet()
           .toList();
 
+  void _toggleChip(String tag) {
+    setState(() {
+      if (_selectedChips.contains(tag)) {
+        _selectedChips.remove(tag);
+      } else {
+        _selectedChips.add(tag);
+      }
+    });
+  }
+
   void _save() {
+    // Merge chip selections with anything the user typed by hand.
+    final typed = _parseTags(_tagsController.text);
+    final merged = <String>{..._selectedChips, ...typed}.toList();
     Navigator.pop(
       context,
       _PostStopResult(
         note: _noteController.text.trim(),
-        tags: _parseTags(_tagsController.text),
+        tags: merged,
       ),
     );
   }
@@ -1074,11 +1113,23 @@ class _PostStopSheetState extends State<_PostStopSheet> {
             const SizedBox(height: 16),
             Text('TAGS', style: BeatsType.label),
             const SizedBox(height: 6),
+            if (_allTags.isNotEmpty) ...[
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final tag in _allTags.take(12)) _tagChip(tag),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _tagsController,
               style: BeatsType.bodyMedium,
               cursorColor: BeatsColors.amber,
-              decoration: _decoration('comma, separated, words'),
+              decoration: _decoration(_allTags.isEmpty
+                  ? 'comma, separated, words'
+                  : 'add new tag…'),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _save(),
             ),
@@ -1119,6 +1170,34 @@ class _PostStopSheetState extends State<_PostStopSheet> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tagChip(String tag) {
+    final selected = _selectedChips.contains(tag);
+    return GestureDetector(
+      onTap: () => _toggleChip(tag),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: selected
+              ? BeatsColors.amber.withValues(alpha: 0.18)
+              : Colors.transparent,
+          border: Border.all(
+            color: selected ? BeatsColors.amber : BeatsColors.border,
+          ),
+        ),
+        child: Text(
+          tag,
+          style: BeatsType.bodySmall.copyWith(
+            fontSize: 12,
+            color: selected ? BeatsColors.amber : BeatsColors.textSecondary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
         ),
       ),
     );

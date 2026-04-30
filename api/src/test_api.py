@@ -1292,6 +1292,18 @@ class TestDevicePairingAPI:
         resp = client.get("/api/analytics/heatmap", headers=device_headers)
         assert resp.status_code == 200
 
+    def test_device_token_allowed_on_analytics_tags(self):
+        """Device tokens can read /api/analytics/tags — used by companion's
+        post-stop prompt to suggest recent tags as one-tap chips."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_token = resp.json()["device_token"]
+        device_headers = {"Authorization": f"Bearer {device_token}"}
+
+        resp = client.get("/api/analytics/tags", headers=device_headers)
+        assert resp.status_code == 200
+
     def test_device_token_allowed_on_beats(self):
         """Device tokens can read /api/beats — used by companion's post-stop
         'How did it go?' prompt to update the just-stopped beat with note + tags."""
