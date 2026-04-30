@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
 import '../theme/beats_theme.dart';
+import '../theme/confetti_burst.dart';
 import '../theme/staggered_entrance.dart';
 
 class IntentionsScreen extends StatefulWidget {
@@ -31,13 +32,40 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
     } catch (_) { if (mounted) setState(() => _loading = false); }
   }
 
-  Future<void> _toggle(String id, bool completed) async {
+  Future<void> _toggle(String id, bool completed, {BuildContext? checkContext}) async {
     setState(() {
       final idx = _intentions.indexWhere((i) => i['id'] == id);
       if (idx >= 0) _intentions[idx]['completed'] = completed;
     });
+    if (completed && checkContext != null) {
+      _fireBurstAt(checkContext);
+    }
     try { await widget.client.toggleIntention(id, completed); }
     catch (_) { await _refresh(); }
+  }
+
+  /// Drops a one-shot confetti burst centered on the widget pointed to by
+  /// [originContext]. Used as completion micro-feedback when checking off an
+  /// intention.
+  void _fireBurstAt(BuildContext originContext) {
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+    final renderObject = originContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) return;
+    final origin = renderObject.localToGlobal(
+      renderObject.size.center(Offset.zero),
+    );
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned.fill(
+        child: ConfettiBurst(
+          origin: origin,
+          onComplete: () => entry.remove(),
+        ),
+      ),
+    );
+    overlay.insert(entry);
   }
 
   Future<void> _addIntention() async {
@@ -182,49 +210,72 @@ class _IntentionsScreenState extends State<IntentionsScreen> {
                   delay: Duration(milliseconds: 80 + i * 60),
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: GestureDetector(
-                      onTap: () => _toggle(item['id'], !isDone),
-                      child: Row(
-                        children: [
-                          // Color bar
-                          Container(width: 3, height: 44,
-                            decoration: BoxDecoration(
-                              color: isDone ? color.withValues(alpha: 0.2) : color,
-                              borderRadius: BorderRadius.circular(2))),
-                          const SizedBox(width: 16),
-                          // Check circle
-                          Container(
-                            width: 22, height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isDone ? BeatsColors.amber.withValues(alpha: 0.15) : Colors.transparent,
-                              border: Border.all(
-                                color: isDone ? BeatsColors.amber : BeatsColors.border,
-                                width: 1.5),
+                    // Builder gives us a context whose RenderBox lives at the
+                    // check circle's position — used as the confetti origin.
+                    child: Builder(builder: (rowCtx) {
+                      return GestureDetector(
+                        onTap: () => _toggle(
+                          item['id'],
+                          !isDone,
+                          checkContext: rowCtx,
+                        ),
+                        child: Row(
+                          children: [
+                            // Color bar
+                            Container(width: 3, height: 44,
+                              decoration: BoxDecoration(
+                                color: isDone ? color.withValues(alpha: 0.2) : color,
+                                borderRadius: BorderRadius.circular(2))),
+                            const SizedBox(width: 16),
+                            // Check circle — animated for a small "settle" pop
+                            // on completion (1.0 → 1.15 → 1.0).
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 1.0, end: isDone ? 1.0 : 1.0),
+                              duration: const Duration(milliseconds: 220),
+                              builder: (_, scale, child) =>
+                                  Transform.scale(scale: scale, child: child),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutBack,
+                                width: 22, height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDone
+                                      ? BeatsColors.amber.withValues(alpha: 0.15)
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: isDone ? BeatsColors.amber : BeatsColors.border,
+                                    width: 1.5),
+                                ),
+                                child: isDone
+                                    ? const Icon(Icons.check, size: 14, color: BeatsColors.amber)
+                                    : null,
+                              ),
                             ),
-                            child: isDone
-                                ? const Icon(Icons.check, size: 14, color: BeatsColors.amber)
-                                : null,
-                          ),
-                          const SizedBox(width: 14),
-                          // Content
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(name, style: BeatsType.bodyMedium.copyWith(
+                            const SizedBox(width: 14),
+                            // Content
+                            Expanded(
+                              child: AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 220),
+                                style: BeatsType.bodyMedium.copyWith(
                                   color: isDone ? BeatsColors.textTertiary : BeatsColors.textPrimary,
                                   decoration: isDone ? TextDecoration.lineThrough : null,
                                   decorationColor: BeatsColors.textTertiary,
-                                )),
-                                Text(_fmt(minutes), style: BeatsType.bodySmall.copyWith(
-                                  fontSize: 11, color: BeatsColors.textTertiary)),
-                              ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name),
+                                    Text(_fmt(minutes), style: BeatsType.bodySmall.copyWith(
+                                      fontSize: 11, color: BeatsColors.textTertiary)),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
+                          ],
+                        ),
+                      );
+                    }),
                   ),
                 );
               }),

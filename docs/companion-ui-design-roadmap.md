@@ -92,8 +92,7 @@ Color-bar accent, strikethrough completion, top progress bar, and pill-shaped du
 
 ### Completion Animation
 
-- When checking off an intention: **confetti burst** from the checkbox (subtle, 4-5 particles, amber/gold)
-- The item should **slide and compress** slightly, then settle back
+A 6-particle confetti burst (amber/gold, ~650ms with mild gravity) fires from the check circle on completion via `ConfettiBurst` mounted in the overlay. The check circle and text style transition smoothly across the done/undone change. No further work pending here.
 
 ---
 
@@ -123,7 +122,7 @@ The Settings tab still uses Material defaults (`Card`, `Chip`, `ListTile`) — o
 | **5 — Mood notes + sparkline** | Medium | 0.5 day |
 | **2 — Remaining micro-interactions** | Medium | 0.5 day |
 | **4 — Flow ring/timeline refinements** | Medium | 0.5 day |
-| **6 — Intentions polish + completion FX** | Medium | 0.5 day |
+| **6 — Intentions add-sheet polish (visual preview, quick-add row)** | Low-Medium | 0.5 day |
 | **7 — Settings/Pairing visual rewrite** | Low but very visible to first-time users | 1 day |
 
 **Total: ~3 days of polish remaining.**
