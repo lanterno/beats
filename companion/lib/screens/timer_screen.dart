@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
 import '../services/recent_projects.dart';
+import '../services/tag_parsing.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/press_scale.dart';
@@ -1115,13 +1116,6 @@ class _PostStopSheetState extends State<_PostStopSheet> {
     super.dispose();
   }
 
-  List<String> _parseTags(String raw) =>
-      raw.split(RegExp(r'[,\s]+'))
-          .map((t) => t.trim().toLowerCase())
-          .where((t) => t.isNotEmpty)
-          .toSet()
-          .toList();
-
   void _toggleChip(String tag) {
     setState(() {
       if (_selectedChips.contains(tag)) {
@@ -1133,9 +1127,11 @@ class _PostStopSheetState extends State<_PostStopSheet> {
   }
 
   void _save() {
-    // Merge chip selections with anything the user typed by hand.
-    final typed = _parseTags(_tagsController.text);
-    final merged = <String>{..._selectedChips, ...typed}.toList();
+    // Merge chip selections with anything the user typed by hand. Both
+    // sides go through tag_parsing.dart so the same normalization rules
+    // (lowercase, trim, dedupe) apply uniformly.
+    final typed = parseTagsInput(_tagsController.text);
+    final merged = mergeTags(chips: _selectedChips, typed: typed);
     Navigator.pop(
       context,
       _PostStopResult(
