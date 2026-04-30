@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { useProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
+import { downloadFile } from "@/shared/lib/downloadFile";
 import { useUrlParam } from "@/shared/lib/useUrlParam";
 import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
@@ -220,7 +221,13 @@ export default function Insights() {
 /** Renders dismissible pills for the repo / language / app filters chosen
  * by clicking a row on the matching Flow* card. Mirrors the project / tag
  * dropdown affordance — explicit, dismissible, sibling pills compose
- * visually so the user sees that all active filters are AND-applied. */
+ * visually so the user sees that all active filters are AND-applied.
+ *
+ * Includes a "↓ csv" link that downloads exactly the slice the user is
+ * looking at — when chips are visible, the user has invested clicks
+ * into a specific view and wanting to capture it is a natural next
+ * action. (The unfiltered "all of today" case is rare enough that we
+ * skip the affordance there to keep the page quiet.) */
 function FlowFilterChips({
 	repo,
 	language,
@@ -265,8 +272,39 @@ function FlowFilterChips({
 					clearLabel="Clear app filter"
 				/>
 			)}
+			<button
+				type="button"
+				onClick={() => {
+					const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+					downloadFile(
+						flowWindowsCsvHref({ repo, language, bundleId }),
+						`beats_flow_windows_${date}.csv`,
+					);
+				}}
+				className="text-accent hover:underline tabular-nums"
+				title="Download the visible flow-window slice as CSV"
+			>
+				↓ csv
+			</button>
 		</div>
 	);
+}
+
+function flowWindowsCsvHref({
+	repo,
+	language,
+	bundleId,
+}: {
+	repo?: string;
+	language?: string;
+	bundleId?: string;
+}): string {
+	const params = new URLSearchParams();
+	if (repo) params.set("editor_repo", repo);
+	if (language) params.set("editor_language", language);
+	if (bundleId) params.set("bundle_id", bundleId);
+	const q = params.toString();
+	return `/api/signals/flow-windows.csv${q ? `?${q}` : ""}`;
 }
 
 function shortBundleTail(bundleId: string): string {

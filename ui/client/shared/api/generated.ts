@@ -2091,6 +2091,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/signals/flow-windows.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Flow Windows Csv
+         * @description Download the current flow-window slice as CSV.
+         *
+         *     Accepts the same filter params as `GET /flow-windows`, so the user
+         *     can download exactly the slice they're staring at on the Insights
+         *     page (or pulling from `beatsd recent`). One row per window.
+         */
+        get: operations["export_flow_windows_csv_api_signals_flow_windows_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/signals/suggest-timer": {
         parameters: {
             query?: never;
@@ -6771,6 +6795,42 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_flow_windows_csv_api_signals_flow_windows_csv_get: {
+        parameters: {
+            query?: {
+                start?: string;
+                end?: string;
+                project_id?: string | null;
+                editor_repo?: string | null;
+                editor_language?: string | null;
+                bundle_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

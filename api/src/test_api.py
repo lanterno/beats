@@ -1639,6 +1639,51 @@ class TestSignalsAPI:
         assert all(w["editor_language"] == "typescript" for w in windows)
         assert any(w["flow_score"] == 0.83 for w in windows)
 
+    def test_flow_windows_csv_export_respects_filter(self):
+        """GET /api/signals/flow-windows.csv streams a CSV that honors
+        the same filter params as the JSON endpoint, so the "Download"
+        button on Insights returns exactly the visible slice."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        for lang, score in [("go", 0.74), ("typescript", 0.55)]:
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": (now - timedelta(minutes=2)).isoformat(),
+                    "window_end": (now - timedelta(minutes=1)).isoformat(),
+                    "flow_score": score,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 1.0,
+                    "idle_fraction": 0.0,
+                    "dominant_bundle_id": "com.microsoft.VSCode",
+                    "dominant_category": "coding",
+                    "editor_language": lang,
+                },
+                headers=device_headers,
+            )
+
+        resp = client.get(
+            "/api/signals/flow-windows.csv",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "editor_language": "go",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/csv")
+        assert "attachment" in resp.headers["content-disposition"]
+
+        body = resp.text
+        # Header row + at least one data row, only the "go" rows.
+        lines = [ln for ln in body.splitlines() if ln.strip()]
+        assert lines[0].startswith("window_start,window_end,flow_score")
+        assert "0.7400" in body
+        assert "0.5500" not in body  # the typescript row should be filtered out
+        assert "com.microsoft.VSCode" in body
+
     def test_flow_windows_filter_by_bundle_id(self):
         """GET /api/signals/flow-windows?bundle_id=… narrows to that
         macOS bundle id, used for click-to-filter on FlowByApp."""

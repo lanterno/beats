@@ -7245,6 +7245,122 @@
         ]
       }
     },
+    "/api/signals/flow-windows.csv": {
+      "get": {
+        "description": "Download the current flow-window slice as CSV.\n\nAccepts the same filter params as `GET /flow-windows`, so the user\ncan download exactly the slice they're staring at on the Insights\npage (or pulling from `beatsd recent`). One row per window.",
+        "operationId": "export_flow_windows_csv_api_signals_flow_windows_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "editor_repo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Editor Repo"
+            }
+          },
+          {
+            "in": "query",
+            "name": "editor_language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Editor Language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bundle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bundle Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Flow Windows Csv",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
     "/api/signals/suggest-timer": {
       "post": {
         "description": "Check if a timer should be auto-started based on flow state.\n\nCalled by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.\nMatches the dominant app category against projects with autostart_repos.",

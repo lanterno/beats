@@ -18,7 +18,9 @@
 > `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view
 > is bookmarkable and shareable. The same per-window slice is
 > reachable from the terminal via `beatsd recent --repo …
-> --language … --bundle …`.
+> --language … --bundle …`, or downloadable as CSV via the "↓ csv"
+> link in the chip row (`GET /api/signals/flow-windows.csv` accepts
+> the same filter params as the JSON endpoint).
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score

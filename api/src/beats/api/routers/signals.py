@@ -1,8 +1,11 @@
 """Signals API router — flow windows and signal summaries from the daemon."""
 
+import csv
+import io
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from beats.api.dependencies import (
@@ -162,6 +165,80 @@ async def list_flow_windows(
         )
         for w in windows
     ]
+
+
+@router.get("/flow-windows.csv")
+async def export_flow_windows_csv(
+    user_id: CurrentUserId,
+    repo: FlowWindowRepoDep,
+    start: datetime = Query(default_factory=lambda: datetime.now(UTC) - timedelta(days=1)),
+    end: datetime = Query(default_factory=lambda: datetime.now(UTC)),
+    project_id: str | None = Query(default=None),
+    editor_repo: str | None = Query(default=None),
+    editor_language: str | None = Query(default=None),
+    bundle_id: str | None = Query(default=None),
+) -> StreamingResponse:
+    """Download the current flow-window slice as CSV.
+
+    Accepts the same filter params as `GET /flow-windows`, so the user
+    can download exactly the slice they're staring at on the Insights
+    page (or pulling from `beatsd recent`). One row per window.
+    """
+    windows = await repo.list_by_range(
+        start,
+        end,
+        project_id=project_id,
+        editor_repo=editor_repo,
+        editor_language=editor_language,
+        bundle_id=bundle_id,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "window_start",
+            "window_end",
+            "flow_score",
+            "cadence_score",
+            "coherence_score",
+            "category_fit_score",
+            "idle_fraction",
+            "dominant_bundle_id",
+            "dominant_category",
+            "context_switches",
+            "active_project_id",
+            "editor_repo",
+            "editor_branch",
+            "editor_language",
+        ]
+    )
+    for w in windows:
+        writer.writerow(
+            [
+                w.window_start.isoformat(),
+                w.window_end.isoformat(),
+                f"{w.flow_score:.4f}",
+                f"{w.cadence_score:.4f}",
+                f"{w.coherence_score:.4f}",
+                f"{w.category_fit_score:.4f}",
+                f"{w.idle_fraction:.4f}",
+                w.dominant_bundle_id or "",
+                w.dominant_category or "",
+                w.context_switches,
+                w.active_project_id or "",
+                w.editor_repo or "",
+                w.editor_branch or "",
+                w.editor_language or "",
+            ]
+        )
+
+    filename = f"beats_flow_windows_{datetime.now(UTC).strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/summaries", status_code=status.HTTP_200_OK)

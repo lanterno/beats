@@ -45,6 +45,7 @@ import { getSessionToken } from "@/features/auth/stores/authStore";
 import { del, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
 import { COLOR_MODES, DENSITIES, THEMES, useOAuthCallback, useTheme } from "@/shared/lib";
+import { downloadFile } from "@/shared/lib/downloadFile";
 import { CoachUsage } from "./CoachUsage";
 
 export default function Settings() {
@@ -54,19 +55,9 @@ export default function Settings() {
 
 	const apiBase = config.apiBaseUrl;
 
-	const downloadFile = async (url: string, filename: string) => {
+	const downloadWithToast = async (url: string, filename: string) => {
 		try {
-			const token = getSessionToken();
-			const res = await fetch(`${apiBase}${url}`, {
-				headers: token ? { Authorization: `Bearer ${token}` } : {},
-			});
-			if (!res.ok) throw new Error("Export failed");
-			const blob = await res.blob();
-			const a = document.createElement("a");
-			a.href = URL.createObjectURL(blob);
-			a.download = filename;
-			a.click();
-			URL.revokeObjectURL(a.href);
+			await downloadFile(url, filename);
 			toast.success(`Downloaded ${filename}`);
 		} catch {
 			toast.error("Export failed");
@@ -79,12 +70,12 @@ export default function Settings() {
 			? `_${(projects ?? []).find((p) => p.id === projectId)?.name ?? "project"}`
 			: "";
 		const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-		downloadFile(`/api/export/csv/sessions${params}`, `beats_sessions${suffix}_${date}.csv`);
+		downloadWithToast(`/api/export/csv/sessions${params}`, `beats_sessions${suffix}_${date}.csv`);
 	};
 
 	const handleExportJSON = () => {
 		const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-		downloadFile("/api/export/full", `beats_backup_${date}.json`);
+		downloadWithToast("/api/export/full", `beats_backup_${date}.json`);
 	};
 
 	const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
