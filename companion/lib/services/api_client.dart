@@ -287,12 +287,33 @@ class ApiClient {
 
   // ---- Daily Notes ----
 
-  Future<void> postDailyNote(int mood, {String note = ''}) async {
-    await http.post(
+  /// Upserts today's daily note. The API is keyed on (user, date) so calling
+  /// this multiple times with different mood/note values overwrites in place.
+  Future<void> upsertDailyNote({int? mood, String? note, String? date}) async {
+    final body = <String, dynamic>{};
+    if (date != null) body['date'] = date;
+    if (mood != null) body['mood'] = mood;
+    if (note != null) body['note'] = note;
+    final resp = await http.put(
       Uri.parse('$baseUrl/api/daily-notes'),
       headers: _headers,
-      body: jsonEncode({'mood': mood, 'note': note}),
+      body: jsonEncode(body),
     );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Save daily note failed: ${resp.body}');
+    }
+  }
+
+  /// Returns daily notes between [start] and [end], inclusive (YYYY-MM-DD).
+  /// Used by the mood sparkline on the coach screen.
+  Future<List<Map<String, dynamic>>> getDailyNotesRange(String start, String end) async {
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/daily-notes/range?start=$start&end=$end'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
   }
 
   // ---- Biometrics ----

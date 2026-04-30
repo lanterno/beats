@@ -75,8 +75,7 @@ Inline editor with debounce-save and an `X OF N ANSWERED` progress indicator are
 
 ### Mood Picker
 
-- Add a **"What went well?"** text input below the mood picker for optional notes
-- Show **mood history sparkline** — last 7 days as tiny dots, color-coded
+A "What went well?" text input now sits below the picker and debounce-saves to `/api/daily-notes` 800ms after typing stops, with a `SAVING…` hint while in flight. A 7-day mood history sparkline (color-coded dots: red ≤2, amber =3, green ≥4) sits inline with the section header. No further work pending here.
 
 ---
 
@@ -118,13 +117,12 @@ The code input now renders as 6 individual character boxes (`_CodeInput`); the a
 
 | Phase | Impact | Effort |
 |-------|--------|--------|
-| **5 — Mood notes + sparkline** | Medium | 0.5 day |
 | **2 — Remaining micro-interactions** | Medium | 0.5 day |
-| **4 — Flow ring/timeline refinements** | Medium | 0.5 day |
+| **4 — Flow ring stroke/inner gradient** | Medium | 0.5 day |
 | **6 — Intentions add-sheet polish (visual preview, quick-add row)** | Low-Medium | 0.5 day |
-| **7 — Settings/Pairing visual rewrite** | Low but very visible to first-time users | 1 day |
+| **7 — Settings tab visual rewrite (danger zone, custom containers)** | Low but very visible | 1 day |
 
-**Total: ~3 days of polish remaining.**
+**Total: ~2.5 days of polish remaining.**
 
 ---
 

@@ -18,6 +18,13 @@ class _CoachScreenState extends State<CoachScreen> {
   Map<String, dynamic>? _brief;
   Map<String, dynamic>? _review;
   int? _todayMood;
+  String _todayNote = '';
+  bool _savingNote = false;
+  Timer? _noteSaveTimer;
+  final TextEditingController _noteController = TextEditingController();
+
+  /// Last 7 days of moods, keyed by ISO date — used for the sparkline.
+  Map<String, int> _moodHistory = {};
 
   // Per-question editing state, keyed by question index.
   final Map<int, TextEditingController> _answerControllers = {};
@@ -33,6 +40,8 @@ class _CoachScreenState extends State<CoachScreen> {
 
   @override
   void dispose() {
+    _noteSaveTimer?.cancel();
+    _noteController.dispose();
     for (final t in _saveTimers.values) {
       t.cancel();
     }
@@ -42,16 +51,50 @@ class _CoachScreenState extends State<CoachScreen> {
     super.dispose();
   }
 
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _refresh() async {
     try {
       final brief = await widget.client.getTodayBrief();
       final review = await widget.client.getTodayReview();
+
+      // Pull the last 7 days of daily notes for the sparkline + today's row.
+      final today = DateTime.now();
+      String fmt(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final start = today.subtract(const Duration(days: 6));
+      final notes = await widget.client.getDailyNotesRange(fmt(start), fmt(today));
+
+      final moods = <String, int>{};
+      String? todayNote;
+      int? todayMood;
+      for (final n in notes) {
+        final d = n['date'] as String?;
+        if (d == null) continue;
+        final m = (n['mood'] as num?)?.toInt();
+        if (m != null) moods[d] = m;
+        if (d == _todayKey()) {
+          todayMood = m;
+          final note = n['note'] as String?;
+          if (note != null) todayNote = note;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _brief = brief;
           _review = review;
+          _moodHistory = moods;
+          _todayMood = todayMood;
+          _todayNote = todayNote ?? '';
           _loading = false;
         });
+        if (_noteController.text != _todayNote) {
+          _noteController.text = _todayNote;
+        }
         _syncAnswerControllers();
       }
     } catch (_) {
@@ -77,8 +120,34 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _submitMood(int mood) async {
-    setState(() => _todayMood = mood);
-    try { await widget.client.postDailyNote(mood); } catch (_) {}
+    setState(() {
+      _todayMood = mood;
+      _moodHistory[_todayKey()] = mood;
+    });
+    try {
+      await widget.client.upsertDailyNote(mood: mood, note: _noteController.text);
+    } catch (_) {}
+  }
+
+  void _onNoteChanged(String value) {
+    _noteSaveTimer?.cancel();
+    _noteSaveTimer = Timer(const Duration(milliseconds: 800), () {
+      _saveNote(value);
+    });
+  }
+
+  Future<void> _saveNote(String value) async {
+    setState(() => _savingNote = true);
+    try {
+      await widget.client.upsertDailyNote(mood: _todayMood, note: value);
+      if (!mounted) return;
+      setState(() {
+        _todayNote = value;
+        _savingNote = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _savingNote = false);
+    }
   }
 
   void _toggleQuestion(int index) {
@@ -226,7 +295,13 @@ class _CoachScreenState extends State<CoachScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('HOW WAS TODAY?', style: BeatsType.label.copyWith(letterSpacing: 2)),
+                    Row(
+                      children: [
+                        Text('HOW WAS TODAY?', style: BeatsType.label.copyWith(letterSpacing: 2)),
+                        const Spacer(),
+                        if (_moodHistory.length > 1) _buildMoodSparkline(),
+                      ],
+                    ),
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -276,6 +351,39 @@ class _CoachScreenState extends State<CoachScreen> {
                         );
                       }),
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Text('WHAT WENT WELL?', style: BeatsType.label.copyWith(letterSpacing: 2)),
+                        const Spacer(),
+                        if (_savingNote)
+                          Text('SAVING…', style: BeatsType.label.copyWith(
+                            fontSize: 9, color: BeatsColors.textTertiary, letterSpacing: 1.5)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _noteController,
+                      onChanged: _onNoteChanged,
+                      onEditingComplete: () => _saveNote(_noteController.text),
+                      maxLines: null,
+                      minLines: 2,
+                      style: BeatsType.bodySmall.copyWith(
+                        color: BeatsColors.textPrimary, height: 1.5),
+                      cursorColor: BeatsColors.amber,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                        hintText: 'A line or two — optional',
+                        hintStyle: BeatsType.bodySmall.copyWith(
+                          color: BeatsColors.textTertiary.withValues(alpha: 0.5)),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: BeatsColors.border.withValues(alpha: 0.6))),
+                        focusedBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(color: BeatsColors.amber)),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -283,6 +391,44 @@ class _CoachScreenState extends State<CoachScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Render the last 7 days of moods as small dots, color-coded.
+  /// Days without an entry render as a faint placeholder so the row keeps
+  /// the same width regardless of how much data is present.
+  Widget _buildMoodSparkline() {
+    final today = DateTime.now();
+    final days = List.generate(7, (i) {
+      final d = today.subtract(Duration(days: 6 - i));
+      final key =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      return _moodHistory[key];
+    });
+
+    Color colorFor(int? mood) {
+      if (mood == null) return BeatsColors.border.withValues(alpha: 0.5);
+      // 1 = rough → red, 5 = great → green, 3 in the middle → amber.
+      if (mood <= 2) return BeatsColors.red;
+      if (mood >= 4) return BeatsColors.green;
+      return BeatsColors.amber;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < days.length; i++) ...[
+          if (i > 0) const SizedBox(width: 4),
+          Container(
+            width: days[i] == null ? 4 : 6,
+            height: days[i] == null ? 4 : 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: colorFor(days[i]),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
