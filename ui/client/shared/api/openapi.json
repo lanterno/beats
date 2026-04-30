@@ -966,6 +966,39 @@
             "title": "Dominant Category",
             "type": "string"
           },
+          "editor_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Branch"
+          },
+          "editor_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Language"
+          },
+          "editor_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Repo"
+          },
           "flow_score": {
             "title": "Flow Score",
             "type": "number"
@@ -1636,6 +1669,39 @@
             "default": "",
             "title": "Dominant Category",
             "type": "string"
+          },
+          "editor_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Branch"
+          },
+          "editor_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Language"
+          },
+          "editor_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Repo"
           },
           "flow_score": {
             "maximum": 1.0,
@@ -4372,8 +4438,48 @@
           "daily-notes"
         ]
       },
+      "post": {
+        "description": "Create or update the daily note for a date.\n\nAccepts both PUT and POST so older clients posting to this endpoint don't\nsilently 405 \u2014 the operation is idempotent on (user_id, date).",
+        "operationId": "upsert_daily_note_api_daily_notes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertDailyNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyNoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Daily Note",
+        "tags": [
+          "daily-notes"
+        ]
+      },
       "put": {
-        "description": "Create or update the daily note for a date.",
+        "description": "Create or update the daily note for a date.\n\nAccepts both PUT and POST so older clients posting to this endpoint don't\nsilently 405 \u2014 the operation is idempotent on (user_id, date).",
         "operationId": "upsert_daily_note_api_daily_notes_put",
         "requestBody": {
           "content": {
@@ -4408,6 +4514,64 @@
           }
         },
         "summary": "Upsert Daily Note",
+        "tags": [
+          "daily-notes"
+        ]
+      }
+    },
+    "/api/daily-notes/range": {
+      "get": {
+        "description": "List daily notes between [start, end] (inclusive). Used by clients\nthat render mood sparklines / streaks.",
+        "operationId": "list_daily_notes_api_daily_notes_range_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DailyNoteResponse"
+                  },
+                  "title": "Response List Daily Notes Api Daily Notes Range Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Daily Notes",
         "tags": [
           "daily-notes"
         ]

@@ -786,8 +786,39 @@ export interface paths {
         /**
          * Upsert Daily Note
          * @description Create or update the daily note for a date.
+         *
+         *     Accepts both PUT and POST so older clients posting to this endpoint don't
+         *     silently 405 — the operation is idempotent on (user_id, date).
          */
         put: operations["upsert_daily_note_api_daily_notes_put"];
+        /**
+         * Upsert Daily Note
+         * @description Create or update the daily note for a date.
+         *
+         *     Accepts both PUT and POST so older clients posting to this endpoint don't
+         *     silently 405 — the operation is idempotent on (user_id, date).
+         */
+        post: operations["upsert_daily_note_api_daily_notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/daily-notes/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Daily Notes
+         * @description List daily notes between [start, end] (inclusive). Used by clients
+         *     that render mood sparklines / streaks.
+         */
+        get: operations["list_daily_notes_api_daily_notes_range_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2600,6 +2631,12 @@ export interface components {
             dominant_bundle_id: string;
             /** Dominant Category */
             dominant_category: string;
+            /** Editor Branch */
+            editor_branch?: string | null;
+            /** Editor Language */
+            editor_language?: string | null;
+            /** Editor Repo */
+            editor_repo?: string | null;
             /** Flow Score */
             flow_score: number;
             /** Id */
@@ -2903,6 +2940,12 @@ export interface components {
              * @default
              */
             dominant_category: string;
+            /** Editor Branch */
+            editor_branch?: string | null;
+            /** Editor Language */
+            editor_language?: string | null;
+            /** Editor Repo */
+            editor_repo?: string | null;
             /** Flow Score */
             flow_score: number;
             /** Idle Fraction */
@@ -4623,6 +4666,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DailyNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_daily_note_api_daily_notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertDailyNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_daily_notes_api_daily_notes_range_get: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyNoteResponse"][];
                 };
             };
             /** @description Validation Error */

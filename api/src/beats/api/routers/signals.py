@@ -32,6 +32,12 @@ class PostFlowWindowRequest(BaseModel):
     dominant_category: str = ""
     context_switches: int = 0
     active_project_id: str | None = None
+    # Editor heartbeat snapshot at the time the daemon flushed the window.
+    # All optional — older daemons (and windows where no editor was active)
+    # send these as null / omit them.
+    editor_repo: str | None = None
+    editor_branch: str | None = None
+    editor_language: str | None = None
 
 
 class FlowWindowResponse(BaseModel):
@@ -47,6 +53,9 @@ class FlowWindowResponse(BaseModel):
     dominant_category: str
     context_switches: int
     active_project_id: str | None
+    editor_repo: str | None = None
+    editor_branch: str | None = None
+    editor_language: str | None = None
 
 
 class PostSignalSummaryRequest(BaseModel):
@@ -93,6 +102,9 @@ async def post_flow_window(
         dominant_category=body.dominant_category,
         context_switches=body.context_switches,
         active_project_id=body.active_project_id,
+        editor_repo=body.editor_repo,
+        editor_branch=body.editor_branch,
+        editor_language=body.editor_language,
     )
     created = await repo.create(window)
     return {"id": created.id or ""}
@@ -121,6 +133,9 @@ async def list_flow_windows(
             dominant_category=w.dominant_category,
             context_switches=w.context_switches,
             active_project_id=w.active_project_id,
+            editor_repo=w.editor_repo,
+            editor_branch=w.editor_branch,
+            editor_language=w.editor_language,
         )
         for w in windows
     ]

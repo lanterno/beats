@@ -1,13 +1,14 @@
 # VS Code Extension — `beats-vscode`
 
-> **Status: end-to-end shipped.** The VS Code extension at
-> `integrations/vscode-beats/` posts heartbeats to the daemon's editor
-> listener at `daemon/internal/editor/listener.go`, which exposes the most
-> recent fresh beat to the collector loop. Each flow window now carries
-> the active editor's workspace + branch + language alongside the
-> existing flow signals. Server-side schema for storing editor context on
-> flow windows is the only piece still pending — the daemon currently
-> logs editor info locally rather than sending it.
+> **Status: end-to-end shipped, persisted on the API.** The VS Code
+> extension at `integrations/vscode-beats/` posts heartbeats to the
+> daemon's editor listener at `daemon/internal/editor/listener.go`,
+> which exposes the most recent fresh beat to the collector loop. Each
+> flow window carries the active editor's workspace + branch + language
+> alongside the existing flow signals, and those three fields are
+> persisted on the `FlowWindow` document and exposed via
+> `GET /api/signals/flow-windows` as `editor_repo`, `editor_branch`,
+> `editor_language`.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score

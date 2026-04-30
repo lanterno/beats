@@ -410,6 +410,13 @@ class FlowWindow(TzNormalizedModel):
     dominant_category: str = ""
     context_switches: int = 0
     active_project_id: str | None = None
+    # Editor context — populated by the daemon from the most recent fresh
+    # heartbeat received from an editor extension (today: VS Code via
+    # `daemon/internal/editor/listener.go`). All three default to None when
+    # no editor was active during the window.
+    editor_repo: str | None = None
+    editor_branch: str | None = None
+    editor_language: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

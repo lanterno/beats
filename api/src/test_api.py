@@ -1412,6 +1412,64 @@ class TestSignalsAPI:
         assert resp.status_code == 201
         assert "id" in resp.json()
 
+    def test_flow_window_round_trips_editor_context(self):
+        """Editor heartbeat fields (repo, branch, language) round-trip."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": (now - timedelta(minutes=1)).isoformat(),
+                "window_end": now.isoformat(),
+                "flow_score": 0.92,
+                "cadence_score": 0.9,
+                "coherence_score": 1.0,
+                "category_fit_score": 1.0,
+                "idle_fraction": 0.0,
+                "dominant_bundle_id": "com.microsoft.VSCode",
+                "dominant_category": "coding",
+                "editor_repo": "/Users/me/code/example",
+                "editor_branch": "main",
+                "editor_language": "go",
+            },
+            headers=device_headers,
+        )
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        match = next((w for w in resp.json() if w["flow_score"] == 0.92), None)
+        assert match is not None, "posted flow window not found in list"
+        assert match["editor_repo"] == "/Users/me/code/example"
+        assert match["editor_branch"] == "main"
+        assert match["editor_language"] == "go"
+
+    def test_flow_window_without_editor_context_still_validates(self):
+        """Older daemons that don't send editor_* fields are still accepted."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        resp = client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": (now - timedelta(minutes=1)).isoformat(),
+                "window_end": now.isoformat(),
+                "flow_score": 0.4,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.5,
+                "dominant_bundle_id": "com.apple.Safari",
+                "dominant_category": "browser",
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 201
+
     def test_read_flow_windows_with_session_token(self):
         """Session token can read flow windows posted by the device."""
         _, device_headers = self._pair_device()

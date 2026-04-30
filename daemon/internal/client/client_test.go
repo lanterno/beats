@@ -3,8 +3,10 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -123,6 +125,64 @@ func TestPostFlowWindow(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPostFlowWindow_IncludesEditorContext(t *testing.T) {
+	// Editor context fields round-trip on the wire when set.
+	var captured FlowWindowRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+		w.Write([]byte(`{"id":"abc"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "dev-token")
+	now := time.Now().UTC()
+	err := c.PostFlowWindow(context.Background(), FlowWindowRequest{
+		WindowStart:    now.Add(-time.Minute),
+		WindowEnd:      now,
+		EditorRepo:     "/Users/me/code/example",
+		EditorBranch:   "main",
+		EditorLanguage: "go",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if captured.EditorRepo != "/Users/me/code/example" {
+		t.Errorf("editor_repo did not round-trip, got %q", captured.EditorRepo)
+	}
+	if captured.EditorBranch != "main" {
+		t.Errorf("editor_branch did not round-trip, got %q", captured.EditorBranch)
+	}
+	if captured.EditorLanguage != "go" {
+		t.Errorf("editor_language did not round-trip, got %q", captured.EditorLanguage)
+	}
+}
+
+func TestPostFlowWindow_OmitsEmptyEditorContext(t *testing.T) {
+	// When editor fields are zero-valued, they should not appear in the
+	// JSON payload at all (omitempty). Saves a few bytes per request and
+	// makes "no editor active" distinguishable from "editor sent ''".
+	var raw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ = io.ReadAll(r.Body)
+		w.Write([]byte(`{"id":"abc"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "dev-token")
+	now := time.Now().UTC()
+	if err := c.PostFlowWindow(context.Background(), FlowWindowRequest{
+		WindowStart: now.Add(-time.Minute),
+		WindowEnd:   now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"editor_repo", "editor_branch", "editor_language"} {
+		if strings.Contains(string(raw), key) {
+			t.Errorf("expected %s to be omitted from payload, got %s", key, raw)
+		}
 	}
 }
 

@@ -152,6 +152,9 @@ func main() {
 				DominantCategory: w.DominantCategory,
 				ContextSwitches:  w.ContextSwitches,
 				ActiveProjectID:  w.ActiveProjectID,
+				EditorRepo:       w.EditorRepo,
+				EditorBranch:     w.EditorBranch,
+				EditorLanguage:   w.EditorLanguage,
 			}
 			if postErr := c.PostFlowWindow(ctx, req); postErr != nil {
 				fmt.Fprintf(os.Stderr, "post flow window: %v\n", postErr)

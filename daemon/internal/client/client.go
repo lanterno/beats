@@ -123,6 +123,12 @@ type FlowWindowRequest struct {
 	DominantCategory string    `json:"dominant_category"`
 	ContextSwitches  int       `json:"context_switches"`
 	ActiveProjectID  string    `json:"active_project_id,omitempty"`
+	// Editor heartbeat snapshot, populated from editor.Listener.Latest()
+	// when the window flushes. omitempty so windows without an editor
+	// active don't waste payload bytes on null fields.
+	EditorRepo     string `json:"editor_repo,omitempty"`
+	EditorBranch   string `json:"editor_branch,omitempty"`
+	EditorLanguage string `json:"editor_language,omitempty"`
 }
 
 // PostFlowWindow sends a computed flow window to the API. Requires a device token.
