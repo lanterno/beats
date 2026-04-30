@@ -48,8 +48,7 @@ The today / week / streak stats row is live. Remaining nice-to-haves:
 
 ### Project Picker Sheet
 
-- Add **recent projects** section at the top (projects used in the last 3 days, separated by a "Recent" label)
-- Animate the sheet entrance with a spring curve (`Curves.easeOutBack`)
+The picker now shows a **RECENT** section at the top (last 5 projects started, tracked locally in `RecentProjects`/`SharedPreferences`) followed by an **ALL PROJECTS** section. Sheet content uses an `easeOutBack` spring entrance. Nothing pending here.
 
 ---
 
@@ -121,14 +120,13 @@ The Settings tab still uses Material defaults (`Card`, `Chip`, `ListTile`) — o
 
 | Phase | Impact | Effort |
 |-------|--------|--------|
-| **3 — Project picker polish (recents, spring entrance)** | Medium-High | 0.5 day |
 | **5 — Mood notes + sparkline** | Medium | 0.5 day |
 | **2 — Remaining micro-interactions** | Medium | 0.5 day |
 | **4 — Flow ring/timeline refinements** | Medium | 0.5 day |
 | **6 — Intentions polish + completion FX** | Medium | 0.5 day |
 | **7 — Settings/Pairing visual rewrite** | Low but very visible to first-time users | 1 day |
 
-**Total: ~3.5 days of polish remaining.**
+**Total: ~3 days of polish remaining.**
 
 ---
 

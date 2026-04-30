@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
+import '../services/recent_projects.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
 
@@ -42,6 +43,9 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   DateTime? _customStartTime;
   DateTime? _customStopTime;
 
+  final RecentProjects _recents = RecentProjects();
+  List<String> _recentIds = const [];
+
   // Stats row (today, this week, current streak) computed from the heatmap.
   int _todayMinutes = 0;
   int _weekMinutes = 0;
@@ -58,10 +62,17 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     )..repeat(reverse: true);
     _refresh();
     _refreshStats();
+    _loadRecents();
     _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _refresh();
       _refreshStats();
     });
+  }
+
+  Future<void> _loadRecents() async {
+    final ids = await _recents.load();
+    if (!mounted) return;
+    setState(() => _recentIds = ids);
   }
 
   Future<void> _refresh() async {
@@ -186,6 +197,13 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     _startTicker();
     try {
       await widget.client.startTimer(_selectedProjectId!, startTime: startTime);
+      // Promote this project to the head of the recents list — used by the
+      // picker to surface a "RECENT" section.
+      final id = _selectedProjectId;
+      if (id != null) {
+        await _recents.markUsed(id);
+        await _loadRecents();
+      }
       await _refresh();
     } catch (e) { setState(() => _error = '$e'); await _refresh(); }
   }
@@ -234,6 +252,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       ),
       builder: (ctx) => _ProjectPickerSheet(
         projects: _projects,
+        recentIds: _recentIds,
         selectedId: _selectedProjectId,
         onSelected: (id, name, color) {
           setState(() {
@@ -715,9 +734,15 @@ class _DateTimePicker extends StatelessWidget {
 
 class _ProjectPickerSheet extends StatefulWidget {
   final List<Map<String, dynamic>> projects;
+  final List<String> recentIds;
   final String? selectedId;
   final void Function(String id, String name, List<int> color) onSelected;
-  const _ProjectPickerSheet({required this.projects, this.selectedId, required this.onSelected});
+  const _ProjectPickerSheet({
+    required this.projects,
+    this.recentIds = const [],
+    this.selectedId,
+    required this.onSelected,
+  });
 
   @override
   State<_ProjectPickerSheet> createState() => _ProjectPickerSheetState();
@@ -726,12 +751,30 @@ class _ProjectPickerSheet extends StatefulWidget {
 class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
   String _query = '';
 
+  /// Map of id → project, for O(1) lookup when resolving recents.
+  Map<String, Map<String, dynamic>> _projectsById() => {
+        for (final p in widget.projects)
+          if (p['id'] is String) p['id'] as String: p,
+      };
+
   @override
   Widget build(BuildContext context) {
+    final all = widget.projects;
     final filtered = _query.isEmpty
-        ? widget.projects
-        : widget.projects.where((p) =>
+        ? all
+        : all.where((p) =>
             (p['name'] as String? ?? '').toLowerCase().contains(_query.toLowerCase())).toList();
+
+    // Resolve recents to actual project records (only show recents that still
+    // exist + aren't already filtered out by the search query).
+    final byId = _projectsById();
+    final recents = _query.isNotEmpty
+        ? const <Map<String, dynamic>>[]
+        : widget.recentIds
+            .map((id) => byId[id])
+            .whereType<Map<String, dynamic>>()
+            .toList(growable: false);
+    final recentIdSet = {for (final r in recents) r['id'] as String?};
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -771,53 +814,104 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
           ),
           const SizedBox(height: 8),
 
+          // Spring entrance for the list area: scale from 0.97 → 1.0 with an
+          // easeOutBack curve so it feels like the content settles into place.
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 360),
-            child: filtered.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('No projects found',
-                      style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary)),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final p = filtered[i];
-                      final rgb = _hexToRgb(p['color'] as String?);
-                      final color = Color.fromARGB(255, rgb[0], rgb[1], rgb[2]);
-                      final name = p['name'] as String? ?? 'Unnamed';
-                      final selected = p['id'] == widget.selectedId;
-
-                      return GestureDetector(
-                        onTap: () => widget.onSelected(p['id'], name, rgb),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: selected ? BeatsColors.amber.withValues(alpha: 0.08) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 4, height: 24,
-                                decoration: BoxDecoration(
-                                  color: color, borderRadius: BorderRadius.circular(2))),
-                              const SizedBox(width: 14),
-                              Expanded(child: Text(name, style: BeatsType.bodyMedium.copyWith(
-                                fontWeight: selected ? FontWeight.w600 : FontWeight.w400))),
-                              if (selected)
-                                Icon(Icons.check, size: 18, color: BeatsColors.amber),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+            constraints: const BoxConstraints(maxHeight: 420),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutBack,
+              builder: (_, t, child) {
+                final clamped = t.clamp(0.0, 1.0);
+                return Opacity(
+                  opacity: clamped,
+                  child: Transform.scale(
+                    scale: 0.97 + 0.03 * clamped,
+                    alignment: Alignment.topCenter,
+                    child: child,
                   ),
+                );
+              },
+              child: filtered.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('No projects found',
+                        style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary)),
+                    )
+                  : ListView(
+                      shrinkWrap: true,
+                      children: [
+                        if (recents.isNotEmpty) ...[
+                          _sectionLabel('RECENT'),
+                          for (final p in recents) _projectRow(p),
+                          const SizedBox(height: 12),
+                          _sectionLabel('ALL PROJECTS'),
+                        ],
+                        for (final p in filtered)
+                          if (recentIdSet.contains(p['id']) && _query.isEmpty)
+                            const SizedBox.shrink()
+                          else
+                            _projectRow(p),
+                      ],
+                    ),
+            ),
           ),
           const SizedBox(height: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+      child: Text(
+        text,
+        style: BeatsType.label.copyWith(
+          fontSize: 9,
+          letterSpacing: 2,
+          color: BeatsColors.textTertiary,
+        ),
+      ),
+    );
+  }
+
+  Widget _projectRow(Map<String, dynamic> p) {
+    final rgb = _hexToRgb(p['color'] as String?);
+    final color = Color.fromARGB(255, rgb[0], rgb[1], rgb[2]);
+    final name = p['name'] as String? ?? 'Unnamed';
+    final id = p['id'] as String? ?? '';
+    final selected = id == widget.selectedId;
+
+    return GestureDetector(
+      onTap: () => widget.onSelected(id, name, rgb),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? BeatsColors.amber.withValues(alpha: 0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 4, height: 24,
+              decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                name,
+                style: BeatsType.bodyMedium.copyWith(
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check, size: 18, color: BeatsColors.amber),
+          ],
+        ),
       ),
     );
   }
