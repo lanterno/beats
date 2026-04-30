@@ -34,6 +34,8 @@ as they're identified.
 - Tap/drag-to-inspect timeline with vertical guide and detail row showing
   time, exact score, dominant category, and the editor's repo + branch
   when a VS Code heartbeat covered that window
+- "PEAK 91 AT 14:32" line under the score ring — tap-to-jump the
+  inspector to the day's best window
 - Animated category bars
 
 ## Shipped — Coach

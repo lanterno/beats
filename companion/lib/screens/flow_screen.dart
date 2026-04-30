@@ -116,6 +116,70 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
     return best;
   }
 
+  /// Returns the index of the window with the highest flow_score, with an
+  /// earliest-peak tiebreak (matches the web's summarizeFlow). -1 only when
+  /// _windows is empty, which the caller already guards against.
+  int _peakWindowIndex() {
+    if (_windows.isEmpty) return -1;
+    var best = 0;
+    var bestScore = -1.0;
+    for (var i = 0; i < _windows.length; i++) {
+      final score = (_windows[i]['flow_score'] as num?)?.toDouble() ?? 0.0;
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  Widget _buildPeakLine() {
+    final idx = _peakWindowIndex();
+    if (idx < 0) return const SizedBox.shrink();
+    final w = _windows[idx];
+    final score = (w['flow_score'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0;
+    final start = DateTime.tryParse(w['window_start'] as String? ?? '')?.toLocal();
+    if (start == null) return const SizedBox.shrink();
+    final timeStr = '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
+
+    return Center(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedWindowIndex = idx),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('PEAK',
+                style: BeatsType.label.copyWith(
+                  fontSize: 9, color: BeatsColors.textTertiary, letterSpacing: 2)),
+              const SizedBox(width: 8),
+              Text(
+                '${(score * 100).round()}',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 13, color: _scoreColor(score), fontWeight: FontWeight.w400,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('AT', style: BeatsType.label.copyWith(
+                fontSize: 9, color: BeatsColors.textTertiary, letterSpacing: 2)),
+              const SizedBox(width: 6),
+              Text(
+                timeStr,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 13, color: BeatsColors.amber,
+                  decoration: TextDecoration.underline,
+                  decorationColor: BeatsColors.amber.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSelectedWindowDetail() {
     final idx = _selectedWindowIndex;
     if (idx == null || idx >= _windows.length) return const SizedBox.shrink();
@@ -312,7 +376,16 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
+
+                // ── Peak today ──
+                // Surfaces the day's best window with one tap to jump the
+                // timeline inspector to it. Only renders when there are
+                // multiple windows; for a single window it duplicates the
+                // ring score above.
+                if (_windows.length > 1) _buildPeakLine(),
+
+                const SizedBox(height: 24),
 
                 // ── Timeline ──
                 if (_windows.isNotEmpty) ...[
