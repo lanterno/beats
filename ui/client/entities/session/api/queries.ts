@@ -294,12 +294,14 @@ export function useThisWeekSessions() {
 }
 
 /**
- * Filter args shared by the flow-window hooks. Both projectId and
- * editorRepo map directly onto the API's optional query params.
+ * Filter args shared by the flow-window hooks. Each field maps directly
+ * onto an optional query param of /api/signals/flow-windows; multiple
+ * fields AND-compose at the API.
  */
 export interface FlowFilter {
 	projectId?: string;
 	editorRepo?: string;
+	editorLanguage?: string;
 }
 
 /**
@@ -323,6 +325,7 @@ export function useFlowWindows(start?: string, end?: string, filter: FlowFilter 
 			effectiveEnd,
 			filter.projectId ?? "all",
 			filter.editorRepo ?? "all",
+			filter.editorLanguage ?? "all",
 		],
 		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(effectiveStart, effectiveEnd, filter),
 		staleTime: 30_000,
@@ -350,6 +353,7 @@ export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
 			endIso,
 			filter.projectId ?? "all",
 			filter.editorRepo ?? "all",
+			filter.editorLanguage ?? "all",
 		],
 		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(startIso, endIso, filter),
 		staleTime: 5 * 60_000,

@@ -16,11 +16,16 @@ const SPARK_H = 64;
 export function FlowToday({
 	projectId,
 	editorRepo,
+	editorLanguage,
 }: {
 	projectId?: string;
 	editorRepo?: string;
+	editorLanguage?: string;
 } = {}) {
-	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
+	const filter =
+		projectId || editorRepo || editorLanguage
+			? { projectId, editorRepo, editorLanguage }
+			: undefined;
 	const { data: windows, isLoading } = useFlowWindows(undefined, undefined, filter);
 	// Baseline draws from the last 7 days (FlowThisWeek already issues this
 	// fetch — react-query dedupes by key so this is free here). When a

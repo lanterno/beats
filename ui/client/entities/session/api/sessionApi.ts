@@ -80,21 +80,24 @@ export async function fetchGaps(targetDate: string): Promise<Gap[]> {
  * Fetch flow windows in a date range. Each window is ~1 minute of
  * aggregated desktop activity emitted by the daemon's collector.
  *
- * Optional filters narrow the result server-side via the new query
- * params on /api/signals/flow-windows:
+ * Optional filters narrow the result server-side via the query params
+ * on /api/signals/flow-windows. They AND-compose:
  * - projectId — windows where active_project_id matched (timer was
  *   running on this project at the time)
  * - editorRepo — windows whose VS Code heartbeat reported this
  *   absolute workspace path
+ * - editorLanguage — windows whose VS Code heartbeat reported this
+ *   language id (e.g. "go", "typescriptreact")
  */
 export async function fetchFlowWindows(
 	start: string,
 	end: string,
-	options: { projectId?: string; editorRepo?: string } = {},
+	options: { projectId?: string; editorRepo?: string; editorLanguage?: string } = {},
 ): Promise<FlowWindow[]> {
 	const params = new URLSearchParams({ start, end });
 	if (options.projectId) params.set("project_id", options.projectId);
 	if (options.editorRepo) params.set("editor_repo", options.editorRepo);
+	if (options.editorLanguage) params.set("editor_language", options.editorLanguage);
 	const data = await get<unknown>(`/api/signals/flow-windows?${params.toString()}`);
 	return parseApiResponse(FlowWindowListSchema, data);
 }

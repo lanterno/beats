@@ -26,9 +26,10 @@ import { WeeklyCard } from "./WeeklyCard";
 export default function Insights() {
 	const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
 	const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
-	// Filter that's set by clicking a row on FlowByRepo. Independent of
-	// the project filter — they compose AND-style at the API.
+	// Filters set by clicking a row on FlowByRepo / FlowByLanguage.
+	// Independent of the project filter — they compose AND-style at the API.
 	const [selectedRepo, setSelectedRepo] = useState<string | undefined>(undefined);
+	const [selectedLanguage, setSelectedLanguage] = useState<string | undefined>(undefined);
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
 	const currentYear = new Date().getFullYear();
@@ -135,20 +136,47 @@ export default function Insights() {
 			    Tag filter still hides these — flow windows don't carry tags. */}
 			{!selectedTag && (
 				<>
-					{selectedRepo && (
-						<RepoFilterChip repo={selectedRepo} onClear={() => setSelectedRepo(undefined)} />
+					{(selectedRepo || selectedLanguage) && (
+						<FlowFilterChips
+							repo={selectedRepo}
+							language={selectedLanguage}
+							onClearRepo={() => setSelectedRepo(undefined)}
+							onClearLanguage={() => setSelectedLanguage(undefined)}
+						/>
 					)}
-					<FlowToday projectId={selectedProjectId} editorRepo={selectedRepo} />
-					<BestMoment projectId={selectedProjectId} editorRepo={selectedRepo} />
-					<FlowThisWeek projectId={selectedProjectId} editorRepo={selectedRepo} />
+					<FlowToday
+						projectId={selectedProjectId}
+						editorRepo={selectedRepo}
+						editorLanguage={selectedLanguage}
+					/>
+					<BestMoment
+						projectId={selectedProjectId}
+						editorRepo={selectedRepo}
+						editorLanguage={selectedLanguage}
+					/>
+					<FlowThisWeek
+						projectId={selectedProjectId}
+						editorRepo={selectedRepo}
+						editorLanguage={selectedLanguage}
+					/>
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 						<FlowByRepo
 							projectId={selectedProjectId}
+							editorLanguage={selectedLanguage}
 							selectedRepo={selectedRepo}
 							onSelectRepo={setSelectedRepo}
 						/>
-						<FlowByLanguage projectId={selectedProjectId} editorRepo={selectedRepo} />
-						<FlowByApp projectId={selectedProjectId} editorRepo={selectedRepo} />
+						<FlowByLanguage
+							projectId={selectedProjectId}
+							editorRepo={selectedRepo}
+							selectedLanguage={selectedLanguage}
+							onSelectLanguage={setSelectedLanguage}
+						/>
+						<FlowByApp
+							projectId={selectedProjectId}
+							editorRepo={selectedRepo}
+							editorLanguage={selectedLanguage}
+						/>
 					</div>
 				</>
 			)}
@@ -175,28 +203,79 @@ export default function Insights() {
 	);
 }
 
-/** Renders a small "Filtered to repo X · clear" pill above the flow cards
- * when the user has clicked a repo on FlowByRepo. Mirrors the project /
- * tag dropdown affordance — explicit, dismissible. */
-function RepoFilterChip({ repo, onClear }: { repo: string; onClear: () => void }) {
-	const parts = repo.split(/[\\/]/).filter(Boolean);
-	const tail = parts.length > 2 ? parts.slice(-2).join("/") : parts.join("/");
+/** Renders dismissible pills for the repo / language filters chosen by
+ * clicking a row on FlowByRepo or FlowByLanguage. Mirrors the project /
+ * tag dropdown affordance — explicit, dismissible, sibling pills compose
+ * visually so the user sees that both filters are AND-applied. */
+function FlowFilterChips({
+	repo,
+	language,
+	onClearRepo,
+	onClearLanguage,
+}: {
+	repo?: string;
+	language?: string;
+	onClearRepo: () => void;
+	onClearLanguage: () => void;
+}) {
 	return (
-		<div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-			<span>Filtered to repo</span>
-			<span className="text-foreground/80 font-mono" title={repo}>
-				{tail || repo}
+		<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+			{repo && (
+				<FilterPill
+					label="repo"
+					value={shortRepoTail(repo)}
+					title={repo}
+					onClear={onClearRepo}
+					clearLabel="Clear repo filter"
+				/>
+			)}
+			{language && (
+				<FilterPill
+					label="language"
+					value={language}
+					title={language}
+					onClear={onClearLanguage}
+					clearLabel="Clear language filter"
+				/>
+			)}
+		</div>
+	);
+}
+
+function FilterPill({
+	label,
+	value,
+	title,
+	onClear,
+	clearLabel,
+}: {
+	label: string;
+	value: string;
+	title: string;
+	onClear: () => void;
+	clearLabel: string;
+}) {
+	return (
+		<span className="flex items-center gap-2">
+			<span>Filtered to {label}</span>
+			<span className="text-foreground/80 font-mono" title={title}>
+				{value}
 			</span>
 			<button
 				type="button"
 				onClick={onClear}
 				className="text-accent hover:underline tabular-nums"
-				aria-label="Clear repo filter"
+				aria-label={clearLabel}
 			>
 				clear
 			</button>
-		</div>
+		</span>
 	);
+}
+
+function shortRepoTail(repo: string): string {
+	const parts = repo.split(/[\\/]/).filter(Boolean);
+	return parts.length > 2 ? parts.slice(-2).join("/") : parts.join("/") || repo;
 }
 
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {

@@ -19,11 +19,16 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 export function BestMoment({
 	projectId,
 	editorRepo,
+	editorLanguage,
 }: {
 	projectId?: string;
 	editorRepo?: string;
+	editorLanguage?: string;
 } = {}) {
-	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
+	const filter =
+		projectId || editorRepo || editorLanguage
+			? { projectId, editorRepo, editorLanguage }
+			: undefined;
 	const { data: windows } = useFlowWindowsLastDays(7, filter);
 	const { data: projects } = useProjects();
 

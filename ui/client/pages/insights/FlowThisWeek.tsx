@@ -23,11 +23,16 @@ interface DayBucket {
 export function FlowThisWeek({
 	projectId,
 	editorRepo,
+	editorLanguage,
 }: {
 	projectId?: string;
 	editorRepo?: string;
+	editorLanguage?: string;
 } = {}) {
-	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
+	const filter =
+		projectId || editorRepo || editorLanguage
+			? { projectId, editorRepo, editorLanguage }
+			: undefined;
 	const { data: windows, isLoading } = useFlowWindowsLastDays(DAYS, filter);
 
 	const buckets = useMemo<DayBucket[]>(() => {

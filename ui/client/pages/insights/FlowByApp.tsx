@@ -56,11 +56,16 @@ function shortBundleLabel(id: string): string {
 export function FlowByApp({
 	projectId,
 	editorRepo,
+	editorLanguage,
 }: {
 	projectId?: string;
 	editorRepo?: string;
+	editorLanguage?: string;
 } = {}) {
-	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
+	const filter =
+		projectId || editorRepo || editorLanguage
+			? { projectId, editorRepo, editorLanguage }
+			: undefined;
 	const { data: windows } = useFlowWindows(undefined, undefined, filter);
 	const stats = useMemo(
 		() => aggregateFlowBy(windows ?? [], (w) => w.dominant_bundle_id, 5),
