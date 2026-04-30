@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,58 @@ func TestFormatRecentTable_NewestRowAtBottom(t *testing.T) {
 	}
 	if !(idxNew > idxOld) {
 		t.Errorf("expected newest row at bottom of table; old=%d new=%d in:\n%s", idxOld, idxNew, out)
+	}
+}
+
+func TestFormatRecentJSON_RoundTrips(t *testing.T) {
+	// JSON output must parse back into the same slice — that's the whole
+	// point of the format ("beatsd recent --json | jq" should work).
+	now := time.Date(2026, 5, 1, 14, 0, 0, 0, time.UTC)
+	windows := []client.FlowWindowRecord{
+		{
+			ID:               "w1",
+			WindowStart:      now,
+			WindowEnd:        now.Add(time.Minute),
+			FlowScore:        0.74,
+			DominantBundleID: "com.microsoft.VSCode",
+			EditorRepo:       "/Users/me/code/beats",
+			EditorLanguage:   "go",
+		},
+	}
+	out, err := formatRecentJSON(windows)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("expected trailing newline so shell prompt lands cleanly, got %q", out)
+	}
+
+	var decoded []client.FlowWindowRecord
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("output should round-trip through json.Unmarshal: %v\noutput: %s", err, out)
+	}
+	if len(decoded) != 1 || decoded[0].ID != "w1" || decoded[0].EditorLanguage != "go" {
+		t.Errorf("round-trip lost data, got: %+v", decoded)
+	}
+}
+
+func TestFormatRecentJSON_EmptyIsArrayNotNull(t *testing.T) {
+	// When there are no rows we still emit `[]` — `jq` users would have
+	// to special-case `null` otherwise. Pipe-friendly trumps shorter.
+	out, err := formatRecentJSON(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "[]") || strings.Contains(out, "null") {
+		t.Errorf("expected an empty JSON array, got: %q", out)
+	}
+
+	var decoded []client.FlowWindowRecord
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("empty output should still parse as an array: %v", err)
+	}
+	if len(decoded) != 0 {
+		t.Errorf("decoded length should be 0, got %d", len(decoded))
 	}
 }
 

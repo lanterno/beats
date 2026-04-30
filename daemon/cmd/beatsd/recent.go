@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,16 +12,21 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/pair"
 )
 
-// runRecent prints the last [minutes] minutes of flow windows in a small
-// table. Complements `beatsd status` (right-now snapshot) and `beatsd
-// doctor` (setup health) — this answers "what has the daemon actually
-// been seeing the last hour?" without the user firing up the web UI.
+// runRecent prints the last [minutes] minutes of flow windows. Complements
+// `beatsd status` (right-now snapshot) and `beatsd doctor` (setup health)
+// — this answers "what has the daemon actually been seeing the last
+// hour?" without the user firing up the web UI.
 //
 // `filter` narrows the result to a specific repo / language / app via
 // the same query params the web Insights cards use. The table caption
 // surfaces whichever filters were applied so the user can tell at a
 // glance which slice they're looking at.
-func runRecent(cfg *config.Config, minutes int, filter client.FlowWindowsFilter) error {
+//
+// When `asJSON` is true, the windows are emitted as a JSON array on
+// stdout instead of the human table. Intended for shell scripting:
+// `beatsd recent --language go --json | jq '.[] | select(.flow_score > 0.7)'`
+// — the table form prints decorative captions that would corrupt jq input.
+func runRecent(cfg *config.Config, minutes int, filter client.FlowWindowsFilter, asJSON bool) error {
 	if minutes <= 0 {
 		minutes = 60
 	}
@@ -44,8 +50,32 @@ func runRecent(cfg *config.Config, minutes int, filter client.FlowWindowsFilter)
 		return err
 	}
 
+	if asJSON {
+		out, err := formatRecentJSON(windows)
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+		return nil
+	}
 	fmt.Print(formatRecentTable(windows, minutes, filter))
 	return nil
+}
+
+// formatRecentJSON renders the windows as a pretty-printed JSON array.
+// Always emits an array (even when empty) so callers piping through `jq`
+// don't have to special-case "no rows" — `[]` is valid JSON, `null` would
+// surprise tools that expect to iterate. Trailing newline so terminal
+// prompts land on the next line.
+func formatRecentJSON(windows []client.FlowWindowRecord) (string, error) {
+	if windows == nil {
+		windows = []client.FlowWindowRecord{}
+	}
+	b, err := json.MarshalIndent(windows, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode JSON: %w", err)
+	}
+	return string(b) + "\n", nil
 }
 
 // formatRecentTable renders a slice of flow windows as a small text table.

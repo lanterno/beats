@@ -186,6 +186,7 @@ func main() {
 		// and matches what `beatsd recent --help` would document.
 		minutes := 60
 		var filter client.FlowWindowsFilter
+		var asJSON bool
 		for i := 1; i < len(args); i++ {
 			switch args[i] {
 			case "--minutes":
@@ -206,9 +207,11 @@ func main() {
 				if i+1 < len(args) {
 					filter.BundleID = args[i+1]
 				}
+			case "--json":
+				asJSON = true
 			}
 		}
-		if err := runRecent(cfg, minutes, filter); err != nil {
+		if err := runRecent(cfg, minutes, filter, asJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -300,6 +303,7 @@ Commands:
                   --repo PATH      narrow to a specific editor workspace
                   --language ID    narrow to a VS Code language id (e.g. go, dart)
                   --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
+                  --json           emit raw windows as a JSON array (for piping into jq)
   unpair        Remove the device token from the keychain
   version       Print version info
 
