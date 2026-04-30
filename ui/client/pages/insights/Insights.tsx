@@ -12,6 +12,7 @@ import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
 import { EstimationAccuracy } from "./EstimationAccuracy";
+import { FlowByApp } from "./FlowByApp";
 import { FlowByLanguage } from "./FlowByLanguage";
 import { FlowByRepo } from "./FlowByRepo";
 import { FlowThisWeek } from "./FlowThisWeek";
@@ -134,9 +135,10 @@ export default function Insights() {
 					<FlowToday projectId={selectedProjectId} />
 					<BestMoment projectId={selectedProjectId} />
 					<FlowThisWeek projectId={selectedProjectId} />
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 						<FlowByRepo projectId={selectedProjectId} />
 						<FlowByLanguage projectId={selectedProjectId} />
+						<FlowByApp projectId={selectedProjectId} />
 					</div>
 				</>
 			)}
