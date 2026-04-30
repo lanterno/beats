@@ -30,7 +30,10 @@
 > `GET /api/signals/flow-windows/summary` returns single-round-trip
 > aggregate stats — avg / peak / count plus the top bucket on each
 > grouping axis — for callers (CLIs, the companion) that want the
-> headline without fetching every row.
+> headline without fetching every row. The home page renders a
+> "Flow today" headline card backed by this endpoint, and the
+> daemon's `beatsd stats` command prints the same summary as a
+> one-liner for shell prompts.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score

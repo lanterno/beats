@@ -20,6 +20,7 @@ export {
 	useDailyRhythm,
 	useFlowWindows,
 	useFlowWindowsLastDays,
+	useFlowWindowsSummary,
 	useGaps,
 	useHeatmap,
 	useLastWeekTotal,

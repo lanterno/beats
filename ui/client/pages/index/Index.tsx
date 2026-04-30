@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { LoadingSpinner, useProjects } from "@/entities/project";
 import { useTodaySessions } from "@/entities/session";
 import { DailyBrief } from "./DailyBrief";
+import { FlowHeadline } from "./FlowHeadline";
 import { Inbox } from "./Inbox";
 import { ProductivityScore } from "./ProductivityScore";
 import { ProjectPulseList } from "./ProjectPulseList";
@@ -46,6 +47,10 @@ export default function Index() {
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
 				<DailyBrief />
 				<Inbox />
+			</div>
+
+			<div className="mt-5">
+				<FlowHeadline />
 			</div>
 
 			<div className="mt-5">

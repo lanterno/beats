@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
-import type { FlowWindow, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
+import type { FlowWindow, FlowWindowSummary, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -21,6 +21,7 @@ import {
 	fetchBeats,
 	fetchDailyRhythm,
 	fetchFlowWindows,
+	fetchFlowWindowsSummary,
 	fetchGaps,
 	fetchHeatmap,
 	updateBeat,
@@ -360,6 +361,37 @@ export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
 		],
 		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(startIso, endIso, filter),
 		staleTime: 5 * 60_000,
+	});
+}
+
+/**
+ * Hook to fetch single round-trip aggregate flow stats for the slice
+ * `[start, end]` under the given filter. Used by headline cards (the
+ * Index page's FlowHeadline) that just want avg/peak/count + the top
+ * bucket on each axis without paginating every row.
+ *
+ * Defaults to today (00:00 → now) when start/end aren't provided so
+ * call sites that just want "today's flow" can pass nothing.
+ */
+export function useFlowWindowsSummary(start?: string, end?: string, filter: FlowFilter = {}) {
+	const now = new Date();
+	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+	const effectiveStart = start ?? todayStart;
+	const effectiveEnd = end ?? now.toISOString();
+	return useQuery({
+		queryKey: [
+			...sessionKeys.all,
+			"flow-windows-summary",
+			effectiveStart,
+			effectiveEnd,
+			filter.projectId ?? "all",
+			filter.editorRepo ?? "all",
+			filter.editorLanguage ?? "all",
+			filter.bundleId ?? "all",
+		],
+		queryFn: (): Promise<FlowWindowSummary> =>
+			fetchFlowWindowsSummary(effectiveStart, effectiveEnd, filter),
+		staleTime: 30_000,
 	});
 }
 

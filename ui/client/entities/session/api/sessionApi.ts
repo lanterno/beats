@@ -3,10 +3,18 @@
  * Low-level API calls for sessions (beats) and analytics.
  */
 
-import type { ApiBeat, FlowWindow, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
+import type {
+	ApiBeat,
+	FlowWindow,
+	FlowWindowSummary,
+	Gap,
+	HeatmapDay,
+	RhythmSlot,
+} from "@/shared/api";
 import {
 	ApiBeatListSchema,
 	FlowWindowListSchema,
+	FlowWindowSummarySchema,
 	GapListSchema,
 	get,
 	HeatmapDayListSchema,
@@ -108,4 +116,29 @@ export async function fetchFlowWindows(
 	if (options.bundleId) params.set("bundle_id", options.bundleId);
 	const data = await get<unknown>(`/api/signals/flow-windows?${params.toString()}`);
 	return parseApiResponse(FlowWindowListSchema, data);
+}
+
+/**
+ * Fetch single round-trip aggregate stats for a flow-window slice.
+ * Hits /api/signals/flow-windows/summary which returns count/avg/peak
+ * plus the top bucket on each grouping axis — designed for headline
+ * cards that don't need every row.
+ */
+export async function fetchFlowWindowsSummary(
+	start: string,
+	end: string,
+	options: {
+		projectId?: string;
+		editorRepo?: string;
+		editorLanguage?: string;
+		bundleId?: string;
+	} = {},
+): Promise<FlowWindowSummary> {
+	const params = new URLSearchParams({ start, end });
+	if (options.projectId) params.set("project_id", options.projectId);
+	if (options.editorRepo) params.set("editor_repo", options.editorRepo);
+	if (options.editorLanguage) params.set("editor_language", options.editorLanguage);
+	if (options.bundleId) params.set("bundle_id", options.bundleId);
+	const data = await get<unknown>(`/api/signals/flow-windows/summary?${params.toString()}`);
+	return parseApiResponse(FlowWindowSummarySchema, data);
 }

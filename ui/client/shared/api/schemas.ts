@@ -147,6 +147,29 @@ export type FlowWindow = z.infer<typeof FlowWindowSchema>;
 
 export const FlowWindowListSchema = z.array(FlowWindowSchema);
 
+/** One bucket inside FlowWindowSummary — the highest-count entry on
+ * its grouping axis (top_repo / top_language / top_bundle). */
+export const FlowTopBucketSchema = z.object({
+	key: z.string(),
+	avg: z.number(),
+	count: z.number(),
+});
+export type FlowTopBucket = z.infer<typeof FlowTopBucketSchema>;
+
+/** Aggregate stats for a flow-window slice, returned in a single
+ * round-trip by GET /api/signals/flow-windows/summary. Mirrors the
+ * Python FlowWindowSummaryResponse. */
+export const FlowWindowSummarySchema = z.object({
+	count: z.number(),
+	avg: z.number(),
+	peak: z.number(),
+	peak_at: z.string().nullable(),
+	top_repo: FlowTopBucketSchema.nullable(),
+	top_language: FlowTopBucketSchema.nullable(),
+	top_bundle: FlowTopBucketSchema.nullable(),
+});
+export type FlowWindowSummary = z.infer<typeof FlowWindowSummarySchema>;
+
 // ============================================================================
 // Intention schemas
 // ============================================================================
