@@ -224,6 +224,14 @@ class _CoachScreenState extends State<CoachScreen> {
                         const SizedBox(width: 10),
                         Text('MORNING BRIEF', style: BeatsType.label.copyWith(
                           color: BeatsColors.amber, letterSpacing: 2)),
+                        const Spacer(),
+                        if (_briefTimestamp() != null)
+                          Text(_briefTimestamp()!,
+                            style: BeatsType.label.copyWith(
+                              fontSize: 9,
+                              color: BeatsColors.textTertiary,
+                              letterSpacing: 1.5,
+                            )),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -406,6 +414,17 @@ class _CoachScreenState extends State<CoachScreen> {
         ),
       ),
     );
+  }
+
+  /// Returns a short local-time string for when today's brief was generated,
+  /// e.g. "07:14". Returns null if there's no brief or the timestamp is missing.
+  String? _briefTimestamp() {
+    final raw = _brief?['created_at'] as String?;
+    if (raw == null) return null;
+    final ts = DateTime.tryParse(raw);
+    if (ts == null) return null;
+    final local = ts.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   /// Render the last 7 days of moods as small dots, color-coded.

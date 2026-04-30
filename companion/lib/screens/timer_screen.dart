@@ -51,6 +51,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   // Stats row (today, this week, current streak) computed from the heatmap.
   int _todayMinutes = 0;
   int _weekMinutes = 0;
+  int _lastWeekMinutes = 0;
   int _streakDays = 0;
   bool _statsLoaded = false;
 
@@ -142,8 +143,11 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       final weekStart = DateTime(today.year, today.month, today.day)
           .subtract(Duration(days: today.weekday - 1));
       var weekMins = 0;
+      var lastWeekMins = 0;
       for (var i = 0; i < 7; i++) {
         weekMins += byDate[_dateKey(weekStart.add(Duration(days: i)))] ?? 0;
+        lastWeekMins +=
+            byDate[_dateKey(weekStart.subtract(Duration(days: 7 - i)))] ?? 0;
       }
 
       // Streak: walk back day-by-day, counting consecutive days with minutes > 0.
@@ -169,6 +173,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       setState(() {
         _todayMinutes = todayMins;
         _weekMinutes = weekMins;
+        _lastWeekMinutes = lastWeekMins;
         _streakDays = streak;
         _statsLoaded = true;
       });
@@ -485,18 +490,29 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   }
 
   Widget _buildStatsRow() {
+    final streakLabel = _streakDays > 0
+        ? (_streakDays >= 7
+            ? '🔥 $_streakDays'
+            : '$_streakDays${_streakDays == 1 ? ' DAY' : ' DAYS'}')
+        : '—';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
           Expanded(child: _statCell(label: 'TODAY', value: _formatMinutes(_todayMinutes))),
           _statDivider(),
-          Expanded(child: _statCell(label: 'WEEK', value: _formatMinutes(_weekMinutes))),
+          Expanded(
+            child: _statCell(
+              label: 'WEEK',
+              value: _formatMinutes(_weekMinutes),
+              trailing: _weekDeltaBadge(),
+            ),
+          ),
           _statDivider(),
           Expanded(
             child: _statCell(
               label: 'STREAK',
-              value: _streakDays > 0 ? '$_streakDays${_streakDays == 1 ? ' DAY' : ' DAYS'}' : '—',
+              value: streakLabel,
               accent: _streakDays > 0,
             ),
           ),
@@ -505,7 +521,34 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _statCell({required String label, required String value, bool accent = false}) {
+  /// Renders a compact ↑/↓ delta badge next to the WEEK total when there's
+  /// at least a small amount of last-week data to compare against. Returns
+  /// null on the first week of activity (avoids "↑∞%" or "↑200%" noise).
+  Widget? _weekDeltaBadge() {
+    if (_lastWeekMinutes < 30) return null; // not enough signal
+    final deltaPct = ((_weekMinutes - _lastWeekMinutes) / _lastWeekMinutes * 100).round();
+    if (deltaPct == 0) return null;
+    final up = deltaPct > 0;
+    final color = up ? BeatsColors.green : BeatsColors.red;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        '${up ? '↑' : '↓'} ${deltaPct.abs()}%',
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 9,
+          color: color.withValues(alpha: 0.85),
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _statCell({
+    required String label,
+    required String value,
+    bool accent = false,
+    Widget? trailing,
+  }) {
     return Column(
       children: [
         Text(
@@ -516,6 +559,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             color: accent ? BeatsColors.amber : BeatsColors.textPrimary,
           ),
         ),
+        ?trailing,
         const SizedBox(height: 6),
         Text(
           label,
@@ -581,7 +625,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   Widget _buildStartSection() {
     return Column(
       children: [
-        // Project selector
+        // Project selector — inner shadow gives the chip a subtle inset feel.
         PressScale(
           onTap: _showProjectPicker,
           child: Container(
@@ -590,6 +634,15 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
               color: BeatsColors.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: BeatsColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  offset: const Offset(0, 1),
+                  blurRadius: 2,
+                  spreadRadius: -1,
+                  blurStyle: BlurStyle.inner,
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -751,14 +804,29 @@ class _TimeUnit extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textStyle = GoogleFonts.jetBrainsMono(
+      fontSize: 64, fontWeight: FontWeight.w200, color: color, height: 1,
+      fontFeatures: [const FontFeature.tabularFigures()],
+    );
+
+    // Cross-fade the digits on each tick rather than hard-swapping. Keyed by
+    // value so the AnimatedSwitcher knows when to run a transition; fixed
+    // width prevents reflow when 09 → 10 changes glyph width.
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 64, fontWeight: FontWeight.w200, color: color, height: 1,
-            fontFeatures: [const FontFeature.tabularFigures()],
-          )),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.center,
+            children: [...previous, ?current],
+          ),
+          child: Text(value, key: ValueKey(value), style: textStyle),
+        ),
         const SizedBox(height: 4),
         Text(label, style: BeatsType.label.copyWith(
           fontSize: 9, color: color.withValues(alpha: 0.4), letterSpacing: 3)),

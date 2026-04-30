@@ -76,15 +76,18 @@ Small touches that didn't make the first wave. Nice-to-have, not blocking.
 - **Timer block**: more generous padding above/below the digits
 - **Timer block**: subtle gradient-fade divider between the project chip
   and the time
-- **Timer block**: subtle inner shadow on the project selector for depth
-- **Stats row**: week-over-week comparison arrow (↑12% / ↓5%)
-- **Stats row**: flame glyph on streak ≥ 7 days
-- **Timer digits**: subtle fade on each second tick (currently a hard swap)
 - **Timer card shadow**: extend the dot's pulsing breath to the card shadow
-- **Coach morning brief**: timestamp in the top-right showing when generated
-- **Tags after stop**: replace the freeform tags input with chips of recent
-  tags + freeform fallback (needs `/api/analytics/tags` allowed for device
-  tokens — small server change)
+
+Recently shipped:
+
+- Project-selector inner shadow for depth
+- Stats row: ↑/↓ week-over-week percentage badge under WEEK total (hidden
+  when last week had < 30 minutes — avoids noisy "↑200%" early on)
+- Stats row: 🔥 glyph replaces "DAYS" once the streak is ≥ 7
+- Timer digits: 220ms cross-fade between values on each second tick
+- Coach morning brief: HH:MM timestamp in the top-right of the section
+- Recent-tag chips on the post-stop sheet (one-tap select + freeform
+  input merges with chip selections on save)
 
 ---
 
