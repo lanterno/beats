@@ -27,8 +27,10 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   bool _loading = true;
   double _currentScore = 0.0;
   List<Map<String, dynamic>> _windows = [];
+  List<Map<String, dynamic>> _summaries = [];
   Map<String, int> _categoryTotals = {};
   int _totalSamples = 0;
+  int? _selectedWindowIndex;
 
   late AnimationController _glowController;
 
@@ -65,10 +67,12 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       if (mounted) {
         setState(() {
           _windows = windows;
+          _summaries = summaries;
           _currentScore = latest;
           _categoryTotals = cats;
           _totalSamples = total;
           _loading = false;
+          _selectedWindowIndex = null;
         });
       }
     } catch (_) {
@@ -80,6 +84,95 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
     if (s >= 0.7) return BeatsColors.green;
     if (s >= 0.3) return BeatsColors.amber;
     return BeatsColors.red;
+  }
+
+  void _selectWindowAt(double dx, double width) {
+    if (_windows.isEmpty || width <= 0) return;
+    final ratio = (dx / width).clamp(0.0, 1.0);
+    final idx = _windows.length == 1
+        ? 0
+        : (ratio * (_windows.length - 1)).round().clamp(0, _windows.length - 1);
+    if (idx == _selectedWindowIndex) return;
+    setState(() => _selectedWindowIndex = idx);
+  }
+
+  /// Picks the most recent summary whose hour ≤ the given window's start.
+  /// Summaries are bucketed at the hour, so this lines up roughly with the
+  /// window the user tapped on.
+  Map<String, dynamic>? _summaryForWindow(Map<String, dynamic> window) {
+    final start = DateTime.tryParse(window['window_start'] as String? ?? '');
+    if (start == null || _summaries.isEmpty) return null;
+    Map<String, dynamic>? best;
+    DateTime? bestHour;
+    for (final s in _summaries) {
+      final h = DateTime.tryParse(s['hour'] as String? ?? '');
+      if (h == null || h.isAfter(start)) continue;
+      if (bestHour == null || h.isAfter(bestHour)) {
+        bestHour = h;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  Widget _buildSelectedWindowDetail() {
+    final idx = _selectedWindowIndex;
+    if (idx == null || idx >= _windows.length) return const SizedBox.shrink();
+    final w = _windows[idx];
+    final score = (w['flow_score'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0;
+    final scoreInt = (score * 100).round();
+    final start = DateTime.tryParse(w['window_start'] as String? ?? '')?.toLocal();
+    final timeStr = start != null
+        ? '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}'
+        : '—';
+
+    final summary = _summaryForWindow(w);
+    final cats = (summary?['categories'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final dominant = cats.entries
+        .where((e) => (e.value as num?) != null)
+        .toList()
+      ..sort((a, b) => (b.value as num).compareTo(a.value as num));
+    final topName = dominant.isNotEmpty ? dominant.first.key : null;
+    final topColor = topName != null
+        ? (_catColors[topName] ?? BeatsColors.textTertiary)
+        : BeatsColors.textTertiary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: BeatsColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: BeatsColors.border.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            timeStr,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 12, color: BeatsColors.textTertiary, letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text('$scoreInt',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 16, color: _scoreColor(score), fontWeight: FontWeight.w400,
+            )),
+          Text(' / 100',
+            style: BeatsType.bodySmall.copyWith(
+              fontSize: 11, color: BeatsColors.textTertiary)),
+          const Spacer(),
+          if (topName != null) ...[
+            Container(width: 6, height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle, color: topColor)),
+            const SizedBox(width: 6),
+            Text(topName.toUpperCase(),
+              style: BeatsType.label.copyWith(
+                fontSize: 9, color: BeatsColors.textSecondary, letterSpacing: 1.5)),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -182,13 +275,29 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                       children: [
                         Text('TODAY', style: BeatsType.label),
                         const SizedBox(height: 14),
-                        SizedBox(
-                          height: 72,
-                          child: CustomPaint(
-                            size: const Size(double.infinity, 72),
-                            painter: _AreaPainter(_windows),
+                        LayoutBuilder(builder: (_, constraints) {
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (d) => _selectWindowAt(d.localPosition.dx, constraints.maxWidth),
+                            onPanUpdate: (d) => _selectWindowAt(d.localPosition.dx, constraints.maxWidth),
+                            onPanEnd: (_) {},
+                            child: SizedBox(
+                              height: 72,
+                              child: CustomPaint(
+                                size: const Size(double.infinity, 72),
+                                painter: _AreaPainter(
+                                  _windows,
+                                  selectedIndex: _selectedWindowIndex,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                        if (_selectedWindowIndex != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: _buildSelectedWindowDetail(),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -339,7 +448,8 @@ class _RingPainter extends CustomPainter {
 
 class _AreaPainter extends CustomPainter {
   final List<Map<String, dynamic>> windows;
-  _AreaPainter(this.windows);
+  final int? selectedIndex;
+  _AreaPainter(this.windows, {this.selectedIndex});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -354,7 +464,9 @@ class _AreaPainter extends CustomPainter {
 
     // Area
     final area = Path()..moveTo(0, size.height);
-    for (final p in points) area.lineTo(p.dx, p.dy);
+    for (final p in points) {
+      area.lineTo(p.dx, p.dy);
+    }
     area.lineTo(size.width, size.height);
     area.close();
     canvas.drawPath(area, Paint()
@@ -366,14 +478,34 @@ class _AreaPainter extends CustomPainter {
     // Line
     final line = Path();
     for (var i = 0; i < points.length; i++) {
-      if (i == 0) line.moveTo(points[i].dx, points[i].dy);
-      else line.lineTo(points[i].dx, points[i].dy);
+      if (i == 0) {
+        line.moveTo(points[i].dx, points[i].dy);
+      } else {
+        line.lineTo(points[i].dx, points[i].dy);
+      }
     }
     canvas.drawPath(line, Paint()
       ..color = BeatsColors.amber
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round);
+
+    // Selected-point marker: vertical guide + filled dot.
+    final sel = selectedIndex;
+    if (sel != null && sel >= 0 && sel < points.length) {
+      final p = points[sel];
+      canvas.drawLine(
+        Offset(p.dx, 0),
+        Offset(p.dx, size.height),
+        Paint()
+          ..color = BeatsColors.amber.withValues(alpha: 0.35)
+          ..strokeWidth = 1,
+      );
+      canvas.drawCircle(p, 4.5,
+          Paint()..color = BeatsColors.background);
+      canvas.drawCircle(p, 3.5,
+          Paint()..color = BeatsColors.amber);
+    }
   }
 
   @override

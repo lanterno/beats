@@ -54,11 +54,10 @@ The picker now shows a **RECENT** section at the top (last 5 projects started, t
 
 ## Phase 4 — Flow Screen Polish (remaining)
 
-The score ring, breathing glow at score ≥ 0.7, area-chart timeline, and animated category bars already ship. Polish remaining:
+The score ring, breathing glow at score ≥ 0.7, area-chart timeline, animated category bars, and the tap/drag-to-inspect timeline (vertical guide + dot, with a detail row showing time, exact score, and dominant category from the matching summary bucket) already ship. Polish remaining:
 
 - Inner circle of the ring: subtle radial gradient (currently flat)
 - Foreground ring stroke: gradient from amber to warm white instead of solid color
-- Add **touch interaction** on the timeline: tap a point to see the exact score + dominant app at that time
 
 ---
 
