@@ -51,6 +51,9 @@ DEVICE_ALLOWED_PREFIXES = (
     "/api/biometrics/daily",
     "/api/timer",
     "/api/projects",
+    # Companion's "How did it go?" prompt updates the just-stopped beat with
+    # an optional note + tags via PUT /api/beats/.
+    "/api/beats",
     "/api/coach/brief",
     "/api/coach/review",
     "/api/intentions",
