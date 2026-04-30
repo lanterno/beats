@@ -126,14 +126,15 @@ export default function Insights() {
 			{/* Intelligence: Pattern cards */}
 			{!selectedProjectId && !selectedTag && <PatternCards />}
 
-			{/* Today's flow score + repo / language dimensions, from the daemon */}
-			{!selectedProjectId && !selectedTag && (
+			{/* Today's flow score + repo / language dimensions, from the daemon.
+			    Tag filter still hides these — flow windows don't carry tags. */}
+			{!selectedTag && (
 				<>
-					<FlowToday />
-					<FlowThisWeek />
+					<FlowToday projectId={selectedProjectId} />
+					<FlowThisWeek projectId={selectedProjectId} />
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-						<FlowByRepo />
-						<FlowByLanguage />
+						<FlowByRepo projectId={selectedProjectId} />
+						<FlowByLanguage projectId={selectedProjectId} />
 					</div>
 				</>
 			)}

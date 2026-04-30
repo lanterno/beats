@@ -7,8 +7,9 @@ import { useMemo } from "react";
 import { useFlowWindows } from "@/entities/session";
 import { aggregateFlowByRepo, shortRepoPath } from "@/shared/lib/flowAggregation";
 
-export function FlowByRepo() {
-	const { data: windows } = useFlowWindows();
+export function FlowByRepo({ projectId }: { projectId?: string } = {}) {
+	const filter = projectId ? { projectId } : undefined;
+	const { data: windows } = useFlowWindows(undefined, undefined, filter);
 	const stats = useMemo(() => aggregateFlowByRepo(windows ?? [], 5), [windows]);
 
 	if (stats.length === 0) return null;

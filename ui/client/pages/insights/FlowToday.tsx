@@ -13,11 +13,14 @@ import { flowBaseline, shortRepoPath, summarizeFlow } from "@/shared/lib/flowAgg
 const SPARK_W = 480;
 const SPARK_H = 64;
 
-export function FlowToday() {
-	const { data: windows, isLoading } = useFlowWindows();
+export function FlowToday({ projectId }: { projectId?: string } = {}) {
+	const filter = projectId ? { projectId } : undefined;
+	const { data: windows, isLoading } = useFlowWindows(undefined, undefined, filter);
 	// Baseline draws from the last 7 days (FlowThisWeek already issues this
-	// fetch — react-query dedupes by key so this is free here).
-	const { data: baselineWindows } = useFlowWindowsLastDays(7);
+	// fetch — react-query dedupes by key so this is free here). When a
+	// project filter is active, the baseline filters too so "above typical"
+	// is "above your typical day on THIS project".
+	const { data: baselineWindows } = useFlowWindowsLastDays(7, filter);
 	const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
 	const stats = useMemo(() => summarizeFlow(windows ?? []), [windows]);

@@ -294,17 +294,37 @@ export function useThisWeekSessions() {
 }
 
 /**
+ * Filter args shared by the flow-window hooks. Both projectId and
+ * editorRepo map directly onto the API's optional query params.
+ */
+export interface FlowFilter {
+	projectId?: string;
+	editorRepo?: string;
+}
+
+/**
  * Hook to fetch flow windows in a date range. Used by the Insights "Flow"
  * card to render today's score sparkline. Defaults to today (00:00 → now).
+ *
+ * The filter argument is included in the queryKey so switching projects
+ * doesn't show stale data — react-query treats each (start,end,projectId,
+ * editorRepo) combination as its own cache entry.
  */
-export function useFlowWindows(start?: string, end?: string) {
+export function useFlowWindows(start?: string, end?: string, filter: FlowFilter = {}) {
 	const now = new Date();
 	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 	const effectiveStart = start ?? todayStart;
 	const effectiveEnd = end ?? now.toISOString();
 	return useQuery({
-		queryKey: [...sessionKeys.all, "flow-windows", effectiveStart, effectiveEnd],
-		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(effectiveStart, effectiveEnd),
+		queryKey: [
+			...sessionKeys.all,
+			"flow-windows",
+			effectiveStart,
+			effectiveEnd,
+			filter.projectId ?? "all",
+			filter.editorRepo ?? "all",
+		],
+		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(effectiveStart, effectiveEnd, filter),
 		staleTime: 30_000,
 	});
 }
@@ -314,7 +334,7 @@ export function useFlowWindows(start?: string, end?: string) {
  * to plot a daily-trend bar chart. Defaults to 7 days, anchored to "now"
  * so the freshness varies smoothly throughout the day.
  */
-export function useFlowWindowsLastDays(days = 7) {
+export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
 	const now = new Date();
 	const start = new Date(now);
 	start.setDate(start.getDate() - days);
@@ -322,8 +342,16 @@ export function useFlowWindowsLastDays(days = 7) {
 	const startIso = start.toISOString();
 	const endIso = now.toISOString();
 	return useQuery({
-		queryKey: [...sessionKeys.all, "flow-windows-range", days, startIso, endIso],
-		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(startIso, endIso),
+		queryKey: [
+			...sessionKeys.all,
+			"flow-windows-range",
+			days,
+			startIso,
+			endIso,
+			filter.projectId ?? "all",
+			filter.editorRepo ?? "all",
+		],
+		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(startIso, endIso, filter),
 		staleTime: 5 * 60_000,
 	});
 }

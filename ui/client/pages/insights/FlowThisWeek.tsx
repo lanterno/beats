@@ -20,8 +20,9 @@ interface DayBucket {
 	isToday: boolean;
 }
 
-export function FlowThisWeek() {
-	const { data: windows, isLoading } = useFlowWindowsLastDays(DAYS);
+export function FlowThisWeek({ projectId }: { projectId?: string } = {}) {
+	const filter = projectId ? { projectId } : undefined;
+	const { data: windows, isLoading } = useFlowWindowsLastDays(DAYS, filter);
 
 	const buckets = useMemo<DayBucket[]>(() => {
 		if (!windows) return [];
