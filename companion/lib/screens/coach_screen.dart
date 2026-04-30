@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
@@ -18,25 +19,109 @@ class _CoachScreenState extends State<CoachScreen> {
   Map<String, dynamic>? _review;
   int? _todayMood;
 
+  // Per-question editing state, keyed by question index.
+  final Map<int, TextEditingController> _answerControllers = {};
+  final Set<int> _expandedQuestions = {};
+  final Map<int, Timer> _saveTimers = {};
+  final Set<int> _savingQuestions = {};
+
   @override
   void initState() {
     super.initState();
     _refresh();
   }
 
+  @override
+  void dispose() {
+    for (final t in _saveTimers.values) {
+      t.cancel();
+    }
+    for (final c in _answerControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
   Future<void> _refresh() async {
     try {
       final brief = await widget.client.getTodayBrief();
       final review = await widget.client.getTodayReview();
-      if (mounted) setState(() { _brief = brief; _review = review; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _brief = brief;
+          _review = review;
+          _loading = false;
+        });
+        _syncAnswerControllers();
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Keep TextEditingControllers in sync with whatever answers came back from the API.
+  /// We don't blow away controllers the user is editing — only seed empty ones.
+  void _syncAnswerControllers() {
+    final answers = (_review?['answers'] as List?) ?? const [];
+    for (var i = 0; i < answers.length; i++) {
+      final existing = answers[i];
+      final text = existing is String ? existing : '';
+      final controller = _answerControllers.putIfAbsent(
+        i,
+        () => TextEditingController(text: text),
+      );
+      if (controller.text.isEmpty && text.isNotEmpty) {
+        controller.text = text;
+      }
     }
   }
 
   Future<void> _submitMood(int mood) async {
     setState(() => _todayMood = mood);
     try { await widget.client.postDailyNote(mood); } catch (_) {}
+  }
+
+  void _toggleQuestion(int index) {
+    setState(() {
+      if (_expandedQuestions.contains(index)) {
+        _expandedQuestions.remove(index);
+      } else {
+        _expandedQuestions.add(index);
+      }
+    });
+  }
+
+  void _onAnswerChanged(int index, String value) {
+    _saveTimers[index]?.cancel();
+    _saveTimers[index] = Timer(const Duration(milliseconds: 800), () {
+      _saveAnswer(index, value);
+    });
+  }
+
+  Future<void> _saveAnswer(int index, String value) async {
+    final date = _review?['date'] as String?;
+    if (date == null) return;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() => _savingQuestions.add(index));
+    try {
+      await widget.client.answerReview(date, index, trimmed);
+      if (!mounted) return;
+      // Reflect the saved answer in our local copy of the review doc so the
+      // progress indicator picks it up without an extra round-trip.
+      final answers = List<dynamic>.from((_review?['answers'] as List?) ?? const []);
+      while (answers.length <= index) {
+        answers.add(null);
+      }
+      answers[index] = trimmed;
+      setState(() {
+        _review = {...?_review, 'answers': answers};
+        _savingQuestions.remove(index);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _savingQuestions.remove(index));
+    }
   }
 
   @override
@@ -108,6 +193,14 @@ class _CoachScreenState extends State<CoachScreen> {
                           color: BeatsColors.textTertiary, borderRadius: BorderRadius.circular(2))),
                         const SizedBox(width: 10),
                         Text('EVENING REVIEW', style: BeatsType.label.copyWith(letterSpacing: 2)),
+                        const Spacer(),
+                        if (_review != null && _review!['questions'] != null)
+                          Text(_progressLabel(),
+                            style: BeatsType.label.copyWith(
+                              fontSize: 9,
+                              color: BeatsColors.textTertiary,
+                              letterSpacing: 1.5,
+                            )),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -193,38 +286,115 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
+  String _progressLabel() {
+    final questions = (_review?['questions'] as List?) ?? const [];
+    final total = questions.length;
+    final answers = (_review?['answers'] as List?) ?? const [];
+    var answered = 0;
+    for (final a in answers) {
+      if (a is String && a.trim().isNotEmpty) answered++;
+    }
+    return '$answered OF $total ANSWERED';
+  }
+
   List<Widget> _buildQuestions() {
     final questions = _review!['questions'] as List? ?? [];
+    final answers = (_review?['answers'] as List?) ?? const [];
     return questions.asMap().entries.map<Widget>((entry) {
       final i = entry.key;
       final q = entry.value;
+      final savedAnswer = i < answers.length && answers[i] is String
+          ? answers[i] as String
+          : '';
+      final hasAnswer = savedAnswer.trim().isNotEmpty;
+      final isExpanded = _expandedQuestions.contains(i) || !hasAnswer;
+      final controller = _answerControllers.putIfAbsent(
+        i,
+        () => TextEditingController(text: savedAnswer),
+      );
+      final isSaving = _savingQuestions.contains(i);
+
       return Padding(
         padding: const EdgeInsets.only(bottom: 20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${i + 1}',
-              style: GoogleFonts.dmSerifDisplay(
-                fontSize: 28, color: BeatsColors.amber.withValues(alpha: 0.3))),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 6),
-                  Text(q['question'] ?? '',
-                    style: BeatsType.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w500, height: 1.5)),
-                  if (q['answer'] != null) ...[
-                    const SizedBox(height: 8),
-                    Text(q['answer'],
-                      style: BeatsType.bodySmall.copyWith(
-                        color: BeatsColors.textTertiary, height: 1.5)),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: hasAnswer ? () => _toggleQuestion(i) : null,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${i + 1}',
+                style: GoogleFonts.dmSerifDisplay(
+                  fontSize: 28,
+                  color: hasAnswer
+                      ? BeatsColors.amber
+                      : BeatsColors.amber.withValues(alpha: 0.3),
+                )),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 6),
+                    Text(q['question'] ?? '',
+                      style: BeatsType.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w500, height: 1.5)),
+                    if (isExpanded) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: controller,
+                        onChanged: (v) => _onAnswerChanged(i, v),
+                        onEditingComplete: () => _saveAnswer(i, controller.text),
+                        maxLines: null,
+                        minLines: 2,
+                        style: BeatsType.bodySmall.copyWith(
+                          color: BeatsColors.textPrimary, height: 1.5),
+                        cursorColor: BeatsColors.amber,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 0, vertical: 8),
+                          hintText: 'Write a few words…',
+                          hintStyle: BeatsType.bodySmall.copyWith(
+                            color: BeatsColors.textTertiary.withValues(alpha: 0.5),
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: BeatsColors.border.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          focusedBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: BeatsColors.amber),
+                          ),
+                        ),
+                      ),
+                      if (isSaving)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text('SAVING…',
+                            style: BeatsType.label.copyWith(
+                              fontSize: 9,
+                              color: BeatsColors.textTertiary,
+                              letterSpacing: 1.5,
+                            )),
+                        ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Text(savedAnswer,
+                        style: BeatsType.bodySmall.copyWith(
+                          color: BeatsColors.textTertiary, height: 1.5)),
+                      const SizedBox(height: 4),
+                      Text('TAP TO EDIT',
+                        style: BeatsType.label.copyWith(
+                          fontSize: 8,
+                          color: BeatsColors.textTertiary.withValues(alpha: 0.6),
+                          letterSpacing: 1.5,
+                        )),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }).toList();

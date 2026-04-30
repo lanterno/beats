@@ -222,12 +222,19 @@ class ApiClient {
     return jsonDecode(body);
   }
 
-  Future<void> answerReview(String questionId, String answer) async {
-    await http.post(
+  Future<void> answerReview(String date, int questionIndex, String answer) async {
+    final resp = await http.post(
       Uri.parse('$baseUrl/api/coach/review/answer'),
       headers: _headers,
-      body: jsonEncode({'question_id': questionId, 'answer': answer}),
+      body: jsonEncode({
+        'date': date,
+        'question_index': questionIndex,
+        'answer': answer,
+      }),
     );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Save review answer failed: ${resp.body}');
+    }
   }
 
   // ---- Intentions ----
