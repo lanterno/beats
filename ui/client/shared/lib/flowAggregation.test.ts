@@ -5,6 +5,7 @@ import {
 	aggregateFlowByDay,
 	aggregateFlowByHour,
 	aggregateFlowByRepo,
+	aggregateFlowByWeekday,
 	flowBaseline,
 	localDateKey,
 	shortRepoPath,
@@ -319,5 +320,37 @@ describe("aggregateFlowByHour", () => {
 		];
 		const byHour = aggregateFlowByHour(windows);
 		expect(byHour.map((h) => h.hour)).toEqual([7, 13, 20]);
+	});
+});
+
+describe("aggregateFlowByWeekday", () => {
+	it("returns an empty array when there are no windows", () => {
+		expect(aggregateFlowByWeekday([])).toEqual([]);
+	});
+
+	it("buckets windows by local day-of-week using JS getDay() indexing", () => {
+		// Local-time strings (no Z) so the test is timezone-stable.
+		// 2026-04-27 is a Monday → getDay() === 1.
+		// 2026-04-29 is a Wednesday → getDay() === 3.
+		// 2026-05-01 is a Friday → getDay() === 5.
+		const windows = [
+			w({ flow_score: 0.6, window_start: "2026-04-27T10:00:00" }),
+			w({ flow_score: 0.8, window_start: "2026-04-27T14:00:00" }),
+			w({ flow_score: 0.5, window_start: "2026-04-29T10:00:00" }),
+			w({ flow_score: 0.9, window_start: "2026-05-01T10:00:00" }),
+		];
+		const byDow = aggregateFlowByWeekday(windows);
+		expect(byDow).toEqual([
+			{ weekday: 1, avg: 0.7, count: 2 },
+			{ weekday: 3, avg: 0.5, count: 1 },
+			{ weekday: 5, avg: 0.9, count: 1 },
+		]);
+	});
+
+	it("omits empty weekdays so callers can backfill the gaps themselves", () => {
+		const windows = [w({ flow_score: 0.5, window_start: "2026-05-01T11:00:00" })];
+		const byDow = aggregateFlowByWeekday(windows);
+		expect(byDow.length).toBe(1);
+		expect(byDow[0].weekday).toBe(5); // Friday
 	});
 });

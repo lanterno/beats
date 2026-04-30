@@ -186,6 +186,13 @@ export interface HourlyFlow {
 	count: number;
 }
 
+export interface WeekdayFlow {
+	/** 0 = Sunday … 6 = Saturday, matching JS Date.getDay(). */
+	weekday: number;
+	avg: number;
+	count: number;
+}
+
 /**
  * Buckets flow windows into 24 hour-of-day slots and returns the average
  * score for each populated hour. Designed for the "Flow rhythm" card
@@ -209,6 +216,32 @@ export function aggregateFlowByHour(windows: FlowWindow[]): HourlyFlow[] {
 	for (let h = 0; h < 24; h++) {
 		if (counts[h] === 0) continue;
 		out.push({ hour: h, avg: sums[h] / counts[h], count: counts[h] });
+	}
+	return out;
+}
+
+/**
+ * Buckets flow windows by local day-of-week and returns the mean score
+ * for each populated weekday. Sibling to aggregateFlowByHour — answers
+ * "do I flow better on certain weekdays?" rather than "when in the day".
+ *
+ * Uses Date.getDay() (Sunday=0..Saturday=6); callers can reorder for
+ * Monday-first display by mapping the index. Empty weekdays are
+ * omitted; caller decides whether to backfill the seven slots.
+ */
+export function aggregateFlowByWeekday(windows: FlowWindow[]): WeekdayFlow[] {
+	if (windows.length === 0) return [];
+	const sums = new Array<number>(7).fill(0);
+	const counts = new Array<number>(7).fill(0);
+	for (const w of windows) {
+		const d = new Date(w.window_start).getDay();
+		sums[d] += w.flow_score;
+		counts[d] += 1;
+	}
+	const out: WeekdayFlow[] = [];
+	for (let d = 0; d < 7; d++) {
+		if (counts[d] === 0) continue;
+		out.push({ weekday: d, avg: sums[d] / counts[d], count: counts[d] });
 	}
 	return out;
 }

@@ -17,6 +17,7 @@ import { EstimationAccuracy } from "./EstimationAccuracy";
 import { FlowByApp } from "./FlowByApp";
 import { FlowByLanguage } from "./FlowByLanguage";
 import { FlowByRepo } from "./FlowByRepo";
+import { FlowByWeekday } from "./FlowByWeekday";
 import { FlowRhythm } from "./FlowRhythm";
 import { FlowThisWeek } from "./FlowThisWeek";
 import { FlowToday } from "./FlowToday";
@@ -171,12 +172,20 @@ export default function Insights() {
 						editorLanguage={selectedLanguage}
 						bundleId={selectedBundleId}
 					/>
-					<FlowRhythm
-						projectId={selectedProjectId}
-						editorRepo={selectedRepo}
-						editorLanguage={selectedLanguage}
-						bundleId={selectedBundleId}
-					/>
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+						<FlowRhythm
+							projectId={selectedProjectId}
+							editorRepo={selectedRepo}
+							editorLanguage={selectedLanguage}
+							bundleId={selectedBundleId}
+						/>
+						<FlowByWeekday
+							projectId={selectedProjectId}
+							editorRepo={selectedRepo}
+							editorLanguage={selectedLanguage}
+							bundleId={selectedBundleId}
+						/>
+					</div>
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 						<FlowByRepo
 							projectId={selectedProjectId}

@@ -15,7 +15,10 @@
 > "Flow by app" cards (filters AND-compose). The "Flow rhythm" card
 > bins the same 7-day window data by hour-of-day so the user can see
 > *when* in their day they tend to flow best — answer changes when a
-> filter chip is set ("when do I flow best on Go work?"). Every
+> filter chip is set ("when do I flow best on Go work?"). The "Flow
+> by weekday" sibling pulls 28 days and bins by day-of-week so each
+> weekday slot has at least ~4 samples, answering "do I flow better
+> on Tuesdays or Fridays?". Every
 > filter on the Insights page (the project + tag dropdowns and the
 > click-to-filter chips) is persisted in the URL —
 > `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view
