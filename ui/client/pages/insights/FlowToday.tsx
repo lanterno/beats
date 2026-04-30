@@ -8,6 +8,7 @@
  */
 import { useMemo, useState } from "react";
 import { useFlowWindows } from "@/entities/session";
+import { shortRepoPath, summarizeFlow } from "@/shared/lib/flowAggregation";
 
 const SPARK_W = 480;
 const SPARK_H = 64;
@@ -16,13 +17,7 @@ export function FlowToday() {
 	const { data: windows, isLoading } = useFlowWindows();
 	const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-	const stats = useMemo(() => {
-		if (!windows || windows.length === 0) return null;
-		const scores = windows.map((w) => w.flow_score);
-		const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
-		const peak = Math.max(...scores);
-		return { avg, peak, count: windows.length };
-	}, [windows]);
+	const stats = useMemo(() => summarizeFlow(windows ?? []), [windows]);
 
 	if (isLoading) return null;
 	if (!windows || windows.length === 0) {
@@ -85,7 +80,7 @@ export function FlowToday() {
 							className="text-foreground/70 truncate max-w-[280px]"
 							title={selected.editor_repo}
 						>
-							{shortRepo(selected.editor_repo)}
+							{shortRepoPath(selected.editor_repo)}
 							{selected.editor_branch ? (
 								<span className="text-muted-foreground"> · {selected.editor_branch}</span>
 							) : null}
@@ -182,10 +177,4 @@ function FlowSparkline({ windows, selectedIdx, onSelect }: SparklineProps) {
 function formatTime(iso: string): string {
 	const d = new Date(iso);
 	return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function shortRepo(path: string): string {
-	const parts = path.split(/[\\/]/);
-	const tail = parts.filter(Boolean).slice(-2).join("/");
-	return tail || path;
 }
