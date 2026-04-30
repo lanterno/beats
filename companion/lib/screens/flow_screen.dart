@@ -133,49 +133,87 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
     return best;
   }
 
-  Widget _buildPeakLine() {
+  /// Computes the day's avg flow score across `_windows`. Returns null on
+  /// empty input so callers can render an empty state rather than 0/100.
+  double? _todayAvgScore() {
+    if (_windows.isEmpty) return null;
+    var sum = 0.0;
+    for (final w in _windows) {
+      sum += (w['flow_score'] as num?)?.toDouble() ?? 0.0;
+    }
+    return sum / _windows.length;
+  }
+
+  Widget _buildStatsLine() {
     final idx = _peakWindowIndex();
-    if (idx < 0) return const SizedBox.shrink();
+    final avg = _todayAvgScore();
+    if (idx < 0 || avg == null) return const SizedBox.shrink();
     final w = _windows[idx];
-    final score = (w['flow_score'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0;
+    final peakScore = (w['flow_score'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0;
     final start = DateTime.tryParse(w['window_start'] as String? ?? '')?.toLocal();
     if (start == null) return const SizedBox.shrink();
     final timeStr = '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
 
+    final labelStyle = BeatsType.label.copyWith(
+      fontSize: 9, color: BeatsColors.textTertiary, letterSpacing: 2,
+    );
+    final numStyle = GoogleFonts.jetBrainsMono(
+      fontSize: 13, color: BeatsColors.textPrimary, fontWeight: FontWeight.w400,
+    );
+
     return Center(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedWindowIndex = idx),
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 14,
+        runSpacing: 6,
+        children: [
+          // AVG block
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('PEAK',
-                style: BeatsType.label.copyWith(
-                  fontSize: 9, color: BeatsColors.textTertiary, letterSpacing: 2)),
-              const SizedBox(width: 8),
-              Text(
-                '${(score * 100).round()}',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 13, color: _scoreColor(score), fontWeight: FontWeight.w400,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('AT', style: BeatsType.label.copyWith(
-                fontSize: 9, color: BeatsColors.textTertiary, letterSpacing: 2)),
+              Text('AVG', style: labelStyle),
               const SizedBox(width: 6),
-              Text(
-                timeStr,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 13, color: BeatsColors.amber,
-                  decoration: TextDecoration.underline,
-                  decorationColor: BeatsColors.amber.withValues(alpha: 0.4),
-                ),
-              ),
+              Text('${(avg * 100).round()}', style: numStyle),
             ],
           ),
-        ),
+          // PEAK block — tap to jump the inspector to the peak window.
+          GestureDetector(
+            onTap: () => setState(() => _selectedWindowIndex = idx),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('PEAK', style: labelStyle),
+                const SizedBox(width: 6),
+                Text(
+                  '${(peakScore * 100).round()}',
+                  style: numStyle.copyWith(color: _scoreColor(peakScore)),
+                ),
+                const SizedBox(width: 4),
+                Text('@', style: labelStyle),
+                const SizedBox(width: 4),
+                Text(
+                  timeStr,
+                  style: numStyle.copyWith(
+                    color: BeatsColors.amber,
+                    decoration: TextDecoration.underline,
+                    decorationColor: BeatsColors.amber.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // COUNT block
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${_windows.length}',
+                  style: numStyle.copyWith(color: BeatsColors.textSecondary)),
+              const SizedBox(width: 6),
+              Text(_windows.length == 1 ? 'WINDOW' : 'WINDOWS', style: labelStyle),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -378,12 +416,11 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 16),
 
-                // ── Peak today ──
-                // Surfaces the day's best window with one tap to jump the
-                // timeline inspector to it. Only renders when there are
-                // multiple windows; for a single window it duplicates the
-                // ring score above.
-                if (_windows.length > 1) _buildPeakLine(),
+                // ── Today's stats: avg · peak (with click-to-jump) · count ──
+                // Density of info matches the web's FlowToday header but in
+                // the brutalist label style. Hidden when there's only one
+                // window — it would duplicate the ring above.
+                if (_windows.length > 1) _buildStatsLine(),
 
                 const SizedBox(height: 24),
 
