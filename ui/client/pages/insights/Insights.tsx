@@ -17,6 +17,7 @@ import { EstimationAccuracy } from "./EstimationAccuracy";
 import { FlowByApp } from "./FlowByApp";
 import { FlowByLanguage } from "./FlowByLanguage";
 import { FlowByRepo } from "./FlowByRepo";
+import { FlowRhythm } from "./FlowRhythm";
 import { FlowThisWeek } from "./FlowThisWeek";
 import { FlowToday } from "./FlowToday";
 import { MoodCorrelation } from "./MoodCorrelation";
@@ -165,6 +166,12 @@ export default function Insights() {
 						bundleId={selectedBundleId}
 					/>
 					<FlowThisWeek
+						projectId={selectedProjectId}
+						editorRepo={selectedRepo}
+						editorLanguage={selectedLanguage}
+						bundleId={selectedBundleId}
+					/>
+					<FlowRhythm
 						projectId={selectedProjectId}
 						editorRepo={selectedRepo}
 						editorLanguage={selectedLanguage}

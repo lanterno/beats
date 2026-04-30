@@ -179,6 +179,40 @@ export function flowBaseline(
  * (latest peak) feels like the day got worse, the earliest framing reads
  * as "this is when you locked in".
  */
+export interface HourlyFlow {
+	/** Hour of day, 0–23 in the user's local time. */
+	hour: number;
+	avg: number;
+	count: number;
+}
+
+/**
+ * Buckets flow windows into 24 hour-of-day slots and returns the average
+ * score for each populated hour. Designed for the "Flow rhythm" card
+ * that surfaces *when* during the day a user tends to flow best,
+ * answering a different question than FlowThisWeek (which day) or
+ * FlowToday (today's shape).
+ *
+ * Empty hours are omitted — caller decides whether to backfill the 24
+ * slots for a fixed-width chart or just render the populated ones.
+ */
+export function aggregateFlowByHour(windows: FlowWindow[]): HourlyFlow[] {
+	if (windows.length === 0) return [];
+	const sums = new Array<number>(24).fill(0);
+	const counts = new Array<number>(24).fill(0);
+	for (const w of windows) {
+		const h = new Date(w.window_start).getHours();
+		sums[h] += w.flow_score;
+		counts[h] += 1;
+	}
+	const out: HourlyFlow[] = [];
+	for (let h = 0; h < 24; h++) {
+		if (counts[h] === 0) continue;
+		out.push({ hour: h, avg: sums[h] / counts[h], count: counts[h] });
+	}
+	return out;
+}
+
 export function summarizeFlow(windows: FlowWindow[]): FlowSummary | null {
 	if (windows.length === 0) return null;
 	let sum = 0;

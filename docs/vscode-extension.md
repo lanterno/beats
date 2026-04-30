@@ -12,9 +12,12 @@
 > `editor_language`, and `bundle_id` query params for server-side
 > filtering, and the web Insights page wires all three onto
 > click-to-filter rows in the "Flow by repo" / "Flow by language" /
-> "Flow by app" cards (filters AND-compose). Every filter on the
-> Insights page (the project + tag dropdowns and the click-to-filter
-> chips) is persisted in the URL —
+> "Flow by app" cards (filters AND-compose). The "Flow rhythm" card
+> bins the same 7-day window data by hour-of-day so the user can see
+> *when* in their day they tend to flow best — answer changes when a
+> filter chip is set ("when do I flow best on Go work?"). Every
+> filter on the Insights page (the project + tag dropdowns and the
+> click-to-filter chips) is persisted in the URL —
 > `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view
 > is bookmarkable and shareable. The same per-window slice is
 > reachable from the terminal via `beatsd recent --repo …

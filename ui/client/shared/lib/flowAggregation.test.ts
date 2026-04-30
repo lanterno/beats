@@ -3,6 +3,7 @@ import type { FlowWindow } from "@/shared/api";
 import {
 	aggregateFlowBy,
 	aggregateFlowByDay,
+	aggregateFlowByHour,
 	aggregateFlowByRepo,
 	flowBaseline,
 	localDateKey,
@@ -278,5 +279,45 @@ describe("summarizeFlow", () => {
 			w({ flow_score: 0.9 }),
 		];
 		expect(summarizeFlow(windows)?.peakIndex).toBe(1);
+	});
+});
+
+describe("aggregateFlowByHour", () => {
+	it("returns an empty array when there are no windows", () => {
+		expect(aggregateFlowByHour([])).toEqual([]);
+	});
+
+	it("buckets windows by local hour and returns means", () => {
+		// Use local-time wall-clock strings (no Z suffix) so the test is
+		// deterministic regardless of which timezone the test runner sits
+		// in. Date(localString) uses local time, matching the production
+		// code path.
+		const windows = [
+			w({ flow_score: 0.6, window_start: "2026-04-30T09:00:00" }),
+			w({ flow_score: 0.8, window_start: "2026-04-30T09:30:00" }),
+			w({ flow_score: 0.9, window_start: "2026-04-30T14:00:00" }),
+		];
+		const byHour = aggregateFlowByHour(windows);
+		expect(byHour).toEqual([
+			{ hour: 9, avg: 0.7, count: 2 },
+			{ hour: 14, avg: 0.9, count: 1 },
+		]);
+	});
+
+	it("omits empty hours so callers can render only the populated buckets", () => {
+		const windows = [w({ flow_score: 0.5, window_start: "2026-04-30T11:00:00" })];
+		const byHour = aggregateFlowByHour(windows);
+		expect(byHour.length).toBe(1);
+		expect(byHour[0].hour).toBe(11);
+	});
+
+	it("returns hours in ascending order regardless of input order", () => {
+		const windows = [
+			w({ flow_score: 0.5, window_start: "2026-04-30T20:00:00" }),
+			w({ flow_score: 0.5, window_start: "2026-04-30T07:00:00" }),
+			w({ flow_score: 0.5, window_start: "2026-04-30T13:00:00" }),
+		];
+		const byHour = aggregateFlowByHour(windows);
+		expect(byHour.map((h) => h.hour)).toEqual([7, 13, 20]);
 	});
 });
