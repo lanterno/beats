@@ -12,7 +12,11 @@
 > `editor_language`, and `bundle_id` query params for server-side
 > filtering, and the web Insights page wires all three onto
 > click-to-filter rows in the "Flow by repo" / "Flow by language" /
-> "Flow by app" cards (filters AND-compose).
+> "Flow by app" cards (filters AND-compose). The Insights filter
+> selection is persisted in the URL (`?repo=…&language=…&bundle=…`),
+> so a filtered view is bookmarkable and shareable. The same slice
+> is reachable from the terminal via `beatsd recent --repo …
+> --language … --bundle …`.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score

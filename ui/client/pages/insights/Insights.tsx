@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { useProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
+import { useUrlParam } from "@/shared/lib/useUrlParam";
 import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
@@ -28,9 +29,10 @@ export default function Insights() {
 	const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
 	// Filters set by clicking a row on FlowByRepo / FlowByLanguage / FlowByApp.
 	// Independent of the project filter — they compose AND-style at the API.
-	const [selectedRepo, setSelectedRepo] = useState<string | undefined>(undefined);
-	const [selectedLanguage, setSelectedLanguage] = useState<string | undefined>(undefined);
-	const [selectedBundleId, setSelectedBundleId] = useState<string | undefined>(undefined);
+	// Persisted in the URL so users can bookmark / share a filtered view.
+	const [selectedRepo, setSelectedRepo] = useUrlParam("repo");
+	const [selectedLanguage, setSelectedLanguage] = useUrlParam("language");
+	const [selectedBundleId, setSelectedBundleId] = useUrlParam("bundle");
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
 	const currentYear = new Date().getFullYear();
