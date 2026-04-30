@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { useProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
+import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
 import { EstimationAccuracy } from "./EstimationAccuracy";
@@ -131,6 +132,7 @@ export default function Insights() {
 			{!selectedTag && (
 				<>
 					<FlowToday projectId={selectedProjectId} />
+					<BestMoment projectId={selectedProjectId} />
 					<FlowThisWeek projectId={selectedProjectId} />
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 						<FlowByRepo projectId={selectedProjectId} />
