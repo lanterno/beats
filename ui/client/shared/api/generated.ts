@@ -2115,6 +2115,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/signals/flow-windows/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summarize Flow Windows
+         * @description Aggregate stats for the flow-window slice in [start, end].
+         *
+         *     Single round-trip alternative to `GET /flow-windows` + client-side
+         *     reduction. Returns avg / peak / count of the slice plus the top
+         *     bucket on each of the three grouping axes (repo, language, app)
+         *     so a caller can render a "you flowed best on X today" headline
+         *     without a second request.
+         *
+         *     Accepts the same filter params as `GET /flow-windows`, AND-composed.
+         */
+        get: operations["summarize_flow_windows_api_signals_flow_windows_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/signals/suggest-timer": {
         parameters: {
             query?: never;
@@ -2690,6 +2718,26 @@ export interface components {
             window_start: string;
         };
         /**
+         * FlowWindowSummaryResponse
+         * @description Aggregate stats for a flow-window slice — single round-trip alternative
+         *     to fetching the rows and reducing client-side. Mirrors what the UI's
+         *     summarizeFlow / aggregateFlowBy helpers compute, plus the per-axis
+         *     leaderboard top entry so callers don't need a second request.
+         */
+        FlowWindowSummaryResponse: {
+            /** Avg */
+            avg: number;
+            /** Count */
+            count: number;
+            /** Peak */
+            peak: number;
+            /** Peak At */
+            peak_at: string | null;
+            top_bundle: components["schemas"]["TopBucket"] | null;
+            top_language: components["schemas"]["TopBucket"] | null;
+            top_repo: components["schemas"]["TopBucket"] | null;
+        };
+        /**
          * FocusScoreResponse
          * @description Response schema for a focus quality score.
          */
@@ -3188,6 +3236,18 @@ export interface components {
             project_id?: string | null;
             /** Timer Running */
             timer_running: boolean;
+        };
+        /**
+         * TopBucket
+         * @description One bucket from a leaderboard within FlowWindowSummaryResponse.
+         */
+        TopBucket: {
+            /** Avg */
+            avg: number;
+            /** Count */
+            count: number;
+            /** Key */
+            key: string;
         };
         /**
          * UpdateBeatRequest
@@ -6831,6 +6891,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summarize_flow_windows_api_signals_flow_windows_summary_get: {
+        parameters: {
+            query?: {
+                start?: string;
+                end?: string;
+                project_id?: string | null;
+                editor_repo?: string | null;
+                editor_language?: string | null;
+                bundle_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlowWindowSummaryResponse"];
                 };
             };
             /** @description Validation Error */

@@ -80,6 +80,29 @@ class DeleteSignalsResponse(BaseModel):
     deleted_summaries: int
 
 
+class TopBucket(BaseModel):
+    """One bucket from a leaderboard within FlowWindowSummaryResponse."""
+
+    key: str
+    avg: float
+    count: int
+
+
+class FlowWindowSummaryResponse(BaseModel):
+    """Aggregate stats for a flow-window slice — single round-trip alternative
+    to fetching the rows and reducing client-side. Mirrors what the UI's
+    summarizeFlow / aggregateFlowBy helpers compute, plus the per-axis
+    leaderboard top entry so callers don't need a second request."""
+
+    count: int
+    avg: float
+    peak: float
+    peak_at: datetime | None
+    top_repo: TopBucket | None
+    top_language: TopBucket | None
+    top_bundle: TopBucket | None
+
+
 # --- Endpoints ---
 
 
@@ -238,6 +261,86 @@ async def export_flow_windows_csv(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/flow-windows/summary", response_model=FlowWindowSummaryResponse)
+async def summarize_flow_windows(
+    user_id: CurrentUserId,
+    repo: FlowWindowRepoDep,
+    start: datetime = Query(default_factory=lambda: datetime.now(UTC) - timedelta(days=1)),
+    end: datetime = Query(default_factory=lambda: datetime.now(UTC)),
+    project_id: str | None = Query(default=None),
+    editor_repo: str | None = Query(default=None),
+    editor_language: str | None = Query(default=None),
+    bundle_id: str | None = Query(default=None),
+) -> FlowWindowSummaryResponse:
+    """Aggregate stats for the flow-window slice in [start, end].
+
+    Single round-trip alternative to `GET /flow-windows` + client-side
+    reduction. Returns avg / peak / count of the slice plus the top
+    bucket on each of the three grouping axes (repo, language, app)
+    so a caller can render a "you flowed best on X today" headline
+    without a second request.
+
+    Accepts the same filter params as `GET /flow-windows`, AND-composed.
+    """
+    windows = await repo.list_by_range(
+        start,
+        end,
+        project_id=project_id,
+        editor_repo=editor_repo,
+        editor_language=editor_language,
+        bundle_id=bundle_id,
+    )
+
+    if not windows:
+        return FlowWindowSummaryResponse(
+            count=0,
+            avg=0.0,
+            peak=0.0,
+            peak_at=None,
+            top_repo=None,
+            top_language=None,
+            top_bundle=None,
+        )
+
+    total = sum(w.flow_score for w in windows)
+    peak_window = max(windows, key=lambda w: w.flow_score)
+
+    return FlowWindowSummaryResponse(
+        count=len(windows),
+        avg=total / len(windows),
+        peak=peak_window.flow_score,
+        peak_at=peak_window.window_start,
+        top_repo=_top_bucket(windows, lambda w: w.editor_repo or ""),
+        top_language=_top_bucket(windows, lambda w: w.editor_language or ""),
+        top_bundle=_top_bucket(windows, lambda w: w.dominant_bundle_id or ""),
+    )
+
+
+def _top_bucket(windows: list[FlowWindow], key_of) -> TopBucket | None:
+    """Group windows by a key, return the bucket with the most windows.
+
+    Empty keys are skipped so an axis with no editor heartbeats returns
+    None rather than a meaningless "" bucket. Tie-breaks on avg so the
+    higher-quality bucket wins when minutes match — same rule as the
+    daemon's `beatsd top` and the UI's aggregation cards."""
+    sums: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for w in windows:
+        k = key_of(w)
+        if not k:
+            continue
+        sums[k] = sums.get(k, 0.0) + w.flow_score
+        counts[k] = counts.get(k, 0) + 1
+    if not counts:
+        return None
+    best_key = max(counts, key=lambda k: (counts[k], sums[k] / counts[k]))
+    return TopBucket(
+        key=best_key,
+        avg=sums[best_key] / counts[best_key],
+        count=counts[best_key],
     )
 
 

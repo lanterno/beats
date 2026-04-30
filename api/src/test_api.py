@@ -1639,6 +1639,131 @@ class TestSignalsAPI:
         assert all(w["editor_language"] == "typescript" for w in windows)
         assert any(w["flow_score"] == 0.83 for w in windows)
 
+    def test_flow_windows_summary_aggregates_and_picks_top_buckets(self):
+        """GET /api/signals/flow-windows/summary returns avg/peak/count
+        plus the top bucket on each grouping axis in a single round-trip,
+        honoring the same filter params as the JSON endpoint."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        # Use a bundle id no other test in the class POSTs, then filter by
+        # it so prior windows in the shared class state can't leak in.
+        marker_bundle = "com.test.summary_aggregate_marker"
+        # Two go windows on the beats repo, one rust window on a different repo.
+        # The summary should call out beats + go + that bundle as the top buckets.
+        rows = [
+            ("/Users/me/code/beats-summary", "go", 0.8),
+            ("/Users/me/code/beats-summary", "go", 0.9),
+            ("/Users/me/code/other-summary", "rust", 0.3),
+        ]
+        for repo_path, lang, score in rows:
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": (now - timedelta(minutes=2)).isoformat(),
+                    "window_end": (now - timedelta(minutes=1)).isoformat(),
+                    "flow_score": score,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 1.0,
+                    "idle_fraction": 0.0,
+                    "dominant_bundle_id": marker_bundle,
+                    "dominant_category": "coding",
+                    "editor_repo": repo_path,
+                    "editor_language": lang,
+                },
+                headers=device_headers,
+            )
+
+        resp = client.get(
+            "/api/signals/flow-windows/summary",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "bundle_id": marker_bundle,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+
+        assert body["count"] == 3
+        assert abs(body["avg"] - (0.8 + 0.9 + 0.3) / 3) < 1e-6
+        assert body["peak"] == 0.9
+        assert body["peak_at"] is not None
+
+        assert body["top_repo"]["key"] == "/Users/me/code/beats-summary"
+        assert body["top_repo"]["count"] == 2
+        assert body["top_language"]["key"] == "go"
+        assert body["top_language"]["count"] == 2
+        assert body["top_bundle"]["key"] == marker_bundle
+        assert body["top_bundle"]["count"] == 3
+
+    def test_flow_windows_summary_empty_slice_returns_zeros(self):
+        """No windows in the range → zero/None response, not 404 — callers
+        can render an empty state without parsing an error."""
+        self._pair_device()
+        now = datetime.now(UTC)
+        resp = client.get(
+            "/api/signals/flow-windows/summary",
+            params={
+                "start": (now - timedelta(hours=2)).isoformat(),
+                "end": (now - timedelta(hours=1)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 0
+        assert body["avg"] == 0.0
+        assert body["peak"] == 0.0
+        assert body["peak_at"] is None
+        assert body["top_repo"] is None
+        assert body["top_language"] is None
+        assert body["top_bundle"] is None
+
+    def test_flow_windows_summary_respects_filter(self):
+        """The summary honors the language filter — same slice the user
+        sees in the chip-row download is what the summary endpoint
+        aggregates. Uses a unique marker repo to avoid pollution from
+        other tests in this shared-state class."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        marker_repo = "/Users/me/code/summary-filter-marker"
+        for lang, score in [("haskell", 0.9), ("scala", 0.4), ("scala", 0.5)]:
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": (now - timedelta(minutes=2)).isoformat(),
+                    "window_end": (now - timedelta(minutes=1)).isoformat(),
+                    "flow_score": score,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 1.0,
+                    "idle_fraction": 0.0,
+                    "dominant_bundle_id": "com.microsoft.VSCode",
+                    "dominant_category": "coding",
+                    "editor_repo": marker_repo,
+                    "editor_language": lang,
+                },
+                headers=device_headers,
+            )
+
+        resp = client.get(
+            "/api/signals/flow-windows/summary",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "editor_repo": marker_repo,
+                "editor_language": "scala",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 2
+        assert abs(body["avg"] - 0.45) < 1e-6
+        assert body["top_language"]["key"] == "scala"
+
     def test_flow_windows_csv_export_respects_filter(self):
         """GET /api/signals/flow-windows.csv streams a CSV that honors
         the same filter params as the JSON endpoint, so the "Download"

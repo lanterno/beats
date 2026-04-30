@@ -1039,6 +1039,76 @@
         "title": "FlowWindowResponse",
         "type": "object"
       },
+      "FlowWindowSummaryResponse": {
+        "description": "Aggregate stats for a flow-window slice \u2014 single round-trip alternative\nto fetching the rows and reducing client-side. Mirrors what the UI's\nsummarizeFlow / aggregateFlowBy helpers compute, plus the per-axis\nleaderboard top entry so callers don't need a second request.",
+        "properties": {
+          "avg": {
+            "title": "Avg",
+            "type": "number"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "peak": {
+            "title": "Peak",
+            "type": "number"
+          },
+          "peak_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak At"
+          },
+          "top_bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "top_language": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "top_repo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "avg",
+          "peak",
+          "peak_at",
+          "top_repo",
+          "top_language",
+          "top_bundle"
+        ],
+        "title": "FlowWindowSummaryResponse",
+        "type": "object"
+      },
       "FocusScoreResponse": {
         "description": "Response schema for a focus quality score.",
         "properties": {
@@ -2179,6 +2249,30 @@
           "timer_running"
         ],
         "title": "TimerStatusResponse",
+        "type": "object"
+      },
+      "TopBucket": {
+        "description": "One bucket from a leaderboard within FlowWindowSummaryResponse.",
+        "properties": {
+          "avg": {
+            "title": "Avg",
+            "type": "number"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "avg",
+          "count"
+        ],
+        "title": "TopBucket",
         "type": "object"
       },
       "UpdateBeatRequest": {
@@ -7356,6 +7450,124 @@
           }
         },
         "summary": "Export Flow Windows Csv",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/flow-windows/summary": {
+      "get": {
+        "description": "Aggregate stats for the flow-window slice in [start, end].\n\nSingle round-trip alternative to `GET /flow-windows` + client-side\nreduction. Returns avg / peak / count of the slice plus the top\nbucket on each of the three grouping axes (repo, language, app)\nso a caller can render a \"you flowed best on X today\" headline\nwithout a second request.\n\nAccepts the same filter params as `GET /flow-windows`, AND-composed.",
+        "operationId": "summarize_flow_windows_api_signals_flow_windows_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "editor_repo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Editor Repo"
+            }
+          },
+          {
+            "in": "query",
+            "name": "editor_language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Editor Language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bundle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bundle Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowWindowSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summarize Flow Windows",
         "tags": [
           "signals"
         ]

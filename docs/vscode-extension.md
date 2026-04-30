@@ -27,6 +27,10 @@
 > --language … --bundle …`, or downloadable as CSV via the "↓ csv"
 > link in the chip row (`GET /api/signals/flow-windows.csv` accepts
 > the same filter params as the JSON endpoint).
+> `GET /api/signals/flow-windows/summary` returns single-round-trip
+> aggregate stats — avg / peak / count plus the top bucket on each
+> grouping axis — for callers (CLIs, the companion) that want the
+> headline without fetching every row.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score
