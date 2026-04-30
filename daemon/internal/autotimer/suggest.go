@@ -19,17 +19,41 @@ const (
 	FlowThreshold = 0.7
 )
 
+// Suggester is the slice of the API client the tracker actually needs. We
+// take an interface (instead of the concrete *client.Client) so tests can
+// inject a fake without spinning up an HTTP server. *client.Client already
+// satisfies this; nothing changes for callers.
+type Suggester interface {
+	SuggestTimer(ctx context.Context, w client.FlowWindowRequest) (*client.AutoTimerSuggestion, error)
+}
+
+// Notifier is the side-effect side of the tracker — what to do when a
+// suggestion fires. Defaults to notify.Send, but tests pass a capturing
+// closure to avoid firing real OS notifications.
+type Notifier func(title, body string)
+
 // Tracker watches flow windows and suggests timer starts when sustained
 // high flow is detected without a running timer.
 type Tracker struct {
-	client             *client.Client
-	consecutiveHighFlow int
+	client                Suggester
+	notify                Notifier
+	consecutiveHighFlow   int
 	lastSuggestedCategory string
 }
 
-// NewTracker creates a new auto-timer suggestion tracker.
-func NewTracker(c *client.Client) *Tracker {
-	return &Tracker{client: c}
+// NewTracker creates a new auto-timer suggestion tracker that posts to the
+// given API client and fires desktop notifications via notify.Send.
+func NewTracker(c Suggester) *Tracker {
+	return &Tracker{client: c, notify: notify.Send}
+}
+
+// NewTrackerWithNotifier is the testable form: lets the caller intercept
+// the notification side effect.
+func NewTrackerWithNotifier(c Suggester, n Notifier) *Tracker {
+	if n == nil {
+		n = notify.Send
+	}
+	return &Tracker{client: c, notify: n}
 }
 
 // OnFlowWindow is called after each flow window computation.
@@ -78,7 +102,7 @@ func (t *Tracker) OnFlowWindow(ctx context.Context, w collector.FlowWindow) {
 	t.lastSuggestedCategory = w.DominantCategory
 	log.Printf("autotimer: suggesting timer for %q (project: %s)", suggestion.ProjectName, suggestion.ProjectID)
 
-	notify.Send(
+	t.notify(
 		"Start timer?",
 		fmt.Sprintf("You've been focused on %s for %d minutes. Start tracking \"%s\"?",
 			w.DominantCategory, t.consecutiveHighFlow, suggestion.ProjectName),
