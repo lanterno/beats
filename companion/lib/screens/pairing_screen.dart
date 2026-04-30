@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
 import '../services/token_storage.dart';
 import '../theme/beats_theme.dart';
+import '../theme/embers.dart';
 import '../theme/staggered_entrance.dart';
 
 class PairingScreen extends StatefulWidget {
@@ -74,12 +75,17 @@ class _PairingScreenState extends State<PairingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: BeatsColors.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
+      body: Stack(
+        children: [
+          // Ambient ember field behind the form — slow drift, very low alpha
+          // so it never competes with the input fields for attention.
+          const Positioned.fill(child: Embers()),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -189,10 +195,12 @@ class _PairingScreenState extends State<PairingScreen> {
                     ),
                   ),
                 ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

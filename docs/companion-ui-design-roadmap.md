@@ -14,9 +14,9 @@ What's left is detail polish across individual screens.
 
 Tab transitions and stagger entries already work. Project card and Start/Stop buttons now use the shared `PressScale` widget for a tactile press-down. The Stop button shakes (elastic-in, ±8px) on the first tap inside a sub-5s session and only stops on the second tap. Outstanding micro-interactions:
 
-- **Pull-to-refresh**: custom indicator (currently the default with `BeatsColors.amber`)
-
 Mood emoji tap now does a true 1.0 → 1.2 → 1.0 bounce (peaks at t≈0.6 on `easeOutBack`) — shipped.
+
+Pull-to-refresh now uses the shared `BeatsRefresh` wrapper (thinner stroke, surface backdrop, smaller displacement) at every screen — shipped.
 
 ### Running State Ambient Motion
 
@@ -88,9 +88,7 @@ A 6-particle confetti burst (amber/gold, ~650ms with mild gravity) fires from th
 
 ### Pairing Screen
 
-The code input renders as 6 individual character boxes (`_CodeInput`); the active box highlights amber, filled boxes show a softer amber border, and a transparent backing TextField preserves keyboard, paste, and autofill. Remaining nice-to-have:
-
-- Add a **subtle particle/ember animation** in the background — floating dots that drift upward slowly
+The code input renders as 6 individual character boxes (`_CodeInput`); the active box highlights amber, filled boxes show a softer amber border, and a transparent backing TextField preserves keyboard, paste, and autofill. The screen also has a slow ambient ember field behind the form (`Embers` widget — 14 amber dots drifting upward at low alpha, 30s loop). No further design work pending here.
 
 ### Settings Screen
 
@@ -100,12 +98,7 @@ Rewritten to drop the Material `Card`/`ListTile`/`Chip` defaults: section header
 
 ## Implementation Priority
 
-| Phase | Impact | Effort |
-|-------|--------|--------|
-| **2 — Custom pull-to-refresh indicator** | Low | 0.25 day |
-| **7 — Pairing background ember animation** | Low | 0.25 day |
-
-**Total: ~0.5 days of polish remaining.**
+All identified items shipped. Future polish lives in this doc as new items emerge.
 
 ---
 

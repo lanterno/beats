@@ -8,7 +8,10 @@ void main() {
       home: PairingScreen(onPaired: () {}),
     ));
     // Drain StaggeredEntrance timers and entrance animation.
-    await tester.pumpAndSettle();
+    // Embers run forever, so pumpAndSettle would hang — pump enough to
+    // drain the StaggeredEntrance entries instead (longest delay ~220ms,
+    // duration 400ms → 700ms is plenty).
+    await tester.pump(const Duration(milliseconds: 700));
 
     expect(find.text('Beats'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
@@ -19,7 +22,10 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: PairingScreen(onPaired: () {}),
     ));
-    await tester.pumpAndSettle();
+    // Embers run forever, so pumpAndSettle would hang — pump enough to
+    // drain the StaggeredEntrance entries instead (longest delay ~220ms,
+    // duration 400ms → 700ms is plenty).
+    await tester.pump(const Duration(milliseconds: 700));
 
     // Enter a short code and tap Pair
     final codeField = find.byType(TextField).last;

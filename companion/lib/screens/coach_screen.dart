@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
 
@@ -205,9 +206,8 @@ class _CoachScreenState extends State<CoachScreen> {
     return Scaffold(
       backgroundColor: BeatsColors.background,
       body: SafeArea(
-        child: RefreshIndicator(
+        child: BeatsRefresh(
           onRefresh: _refresh,
-          color: BeatsColors.amber,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 100),
