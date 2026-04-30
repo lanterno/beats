@@ -141,6 +141,34 @@ export function localDateKey(iso: string): string {
 }
 
 /**
+ * Returns the user's "typical day" baseline — the average flow score
+ * across all windows whose local date is **strictly before** [asOfDate].
+ * Today's data is excluded so the baseline answers "how does today
+ * compare to my recent days?" without including itself.
+ *
+ * Returns null when there are fewer than [minWindows] qualifying windows
+ * — too little data to draw any signal from. Callers should render a
+ * neutral state in that case rather than a misleading "above typical"
+ * built on three windows.
+ */
+export function flowBaseline(
+	windows: FlowWindow[],
+	asOfDate: Date,
+	minWindows = 30,
+): number | null {
+	const todayKey = `${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, "0")}-${String(asOfDate.getDate()).padStart(2, "0")}`;
+	let sum = 0;
+	let count = 0;
+	for (const w of windows) {
+		if (localDateKey(w.window_start) >= todayKey) continue;
+		sum += w.flow_score;
+		count++;
+	}
+	if (count < minWindows) return null;
+	return sum / count;
+}
+
+/**
  * Aggregate score statistics across the given windows. Returns null when
  * there's nothing to summarize, so callers can render an empty state
  * rather than "avg 0 / peak 0 / 0 windows".

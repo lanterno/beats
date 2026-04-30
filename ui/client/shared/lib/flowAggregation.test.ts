@@ -4,6 +4,7 @@ import {
 	aggregateFlowBy,
 	aggregateFlowByDay,
 	aggregateFlowByRepo,
+	flowBaseline,
 	localDateKey,
 	shortRepoPath,
 	summarizeFlow,
@@ -164,6 +165,49 @@ describe("aggregateFlowByDay", () => {
 		// Apr 30 is missing — that's intentional so a 7-day chart can choose
 		// to render it as "0" or as a gap.
 		expect(byDay).toHaveLength(2);
+	});
+});
+
+describe("flowBaseline", () => {
+	const today = new Date(2026, 3, 30); // Apr 30, 2026 (local)
+
+	it("returns null when not enough prior windows exist", () => {
+		// 5 prior-day windows; minWindows defaults to 30. Should return null
+		// so callers don't draw a comparison off too little data.
+		const windows: ReturnType<typeof w>[] = [];
+		for (let i = 0; i < 5; i++) {
+			windows.push(w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.7 }));
+		}
+		expect(flowBaseline(windows, today)).toBeNull();
+	});
+
+	it("excludes today's windows from the baseline", () => {
+		const prior: ReturnType<typeof w>[] = [];
+		for (let i = 0; i < 30; i++) {
+			prior.push(w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.5 }));
+		}
+		const todays = [w({ window_start: "2026-04-30T12:00:00Z", flow_score: 0.95 })];
+		const baseline = flowBaseline([...prior, ...todays], today);
+		// Today's 0.95 must NOT pull the baseline up.
+		expect(baseline).toBeCloseTo(0.5);
+	});
+
+	it("returns the unweighted mean across qualifying windows", () => {
+		const windows: ReturnType<typeof w>[] = [];
+		// 20 windows at 0.4, 20 windows at 0.6 → mean 0.5.
+		for (let i = 0; i < 20; i++) {
+			windows.push(w({ window_start: "2026-04-28T12:00:00Z", flow_score: 0.4 }));
+		}
+		for (let i = 0; i < 20; i++) {
+			windows.push(w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.6 }));
+		}
+		expect(flowBaseline(windows, today)).toBeCloseTo(0.5);
+	});
+
+	it("respects a custom minWindows threshold", () => {
+		const windows = [w({ window_start: "2026-04-29T12:00:00Z", flow_score: 0.7 })];
+		expect(flowBaseline(windows, today, 1)).toBeCloseTo(0.7);
+		expect(flowBaseline(windows, today, 2)).toBeNull();
 	});
 });
 

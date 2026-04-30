@@ -7,17 +7,24 @@
  * VS Code extension was sending heartbeats during that window.
  */
 import { useMemo, useState } from "react";
-import { useFlowWindows } from "@/entities/session";
-import { shortRepoPath, summarizeFlow } from "@/shared/lib/flowAggregation";
+import { useFlowWindows, useFlowWindowsLastDays } from "@/entities/session";
+import { flowBaseline, shortRepoPath, summarizeFlow } from "@/shared/lib/flowAggregation";
 
 const SPARK_W = 480;
 const SPARK_H = 64;
 
 export function FlowToday() {
 	const { data: windows, isLoading } = useFlowWindows();
+	// Baseline draws from the last 7 days (FlowThisWeek already issues this
+	// fetch — react-query dedupes by key so this is free here).
+	const { data: baselineWindows } = useFlowWindowsLastDays(7);
 	const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
 	const stats = useMemo(() => summarizeFlow(windows ?? []), [windows]);
+	const baseline = useMemo(
+		() => (baselineWindows ? flowBaseline(baselineWindows, new Date()) : null),
+		[baselineWindows],
+	);
 
 	if (isLoading) return null;
 	if (!windows || windows.length === 0) {
@@ -47,6 +54,7 @@ export function FlowToday() {
 							{Math.round((stats?.avg ?? 0) * 100)}
 						</span>
 					</span>
+					{stats && baseline !== null && <BaselineDelta avg={stats.avg} baseline={baseline} />}
 					<span>
 						peak{" "}
 						<span className="text-foreground tabular-nums">
@@ -190,4 +198,28 @@ function FlowSparkline({ windows, selectedIdx, onSelect }: SparklineProps) {
 function formatTime(iso: string): string {
 	const d = new Date(iso);
 	return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Renders today's avg compared to the user's recent baseline, color-coded.
+ * Uses score points (e.g. "+5") rather than percentage of the baseline so a
+ * day at 0.30 vs a 0.20 baseline doesn't read "+50%" — that framing
+ * overstates the difference at low scores.
+ *
+ * Hidden when within ±3 score points of the baseline; that's small enough
+ * to be noise on a typical day's window count and a flat "on track" badge
+ * adds clutter without insight.
+ */
+function BaselineDelta({ avg, baseline }: { avg: number; baseline: number }) {
+	const delta = Math.round((avg - baseline) * 100);
+	if (Math.abs(delta) < 3) return null;
+	const up = delta > 0;
+	return (
+		<span
+			className={`tabular-nums ${up ? "text-green-500" : "text-amber-500"}`}
+			title={`vs your 7-day baseline (${Math.round(baseline * 100)})`}
+		>
+			{up ? "↑" : "↓"} {Math.abs(delta)}
+		</span>
+	);
 }
