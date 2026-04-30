@@ -1,0 +1,69 @@
+{
+  "name": "beats-vscode",
+  "displayName": "Beats",
+  "description": "Workspace heartbeats for the Beats time-tracking daemon — improves Flow Score accuracy by telling the daemon which git repo you're editing.",
+  "version": "0.1.0",
+  "publisher": "lanterno",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "time tracking",
+    "beats",
+    "flow",
+    "productivity"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Beats",
+      "properties": {
+        "beats.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send workspace heartbeats to the local Beats daemon."
+        },
+        "beats.daemonPort": {
+          "type": "number",
+          "default": 37499,
+          "description": "Local TCP port the Beats daemon listens on for editor heartbeats."
+        },
+        "beats.heartbeatIntervalSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "description": "How often (in seconds) to send a heartbeat. Heartbeats are skipped while VS Code is not focused."
+        },
+        "beats.privacy.sendBranch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the current git branch name in the heartbeat. Disable to suppress branch names while still reporting the workspace path."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lanterno/beats.git",
+    "directory": "integrations/vscode-beats"
+  }
+}
