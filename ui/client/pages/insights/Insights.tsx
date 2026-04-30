@@ -39,6 +39,26 @@ export default function Insights() {
 	const [selectedRepo, setSelectedRepo] = useUrlParam("repo");
 	const [selectedLanguage, setSelectedLanguage] = useUrlParam("language");
 	const [selectedBundleId, setSelectedBundleId] = useUrlParam("bundle");
+
+	// Number of filters the user has set across all five axes — used to
+	// decide whether to surface the "clear all filters" link in the
+	// header. We only show the link when 2+ are active; one filter is
+	// trivially clearable via its own dropdown / dismiss pill, and a
+	// single-purpose "clear" affordance there would just be noise.
+	const activeFilterCount =
+		(selectedProjectId ? 1 : 0) +
+		(selectedTag ? 1 : 0) +
+		(selectedRepo ? 1 : 0) +
+		(selectedLanguage ? 1 : 0) +
+		(selectedBundleId ? 1 : 0);
+
+	const clearAllFilters = () => {
+		setSelectedProjectId(undefined);
+		setSelectedTag(undefined);
+		setSelectedRepo(undefined);
+		setSelectedLanguage(undefined);
+		setSelectedBundleId(undefined);
+	};
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
 	const currentYear = new Date().getFullYear();
@@ -80,6 +100,16 @@ export default function Insights() {
 					>
 						{new Date().getFullYear() - 1} Review
 					</Link>
+					{activeFilterCount >= 2 && (
+						<button
+							type="button"
+							onClick={clearAllFilters}
+							className="text-[10px] px-2 py-0.5 rounded-full border border-muted-foreground/40 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+							title="Clear every filter on this page"
+						>
+							× clear all filters ({activeFilterCount})
+						</button>
+					)}
 				</div>
 				<div className="flex items-center gap-2">
 					{allTags && allTags.length > 0 && (

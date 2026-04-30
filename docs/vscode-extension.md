@@ -18,9 +18,10 @@
 > filter chip is set ("when do I flow best on Go work?"). The "Flow
 > by weekday" sibling pulls 28 days and bins by day-of-week so each
 > weekday slot has at least ~4 samples, answering "do I flow better
-> on Tuesdays or Fridays?". Every
-> filter on the Insights page (the project + tag dropdowns and the
-> click-to-filter chips) is persisted in the URL —
+> on Tuesdays or Fridays?". When two or more filters are active, an
+> "× clear all filters" link in the Insights header resets the page
+> in one click. Every filter on the Insights page (the project + tag
+> dropdowns and the click-to-filter chips) is persisted in the URL —
 > `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view
 > is bookmarkable and shareable. The same per-window slice is
 > reachable from the terminal via `beatsd recent --repo …
