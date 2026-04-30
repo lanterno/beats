@@ -59,16 +59,7 @@ The coach speaks through the companion. Coach content is already rendered in-app
 
 ## Phase 4 — Quick Entry Polish
 
-The Intentions screen exists. Two small flows still missing:
-
-### Quick Note After Stop
-
-Shipped. After stopping a timer, the companion shows a "How did it go on \<project\>?" bottom sheet with a multiline note field, a freeform comma/space-separated tags input, and Skip / Save actions; Save updates the just-stopped beat in place via PUT `/api/beats/`. No tag suggestions yet — recent-tags chips are a future polish.
-
-### End-of-Day Mood Prompt
-
-- The mood picker lives on the Coach tab today; it should also surface as a notification or in-app prompt at the configured end-of-day time
-- Stored via `POST /api/daily-notes` (already wired)
+The post-stop "How did it go?" prompt is shipped (note + freeform tags + skip; updates the just-stopped beat in place via `PUT /api/beats/`). The remaining piece is the **EOD mood prompt** — surface the existing Coach mood picker as a push notification or in-app prompt at the configured end-of-day time. Storage is already wired (`PUT /api/daily-notes`); the work depends on Phase 3's notification infrastructure.
 
 ---
 

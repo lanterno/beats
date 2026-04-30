@@ -1,115 +1,110 @@
-# Companion App UI Design Roadmap — From Functional to Magnetic
+# Companion App UI Design Roadmap
 
-> Aesthetic direction: **Brutalist Luxury** — luxury timepiece meets brutalist typography. Massive type that owns the screen, dramatic negative space, zero visual clutter, every screen stripped to its essence. Warm amber accents on a near-black ground.
+> Aesthetic direction: **Brutalist Luxury** — luxury timepiece meets brutalist
+> typography. Massive type that owns the screen, dramatic negative space,
+> zero visual clutter, every screen stripped to its essence. Warm amber
+> accents on a near-black ground.
 
-## Current State
+The first wave of this redesign is fully shipped. New polish items land here
+as they're identified.
 
-The foundation is in place: the amber color palette (`BeatsColors`), DM Serif / DM Sans / JetBrains Mono typography (`BeatsType`), the frosted-glass custom bottom nav, `StaggeredEntrance`, fade+slide tab transitions, the radial-gradient running state on the Timer screen, the today/week/streak stats row below the timer, the breathing glow behind the Flow ring at score ≥ 0.7, animated category bars, the cardless "text flows on the page" treatment for Coach, an inline editor for evening review answers with `X OF N ANSWERED` progress, and the daily mood picker are all live.
+## Shipped — System & Foundation
 
-What's left is detail polish across individual screens.
+- Amber color palette (`BeatsColors`), DM Serif / DM Sans / JetBrains Mono
+  typography (`BeatsType`)
+- Frosted-glass custom bottom nav, `StaggeredEntrance`, fade+slide tab
+  transitions
+- Shared `PressScale` (1.0 → 0.97 on press) for buttons + tappable cards
+- Shared `BeatsRefresh` pull-to-refresh (thin amber stroke, surface backdrop)
 
----
+## Shipped — Timer
 
-## Phase 2 — Motion & Transitions (remaining)
+- Radial-gradient running state tinted by project color
+- Today / Week / Streak stats row below the action area, derived from the
+  heatmap; streak forgives a zero-today
+- Project picker with **RECENT** section + spring entrance
+- Stop button shakes (elastic-in, ±8px) on first tap inside a sub-5s session
+- Brutalist time digits with HR / MIN / SEC labels
 
-Tab transitions and stagger entries already work. Project card and Start/Stop buttons now use the shared `PressScale` widget for a tactile press-down. The Stop button shakes (elastic-in, ±8px) on the first tap inside a sub-5s session and only stops on the second tap. Outstanding micro-interactions:
+## Shipped — Flow
 
-Mood emoji tap now does a true 1.0 → 1.2 → 1.0 bounce (peaks at t≈0.6 on `easeOutBack`) — shipped.
+- Score ring with breathing glow at score ≥ 0.7
+- Inner radial gradient and sweep-gradient (amber → warm-white → amber)
+  ring stroke
+- Tap/drag-to-inspect timeline with vertical guide and detail row showing
+  time, exact score, and dominant category
+- Animated category bars
 
-Pull-to-refresh now uses the shared `BeatsRefresh` wrapper (thinner stroke, surface backdrop, smaller displacement) at every screen — shipped.
+## Shipped — Coach
 
-### Running State Ambient Motion
+- Cardless "text on the page" treatment with thin dividers
+- Inline editor on each evening review question with debounce-save and
+  `X OF N ANSWERED` progress indicator
+- Mood picker with 1.0 → 1.2 → 1.0 bounce on selection
+- "What went well?" debounce-saving note field
+- 7-day mood sparkline (red ≤2 / amber =3 / green ≥4)
 
-- The amber glow on the timer card should **breathe** — slowly pulsing opacity (already done for the dot, extend to the card shadow)
-- The timer digits should have a subtle fade transition on each second tick (not a hard swap)
+## Shipped — Plan / Intentions
 
-> Flow score ring already has a breathing glow at score ≥ 0.7 — shipped.
+- Color-bar accent + strikethrough completion + top progress bar
+- Live preview row in the add-sheet that updates as the user picks
+- QUICK ADD row of the last 3 distinct (project, duration) combos from today
+- 6-particle confetti burst on completion
 
----
+## Shipped — Pairing & Settings
 
-## Phase 3 — Timer Screen Polish (remaining)
+- 6-box pairing code input with amber active highlight and transparent
+  backing TextField (preserves keyboard, paste, autofill)
+- Slow ambient `Embers` field behind the pairing form
+- Settings rewritten in the brutalist vocabulary: section headers with
+  trailing rule, surface containers, dot status indicators, tinted
+  DANGER ZONE block, brutalist confirm dialog for unpair
 
-The radial-gradient running state and stagger entries already ship. Still missing:
+## Shipped — Tray (macOS / Windows / Linux)
 
-### Layout Refinements
-
-- More generous padding inside the time block — equal breathing room above/below the digits
-- Subtle gradient fade divider between project chip and timer (instead of the implicit gap)
-- Project selector input could use a subtle inner shadow for depth
-
-### Stats Row
-
-The today / week / streak stats row is live. Remaining nice-to-haves:
-
-- Add a **week-over-week comparison arrow** (↑ 12% or ↓ 5%) matching the web's `SidebarStats`
-- Restyle the streak when it's high (e.g. flame glyph at ≥ 7 days)
-
-### Project Picker Sheet
-
-The picker now shows a **RECENT** section at the top (last 5 projects started, tracked locally in `RecentProjects`/`SharedPreferences`) followed by an **ALL PROJECTS** section. Sheet content uses an `easeOutBack` spring entrance. Nothing pending here.
-
----
-
-## Phase 4 — Flow Screen Polish
-
-The score ring, breathing glow at score ≥ 0.7, area-chart timeline, animated category bars, the tap/drag-to-inspect timeline (vertical guide + dot, with a detail row showing time, exact score, and dominant category from the matching summary bucket), the inner radial-gradient glow, and a sweep-gradient ring stroke (amber → warm-white → amber) all ship. Nothing pending here.
-
----
-
-## Phase 5 — Coach Screen Elevation
-
-Numbered questions, mood picker with bouncing scale, the colored-ring selection state, and the cardless "text on the page with thin dividers" layout are in place. Still missing:
-
-### Morning Brief
-
-- Add a **timestamp** in the top-right showing when the brief was generated
-
-### Evening Review
-
-Inline editor with debounce-save and an `X OF N ANSWERED` progress indicator are shipped. No further design work pending here.
-
-### Mood Picker
-
-A "What went well?" text input now sits below the picker and debounce-saves to `/api/daily-notes` 800ms after typing stops, with a `SAVING…` hint while in flight. A 7-day mood history sparkline (color-coded dots: red ≤2, amber =3, green ≥4) sits inline with the section header. No further work pending here.
+- Live elapsed time + project in the menu bar
+- Quick-start submenu, stop, open, quit
+- Tray icon renders a colored dot matching the running project
+  (gray when idle), cached on disk by hex via `TrayIconRenderer`
 
 ---
 
-## Phase 6 — Intentions Screen Polish
+## Open polish
 
-Color-bar accent, strikethrough completion, top progress bar, pill-shaped duration chips, the live visual preview of the intention being created (project dot + name + duration), and a QUICK ADD row of the last 3 distinct (project, duration) combinations from today are all in place. Nothing pending here.
+Small touches that didn't make the first wave. Nice-to-have, not blocking.
 
-### Completion Animation
-
-A 6-particle confetti burst (amber/gold, ~650ms with mild gravity) fires from the check circle on completion via `ConfettiBurst` mounted in the overlay. The check circle and text style transition smoothly across the done/undone change. No further work pending here.
-
----
-
-## Phase 7 — Settings & Pairing Polish
-
-### Pairing Screen
-
-The code input renders as 6 individual character boxes (`_CodeInput`); the active box highlights amber, filled boxes show a softer amber border, and a transparent backing TextField preserves keyboard, paste, and autofill. The screen also has a slow ambient ember field behind the form (`Embers` widget — 14 amber dots drifting upward at low alpha, 30s loop). No further design work pending here.
-
-### Settings Screen
-
-Rewritten to drop the Material `Card`/`ListTile`/`Chip` defaults: section headers with a thin trailing rule, custom `BeatsColors.surface` rows with green/red dot status indicators, glow on the connection dot, an inline Oura PAT entry, and a tinted "DANGER ZONE" section that gates Unpair behind a brutalist confirm dialog. No further design work pending here.
-
----
-
-## Implementation Priority
-
-All identified items shipped. Future polish lives in this doc as new items emerge.
+- **Timer block**: more generous padding above/below the digits
+- **Timer block**: subtle gradient-fade divider between the project chip
+  and the time
+- **Timer block**: subtle inner shadow on the project selector for depth
+- **Stats row**: week-over-week comparison arrow (↑12% / ↓5%)
+- **Stats row**: flame glyph on streak ≥ 7 days
+- **Timer digits**: subtle fade on each second tick (currently a hard swap)
+- **Timer card shadow**: extend the dot's pulsing breath to the card shadow
+- **Coach morning brief**: timestamp in the top-right showing when generated
+- **Tags after stop**: replace the freeform tags input with chips of recent
+  tags + freeform fallback (needs `/api/analytics/tags` allowed for device
+  tokens — small server change)
 
 ---
 
 ## Guiding Principles
 
-1. **Warm, not cold.** Every surface, every text color, every shadow should carry warmth. No cool grays, no blue-tinted whites.
+1. **Warm, not cold.** Every surface, every text color, every shadow should
+   carry warmth. No cool grays, no blue-tinted whites.
 
-2. **Brutalist clarity over decoration.** Massive type, dramatic negative space, thin dividers instead of cards. No grain, no noise overlays, no faux-tactile textures.
+2. **Brutalist clarity over decoration.** Massive type, dramatic negative
+   space, thin dividers instead of cards. No grain, no noise overlays, no
+   faux-tactile textures.
 
-3. **Reward attention.** Small details that users discover over time — the way the glow breathes, the way a project's color tints the timer background, the way the mood sparkline tells a story.
+3. **Reward attention.** Small details that users discover over time — the
+   way the glow breathes, the way a project's color tints the timer
+   background, the way the mood sparkline tells a story.
 
-4. **Consistent motion vocabulary.** Every animation uses the same timing (250ms), the same curve family (easeOutCubic for enters, easeInCubic for exits), and the same distance (12px for slides, 0.97–1.0 for scales).
+4. **Consistent motion vocabulary.** Every animation uses the same timing
+   (250ms), the same curve family (easeOutCubic for enters, easeInCubic for
+   exits), and the same distance (12px for slides, 0.97–1.0 for scales).
 
-5. **The timer is sacred.** It's the center of the app. Every design decision should make the timer screen feel more important, more present, more alive than anything else.
+5. **The timer is sacred.** It's the center of the app. Every design
+   decision should make the timer screen feel more important, more present,
+   more alive than anything else.

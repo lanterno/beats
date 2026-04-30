@@ -10,7 +10,11 @@ See `CLAUDE.md` for the architecture, runtime, and testing conventions, and the 
 
 ## Open Roadmap
 
-- [ ] Per-environment databases (dev / staging / prod isolation)
+- [ ] Per-environment database isolation. Constraint: stay on Atlas M0 free
+  tier (one cluster). Plan: namespace by database name within the same
+  cluster (`beats_dev`, `beats_staging`, `beats_prod`) and thread a
+  `BEATS_ENV` setting through `pydantic-settings` so each env auto-picks
+  its database. Less isolated than separate clusters, but free.
 
 API, Artifact Registry, and the MongoDB Atlas cluster all live in
 `europe-west1` (Belgium) on GCP — already intra-region with each other,
