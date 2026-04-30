@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_client.dart';
+import '../services/notifications.dart';
 import '../services/token_storage.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
@@ -28,6 +30,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _fitbitUser;
   bool _ouraConnected = false;
 
+  // Notification preferences (persisted in SharedPreferences).
+  static const _kNotifEnabled = 'beats_notifications_enabled';
+  static const _kEodHour = 'beats_eod_hour';
+  static const _kEodMinute = 'beats_eod_minute';
+  bool _notifEnabled = true;
+  TimeOfDay _eodTime = const TimeOfDay(hour: 21, minute: 0);
+
   @override
   void initState() {
     super.initState();
@@ -45,7 +54,77 @@ class _HomeScreenState extends State<HomeScreen> {
     _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
     await _sendHeartbeat();
     await _refreshIntegrations();
+    await _loadNotificationPrefs();
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadNotificationPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool(_kNotifEnabled) ?? true;
+    final hour = prefs.getInt(_kEodHour) ?? 21;
+    final minute = prefs.getInt(_kEodMinute) ?? 0;
+    if (!mounted) return;
+    setState(() {
+      _notifEnabled = enabled;
+      _eodTime = TimeOfDay(hour: hour, minute: minute);
+    });
+    // Reconcile the OS-level schedule with our prefs on every screen open —
+    // covers the case where the user changed the time on another machine
+    // (or wiped notification permissions and restored them).
+    await _reconcileEodSchedule();
+  }
+
+  Future<void> _reconcileEodSchedule() async {
+    final svc = NotificationsService.instance;
+    if (_notifEnabled) {
+      await svc.scheduleEodMoodPrompt(
+        hour: _eodTime.hour,
+        minute: _eodTime.minute,
+      );
+    } else {
+      await svc.cancelEodMoodPrompt();
+    }
+  }
+
+  Future<void> _setNotifEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kNotifEnabled, enabled);
+    if (enabled) {
+      // Trigger the OS prompt the first time the user opts in. Subsequent
+      // toggles are no-ops at the OS level.
+      await NotificationsService.instance.requestPermissions();
+    }
+    if (!mounted) return;
+    setState(() => _notifEnabled = enabled);
+    await _reconcileEodSchedule();
+  }
+
+  Future<void> _pickEodTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _eodTime,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(
+                primary: BeatsColors.amber,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kEodHour, picked.hour);
+    await prefs.setInt(_kEodMinute, picked.minute);
+    if (!mounted) return;
+    setState(() => _eodTime = picked);
+    await _reconcileEodSchedule();
+  }
+
+  String _formatTime(TimeOfDay t) {
+    final h = t.hour.toString().padLeft(2, '0');
+    final m = t.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   Future<void> _sendHeartbeat() async {
@@ -285,6 +364,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: _ouraPatController,
                   onConnect: _connectOura,
                   onDisconnect: _disconnectOura,
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Notifications ──
+              _SectionHeader(label: 'NOTIFICATIONS'),
+              const SizedBox(height: 12),
+              StaggeredEntrance(
+                delay: const Duration(milliseconds: 160),
+                child: _NotificationsRow(
+                  enabled: _notifEnabled,
+                  eodLabel: _formatTime(_eodTime),
+                  onToggle: _setNotifEnabled,
+                  onPickEod: _pickEodTime,
                 ),
               ),
               const SizedBox(height: 40),
@@ -540,6 +633,114 @@ class _OuraRow extends StatelessWidget {
                     ),
                     child: Text('Connect', style: BeatsType.button.copyWith(
                       fontSize: 13, color: const Color(0xFF1A1408))),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationsRow extends StatelessWidget {
+  final bool enabled;
+  final String eodLabel;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onPickEod;
+  const _NotificationsRow({
+    required this.enabled,
+    required this.eodLabel,
+    required this.onToggle,
+    required this.onPickEod,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: BeatsColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: BeatsColors.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: enabled ? BeatsColors.amber : BeatsColors.textTertiary,
+                )),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Coach prompts', style: BeatsType.bodyMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      enabled
+                          ? 'Brief, review, and end-of-day mood'
+                          : 'Off',
+                      style: BeatsType.bodySmall.copyWith(
+                        fontSize: 11, color: BeatsColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: enabled,
+                onChanged: onToggle,
+                activeThumbColor: BeatsColors.amber,
+              ),
+            ],
+          ),
+          if (enabled) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Container(
+                  height: 1,
+                  color: BeatsColors.border.withValues(alpha: 0.5)),
+            ),
+            Row(
+              children: [
+                const SizedBox(width: 22),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('End-of-day mood prompt', style: BeatsType.bodyMedium),
+                      const SizedBox(height: 2),
+                      Text('Daily reminder, fires from the OS scheduler',
+                        style: BeatsType.bodySmall.copyWith(
+                          fontSize: 11, color: BeatsColors.textTertiary)),
+                    ],
+                  ),
+                ),
+                PressScale(
+                  onTap: onPickEod,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: BeatsColors.amber.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: BeatsColors.amber.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      eodLabel,
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 14,
+                        color: BeatsColors.amber,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
                   ),
                 ),
               ],

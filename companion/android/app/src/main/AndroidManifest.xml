@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Notifications: Android 13+ requires explicit user grant.
+         flutter_local_notifications surfaces the OS prompt when we call
+         requestNotificationsPermission(). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Lets the daily EOD prompt fire even while the device is in Doze.
+         Without this we still get scheduled notifications, but they may
+         drift by minutes. Using SCHEDULE_EXACT_ALARM (not USE_EXACT_ALARM)
+         is allowed for ourselves without a user-visible permission flow. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:label="beats_companion"
         android:name="${applicationName}"

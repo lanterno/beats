@@ -26,40 +26,47 @@
 
 The coach speaks through the companion. Coach content is already rendered in-app — this phase makes it reach the user without opening the app.
 
-### Morning Brief
+### Shipped — local notifications, free-tier path
 
-- Push notification at configured time (e.g., 7 AM)
-- Tapping opens the Coach tab
-- "Start suggested project" button if the brief recommends one
+`NotificationsService` + `NotificationPoller` (in `companion/lib/services/`)
+deliver coach prompts using only OS-level local notifications. No APNs,
+no FCM, no Apple Developer / Google Play projects required.
 
-### Evening Review
+| Prompt | Delivery |
+|---|---|
+| **Morning brief** | Foreground polling every 5 min — fires `notifyBriefAvailable` when `/api/coach/brief/today` returns a new id. Deduped per-day in `SharedPreferences`. |
+| **Evening review** | Same poller — `notifyReviewAvailable` on a new review's `date` key. |
+| **EOD mood prompt** | OS-scheduled (`zonedSchedule`, `matchDateTimeComponents: time`). Fires daily at the user-configured time (default 21:00) **even when the app isn't running**. Configured from Settings → NOTIFICATIONS. |
 
-- Push notification at configured time (e.g., 9 PM)
-- Opens the Coach tab with the review questions focused
-- Question cards need to expand into editable text inputs (currently read-only) so answers can `POST /api/coach/review`
+Tapping any of these payloads switches the app to the Coach tab.
 
-### Auto-Timer Notifications
+### Trade-off the free-tier path makes
 
-- When the daemon detects high flow without a timer: push notification "Start tracking Beats?"
-- Tap → starts the matched project's timer directly from the notification
-- Requires: iOS APNs / Android FCM setup, or local notifications triggered by polling `/api/signals/suggest-timer`
+Brief and review prompts only fire while the app is alive (foreground or
+recently-backgrounded). If the user closes the app and the coach generates
+a brief at 7 AM, they'll see the notification on next open instead. The
+EOD mood prompt is the one piece that reaches them while the app is
+closed, because it's pre-scheduled at the OS level rather than triggered
+by a server check.
 
-### Drift Alerts
+### Still pending
 
-- When the daemon logs a drift event: push notification "You've been on Twitter for 2 min while Beats is tracking"
-- Non-blocking — just awareness. No action required.
-
-### Implementation Notes
-
-- **iOS**: local notifications via `flutter_local_notifications` plugin. Background fetch every 15 min checks for new briefs/suggestions.
-- **Android**: same plugin. WorkManager for background checks.
-- **Desktop**: system tray notifications (macOS: `NSUserNotification`, Linux: `libnotify`, Windows: toast).
+- **"Start suggested project" action button** on the brief notification
+- **Auto-timer notifications** when the daemon detects high flow without
+  a timer (needs the daemon to expose `/api/signals/suggest-timer` and
+  the poller to consume it)
+- **Drift alerts** when the daemon logs a drift event
+- **True server-pushed delivery** via APNs/FCM — would solve the
+  "app must be alive" limitation but needs an Apple Developer account
+  and an FCM project. Out of scope for the free-tier path.
 
 ---
 
 ## Phase 4 — Quick Entry Polish
 
-The post-stop "How did it go?" prompt is shipped (note + freeform tags + skip; updates the just-stopped beat in place via `PUT /api/beats/`). The remaining piece is the **EOD mood prompt** — surface the existing Coach mood picker as a push notification or in-app prompt at the configured end-of-day time. Storage is already wired (`PUT /api/daily-notes`); the work depends on Phase 3's notification infrastructure.
+The post-stop "How did it go?" prompt is shipped (note + freeform tags + skip; updates the just-stopped beat in place via `PUT /api/beats/`).
+
+The **EOD mood prompt** is also shipped — see Phase 3. A daily local notification at the user-configured time opens the Coach tab where the existing mood picker + "What went well?" note land in the day's `daily-note`.
 
 ---
 
@@ -123,8 +130,8 @@ The tray (`tray_service.dart`) shows live elapsed time + project, a Start Timer 
 
 | Phase | What | Value | Effort |
 |-------|------|-------|--------|
-| **3** | Coach notifications | The coach reaches users proactively | 1.5 weeks |
-| **4** | EOD mood prompt (post-stop note ✅) | Frictionless capture around timer events | 0.25 week |
+| **3** | Coach notifications (free-tier path ✅) | The coach reaches users proactively | 0.5 week (server-push extras) |
+| **4** | EOD mood prompt + post-stop note ✅ | — | 0 |
 | **5** | Widgets + watch (menu bar polish ✅) | Ambient presence on home screen / wrist | ~1.5 weeks |
 
-**Total: ~3.25 weeks for the remaining vision.**
+**Total: ~2 weeks for the remaining vision** — and the bulk is widgets / watch / server-push, all of which need real devices or paid platform credentials.

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'screens/coach_screen.dart';
@@ -8,6 +9,8 @@ import 'screens/intentions_screen.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/timer_screen.dart';
 import 'services/api_client.dart';
+import 'services/notification_poller.dart';
+import 'services/notifications.dart';
 import 'services/token_storage.dart';
 import 'services/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
@@ -46,12 +49,21 @@ class _AppShellState extends State<AppShell> {
   bool _paired = false;
   ApiClient? _client;
   TrayService? _tray;
+  NotificationPoller? _poller;
+  StreamSubscription<String?>? _notificationTaps;
   int _currentTab = 0;
 
   @override
   void initState() {
     super.initState();
     _checkPairing();
+  }
+
+  @override
+  void dispose() {
+    _poller?.stop();
+    _notificationTaps?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkPairing() async {
@@ -69,11 +81,42 @@ class _AppShellState extends State<AppShell> {
         },
       );
       _tray!.init();
+      await _initNotifications();
     }
     setState(() {
       _paired = token != null;
       _loading = false;
     });
+  }
+
+  /// Initialize the notification stack and start the foreground poller.
+  /// Tap routing: every Beats notification carries a payload describing
+  /// which tab the user wants to land on (`brief`, `review`, `eod-mood`,
+  /// `auto-timer:*`). All four route to the Coach tab today; auto-timer
+  /// could route to Timer once that flow lands.
+  Future<void> _initNotifications() async {
+    final svc = NotificationsService.instance;
+    await svc.init();
+    // Permission prompt is best surfaced from a Settings toggle, not on
+    // first launch — but we ask once here so the very first run gets the
+    // dialog instead of silently failing.
+    unawaited(svc.requestPermissions());
+
+    _notificationTaps = svc.taps.listen((payload) {
+      if (!mounted) return;
+      // Route every coach-flavored payload to the Coach tab. Auto-timer
+      // suggestions also live there for now since we don't yet have a
+      // dedicated start-from-suggestion flow.
+      const coachTab = 3;
+      setState(() => _currentTab = coachTab);
+    });
+
+    final poller = NotificationPoller(
+      client: _client!,
+      notifications: svc,
+    );
+    _poller = poller;
+    poller.start();
   }
 
   void _onPaired() async {
@@ -83,9 +126,15 @@ class _AppShellState extends State<AppShell> {
       _paired = true;
       _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
     });
+    if (_client != null) await _initNotifications();
   }
 
   void _onUnpaired() {
+    _poller?.stop();
+    _poller = null;
+    _notificationTaps?.cancel();
+    _notificationTaps = null;
+    NotificationsService.instance.cancelEodMoodPrompt();
     setState(() {
       _paired = false;
       _client = null;
