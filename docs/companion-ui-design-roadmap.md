@@ -49,12 +49,9 @@ The picker now shows a **RECENT** section at the top (last 5 projects started, t
 
 ---
 
-## Phase 4 — Flow Screen Polish (remaining)
+## Phase 4 — Flow Screen Polish
 
-The score ring, breathing glow at score ≥ 0.7, area-chart timeline, animated category bars, and the tap/drag-to-inspect timeline (vertical guide + dot, with a detail row showing time, exact score, and dominant category from the matching summary bucket) already ship. Polish remaining:
-
-- Inner circle of the ring: subtle radial gradient (currently flat)
-- Foreground ring stroke: gradient from amber to warm white instead of solid color
+The score ring, breathing glow at score ≥ 0.7, area-chart timeline, animated category bars, the tap/drag-to-inspect timeline (vertical guide + dot, with a detail row showing time, exact score, and dominant category from the matching summary bucket), the inner radial-gradient glow, and a sweep-gradient ring stroke (amber → warm-white → amber) all ship. Nothing pending here.
 
 ---
 
@@ -93,20 +90,15 @@ A 6-particle confetti burst (amber/gold, ~650ms with mild gravity) fires from th
 
 ## Phase 7 — Settings & Pairing Polish
 
-The Settings tab still uses Material defaults (`Card`, `Chip`, `ListTile`) — out of step with the rest of the app.
-
 ### Pairing Screen
 
-The code input now renders as 6 individual character boxes (`_CodeInput`); the active box highlights amber, filled boxes show a softer amber border, and a transparent backing TextField preserves keyboard, paste, and autofill. Remaining nice-to-have:
+The code input renders as 6 individual character boxes (`_CodeInput`); the active box highlights amber, filled boxes show a softer amber border, and a transparent backing TextField preserves keyboard, paste, and autofill. Remaining nice-to-have:
 
 - Add a **subtle particle/ember animation** in the background — floating dots that drift upward slowly
 
 ### Settings Screen
 
-- Replace `Card` / `ListTile` / `Chip` with custom containers using `BeatsColors.surface` and the project's typography
-- Group sections with **section headers** that have a line extending to the right edge
-- Connection status indicators: replace text with **colored dots** (green = connected, gray = disconnected)
-- Unpair button: move to a **danger zone** section at the very bottom with a red tint
+Rewritten to drop the Material `Card`/`ListTile`/`Chip` defaults: section headers with a thin trailing rule, custom `BeatsColors.surface` rows with green/red dot status indicators, glow on the connection dot, an inline Oura PAT entry, and a tinted "DANGER ZONE" section that gates Unpair behind a brutalist confirm dialog. No further design work pending here.
 
 ---
 
@@ -114,12 +106,11 @@ The code input now renders as 6 individual character boxes (`_CodeInput`); the a
 
 | Phase | Impact | Effort |
 |-------|--------|--------|
-| **2 — Remaining micro-interactions** | Medium | 0.5 day |
-| **4 — Flow ring stroke/inner gradient** | Medium | 0.5 day |
+| **2 — Mood emoji bounce + custom pull-to-refresh** | Low-Medium | 0.5 day |
 | **6 — Intentions add-sheet polish (visual preview, quick-add row)** | Low-Medium | 0.5 day |
-| **7 — Settings tab visual rewrite (danger zone, custom containers)** | Low but very visible | 1 day |
+| **7 — Pairing background ember animation** | Low | 0.25 day |
 
-**Total: ~2.5 days of polish remaining.**
+**Total: ~1.25 days of polish remaining.**
 
 ---
 

@@ -419,21 +419,47 @@ class _RingPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 - 12;
 
+    // Inner radial gradient — gives the ring's interior a quiet glow that
+    // tints with the score color so the digits read as part of a luminous
+    // disc rather than floating on a flat ground.
+    final innerRect = Rect.fromCircle(center: center, radius: radius);
+    canvas.drawCircle(
+      center,
+      radius - 1.5,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withValues(alpha: 0.06),
+            BeatsColors.background.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 1.0],
+        ).createShader(innerRect),
+    );
+
     // Background ring
     canvas.drawCircle(center, radius, Paint()
       ..color = BeatsColors.border.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3);
 
-    // Score arc
+    // Score arc — a sweep gradient from amber-warm into a softer warm-white,
+    // rotated so the gradient starts at the top (matching the arc's start).
     if (score > 0) {
+      final arcRect = Rect.fromCircle(center: center, radius: radius);
+      final endColor = Color.lerp(color, const Color(0xFFFFE4B5), 0.55) ?? color;
+      final shader = SweepGradient(
+        startAngle: 0,
+        endAngle: 2 * pi,
+        colors: [color, endColor, color],
+        transform: GradientRotation(-pi / 2),
+      ).createShader(arcRect);
       canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
+        arcRect,
         -pi / 2,
         2 * pi * score.clamp(0.0, 1.0),
         false,
         Paint()
-          ..color = color
+          ..shader = shader
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3
           ..strokeCap = StrokeCap.round,
