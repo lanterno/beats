@@ -40,6 +40,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
 interface Props {
 	projectId?: string;
 	editorRepo?: string;
+	bundleId?: string;
 	selectedLanguage?: string;
 	onSelectLanguage?: (lang: string | undefined) => void;
 }
@@ -47,10 +48,12 @@ interface Props {
 export function FlowByLanguage({
 	projectId,
 	editorRepo,
+	bundleId,
 	selectedLanguage,
 	onSelectLanguage,
 }: Props = {}) {
-	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
+	const filter =
+		projectId || editorRepo || bundleId ? { projectId, editorRepo, bundleId } : undefined;
 	const { data: windows } = useFlowWindows(undefined, undefined, filter);
 	const stats = useMemo(
 		() => aggregateFlowBy(windows ?? [], (w) => w.editor_language, 5),

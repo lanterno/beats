@@ -302,6 +302,7 @@ export interface FlowFilter {
 	projectId?: string;
 	editorRepo?: string;
 	editorLanguage?: string;
+	bundleId?: string;
 }
 
 /**
@@ -326,6 +327,7 @@ export function useFlowWindows(start?: string, end?: string, filter: FlowFilter 
 			filter.projectId ?? "all",
 			filter.editorRepo ?? "all",
 			filter.editorLanguage ?? "all",
+			filter.bundleId ?? "all",
 		],
 		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(effectiveStart, effectiveEnd, filter),
 		staleTime: 30_000,
@@ -354,6 +356,7 @@ export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
 			filter.projectId ?? "all",
 			filter.editorRepo ?? "all",
 			filter.editorLanguage ?? "all",
+			filter.bundleId ?? "all",
 		],
 		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(startIso, endIso, filter),
 		staleTime: 5 * 60_000,

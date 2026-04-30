@@ -1639,6 +1639,45 @@ class TestSignalsAPI:
         assert all(w["editor_language"] == "typescript" for w in windows)
         assert any(w["flow_score"] == 0.83 for w in windows)
 
+    def test_flow_windows_filter_by_bundle_id(self):
+        """GET /api/signals/flow-windows?bundle_id=… narrows to that
+        macOS bundle id, used for click-to-filter on FlowByApp."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        for bundle, score in [
+            ("com.microsoft.VSCode", 0.82),
+            ("com.apple.Safari", 0.31),
+        ]:
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": (now - timedelta(minutes=2)).isoformat(),
+                    "window_end": (now - timedelta(minutes=1)).isoformat(),
+                    "flow_score": score,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 1.0,
+                    "idle_fraction": 0.0,
+                    "dominant_bundle_id": bundle,
+                    "dominant_category": "coding",
+                },
+                headers=device_headers,
+            )
+
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "bundle_id": "com.microsoft.VSCode",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        windows = resp.json()
+        assert all(w["dominant_bundle_id"] == "com.microsoft.VSCode" for w in windows)
+        assert any(w["flow_score"] == 0.82 for w in windows)
+
     def test_flow_window_without_editor_context_still_validates(self):
         """Older daemons that don't send editor_* fields are still accepted."""
         _, device_headers = self._pair_device()

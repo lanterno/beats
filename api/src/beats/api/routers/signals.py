@@ -119,6 +119,7 @@ async def list_flow_windows(
     project_id: str | None = Query(default=None),
     editor_repo: str | None = Query(default=None),
     editor_language: str | None = Query(default=None),
+    bundle_id: str | None = Query(default=None),
 ) -> list[FlowWindowResponse]:
     """List flow windows for the current user within a date range.
 
@@ -130,6 +131,8 @@ async def list_flow_windows(
       companion / web UI render a shortened display form on top.
     - `editor_language` — only windows whose VS Code heartbeat reported
       this language id (e.g. "go", "typescriptreact").
+    - `bundle_id` — only windows whose dominant frontmost app matched
+      this macOS bundle id (e.g. "com.microsoft.VSCode").
     """
     windows = await repo.list_by_range(
         start,
@@ -137,6 +140,7 @@ async def list_flow_windows(
         project_id=project_id,
         editor_repo=editor_repo,
         editor_language=editor_language,
+        bundle_id=bundle_id,
     )
     return [
         FlowWindowResponse(

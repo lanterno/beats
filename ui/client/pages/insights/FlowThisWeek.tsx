@@ -24,14 +24,16 @@ export function FlowThisWeek({
 	projectId,
 	editorRepo,
 	editorLanguage,
+	bundleId,
 }: {
 	projectId?: string;
 	editorRepo?: string;
 	editorLanguage?: string;
+	bundleId?: string;
 } = {}) {
 	const filter =
-		projectId || editorRepo || editorLanguage
-			? { projectId, editorRepo, editorLanguage }
+		projectId || editorRepo || editorLanguage || bundleId
+			? { projectId, editorRepo, editorLanguage, bundleId }
 			: undefined;
 	const { data: windows, isLoading } = useFlowWindowsLastDays(DAYS, filter);
 

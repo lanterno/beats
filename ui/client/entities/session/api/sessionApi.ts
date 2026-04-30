@@ -88,16 +88,24 @@ export async function fetchGaps(targetDate: string): Promise<Gap[]> {
  *   absolute workspace path
  * - editorLanguage — windows whose VS Code heartbeat reported this
  *   language id (e.g. "go", "typescriptreact")
+ * - bundleId — windows whose dominant frontmost app matched this
+ *   macOS bundle id (e.g. "com.microsoft.VSCode")
  */
 export async function fetchFlowWindows(
 	start: string,
 	end: string,
-	options: { projectId?: string; editorRepo?: string; editorLanguage?: string } = {},
+	options: {
+		projectId?: string;
+		editorRepo?: string;
+		editorLanguage?: string;
+		bundleId?: string;
+	} = {},
 ): Promise<FlowWindow[]> {
 	const params = new URLSearchParams({ start, end });
 	if (options.projectId) params.set("project_id", options.projectId);
 	if (options.editorRepo) params.set("editor_repo", options.editorRepo);
 	if (options.editorLanguage) params.set("editor_language", options.editorLanguage);
+	if (options.bundleId) params.set("bundle_id", options.bundleId);
 	const data = await get<unknown>(`/api/signals/flow-windows?${params.toString()}`);
 	return parseApiResponse(FlowWindowListSchema, data);
 }

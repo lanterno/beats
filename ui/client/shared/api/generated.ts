@@ -2075,6 +2075,8 @@ export interface paths {
          *       companion / web UI render a shortened display form on top.
          *     - `editor_language` — only windows whose VS Code heartbeat reported
          *       this language id (e.g. "go", "typescriptreact").
+         *     - `bundle_id` — only windows whose dominant frontmost app matched
+         *       this macOS bundle id (e.g. "com.microsoft.VSCode").
          */
         get: operations["list_flow_windows_api_signals_flow_windows_get"];
         put?: never;
@@ -6719,6 +6721,7 @@ export interface operations {
                 project_id?: string | null;
                 editor_repo?: string | null;
                 editor_language?: string | null;
+                bundle_id?: string | null;
             };
             header?: never;
             path?: never;

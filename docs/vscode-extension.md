@@ -8,10 +8,11 @@
 > alongside the existing flow signals, and those three fields are
 > persisted on the `FlowWindow` document and exposed via
 > `GET /api/signals/flow-windows` as `editor_repo`, `editor_branch`,
-> `editor_language`. The endpoint also accepts optional `editor_repo`
-> and `editor_language` query params for server-side filtering, and the
-> web Insights page wires both onto click-to-filter rows in the
-> "Flow by repo" / "Flow by language" cards.
+> `editor_language`. The endpoint accepts optional `editor_repo`,
+> `editor_language`, and `bundle_id` query params for server-side
+> filtering, and the web Insights page wires all three onto
+> click-to-filter rows in the "Flow by repo" / "Flow by language" /
+> "Flow by app" cards (filters AND-compose).
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score

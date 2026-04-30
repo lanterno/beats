@@ -998,6 +998,7 @@ class FlowWindowRepository(ABC):
         project_id: str | None = None,
         editor_repo: str | None = None,
         editor_language: str | None = None,
+        bundle_id: str | None = None,
     ) -> list[FlowWindow]: ...
 
 
@@ -1017,12 +1018,14 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
         project_id: str | None = None,
         editor_repo: str | None = None,
         editor_language: str | None = None,
+        bundle_id: str | None = None,
     ) -> list[FlowWindow]:
         # Filters are AND-composed. project_id matches windows captured
         # while a timer was running on that project; editor_repo matches
         # windows where the VS Code heartbeat covered them; editor_language
-        # matches the language id reported by the heartbeat. All optional
-        # so the existing call sites keep working.
+        # matches the language id reported by the heartbeat; bundle_id
+        # matches windows whose dominant frontmost app was that bundle.
+        # All optional so the existing call sites keep working.
         query: dict = {"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
         if project_id is not None:
             query["active_project_id"] = project_id
@@ -1030,6 +1033,8 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
             query["editor_repo"] = editor_repo
         if editor_language is not None:
             query["editor_language"] = editor_language
+        if bundle_id is not None:
+            query["dominant_bundle_id"] = bundle_id
         cursor = self.collection.find(self._q(query)).sort("window_start", 1)
         docs = await cursor.to_list(length=None)
         return [FlowWindow(**serialize_from_document(doc)) for doc in docs]

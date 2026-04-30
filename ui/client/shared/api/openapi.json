@@ -7081,7 +7081,7 @@
     },
     "/api/signals/flow-windows": {
       "get": {
-        "description": "List flow windows for the current user within a date range.\n\nOptional filters narrow the result, AND-composed:\n- `project_id` \u2014 only windows captured while a timer was running on\n  this project (i.e. `active_project_id` matches).\n- `editor_repo` \u2014 only windows whose VS Code heartbeat reported this\n  workspace path. Use the absolute path the daemon stores; the\n  companion / web UI render a shortened display form on top.\n- `editor_language` \u2014 only windows whose VS Code heartbeat reported\n  this language id (e.g. \"go\", \"typescriptreact\").",
+        "description": "List flow windows for the current user within a date range.\n\nOptional filters narrow the result, AND-composed:\n- `project_id` \u2014 only windows captured while a timer was running on\n  this project (i.e. `active_project_id` matches).\n- `editor_repo` \u2014 only windows whose VS Code heartbeat reported this\n  workspace path. Use the absolute path the daemon stores; the\n  companion / web UI render a shortened display form on top.\n- `editor_language` \u2014 only windows whose VS Code heartbeat reported\n  this language id (e.g. \"go\", \"typescriptreact\").\n- `bundle_id` \u2014 only windows whose dominant frontmost app matched\n  this macOS bundle id (e.g. \"com.microsoft.VSCode\").",
         "operationId": "list_flow_windows_api_signals_flow_windows_get",
         "parameters": [
           {
@@ -7150,6 +7150,22 @@
                 }
               ],
               "title": "Editor Language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bundle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bundle Id"
             }
           }
         ],

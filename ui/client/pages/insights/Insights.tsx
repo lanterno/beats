@@ -26,10 +26,11 @@ import { WeeklyCard } from "./WeeklyCard";
 export default function Insights() {
 	const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
 	const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
-	// Filters set by clicking a row on FlowByRepo / FlowByLanguage.
+	// Filters set by clicking a row on FlowByRepo / FlowByLanguage / FlowByApp.
 	// Independent of the project filter — they compose AND-style at the API.
 	const [selectedRepo, setSelectedRepo] = useState<string | undefined>(undefined);
 	const [selectedLanguage, setSelectedLanguage] = useState<string | undefined>(undefined);
+	const [selectedBundleId, setSelectedBundleId] = useState<string | undefined>(undefined);
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
 	const currentYear = new Date().getFullYear();
@@ -136,39 +137,46 @@ export default function Insights() {
 			    Tag filter still hides these — flow windows don't carry tags. */}
 			{!selectedTag && (
 				<>
-					{(selectedRepo || selectedLanguage) && (
+					{(selectedRepo || selectedLanguage || selectedBundleId) && (
 						<FlowFilterChips
 							repo={selectedRepo}
 							language={selectedLanguage}
+							bundleId={selectedBundleId}
 							onClearRepo={() => setSelectedRepo(undefined)}
 							onClearLanguage={() => setSelectedLanguage(undefined)}
+							onClearBundleId={() => setSelectedBundleId(undefined)}
 						/>
 					)}
 					<FlowToday
 						projectId={selectedProjectId}
 						editorRepo={selectedRepo}
 						editorLanguage={selectedLanguage}
+						bundleId={selectedBundleId}
 					/>
 					<BestMoment
 						projectId={selectedProjectId}
 						editorRepo={selectedRepo}
 						editorLanguage={selectedLanguage}
+						bundleId={selectedBundleId}
 					/>
 					<FlowThisWeek
 						projectId={selectedProjectId}
 						editorRepo={selectedRepo}
 						editorLanguage={selectedLanguage}
+						bundleId={selectedBundleId}
 					/>
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 						<FlowByRepo
 							projectId={selectedProjectId}
 							editorLanguage={selectedLanguage}
+							bundleId={selectedBundleId}
 							selectedRepo={selectedRepo}
 							onSelectRepo={setSelectedRepo}
 						/>
 						<FlowByLanguage
 							projectId={selectedProjectId}
 							editorRepo={selectedRepo}
+							bundleId={selectedBundleId}
 							selectedLanguage={selectedLanguage}
 							onSelectLanguage={setSelectedLanguage}
 						/>
@@ -176,6 +184,8 @@ export default function Insights() {
 							projectId={selectedProjectId}
 							editorRepo={selectedRepo}
 							editorLanguage={selectedLanguage}
+							selectedBundleId={selectedBundleId}
+							onSelectBundleId={setSelectedBundleId}
 						/>
 					</div>
 				</>
@@ -203,20 +213,24 @@ export default function Insights() {
 	);
 }
 
-/** Renders dismissible pills for the repo / language filters chosen by
- * clicking a row on FlowByRepo or FlowByLanguage. Mirrors the project /
- * tag dropdown affordance — explicit, dismissible, sibling pills compose
- * visually so the user sees that both filters are AND-applied. */
+/** Renders dismissible pills for the repo / language / app filters chosen
+ * by clicking a row on the matching Flow* card. Mirrors the project / tag
+ * dropdown affordance — explicit, dismissible, sibling pills compose
+ * visually so the user sees that all active filters are AND-applied. */
 function FlowFilterChips({
 	repo,
 	language,
+	bundleId,
 	onClearRepo,
 	onClearLanguage,
+	onClearBundleId,
 }: {
 	repo?: string;
 	language?: string;
+	bundleId?: string;
 	onClearRepo: () => void;
 	onClearLanguage: () => void;
+	onClearBundleId: () => void;
 }) {
 	return (
 		<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -238,8 +252,24 @@ function FlowFilterChips({
 					clearLabel="Clear language filter"
 				/>
 			)}
+			{bundleId && (
+				<FilterPill
+					label="app"
+					value={shortBundleTail(bundleId)}
+					title={bundleId}
+					onClear={onClearBundleId}
+					clearLabel="Clear app filter"
+				/>
+			)}
 		</div>
 	);
+}
+
+function shortBundleTail(bundleId: string): string {
+	// Reverse-DNS bundle ids: "com.microsoft.VSCode" → "VSCode". Same
+	// fallback FlowByApp uses for unknown ids; good enough for a chip.
+	const dot = bundleId.lastIndexOf(".");
+	return dot >= 0 ? bundleId.slice(dot + 1) : bundleId;
 }
 
 function FilterPill({

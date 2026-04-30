@@ -14,16 +14,25 @@ import { aggregateFlowByRepo, shortRepoPath } from "@/shared/lib/flowAggregation
 interface Props {
 	projectId?: string;
 	editorLanguage?: string;
+	bundleId?: string;
 	selectedRepo?: string;
 	onSelectRepo?: (repo: string | undefined) => void;
 }
 
-export function FlowByRepo({ projectId, editorLanguage, selectedRepo, onSelectRepo }: Props = {}) {
+export function FlowByRepo({
+	projectId,
+	editorLanguage,
+	bundleId,
+	selectedRepo,
+	onSelectRepo,
+}: Props = {}) {
 	// FlowByRepo specifically does NOT filter its own data by selectedRepo —
 	// it has to keep showing all repos so the user has somewhere to click
-	// to switch. It DOES filter by projectId / editorLanguage because those
-	// are picked elsewhere on the page and we want repo stats to honor them.
-	const filter = projectId || editorLanguage ? { projectId, editorLanguage } : undefined;
+	// to switch. It DOES filter by the other dimensions (project, language,
+	// bundle) because those are picked elsewhere on the page and we want
+	// repo stats to honor them.
+	const filter =
+		projectId || editorLanguage || bundleId ? { projectId, editorLanguage, bundleId } : undefined;
 	const { data: windows } = useFlowWindows(undefined, undefined, filter);
 	const stats = useMemo(() => aggregateFlowByRepo(windows ?? [], 5), [windows]);
 
