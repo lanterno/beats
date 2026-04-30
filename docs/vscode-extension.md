@@ -12,10 +12,12 @@
 > `editor_language`, and `bundle_id` query params for server-side
 > filtering, and the web Insights page wires all three onto
 > click-to-filter rows in the "Flow by repo" / "Flow by language" /
-> "Flow by app" cards (filters AND-compose). The Insights filter
-> selection is persisted in the URL (`?repo=…&language=…&bundle=…`),
-> so a filtered view is bookmarkable and shareable. The same slice
-> is reachable from the terminal via `beatsd recent --repo …
+> "Flow by app" cards (filters AND-compose). Every filter on the
+> Insights page (the project + tag dropdowns and the click-to-filter
+> chips) is persisted in the URL —
+> `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view
+> is bookmarkable and shareable. The same per-window slice is
+> reachable from the terminal via `beatsd recent --repo …
 > --language … --bundle …`.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the

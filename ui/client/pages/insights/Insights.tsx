@@ -3,7 +3,7 @@
  * Analytics dashboard with summary stats, contribution heatmap,
  * daily rhythm chart, and top projects breakdown.
  */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
@@ -25,11 +25,13 @@ import { TopProjects } from "./TopProjects";
 import { WeeklyCard } from "./WeeklyCard";
 
 export default function Insights() {
-	const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
-	const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
-	// Filters set by clicking a row on FlowByRepo / FlowByLanguage / FlowByApp.
-	// Independent of the project filter — they compose AND-style at the API.
-	// Persisted in the URL so users can bookmark / share a filtered view.
+	// Every filter on this page is URL-persisted so the whole view (project +
+	// tag dropdowns + click-to-filter chips) is bookmarkable as one unit.
+	// Refreshing or sharing the URL reproduces the exact slice the user was
+	// looking at — the inconsistency of "chips persist but dropdowns reset"
+	// would surprise anyone who actually tries it.
+	const [selectedProjectId, setSelectedProjectId] = useUrlParam("project");
+	const [selectedTag, setSelectedTag] = useUrlParam("tag");
 	const [selectedRepo, setSelectedRepo] = useUrlParam("repo");
 	const [selectedLanguage, setSelectedLanguage] = useUrlParam("language");
 	const [selectedBundleId, setSelectedBundleId] = useUrlParam("bundle");
