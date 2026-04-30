@@ -1,8 +1,7 @@
 import 'dart:async';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'api_client.dart';
+import 'notification_dedupe.dart';
 import 'notifications.dart';
 
 /// Foreground polling loop that converts API state into local notifications.
@@ -21,12 +20,14 @@ class NotificationPoller {
   final ApiClient client;
   final NotificationsService notifications;
   Duration interval;
+  final NotificationDedupe _dedupe;
 
   NotificationPoller({
     required this.client,
     required this.notifications,
     this.interval = const Duration(minutes: 5),
-  });
+    NotificationDedupe? dedupe,
+  }) : _dedupe = dedupe ?? NotificationDedupe();
 
   Timer? _timer;
   bool _running = false;
@@ -60,7 +61,7 @@ class NotificationPoller {
       if (brief == null) return;
       final id = (brief['id'] as String?) ?? (brief['date'] as String?);
       if (id == null) return;
-      if (await _alreadyNotified('brief', id)) return;
+      if (await _dedupe.alreadyNotified('brief', id)) return;
       // Use the first ~80 chars of the brief body as a preview so the
       // notification reads like a real prompt, not just "you have a brief".
       final body = brief['body'] as String?;
@@ -70,7 +71,7 @@ class NotificationPoller {
         preview = trimmed.length > 80 ? '${trimmed.substring(0, 80)}…' : trimmed;
       }
       await notifications.notifyBriefAvailable(preview: preview);
-      await _markNotified('brief', id);
+      await _dedupe.markNotified('brief', id);
     } catch (_) {
       // Network blips, daemon offline, etc. — silent, retry next tick.
     }
@@ -82,21 +83,12 @@ class NotificationPoller {
       if (review == null) return;
       final date = review['date'] as String?;
       if (date == null) return;
-      if (await _alreadyNotified('review', date)) return;
+      if (await _dedupe.alreadyNotified('review', date)) return;
       await notifications.notifyReviewAvailable();
-      await _markNotified('review', date);
+      await _dedupe.markNotified('review', date);
     } catch (_) {
       // Same as above — best-effort.
     }
   }
 
-  static Future<bool> _alreadyNotified(String kind, String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('beats_notified_$kind') == id;
-  }
-
-  static Future<void> _markNotified(String kind, String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('beats_notified_$kind', id);
-  }
 }
