@@ -18,3 +18,9 @@ var ErrEventTapNotAvailable = errors.New("event tap not available")
 func StartEventTap() (getAndReset func() int64, stop func(), err error) {
 	return nil, nil, ErrEventTapNotAvailable
 }
+
+// ProbeEventTap is the non-darwin counterpart: always reports
+// "not available" since input-event counting is darwin-only.
+func ProbeEventTap() error {
+	return ErrEventTapNotAvailable
+}

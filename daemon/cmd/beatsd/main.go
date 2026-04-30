@@ -174,6 +174,11 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "status":
+		if err := runStatus(cfg); err != nil {
+			os.Exit(1)
+		}
+
 	case "version":
 		fmt.Printf("beatsd %s\n", version)
 
@@ -255,6 +260,7 @@ Commands:
   pair <code>   Exchange a pairing code for a device token
   run           Start the signal collector daemon
   doctor        Check pairing, API reachability, Accessibility permission, ports
+  status        Print whether a daemon is running, timer state, and API reachability
   unpair        Remove the device token from the keychain
   version       Print version info
 

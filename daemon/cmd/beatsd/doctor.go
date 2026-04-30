@@ -110,25 +110,19 @@ func checkEditorPort() (string, error) {
 	return fmt.Sprintf("%s available", addr), nil
 }
 
-// checkEventTap: is macOS Accessibility permission granted? On non-darwin
-// we report a stub-fallback note so the user knows the feature is darwin-only.
+// checkEventTap: is macOS Accessibility permission granted? Uses
+// ProbeEventTap rather than the full StartEventTap so doctor doesn't have
+// to spin up + tear down a CFRunLoop for a yes/no answer.
 func checkEventTap() (string, error) {
-	getAndReset, stop, err := collector.StartEventTap()
-	if err != nil {
-		// Non-darwin platforms always return ErrEventTapNotAvailable from
-		// the stub. Treat that as informational, not a failure — cadence
-		// just falls back to 0.5.
+	if err := collector.ProbeEventTap(); err != nil {
+		// Non-darwin platforms always report unavailable from the stub.
+		// Treat that as informational, not a failure — cadence just falls
+		// back to 0.5.
 		if strings.Contains(err.Error(), "not available on this platform") ||
 			err.Error() == "event tap not available" {
 			return "stub fallback (cadence will default to 0.5)", nil
 		}
 		return "", fmt.Errorf("%w — grant via System Settings → Privacy & Security → Accessibility", err)
 	}
-	if stop != nil {
-		stop()
-	}
-	if getAndReset != nil {
-		_ = getAndReset()
-	}
-	return "active (real input counting)", nil
+	return "available", nil
 }

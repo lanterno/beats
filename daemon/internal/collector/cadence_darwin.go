@@ -59,22 +59,22 @@ static int startTap() {
 }
 
 // Blocks: spins a CFRunLoop on the calling thread that pumps events into
-// tapCallback. Started on a background goroutine via cgo; stops when
-// stopTap() releases its run loop.
+// tapCallback. Started on a background goroutine via cgo. After
+// CFRunLoopRun returns (because stopTap signaled it to stop), this
+// function owns the teardown — releasing the tap and source on the same
+// thread that ran them avoids the cross-thread CFRelease race that bit
+// `beatsd doctor` (CFRunLoopStop on thread A while CFRelease on thread B
+// races against the run loop's exit-path touching the tap).
 static void runTapLoop() {
     tapRunLoop = CFRunLoopGetCurrent();
     CFRunLoopAddSource(tapRunLoop, sourceRef, kCFRunLoopCommonModes);
     CGEventTapEnable(tapRef, true);
     CFRunLoopRun();
-}
 
-static void stopTap() {
-    if (tapRunLoop != NULL) {
-        CFRunLoopStop(tapRunLoop);
-        tapRunLoop = NULL;
-    }
+    // Run loop exited. Tear everything down on this thread.
     if (tapRef != NULL) {
         CGEventTapEnable(tapRef, false);
+        CFRunLoopRemoveSource(tapRunLoop, sourceRef, kCFRunLoopCommonModes);
         CFRelease(tapRef);
         tapRef = NULL;
     }
@@ -82,6 +82,38 @@ static void stopTap() {
         CFRelease(sourceRef);
         sourceRef = NULL;
     }
+    tapRunLoop = NULL;
+}
+
+// stopTap signals the run loop to exit. Cleanup of the tap + source
+// happens inside runTapLoop after CFRunLoopRun returns — see the comment
+// above. Calling stopTap twice or before startTap is a no-op.
+static void stopTap() {
+    if (tapRunLoop != NULL) {
+        CFRunLoopStop(tapRunLoop);
+    }
+}
+
+// Cheap "would CGEventTapCreate succeed?" probe for `beatsd doctor`. Used
+// instead of starting + stopping the full run loop, which would hit the
+// teardown path needlessly. Returns 0 on success (tap was created and
+// immediately released), -1 if the OS refused (typically: no Accessibility
+// permission).
+static int probeEventTap() {
+    CGEventMask mask = (1 << kCGEventKeyDown);
+    CFMachPortRef probe = CGEventTapCreate(
+        kCGSessionEventTap,
+        kCGHeadInsertEventTap,
+        kCGEventTapOptionListenOnly,
+        mask,
+        tapCallback,
+        NULL
+    );
+    if (probe == NULL) {
+        return -1;
+    }
+    CFRelease(probe);
+    return 0;
 }
 
 static int64_t getAndResetCount() {
@@ -99,6 +131,17 @@ import (
 // permission to the daemon binary; the loop logs the upgrade hint once and
 // the cadence score defaults to 0.5.
 var ErrEventTapNotAvailable = errors.New("event tap not available — grant Accessibility permission to enable cadence tracking")
+
+// ProbeEventTap returns nil if CGEventTapCreate would succeed right now —
+// i.e. Accessibility permission is granted — and ErrEventTapNotAvailable
+// otherwise. Non-blocking; suitable for diagnostics commands like
+// `beatsd doctor` that just want to know "would the cadence path work?".
+func ProbeEventTap() error {
+	if C.probeEventTap() != 0 {
+		return ErrEventTapNotAvailable
+	}
+	return nil
+}
 
 // StartEventTap installs a CGEventTap that counts input events and returns
 // (getAndReset, stop, nil) on success. The tap is passive
