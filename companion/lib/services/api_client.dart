@@ -176,6 +176,21 @@ class ApiClient {
     return list.cast<Map<String, dynamic>>();
   }
 
+  // ---- Analytics ----
+
+  /// Returns one entry per day in the given year (default: current year).
+  /// Each entry: {date: 'YYYY-MM-DD', total_minutes: int, session_count: int, project_count: int}.
+  Future<List<Map<String, dynamic>>> getHeatmap({int? year}) async {
+    final query = year != null ? '?year=$year' : '';
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/analytics/heatmap$query'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) return [];
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
   // ---- Flow Score ----
 
   Future<List<Map<String, dynamic>>> getFlowWindows(String start, String end) async {

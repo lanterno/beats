@@ -4,7 +4,7 @@
 
 ## Current State
 
-The foundation is in place: the amber color palette (`BeatsColors`), DM Serif / DM Sans / JetBrains Mono typography (`BeatsType`), the frosted-glass custom bottom nav, `StaggeredEntrance`, fade+slide tab transitions, the radial-gradient running state on the Timer screen, the breathing glow behind the Flow ring at score ≥ 0.7, animated category bars, and the cardless "text flows on the page" treatment for Coach are all live.
+The foundation is in place: the amber color palette (`BeatsColors`), DM Serif / DM Sans / JetBrains Mono typography (`BeatsType`), the frosted-glass custom bottom nav, `StaggeredEntrance`, fade+slide tab transitions, the radial-gradient running state on the Timer screen, the today/week/streak stats row below the timer, the breathing glow behind the Flow ring at score ≥ 0.7, animated category bars, the cardless "text flows on the page" treatment for Coach, an inline editor for evening review answers with `X OF N ANSWERED` progress, and the daily mood picker are all live.
 
 What's left is detail polish across individual screens.
 
@@ -41,9 +41,10 @@ The radial-gradient running state and stagger entries already ship. Still missin
 
 ### Stats Row
 
-- Add a stats row below the timer with **today's total** and **this week's total** (fetch from API; currently absent)
-- Add **week-over-week comparison arrow** (↑ 12% or ↓ 5%) matching the web's `SidebarStats`
-- Add **streak display** when streak > 0 (flame emoji + "N-day streak")
+The today / week / streak stats row is live. Remaining nice-to-haves:
+
+- Add a **week-over-week comparison arrow** (↑ 12% or ↓ 5%) matching the web's `SidebarStats`
+- Restyle the streak when it's high (e.g. flame glyph at ≥ 7 days)
 
 ### Project Picker Sheet
 
@@ -72,8 +73,7 @@ Numbered questions, mood picker with bouncing scale, the colored-ring selection 
 
 ### Evening Review
 
-- Each question should expand into a **text input area** on tap (currently read-only — required for actually answering and `POST /api/coach/review`)
-- Add a **subtle progress indicator** — "1 of 3 answered" at the top
+Inline editor with debounce-save and an `X OF N ANSWERED` progress indicator are shipped. No further design work pending here.
 
 ### Mood Picker
 
@@ -121,14 +121,14 @@ The Settings tab still uses Material defaults (`Card`, `Chip`, `ListTile`) — o
 
 | Phase | Impact | Effort |
 |-------|--------|--------|
-| **3 — Timer stats row + picker polish** | High | 1 day |
-| **5 — Answerable review + mood notes/sparkline** | Medium-High (review is unusable read-only) | 1 day |
+| **3 — Project picker polish (recents, spring entrance)** | Medium-High | 0.5 day |
+| **5 — Mood notes + sparkline** | Medium | 0.5 day |
 | **2 — Remaining micro-interactions** | Medium | 0.5 day |
 | **4 — Flow ring/timeline refinements** | Medium | 0.5 day |
 | **6 — Intentions polish + completion FX** | Medium | 0.5 day |
 | **7 — Settings/Pairing visual rewrite** | Low but very visible to first-time users | 1 day |
 
-**Total: ~4.5 days of polish remaining.**
+**Total: ~3.5 days of polish remaining.**
 
 ---
 

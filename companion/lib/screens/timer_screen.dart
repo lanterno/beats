@@ -42,6 +42,12 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   DateTime? _customStartTime;
   DateTime? _customStopTime;
 
+  // Stats row (today, this week, current streak) computed from the heatmap.
+  int _todayMinutes = 0;
+  int _weekMinutes = 0;
+  int _streakDays = 0;
+  bool _statsLoaded = false;
+
   late AnimationController _pulseController;
 
   @override
@@ -51,7 +57,11 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       vsync: this, duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
     _refresh();
-    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
+    _refreshStats();
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _refresh();
+      _refreshStats();
+    });
   }
 
   Future<void> _refresh() async {
@@ -97,6 +107,70 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   }
 
   void _stopTicker() { _ticker?.cancel(); _ticker = null; }
+
+  Future<void> _refreshStats() async {
+    try {
+      final today = DateTime.now();
+      final entries = await widget.client.getHeatmap(year: today.year);
+      // The heatmap is keyed by 'YYYY-MM-DD' strings — index it for O(1) lookup.
+      final byDate = <String, int>{
+        for (final e in entries)
+          if (e['date'] is String) e['date'] as String: (e['total_minutes'] as num?)?.toInt() ?? 0,
+      };
+
+      final todayKey = _dateKey(today);
+      final todayMins = byDate[todayKey] ?? 0;
+
+      // Week = Monday→Sunday containing today (DateTime.weekday: Mon=1, Sun=7).
+      final weekStart = DateTime(today.year, today.month, today.day)
+          .subtract(Duration(days: today.weekday - 1));
+      var weekMins = 0;
+      for (var i = 0; i < 7; i++) {
+        weekMins += byDate[_dateKey(weekStart.add(Duration(days: i)))] ?? 0;
+      }
+
+      // Streak: walk back day-by-day, counting consecutive days with minutes > 0.
+      // Today is forgiven if it has zero minutes (so the streak doesn't drop until
+      // the user has actually missed a day).
+      var streak = 0;
+      var cursor = DateTime(today.year, today.month, today.day);
+      var first = true;
+      while (true) {
+        final mins = byDate[_dateKey(cursor)] ?? 0;
+        if (mins > 0) {
+          streak++;
+        } else if (!first) {
+          break;
+        }
+        first = false;
+        cursor = cursor.subtract(const Duration(days: 1));
+        // Bound the walk to a year to avoid runaway loops on garbage data.
+        if (today.difference(cursor).inDays > 365) break;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _todayMinutes = todayMins;
+        _weekMinutes = weekMins;
+        _streakDays = streak;
+        _statsLoaded = true;
+      });
+    } catch (_) {
+      // Stats are non-critical — leave them stale on transient failures.
+    }
+  }
+
+  String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _formatMinutes(int minutes) {
+    if (minutes <= 0) return '0m';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
+  }
 
   Future<void> _handleStart() async {
     if (_selectedProjectId == null) return;
@@ -146,6 +220,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
         ));
       }
       await _refresh();
+      await _refreshStats();
     } catch (e) { setState(() => _error = '$e'); if (was) await _refresh(); }
   }
 
@@ -270,6 +345,15 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
                   child: _running ? _buildStopSection() : _buildStartSection(),
                 ),
 
+                // ── Stats row (today / week / streak) ──
+                if (_statsLoaded) ...[
+                  const SizedBox(height: 40),
+                  StaggeredEntrance(
+                    delay: const Duration(milliseconds: 180),
+                    child: _buildStatsRow(),
+                  ),
+                ],
+
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -310,6 +394,59 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             color: projColor, letterSpacing: 2)),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatsRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          Expanded(child: _statCell(label: 'TODAY', value: _formatMinutes(_todayMinutes))),
+          _statDivider(),
+          Expanded(child: _statCell(label: 'WEEK', value: _formatMinutes(_weekMinutes))),
+          _statDivider(),
+          Expanded(
+            child: _statCell(
+              label: 'STREAK',
+              value: _streakDays > 0 ? '$_streakDays${_streakDays == 1 ? ' DAY' : ' DAYS'}' : '—',
+              accent: _streakDays > 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCell({required String label, required String value, bool accent = false}) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 16,
+            fontWeight: FontWeight.w300,
+            color: accent ? BeatsColors.amber : BeatsColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: BeatsType.label.copyWith(
+            fontSize: 9,
+            color: BeatsColors.textTertiary,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statDivider() {
+    return Container(
+      width: 1,
+      height: 32,
+      color: BeatsColors.border.withValues(alpha: 0.5),
     );
   }
 
