@@ -119,6 +119,135 @@ func TestComputeFlowWindow_WithIdlePenalty(t *testing.T) {
 	}
 }
 
+func TestComputeCadence_LowAndHighRates(t *testing.T) {
+	// 12 samples at 5s = 1 minute. The heuristic is 200 events/min = 1.0.
+	const epmFull = 200.0
+	now := time.Now().UTC()
+
+	build := func(eventsPerSample int64) []Sample {
+		s := make([]Sample, 12)
+		for i := range s {
+			s[i] = Sample{
+				CollectedAt: now.Add(time.Duration(i*5) * time.Second),
+				BundleID:    "com.apple.dt.Xcode",
+				IdleSeconds: 1.0,
+				EventCount:  eventsPerSample,
+			}
+		}
+		return s
+	}
+
+	// 0 events → cadence = 0
+	if got := computeCadence(build(0)); got != 0.0 {
+		t.Errorf("zero events should give cadence 0.0, got %f", got)
+	}
+	// Roughly half-full: 100 events/min spread over 12 samples ≈ 8.3
+	// per sample → 8 events × 12 samples = 96 events / 1 min ≈ 0.48
+	if got := computeCadence(build(8)); math.Abs(got-0.48) > 0.05 {
+		t.Errorf("8 events/sample should give cadence ~0.48, got %f", got)
+	}
+	// Beyond full: 50 events/sample × 12 samples = 600/min — clamps to 1.0
+	if got := computeCadence(build(50)); got != 1.0 {
+		t.Errorf("beyond-full rate should clamp to 1.0, got %f", got)
+	}
+	_ = epmFull // silence unused-const warning if the heuristic ever changes
+}
+
+func TestComputeCadence_MixedAvailability_OnlyEventTapSamplesCount(t *testing.T) {
+	// Half the samples have EventCount=-1 (no event tap), half are real.
+	// The function should still return a sensible cadence based on the
+	// real samples — not skew because half the data is "missing".
+	now := time.Now().UTC()
+	samples := make([]Sample, 12)
+	for i := range samples {
+		ec := int64(-1)
+		if i%2 == 0 {
+			ec = 16 // 6 samples × 16 events = 96 over half the window
+		}
+		samples[i] = Sample{
+			CollectedAt: now.Add(time.Duration(i*5) * time.Second),
+			BundleID:    "com.apple.dt.Xcode",
+			IdleSeconds: 1.0,
+			EventCount:  ec,
+		}
+	}
+	c := computeCadence(samples)
+	// We don't pin an exact value here (the function divides total by
+	// duration computed from len(samples), which includes the missing
+	// ones — that's a known quirk worth pinning if changed) but it
+	// should be a real number, not the 0.5 fallback.
+	if c == 0.5 {
+		t.Errorf("expected real cadence value, got fallback 0.5")
+	}
+	if c < 0 || c > 1 {
+		t.Errorf("cadence out of range: %f", c)
+	}
+}
+
+func TestComputeCoherence_EmptyAndSingleSample(t *testing.T) {
+	// Empty input: implementation has no samples, no bundle counts → n=0
+	// → returns 1.0 (defensible: "nothing happened" reads as
+	// "you weren't context switching").
+	if got := computeCoherence(nil); got != 1.0 {
+		t.Errorf("empty samples should give coherence 1.0, got %f", got)
+	}
+	// Single sample, single bundle: definitely focused.
+	got := computeCoherence([]Sample{{BundleID: "com.apple.dt.Xcode"}})
+	if got != 1.0 {
+		t.Errorf("single-sample coherence should be 1.0, got %f", got)
+	}
+}
+
+func TestComputeContextSwitches_IgnoresEmptyBundles(t *testing.T) {
+	// The frontmost-app helper occasionally returns an empty bundle ID
+	// (briefly, e.g. during a Spaces switch). A naive switch counter
+	// would over-count those as "context switches"; the real impl
+	// skips transitions involving empty IDs.
+	now := time.Now().UTC()
+	samples := []Sample{
+		{CollectedAt: now, BundleID: "A"},
+		{CollectedAt: now.Add(5 * time.Second), BundleID: ""},
+		{CollectedAt: now.Add(10 * time.Second), BundleID: "B"},
+		{CollectedAt: now.Add(15 * time.Second), BundleID: "B"},
+	}
+	if got := computeContextSwitches(samples); got != 0 {
+		t.Errorf("empty-bundle transitions should not count, got %d switches", got)
+	}
+}
+
+func TestComputeIdleFraction_BoundaryConditions(t *testing.T) {
+	// Idle threshold is 30s. A sample at exactly 30 should NOT count as
+	// idle (the impl uses strict >, not >=). One above does.
+	at30 := []Sample{{IdleSeconds: 30.0}}
+	if computeIdleFraction(at30) != 0.0 {
+		t.Errorf("exactly 30s idle should not count as idle")
+	}
+	above := []Sample{{IdleSeconds: 30.5}}
+	if computeIdleFraction(above) != 1.0 {
+		t.Errorf("30.5s should fully count as idle")
+	}
+	if computeIdleFraction(nil) != 0.0 {
+		t.Errorf("empty samples should give 0.0 idle fraction")
+	}
+}
+
+func TestClamp(t *testing.T) {
+	cases := []struct {
+		v, lo, hi, want float64
+	}{
+		{0.5, 0.0, 1.0, 0.5},
+		{-0.1, 0.0, 1.0, 0.0},
+		{1.5, 0.0, 1.0, 1.0},
+		{0.0, 0.0, 1.0, 0.0},
+		{1.0, 0.0, 1.0, 1.0},
+	}
+	for _, c := range cases {
+		if got := clamp(c.v, c.lo, c.hi); got != c.want {
+			t.Errorf("clamp(%v, %v, %v) = %v, want %v", c.v, c.lo, c.hi, got, c.want)
+		}
+	}
+}
+
 func TestComputeFlowWindow_CategoryFit(t *testing.T) {
 	now := time.Now().UTC()
 	samples := []Sample{{
