@@ -171,6 +171,8 @@ To enable accurate cadence tracking:
 
 The daemon continues to work without it — cadence is 40% of the score, but coherence (40%) and category fit (20%) still provide useful signal.
 
+`beatsd doctor` runs the same check non-fatally and prints a one-line status alongside the other prerequisites (device token, API reachability, editor port). Useful for first-run setup and for triaging "why isn't my flow score moving?" — the doctor row will read `stub fallback` instead of `active (real input counting)` if the permission isn't granted.
+
 ## Risks
 
 | Risk | Mitigation |

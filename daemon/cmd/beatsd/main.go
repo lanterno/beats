@@ -169,6 +169,11 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "doctor":
+		if err := runDoctor(cfg); err != nil {
+			os.Exit(1)
+		}
+
 	case "version":
 		fmt.Printf("beatsd %s\n", version)
 
@@ -249,6 +254,7 @@ func printUsage() {
 Commands:
   pair <code>   Exchange a pairing code for a device token
   run           Start the signal collector daemon
+  doctor        Check pairing, API reachability, Accessibility permission, ports
   unpair        Remove the device token from the keychain
   version       Print version info
 
