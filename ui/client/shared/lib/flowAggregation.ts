@@ -4,48 +4,70 @@
  */
 import type { FlowWindow } from "@/shared/api";
 
-export interface RepoStat {
-	repo: string;
+/**
+ * One bucket of aggregated flow data. The `key` field is generic — it could
+ * be a repo path, language id, dominant category, branch, or anything else
+ * the caller chooses to group by.
+ */
+export interface FlowGroupStat {
+	key: string;
 	avg: number;
 	minutes: number;
 	count: number;
 }
 
+/** Backwards-compat alias used by FlowByRepo before the helper was generalized. */
+export type RepoStat = FlowGroupStat & { repo: string };
+
 /**
- * Groups flow windows by editor_repo and returns the top [limit] repos
- * sorted by tracked minutes (count of windows that hit each repo).
+ * Groups flow windows by an arbitrary string field extracted via [keyOf]
+ * and returns the top [limit] buckets sorted by tracked minutes.
  *
- * Windows without an editor_repo are skipped — they represent slices
- * where no editor heartbeat was active, which would group together as
- * a meaningless "(unknown)" bucket.
+ * Windows where [keyOf] returns null / undefined / "" are skipped — they'd
+ * otherwise collapse into a meaningless "(unknown)" bucket.
  *
  * Each window represents ~1 minute of activity (the daemon's default
- * flush interval), so we use the count of windows as the minutes
- * approximation. Avg is the unweighted mean of flow_score across
- * windows in the bucket.
+ * flush interval), so window count doubles as a minutes approximation.
+ * Avg is the unweighted mean of flow_score across windows in the bucket.
  */
-export function aggregateFlowByRepo(windows: FlowWindow[], limit = 5): RepoStat[] {
+export function aggregateFlowBy(
+	windows: FlowWindow[],
+	keyOf: (w: FlowWindow) => string | null | undefined,
+	limit = 5,
+): FlowGroupStat[] {
 	if (windows.length === 0) return [];
 
-	const byRepo = new Map<string, { sum: number; count: number }>();
+	const groups = new Map<string, { sum: number; count: number }>();
 	for (const w of windows) {
-		const repo = w.editor_repo;
-		if (!repo) continue;
-		const cur = byRepo.get(repo) ?? { sum: 0, count: 0 };
+		const key = keyOf(w);
+		if (!key) continue;
+		const cur = groups.get(key) ?? { sum: 0, count: 0 };
 		cur.sum += w.flow_score;
 		cur.count += 1;
-		byRepo.set(repo, cur);
+		groups.set(key, cur);
 	}
 
-	return Array.from(byRepo.entries())
-		.map(([repo, { sum, count }]) => ({
-			repo,
+	return Array.from(groups.entries())
+		.map(([key, { sum, count }]) => ({
+			key,
 			avg: sum / count,
 			minutes: count,
 			count,
 		}))
 		.sort((a, b) => b.minutes - a.minutes)
 		.slice(0, limit);
+}
+
+/**
+ * Convenience wrapper for the most common case (group by editor_repo).
+ * Preserves the original `repo` field name on the return shape so callers
+ * predating the generic helper don't have to change.
+ */
+export function aggregateFlowByRepo(windows: FlowWindow[], limit = 5): RepoStat[] {
+	return aggregateFlowBy(windows, (w) => w.editor_repo, limit).map((g) => ({
+		...g,
+		repo: g.key,
+	}));
 }
 
 /**

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { FlowWindow } from "@/shared/api";
-import { aggregateFlowByRepo, shortRepoPath, summarizeFlow } from "./flowAggregation";
+import {
+	aggregateFlowBy,
+	aggregateFlowByRepo,
+	shortRepoPath,
+	summarizeFlow,
+} from "./flowAggregation";
 
 // Helper: build a FlowWindow with sensible defaults plus the fields the
 // aggregation actually reads. Keeps the test bodies focused on the
@@ -83,6 +88,44 @@ describe("aggregateFlowByRepo", () => {
 		const stats = aggregateFlowByRepo(windows);
 		expect(stats).toHaveLength(1);
 		expect(stats[0].repo).toBe("/a");
+	});
+});
+
+describe("aggregateFlowBy (generic)", () => {
+	it("groups by an arbitrary keyOf function — language", () => {
+		const windows = [
+			w({ flow_score: 0.5, editor_language: "go" }),
+			w({ flow_score: 0.7, editor_language: "go" }),
+			w({ flow_score: 0.9, editor_language: "rust" }),
+		];
+		const stats = aggregateFlowBy(windows, (win) => win.editor_language);
+		expect(stats).toHaveLength(2);
+		const go = stats.find((s) => s.key === "go");
+		expect(go?.avg).toBeCloseTo(0.6);
+		expect(go?.minutes).toBe(2);
+	});
+
+	it("groups by dominant_category", () => {
+		const windows = [
+			w({ flow_score: 0.4, dominant_category: "browser" }),
+			w({ flow_score: 0.8, dominant_category: "coding" }),
+			w({ flow_score: 0.9, dominant_category: "coding" }),
+		];
+		const stats = aggregateFlowBy(windows, (win) => win.dominant_category);
+		expect(stats[0].key).toBe("coding"); // sorts by minute count
+		expect(stats[0].minutes).toBe(2);
+	});
+
+	it("skips windows where keyOf returns undefined / null / empty", () => {
+		const windows = [
+			w({ editor_language: undefined }),
+			w({ editor_language: null }),
+			w({ editor_language: "" }),
+			w({ editor_language: "go" }),
+		];
+		const stats = aggregateFlowBy(windows, (win) => win.editor_language);
+		expect(stats).toHaveLength(1);
+		expect(stats[0].key).toBe("go");
 	});
 });
 
