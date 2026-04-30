@@ -115,6 +115,38 @@ export type RhythmSlot = z.infer<typeof RhythmSlotSchema>;
 export const HeatmapDayListSchema = z.array(HeatmapDaySchema);
 export const RhythmSlotListSchema = z.array(RhythmSlotSchema);
 
+// ----------------------------------------------------------------------------
+// Flow window schemas
+// ----------------------------------------------------------------------------
+
+/**
+ * One flow-state window from the daemon's signal collector. Each window
+ * is typically 1 minute of aggregated desktop activity. The composite
+ * `flow_score` is a weighted blend of cadence, coherence, and category
+ * fit — see the daemon's collector/scorer.go.
+ */
+export const FlowWindowSchema = z.object({
+	id: z.string(),
+	window_start: z.string(),
+	window_end: z.string(),
+	flow_score: z.number(),
+	cadence_score: z.number(),
+	coherence_score: z.number(),
+	category_fit_score: z.number(),
+	idle_fraction: z.number(),
+	dominant_bundle_id: z.string(),
+	dominant_category: z.string(),
+	context_switches: z.number(),
+	active_project_id: z.string().nullable(),
+	editor_repo: z.string().nullable().optional(),
+	editor_branch: z.string().nullable().optional(),
+	editor_language: z.string().nullable().optional(),
+});
+
+export type FlowWindow = z.infer<typeof FlowWindowSchema>;
+
+export const FlowWindowListSchema = z.array(FlowWindowSchema);
+
 // ============================================================================
 // Intention schemas
 // ============================================================================

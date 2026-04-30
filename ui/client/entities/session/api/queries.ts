@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
-import type { Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
+import type { FlowWindow, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -20,6 +20,7 @@ import {
 	fetchAllTags,
 	fetchBeats,
 	fetchDailyRhythm,
+	fetchFlowWindows,
 	fetchGaps,
 	fetchHeatmap,
 	updateBeat,
@@ -288,6 +289,22 @@ export function useThisWeekSessions() {
 				.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 		},
 		enabled: !!allBeats,
+		staleTime: 30_000,
+	});
+}
+
+/**
+ * Hook to fetch flow windows in a date range. Used by the Insights "Flow"
+ * card to render today's score sparkline. Defaults to today (00:00 → now).
+ */
+export function useFlowWindows(start?: string, end?: string) {
+	const now = new Date();
+	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+	const effectiveStart = start ?? todayStart;
+	const effectiveEnd = end ?? now.toISOString();
+	return useQuery({
+		queryKey: [...sessionKeys.all, "flow-windows", effectiveStart, effectiveEnd],
+		queryFn: (): Promise<FlowWindow[]> => fetchFlowWindows(effectiveStart, effectiveEnd),
 		staleTime: 30_000,
 	});
 }

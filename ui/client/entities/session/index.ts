@@ -18,6 +18,7 @@ export {
 	useAllCurrentWeekSessions,
 	useAllTags,
 	useDailyRhythm,
+	useFlowWindows,
 	useGaps,
 	useHeatmap,
 	useLastWeekTotal,

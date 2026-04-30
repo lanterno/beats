@@ -3,9 +3,10 @@
  * Low-level API calls for sessions (beats) and analytics.
  */
 
-import type { ApiBeat, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
+import type { ApiBeat, FlowWindow, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
 import {
 	ApiBeatListSchema,
+	FlowWindowListSchema,
 	GapListSchema,
 	get,
 	HeatmapDayListSchema,
@@ -73,4 +74,14 @@ export async function fetchAllTags(): Promise<string[]> {
 export async function fetchGaps(targetDate: string): Promise<Gap[]> {
 	const data = await get<unknown>(`/api/analytics/gaps?target_date=${targetDate}`);
 	return parseApiResponse(GapListSchema, data);
+}
+
+/**
+ * Fetch flow windows in a date range. Each window is ~1 minute of
+ * aggregated desktop activity emitted by the daemon's collector.
+ */
+export async function fetchFlowWindows(start: string, end: string): Promise<FlowWindow[]> {
+	const url = `/api/signals/flow-windows?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+	const data = await get<unknown>(url);
+	return parseApiResponse(FlowWindowListSchema, data);
 }
