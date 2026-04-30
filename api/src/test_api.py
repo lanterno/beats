@@ -1153,8 +1153,11 @@ class TestMultiUserIsolation:
         token = sm.create_session_token(user_id, email)
         return {"Authorization": f"Bearer {token}"}
 
-    def test_projects_isolated_between_users(self):
-        """Projects created by one user are not visible to another."""
+    def _seed_users(self, *emails: str) -> list[str]:
+        """Insert N users via direct DB writes. Returns their ids in the
+        same order they were passed. Cheaper + more deterministic than
+        going through the WebAuthn registration flow for every isolation
+        test that needs more than one user."""
         import os
 
         from bson import ObjectId
@@ -1165,19 +1168,17 @@ class TestMultiUserIsolation:
         sync_client = MongoClient(dsn)
         db = sync_client[db_name]
 
-        # Create two users
-        user1_id = str(ObjectId())
-        user2_id = str(ObjectId())
-        for uid, email in [(user1_id, "user1@test.com"), (user2_id, "user2@test.com")]:
-            db.users.insert_one(
-                {
-                    "_id": ObjectId(uid),
-                    "email": email,
-                    "display_name": None,
-                }
-            )
+        ids: list[str] = []
+        for email in emails:
+            uid = str(ObjectId())
+            ids.append(uid)
+            db.users.insert_one({"_id": ObjectId(uid), "email": email, "display_name": None})
         sync_client.close()
+        return ids
 
+    def test_projects_isolated_between_users(self):
+        """Projects created by one user are not visible to another."""
+        user1_id, user2_id = self._seed_users("user1@test.com", "user2@test.com")
         h1 = self._make_headers(user1_id, "user1@test.com")
         h2 = self._make_headers(user2_id, "user2@test.com")
 
@@ -1196,6 +1197,79 @@ class TestMultiUserIsolation:
         # User 2 does NOT see it
         projects_u2 = client.get("/api/projects/", headers=h2).json()
         assert not any(p["name"] == "user1-project" for p in projects_u2)
+
+    def test_flow_windows_isolated_between_users(self):
+        """Flow windows posted by one user's daemon don't leak to another.
+
+        This is the safety net for the signals pipeline — a regression in
+        the user-scoping query (e.g. forgetting `_q()` on a list_by_range
+        call) would silently expose private flow data across accounts.
+        """
+        user1_id, user2_id = self._seed_users("flow1@test.com", "flow2@test.com")
+        h1 = self._make_headers(user1_id, "flow1@test.com")
+        h2 = self._make_headers(user2_id, "flow2@test.com")
+
+        # User 1 pairs a device. The session-mode helper above doesn't
+        # exercise the device-token flow, so do the explicit pairing.
+        resp = client.post("/api/device/pair/code", headers=h1)
+        assert resp.status_code == 200, resp.json()
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        assert resp.status_code == 200
+        u1_device = {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+        # User 1's daemon emits a unique-scoring flow window so we can
+        # spot it by value alone in user 2's read.
+        now = datetime.now(UTC)
+        resp = client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": (now - timedelta(minutes=1)).isoformat(),
+                "window_end": now.isoformat(),
+                "flow_score": 0.9123,  # distinctive sentinel
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.0,
+                "dominant_bundle_id": "com.user1.private",
+                "dominant_category": "coding",
+                "editor_repo": "/tmp/user1-private-workspace",
+            },
+            headers=u1_device,
+        )
+        assert resp.status_code == 201
+
+        # User 2 reads back over the same time range. Should see ZERO of
+        # user 1's windows — neither the score, the bundle, nor the repo
+        # path.
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+            },
+            headers=h2,
+        )
+        assert resp.status_code == 200
+        u2_windows = resp.json()
+        for w in u2_windows:
+            assert w["flow_score"] != 0.9123, f"user2 saw user1's distinctive flow window: {w}"
+            assert w["dominant_bundle_id"] != "com.user1.private"
+            assert w.get("editor_repo") != "/tmp/user1-private-workspace"
+
+        # Sanity: even with the project_id / editor_repo filters that
+        # skip the date range path, isolation must still hold.
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "editor_repo": "/tmp/user1-private-workspace",
+            },
+            headers=h2,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == [], "filter must not bypass user scoping"
 
 
 class TestDevicePairingAPI:
