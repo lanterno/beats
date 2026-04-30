@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../services/api_client.dart';
 import '../services/recent_projects.dart';
 import '../theme/beats_theme.dart';
+import '../theme/press_scale.dart';
 import '../theme/staggered_entrance.dart';
 
 List<int> _hexToRgb(String? hex) {
@@ -51,6 +52,10 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   int _weekMinutes = 0;
   int _streakDays = 0;
   bool _statsLoaded = false;
+
+  // Drives a brief horizontal shake on the stop button when the user taps it
+  // before the session has had a chance to be meaningful.
+  double _stopShake = 0.0;
 
   late AnimationController _pulseController;
 
@@ -206,6 +211,34 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       }
       await _refresh();
     } catch (e) { setState(() => _error = '$e'); await _refresh(); }
+  }
+
+  /// Threshold under which a stop tap looks accidental — sub-5s sessions
+  /// almost always mean "I just hit Start by accident" rather than a
+  /// deliberate end. The first early tap shakes the button; a second tap
+  /// goes through.
+  static const _accidentalStopThreshold = Duration(seconds: 5);
+
+  bool _shakeArmed = true;
+
+  void _handleStopOrShake() {
+    final elapsed = _elapsed;
+    if (_shakeArmed && elapsed < _accidentalStopThreshold) {
+      // Shake: nudge the button right, then back.
+      setState(() {
+        _shakeArmed = false;
+        _stopShake = _stopShake == 0 ? 8 : -_stopShake;
+      });
+      Future.delayed(const Duration(milliseconds: 320), () {
+        if (mounted) setState(() => _stopShake = 0);
+      });
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _shakeArmed = true;
+      });
+      return;
+    }
+    _shakeArmed = true;
+    _handleStop();
   }
 
   Future<void> _handleStop() async {
@@ -546,7 +579,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     return Column(
       children: [
         // Project selector
-        GestureDetector(
+        PressScale(
           onTap: _showProjectPicker,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -580,7 +613,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
         const SizedBox(height: 16),
 
         // Start button
-        GestureDetector(
+        PressScale(
           onTap: _selectedProjectId != null ? _handleStart : null,
           child: Container(
             width: double.infinity,
@@ -635,26 +668,38 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   Widget _buildStopSection() {
     return Column(
       children: [
-        // Stop button
-        GestureDetector(
-          onTap: _handleStop,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: BoxDecoration(
-              color: BeatsColors.red,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(width: 14, height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.white, borderRadius: BorderRadius.circular(2))),
-                const SizedBox(width: 10),
-                Text('Stop', style: BeatsType.button.copyWith(
-                  fontSize: 16, color: Colors.white)),
-              ],
+        // Stop button — wrapped in a TweenAnimationBuilder driven by
+        // _stopShake so an early tap (<5s) produces a brief horizontal shake
+        // instead of immediately stopping the timer.
+        TweenAnimationBuilder<double>(
+          key: ValueKey(_stopShake),
+          tween: Tween(begin: 0.0, end: _stopShake),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.elasticIn,
+          builder: (_, t, child) => Transform.translate(
+            offset: Offset(t, 0),
+            child: child,
+          ),
+          child: PressScale(
+            onTap: _handleStopOrShake,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: BeatsColors.red,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(width: 14, height: 14,
+                    decoration: BoxDecoration(
+                      color: Colors.white, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 10),
+                  Text('Stop', style: BeatsType.button.copyWith(
+                    fontSize: 16, color: Colors.white)),
+                ],
+              ),
             ),
           ),
         ),

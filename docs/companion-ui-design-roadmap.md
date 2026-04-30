@@ -12,11 +12,8 @@ What's left is detail polish across individual screens.
 
 ## Phase 2 — Motion & Transitions (remaining)
 
-Tab transitions and stagger entries already work. Outstanding micro-interactions:
+Tab transitions and stagger entries already work. Project card and Start/Stop buttons now use the shared `PressScale` widget for a tactile press-down. The Stop button shakes (elastic-in, ±8px) on the first tap inside a sub-5s session and only stops on the second tap. Outstanding micro-interactions:
 
-- **Project card tap**: slight scale-down (0.97) on press, spring back on release
-- **Start button**: pulse glow animation on hover/long-press before confirming
-- **Stop button**: brief shake animation if tapped too quickly (< 5 seconds into a session)
 - **Mood emoji tap**: extend the existing scale to a true 1.0 → 1.2 → 1.0 bounce
 - **Pull-to-refresh**: custom indicator (currently the default with `BeatsColors.amber`)
 
