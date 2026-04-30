@@ -1,0 +1,65 @@
+name: Release VS Code Extension
+# Triggers on the same tag-push as the daemon release. Builds the
+# integrations/vscode-beats extension into a .vsix and uploads it to the
+# GitHub release that release-daemon.yml is creating in parallel.
+#
+# Install path for users:
+#   curl -L -o beats-vscode.vsix \
+#     https://github.com/<repo>/releases/download/<tag>/beats-vscode-<version>.vsix
+#   code --install-extension beats-vscode.vsix
+#
+# Marketplace publish (vsce publish) is intentionally out of scope —
+# uploading the artifact alongside daemon releases gets us most of the
+# value without needing a personal access token.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # to upload the .vsix to the release
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/vscode-beats
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm install
+
+      - run: npm run compile
+
+      # vsce is already a devDependency; this writes a .vsix into the
+      # working directory whose name is `<name>-<version>.vsix` per the
+      # extension's package.json. Match that pattern in the upload step.
+      - run: npx vsce package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beats-vscode-vsix
+          path: integrations/vscode-beats/*.vsix
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: beats-vscode-vsix
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.vsix
+          # release-daemon.yml is the primary author of the release body;
+          # we just append our artifact. Setting `append_body: false`
+          # would clobber it, so leave it alone.
+          fail_on_unmatched_files: true

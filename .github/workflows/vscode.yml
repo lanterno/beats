@@ -1,0 +1,30 @@
+name: VS Code Extension
+on:
+  push:
+    paths: [integrations/vscode-beats/**]
+  pull_request:
+    paths: [integrations/vscode-beats/**]
+
+jobs:
+  build:
+    name: Compile + Package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/vscode-beats
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run compile
+      # Package as a sanity check — catches packaging-level issues
+      # (missing files in .vscodeignore, version conflicts) on every PR
+      # without needing a tag-driven release.
+      - run: npx vsce package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beats-vscode-vsix-snapshot
+          path: integrations/vscode-beats/*.vsix
+          retention-days: 7
