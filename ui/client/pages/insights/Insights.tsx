@@ -11,6 +11,7 @@ import { formatDuration } from "@/shared/lib";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
 import { EstimationAccuracy } from "./EstimationAccuracy";
+import { FlowByRepo } from "./FlowByRepo";
 import { FlowToday } from "./FlowToday";
 import { MoodCorrelation } from "./MoodCorrelation";
 import { PatternCards } from "./PatternCards";
@@ -124,7 +125,12 @@ export default function Insights() {
 			{!selectedProjectId && !selectedTag && <PatternCards />}
 
 			{/* Today's flow score from the daemon */}
-			{!selectedProjectId && !selectedTag && <FlowToday />}
+			{!selectedProjectId && !selectedTag && (
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+					<FlowToday />
+					<FlowByRepo />
+				</div>
+			)}
 
 			<ContributionHeatmap projectId={selectedProjectId} tag={selectedTag} />
 
