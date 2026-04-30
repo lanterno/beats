@@ -25,4 +25,9 @@ type FlowWindow struct {
 	DominantCategory string
 	ContextSwitches  int
 	ActiveProjectID  string // empty if no timer running
+	// Editor context — set by the editor.Listener after the window is
+	// computed. Empty when no fresh editor heartbeat is available.
+	EditorRepo     string
+	EditorBranch   string
+	EditorLanguage string
 }

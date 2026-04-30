@@ -17,6 +17,7 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/collector"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
+	"github.com/ahmedElghable/beats/daemon/internal/editor"
 	"github.com/ahmedElghable/beats/daemon/internal/pair"
 )
 
@@ -96,10 +97,27 @@ func main() {
 
 		tracker := autotimer.NewTracker(c)
 
+		// Editor heartbeat listener — receives beats from integrations like
+		// the VS Code extension and exposes the most recent one to the
+		// collector via Latest(). Failure to bind (e.g. port already in use)
+		// is non-fatal: the collector keeps working without editor context.
+		editorListener := editor.New()
+		if err := editorListener.Start(ctx, editor.DefaultPort); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: editor listener: %v\n", err)
+		}
+		defer func() { _ = editorListener.Stop() }()
+
 		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
-			fmt.Printf("flow: %.2f (coherence=%.2f idle=%.0f%% app=%s cat=%s switches=%d)\n",
+			if hb := editorListener.Latest(); hb != nil {
+				w.EditorRepo = hb.Repo
+				w.EditorBranch = hb.Branch
+				w.EditorLanguage = hb.Language
+			}
+
+			fmt.Printf("flow: %.2f (coherence=%.2f idle=%.0f%% app=%s cat=%s switches=%d repo=%s)\n",
 				w.FlowScore, w.CoherenceScore, w.IdleFraction*100,
-				w.DominantBundleID, w.DominantCategory, w.ContextSwitches)
+				w.DominantBundleID, w.DominantCategory, w.ContextSwitches,
+				shortRepo(w.EditorRepo))
 
 			if dryRun {
 				return // Don't send anything in dry-run mode
@@ -144,6 +162,27 @@ func main() {
 		printUsage()
 		os.Exit(1)
 	}
+}
+
+// shortRepo returns the basename of a repo path for the log line so a
+// 60-char workspace doesn't blow out the terminal.
+func shortRepo(p string) string {
+	if p == "" {
+		return "-"
+	}
+	if i := lastSlash(p); i >= 0 && i < len(p)-1 {
+		return p[i+1:]
+	}
+	return p
+}
+
+func lastSlash(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == '/' || s[i] == '\\' {
+			return i
+		}
+	}
+	return -1
 }
 
 func printUsage() {
