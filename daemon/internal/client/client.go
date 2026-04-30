@@ -158,13 +158,42 @@ type FlowWindowRecord struct {
 	EditorLanguage   string    `json:"editor_language,omitempty"`
 }
 
+// FlowWindowsFilter narrows the result of GetFlowWindows. Empty fields
+// are omitted from the URL — same shape the API expects, AND-composed
+// server-side. Used by `beatsd recent --repo …` and friends.
+type FlowWindowsFilter struct {
+	EditorRepo     string
+	EditorLanguage string
+	BundleID       string
+}
+
 // GetFlowWindows lists flow windows for the device's user in [start, end].
 // Used by `beatsd recent` to show the last N minutes of activity without
 // the user having to open the web UI.
 func (c *Client) GetFlowWindows(ctx context.Context, start, end time.Time) ([]FlowWindowRecord, error) {
+	return c.GetFlowWindowsFiltered(ctx, start, end, FlowWindowsFilter{})
+}
+
+// GetFlowWindowsFiltered is GetFlowWindows with optional server-side
+// filters. Kept as a separate method so existing call sites (and the
+// older daemon flows) don't need to thread a filter struct through.
+func (c *Client) GetFlowWindowsFiltered(
+	ctx context.Context,
+	start, end time.Time,
+	filter FlowWindowsFilter,
+) ([]FlowWindowRecord, error) {
 	q := url.Values{}
 	q.Set("start", start.UTC().Format(time.RFC3339))
 	q.Set("end", end.UTC().Format(time.RFC3339))
+	if filter.EditorRepo != "" {
+		q.Set("editor_repo", filter.EditorRepo)
+	}
+	if filter.EditorLanguage != "" {
+		q.Set("editor_language", filter.EditorLanguage)
+	}
+	if filter.BundleID != "" {
+		q.Set("bundle_id", filter.BundleID)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.baseURL+"/api/signals/flow-windows?"+q.Encode(), nil)
 	if err != nil {

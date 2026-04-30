@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -182,6 +183,64 @@ func TestPostFlowWindow_OmitsEmptyEditorContext(t *testing.T) {
 	for _, key := range []string{"editor_repo", "editor_branch", "editor_language"} {
 		if strings.Contains(string(raw), key) {
 			t.Errorf("expected %s to be omitted from payload, got %s", key, raw)
+		}
+	}
+}
+
+func TestGetFlowWindowsFiltered_EncodesQueryParams(t *testing.T) {
+	// Verifies the client sends each FlowWindowsFilter field as the
+	// matching API query param. Empty fields are omitted entirely so a
+	// no-filter call doesn't gain noisy `editor_repo=` empties.
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "dev-token")
+	now := time.Now().UTC()
+	_, err := c.GetFlowWindowsFiltered(context.Background(), now.Add(-time.Hour), now, FlowWindowsFilter{
+		EditorRepo:     "/Users/me/code/beats",
+		EditorLanguage: "go",
+		BundleID:       "com.microsoft.VSCode",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got.Get("editor_repo") != "/Users/me/code/beats" {
+		t.Errorf("editor_repo not encoded, got %q", got.Get("editor_repo"))
+	}
+	if got.Get("editor_language") != "go" {
+		t.Errorf("editor_language not encoded, got %q", got.Get("editor_language"))
+	}
+	if got.Get("bundle_id") != "com.microsoft.VSCode" {
+		t.Errorf("bundle_id not encoded, got %q", got.Get("bundle_id"))
+	}
+}
+
+func TestGetFlowWindows_OmitsEmptyFilterParams(t *testing.T) {
+	// Back-compat: the unfiltered GetFlowWindows must not introduce empty
+	// `editor_repo=` keys — the API is happy ignoring them but they make
+	// the URL noisy in logs and could collide with future params.
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "dev-token")
+	now := time.Now().UTC()
+	if _, err := c.GetFlowWindows(context.Background(), now.Add(-time.Hour), now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, key := range []string{"editor_repo", "editor_language", "bundle_id"} {
+		if got.Has(key) {
+			t.Errorf("expected %s to be absent from URL when filter empty, but it was present", key)
 		}
 	}
 }

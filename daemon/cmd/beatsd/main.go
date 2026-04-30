@@ -181,18 +181,34 @@ func main() {
 		}
 
 	case "recent":
-		// Optional `--minutes N` after the subcommand. We parse it
-		// inline rather than reaching for the flag package — there's
-		// only one option and the help text is a one-liner.
+		// Optional flags after the subcommand. We parse inline rather
+		// than reaching for the flag package — the option set is small
+		// and matches what `beatsd recent --help` would document.
 		minutes := 60
+		var filter client.FlowWindowsFilter
 		for i := 1; i < len(args); i++ {
-			if args[i] == "--minutes" && i+1 < len(args) {
-				if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
-					minutes = v
+			switch args[i] {
+			case "--minutes":
+				if i+1 < len(args) {
+					if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+						minutes = v
+					}
+				}
+			case "--repo":
+				if i+1 < len(args) {
+					filter.EditorRepo = args[i+1]
+				}
+			case "--language":
+				if i+1 < len(args) {
+					filter.EditorLanguage = args[i+1]
+				}
+			case "--bundle":
+				if i+1 < len(args) {
+					filter.BundleID = args[i+1]
 				}
 			}
 		}
-		if err := runRecent(cfg, minutes); err != nil {
+		if err := runRecent(cfg, minutes, filter); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -279,7 +295,11 @@ Commands:
   run           Start the signal collector daemon
   doctor        Check pairing, API reachability, Accessibility permission, ports
   status        Print whether a daemon is running, timer state, and API reachability
-  recent        Print the last hour of flow windows in a small table (--minutes N to override)
+  recent        Print the last hour of flow windows in a small table
+                  --minutes N      override the window (default 60)
+                  --repo PATH      narrow to a specific editor workspace
+                  --language ID    narrow to a VS Code language id (e.g. go, dart)
+                  --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
   unpair        Remove the device token from the keychain
   version       Print version info
 

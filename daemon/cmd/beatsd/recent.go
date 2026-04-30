@@ -15,7 +15,12 @@ import (
 // table. Complements `beatsd status` (right-now snapshot) and `beatsd
 // doctor` (setup health) — this answers "what has the daemon actually
 // been seeing the last hour?" without the user firing up the web UI.
-func runRecent(cfg *config.Config, minutes int) error {
+//
+// `filter` narrows the result to a specific repo / language / app via
+// the same query params the web Insights cards use. The table caption
+// surfaces whichever filters were applied so the user can tell at a
+// glance which slice they're looking at.
+func runRecent(cfg *config.Config, minutes int, filter client.FlowWindowsFilter) error {
 	if minutes <= 0 {
 		minutes = 60
 	}
@@ -34,12 +39,12 @@ func runRecent(cfg *config.Config, minutes int) error {
 
 	end := time.Now().UTC()
 	start := end.Add(-time.Duration(minutes) * time.Minute)
-	windows, err := c.GetFlowWindows(ctx, start, end)
+	windows, err := c.GetFlowWindowsFiltered(ctx, start, end, filter)
 	if err != nil {
 		return err
 	}
 
-	fmt.Print(formatRecentTable(windows, minutes))
+	fmt.Print(formatRecentTable(windows, minutes, filter))
 	return nil
 }
 
@@ -47,13 +52,27 @@ func runRecent(cfg *config.Config, minutes int) error {
 // Extracted from runRecent so it can be unit-tested without spinning up
 // HTTP. The table is intentionally human-readable (not JSON) — the goal
 // is glanceability in a terminal, not machine consumption.
-func formatRecentTable(windows []client.FlowWindowRecord, minutesRequested int) string {
+func formatRecentTable(
+	windows []client.FlowWindowRecord,
+	minutesRequested int,
+	filter client.FlowWindowsFilter,
+) string {
 	if len(windows) == 0 {
-		return fmt.Sprintf("  no flow windows in the last %d min — is `beatsd run` up?\n", minutesRequested)
+		hint := "is `beatsd run` up?"
+		if !filterIsEmpty(filter) {
+			// Don't blame the daemon when the user just narrowed the slice
+			// to nothing. The unfiltered set might be fine.
+			hint = "no rows for the active filter — try widening or dropping it"
+		}
+		return fmt.Sprintf("  no flow windows in the last %d min — %s\n", minutesRequested, hint)
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "  last %d min · %d windows\n\n", minutesRequested, len(windows))
+	if caption := filterCaption(filter); caption != "" {
+		fmt.Fprintf(&b, "  last %d min · %d windows · %s\n\n", minutesRequested, len(windows), caption)
+	} else {
+		fmt.Fprintf(&b, "  last %d min · %d windows\n\n", minutesRequested, len(windows))
+	}
 	fmt.Fprintf(&b, "  %-5s  %-3s  %-22s  %s\n", "TIME", "FLOW", "APP", "REPO")
 	fmt.Fprintf(&b, "  %s\n", strings.Repeat("─", 60))
 
@@ -86,6 +105,30 @@ func truncOrFallback(primary, fallback string, width int) string {
 		return s[:width-1] + "…"
 	}
 	return s
+}
+
+// filterIsEmpty reports whether no narrow filter is active. Used to pick
+// the right empty-state hint — "is the daemon up?" vs "your filter
+// matched nothing".
+func filterIsEmpty(f client.FlowWindowsFilter) bool {
+	return f.EditorRepo == "" && f.EditorLanguage == "" && f.BundleID == ""
+}
+
+// filterCaption builds a single human-readable line summarizing the
+// active filter (if any). Joined into the table header so the user can
+// see at a glance which slice they're staring at.
+func filterCaption(f client.FlowWindowsFilter) string {
+	var parts []string
+	if f.EditorRepo != "" {
+		parts = append(parts, "repo="+shortRepoTrail(f.EditorRepo))
+	}
+	if f.EditorLanguage != "" {
+		parts = append(parts, "lang="+f.EditorLanguage)
+	}
+	if f.BundleID != "" {
+		parts = append(parts, "app="+f.BundleID)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // shortRepoTrail returns the last two path segments of an editor_repo so
