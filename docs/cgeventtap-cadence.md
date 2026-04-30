@@ -1,6 +1,8 @@
 # CGEventTap Cadence Tracking
 
-> Replaces the cadence stub with real input event counting via macOS CGEventTap for accurate Flow Score cadence scoring.
+> **Status: shipped.** `daemon/internal/collector/cadence_darwin.go` implements the real CGEventTap; `daemon/internal/collector/cadence.go` is the non-darwin fallback. The collector loop already handled the `ErrEventTapNotAvailable` path, so no other code changed.
+
+Replaces the cadence stub with real input event counting via macOS CGEventTap for accurate Flow Score cadence scoring.
 
 ## Why
 
