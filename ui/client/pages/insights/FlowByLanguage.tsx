@@ -31,8 +31,14 @@ const LANGUAGE_LABELS: Record<string, string> = {
 	shellscript: "Shell",
 };
 
-export function FlowByLanguage({ projectId }: { projectId?: string } = {}) {
-	const filter = projectId ? { projectId } : undefined;
+export function FlowByLanguage({
+	projectId,
+	editorRepo,
+}: {
+	projectId?: string;
+	editorRepo?: string;
+} = {}) {
+	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
 	const { data: windows } = useFlowWindows(undefined, undefined, filter);
 	const stats = useMemo(
 		() => aggregateFlowBy(windows ?? [], (w) => w.editor_language, 5),

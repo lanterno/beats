@@ -26,6 +26,9 @@ import { WeeklyCard } from "./WeeklyCard";
 export default function Insights() {
 	const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
 	const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
+	// Filter that's set by clicking a row on FlowByRepo. Independent of
+	// the project filter — they compose AND-style at the API.
+	const [selectedRepo, setSelectedRepo] = useState<string | undefined>(undefined);
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
 	const currentYear = new Date().getFullYear();
@@ -132,13 +135,20 @@ export default function Insights() {
 			    Tag filter still hides these — flow windows don't carry tags. */}
 			{!selectedTag && (
 				<>
-					<FlowToday projectId={selectedProjectId} />
-					<BestMoment projectId={selectedProjectId} />
-					<FlowThisWeek projectId={selectedProjectId} />
+					{selectedRepo && (
+						<RepoFilterChip repo={selectedRepo} onClear={() => setSelectedRepo(undefined)} />
+					)}
+					<FlowToday projectId={selectedProjectId} editorRepo={selectedRepo} />
+					<BestMoment projectId={selectedProjectId} editorRepo={selectedRepo} />
+					<FlowThisWeek projectId={selectedProjectId} editorRepo={selectedRepo} />
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-						<FlowByRepo projectId={selectedProjectId} />
-						<FlowByLanguage projectId={selectedProjectId} />
-						<FlowByApp projectId={selectedProjectId} />
+						<FlowByRepo
+							projectId={selectedProjectId}
+							selectedRepo={selectedRepo}
+							onSelectRepo={setSelectedRepo}
+						/>
+						<FlowByLanguage projectId={selectedProjectId} editorRepo={selectedRepo} />
+						<FlowByApp projectId={selectedProjectId} editorRepo={selectedRepo} />
 					</div>
 				</>
 			)}
@@ -161,6 +171,30 @@ export default function Insights() {
 
 			{/* Weekly shareable card */}
 			{!selectedProjectId && !selectedTag && <WeeklyCard />}
+		</div>
+	);
+}
+
+/** Renders a small "Filtered to repo X · clear" pill above the flow cards
+ * when the user has clicked a repo on FlowByRepo. Mirrors the project /
+ * tag dropdown affordance — explicit, dismissible. */
+function RepoFilterChip({ repo, onClear }: { repo: string; onClear: () => void }) {
+	const parts = repo.split(/[\\/]/).filter(Boolean);
+	const tail = parts.length > 2 ? parts.slice(-2).join("/") : parts.join("/");
+	return (
+		<div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+			<span>Filtered to repo</span>
+			<span className="text-foreground/80 font-mono" title={repo}>
+				{tail || repo}
+			</span>
+			<button
+				type="button"
+				onClick={onClear}
+				className="text-accent hover:underline tabular-nums"
+				aria-label="Clear repo filter"
+			>
+				clear
+			</button>
 		</div>
 	);
 }

@@ -16,8 +16,14 @@ const MIN_PEAK = 0.7; // below this, we don't celebrate
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export function BestMoment({ projectId }: { projectId?: string } = {}) {
-	const filter = projectId ? { projectId } : undefined;
+export function BestMoment({
+	projectId,
+	editorRepo,
+}: {
+	projectId?: string;
+	editorRepo?: string;
+} = {}) {
+	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
 	const { data: windows } = useFlowWindowsLastDays(7, filter);
 	const { data: projects } = useProjects();
 

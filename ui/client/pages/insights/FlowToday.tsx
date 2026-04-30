@@ -13,8 +13,14 @@ import { flowBaseline, shortRepoPath, summarizeFlow } from "@/shared/lib/flowAgg
 const SPARK_W = 480;
 const SPARK_H = 64;
 
-export function FlowToday({ projectId }: { projectId?: string } = {}) {
-	const filter = projectId ? { projectId } : undefined;
+export function FlowToday({
+	projectId,
+	editorRepo,
+}: {
+	projectId?: string;
+	editorRepo?: string;
+} = {}) {
+	const filter = projectId || editorRepo ? { projectId, editorRepo } : undefined;
 	const { data: windows, isLoading } = useFlowWindows(undefined, undefined, filter);
 	// Baseline draws from the last 7 days (FlowThisWeek already issues this
 	// fetch — react-query dedupes by key so this is free here). When a
