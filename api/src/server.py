@@ -4,13 +4,16 @@ import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from beats.api.errors import envelope as error_envelope
+from beats.api.errors import http_exception_handler, validation_exception_handler
 from beats.api.middleware import IdempotencyMiddleware, ensure_mutation_log_indexes
 from beats.api.routers.account import router as account_router
 from beats.api.routers.analytics import router as analytics_router
@@ -132,17 +135,19 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 repo = MongoDeviceRegistrationRepository(db.device_registrations)
                 reg = await repo.get_by_device_id(device_id)
                 if not reg or reg.revoked:
-                    return JSONResponse(
-                        content={"error": "Device token has been revoked"},
+                    return error_envelope(
                         status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Device token has been revoked",
+                        code="DEVICE_REVOKED",
                     )
 
                 # Check path allowlist
                 path = request.url.path
                 if not any(path.startswith(p) for p in DEVICE_ALLOWED_PREFIXES):
-                    return JSONResponse(
-                        content={"error": "Device token not authorized for this endpoint"},
+                    return error_envelope(
                         status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Device token not authorized for this endpoint",
+                        code="DEVICE_PATH_FORBIDDEN",
                     )
 
                 request.state.user_id = device_payload["sub"]
@@ -156,9 +161,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     request.url.path,
                     origin,
                 )
-                return JSONResponse(
-                    content={"error": "Invalid or expired session token"},
+                return error_envelope(
                     status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired session token",
+                    code="INVALID_TOKEN",
                 )
 
         # Public endpoints pass through without auth
@@ -168,9 +174,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # No valid authentication provided for protected endpoint
         origin = request.headers.get("origin", "unknown")
         logger.warning("Unauthorized request to %s from: %s", request.url.path, origin)
-        return JSONResponse(
-            content={"error": "Authentication required. Provide a Bearer token."},
+        return error_envelope(
             status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Provide a Bearer token.",
+            code="MISSING_TOKEN",
         )
 
 
@@ -179,16 +186,21 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# Unified domain exception handler
+# Unified error envelope: every HTTP error and validation failure flows
+# through the handlers in beats.api.errors so clients see a consistent
+# {detail, code, fields?} shape.
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+
+
 @app.exception_handler(DomainException)
 async def domain_exception_handler(request: Request, exc: DomainException):
-    """Handle all domain exceptions with appropriate HTTP responses."""
-    content = {"error": exc.message}
-    if hasattr(exc, "detail") and exc.detail:
-        content.update(exc.detail)
-    return JSONResponse(
+    """Handle all domain exceptions with the standard error envelope."""
+    return error_envelope(
         status_code=exc.status_code,
-        content=content,
+        detail=exc.message,
+        code=getattr(exc, "code", None),
+        fields=getattr(exc, "fields", None),
     )
 
 

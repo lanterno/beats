@@ -10,9 +10,26 @@ See `CLAUDE.md` for the architecture, runtime, and testing conventions, and the 
 
 ## Open Roadmap
 
-- [ ] Provide meaningful errors at the API surface (consistent shape, codes, fielded validation messages)
 - [ ] Per-environment databases (dev / staging / prod isolation)
 - [ ] Move Cloud Run region closer to the user (Eurozone) to reduce round-trip latency
+
+## Error Shape
+
+Every HTTP error from the API uses the unified envelope defined in
+`beats.api.errors`:
+
+```json
+{
+  "detail": "<human-readable message>",
+  "code": "<MACHINE_READABLE_CODE>",
+  "fields": [
+    {"path": "project_id", "message": "Field required", "type": "missing"}
+  ]
+}
+```
+
+`fields` only appears on `422 VALIDATION_ERROR` responses; routers can
+override `code` by raising `HTTPException(detail={"code": "X", "message": "..."})`.
 
 ### Database
 

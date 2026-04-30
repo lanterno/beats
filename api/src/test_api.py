@@ -704,6 +704,39 @@ class TestCoachEndpoints:
         assert response.status_code == 401
 
 
+class TestErrorEnvelope:
+    """Every HTTP error from the API now flows through the unified envelope:
+    {detail: str, code: str, fields?: list}."""
+
+    def test_404_uses_envelope(self):
+        # Valid ObjectId shape but no such record.
+        resp = client.get("/api/beats/507f1f77bcf86cd799439011", headers=auth_headers)
+        assert resp.status_code == 404
+        body = resp.json()
+        assert isinstance(body.get("detail"), str)
+        assert body["code"] == "NOT_FOUND"
+
+    def test_validation_error_lists_fields(self):
+        # Missing required field "project_id" on a beat create.
+        resp = client.post("/api/beats/", json={}, headers=auth_headers)
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert "fields" in body
+        assert isinstance(body["fields"], list)
+        assert any(f.get("path", "").endswith("project_id") for f in body["fields"]), body["fields"]
+        # Each field has the keys clients can rely on.
+        for f in body["fields"]:
+            assert "path" in f and "message" in f and "type" in f
+
+    def test_missing_auth_envelope(self):
+        resp = client.get("/api/projects/")
+        assert resp.status_code == 401
+        body = resp.json()
+        assert body["code"] == "MISSING_TOKEN"
+        assert "Authentication" in body["detail"]
+
+
 class TestDailyNotes:
     """Daily-notes endpoints: upsert (PUT + POST alias), single-day get,
     and the date-range list used by mood sparklines."""
@@ -1008,7 +1041,9 @@ class TestAuthenticationMiddleware:
             headers={"Authorization": "Bearer invalid-jwt-token"},
         )
         assert response.status_code == 401
-        assert "Invalid or expired" in response.json()["error"]
+        body = response.json()
+        assert "Invalid or expired" in body["detail"]
+        assert body["code"] == "INVALID_TOKEN"
 
     def test_public_endpoints_no_auth(self):
         """Test public endpoints don't require auth"""
@@ -1313,7 +1348,9 @@ class TestDevicePairingAPI:
             headers=device_headers,
         )
         assert resp.status_code == 403
-        assert "revoked" in resp.json()["error"]
+        body = resp.json()
+        assert "revoked" in body["detail"]
+        assert body["code"] == "DEVICE_REVOKED"
 
     def test_revoked_device_not_in_list(self):
         """Revoked devices don't appear in the registrations list."""
