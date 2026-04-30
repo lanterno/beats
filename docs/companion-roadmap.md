@@ -49,13 +49,30 @@ EOD mood prompt is the one piece that reaches them while the app is
 closed, because it's pre-scheduled at the OS level rather than triggered
 by a server check.
 
+### Also shipped — daemon-side notifications (macOS)
+
+The daemon's `autotimer` and `shield` modules both fire native macOS
+notifications via `osascript` while running:
+
+- **Auto-timer suggestion**: 8 consecutive 1-minute flow windows ≥ 0.7
+  with a category match against an `autostart_repos` project triggers
+  "Start tracking?". Wired through `daemon/internal/autotimer/suggest.go`.
+- **Drift alert**: 30s+ continuous time on a known-distraction bundle
+  (Twitter, Spotify, Discord, etc.) while a timer is running fires
+  "Drift detected". Wired through `daemon/internal/shield/shield.go`,
+  with the timer-running state cached from `/api/signals/timer-context`
+  on a 30s poller.
+
+Linux/Windows fall through to a log line — extending those to native
+notifications (libnotify / Win toast) is a small follow-up.
+
 ### Still pending
 
 - **"Start suggested project" action button** on the brief notification
-- **Auto-timer notifications** when the daemon detects high flow without
-  a timer (needs the daemon to expose `/api/signals/suggest-timer` and
-  the poller to consume it)
-- **Drift alerts** when the daemon logs a drift event
+- **Companion-side auto-timer + drift notifications** — daemon notifies
+  on the desktop today, but mobile users only see prompts when the
+  companion poller runs. This needs either a daemon→companion bridge
+  or server-side push.
 - **True server-pushed delivery** via APNs/FCM — would solve the
   "app must be alive" limitation but needs an Apple Developer account
   and an FCM project. Out of scope for the free-tier path.

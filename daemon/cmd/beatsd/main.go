@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync/atomic"
+	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/autotimer"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
@@ -19,6 +21,7 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/config"
 	"github.com/ahmedElghable/beats/daemon/internal/editor"
 	"github.com/ahmedElghable/beats/daemon/internal/pair"
+	"github.com/ahmedElghable/beats/daemon/internal/shield"
 )
 
 var version = "dev"
@@ -107,6 +110,20 @@ func main() {
 		}
 		defer func() { _ = editorListener.Stop() }()
 
+		// Distraction shield: detects drift into known time-sink apps while
+		// a timer is running and emits a system notification + log. Needs
+		// to know whether a timer is running on each sample; we cache that
+		// state from the API on a 30s poller (cheap; the user starts/stops
+		// timers rarely). atomic.Bool keeps the read on the hot path lock-
+		// free.
+		var timerRunning atomic.Bool
+		if !dryRun {
+			go pollTimerContext(ctx, c, &timerRunning)
+		}
+		shieldTracker := shield.NewTracker(func(ev shield.DriftEvent) {
+			fmt.Printf("drift: %s for %s\n", ev.BundleID, ev.Duration.Round(time.Second))
+		})
+
 		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
 			if hb := editorListener.Latest(); hb != nil {
 				w.EditorRepo = hb.Repo
@@ -141,6 +158,8 @@ func main() {
 			}
 
 			tracker.OnFlowWindow(ctx, w)
+		}, func(s collector.Sample) {
+			shieldTracker.OnSample(s, timerRunning.Load())
 		})
 		if runErr != nil && runErr != context.Canceled {
 			fmt.Fprintf(os.Stderr, "collector error: %v\n", runErr)
@@ -161,6 +180,42 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
 		os.Exit(1)
+	}
+}
+
+// pollTimerContext keeps `running` in sync with whether the user has an
+// active timer on the API side. Runs until ctx is cancelled. Failures (API
+// down, bad token) are logged once per minute at most so a flaky network
+// doesn't flood stderr.
+func pollTimerContext(ctx context.Context, c *client.Client, running *atomic.Bool) {
+	const interval = 30 * time.Second
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+
+	var lastErrLog time.Time
+
+	check := func() {
+		ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		tc, err := c.GetTimerContext(ctx2)
+		if err != nil {
+			if time.Since(lastErrLog) > time.Minute {
+				fmt.Fprintf(os.Stderr, "timer-context poll: %v\n", err)
+				lastErrLog = time.Now()
+			}
+			return
+		}
+		running.Store(tc.TimerRunning)
+	}
+
+	check() // immediate so we don't wait 30s for the first signal
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			check()
+		}
 	}
 }
 

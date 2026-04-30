@@ -15,8 +15,18 @@ import (
 // The onWindow callback receives each computed FlowWindow. It runs synchronously
 // on the loop goroutine — keep it fast (the API POST is acceptable).
 //
+// onSample is optional. When set, it's invoked for every collected Sample
+// (typically every 5 seconds). Used by callers that want a finer cadence
+// than the per-window callback — e.g. the distraction shield tracker which
+// needs to detect drift in near-realtime.
+//
 // Run blocks until ctx is cancelled.
-func Run(ctx context.Context, cfg config.CollectorConfig, onWindow func(FlowWindow)) error {
+func Run(
+	ctx context.Context,
+	cfg config.CollectorConfig,
+	onWindow func(FlowWindow),
+	onSample func(Sample),
+) error {
 	pollInterval := time.Duration(cfg.PollIntervalSec) * time.Second
 	flushInterval := time.Duration(cfg.FlushIntervalSec) * time.Second
 
@@ -65,6 +75,9 @@ func Run(ctx context.Context, cfg config.CollectorConfig, onWindow func(FlowWind
 		case <-pollTicker.C:
 			s := collectSample(hasEventTap, getAndReset)
 			samples = append(samples, s)
+			if onSample != nil {
+				onSample(s)
+			}
 
 		case now := <-flushTicker.C:
 			if len(samples) == 0 {
