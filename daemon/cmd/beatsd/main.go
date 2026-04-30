@@ -216,6 +216,24 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "top":
+		// Same `--minutes N` parsing as `recent`. No filter flags here:
+		// the whole point of `top` is to discover which repo / language /
+		// app the user has been flowing on, so pre-narrowing by any of
+		// those fields would be self-defeating.
+		minutes := 60
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--minutes" && i+1 < len(args) {
+				if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+					minutes = v
+				}
+			}
+		}
+		if err := runTop(cfg, minutes); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "version":
 		fmt.Print(collectVersionInfo())
 
@@ -304,6 +322,8 @@ Commands:
                   --language ID    narrow to a VS Code language id (e.g. go, dart)
                   --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
                   --json           emit raw windows as a JSON array (for piping into jq)
+  top           Print top-5 leaderboards by repo / language / app for the recent window
+                  --minutes N      override the window (default 60)
   unpair        Remove the device token from the keychain
   version       Print version info
 
