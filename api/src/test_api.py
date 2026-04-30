@@ -1449,6 +1449,85 @@ class TestSignalsAPI:
         assert match["editor_branch"] == "main"
         assert match["editor_language"] == "go"
 
+    def test_flow_windows_filter_by_project_id(self):
+        """GET /api/signals/flow-windows?project_id=X returns only windows
+        whose active_project_id matches."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        # Two windows tagged with different project ids.
+        for pid, score in [("proj-A", 0.4), ("proj-B", 0.81)]:
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": (now - timedelta(minutes=2)).isoformat(),
+                    "window_end": (now - timedelta(minutes=1)).isoformat(),
+                    "flow_score": score,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 0.0,
+                    "idle_fraction": 0.0,
+                    "dominant_bundle_id": "com.apple.dt.Xcode",
+                    "dominant_category": "coding",
+                    "active_project_id": pid,
+                },
+                headers=device_headers,
+            )
+
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "project_id": "proj-B",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        windows = resp.json()
+        # Only proj-B's window comes back, no cross-contamination.
+        assert all(w["active_project_id"] == "proj-B" for w in windows)
+        assert any(w["flow_score"] == 0.81 for w in windows)
+
+    def test_flow_windows_filter_by_editor_repo(self):
+        """GET /api/signals/flow-windows?editor_repo=… narrows to that
+        workspace path, used by future per-repo UI views."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        for repo_path, score in [
+            ("/Users/me/code/alpha", 0.55),
+            ("/Users/me/code/beta", 0.77),
+        ]:
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": (now - timedelta(minutes=2)).isoformat(),
+                    "window_end": (now - timedelta(minutes=1)).isoformat(),
+                    "flow_score": score,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 1.0,
+                    "idle_fraction": 0.0,
+                    "dominant_bundle_id": "com.microsoft.VSCode",
+                    "dominant_category": "coding",
+                    "editor_repo": repo_path,
+                },
+                headers=device_headers,
+            )
+
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(hours=1)).isoformat(),
+                "end": (now + timedelta(hours=1)).isoformat(),
+                "editor_repo": "/Users/me/code/beta",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        windows = resp.json()
+        assert all(w["editor_repo"] == "/Users/me/code/beta" for w in windows)
+        assert any(w["flow_score"] == 0.77 for w in windows)
+
     def test_flow_window_without_editor_context_still_validates(self):
         """Older daemons that don't send editor_* fields are still accepted."""
         _, device_headers = self._pair_device()

@@ -991,7 +991,13 @@ class FlowWindowRepository(ABC):
     async def create(self, window: FlowWindow) -> FlowWindow: ...
 
     @abstractmethod
-    async def list_by_range(self, start: datetime, end: datetime) -> list[FlowWindow]: ...
+    async def list_by_range(
+        self,
+        start: datetime,
+        end: datetime,
+        project_id: str | None = None,
+        editor_repo: str | None = None,
+    ) -> list[FlowWindow]: ...
 
 
 class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
@@ -1003,10 +1009,23 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
         result = await self.collection.insert_one(data)
         return FlowWindow(**serialize_from_document({**data, "_id": result.inserted_id}))
 
-    async def list_by_range(self, start: datetime, end: datetime) -> list[FlowWindow]:
-        cursor = self.collection.find(
-            self._q({"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
-        ).sort("window_start", 1)
+    async def list_by_range(
+        self,
+        start: datetime,
+        end: datetime,
+        project_id: str | None = None,
+        editor_repo: str | None = None,
+    ) -> list[FlowWindow]:
+        # Filters are AND-composed. project_id matches windows captured
+        # while a timer was running on that project; editor_repo matches
+        # windows where the VS Code heartbeat covered them. Both are
+        # optional so the existing two-arg call sites keep working.
+        query: dict = {"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
+        if project_id is not None:
+            query["active_project_id"] = project_id
+        if editor_repo is not None:
+            query["editor_repo"] = editor_repo
+        cursor = self.collection.find(self._q(query)).sort("window_start", 1)
         docs = await cursor.to_list(length=None)
         return [FlowWindow(**serialize_from_document(doc)) for doc in docs]
 

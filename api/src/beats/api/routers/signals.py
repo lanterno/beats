@@ -116,9 +116,19 @@ async def list_flow_windows(
     repo: FlowWindowRepoDep,
     start: datetime = Query(default_factory=lambda: datetime.now(UTC) - timedelta(days=1)),
     end: datetime = Query(default_factory=lambda: datetime.now(UTC)),
+    project_id: str | None = Query(default=None),
+    editor_repo: str | None = Query(default=None),
 ) -> list[FlowWindowResponse]:
-    """List flow windows for the current user within a date range."""
-    windows = await repo.list_by_range(start, end)
+    """List flow windows for the current user within a date range.
+
+    Optional filters narrow the result:
+    - `project_id` — only windows captured while a timer was running on
+      this project (i.e. `active_project_id` matches).
+    - `editor_repo` — only windows whose VS Code heartbeat reported this
+      workspace path. Use the absolute path the daemon stores; the
+      companion / web UI render a shortened display form on top.
+    """
+    windows = await repo.list_by_range(start, end, project_id=project_id, editor_repo=editor_repo)
     return [
         FlowWindowResponse(
             id=w.id or "",

@@ -7081,7 +7081,7 @@
     },
     "/api/signals/flow-windows": {
       "get": {
-        "description": "List flow windows for the current user within a date range.",
+        "description": "List flow windows for the current user within a date range.\n\nOptional filters narrow the result:\n- `project_id` \u2014 only windows captured while a timer was running on\n  this project (i.e. `active_project_id` matches).\n- `editor_repo` \u2014 only windows whose VS Code heartbeat reported this\n  workspace path. Use the absolute path the daemon stores; the\n  companion / web UI render a shortened display form on top.",
         "operationId": "list_flow_windows_api_signals_flow_windows_get",
         "parameters": [
           {
@@ -7102,6 +7102,38 @@
               "format": "date-time",
               "title": "End",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "editor_repo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Editor Repo"
             }
           }
         ],
