@@ -2067,12 +2067,14 @@ export interface paths {
          * List Flow Windows
          * @description List flow windows for the current user within a date range.
          *
-         *     Optional filters narrow the result:
+         *     Optional filters narrow the result, AND-composed:
          *     - `project_id` — only windows captured while a timer was running on
          *       this project (i.e. `active_project_id` matches).
          *     - `editor_repo` — only windows whose VS Code heartbeat reported this
          *       workspace path. Use the absolute path the daemon stores; the
          *       companion / web UI render a shortened display form on top.
+         *     - `editor_language` — only windows whose VS Code heartbeat reported
+         *       this language id (e.g. "go", "typescriptreact").
          */
         get: operations["list_flow_windows_api_signals_flow_windows_get"];
         put?: never;
@@ -6716,6 +6718,7 @@ export interface operations {
                 end?: string;
                 project_id?: string | null;
                 editor_repo?: string | null;
+                editor_language?: string | null;
             };
             header?: never;
             path?: never;

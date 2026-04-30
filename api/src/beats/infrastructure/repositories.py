@@ -997,6 +997,7 @@ class FlowWindowRepository(ABC):
         end: datetime,
         project_id: str | None = None,
         editor_repo: str | None = None,
+        editor_language: str | None = None,
     ) -> list[FlowWindow]: ...
 
 
@@ -1015,16 +1016,20 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
         end: datetime,
         project_id: str | None = None,
         editor_repo: str | None = None,
+        editor_language: str | None = None,
     ) -> list[FlowWindow]:
         # Filters are AND-composed. project_id matches windows captured
         # while a timer was running on that project; editor_repo matches
-        # windows where the VS Code heartbeat covered them. Both are
-        # optional so the existing two-arg call sites keep working.
+        # windows where the VS Code heartbeat covered them; editor_language
+        # matches the language id reported by the heartbeat. All optional
+        # so the existing call sites keep working.
         query: dict = {"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
         if project_id is not None:
             query["active_project_id"] = project_id
         if editor_repo is not None:
             query["editor_repo"] = editor_repo
+        if editor_language is not None:
+            query["editor_language"] = editor_language
         cursor = self.collection.find(self._q(query)).sort("window_start", 1)
         docs = await cursor.to_list(length=None)
         return [FlowWindow(**serialize_from_document(doc)) for doc in docs]
