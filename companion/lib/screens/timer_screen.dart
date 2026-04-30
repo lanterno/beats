@@ -220,7 +220,7 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       _showStopTimeInput = false; _customStopTime = null; _customStartTime = null;
     });
     try {
-      await widget.client.stopTimer(stopTime: stopTime);
+      final beat = await widget.client.stopTimer(stopTime: stopTime);
       setState(() { _startTime = null; _elapsed = Duration.zero; });
       if (mounted && projectName.isNotEmpty) {
         final dur = minutes >= 60 ? '${minutes ~/ 60}h ${minutes % 60}m' : '${minutes}m';
@@ -239,7 +239,39 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       }
       await _refresh();
       await _refreshStats();
+      // Prompt for an optional note + tags on the just-stopped session.
+      // Skipped sessions still log the time; this is purely additive context.
+      if (mounted && beat['id'] != null) {
+        unawaited(_promptPostStopNote(beat));
+      }
     } catch (e) { setState(() => _error = '$e'); if (was) await _refresh(); }
+  }
+
+  Future<void> _promptPostStopNote(Map<String, dynamic> beat) async {
+    final result = await showModalBottomSheet<_PostStopResult?>(
+      context: context,
+      backgroundColor: BeatsColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _PostStopSheet(projectName: _selectedProjectName ?? ''),
+    );
+    if (result == null) return; // skipped
+    final updated = Map<String, dynamic>.from(beat)
+      ..['note'] = result.note
+      ..['tags'] = result.tags;
+    try {
+      await widget.client.updateBeat(updated);
+    } catch (_) {
+      // Best-effort: the session is already saved; surface a snackbar but
+      // don't roll back the UI.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Couldn\'t save your note — try editing the session later'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 
   void _showProjectPicker() {
@@ -915,4 +947,149 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
       ),
     );
   }
+}
+
+// ─── Post-stop "How did it go?" sheet ───────────────────────────────
+
+class _PostStopResult {
+  final String note;
+  final List<String> tags;
+  const _PostStopResult({required this.note, required this.tags});
+}
+
+class _PostStopSheet extends StatefulWidget {
+  final String projectName;
+  const _PostStopSheet({required this.projectName});
+
+  @override
+  State<_PostStopSheet> createState() => _PostStopSheetState();
+}
+
+class _PostStopSheetState extends State<_PostStopSheet> {
+  final _noteController = TextEditingController();
+  final _tagsController = TextEditingController();
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _tagsController.dispose();
+    super.dispose();
+  }
+
+  List<String> _parseTags(String raw) =>
+      raw.split(RegExp(r'[,\s]+'))
+          .map((t) => t.trim().toLowerCase())
+          .where((t) => t.isNotEmpty)
+          .toSet()
+          .toList();
+
+  void _save() {
+    Navigator.pop(
+      context,
+      _PostStopResult(
+        note: _noteController.text.trim(),
+        tags: _parseTags(_tagsController.text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
+              color: BeatsColors.textTertiary.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            Text(
+              widget.projectName.isEmpty
+                  ? 'How did it go?'
+                  : 'How did it go on ${widget.projectName}?',
+              style: GoogleFonts.dmSerifDisplay(
+                fontSize: 22, color: BeatsColors.textPrimary),
+            ),
+            const SizedBox(height: 16),
+            Text('NOTE', style: BeatsType.label),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _noteController,
+              autofocus: true,
+              maxLines: null,
+              minLines: 3,
+              style: BeatsType.bodyMedium,
+              cursorColor: BeatsColors.amber,
+              decoration: _decoration('A line about how it went…'),
+            ),
+            const SizedBox(height: 16),
+            Text('TAGS', style: BeatsType.label),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _tagsController,
+              style: BeatsType.bodyMedium,
+              cursorColor: BeatsColors.amber,
+              decoration: _decoration('comma, separated, words'),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, null),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: BeatsColors.border),
+                      ),
+                      child: Text('Skip', style: BeatsType.button.copyWith(
+                        color: BeatsColors.textTertiary)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _save,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: BeatsColors.amber,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('Save', style: BeatsType.button.copyWith(
+                        color: const Color(0xFF1A1408))),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _decoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: BeatsType.bodyMedium.copyWith(
+      color: BeatsColors.textTertiary.withValues(alpha: 0.5)),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: BeatsColors.border)),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.6))),
+  );
 }

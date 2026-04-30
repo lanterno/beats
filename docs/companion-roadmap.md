@@ -63,9 +63,7 @@ The Intentions screen exists. Two small flows still missing:
 
 ### Quick Note After Stop
 
-- After stopping a timer, prompt: "How did it go?" with optional note text field
-- Tags picker (recent tags + freeform)
-- Skip button for fast exit
+Shipped. After stopping a timer, the companion shows a "How did it go on \<project\>?" bottom sheet with a multiline note field, a freeform comma/space-separated tags input, and Skip / Save actions; Save updates the just-stopped beat in place via PUT `/api/beats/`. No tag suggestions yet — recent-tags chips are a future polish.
 
 ### End-of-Day Mood Prompt
 
@@ -135,7 +133,7 @@ The tray (`tray_service.dart`) shows live elapsed time + project, a Start Timer 
 | Phase | What | Value | Effort |
 |-------|------|-------|--------|
 | **3** | Coach notifications | The coach reaches users proactively | 1.5 weeks |
-| **4** | Quick entry polish | Frictionless capture around timer events | 0.5 week |
+| **4** | EOD mood prompt (post-stop note ✅) | Frictionless capture around timer events | 0.25 week |
 | **5** | Widgets + watch (menu bar polish ✅) | Ambient presence on home screen / wrist | ~1.5 weeks |
 
-**Total: ~3.5 weeks for the remaining vision.**
+**Total: ~3.25 weeks for the remaining vision.**

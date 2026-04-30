@@ -164,6 +164,20 @@ class ApiClient {
     return jsonDecode(resp.body);
   }
 
+  /// Updates an existing beat in place. The API requires the full beat shape;
+  /// callers typically pass the dict returned by [stopTimer] with the user's
+  /// edits applied (note, tags).
+  Future<void> updateBeat(Map<String, dynamic> beat) async {
+    final resp = await http.put(
+      Uri.parse('$baseUrl/api/beats/'),
+      headers: _headers,
+      body: jsonEncode(beat),
+    );
+    if (resp.statusCode != 200) {
+      throw ApiException(resp.statusCode, 'Update beat failed: ${resp.body}');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getProjects() async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/projects/'),
