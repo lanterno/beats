@@ -86,20 +86,37 @@ export interface FlowSummary {
 	avg: number;
 	peak: number;
 	count: number;
+	/**
+	 * Index of the peak window in the input array. -1 only when [count] is 0
+	 * (which we already exclude by returning null), so callers can treat it
+	 * as a non-null number when [FlowSummary] itself is non-null.
+	 */
+	peakIndex: number;
 }
 
 /**
  * Aggregate score statistics across the given windows. Returns null when
  * there's nothing to summarize, so callers can render an empty state
  * rather than "avg 0 / peak 0 / 0 windows".
+ *
+ * On ties (multiple windows at the exact peak score), [peakIndex] points
+ * at the *first* such window — the earliest peak moment of the day. This
+ * matters because callers display "peak at HH:MM"; the alternative
+ * (latest peak) feels like the day got worse, the earliest framing reads
+ * as "this is when you locked in".
  */
 export function summarizeFlow(windows: FlowWindow[]): FlowSummary | null {
 	if (windows.length === 0) return null;
 	let sum = 0;
-	let peak = 0;
-	for (const w of windows) {
-		sum += w.flow_score;
-		if (w.flow_score > peak) peak = w.flow_score;
+	let peak = -Infinity;
+	let peakIndex = 0;
+	for (let i = 0; i < windows.length; i++) {
+		const score = windows[i].flow_score;
+		sum += score;
+		if (score > peak) {
+			peak = score;
+			peakIndex = i;
+		}
 	}
-	return { avg: sum / windows.length, peak, count: windows.length };
+	return { avg: sum / windows.length, peak, count: windows.length, peakIndex };
 }

@@ -157,16 +157,31 @@ describe("summarizeFlow", () => {
 		expect(summarizeFlow([])).toBeNull();
 	});
 
-	it("computes avg, peak, and count", () => {
+	it("computes avg, peak, count, and peakIndex", () => {
 		const windows = [w({ flow_score: 0.2 }), w({ flow_score: 0.6 }), w({ flow_score: 0.9 })];
 		const s = summarizeFlow(windows);
 		expect(s?.count).toBe(3);
 		expect(s?.peak).toBe(0.9);
 		expect(s?.avg).toBeCloseTo(0.5666, 3);
+		expect(s?.peakIndex).toBe(2);
 	});
 
 	it("treats a single window correctly", () => {
 		const s = summarizeFlow([w({ flow_score: 0.42 })]);
-		expect(s).toEqual({ avg: 0.42, peak: 0.42, count: 1 });
+		expect(s).toEqual({ avg: 0.42, peak: 0.42, count: 1, peakIndex: 0 });
+	});
+
+	it("returns the earliest index on tied peaks", () => {
+		// Three windows tied at 0.9. peakIndex should point at the first
+		// one — earliest-peak framing reads as "this is when you locked in"
+		// rather than "the day got worse since".
+		const windows = [
+			w({ flow_score: 0.5 }),
+			w({ flow_score: 0.9 }),
+			w({ flow_score: 0.9 }),
+			w({ flow_score: 0.6 }),
+			w({ flow_score: 0.9 }),
+		];
+		expect(summarizeFlow(windows)?.peakIndex).toBe(1);
 	});
 });

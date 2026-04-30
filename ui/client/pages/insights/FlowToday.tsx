@@ -61,6 +61,19 @@ export function FlowToday() {
 
 			<FlowSparkline windows={windows} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
 
+			{stats && stats.count > 1 && (
+				<div className="text-[11px] text-muted-foreground">
+					peak at{" "}
+					<button
+						type="button"
+						onClick={() => setSelectedIdx(stats.peakIndex)}
+						className="text-accent hover:underline tabular-nums"
+					>
+						{formatTime(windows[stats.peakIndex].window_start)}
+					</button>
+				</div>
+			)}
+
 			{selected && (
 				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2">
 					<span className="tabular-nums">{formatTime(selected.window_start)}</span>
