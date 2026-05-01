@@ -2917,3 +2917,273 @@ class TestGatewayCacheControlIntegration:
         )
         assert result.cache_creation_input_tokens == 0
         assert result.cache_read_input_tokens == 0
+
+
+class TestBuildDayContext:
+    """build_day_context renders today's signals (beats, intentions,
+    mood, calendar, biometrics) into the small per-turn context
+    block that's prepended to chat / brief / review prompts.
+
+    Why test directly: existing tests stub this whole function out,
+    leaving 130+ lines (38% of context.py) uncovered. A regression
+    in any branch would silently degrade the LLM's per-turn input
+    and the chat coach would drift further from the user's actual
+    state without any test failure.
+
+    Most assertions use `target_date` to avoid wall-clock dependency.
+    Database is needed because the calendar + biometric blocks
+    query Mongo directly; both are wrapped in try/except so a
+    missing testcontainer would degrade gracefully — but we
+    connect anyway to exercise the bio block on success."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        # Clean any stale biometric / calendar docs from prior tests
+        db = Database.get_db()
+        await db.biometric_days.delete_many({})
+        await db.calendar_integrations.delete_many({})
+        yield
+        await Database.disconnect()
+
+    async def test_empty_data_renders_headers_with_empty_state(self):
+        """No beats / intentions / notes / calendar / biometrics →
+        the four section headers still render with documented
+        empty-state lines. Pin so a coach turn on a first-day
+        account doesn't crash on missing keys."""
+        target = datetime.now(UTC).date()
+        repos = _FakeCoachRepos()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert f"## Today: {target.isoformat()}" in out
+        assert "### Yesterday's sessions" in out
+        assert "No sessions yesterday." in out
+        assert "### Today's sessions so far" in out
+        assert "No sessions today." in out
+        assert "### Today's intentions" in out
+        assert "No intentions set for today." in out
+        # Calendar + biometric sections are omitted when empty
+        assert "### Calendar today" not in out
+        assert "### Last night's biometrics" not in out
+
+    async def test_today_beats_render_with_time_project_and_duration(self):
+        """A beat that started today renders as
+        `  HH:MM — ProjectName (Xm)` with a totals line.
+        Pin the format so the coach's "today so far" prompt
+        block is stable."""
+        from beats.domain.models import Beat
+
+        target = datetime.now(UTC).date()
+        s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(hour=9)
+        beat = Beat(
+            id="b1",
+            project_id="p1",
+            start=s,
+            end=s + timedelta(minutes=45),
+        )
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            beats=[beat],
+        )
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "09:00 — Alpha (45m)" in out
+        # Totals line: 45/60 = 0.75h, rounded to 0.8h via :.1f
+        assert "Total: 0.8h across 1 sessions" in out
+
+    async def test_yesterday_beats_render_separately_from_today(self):
+        """Yesterday's beats land under "### Yesterday's sessions"
+        — pin so the coach can compare day-to-day rather than
+        confuse them. A beat from yesterday must not appear in
+        the today section."""
+        from beats.domain.models import Beat
+
+        target = datetime.now(UTC).date()
+        yesterday = target - timedelta(days=1)
+        s = datetime.combine(yesterday, datetime.min.time(), tzinfo=UTC).replace(hour=14)
+        beat = Beat(
+            id="b1",
+            project_id="p1",
+            start=s,
+            end=s + timedelta(minutes=60),
+        )
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            beats=[beat],
+        )
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        # Split on the today header to verify the beat is in
+        # yesterday's section, not today's
+        yesterday_block, _, today_block = out.partition("### Today's sessions so far")
+        assert "14:00 — Alpha (1h 0m)" in yesterday_block
+        assert "Alpha" not in today_block.split("### Today's intentions")[0]
+
+    async def test_beat_with_note_renders_note_suffix(self):
+        """A beat with .note set renders as `... [note: <note>]`.
+        Pin so the LLM sees per-session annotations the user wrote."""
+        from beats.domain.models import Beat
+
+        target = datetime.now(UTC).date()
+        s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beat = Beat(
+            id="b1",
+            project_id="p1",
+            start=s,
+            end=s + timedelta(minutes=30),
+            note="deep work",
+        )
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            beats=[beat],
+        )
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "[note: deep work]" in out
+
+    async def test_intentions_render_with_done_and_pending_status(self):
+        """Today's intentions render with done|pending status.
+        Pin both branches so a regression doesn't silently flip
+        the coach's view of what's complete."""
+        from beats.domain.models import Intention
+
+        target = datetime.now(UTC).date()
+        intentions_by_date = {
+            target: [
+                Intention(
+                    project_id="p1",
+                    date=target,
+                    planned_minutes=60,
+                    completed=True,
+                ),
+                Intention(
+                    project_id="p1",
+                    date=target,
+                    planned_minutes=30,
+                    completed=False,
+                ),
+            ]
+        }
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            intentions_by_date=intentions_by_date,
+        )
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "Alpha: 60min [done]" in out
+        assert "Alpha: 30min [pending]" in out
+
+    async def test_yesterday_mood_line_renders_with_truncated_note(self):
+        """Yesterday's note with mood + text → renders as
+        `Yesterday's mood: M/5 — "<truncated note>"`. Pin so
+        the coach can pick up on emotional context day-over-day."""
+        from beats.domain.models import DailyNote
+
+        target = datetime.now(UTC).date()
+        yesterday = target - timedelta(days=1)
+        long_note = "Felt great. " * 20  # > 100 chars
+
+        class _MoodNoteRepo:
+            async def get_by_date(self, d):
+                if d == yesterday:
+                    return DailyNote(date=yesterday, mood=4, note=long_note)
+                return None
+
+        repos = _FakeCoachRepos()
+        repos.note = _MoodNoteRepo()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "Yesterday's mood: 4/5" in out
+        # Note is truncated to 100 chars
+        assert long_note[:100] in out
+        assert long_note[:101] not in out
+
+    async def test_biometric_block_renders_when_doc_exists(self):
+        """A biometric_days doc for yesterday → renders the
+        sleep/HRV/HR/readiness block. Pin all four field
+        formatters so a regression doesn't drop one. The block
+        is hidden entirely if no fields are populated."""
+        target = datetime.now(UTC).date()
+        yesterday = target - timedelta(days=1)
+        db = Database.get_db()
+        await db.biometric_days.insert_one(
+            {
+                "user_id": "user-1",
+                "date": yesterday.isoformat(),
+                "sleep_minutes": 480,
+                "sleep_efficiency": 0.92,
+                "hrv_ms": 45,
+                "resting_hr_bpm": 58,
+                "readiness_score": 88,
+                "created_at": datetime.now(UTC),
+            }
+        )
+        repos = _FakeCoachRepos()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "### Last night's biometrics" in out
+        # 480 min / 60 = 8.0h
+        assert "Sleep: 8.0h (efficiency 92%)" in out
+        assert "HRV: 45ms" in out
+        assert "Resting HR: 58 bpm" in out
+        assert "Readiness: 88/100" in out
+
+    async def test_biometric_block_omitted_when_no_fields_populated(self):
+        """A biometric_days doc with all biometric fields None
+        (e.g. a placeholder row) → block is omitted, NOT rendered
+        with empty values. Pin so a coach turn doesn't include
+        a half-empty biometric section."""
+        target = datetime.now(UTC).date()
+        yesterday = target - timedelta(days=1)
+        db = Database.get_db()
+        await db.biometric_days.insert_one(
+            {
+                "user_id": "user-1",
+                "date": yesterday.isoformat(),
+                "sleep_minutes": None,
+                "hrv_ms": None,
+                "resting_hr_bpm": None,
+                "readiness_score": None,
+                "created_at": datetime.now(UTC),
+            }
+        )
+        repos = _FakeCoachRepos()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "### Last night's biometrics" not in out
+
+    async def test_biometric_block_partial_fields_only_renders_present(self):
+        """Only sleep_minutes set → biometric block renders just
+        the Sleep line. Pin so a partial day's data still surfaces
+        what's available."""
+        target = datetime.now(UTC).date()
+        yesterday = target - timedelta(days=1)
+        db = Database.get_db()
+        await db.biometric_days.insert_one(
+            {
+                "user_id": "user-1",
+                "date": yesterday.isoformat(),
+                "sleep_minutes": 420,
+                "sleep_efficiency": None,  # no efficiency suffix
+                "created_at": datetime.now(UTC),
+            }
+        )
+        repos = _FakeCoachRepos()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "Sleep: 7.0h" in out
+        # No efficiency suffix
+        assert "(efficiency" not in out
+        # Other lines absent
+        assert "HRV:" not in out
+        assert "Resting HR:" not in out
+        assert "Readiness:" not in out
+
+    async def test_unknown_project_resolves_to_question_mark(self):
+        """Beat references a project_id not in the project list
+        (project deleted between session and prompt build) →
+        renders as "? (Xm)" rather than crashing on KeyError."""
+        from beats.domain.models import Beat
+
+        target = datetime.now(UTC).date()
+        s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(hour=11)
+        beat = Beat(
+            id="b1",
+            project_id="ghost",
+            start=s,
+            end=s + timedelta(minutes=30),
+        )
+        repos = _FakeCoachRepos(projects=[], beats=[beat])
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "11:00 — ? (30m)" in out
