@@ -191,12 +191,20 @@ async def build_day_context(
                 # ("2026-05-01"). Slice 11:16 to extract HH:MM from the
                 # dateTime form; for all-day rows it gives the empty
                 # string, so we render those as "all-day" instead.
-                start_t = ev["start"][11:16] if "T" in ev["start"] else "all-day"
-                end_t = ev["end"][11:16] if "T" in ev["end"] else ""
+                # Defensive .get("", ...) — Google's API can occasionally
+                # return events without a `start.dateTime` key (e.g.
+                # cancelled instances of recurring events). Fall through
+                # to the all-day branch instead of KeyError'ing the
+                # whole calendar block.
+                start_raw = ev.get("start") or ""
+                end_raw = ev.get("end") or ""
+                summary = ev.get("summary", "(no title)")
+                start_t = start_raw[11:16] if "T" in start_raw else "all-day"
+                end_t = end_raw[11:16] if "T" in end_raw else ""
                 if start_t == "all-day":
-                    calendar_lines.append(f"  all-day {ev['summary']}")
+                    calendar_lines.append(f"  all-day {summary}")
                 else:
-                    calendar_lines.append(f"  {start_t}–{end_t} {ev['summary']}")
+                    calendar_lines.append(f"  {start_t}–{end_t} {summary}")
     except Exception:
         logger.debug("Calendar fetch failed for day context", exc_info=True)
 

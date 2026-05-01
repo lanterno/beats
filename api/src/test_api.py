@@ -1045,6 +1045,26 @@ class TestCoachRouterGapFill:
         body = resp.json()
         assert body["code"] == "INVALID_DATE"
 
+    def test_memory_rewrite_budget_exceeded_uses_envelope_code(self, auth_info, monkeypatch):
+        """Pin parity with /brief and /review: a BudgetExceeded on
+        memory rewrite must surface as 429 + code=BUDGET_EXCEEDED,
+        not the generic RATE_LIMITED. Without this, a client that
+        branches on the code field would render "rate limited" for
+        memory but "budget reached" for brief — confusing UX. Locks
+        the parity fix from the T4 audit."""
+        from beats.api.routers import coach as coach_router
+        from beats.coach.usage import BudgetExceeded
+
+        async def fake_rewrite(_user_id):
+            raise BudgetExceeded(spent=20.0, limit=10.0)
+
+        monkeypatch.setattr(coach_router, "rewrite_coach_memory", fake_rewrite)
+
+        resp = client.post("/api/coach/memory/rewrite", headers=auth_info["headers"])
+        assert resp.status_code == 429
+        body = resp.json()
+        assert body["code"] == "BUDGET_EXCEEDED"
+
 
 class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:

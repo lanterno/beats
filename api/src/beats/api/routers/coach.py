@@ -358,7 +358,14 @@ async def rewrite_memory(user_id: CurrentUserId):
     try:
         content = await rewrite_coach_memory(user_id)
     except BudgetExceeded as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+        # Match the brief / review branches: explicit BUDGET_EXCEEDED
+        # code so clients can render "monthly LLM budget reached"
+        # rather than the generic RATE_LIMITED that the bare-string
+        # detail used to map to.
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "BUDGET_EXCEEDED", "message": str(exc)},
+        ) from exc
     except Exception as exc:
         logger.exception("Memory rewrite failed for user=%s", user_id)
         raise HTTPException(status_code=502, detail="Memory rewrite failed.") from exc
