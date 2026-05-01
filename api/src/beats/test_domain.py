@@ -4150,17 +4150,20 @@ class _FakeFitbitIntegrationRepo:
         return had
 
 
-def _fitbit_settings():
+def _fitbit_settings(monkeypatch):
     """Build a Settings instance with deterministic Fitbit creds.
-    Avoids reading .env files. Uses the underlying field names
-    (validation_alias kwargs would not be resolved by ty)."""
+
+    BaseSettings fields use `validation_alias`, which means kwargs on
+    the field's Python name are silently ignored — the alias (env-var
+    casing) is the only populated path. We set env vars via
+    monkeypatch so the Settings constructor reads them, then reset
+    on test teardown."""
     from beats.settings import Settings
 
-    return Settings(
-        fitbit_client_id="cid-fb",
-        fitbit_client_secret="csec-fb",
-        fitbit_redirect_uri="https://beats.test/oauth/fitbit",
-    )
+    monkeypatch.setenv("FITBIT_CLIENT_ID", "cid-fb")
+    monkeypatch.setenv("FITBIT_CLIENT_SECRET", "csec-fb")
+    monkeypatch.setenv("FITBIT_REDIRECT_URI", "https://beats.test/oauth/fitbit")
+    return Settings()
 
 
 def _no_op_raise_for_status(self):
@@ -4178,10 +4181,10 @@ class TestFitbitAuthUrl:
     silently if any are missing or misnamed, leaving the user on
     a "loading…" screen with no error."""
 
-    def test_includes_client_id_redirect_response_type_and_scope(self):
+    def test_includes_client_id_redirect_response_type_and_scope(self, monkeypatch):
         from beats.domain.fitbit import FitbitService
 
-        svc = FitbitService(_fitbit_settings(), _FakeFitbitIntegrationRepo())
+        svc = FitbitService(_fitbit_settings(monkeypatch), _FakeFitbitIntegrationRepo())
         url = svc.get_auth_url()
         assert url.startswith("https://www.fitbit.com/oauth2/authorize?")
         assert "client_id=cid-fb" in url
@@ -4221,7 +4224,7 @@ class TestFitbitExchangeCode:
         )
 
         repo = _FakeFitbitIntegrationRepo()
-        svc = FitbitService(_fitbit_settings(), repo)
+        svc = FitbitService(_fitbit_settings(monkeypatch), repo)
         before = datetime.now(UTC)
         integration = await svc.exchange_code("auth-code")
         after = datetime.now(UTC)
@@ -4267,7 +4270,7 @@ class TestFitbitEnsureFreshToken:
             token_expiry=future,
         )
         repo = _FakeFitbitIntegrationRepo(integration=existing)
-        svc = FitbitService(_fitbit_settings(), repo)
+        svc = FitbitService(_fitbit_settings(monkeypatch), repo)
         result = await svc._ensure_fresh_token(existing)
         assert result.access_token == "at-current"
 
@@ -4302,7 +4305,7 @@ class TestFitbitEnsureFreshToken:
             token_expiry=past,
         )
         repo = _FakeFitbitIntegrationRepo(integration=stale)
-        svc = FitbitService(_fitbit_settings(), repo)
+        svc = FitbitService(_fitbit_settings(monkeypatch), repo)
         refreshed = await svc._ensure_fresh_token(stale)
         assert refreshed.access_token == "at-NEW"
         assert refreshed.refresh_token == "rt-NEW"
@@ -4341,7 +4344,7 @@ class TestFitbitEnsureFreshToken:
             token_expiry=past,
         )
         repo = _FakeFitbitIntegrationRepo(integration=stale)
-        svc = FitbitService(_fitbit_settings(), repo)
+        svc = FitbitService(_fitbit_settings(monkeypatch), repo)
         refreshed = await svc._ensure_fresh_token(stale)
         assert refreshed.refresh_token == "rt-keep"
 
@@ -4358,7 +4361,7 @@ class TestFitbitFetchDaily:
             monkeypatch,
             {"": RuntimeError("should not have called HTTP without integration")},
         )
-        svc = FitbitService(_fitbit_settings(), _FakeFitbitIntegrationRepo(None))
+        svc = FitbitService(_fitbit_settings(monkeypatch), _FakeFitbitIntegrationRepo(None))
         assert await svc.fetch_daily(date(2026, 4, 1)) == {}
 
     async def test_aggregates_sleep_hr_and_steps(self, monkeypatch):
@@ -4391,7 +4394,7 @@ class TestFitbitFetchDaily:
                 access_token="at", refresh_token="rt", token_expiry=future
             )
         )
-        svc = FitbitService(_fitbit_settings(), repo)
+        svc = FitbitService(_fitbit_settings(monkeypatch), repo)
         result = await svc.fetch_daily(date(2026, 4, 1))
         assert result["source"] == "fitbit"
         assert result["sleep_minutes"] == 420
@@ -4430,7 +4433,7 @@ class TestFitbitFetchDaily:
                 access_token="at", refresh_token="rt", token_expiry=future
             )
         )
-        svc = FitbitService(_fitbit_settings(), repo)
+        svc = FitbitService(_fitbit_settings(monkeypatch), repo)
         result = await svc.fetch_daily(date(2026, 4, 1))
         assert result["sleep_minutes"] == 400
         assert result["steps"] == 5000
@@ -4438,15 +4441,321 @@ class TestFitbitFetchDaily:
 
 
 class TestFitbitDisconnect:
-    async def test_disconnect_returns_bool(self):
+    async def test_disconnect_returns_bool(self, monkeypatch):
         from beats.domain.fitbit import FitbitService
         from beats.domain.models import FitbitIntegration
 
         svc_full = FitbitService(
-            _fitbit_settings(),
+            _fitbit_settings(monkeypatch),
             _FakeFitbitIntegrationRepo(integration=FitbitIntegration(access_token="at")),
         )
         assert await svc_full.disconnect() is True
 
-        svc_empty = FitbitService(_fitbit_settings(), _FakeFitbitIntegrationRepo(None))
+        svc_empty = FitbitService(_fitbit_settings(monkeypatch), _FakeFitbitIntegrationRepo(None))
+        assert await svc_empty.disconnect() is False
+
+
+# =============================================================================
+# GitHub Service — OAuth flow + commit-activity fetch with pagination
+# =============================================================================
+
+
+class _FakeGitHubIntegrationRepo:
+    def __init__(self, integration=None):
+        self._integration = integration
+
+    async def get(self):
+        return self._integration
+
+    async def upsert(self, integration):
+        self._integration = integration
+        return integration
+
+    async def delete(self) -> bool:
+        had = self._integration is not None
+        self._integration = None
+        return had
+
+
+def _github_settings(monkeypatch):
+    """Build a Settings instance with deterministic GitHub creds.
+    Same pattern as _fitbit_settings — env vars via monkeypatch."""
+    from beats.settings import Settings
+
+    monkeypatch.setenv("GITHUB_CLIENT_ID", "cid-gh")
+    monkeypatch.setenv("GITHUB_CLIENT_SECRET", "csec-gh")
+    monkeypatch.setenv("GITHUB_REDIRECT_URI", "https://beats.test/oauth/github")
+    return Settings()
+
+
+def _patch_httpx_callable(monkeypatch, handler):
+    """Variant of _patch_httpx that delegates EVERY request to a
+    single callable. Useful when the same URL needs to return
+    different responses across calls (pagination).
+
+    Handler signature: (method, url, params) -> _FakeHTTPResponse | Exception
+    """
+    import httpx
+
+    class _FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, headers=None, params=None):
+            result = handler("GET", url, params or {})
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        async def post(self, url, headers=None, params=None, data=None, json=None):
+            result = handler("POST", url, params or data or {})
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient())
+
+
+class TestGitHubAuthUrl:
+    """get_auth_url builds the OAuth consent URL. Pin client_id +
+    redirect_uri + scope — same risk profile as the Fitbit URL test
+    (any missing param → silent rejection)."""
+
+    def test_includes_client_id_redirect_and_scope(self, monkeypatch):
+        from beats.domain.github import GitHubService
+
+        svc = GitHubService(_github_settings(monkeypatch), _FakeGitHubIntegrationRepo())
+        url = svc.get_auth_url()
+        assert url.startswith("https://github.com/login/oauth/authorize?")
+        assert "client_id=cid-gh" in url
+        assert "redirect_uri=https%3A%2F%2Fbeats.test%2Foauth%2Fgithub" in url
+        # scope = "repo:status read:user" — pin both tokens
+        assert "repo" in url
+        assert "user" in url
+
+
+class TestGitHubExchangeCode:
+    """exchange_code is a TWO-step flow: POST /access_token then
+    GET /user. Both must succeed for the integration to land with
+    the user's login. The user-info fetch is wrapped in try/except
+    so a temporary GitHub outage on /user doesn't block the
+    OAuth callback."""
+
+    async def test_persists_token_and_username_on_happy_path(self, monkeypatch):
+        from beats.domain.github import GitHubService
+
+        def handler(method, url, params):
+            if "access_token" in url:
+                return _FakeHTTPResponse(200, {"access_token": "gho_abc123"})
+            if "/user" in url:
+                return _FakeHTTPResponse(200, {"login": "ahmed"})
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        repo = _FakeGitHubIntegrationRepo()
+        svc = GitHubService(_github_settings(monkeypatch), repo)
+        integration = await svc.exchange_code("auth-code")
+        assert integration.access_token == "gho_abc123"
+        assert integration.github_username == "ahmed"
+        assert (await repo.get()).github_username == "ahmed"
+
+    async def test_user_endpoint_failure_still_persists_with_empty_username(self, monkeypatch):
+        """A 5xx (or any exception) from /user should not block the
+        OAuth callback — pin so a temporary GitHub outage during
+        sign-in doesn't trap the user in an "auth failed" loop.
+        We persist the token with empty username; subsequent calls
+        can fill it in."""
+        from beats.domain.github import GitHubService
+
+        def handler(method, url, params):
+            if "access_token" in url:
+                return _FakeHTTPResponse(200, {"access_token": "gho_xyz"})
+            if "/user" in url:
+                # 500-style error wrapped via raise_for_status
+                return _FakeHTTPResponse(500, {"message": "server error"})
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        repo = _FakeGitHubIntegrationRepo()
+        svc = GitHubService(_github_settings(monkeypatch), repo)
+        integration = await svc.exchange_code("auth-code")
+        assert integration.access_token == "gho_xyz"
+        assert integration.github_username == ""
+
+
+class TestGitHubFetchCommitCounts:
+    """fetch_commit_counts paginates GitHub's /repos/:name/commits
+    endpoint and aggregates by day. Three risks pinned:
+      1. Returns [] (not None / not raises) when not connected
+      2. Aggregation key is the YYYY-MM-DD prefix of the commit
+         author date — drift would scatter commits across keys
+      3. Pagination terminates: we stop on empty results or when a
+         page has < 100 items. A regression that paginated forever
+         would burn the user's GitHub rate limit on every dashboard
+         load"""
+
+    async def test_no_integration_returns_empty(self, monkeypatch):
+        from beats.domain.github import GitHubService
+
+        _patch_httpx_callable(
+            monkeypatch,
+            lambda *a, **kw: (_ for _ in ()).throw(  # noqa
+                RuntimeError("HTTP should not be called without integration")
+            ),
+        )
+        svc = GitHubService(_github_settings(monkeypatch), _FakeGitHubIntegrationRepo(None))
+        result = await svc.fetch_commit_counts("a/b", date(2026, 4, 1), date(2026, 4, 7))
+        assert result == []
+
+    async def test_empty_access_token_returns_empty(self, monkeypatch):
+        """An integration row with an empty access_token (e.g.
+        partial OAuth callback) is treated as "not connected".
+        Pin so we don't fire requests with `Bearer ` (empty token)."""
+        from beats.domain.github import GitHubService
+        from beats.domain.models import GitHubIntegration
+
+        _patch_httpx_callable(
+            monkeypatch,
+            lambda *a, **kw: (_ for _ in ()).throw(  # noqa
+                RuntimeError("HTTP should not be called for empty token")
+            ),
+        )
+        svc = GitHubService(
+            _github_settings(monkeypatch),
+            _FakeGitHubIntegrationRepo(integration=GitHubIntegration(access_token="")),
+        )
+        result = await svc.fetch_commit_counts("a/b", date(2026, 4, 1), date(2026, 4, 7))
+        assert result == []
+
+    async def test_aggregates_commits_by_day_sorted(self, monkeypatch):
+        """Three commits across two days → two output rows sorted
+        ascending. Pin the YYYY-MM-DD prefix slice [:10]."""
+        from beats.domain.github import GitHubService
+        from beats.domain.models import GitHubIntegration
+
+        commits = [
+            {"commit": {"author": {"date": "2026-04-02T10:30:00Z"}}},
+            {"commit": {"author": {"date": "2026-04-01T09:15:00Z"}}},
+            {"commit": {"author": {"date": "2026-04-02T16:45:00Z"}}},
+        ]
+
+        def handler(method, url, params):
+            if "/commits" in url:
+                # Page 1 returns the commits, page 2 empty (terminates)
+                if params.get("page", 1) == 1:
+                    return _FakeHTTPResponse(200, commits)
+                return _FakeHTTPResponse(200, [])
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        svc = GitHubService(
+            _github_settings(monkeypatch),
+            _FakeGitHubIntegrationRepo(integration=GitHubIntegration(access_token="gho_x")),
+        )
+        result = await svc.fetch_commit_counts("ahmed/beats", date(2026, 4, 1), date(2026, 4, 7))
+        assert result == [
+            {"date": "2026-04-01", "commit_count": 1},
+            {"date": "2026-04-02", "commit_count": 2},
+        ]
+
+    async def test_paginates_until_short_page(self, monkeypatch):
+        """A first page with exactly 100 items triggers a follow-up
+        request. The follow-up returning < 100 items terminates
+        the loop. Pin both branches — without this, a user with
+        100+ commits would silently lose every commit past page 1."""
+        from beats.domain.github import GitHubService
+        from beats.domain.models import GitHubIntegration
+
+        # Page 1: 100 commits all on 2026-04-01
+        page_1 = [{"commit": {"author": {"date": "2026-04-01T09:00:00Z"}}}] * 100
+        # Page 2: 5 commits on 2026-04-02
+        page_2 = [{"commit": {"author": {"date": "2026-04-02T10:00:00Z"}}}] * 5
+
+        def handler(method, url, params):
+            if "/commits" in url:
+                p = params.get("page", 1)
+                if p == 1:
+                    return _FakeHTTPResponse(200, page_1)
+                if p == 2:
+                    return _FakeHTTPResponse(200, page_2)
+                # Should not reach here
+                return _FakeHTTPResponse(500, {})
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        svc = GitHubService(
+            _github_settings(monkeypatch),
+            _FakeGitHubIntegrationRepo(integration=GitHubIntegration(access_token="gho_x")),
+        )
+        result = await svc.fetch_commit_counts("ahmed/beats", date(2026, 4, 1), date(2026, 4, 7))
+        assert result == [
+            {"date": "2026-04-01", "commit_count": 100},
+            {"date": "2026-04-02", "commit_count": 5},
+        ]
+
+    async def test_exception_during_fetch_returns_partial(self, monkeypatch):
+        """A network error during pagination breaks the loop
+        cleanly and returns whatever was collected so far. Pin the
+        partial-success contract — better to show the user some
+        data than to 500 the whole dashboard."""
+        from beats.domain.github import GitHubService
+        from beats.domain.models import GitHubIntegration
+
+        page_1 = [{"commit": {"author": {"date": "2026-04-01T09:00:00Z"}}}] * 100
+
+        def handler(method, url, params):
+            if "/commits" in url:
+                p = params.get("page", 1)
+                if p == 1:
+                    return _FakeHTTPResponse(200, page_1)
+                # Page 2 → error
+                import httpx
+
+                return httpx.ConnectError("network down")
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        svc = GitHubService(
+            _github_settings(monkeypatch),
+            _FakeGitHubIntegrationRepo(integration=GitHubIntegration(access_token="gho_x")),
+        )
+        result = await svc.fetch_commit_counts("ahmed/beats", date(2026, 4, 1), date(2026, 4, 7))
+        assert result == [{"date": "2026-04-01", "commit_count": 100}]
+
+
+class TestGitHubDisconnect:
+    async def test_disconnect_returns_bool(self, monkeypatch):
+        from beats.domain.github import GitHubService
+        from beats.domain.models import GitHubIntegration
+
+        svc_full = GitHubService(
+            _github_settings(monkeypatch),
+            _FakeGitHubIntegrationRepo(integration=GitHubIntegration(access_token="gho")),
+        )
+        assert await svc_full.disconnect() is True
+
+        svc_empty = GitHubService(_github_settings(monkeypatch), _FakeGitHubIntegrationRepo(None))
         assert await svc_empty.disconnect() is False
