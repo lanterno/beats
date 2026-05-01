@@ -33,6 +33,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Help is recognized BEFORE config loads — a user just looking
+	// for usage shouldn't fail because daemon.toml is missing or
+	// malformed. Exit 0 because asking for help isn't an error.
+	switch os.Args[1] {
+	case "--help", "-h", "help":
+		printHelp()
+		return
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
@@ -334,8 +343,14 @@ func lastSlash(s string) int {
 	return -1
 }
 
-func printUsage() {
-	fmt.Fprintln(os.Stderr, `Usage: beatsd <command> [flags]
+// printUsage writes the help text to stderr — used by error paths
+// (no command, unknown command). For an explicit help request use
+// printHelp, which writes to stdout so a `beatsd --help | grep` works.
+func printUsage() { writeUsage(os.Stderr) }
+func printHelp()  { writeUsage(os.Stdout) }
+
+func writeUsage(out *os.File) {
+	fmt.Fprintln(out, `Usage: beatsd <command> [flags]
 
 Commands:
   pair <code>   Exchange a pairing code for a device token
