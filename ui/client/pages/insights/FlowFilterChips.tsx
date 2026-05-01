@@ -12,6 +12,7 @@
  * action. (The unfiltered "all of today" case is rare enough that we
  * skip the affordance there to keep the page quiet.)
  */
+import { useState } from "react";
 import { downloadFile } from "@/shared/lib/downloadFile";
 
 export interface FlowFilterChipsProps {
@@ -74,7 +75,41 @@ export function FlowFilterChips({
 			>
 				↓ csv
 			</button>
+			<CopyLinkButton />
 		</div>
+	);
+}
+
+/** Copies window.location.href to the clipboard when clicked. The URL
+ * persistence work means every active filter is already in the address
+ * bar, so this is just a one-click shortcut over select-and-copy. The
+ * button briefly swaps to "✓ copied" for ~1.5s as confirmation —
+ * lighter than wiring a toast through here. */
+function CopyLinkButton() {
+	const [justCopied, setJustCopied] = useState(false);
+	return (
+		<button
+			type="button"
+			onClick={async () => {
+				try {
+					await navigator.clipboard.writeText(window.location.href);
+					setJustCopied(true);
+					// Reset back to default state after the user has seen the
+					// confirmation. Short enough that two consecutive copies
+					// produce two distinct flashes, not a stuck "copied".
+					window.setTimeout(() => setJustCopied(false), 1500);
+				} catch {
+					// Clipboard API can fail on insecure contexts (http
+					// without localhost) or denied permissions. Silent
+					// no-op rather than throwing — the user can fall back
+					// to copying the address bar.
+				}
+			}}
+			className="text-accent hover:underline tabular-nums"
+			title="Copy this filtered view's URL to the clipboard"
+		>
+			{justCopied ? "✓ copied" : "🔗 copy link"}
+		</button>
 	);
 }
 

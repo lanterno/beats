@@ -15,8 +15,8 @@
  *   (same regression class as fetchFlowWindows.test.ts but at the
  *   download-link layer).
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FlowFilterChips, flowWindowsCsvHref } from "./FlowFilterChips";
 
 afterEach(cleanup);
@@ -109,6 +109,66 @@ describe("FlowFilterChips", () => {
 		render(<FlowFilterChips bundleId="com.microsoft.VSCode" {...noopHandlers} />);
 		expect(screen.getByText("VSCode")).toBeInTheDocument();
 		expect(screen.getByTitle("com.microsoft.VSCode")).toBeInTheDocument();
+	});
+
+	describe("copy-link button", () => {
+		const writeText = vi.fn();
+
+		beforeEach(() => {
+			writeText.mockReset();
+			// jsdom doesn't ship navigator.clipboard by default — stub
+			// only the writeText path the component uses.
+			Object.defineProperty(navigator, "clipboard", {
+				value: { writeText },
+				configurable: true,
+			});
+			// Pin the URL so the assertion below isn't dependent on
+			// whatever the test runner left behind.
+			window.history.replaceState({}, "", "/insights?repo=foo&language=go");
+		});
+
+		it("renders a copy-link button", () => {
+			render(<FlowFilterChips repo="/Users/me/code/beats" {...noopHandlers} />);
+			expect(screen.getByRole("button", { name: /copy link/ })).toBeInTheDocument();
+		});
+
+		it("writes the current URL to the clipboard on click", async () => {
+			writeText.mockResolvedValueOnce(undefined);
+			render(<FlowFilterChips repo="/Users/me/code/beats" {...noopHandlers} />);
+
+			fireEvent.click(screen.getByRole("button", { name: /copy link/ }));
+
+			await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+			expect(writeText.mock.calls[0][0]).toContain("?repo=foo&language=go");
+		});
+
+		it("flips the label to '✓ copied' for visual confirmation", async () => {
+			writeText.mockResolvedValueOnce(undefined);
+			render(<FlowFilterChips repo="/Users/me/code/beats" {...noopHandlers} />);
+
+			fireEvent.click(screen.getByRole("button", { name: /copy link/ }));
+
+			await waitFor(() =>
+				expect(screen.getByRole("button", { name: /✓ copied/ })).toBeInTheDocument(),
+			);
+		});
+
+		it("silently swallows clipboard errors (insecure context, denied perms)", async () => {
+			// http (not https) browsers reject writeText. Component
+			// should NOT throw — user falls back to copying the
+			// address bar manually.
+			writeText.mockRejectedValueOnce(new Error("not allowed"));
+			render(<FlowFilterChips repo="/Users/me/code/beats" {...noopHandlers} />);
+
+			fireEvent.click(screen.getByRole("button", { name: /copy link/ }));
+
+			// Wait a tick to let the rejected promise settle. Component
+			// stays in "copy link" state since the success branch never
+			// runs.
+			await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+			expect(screen.queryByRole("button", { name: /✓ copied/ })).not.toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /copy link/ })).toBeInTheDocument();
+		});
 	});
 });
 
