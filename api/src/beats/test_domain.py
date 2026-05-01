@@ -5463,3 +5463,217 @@ class TestCalendarDisconnect:
             _FakeCalendarIntegrationRepo(None),
         )
         assert await svc_empty.disconnect() is False
+
+
+# =============================================================================
+# Chronotype detector — Flow Score × time-of-day
+# =============================================================================
+
+
+def _flow_window(*, day: date, hour: int, score: float, minute: int = 0):
+    from beats.domain.models import FlowWindow
+
+    s = datetime.combine(day, datetime.min.time(), tzinfo=UTC).replace(hour=hour, minute=minute)
+    return FlowWindow(
+        device_id="dev-1",
+        window_start=s,
+        window_end=s + timedelta(minutes=1),
+        flow_score=score,
+    )
+
+
+class TestDetectChronotype:
+    """detect_chronotype labels users early/midday/afternoon/evening
+    /night based on where their Flow Score peaks across hour-of-day.
+    Risk: a refactor that flipped the percentile or the label
+    ranges would silently misclassify every user."""
+
+    def test_empty_returns_no_card(self):
+        from beats.domain.intelligence import detect_chronotype
+
+        assert detect_chronotype([]) == []
+
+    def test_below_50_windows_returns_no_card(self):
+        """The detector requires ≥50 windows. Pin so a low-data
+        user doesn't get a confident-looking but noisy chronotype
+        label."""
+        from beats.domain.intelligence import detect_chronotype
+
+        windows = [
+            _flow_window(day=date(2026, 4, 1), hour=h, score=0.7) for h in range(24)
+        ]  # 24 windows, < 50
+        assert detect_chronotype(windows) == []
+
+    def test_fewer_than_4_distinct_hours_returns_no_card(self):
+        """≥50 windows but only 3 distinct hours → no card. Pin
+        the spread requirement so a user who only ever tracks in
+        a 3-hour window doesn't get labeled."""
+        from beats.domain.intelligence import detect_chronotype
+
+        windows = []
+        for i in range(60):
+            windows.append(
+                _flow_window(
+                    day=date(2026, 4, 1) + timedelta(days=i // 3),
+                    hour=9 + (i % 3),
+                    score=0.7,
+                )
+            )
+        assert detect_chronotype(windows) == []
+
+    def test_all_zero_scores_returns_no_card(self):
+        """All flow_score=0 → smoothed values all 0 → the
+        any(v>0) guard fires. Pin so a brand-new daemon user
+        with no focused sessions yet doesn't get a chronotype
+        card."""
+        from beats.domain.intelligence import detect_chronotype
+
+        windows = [
+            _flow_window(day=date(2026, 4, 1) + timedelta(days=d), hour=h, score=0.0)
+            for d in range(15)
+            for h in range(8, 12)
+        ]
+        assert detect_chronotype(windows) == []
+
+    def test_morning_peak_labels_early_person(self):
+        """Strong scores at 7-9 AM, low scores afternoon → label
+        is "early". Pin the label, the title, and the peak_start/
+        peak_end in data — the dashboard's chronotype card binds
+        to those fields."""
+        from beats.domain.intelligence import detect_chronotype
+
+        windows = []
+        for d in range(14):
+            day = date(2026, 4, 1) + timedelta(days=d)
+            for h in range(7, 10):  # 7-9 AM, high score
+                windows.append(_flow_window(day=day, hour=h, score=0.9))
+            for h in range(13, 18):
+                windows.append(_flow_window(day=day, hour=h, score=0.1))
+        result = detect_chronotype(windows)
+        assert len(result) == 1
+        card = result[0]
+        assert card.type == "chronotype"
+        assert "early" in card.title.lower()
+        assert card.data["label"] == "early"
+        # Smoothing pulls in adjacent hours; peak is morning-ish
+        assert min(card.data["peak_hours"]) >= 6
+        assert max(card.data["peak_hours"]) <= 10
+
+    def test_evening_peak_labels_evening_person(self):
+        """Peak at 19-21 → "evening" label."""
+        from beats.domain.intelligence import detect_chronotype
+
+        windows = []
+        for d in range(14):
+            day = date(2026, 4, 1) + timedelta(days=d)
+            for h in range(19, 22):
+                windows.append(_flow_window(day=day, hour=h, score=0.9))
+            for h in range(8, 12):
+                windows.append(_flow_window(day=day, hour=h, score=0.1))
+        result = detect_chronotype(windows)
+        assert len(result) == 1
+        assert result[0].data["label"] == "evening"
+
+
+# =============================================================================
+# Biometric correlations — Pearson HRV/sleep × mood
+# =============================================================================
+
+
+def _bio_day(d: date, *, hrv: float | None = None, sleep_min: int | None = None):
+    from beats.domain.models import BiometricDay
+
+    return BiometricDay(date=d, source="oura", hrv_ms=hrv, sleep_minutes=sleep_min)
+
+
+def _note(d: date, mood: int):
+    from beats.domain.models import DailyNote
+
+    return DailyNote(date=d, mood=mood)
+
+
+class TestDetectBiometricCorrelations:
+    """Pearson r between HRV/sleep and mood. Threshold |r| ≥ 0.4
+    (stricter than project-level correlation's 0.3 — biometrics
+    are more sensitive to noise)."""
+
+    def test_empty_returns_no_cards(self):
+        from beats.domain.intelligence import detect_biometric_correlations
+
+        assert detect_biometric_correlations([], []) == []
+
+    def test_below_7_pairs_returns_no_cards(self):
+        """_pearson_r returns 0.0 below 7 pairs. Pin so a tiny
+        sample doesn't produce a confident r."""
+        from beats.domain.intelligence import detect_biometric_correlations
+
+        bio = []
+        notes = []
+        for i in range(6):
+            d = date(2026, 4, 1) + timedelta(days=i)
+            bio.append(_bio_day(d, hrv=40 + i * 5))
+            notes.append(_note(d, mood=1 + i % 5))
+        assert detect_biometric_correlations(bio, notes) == []
+
+    def test_strong_hrv_mood_correlation_emits_card(self):
+        """≥7 pairs with HRV monotonic alongside mood → r > 0.4 →
+        card. Pin body framing + r/n values."""
+        from beats.domain.intelligence import detect_biometric_correlations
+
+        bio = []
+        notes = []
+        for i in range(10):
+            d = date(2026, 4, 1) + timedelta(days=i)
+            bio.append(_bio_day(d, hrv=30 + i * 5))
+            notes.append(_note(d, mood=(i % 5) + 1))
+        result = detect_biometric_correlations(bio, notes)
+        hrv_cards = [c for c in result if c.type == "hrv_mood_correlation"]
+        if hrv_cards:
+            card = hrv_cards[0]
+            assert "higher" in card.body.lower() or "lower" in card.body.lower()
+            assert card.data["n"] == 10
+            assert abs(card.data["r"]) >= 0.4
+
+    def test_strong_sleep_mood_correlation_emits_card(self):
+        from beats.domain.intelligence import detect_biometric_correlations
+
+        bio = []
+        notes = []
+        for i in range(10):
+            d = date(2026, 4, 1) + timedelta(days=i)
+            bio.append(_bio_day(d, sleep_min=300 + i * 30))
+            notes.append(_note(d, mood=(i % 5) + 1))
+        result = detect_biometric_correlations(bio, notes)
+        sleep_cards = [c for c in result if c.type == "sleep_mood_correlation"]
+        if sleep_cards:
+            assert sleep_cards[0].data["n"] == 10
+            assert abs(sleep_cards[0].data["r"]) >= 0.4
+
+    def test_constant_x_yields_zero_r_no_card(self):
+        """Constant x → _pearson_r denom-zero → 0.0 → no card.
+        Pin so a stable-HRV user doesn't see a phantom
+        correlation card."""
+        from beats.domain.intelligence import detect_biometric_correlations
+
+        bio = []
+        notes = []
+        for i in range(10):
+            d = date(2026, 4, 1) + timedelta(days=i)
+            bio.append(_bio_day(d, hrv=40, sleep_min=420))
+            notes.append(_note(d, mood=1 + i % 5))
+        assert detect_biometric_correlations(bio, notes) == []
+
+    def test_pairs_only_built_for_dates_with_both_signals(self):
+        """A bio_day on a date without a mood note → not paired.
+        Pin the join semantics so a partial day doesn't pull a
+        phantom value into the regression."""
+        from beats.domain.intelligence import detect_biometric_correlations
+
+        bio = [_bio_day(date(2026, 4, 1) + timedelta(days=i), hrv=40) for i in range(10)]
+        notes = [
+            _note(date(2026, 4, 1), mood=4),
+            _note(date(2026, 4, 2), mood=3),
+            _note(date(2026, 4, 3), mood=5),
+        ]
+        # Only 3 pairs < 7 → no card
+        assert detect_biometric_correlations(bio, notes) == []
