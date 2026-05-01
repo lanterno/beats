@@ -6,7 +6,7 @@ import os
 import uuid
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from beats.api.dependencies import (
@@ -17,7 +17,7 @@ from beats.api.dependencies import (
     ProjectServiceDep,
     TimerServiceDep,
 )
-from beats.api.routers.auth import get_session_manager
+from beats.api.routers.auth import get_session_manager, limiter
 from beats.domain.models import DeviceRegistration, PairingCode
 
 router = APIRouter(prefix="/api/device", tags=["device"])
@@ -222,12 +222,19 @@ async def generate_pair_code(
 
 
 @router.post("/pair/exchange", response_model=PairExchangeResponse)
+@limiter.limit("10/minute")
 async def exchange_pair_code(
+    request: Request,
     body: PairExchangeRequest,
     pairing_repo: PairingCodeRepoDep,
     device_repo: DeviceRegistrationRepoDep,
 ) -> PairExchangeResponse:
-    """Exchange a pairing code for a long-lived device token (public endpoint)."""
+    """Exchange a pairing code for a long-lived device token (public endpoint).
+
+    Rate-limited because the endpoint is unauthenticated and the pairing
+    code is only ~30 bits of entropy (6 base32 chars). Without a limit,
+    a peer on the same NAT could grind through the keyspace.
+    """
     code_hash = hashlib.sha256(body.code.encode()).hexdigest()
     pairing_code = await pairing_repo.find_by_hash(code_hash)
     if not pairing_code:

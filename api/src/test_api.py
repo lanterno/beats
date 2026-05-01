@@ -27,6 +27,23 @@ def _setup_auth(auth_info):
     auth_headers = auth_info["headers"]
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset slowapi's process-global limiter store before each test.
+
+    Several tests legitimately call /api/device/pair/exchange and
+    /api/auth/* during setup; without a reset, the 5–10/min caps on
+    those routes accumulate across the run and 429 the back half of
+    the suite. Tests that *want* to exercise the limit (e.g.
+    TestRateLimiting) consume the budget within a single test and
+    are unaffected by the per-test reset.
+    """
+    from beats.api.routers.auth import limiter
+
+    limiter.reset()
+    yield
+
+
 class TestProjectAPI:
     """Test suite for Project management endpoints"""
 
@@ -1295,6 +1312,26 @@ class TestRateLimiting:
             client.get("/api/auth/login/options")
 
         response = client.get("/api/auth/login/options")
+        assert response.status_code == 429
+
+    def test_pair_exchange_rate_limited(self):
+        """POST /api/device/pair/exchange is rate-limited.
+
+        Endpoint is unauthenticated and accepts a 6-char base32 pairing
+        code (~30 bits of entropy). Without a rate limit, an attacker
+        with network access could grind through the keyspace. Cap is
+        10/min — eleventh request in the same window must 429.
+        """
+        for _ in range(10):
+            client.post(
+                "/api/device/pair/exchange",
+                json={"code": "AAAAAA", "device_name": "test"},
+            )
+
+        response = client.post(
+            "/api/device/pair/exchange",
+            json={"code": "AAAAAA", "device_name": "test"},
+        )
         assert response.status_code == 429
 
 
