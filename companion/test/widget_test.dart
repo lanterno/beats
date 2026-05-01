@@ -15,7 +15,7 @@ void main() {
 
     expect(find.text('Beats'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2)); // API URL + code
+    expect(find.byType(TextField), findsNWidgets(3)); // API URL + Web UI URL + code
   });
 
   testWidgets('Pairing rejects short code', (WidgetTester tester) async {

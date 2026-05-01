@@ -19,6 +19,7 @@ class _PairingScreenState extends State<PairingScreen> {
   final _codeController = TextEditingController();
   final _codeFocus = FocusNode();
   final _apiUrlController = TextEditingController();
+  final _webUrlController = TextEditingController();
   final _storage = TokenStorage();
   bool _loading = false;
   String? _error;
@@ -26,12 +27,17 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   void initState() {
     super.initState();
-    _loadApiUrl();
+    _loadUrls();
   }
 
-  Future<void> _loadApiUrl() async {
-    final url = await _storage.loadApiUrl();
-    _apiUrlController.text = url;
+  Future<void> _loadUrls() async {
+    // Hydrate both fields in one trip so the user sees their saved
+    // values (or the defaults). Web URL was added later — existing
+    // users who never set it land on http://localhost:8080.
+    final api = await _storage.loadApiUrl();
+    final web = await _storage.loadWebUrl();
+    _apiUrlController.text = api;
+    _webUrlController.text = web;
   }
 
   Future<void> _pair() async {
@@ -52,6 +58,13 @@ class _PairingScreenState extends State<PairingScreen> {
       final result = await client.exchangePairCode(code, deviceName: hostname);
       await _storage.saveToken(result.deviceToken);
       await _storage.saveApiUrl(apiUrl);
+      // Web URL is optional — if blank, leave the saved/default
+      // value alone so a user who only filled in the API field
+      // doesn't accidentally clobber a previously-set web URL.
+      final webUrl = _webUrlController.text.trim();
+      if (webUrl.isNotEmpty) {
+        await _storage.saveWebUrl(webUrl);
+      }
       if (mounted) widget.onPaired();
     } on ApiException catch (e) {
       setState(() => _error = e.statusCode == 404
@@ -68,6 +81,7 @@ class _PairingScreenState extends State<PairingScreen> {
     _codeController.dispose();
     _codeFocus.dispose();
     _apiUrlController.dispose();
+    _webUrlController.dispose();
     super.dispose();
   }
 
@@ -83,7 +97,12 @@ class _PairingScreenState extends State<PairingScreen> {
           Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 380),
-              child: Padding(
+              // SingleChildScrollView so the form gracefully scrolls
+              // on short viewports (small windows, embedded webviews,
+              // CI test viewports) — adding the Web UI field made the
+              // column overflow the default test screen height.
+              child: SingleChildScrollView(
+                child: Padding(
                 padding: const EdgeInsets.all(32),
                 child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -148,6 +167,28 @@ class _PairingScreenState extends State<PairingScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // Web UI URL (optional). Distinct from API because
+                // deployments commonly host them on different hosts
+                // (api.example.com vs app.example.com); used by the
+                // FlowScreen / Coach tap-to-open feature to deep-link
+                // to filtered Insights views.
+                StaggeredEntrance(
+                  delay: const Duration(milliseconds: 160),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('WEB UI (OPTIONAL)', style: BeatsType.label),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _webUrlController,
+                        style: BeatsType.bodyMedium,
+                        decoration: _inputDecoration('https://app.lifepete.com'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
                 // Code
                 StaggeredEntrance(
                   delay: const Duration(milliseconds: 180),
@@ -197,9 +238,10 @@ class _PairingScreenState extends State<PairingScreen> {
                 ),
                   ],
                 ),
-              ),
-            ),
-          ),
+              ), // Padding
+              ), // SingleChildScrollView
+            ), // ConstrainedBox
+          ), // Center
         ],
       ),
     );
