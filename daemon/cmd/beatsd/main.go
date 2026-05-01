@@ -218,19 +218,22 @@ func main() {
 		}
 
 	case "open":
-		// Optional `--repo PATH` to deep-link the filtered view.
-		// Distinct from the recent/stats/top filter parser since this
-		// arm only honors --repo (the Insights page also accepts
-		// --language and --bundle but those are less useful as a
-		// shell-launched command — most users opening from a terminal
-		// know the repo).
+		// Optional `--repo PATH` to deep-link the filtered view, plus
+		// `--print` to write the URL to stdout instead of launching a
+		// browser (useful for shell pipelines and headless setups).
 		var repo string
+		var printOnly bool
 		for i := 1; i < len(args); i++ {
-			if args[i] == "--repo" && i+1 < len(args) {
-				repo = args[i+1]
+			switch args[i] {
+			case "--repo":
+				if i+1 < len(args) {
+					repo = args[i+1]
+				}
+			case "--print":
+				printOnly = true
 			}
 		}
-		if err := runOpen(cfg, repo); err != nil {
+		if err := runOpen(cfg, repo, printOnly); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -328,6 +331,7 @@ Commands:
                   --json           emit the three leaderboards as a JSON object (for piping into jq)
   open          Open the Beats web UI Insights page in the system browser
                   --repo PATH      deep-link to a filtered view (?repo=…)
+                  --print          print the URL to stdout instead of launching
   stats         Print a one-line headline summary (count · avg · peak · best repo)
                   --minutes N      override the window (default 60)
                   --repo PATH      narrow to a specific editor workspace

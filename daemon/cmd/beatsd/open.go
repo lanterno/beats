@@ -19,8 +19,21 @@ import (
 // the unfiltered view. We don't auto-detect cwd here because a user
 // running `beatsd open` from a directory that ISN'T a paired editor
 // workspace would land on a confusingly-empty filtered view.
-func runOpen(cfg *config.Config, repo string) error {
+//
+// When `printOnly` is true, the URL is written to stdout instead of
+// launching the browser. Designed for shell pipelines:
+//
+//	beatsd open --repo $(pwd) --print | pbcopy
+//	open "$(beatsd open --print)"
+//
+// — and as a fallback for users without a default browser configured.
+func runOpen(cfg *config.Config, repo string, printOnly bool) error {
 	url := buildInsightsURL(cfg.UI.BaseURL, repo)
+	if printOnly {
+		// Bare URL on stdout, no decoration. Pipeable.
+		fmt.Println(url)
+		return nil
+	}
 	if err := openBrowser(url); err != nil {
 		// Non-fatal — print the URL anyway so the user can copy/paste.
 		fmt.Printf("could not open browser automatically: %v\n", err)
