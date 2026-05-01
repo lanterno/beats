@@ -1,83 +1,137 @@
 # Beats UI
 
-A modern time tracking application for managing project hours and work sessions.
+React 19 + TypeScript SPA — the web frontend for the Beats time-tracking system. Talks to the Python API at `http://localhost:7999` in dev.
+
+See `CLAUDE.md` for runtime + testing conventions, and the repo-root `README.md` for the broader system overview.
 
 ## Tech Stack
 
-- **Framework**: React 19 + TypeScript + Vite
+- **Framework**: React 19 + TypeScript + Vite 7
 - **Routing**: React Router 7
-- **Data Fetching**: TanStack Query v5
-- **Styling**: TailwindCSS 3 + Radix UI
+- **Data fetching**: TanStack Query v5
+- **Styling**: TailwindCSS 4 (`@theme` + `@layer base` syntax) + Radix UI primitives
 - **Validation**: Zod v4
-- **Package Manager**: pnpm
+- **Tests**: Vitest (unit) + Playwright (e2e, Chromium-only)
+- **Lint/format**: Biome (replaces ESLint + Prettier)
+- **PWA**: vite-plugin-pwa with workbox runtime caching
+- **Package manager**: pnpm
 
 ## Getting Started
 
 ```bash
-# Install dependencies
 pnpm install
+pnpm dev                  # Vite dev server on :8080
+pnpm build                # production build → dist/spa/
 
-# Start development server (port 8080)
-pnpm dev
+# Quality
+pnpm lint                 # biome check
+pnpm lint:fix             # biome check --write
+pnpm typecheck            # tsc
 
-# Type check
-pnpm typecheck
-
-# Build for production
-pnpm build
+# Tests
+pnpm test                 # vitest unit tests (one-shot)
+pnpm e2e                  # playwright e2e (requires API on :7999 + UI on :8080)
 ```
 
-**Note**: The backend API must be running at `http://localhost:7999` for the frontend to work.
+The backend API must be running at `http://localhost:7999` for the dev server to work. Override via `VITE_API_URL` if needed.
 
-## Architecture
+## Architecture: Feature-Sliced Design
 
-This project follows **Feature-Sliced Design (FSD)**, a modern frontend architectural methodology that organizes code by business domains rather than technical types.
-
-### Layer Structure
+Code is organized by domain rather than technical layer.
 
 ```
 client/
-├── app/                    # App layer: routing, providers, global config
-├── pages/                  # Pages layer: route components (orchestration)
-├── features/               # Features layer: user interactions with business logic
-├── entities/               # Entities layer: business domain objects
-└── shared/                 # Shared layer: reusable utilities with no business logic
+├── app/                    Application shell, providers, routing (Layout.tsx)
+├── pages/                  Route-level components (one directory per route)
+├── widgets/                Composite components used across pages (e.g. sidebar)
+├── features/               User interactions with business logic
+├── entities/               Business domain objects (data + types + UI)
+└── shared/                 Reusable utilities — no business logic
 ```
 
-### Layers Explained
-
-| Layer | Purpose | Can Import From |
+| Layer | Purpose | Can import from |
 |-------|---------|-----------------|
 | `app/` | Application shell, providers, routing | All layers |
-| `pages/` | Full pages, compose features/entities | features, entities, shared |
-| `features/` | User interactions (e.g., timer) | entities, shared |
-| `entities/` | Business objects (project, session) | shared |
-| `shared/` | Utilities, UI primitives, config | Nothing (foundation layer) |
+| `pages/` | Full pages, compose features/entities/widgets | widgets, features, entities, shared |
+| `widgets/` | Cross-page composite UI (sidebar, headers) | features, entities, shared |
+| `features/` | User interactions (timer, auth) | entities, shared |
+| `entities/` | Business objects (project, session, planning, ...) | shared |
+| `shared/` | Utilities, UI primitives, API client | nothing (foundation layer) |
 
-### Slice Structure
+### Slice structure
 
-Each entity/feature follows a consistent internal structure:
+Each entity / feature follows the same internal shape:
 
 ```
 entities/project/
-├── api/          # Data fetching (TanStack Query hooks, API functions)
-├── model/        # Types, domain logic, mappers
-├── ui/           # Presentational components
-└── index.ts      # Public API (barrel exports)
+├── api/          Data fetching (TanStack Query hooks, API functions)
+├── model/        Types, domain logic, mappers
+├── ui/           Presentational components
+└── index.ts      Public API (barrel exports)
 ```
 
-## Best Practices
+Cross-slice imports go through the public `index.ts` — never reach into another slice's internals.
 
-### 1. TanStack Query for Data Fetching
+## Project Structure
 
-All server state is managed through TanStack Query, providing:
-- Automatic caching and deduplication
-- Background refetching
-- Optimistic updates
-- Consistent loading/error states
+```
+client/
+├── app/
+│   ├── App.tsx                 Root component — router + provider tree
+│   ├── Layout.tsx              Authenticated app shell (sidebar, mobile header,
+│   │                            command palette, focus mode, EOD review)
+│   └── providers/              QueryProvider + auth gate
+│
+├── pages/                      One directory per route
+│   ├── index/                  Today / dashboard
+│   ├── homepage/               Public landing
+│   ├── insights/               Flow trends, contribution heatmap, retrospectives
+│   ├── coach/                  AI coach chat
+│   ├── plan/                   Weekly plan + recurring intentions
+│   ├── project-details/        Project deep-dive
+│   ├── settings/               Account, theme, integrations, devices
+│   └── not-found/              404
+│
+├── widgets/
+│   └── sidebar/                Desktop Sidebar + Mobile drawer header
+│
+├── features/
+│   ├── timer/                  Start/stop timer (ProjectSelector, TimerManager)
+│   └── auth/                   AuthModal + WebAuthn flow + auth store
+│
+├── entities/
+│   ├── project/                Projects + goal overrides
+│   ├── session/                Beats / sessions / flow windows
+│   ├── planning/               Intentions, daily notes, weekly plans
+│   ├── coach/                  Coach chat hooks + history
+│   ├── intelligence/           Productivity score, patterns, suggestions
+│   ├── calendar/               Google Calendar integration
+│   └── github/                 GitHub integration
+│
+├── shared/
+│   ├── api/                    Typed API client + Zod schemas + error envelope
+│   ├── lib/                    Utilities (date, format, sync engine, theme,
+│   │                            keyboard shortcuts, command palette, ...)
+│   ├── ui/                     UI primitives + dialogs (CommandPalette,
+│   │                            FocusMode, MorningBriefing, EndOfDayReview, ...)
+│   └── config/                 Environment configuration
+│
+├── global.css                  Tailwind 4 directives + design tokens
+└── main.tsx                    Entry point
+```
+
+## Path aliases
+
+| Alias | Path |
+|-------|------|
+| `@/*` | `client/*` |
+| `@shared/*` | `shared/*` (legacy, prefer `@/shared/*`) |
+
+## Conventions
+
+### Data fetching with TanStack Query
 
 ```typescript
-// Use query hooks in components
 const { data, isLoading, error } = useProjects();
 
 // Invalidate after mutations
@@ -85,98 +139,56 @@ const queryClient = useQueryClient();
 queryClient.invalidateQueries({ queryKey: projectKeys.all });
 ```
 
-### 2. Runtime Validation with Zod
+### Runtime validation with Zod
 
-API responses are validated at runtime using Zod schemas:
+API responses are validated at the client boundary:
 
 ```typescript
 const data = await get<unknown>("/api/projects/");
 return parseApiResponse(ApiProjectListSchema, data);
 ```
 
-### 3. Type-Safe API Layer
+### Error envelope parity
 
-Domain types are separated from API types with explicit mappers:
+Non-2xx responses are normalized into `ApiError` with the unified `{detail, code, fields?}` shape that the API and the daemon Go client and the companion Dart client all share.
 
 ```typescript
-// API type (matches backend response)
-interface ApiProject { id?: string | null; name: string; ... }
-
-// Domain type (clean, non-nullable)
-interface Project { id: string; name: string; color: string; ... }
-
-// Mapper function
-function toProject(api: ApiProject): Project { ... }
+try {
+  await startTimer(projectId);
+} catch (err) {
+  if (err instanceof ApiError && err.code === "PROJECT_ARCHIVED") { /* … */ }
+  toast.error(describeError(err, "Couldn't start timer"));
+}
 ```
 
-### 4. Public APIs via Index Files
+### Domain types vs API types
 
-Each module exposes a public API through `index.ts`:
+Domain types are kept clean (non-nullable, no API noise); explicit mapper functions translate from the API shape.
+
+### Public APIs via index files
 
 ```typescript
-// Import from public API
+// Good
 import { useProjects, ProjectsTable } from "@/entities/project";
 
-// Never import internals directly
-// BAD: import { useProjects } from "@/entities/project/api/queries";
+// Avoid: reaching into another slice's internals
+import { useProjects } from "@/entities/project/api/queries";
 ```
 
-### 5. TypeScript Strict Mode
+## Testing
 
-The project uses TypeScript strict mode for maximum type safety:
-- `strict: true`
-- `strictNullChecks: true`
-- `noImplicitAny: true`
+Unit tests live next to the source (`*.test.ts` / `*.test.tsx`). E2E tests live under `e2e/`.
 
-## Project Structure
+Currently 31 test files, 324 unit tests covering: shared/lib helpers, shared/ui primitives, entity hooks, page-level smoke tests, and the auth + timer + Layout flows.
 
-```
-client/
-├── app/
-│   ├── App.tsx              # Root component with providers and routing
-│   └── providers/           # QueryProvider (TanStack Query)
-│
-├── pages/
-│   ├── index/               # Home page (dashboard)
-│   ├── project-details/     # Project detail page
-│   └── not-found/           # 404 page
-│
-├── features/
-│   └── timer/               # Timer feature (start/stop work sessions)
-│       ├── api/             # Timer API calls
-│       ├── model/           # useTimer hook, timer state
-│       └── ui/              # TimerManager, TimerDisplay
-│
-├── entities/
-│   ├── project/             # Project entity
-│   │   ├── api/             # useProjects, useProject, useProjectWeeks
-│   │   ├── model/           # Project types, color assignment, mappers
-│   │   └── ui/              # ProjectsTable, TopProjectsTable, StatsCards
-│   │
-│   └── session/             # Session entity (work session / beat)
-│       ├── api/             # useSessions, useUpdateSession
-│       ├── model/           # Session types, mappers
-│       └── ui/              # SessionCard, SessionEditForm, DailySummaryGrid
-│
-├── shared/
-│   ├── api/                 # API client, Zod schemas, error handling
-│   ├── config/              # Environment configuration
-│   ├── lib/                 # Utilities (cn, date, format)
-│   └── ui/                  # UI primitives (Button, Table, Progress, etc.)
-│
-├── global.css               # Global styles and CSS variables
-└── main.tsx                 # Entry point
-```
+E2E (Playwright, Chromium-only) auto-starts the dev server.
 
-## Path Aliases
+## PWA
 
-| Alias | Path |
-|-------|------|
-| `@/*` | `client/*` |
-| `@shared/*` | `shared/*` (legacy, prefer `@/shared/*`) |
+`vite-plugin-pwa` is configured for `autoUpdate` registration. The service worker caches the API at a 5-minute TTL (good for dynamic data; avoid stale dashboards on a stale-while-revalidate refresh) and Google Fonts for a year. Config lives in `vite.config.ts`.
 
-## Further Reading
+## Further reading
 
-- [Feature-Sliced Design](https://feature-sliced.design/) - Architecture methodology
-- [TanStack Query](https://tanstack.com/query) - Data fetching library
-- [Zod](https://zod.dev/) - TypeScript-first schema validation
+- [Feature-Sliced Design](https://feature-sliced.design/)
+- [TanStack Query](https://tanstack.com/query)
+- [Zod](https://zod.dev/)
