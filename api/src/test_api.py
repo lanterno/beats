@@ -736,6 +736,61 @@ class TestErrorEnvelope:
         assert body["code"] == "MISSING_TOKEN"
         assert "Authentication" in body["detail"]
 
+    def test_validation_error_strips_loc_prefix_from_field_path(self):
+        # FastAPI tags each validation loc with body / query / path so a
+        # raw `loc` is ("body", "project_id"). The handler strips that
+        # prefix so consumers see the natural field name. Locked in
+        # here — without the strip, a UI form's `<input name="project_id">`
+        # mapping would have to know about the body prefix.
+        resp = client.post("/api/beats/", json={}, headers=auth_headers)
+        assert resp.status_code == 422
+        body = resp.json()
+        paths = [f["path"] for f in body["fields"]]
+        for path in paths:
+            assert not path.startswith("body."), f"expected loc prefix stripped, got {path!r}"
+            assert not path.startswith("query."), f"expected loc prefix stripped, got {path!r}"
+
+    def test_validation_singular_summary(self):
+        # Detail summary differs in singular vs plural ("Validation
+        # failed for one field" vs "Validation failed for N fields").
+        # Easier on the eyes than "1 fields".
+        resp = client.post(
+            "/api/beats/",
+            # Missing only project_id; supply everything else valid so
+            # exactly one field fails. Time fields use ISO so they'll
+            # parse cleanly.
+            json={
+                "started_at": "2026-04-30T10:00:00Z",
+                "stopped_at": "2026-04-30T11:00:00Z",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422
+        body = resp.json()
+        if len(body["fields"]) == 1:
+            assert body["detail"] == "Validation failed for one field", body["detail"]
+        else:
+            # Defensive: if a future schema change adds another required
+            # field, the plural form should kick in. The test still
+            # documents both branches even if only one fires today.
+            assert body["detail"] == f"Validation failed for {len(body['fields'])} fields"
+
+    def test_domain_exception_uses_envelope(self):
+        # NoActiveTimer is the canonical 400 DomainException — raised
+        # when stopping a timer that isn't running. Locks in that the
+        # @app.exception_handler(DomainException) handler in server.py
+        # produces the same envelope shape (with the 400-default code
+        # since DomainException carries no `code` attribute).
+        resp = client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-30T10:00:00Z"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400, resp.text
+        body = resp.json()
+        assert body["code"] == "BAD_REQUEST"
+        assert "No timer" in body["detail"]
+
 
 class TestDailyNotes:
     """Daily-notes endpoints: upsert (PUT + POST alias), single-day get,
