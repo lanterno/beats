@@ -355,11 +355,27 @@ func main() {
 		}
 
 	case "unpair":
+		// Check whether there was actually a token to remove so the
+		// success message reflects reality. pair.DeleteToken is
+		// idempotent (silently no-op if absent), but printing
+		// "Device token removed" when nothing was removed reads as
+		// either a lie or a bug; both are bad. A LoadToken read
+		// failure isn't fatal — fall through and let DeleteToken
+		// surface anything serious.
+		hadToken := false
+		if t, err := pair.LoadToken(); err == nil && t != "" {
+			hadToken = true
+		}
 		if err := pair.DeleteToken(); err != nil {
 			fmt.Fprintf(os.Stderr, "error removing token: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("Device token removed from keychain.")
+		if hadToken {
+			fmt.Println("Device token removed from keychain.")
+			fmt.Println("Run `beatsd pair <code>` to re-link the daemon.")
+		} else {
+			fmt.Println("No pairing to remove — nothing was stored in the keychain.")
+		}
 
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
