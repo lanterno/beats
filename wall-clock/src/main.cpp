@@ -145,12 +145,21 @@ void loop() {
             if (api.stopTimer()) {
                 Serial.println("Timer stopped");
                 leds.fadeToBlack();
+            } else {
+                // Server didn't accept the stop — give the user a visible
+                // signal so the press doesn't appear to vanish. The next
+                // forced status poll repaints from truth.
+                Serial.println("Timer stop failed");
+                leds.flashError();
             }
         } else if (favoriteCount > 0) {
             String projectId = favorites[currentFavoriteIndex].id;
             if (api.startTimer(projectId)) {
                 Serial.println("Timer started for " + favorites[currentFavoriteIndex].name);
                 leds.setActiveColor(favorites[currentFavoriteIndex].color);
+            } else {
+                Serial.println("Timer start failed");
+                leds.flashError();
             }
         }
         // Force immediate status refresh

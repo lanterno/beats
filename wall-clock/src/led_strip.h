@@ -22,6 +22,11 @@ public:
     // Smooth fade to off
     void fadeToBlack(int steps = 30);
 
+    // Brief red flash for transient errors (e.g. timer start failed).
+    // Caller is responsible for restoring the post-flash state — typical
+    // pattern is to force a status refresh, which repaints from truth.
+    void flashError(int blinks = 3, int onMs = 120, int offMs = 100);
+
     // Color transitions: active vs idle
     void setActiveColor(CRGB projectColor);
     void setIdleColor(CRGB projectColor);

@@ -58,6 +58,17 @@ void LedStrip::fadeToBlack(int steps) {
     show();
 }
 
+void LedStrip::flashError(int blinks, int onMs, int offMs) {
+    for (int i = 0; i < blinks; i++) {
+        fill_solid(_leds, NUM_LEDS, CRGB::Red);
+        show();
+        delay(onMs);
+        clear();
+        show();
+        if (i < blinks - 1) delay(offMs);
+    }
+}
+
 void LedStrip::setActiveColor(CRGB projectColor) {
     setColor(projectColor);
 }
