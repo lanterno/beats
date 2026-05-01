@@ -366,3 +366,46 @@ func TestCollectFlowStatus_ApiFailureMarksUnavailable(t *testing.T) {
 		t.Errorf("expected zero count on API failure, got %+v", got)
 	}
 }
+
+// --- isStaleNoEmissions: cross-language parity with the VS Code
+// extension's tooltip diagnostic ---
+
+func TestIsStaleNoEmissions_FiresAtThreshold(t *testing.T) {
+	// 90s matches the daemon's internal Accessibility re-probe
+	// cadence; the VS Code extension's helper uses the same
+	// threshold. Anything shorter would false-alarm during the
+	// first window flush; anything longer would delay legitimate
+	// diagnostics.
+	if !isStaleNoEmissions(daemonStatus{Running: true, UptimeSec: 90, WindowsEmitted: 0}) {
+		t.Error("expected stale at exactly 90s with 0 emissions")
+	}
+	if !isStaleNoEmissions(daemonStatus{Running: true, UptimeSec: 3600, WindowsEmitted: 0}) {
+		t.Error("expected stale on a long-uptime daemon with 0 emissions")
+	}
+}
+
+func TestIsStaleNoEmissions_DoesNotFireOnFreshDaemon(t *testing.T) {
+	// 60s old, 0 emitted — the daemon hasn't had time to flush
+	// even one window yet (windows are 60s each). False alarm.
+	if isStaleNoEmissions(daemonStatus{Running: true, UptimeSec: 60, WindowsEmitted: 0}) {
+		t.Error("expected no stale flag for freshly-started daemon")
+	}
+}
+
+func TestIsStaleNoEmissions_DoesNotFireWhenWindowsEmitted(t *testing.T) {
+	// Once any data has flowed, the pipeline is known-good. A long
+	// quiet stretch (user not at the keyboard) shouldn't re-trigger
+	// the diagnostic — that's not a system fault.
+	if isStaleNoEmissions(daemonStatus{Running: true, UptimeSec: 3600, WindowsEmitted: 1}) {
+		t.Error("expected no stale flag once any window has been emitted")
+	}
+}
+
+func TestIsStaleNoEmissions_DoesNotFireWhenDaemonNotRunning(t *testing.T) {
+	// If the daemon isn't running at all, the "not running" branch
+	// of the human form already conveys the failure clearly. The
+	// stale-no-emissions hint would just add noise on top.
+	if isStaleNoEmissions(daemonStatus{Running: false, UptimeSec: 0, WindowsEmitted: 0}) {
+		t.Error("expected no stale flag when the daemon is not running")
+	}
+}

@@ -191,10 +191,11 @@ func collectFlowStatus(ctx context.Context, c *client.Client) flowStatus {
 	return out
 }
 
-// printStatusHuman emits the original line-oriented status output.
-// Behavior is identical to the pre-JSON-mode runStatus — kept here
-// so the --json flag is purely additive and the existing piped
-// usages keep working byte-for-byte.
+// printStatusHuman emits the line-oriented status output.
+// Behavior matches the pre-JSON-mode runStatus byte-for-byte
+// for the healthy paths; the only added decoration is the
+// "connected but no emissions" diagnostic line that mirrors
+// the VS Code extension's tooltip warning.
 func printStatusHuman(cfg *config.Config, r statusReport) {
 	if !r.Paired {
 		fmt.Println("  pair:   not paired (run `beatsd pair <code>`)")
@@ -208,6 +209,9 @@ func printStatusHuman(cfg *config.Config, r statusReport) {
 				r.Daemon.WindowsEmitted, formatUptimeShort(r.Daemon.UptimeSec))
 		} else {
 			fmt.Println("  daemon: running")
+		}
+		if isStaleNoEmissions(r.Daemon) {
+			fmt.Println("          ⚠ no flow windows emitted in this session — check Accessibility permission")
 		}
 	} else {
 		fmt.Println("  daemon: not running (start with `beatsd run`)")
@@ -248,6 +252,20 @@ func renderFlowLine(f flowStatus) string {
 		return fmt.Sprintf("no windows in the last hour · %d in last 24h", f.Count24hFallback)
 	}
 	return "no windows in the last hour"
+}
+
+// isStaleNoEmissions reports whether the daemon has been up long
+// enough that "0 windows emitted" looks like a real failure (likely
+// Accessibility permission revoked mid-session) rather than a
+// freshly-started daemon still flushing its first window. 90s
+// matches the daemon's internal Accessibility re-probe cadence;
+// keeping the surface signals aligned means the human + VS Code
+// tooltip diagnostics flag the same condition at the same moment.
+//
+// Cross-language parity with isStaleNoEmissions in
+// integrations/vscode-beats/src/statusBar.ts.
+func isStaleNoEmissions(d daemonStatus) bool {
+	return d.Running && d.WindowsEmitted == 0 && d.UptimeSec >= 90
 }
 
 // formatStatusJSON renders the report as a JSON object with a
