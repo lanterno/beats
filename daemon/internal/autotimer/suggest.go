@@ -101,6 +101,14 @@ func (t *Tracker) OnFlowWindow(ctx context.Context, w collector.FlowWindow) {
 		DominantCategory: w.DominantCategory,
 		ContextSwitches:  w.ContextSwitches,
 		ActiveProjectID:  w.ActiveProjectID,
+		// Editor heartbeat fields. The API's /suggest-timer
+		// matches editor_repo against project.autostart_repos
+		// before falling back to category — without these
+		// forwarded the API can only category-match, defeating
+		// the per-repo auto-start design (commit 69da1f5).
+		EditorRepo:     w.EditorRepo,
+		EditorBranch:   w.EditorBranch,
+		EditorLanguage: w.EditorLanguage,
 	})
 	if err != nil {
 		log.Printf("autotimer: suggest API call failed: %v", err)

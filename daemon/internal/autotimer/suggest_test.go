@@ -13,15 +13,18 @@ import (
 
 // fakeSuggester records every SuggestTimer call and returns a programmable
 // response. Sufficient for verifying the tracker's state-machine without
-// spinning up an HTTP server.
+// spinning up an HTTP server. lastReq captures the most recent request so
+// tests can assert specific fields are forwarded (editor_repo, etc.).
 type fakeSuggester struct {
 	calls    int
+	lastReq  client.FlowWindowRequest
 	response client.AutoTimerSuggestion
 	err      error
 }
 
-func (f *fakeSuggester) SuggestTimer(_ context.Context, _ client.FlowWindowRequest) (*client.AutoTimerSuggestion, error) {
+func (f *fakeSuggester) SuggestTimer(_ context.Context, req client.FlowWindowRequest) (*client.AutoTimerSuggestion, error) {
 	f.calls++
+	f.lastReq = req
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -259,5 +262,45 @@ func TestTracker_NotificationBodyReflectsActualMinutesNotWindowCount(t *testing.
 	}
 	if strings.Contains(body, "for 8 minutes") {
 		t.Errorf("notification still uses window count as minutes — regression: %q", body)
+	}
+}
+
+func TestTracker_ForwardsEditorContextToSuggestTimer(t *testing.T) {
+	// Regression guard: the autotimer used to not forward
+	// editor_repo / editor_branch / editor_language on its
+	// SuggestTimer call. The API's /suggest-timer matches
+	// editor_repo against project.autostart_repos before falling
+	// back to category — without these fields, the API can ONLY
+	// match by category, defeating the per-repo auto-start design.
+	api := &fakeSuggester{
+		response: client.AutoTimerSuggestion{ShouldSuggest: true, ProjectName: "Beats"},
+	}
+	tr := NewTrackerWithNotifier(api, func(_, _ string) {})
+
+	start := time.Date(2026, 4, 30, 9, 0, 0, 0, time.UTC)
+	for i := 0; i < MinConsecutiveHighFlow; i++ {
+		w := collector.FlowWindow{
+			WindowStart:      start.Add(time.Duration(i) * time.Minute),
+			WindowEnd:        start.Add(time.Duration(i+1) * time.Minute),
+			FlowScore:        0.85,
+			DominantCategory: "coding",
+			EditorRepo:       "/Users/me/code/beats",
+			EditorBranch:     "main",
+			EditorLanguage:   "go",
+		}
+		tr.OnFlowWindow(context.Background(), w)
+	}
+
+	if api.calls < 1 {
+		t.Fatal("expected at least one SuggestTimer call")
+	}
+	if api.lastReq.EditorRepo != "/Users/me/code/beats" {
+		t.Errorf("expected editor_repo to be forwarded, got %q", api.lastReq.EditorRepo)
+	}
+	if api.lastReq.EditorBranch != "main" {
+		t.Errorf("expected editor_branch to be forwarded, got %q", api.lastReq.EditorBranch)
+	}
+	if api.lastReq.EditorLanguage != "go" {
+		t.Errorf("expected editor_language to be forwarded, got %q", api.lastReq.EditorLanguage)
 	}
 }
