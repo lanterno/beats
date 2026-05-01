@@ -1,14 +1,18 @@
 # Beats — Developer Guide
 
-Personal time-tracking system: Python API + React SPA + ESP32 wall clock.
+Personal time-tracking system: Python API + React SPA + Go daemon + Flutter companion + VS Code extension + ESP32 wall clock.
 
 ## Repository Layout
 
 ```
-api/          Python (FastAPI + Motor/MongoDB)
-ui/           React 19 SPA (Vite + TypeScript)
-wall-clock/   ESP32 firmware (Arduino/C++)
-terraform/    GCP infrastructure
+api/                          Python (FastAPI + Motor/MongoDB)
+ui/                           React 19 SPA (Vite + TypeScript)
+daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
+companion/                    Flutter desktop companion (timer, coach, integrations)
+integrations/vscode-beats/    VS Code extension (workspace heartbeats + status bar)
+wall-clock/                   ESP32 firmware (Arduino/C++)
+terraform/                    GCP infrastructure
+docs/                         Cross-surface design docs
 ```
 
 ## Quick Start
@@ -24,6 +28,17 @@ cd ui && pnpm e2e          # Playwright (needs API + UI running)
 
 # API local server
 cd api && just run-locally  # uvicorn on :7999
+
+# Daemon
+cd daemon && go test ./...                  # All packages
+cd daemon && go run ./cmd/beatsd run        # Foreground run (after `beatsd pair`)
+
+# Companion (Flutter)
+cd companion && flutter test                # Widget + unit tests
+cd companion && flutter run -d macos        # Desktop dev run
+
+# VS Code extension
+cd integrations/vscode-beats && npm test    # tsc + node --test
 ```
 
 ## Git Hooks (Lefthook)
@@ -35,17 +50,23 @@ Install: `lefthook install` (from repo root)
 
 ## Key Commands
 
-| What            | Where | Command                          |
-|-----------------|-------|----------------------------------|
-| API lint        | api/  | `uv run --group dev ruff check`  |
-| API typecheck   | api/  | `uv run --group dev ty check`    |
-| API test        | api/  | `uv run --group dev pytest src/` |
-| UI lint         | ui/   | `pnpm lint`                      |
-| UI lint fix     | ui/   | `pnpm lint:fix`                  |
-| UI typecheck    | ui/   | `pnpm typecheck`                 |
-| UI test         | ui/   | `pnpm test`                      |
-| UI E2E          | ui/   | `pnpm e2e`                       |
-| API contracts   | api/  | `hurl --test tests/hurl/*.hurl`  |
+| What                   | Where                         | Command                          |
+|------------------------|-------------------------------|----------------------------------|
+| API lint               | api/                          | `uv run --group dev ruff check`  |
+| API typecheck          | api/                          | `uv run --group dev ty check`    |
+| API test               | api/                          | `uv run --group dev pytest src/` |
+| API contracts          | api/                          | `hurl --test tests/hurl/*.hurl`  |
+| UI lint                | ui/                           | `pnpm lint`                      |
+| UI lint fix            | ui/                           | `pnpm lint:fix`                  |
+| UI typecheck           | ui/                           | `pnpm typecheck`                 |
+| UI test                | ui/                           | `pnpm test`                      |
+| UI E2E                 | ui/                           | `pnpm e2e`                       |
+| Daemon test            | daemon/                       | `go test ./...`                  |
+| Daemon format          | daemon/                       | `gofmt -w .`                     |
+| Daemon vet             | daemon/                       | `go vet ./...`                   |
+| Companion analyze      | companion/                    | `flutter analyze`                |
+| Companion test         | companion/                    | `flutter test`                   |
+| VS Code extension test | integrations/vscode-beats/    | `npm test`                       |
 
 ## Testing Strategy
 
@@ -54,13 +75,23 @@ Install: `lefthook install` (from repo root)
 - **UI unit tests** are in `client/**/*.test.ts` (Vitest).
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
 - **API contract tests** are in `api/tests/hurl/` (Hurl).
+- **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
+- **Companion tests** are in `companion/test/` (flutter_test). Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
 
 ## Conventions
 
 - Python: Ruff for linting/formatting, ty for type checking, line length 100
 - TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100
+- Go: gofmt + `go vet`; tests use stdlib `testing` only (no testify). Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
+- Dart: `flutter analyze` (no extra linter config); tests use `flutter_test` package.
 - API auth: JWT Bearer token (WebAuthn sessions) for all endpoints
 - Dates: API sends UTC, UI converts to local timezone on display
+- API errors: every non-2xx response shares the unified envelope `{detail, code, fields?}` (see `api/src/beats/api/errors.py`). The daemon Go client, UI ApiError, and companion ApiException all parse this shape.
+
+## Daemon CLI
+
+`beatsd` is the Go daemon. After `beatsd pair <code>`, every read-side command (`recent`, `top`, `stats`, `status`, `doctor`, `config`, `version`) supports `--json` for shell pipelines. `--here` is shorthand for `--repo $(git rev-parse --show-toplevel)`. See [daemon/README.md](daemon/README.md) for the full command reference.
 
 ## Infrastructure
 
