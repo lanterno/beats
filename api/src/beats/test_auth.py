@@ -363,6 +363,24 @@ class _FakeCredentialStorage:
     async def count_credentials(self, user_id: str) -> int:
         return sum(1 for uid, _ in self._creds if uid == user_id)
 
+    async def update_sign_count(self, credential_id, new_sign_count) -> bool:
+        from beats.auth.storage import StoredCredential
+
+        for i, (uid, c) in enumerate(self._creds):
+            if c.credential_id == credential_id:
+                self._creds[i] = (
+                    uid,
+                    StoredCredential(
+                        credential_id=c.credential_id,
+                        public_key=c.public_key,
+                        sign_count=new_sign_count,
+                        created_at=c.created_at,
+                        device_name=c.device_name,
+                    ),
+                )
+                return True
+        return False
+
 
 class _FakeUserRepo:
     def __init__(self, users: list | None = None):
@@ -502,6 +520,74 @@ class TestWebAuthnRegistrationVerificationGuards:
         with pytest.raises(ValueError, match="No pending registration"):
             await wam.verify_registration(credential={}, user=_user())
 
+    async def test_happy_path_persists_credential_and_returns_token(self, monkeypatch):
+        """Mock py_webauthn's verify_registration_response to return
+        a fake success object — exercises the try-block (lines
+        148-173): save_credential is called with the verified
+        material AND a session token is returned in the response.
+
+        Pin so a refactor of the storage interaction (e.g. forgets
+        to base64-encode credential_id) or the token-issue path
+        gets caught."""
+        from beats.auth import webauthn as webauthn_module
+
+        class _FakeVerification:
+            credential_id = b"\x01\x02\x03\x04"
+            credential_public_key = b"\x05\x06\x07\x08"
+            sign_count = 0
+
+        def fake_verify(*, credential, **_kwargs):  # noqa: ARG001
+            return _FakeVerification()
+
+        monkeypatch.setattr(webauthn_module, "verify_registration_response", fake_verify)
+
+        storage = _FakeCredentialStorage()
+        sm = _sm()
+        # Seed the pending registration challenge so the pre-check passes
+        sm.store_challenge(b"X" * 32, "registration")
+        wam = _wam(storage=storage, session=sm)
+
+        result = await wam.verify_registration(
+            credential={"id": "fake"},
+            user=_user(),
+            device_name="iPhone",
+        )
+
+        # Response shape pinned: verified + token
+        assert result["verified"] is True
+        assert isinstance(result["token"], str) and result["token"]
+
+        # Credential persisted via save_credential
+        creds = await storage.get_credentials("user-1")
+        assert len(creds) == 1
+        # base64url(b"\x01\x02\x03\x04") == "AQIDBA"
+        assert creds[0].credential_id == "AQIDBA"
+        assert creds[0].device_name == "iPhone"
+        # Token validates against the SessionManager
+        payload = sm.validate_session_token(result["token"])
+        assert payload is not None
+        assert payload["sub"] == "user-1"
+
+    async def test_crypto_failure_wraps_to_value_error(self, monkeypatch):
+        """When verify_registration_response raises (signature
+        mismatch, malformed origin, etc.), the broad except wraps
+        it as ValueError("Registration verification failed: ...").
+        Pin the wrapper so the API router's `except ValueError` →
+        400 path stays reachable from the real py_webauthn library."""
+        from beats.auth import webauthn as webauthn_module
+
+        def fake_verify_raises(*, credential, **_kwargs):  # noqa: ARG001
+            raise RuntimeError("origin mismatch")
+
+        monkeypatch.setattr(webauthn_module, "verify_registration_response", fake_verify_raises)
+
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, "registration")
+        wam = _wam(session=sm)
+
+        with pytest.raises(ValueError, match="Registration verification failed"):
+            await wam.verify_registration(credential={"id": "fake"}, user=_user())
+
 
 class TestWebAuthnAuthenticationOptions:
     """get_authentication_options uses an empty allowCredentials list
@@ -569,6 +655,99 @@ class TestWebAuthnAuthenticationVerificationGuards:
         wam = _wam(storage=storage, session=sm)
         with pytest.raises(ValueError, match="No user"):
             await wam.verify_authentication(credential={"id": "orphan"})
+
+    async def test_happy_path_updates_sign_count_and_returns_token(self, monkeypatch):
+        """Mock verify_authentication_response to return a fake
+        success object → exercises the try-block (lines 229-252):
+        update_sign_count is called with the new value AND a
+        session token is issued for the credential's owner.
+
+        Pin the sign_count-update side effect — without it, the
+        WebAuthn replay-attack prevention is silently broken."""
+        from beats.auth import webauthn as webauthn_module
+        from beats.auth.storage import StoredCredential
+        from beats.domain.models import User
+
+        class _FakeAuth:
+            new_sign_count = 42
+
+        def fake_verify(*, credential, **_kwargs):  # noqa: ARG001
+            return _FakeAuth()
+
+        monkeypatch.setattr(webauthn_module, "verify_authentication_response", fake_verify)
+
+        storage = _FakeCredentialStorage()
+        # Seed a credential — credential_id="cred-1", base64url-decodable
+        # public_key = "pk" (also valid base64url for 1 byte)
+        storage._creds.append(
+            (
+                "user-99",
+                StoredCredential(
+                    credential_id="cred-1",
+                    public_key="pk",
+                    sign_count=10,
+                    created_at="2026-04-01T00:00:00",
+                ),
+            )
+        )
+
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, challenge_type="authentication")
+
+        user = User(id="user-99", email="ahmed@example.com")
+        wam = _wam(storage=storage, session=sm, user_repo=_FakeUserRepo([user]))
+
+        result = await wam.verify_authentication(credential={"id": "cred-1"})
+
+        # Response shape pinned
+        assert result["verified"] is True
+        assert result["user_id"] == "user-99"
+        assert isinstance(result["token"], str) and result["token"]
+
+        # sign_count was advanced from 10 → 42
+        cred = await storage.get_credential_by_id("cred-1")
+        assert cred is not None
+        assert cred.sign_count == 42
+
+        # Token validates with the user's identity
+        payload = sm.validate_session_token(result["token"])
+        assert payload is not None
+        assert payload["sub"] == "user-99"
+        assert payload["email"] == "ahmed@example.com"
+
+    async def test_crypto_failure_wraps_to_value_error(self, monkeypatch):
+        """When verify_authentication_response raises (signature
+        mismatch, sign-count rollback, etc.), the broad except
+        wraps it as ValueError("Authentication verification
+        failed: ..."). Pin so the router's `except ValueError`
+        → 401 path stays reachable from the real py_webauthn
+        library."""
+        from beats.auth import webauthn as webauthn_module
+        from beats.auth.storage import StoredCredential
+
+        def fake_verify_raises(*, credential, **_kwargs):  # noqa: ARG001
+            raise RuntimeError("sign-count rollback detected")
+
+        monkeypatch.setattr(webauthn_module, "verify_authentication_response", fake_verify_raises)
+
+        storage = _FakeCredentialStorage()
+        storage._creds.append(
+            (
+                "user-99",
+                StoredCredential(
+                    credential_id="cred-X",
+                    public_key="pk",
+                    sign_count=0,
+                    created_at="2026-04-01T00:00:00",
+                ),
+            )
+        )
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, challenge_type="authentication")
+        wam = _wam(storage=storage, session=sm)
+
+        with pytest.raises(ValueError, match="Authentication verification failed"):
+            await wam.verify_authentication(credential={"id": "cred-X"})
 
 
 class TestWebAuthnIsRegistered:
