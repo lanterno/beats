@@ -32,9 +32,14 @@ class _CoachScreenState extends State<CoachScreen> {
   /// strip above the morning brief. Null when /summary is unreachable
   /// or hasn't returned yet — the strip hides cleanly in that case so
   /// the brief stays first-thing-the-user-sees.
+  ///
+  /// Falls back to yesterday's slice when today is empty (early-
+  /// morning case, just opened the laptop). _flowIsToday tracks
+  /// which slice we're showing so the strip label can swap.
   int? _flowAvg;
   int? _flowPeak;
   int? _flowCount;
+  bool _flowIsToday = true;
 
   // Per-question editing state, keyed by question index.
   final Map<int, TextEditingController> _answerControllers = {};
@@ -78,7 +83,20 @@ class _CoachScreenState extends State<CoachScreen> {
       final startOfDay = DateTime.utc(now.year, now.month, now.day);
       final flowSummary = await widget.client.getFlowWindowsSummary(
           startOfDay.toIso8601String(), now.toIso8601String());
-      final headline = parseFlowSummary(flowSummary);
+      var headline = parseFlowSummary(flowSummary);
+      var flowIsToday = true;
+      // Today's slice is empty — try yesterday so the user opening
+      // the app fresh in the morning still gets useful context.
+      // Same fallback rule the web FlowHeadline + FlowScreen empty
+      // state + `beatsd status` already use.
+      if (headline == null) {
+        final yEnd = startOfDay;
+        final yStart = yEnd.subtract(const Duration(days: 1));
+        final ySummary = await widget.client.getFlowWindowsSummary(
+            yStart.toIso8601String(), yEnd.toIso8601String());
+        headline = parseFlowSummary(ySummary);
+        flowIsToday = false;
+      }
       final flowAvg = headline?.avg;
       final flowPeak = headline?.peak;
       final flowCount = headline?.count;
@@ -115,6 +133,7 @@ class _CoachScreenState extends State<CoachScreen> {
           _flowAvg = flowAvg;
           _flowPeak = flowPeak;
           _flowCount = flowCount;
+          _flowIsToday = flowIsToday;
           _loading = false;
         });
         if (_noteController.text != _todayNote) {
@@ -469,7 +488,8 @@ class _CoachScreenState extends State<CoachScreen> {
             decoration: BoxDecoration(
                 color: BeatsColors.green, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 10),
-        Text('TODAY', style: labelStyle.copyWith(color: BeatsColors.green)),
+        Text(_flowIsToday ? 'TODAY' : 'YESTERDAY',
+            style: labelStyle.copyWith(color: BeatsColors.green)),
         const SizedBox(width: 16),
         Text('AVG', style: labelStyle),
         const SizedBox(width: 6),
