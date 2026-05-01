@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -71,5 +72,81 @@ func TestVersionInfo_OmitsBuildDateAndShaWhenAbsent(t *testing.T) {
 	}
 	if strings.Contains(out, "built:") {
 		t.Errorf("did not expect built: line when BuildDate is empty; got:\n%s", out)
+	}
+}
+
+// --- formatVersionJSON ---
+
+// JSON output is what CI release pipelines and the companion's
+// nascent about screen will consume. The shape is the public
+// --json contract — tag renames here are breaking.
+
+func TestFormatVersionJSON_RoundTrips(t *testing.T) {
+	v := versionInfo{
+		Version:   "v0.1.0",
+		GitSHA:    "abc123def456",
+		GitDirty:  true,
+		BuildDate: "2026-04-30T10:00:00Z",
+		GoVersion: "go1.23.0",
+		OSArch:    "darwin/arm64",
+		CgoBuild:  true,
+	}
+	out, err := formatVersionJSON(v)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("expected trailing newline so shell prompt lands cleanly, got %q", out)
+	}
+	var decoded versionInfo
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("output should round-trip through json.Unmarshal: %v\noutput: %s", err, out)
+	}
+	if decoded != v {
+		t.Errorf("round-trip mismatch:\n want %+v\n got  %+v", v, decoded)
+	}
+}
+
+func TestFormatVersionJSON_StableKeyNames(t *testing.T) {
+	// Locks the wire keys — CI pipelines that grep for
+	// `.git_sha` would break silently if a future refactor
+	// renamed the JSON tags.
+	out, err := formatVersionJSON(versionInfo{
+		Version:   "v0.1.0",
+		GitSHA:    "abc123",
+		GoVersion: "go1.23.0",
+		OSArch:    "darwin/arm64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"version"`, `"git_sha"`, `"git_dirty"`,
+		`"build_date"`, `"go_version"`, `"os_arch"`, `"cgo_build"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected stable key %s in JSON, got: %s", want, out)
+		}
+	}
+}
+
+func TestFormatVersionJSON_GoRunStyleIsValid(t *testing.T) {
+	// `go run` builds produce a versionInfo with empty git_sha /
+	// build_date / cgo_build=false. The JSON form should still be
+	// valid + decodable rather than producing partial output.
+	out, err := formatVersionJSON(versionInfo{
+		Version:   "dev",
+		GoVersion: "go1.23.0",
+		OSArch:    "darwin/arm64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded versionInfo
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("expected valid JSON for go-run-style versionInfo, got: %v", err)
+	}
+	if decoded.Version != "dev" || decoded.GitSHA != "" {
+		t.Errorf("decode wrong: %+v", decoded)
 	}
 }

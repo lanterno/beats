@@ -320,7 +320,23 @@ func main() {
 		}
 
 	case "version":
-		fmt.Print(collectVersionInfo())
+		var asJSON bool
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--json" {
+				asJSON = true
+			}
+		}
+		v := collectVersionInfo()
+		if asJSON {
+			out, err := formatVersionJSON(v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Print(out)
+		} else {
+			fmt.Print(v)
+		}
 
 	case "unpair":
 		if err := pair.DeleteToken(); err != nil {
@@ -454,6 +470,7 @@ Commands:
                   --json           emit the FlowWindowSummary object as JSON
   unpair        Remove the device token from the keychain
   version       Print version info
+                  --json           emit version + build info as a JSON object (for piping into jq)
   config        Print the loaded daemon config (API + UI URLs, collector intervals)
                   --json           emit as a JSON object (for piping into jq)`)
 }

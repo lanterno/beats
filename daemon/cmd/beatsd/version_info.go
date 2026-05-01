@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -11,14 +12,17 @@ import (
 // report. version (the upstream tag like "v0.1.0", or "dev" for unreleased
 // builds) is set via -ldflags at release time; everything else is read
 // from the runtime + build-info embedded by the Go toolchain.
+//
+// JSON tags are stable — `beatsd version --json` is part of the public
+// contract once shipped, used for CI and the companion's about screen.
 type versionInfo struct {
-	Version   string // e.g. "v0.1.0" or "dev"
-	GitSHA    string // 12-char prefix of the embedded vcs.revision
-	GitDirty  bool   // true if vcs.modified=true at build time
-	BuildDate string // build timestamp from vcs.time, ISO 8601
-	GoVersion string // e.g. "go1.23.0"
-	OSArch    string // "darwin/arm64", "linux/amd64", …
-	CgoBuild  bool   // whether cgo was on at build time (matters for cadence)
+	Version   string `json:"version"`    // e.g. "v0.1.0" or "dev"
+	GitSHA    string `json:"git_sha"`    // 12-char prefix of the embedded vcs.revision
+	GitDirty  bool   `json:"git_dirty"`  // true if vcs.modified=true at build time
+	BuildDate string `json:"build_date"` // build timestamp from vcs.time, ISO 8601
+	GoVersion string `json:"go_version"` // e.g. "go1.23.0"
+	OSArch    string `json:"os_arch"`    // "darwin/arm64", "linux/amd64", …
+	CgoBuild  bool   `json:"cgo_build"`  // whether cgo was on at build time (matters for cadence)
 }
 
 func collectVersionInfo() versionInfo {
@@ -50,6 +54,20 @@ func collectVersionInfo() versionInfo {
 		}
 	}
 	return v
+}
+
+// formatVersionJSON renders the version info as a single JSON
+// object with a trailing newline so a shell prompt lands cleanly
+// after `beatsd version --json`. Designed for CI release pipelines
+// (`beatsd version --json | jq -r .git_sha`) and the companion's
+// nascent about-screen, which would otherwise have to regex-parse
+// the human form.
+func formatVersionJSON(v versionInfo) (string, error) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode JSON: %w", err)
+	}
+	return string(b) + "\n", nil
 }
 
 // String renders the version info as a multi-line block suitable for
