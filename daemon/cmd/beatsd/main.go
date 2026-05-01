@@ -234,11 +234,13 @@ func main() {
 	case "open":
 		// Optional --repo / --language / --bundle to deep-link a
 		// filtered view (mirrors the chip filters on the web Insights
-		// page; all three AND-compose). --print writes the URL to
+		// page; all three AND-compose). --here is shorthand for
+		// `--repo $(git rev-parse --show-toplevel)`, useful from any
+		// subdir of a paired workspace. --print writes the URL to
 		// stdout instead of launching a browser, useful for shell
 		// pipelines and headless setups.
 		var filter OpenFilter
-		var printOnly bool
+		var printOnly, useHere bool
 		for i := 1; i < len(args); i++ {
 			switch args[i] {
 			case "--repo":
@@ -253,9 +255,23 @@ func main() {
 				if i+1 < len(args) {
 					filter.Bundle = args[i+1]
 				}
+			case "--here":
+				useHere = true
 			case "--print":
 				printOnly = true
 			}
+		}
+		if useHere {
+			if filter.Repo != "" {
+				fmt.Fprintln(os.Stderr, "error: --here and --repo are mutually exclusive")
+				os.Exit(1)
+			}
+			repo, err := resolveHereRepo()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			filter.Repo = repo
 		}
 		if err := runOpen(cfg, filter, printOnly); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -377,6 +393,7 @@ Commands:
                   --json           emit the three leaderboards as a JSON object (for piping into jq)
   open          Open the Beats web UI Insights page in the system browser
                   --repo PATH      deep-link by editor workspace (?repo=…)
+                  --here           shorthand for --repo $(git rev-parse --show-toplevel)
                   --language ID    deep-link by VS Code language id (?language=…)
                   --bundle ID      deep-link by macOS bundle id (?bundle=…)
                   --print          print the URL to stdout instead of launching

@@ -149,6 +149,64 @@ func TestRunOpen_PrintPathWritesBareURL(t *testing.T) {
 	}
 }
 
+// --- --here / resolveHereRepo / gitToplevel ---
+
+func TestGitToplevel_FromInsideThisRepoReturnsRoot(t *testing.T) {
+	// We run from cmd/beatsd/, three levels deep in the beats repo.
+	// gitToplevel should walk up to the actual top-level. Using the
+	// test's own location is a reliable real-git fixture without
+	// having to scaffold a temporary repo.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	root, ok := gitToplevel(cwd)
+	if !ok {
+		t.Skip("git not on PATH or this checkout isn't a git repo; skipping")
+	}
+	// Sanity: the resolved root should be a parent of cwd.
+	if !strings.HasPrefix(cwd, root) {
+		t.Errorf("expected cwd %q to live under resolved root %q", cwd, root)
+	}
+	// The repo's daemon/cmd/beatsd subtree must exist below the root,
+	// confirming we got the project root and not some accidental
+	// nested git submodule. Check via os.Stat to avoid hard-coding
+	// the absolute path.
+	if _, err := os.Stat(root + "/daemon/cmd/beatsd"); err != nil {
+		t.Errorf("expected daemon/cmd/beatsd under resolved root, got: %v", err)
+	}
+}
+
+func TestGitToplevel_OutsideAnyRepoReturnsNotOk(t *testing.T) {
+	// /tmp on macOS / Linux is not inside a git work tree. The
+	// helper must report (not ok) so resolveHereRepo can fall back
+	// to the bare cwd. Skip on platforms where /tmp doesn't exist
+	// (windows runs unlikely but defensive).
+	if _, err := os.Stat("/tmp"); err != nil {
+		t.Skip("no /tmp on this platform")
+	}
+	if _, ok := gitToplevel("/tmp"); ok {
+		t.Errorf("expected /tmp to not be inside any git repo")
+	}
+}
+
+func TestResolveHereRepo_ReturnsNonEmptyPath(t *testing.T) {
+	// Whatever cwd resolves to (git toplevel or bare cwd), the
+	// result must be a non-empty absolute path so the URL builder
+	// can encode it as ?repo=…
+	got, err := resolveHereRepo()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == "" {
+		t.Errorf("expected a non-empty path, got %q", got)
+	}
+	if !strings.HasPrefix(got, "/") && !(len(got) >= 2 && got[1] == ':') {
+		// Posix absolute (/...) or Windows drive (C:\...).
+		t.Errorf("expected an absolute path, got %q", got)
+	}
+}
+
 func TestRunOpen_PrintPathPipeableWithNoRepo(t *testing.T) {
 	// Bare unfiltered URL when no --repo is given. Same shape pattern
 	// — exactly the URL plus a newline — so scripts that pipe the

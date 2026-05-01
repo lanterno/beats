@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -80,6 +81,46 @@ func buildInsightsURL(base string, filter OpenFilter) string {
 		return trimmed + "/insights"
 	}
 	return trimmed + "/insights?" + q.Encode()
+}
+
+// resolveHereRepo returns the path that should be used as the
+// `--repo` filter when the user passes `--here`. Tries to resolve
+// the git toplevel from the current working directory so a user
+// running `beatsd open --here` from any subdirectory of the repo
+// gets the same canonical path the daemon's editor heartbeats
+// emit. Falls back to the bare cwd when `git rev-parse` fails
+// (cwd isn't inside a git work tree, or git isn't installed) —
+// the URL still opens, just with a less-canonical path.
+//
+// Returns an error only when even os.Getwd() fails, which
+// shouldn't happen in any practical setup but is worth surfacing
+// so we don't silently open the unfiltered Insights view.
+func resolveHereRepo() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not determine current directory: %w", err)
+	}
+	if root, ok := gitToplevel(cwd); ok {
+		return root, nil
+	}
+	return cwd, nil
+}
+
+// gitToplevel runs `git rev-parse --show-toplevel` from [dir] and
+// returns the resolved repo root on success. Extracted so unit
+// tests can call it with a known-git directory (this repo's own
+// path) and assert the contract without mocking exec.Command.
+func gitToplevel(dir string) (string, bool) {
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return "", false
+	}
+	return root, true
 }
 
 // openBrowser invokes the system's URL handler. Cross-platform shim —
