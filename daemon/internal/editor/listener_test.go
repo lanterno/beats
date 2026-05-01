@@ -221,6 +221,42 @@ func TestListener_HealthEndpointReportsStatus(t *testing.T) {
 	if got.EditorCount != 1 {
 		t.Errorf("expected editor_count=1 after one heartbeat, got %d", got.EditorCount)
 	}
+	// Counter starts at 0 and only the collector loop bumps it; we
+	// haven't called RecordWindowEmitted in this test, so 0 is the
+	// expected baseline.
+	if got.WindowsEmitted != 0 {
+		t.Errorf("expected windows_emitted=0 baseline, got %d", got.WindowsEmitted)
+	}
+}
+
+func TestListener_HealthReportsRecordedWindowEmissions(t *testing.T) {
+	listener := New("test")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	// Simulate three successful PostFlowWindow calls (the collector
+	// loop's success branch).
+	for i := 0; i < 3; i++ {
+		listener.RecordWindowEmitted()
+	}
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+	var got HealthResponse
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got.WindowsEmitted != 3 {
+		t.Errorf("expected windows_emitted=3 after three RecordWindowEmitted, got %d",
+			got.WindowsEmitted)
+	}
 }
 
 func TestListener_SummaryReturnsFetcherBytesVerbatim(t *testing.T) {

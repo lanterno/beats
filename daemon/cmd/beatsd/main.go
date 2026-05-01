@@ -180,6 +180,10 @@ func main() {
 			}
 			if postErr := c.PostFlowWindow(ctx, req); postErr != nil {
 				fmt.Fprintf(os.Stderr, "post flow window: %v\n", postErr)
+			} else {
+				// Record the success so /health's windows_emitted
+				// counter reflects only actually-landed windows.
+				editorListener.RecordWindowEmitted()
 			}
 
 			tracker.OnFlowWindow(ctx, w)

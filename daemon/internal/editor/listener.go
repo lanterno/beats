@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -59,6 +60,7 @@ type Listener struct {
 	startedAt      time.Time
 	version        string
 	summaryFetcher SummaryFetcher
+	windowsEmitted atomic.Int64 // updated by RecordWindowEmitted; surfaced on /health
 }
 
 // New constructs a listener. Call [Start] to bind the port; call [Latest]
@@ -82,6 +84,14 @@ func (l *Listener) SetSummaryFetcher(fn SummaryFetcher) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.summaryFetcher = fn
+}
+
+// RecordWindowEmitted increments the per-process flow-window counter
+// surfaced on /health. Called by the collector loop after a
+// successful PostFlowWindow. Atomic so the listener's request
+// handler can read it without holding the mutex.
+func (l *Listener) RecordWindowEmitted() {
+	l.windowsEmitted.Add(1)
 }
 
 // Start binds the listener to 127.0.0.1:port and begins accepting POST
@@ -176,12 +186,16 @@ func (l *Listener) All() map[string]Heartbeat {
 // listener. Designed for editor extensions to probe in a setInterval —
 // JSON tag names are stable and snake_case to match the rest of the
 // API surface. `editor_count` reports how many distinct editors have
-// sent at least one fresh heartbeat (≤ MaxStaleness old).
+// sent at least one fresh heartbeat (≤ MaxStaleness old);
+// `windows_emitted` reports how many flow windows this daemon process
+// has POSTed since startup (proxy for "is the collector actually
+// producing?").
 type HealthResponse struct {
-	OK          bool   `json:"ok"`
-	Version     string `json:"version"`
-	UptimeSec   int64  `json:"uptime_sec"`
-	EditorCount int    `json:"editor_count"`
+	OK             bool   `json:"ok"`
+	Version        string `json:"version"`
+	UptimeSec      int64  `json:"uptime_sec"`
+	EditorCount    int    `json:"editor_count"`
+	WindowsEmitted int64  `json:"windows_emitted"`
 }
 
 // handleHealth serves a tiny status snapshot so editor extensions can
@@ -199,10 +213,11 @@ func (l *Listener) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := HealthResponse{
-		OK:          true,
-		Version:     l.version,
-		UptimeSec:   int64(time.Since(l.startedAt).Seconds()),
-		EditorCount: len(l.All()),
+		OK:             true,
+		Version:        l.version,
+		UptimeSec:      int64(time.Since(l.startedAt).Seconds()),
+		EditorCount:    len(l.All()),
+		WindowsEmitted: l.windowsEmitted.Load(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
