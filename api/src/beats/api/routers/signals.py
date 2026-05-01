@@ -450,15 +450,38 @@ async def suggest_timer(
     """Check if a timer should be auto-started based on flow state.
 
     Called by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.
-    Matches the dominant app category against projects with autostart_repos.
+
+    Matching priority:
+    1. editor_repo against project.autostart_repos — if the user's
+       editor heartbeat carries a workspace path that one project
+       claims as its autostart_repo, that's the most-specific match.
+       Disambiguates two coding projects with the same category.
+    2. dominant_category against project.category — fallback when
+       the editor_repo is empty (no editor active) or no project
+       claims it.
+
+    Previously only matched by category, so two same-category
+    projects couldn't be disambiguated and the docstring's mention
+    of autostart_repos didn't reflect the implementation.
     """
     # Don't suggest if timer already running
     active = await timer_service.beat_repo.get_active()
     if active:
         return AutoTimerSuggestion(should_suggest=False)
 
-    # Find a project matching the dominant category
     projects = await project_service.project_repo.list(archived=False)
+
+    # 1. Try the most-specific match: editor_repo in autostart_repos.
+    if body.editor_repo:
+        for p in projects:
+            if body.editor_repo in p.autostart_repos:
+                return AutoTimerSuggestion(
+                    should_suggest=True,
+                    project_id=p.id,
+                    project_name=p.name,
+                )
+
+    # 2. Fallback: match by category.
     for p in projects:
         if p.category and p.category == body.dominant_category:
             return AutoTimerSuggestion(

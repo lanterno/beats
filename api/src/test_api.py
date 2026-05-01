@@ -1690,6 +1690,99 @@ class TestSignalsAPI:
         data = resp.json()
         return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}
 
+    def test_suggest_timer_matches_editor_repo_against_autostart_repos(self):
+        """The /suggest-timer endpoint disambiguates same-category
+        projects by matching the daemon's editor_repo against each
+        project's autostart_repos. Without this, two "coding"
+        projects always returned the same one (whichever came first
+        in the project list).
+        """
+        # Two coding projects, only one of which claims the editor's repo.
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Project A", "category": "coding"},
+            headers=auth_headers,
+        )
+        proj_a = resp.json()["id"]
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Project B", "category": "coding"},
+            headers=auth_headers,
+        )
+        proj_b = resp.json()["id"]
+        # B claims the workspace via autostart_repos.
+        client.put(
+            "/api/projects/",
+            json={
+                "id": proj_b,
+                "name": "Project B",
+                "category": "coding",
+                "autostart_repos": ["/Users/me/code/projB"],
+            },
+            headers=auth_headers,
+        )
+
+        _, device_headers = self._pair_device()
+        resp = client.post(
+            "/api/signals/suggest-timer",
+            json={
+                "window_start": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                "window_end": datetime.now(UTC).isoformat(),
+                "flow_score": 0.85,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.microsoft.VSCode",
+                "dominant_category": "coding",
+                "editor_repo": "/Users/me/code/projB",
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["should_suggest"] is True
+        # B should win even though A also matches by category, because
+        # editor_repo matches B's autostart_repos.
+        assert body["project_id"] == proj_b, body
+        assert body["project_name"] == "Project B"
+        # Make sure A wasn't picked accidentally.
+        assert body["project_id"] != proj_a
+
+    def test_suggest_timer_falls_back_to_category_when_no_editor_repo_match(self):
+        """When the editor_repo doesn't match any project's
+        autostart_repos (or is empty), fall back to category match.
+        Locks in the second-priority path.
+        """
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Cat Fallback", "category": "design"},
+            headers=auth_headers,
+        )
+        proj_id = resp.json()["id"]
+
+        _, device_headers = self._pair_device()
+        # Send a window with no editor_repo at all.
+        resp = client.post(
+            "/api/signals/suggest-timer",
+            json={
+                "window_start": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                "window_end": datetime.now(UTC).isoformat(),
+                "flow_score": 0.85,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.figma.Desktop",
+                "dominant_category": "design",
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["should_suggest"] is True
+        assert body["project_id"] == proj_id
+
     def test_create_project_with_category_persists(self):
         """Regression guard: the create handler used to ignore the
         \`category\` field — the schema accepted it but the route never
