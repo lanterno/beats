@@ -3235,3 +3235,77 @@ class TestBeatServiceCrud:
         svc = _beat_service([b1, b2])
         result = await svc.list_beats(date_filter=date(2026, 4, 2))
         assert [b.id for b in result] == ["b2"]
+
+
+def _project_service(*, projects: list[Project] | None = None, beats: list[Beat] | None = None):
+    from beats.domain.services import ProjectService
+
+    return ProjectService(
+        project_repo=_FakeProjectRepoForServices(projects),
+        beat_repo=_FakeBeatRepoForServices(beats),
+    )
+
+
+class TestProjectServiceCrud:
+    """ProjectService.create/update/archive/list_projects. Mostly a
+    pass-through to ProjectRepository, but archive_project carries
+    the load-then-mutate-then-save pattern that needs pinning."""
+
+    async def test_create_round_trips(self):
+        svc = _project_service()
+        p = _project("p1", "Alpha", weekly_goal=5.0)
+        created = await svc.create_project(p)
+        assert created.id == "p1"
+        listed = await svc.list_projects()
+        assert [x.id for x in listed] == ["p1"]
+
+    async def test_update_persists_field_changes(self):
+        p = _project("p1", "Alpha", weekly_goal=5.0)
+        svc = _project_service(projects=[p])
+        renamed = p.model_copy(update={"name": "Alpha 2", "weekly_goal": 10.0})
+        result = await svc.update_project(renamed)
+        assert result.name == "Alpha 2"
+        assert result.weekly_goal == 10.0
+
+    async def test_archive_project_sets_archived_true(self):
+        """archive_project loads the project, flips archived,
+        saves. Pin the load-then-flip-then-save sequence so a
+        refactor can't accidentally archive a stale copy."""
+        p = _project("p1", "Alpha", weekly_goal=5.0)
+        svc = _project_service(projects=[p])
+        archived = await svc.archive_project("p1")
+        assert archived.archived is True
+        # Confirm the archived state is reflected in list filters
+        active = await svc.list_projects(archived=False)
+        gone = await svc.list_projects(archived=True)
+        assert [x.id for x in active] == []
+        assert [x.id for x in gone] == ["p1"]
+
+    async def test_archive_raises_on_missing_id(self):
+        """archive_project of a non-existent id surfaces the
+        ProjectNotFound the repo raises. The API route maps that
+        to a 404."""
+        from beats.domain.exceptions import ProjectNotFound
+
+        svc = _project_service()
+        with pytest.raises(ProjectNotFound):
+            await svc.archive_project("ghost")
+
+    async def test_list_projects_default_returns_active_only(self):
+        """list_projects() defaults archived=False — pin so a
+        refactor can't quietly start showing archived projects in
+        the UI's main project picker."""
+        active = _project("p1", "Active", weekly_goal=5.0)
+        archived = _project("p2", "Archived", archived=True)
+        svc = _project_service(projects=[active, archived])
+        result = await svc.list_projects()
+        assert [p.id for p in result] == ["p1"]
+
+    async def test_list_projects_archived_true_returns_archived_only(self):
+        """archived=True scopes to the archive view — used by the
+        Settings → Archived projects panel."""
+        active = _project("p1", "Active", weekly_goal=5.0)
+        archived = _project("p2", "Archived", archived=True)
+        svc = _project_service(projects=[active, archived])
+        result = await svc.list_projects(archived=True)
+        assert [p.id for p in result] == ["p2"]
