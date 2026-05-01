@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../services/flow_summary.dart';
 import '../services/repo_path.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
@@ -84,9 +85,9 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       final latest = windows.isNotEmpty
           ? (windows.last['flow_score'] as num).toDouble() : 0.0;
 
-      final topRepo = (flowSummary?['top_repo'] as Map?)?['key'] as String?;
-      final topLanguage =
-          (flowSummary?['top_language'] as Map?)?['key'] as String?;
+      final headline = parseFlowSummary(flowSummary);
+      final topRepo = headline?.topRepo;
+      final topLanguage = headline?.topLanguage;
 
       // When today is empty, fetch yesterday's headline so the empty
       // state can render useful context. Single round-trip via the

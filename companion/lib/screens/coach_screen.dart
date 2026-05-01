@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../services/flow_summary.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
@@ -77,17 +78,10 @@ class _CoachScreenState extends State<CoachScreen> {
       final startOfDay = DateTime.utc(now.year, now.month, now.day);
       final flowSummary = await widget.client.getFlowWindowsSummary(
           startOfDay.toIso8601String(), now.toIso8601String());
-      int? flowAvg;
-      int? flowPeak;
-      int? flowCount;
-      if (flowSummary != null) {
-        final c = (flowSummary['count'] as num?)?.toInt() ?? 0;
-        if (c > 0) {
-          flowCount = c;
-          flowAvg = (((flowSummary['avg'] as num?)?.toDouble() ?? 0.0) * 100).round();
-          flowPeak = (((flowSummary['peak'] as num?)?.toDouble() ?? 0.0) * 100).round();
-        }
-      }
+      final headline = parseFlowSummary(flowSummary);
+      final flowAvg = headline?.avg;
+      final flowPeak = headline?.peak;
+      final flowCount = headline?.count;
 
       // Pull the last 7 days of daily notes for the sparkline + today's row.
       final today = DateTime.now();
