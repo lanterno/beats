@@ -20,7 +20,16 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from beats.coach import brief as brief_module
 from beats.coach import review as review_module
-from beats.coach.gateway import GatewayResponse
+from beats.coach.gateway import (
+    SONNET_CACHE_READ_PER_MTOK,
+    SONNET_CACHE_WRITE_PER_MTOK,
+    SONNET_INPUT_COST_PER_MTOK,
+    SONNET_OUTPUT_COST_PER_MTOK,
+    CacheSpec,
+    GatewayResponse,
+    _apply_cache_control,
+    _estimate_cost,
+)
 from beats.coach.memory import MemoryStore
 from beats.coach.repos import (
     COACH_MEMORY_COLLECTION,
@@ -886,3 +895,213 @@ class TestSaveAnswerAndReadbacks:
         # The seeded shape distinguishes via the user_id (which is in
         # the doc) — we just verify count to confirm the user_id
         # filter excluded user-b's row.
+
+
+class TestEstimateCost:
+    """The deterministic cost math the gateway uses to bill users.
+    Wrong here = wrong dashboard + wrong budget enforcement.
+
+    The model: cost = base_input·rate + output·rate +
+    cache_creation·write_rate + cache_read·read_rate, where
+    base_input = total_input − cache_creation − cache_read.
+    """
+
+    def test_zero_tokens_zero_cost(self):
+        assert _estimate_cost(0, 0, 0, 0) == 0.0
+
+    def test_pure_input_no_cache_uses_input_rate(self):
+        # 1M input tokens, no output, no cache → 1 × $3 = $3
+        assert _estimate_cost(1_000_000, 0, 0, 0) == 3.0
+
+    def test_pure_output_uses_output_rate(self):
+        # 1M output tokens → 1 × $15 = $15
+        assert _estimate_cost(0, 1_000_000, 0, 0) == 15.0
+
+    def test_input_minus_cache_is_billed_at_input_rate(self):
+        """If 1M input tokens were ALL cache reads, only the cache-read
+        rate applies — the "base input" billed at $3/Mtok is zero.
+        Locks the subtraction at line 64; without it a refactor that
+        bills cache_read AS input would charge $3 + $0.30 instead of
+        just $0.30 — a 10× over-bill on heavy-cache calls."""
+        # 1M cache reads, no other input
+        cost = _estimate_cost(1_000_000, 0, 0, 1_000_000)
+        # base_input = 1M - 0 - 1M = 0, so only the cache-read rate.
+        assert cost == pytest.approx(0.30, rel=1e-9)
+
+    def test_input_minus_cache_with_cache_creation(self):
+        """Same logic for cache writes — they're a separate line item."""
+        cost = _estimate_cost(1_000_000, 0, 1_000_000, 0)
+        # base_input = 0, cache_creation = 1M × $3.75 = $3.75
+        assert cost == pytest.approx(3.75, rel=1e-9)
+
+    def test_mixed_realistic_call(self):
+        """A realistic chat turn: 5K input including 2K cache-read
+        (system prompt) + 1K cache-creation (turn boundary) + 1K
+        output. Computes the line-by-line bill so a refactor that
+        merges any of the rates is caught."""
+        cost = _estimate_cost(
+            input_tokens=5_000,
+            output_tokens=1_000,
+            cache_creation=1_000,
+            cache_read=2_000,
+        )
+        # base_input = 5000 - 1000 - 2000 = 2000
+        # 2000 * 3 / 1M + 1000 * 15 / 1M + 1000 * 3.75 / 1M + 2000 * 0.30 / 1M
+        expected = (
+            2000 * SONNET_INPUT_COST_PER_MTOK / 1_000_000
+            + 1000 * SONNET_OUTPUT_COST_PER_MTOK / 1_000_000
+            + 1000 * SONNET_CACHE_WRITE_PER_MTOK / 1_000_000
+            + 2000 * SONNET_CACHE_READ_PER_MTOK / 1_000_000
+        )
+        assert cost == pytest.approx(expected, rel=1e-9)
+
+    def test_negative_base_input_clamps_to_zero(self):
+        """If reported cache_creation+cache_read exceeds total input
+        (Anthropic API quirk on certain edge cases), base_input
+        clamps at 0 — we never bill negative dollars. Without this
+        guard, a 10K cache_read against 9K input_tokens would
+        produce a negative input charge that subtracts from the
+        bill — under-collecting in a way the dashboard wouldn't
+        catch."""
+        cost = _estimate_cost(
+            input_tokens=9_000,
+            output_tokens=0,
+            cache_creation=0,
+            cache_read=10_000,  # exceeds input
+        )
+        # max(0, 9000 - 0 - 10000) = 0, so just cache_read at $0.30/M
+        expected = 10_000 * SONNET_CACHE_READ_PER_MTOK / 1_000_000
+        assert cost == pytest.approx(expected, rel=1e-9)
+
+
+class TestApplyCacheControl:
+    """_apply_cache_control injects cache_control={"type": "ephemeral"}
+    breakpoints per the CacheSpec. Wrong placement = silently higher
+    coach spend (cache misses) or breaking the request format. Pin
+    every shape combination."""
+
+    def test_string_system_becomes_block_with_cache_marker(self):
+        """The default CacheSpec marks the system prompt as cached.
+        Locks the conversion: str -> [{type, text, cache_control}]."""
+        spec = CacheSpec(system_cached=True, cached_turn_indices=[])
+        sys_blocks, msgs = _apply_cache_control("you are a coach", [], spec)
+
+        assert len(sys_blocks) == 1
+        assert sys_blocks[0]["type"] == "text"
+        assert sys_blocks[0]["text"] == "you are a coach"
+        assert sys_blocks[0]["cache_control"] == {"type": "ephemeral"}
+        assert msgs == []
+
+    def test_system_cached_false_skips_cache_marker(self):
+        """A caller that opts out of system caching (e.g. a one-off
+        non-cacheable system prompt) gets back the converted blocks
+        WITHOUT cache_control. Pin the off-path so a future default
+        flip doesn't silently start charging cache writes for
+        opt-out callers."""
+        spec = CacheSpec(system_cached=False, cached_turn_indices=[])
+        sys_blocks, _ = _apply_cache_control("you are a coach", [], spec)
+
+        assert len(sys_blocks) == 1
+        assert "cache_control" not in sys_blocks[0]
+
+    def test_list_system_marks_only_last_block(self):
+        """If the caller passes pre-built system blocks, only the LAST
+        one gets the cache marker. This is by design — Anthropic's
+        prompt-caching uses the last cached block as the read pointer,
+        so multi-block systems should mark just the final boundary."""
+        spec = CacheSpec(system_cached=True, cached_turn_indices=[])
+        system_in = [
+            {"type": "text", "text": "first"},
+            {"type": "text", "text": "second"},
+        ]
+        sys_blocks, _ = _apply_cache_control(system_in, [], spec)
+        assert len(sys_blocks) == 2
+        assert "cache_control" not in sys_blocks[0]
+        assert sys_blocks[1]["cache_control"] == {"type": "ephemeral"}
+
+    def test_does_not_mutate_input_system_blocks(self):
+        """The function must return new dicts — mutating caller-owned
+        lists would surprise on a retry where the same `system` is
+        passed in again."""
+        spec = CacheSpec(system_cached=True, cached_turn_indices=[])
+        system_in = [{"type": "text", "text": "first"}]
+        _apply_cache_control(system_in, [], spec)
+        assert "cache_control" not in system_in[0]
+
+    def test_string_message_at_cached_index_gets_block_form(self):
+        """A bare-string message content at a cached index gets
+        converted into the block form so cache_control can attach
+        to it. Locks the shape Anthropic's API expects."""
+        spec = CacheSpec(system_cached=False, cached_turn_indices=[0])
+        msgs_in = [{"role": "user", "content": "hello"}]
+        _, msgs_out = _apply_cache_control("sys", msgs_in, spec)
+
+        assert msgs_out[0]["content"] == [
+            {"type": "text", "text": "hello", "cache_control": {"type": "ephemeral"}}
+        ]
+
+    def test_list_message_marks_last_content_block(self):
+        """Same single-cache-marker rule as system: when the message
+        content is already a list of blocks, mark only the last."""
+        spec = CacheSpec(system_cached=False, cached_turn_indices=[0])
+        msgs_in = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "first"},
+                    {"type": "text", "text": "second"},
+                ],
+            }
+        ]
+        _, msgs_out = _apply_cache_control("sys", msgs_in, spec)
+        content = msgs_out[0]["content"]
+        assert "cache_control" not in content[0]
+        assert content[1]["cache_control"] == {"type": "ephemeral"}
+
+    def test_only_indexed_turns_get_cached(self):
+        """Indices outside cached_turn_indices stay unmarked. Pin
+        so a refactor that broadens the cache to all turns (=
+        unsupported by the API + every turn pays write cost)
+        breaks the test."""
+        spec = CacheSpec(system_cached=False, cached_turn_indices=[0])
+        msgs_in = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "ack"},
+            {"role": "user", "content": "third"},
+        ]
+        _, msgs_out = _apply_cache_control("sys", msgs_in, spec)
+        # First turn cached.
+        assert msgs_out[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+        # Other turns left as bare strings.
+        assert msgs_out[1]["content"] == "ack"
+        assert msgs_out[2]["content"] == "third"
+
+    def test_out_of_range_index_is_ignored(self):
+        """A spec referring to an index past the message list is a
+        no-op (rather than IndexError). Defensive — if the caller
+        builds the spec from stale assumptions about message count,
+        we don't 500."""
+        spec = CacheSpec(system_cached=False, cached_turn_indices=[5])
+        msgs_in = [{"role": "user", "content": "only one"}]
+        _, msgs_out = _apply_cache_control("sys", msgs_in, spec)
+        # Untouched; still a bare string.
+        assert msgs_out[0]["content"] == "only one"
+
+    def test_does_not_mutate_input_messages(self):
+        """Same defensive copy guarantee as system blocks — important
+        for retries where the same messages list is passed in twice."""
+        spec = CacheSpec(system_cached=False, cached_turn_indices=[0])
+        msgs_in = [{"role": "user", "content": "hello"}]
+        _apply_cache_control("sys", msgs_in, spec)
+        # Caller's input is still a bare-string content.
+        assert msgs_in[0]["content"] == "hello"
+
+    def test_default_cache_spec_caches_system_only(self):
+        """The CacheSpec() default — system_cached=True, no turns —
+        is what brief.py and review.py use. Pin so a default change
+        is deliberate."""
+        spec = CacheSpec()
+        sys_blocks, msgs = _apply_cache_control("sys", [{"role": "user", "content": "hi"}], spec)
+        assert sys_blocks[0]["cache_control"] == {"type": "ephemeral"}
+        # No turn cached.
+        assert msgs[0]["content"] == "hi"
