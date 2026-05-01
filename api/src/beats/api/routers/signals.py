@@ -256,12 +256,36 @@ async def export_flow_windows_csv(
             ]
         )
 
-    filename = f"beats_flow_windows_{datetime.now(UTC).strftime('%Y%m%d')}.csv"
+    filename = _csv_filename_for_range(start, end)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _csv_filename_for_range(start: datetime, end: datetime) -> str:
+    """Build a filename that reflects the queried date range.
+
+    The previous implementation hardcoded today's date, so a user
+    exporting `?start=2026-04-01&end=2026-04-30` got a file named
+    `beats_flow_windows_<today>.csv` — surprising on a download
+    that's clearly an archival range, not "today".
+
+    Rules:
+    - Single-day range (start and end fall on the same UTC date):
+      `beats_flow_windows_YYYYMMDD.csv`
+    - Multi-day range: `beats_flow_windows_YYYYMMDD_to_YYYYMMDD.csv`
+
+    UTC dates are used (matching the API's storage convention) so
+    a user exporting around midnight gets a stable name regardless
+    of their browser's timezone.
+    """
+    start_day = start.astimezone(UTC).strftime("%Y%m%d")
+    end_day = end.astimezone(UTC).strftime("%Y%m%d")
+    if start_day == end_day:
+        return f"beats_flow_windows_{start_day}.csv"
+    return f"beats_flow_windows_{start_day}_to_{end_day}.csv"
 
 
 @router.get("/flow-windows/summary", response_model=FlowWindowSummaryResponse)

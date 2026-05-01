@@ -1819,6 +1819,38 @@ class TestSignalsAPI:
         assert abs(body["avg"] - 0.45) < 1e-6
         assert body["top_language"]["key"] == "scala"
 
+    def test_csv_filename_helper_single_day(self):
+        """Single-day range gets a single date in the filename."""
+        from beats.api.routers.signals import _csv_filename_for_range
+
+        start = datetime(2026, 4, 1, 9, 0, 0, tzinfo=UTC)
+        end = datetime(2026, 4, 1, 18, 0, 0, tzinfo=UTC)
+        assert _csv_filename_for_range(start, end) == "beats_flow_windows_20260401.csv"
+
+    def test_csv_filename_helper_multi_day(self):
+        """Multi-day range uses the start_to_end form so the file
+        name reflects what the user actually downloaded."""
+        from beats.api.routers.signals import _csv_filename_for_range
+
+        start = datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2026, 4, 30, 23, 59, 59, tzinfo=UTC)
+        assert _csv_filename_for_range(start, end) == "beats_flow_windows_20260401_to_20260430.csv"
+
+    def test_csv_filename_helper_is_utc_stable(self):
+        """A user in UTC+02:00 exporting at 01:30 local on April 2nd
+        is exporting a range that's still April 1st in UTC. The
+        filename should reflect the UTC date so it's stable across
+        timezones."""
+        from datetime import timezone
+
+        from beats.api.routers.signals import _csv_filename_for_range
+
+        # 01:30 on 2026-04-02 in UTC+02:00 == 23:30 on 2026-04-01 in UTC.
+        plus2 = timezone(timedelta(hours=2))
+        start = datetime(2026, 4, 2, 1, 30, 0, tzinfo=plus2)
+        end = datetime(2026, 4, 2, 1, 45, 0, tzinfo=plus2)
+        assert _csv_filename_for_range(start, end) == "beats_flow_windows_20260401.csv"
+
     def test_flow_windows_csv_export_respects_filter(self):
         """GET /api/signals/flow-windows.csv streams a CSV that honors
         the same filter params as the JSON endpoint, so the "Download"
@@ -1863,6 +1895,15 @@ class TestSignalsAPI:
         assert "0.7400" in body
         assert "0.5500" not in body  # the typescript row should be filtered out
         assert "com.microsoft.VSCode" in body
+        # The filename in Content-Disposition reflects the queried
+        # range, not today's date. Single-day query (start and end
+        # within the same UTC day) produces `..._YYYYMMDD.csv`. The
+        # query above straddles ±1h around `now` so it lives within
+        # one day in either direction; assert the start side appears.
+        cd = resp.headers["content-disposition"]
+        # Compute the same start_day the helper would have used.
+        start_day = (now - timedelta(hours=1)).astimezone(UTC).strftime("%Y%m%d")
+        assert f"beats_flow_windows_{start_day}" in cd, cd
 
     def test_flow_windows_filter_by_bundle_id(self):
         """GET /api/signals/flow-windows?bundle_id=… narrows to that
