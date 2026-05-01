@@ -8,6 +8,7 @@ export {
 	apiClient,
 	apiMutate,
 	del,
+	describeError,
 	get,
 	type MutateOptions,
 	type MutateResult,

@@ -15,7 +15,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAll, listPending } from "../lib/mutationQueue";
-import { ApiError, type ApiErrorField, apiClient, apiMutate } from "./client";
+import { ApiError, type ApiErrorField, apiClient, apiMutate, describeError } from "./client";
 
 const originalFetch = globalThis.fetch;
 
@@ -297,5 +297,40 @@ describe("apiMutate — queue vs throw", () => {
 		const result = await apiMutate("POST", "/api/anything", {}, { clientId: "fixed-123" });
 
 		expect(result.clientId).toBe("fixed-123");
+	});
+});
+
+// describeError is the small helper toasts call from `onError`
+// handlers. The whole reason for it: ApiError's `message` already
+// includes detail + code + 422 fields[] suffix, so passing
+// err.message through is exactly what we want — but we need a
+// fallback for non-Error values (a thrown string, a stuck-in-the-
+// rare-corners undefined).
+describe("describeError", () => {
+	it("returns ApiError.message verbatim (with all the envelope detail)", () => {
+		const err = new ApiError(404, "Project archived [PROJECT_ARCHIVED]", "PROJECT_ARCHIVED");
+		expect(describeError(err, "Failed to save")).toBe("Project archived [PROJECT_ARCHIVED]");
+	});
+
+	it("returns plain Error.message verbatim", () => {
+		// Non-API errors (network TypeError, manual `new Error(...)`)
+		// still have a useful message; surface it.
+		expect(describeError(new Error("Failed to fetch"), "x")).toBe("Failed to fetch");
+	});
+
+	it("falls back when the value is not an Error", () => {
+		// Defensive: a thrown string or undefined would become "[object
+		// Object]" or "undefined" if we naively String()'d it. Use the
+		// generic toast text instead.
+		expect(describeError("oops", "Failed to save")).toBe("Failed to save");
+		expect(describeError(undefined, "Failed to save")).toBe("Failed to save");
+		expect(describeError(null, "Failed to save")).toBe("Failed to save");
+		expect(describeError({ detail: "wat" }, "Failed to save")).toBe("Failed to save");
+	});
+
+	it("falls back when an Error has an empty message", () => {
+		// An exotic case (`throw new Error()`) — the empty message would
+		// produce a blank toast, which reads worse than the fallback.
+		expect(describeError(new Error(""), "Failed to save")).toBe("Failed to save");
 	});
 });

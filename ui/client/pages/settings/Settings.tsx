@@ -42,7 +42,7 @@ import {
 import { useProjects } from "@/entities/project";
 import type { CredentialInfo } from "@/features/auth";
 import { getSessionToken } from "@/features/auth/stores/authStore";
-import { del, get, post } from "@/shared/api";
+import { del, describeError, get, post } from "@/shared/api";
 import { config } from "@/shared/config";
 import { COLOR_MODES, DENSITIES, THEMES, useOAuthCallback, useTheme } from "@/shared/lib";
 import { downloadFile } from "@/shared/lib/downloadFile";
@@ -595,7 +595,7 @@ function CalendarSection() {
 	const handleDisconnect = () => {
 		disconnectMutation.mutate(undefined, {
 			onSuccess: () => toast.success("Calendar disconnected"),
-			onError: () => toast.error("Failed to disconnect"),
+			onError: (err) => toast.error(describeError(err, "Failed to disconnect")),
 		});
 	};
 
@@ -658,7 +658,7 @@ function GitHubSection() {
 	const handleDisconnect = () => {
 		disconnectMutation.mutate(undefined, {
 			onSuccess: () => toast.success("GitHub disconnected"),
-			onError: () => toast.error("Failed to disconnect"),
+			onError: (err) => toast.error(describeError(err, "Failed to disconnect")),
 		});
 	};
 

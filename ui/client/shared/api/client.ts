@@ -71,6 +71,25 @@ export class ApiError extends Error {
 }
 
 /**
+ * Surface an API error's human message, falling back to a caller-
+ * supplied generic when the error wasn't an Error or carried no
+ * message. Use this in `onError` handlers so toasts read like
+ * "Project archived [PROJECT_ARCHIVED]" instead of the generic
+ * "Failed to save"; an ApiError's `message` already includes the
+ * envelope's detail + code + (for 422) fields[] suffix.
+ *
+ * Pass a fallback that makes sense without context — it's what the
+ * user sees when something exotic blew up (a thrown string, a
+ * network TypeError before the wrapper got to run, etc.).
+ */
+export function describeError(err: unknown, fallback: string): string {
+	if (err instanceof Error && err.message) {
+		return err.message;
+	}
+	return fallback;
+}
+
+/**
  * Render a 422-style fields array as a human suffix appended to the
  * envelope's `detail`. Skips empty paths/messages defensively so a
  * malformed entry doesn't produce "name (), email ()" garbage.

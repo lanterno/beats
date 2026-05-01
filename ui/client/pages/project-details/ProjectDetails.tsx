@@ -23,6 +23,7 @@ import {
 	useSessions,
 	useUpdateSession,
 } from "@/entities/session";
+import { describeError } from "@/shared/api";
 import {
 	formatDate,
 	formatDuration,
@@ -252,7 +253,7 @@ export default function ProjectDetails() {
 					setOverridePopoverWeek(null);
 					toast.success("Goal override saved");
 				},
-				onError: () => toast.error("Failed to save override"),
+				onError: (err) => toast.error(describeError(err, "Failed to save override")),
 			},
 		);
 	};
