@@ -8,7 +8,6 @@ import { Link } from "react-router-dom";
 import { useProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
-import { useUrlParam } from "@/shared/lib/useUrlParam";
 import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
@@ -26,6 +25,7 @@ import { MoodCorrelation } from "./MoodCorrelation";
 import { PatternCards } from "./PatternCards";
 import { ProjectHealth } from "./ProjectHealth";
 import { TopProjects } from "./TopProjects";
+import { useInsightsFilters } from "./useInsightsFilters";
 import { WeeklyCard } from "./WeeklyCard";
 
 export default function Insights() {
@@ -33,32 +33,23 @@ export default function Insights() {
 	// tag dropdowns + click-to-filter chips) is bookmarkable as one unit.
 	// Refreshing or sharing the URL reproduces the exact slice the user was
 	// looking at — the inconsistency of "chips persist but dropdowns reset"
-	// would surprise anyone who actually tries it.
-	const [selectedProjectId, setSelectedProjectId] = useUrlParam("project");
-	const [selectedTag, setSelectedTag] = useUrlParam("tag");
-	const [selectedRepo, setSelectedRepo] = useUrlParam("repo");
-	const [selectedLanguage, setSelectedLanguage] = useUrlParam("language");
-	const [selectedBundleId, setSelectedBundleId] = useUrlParam("bundle");
-
-	// Number of filters the user has set across all five axes — used to
-	// decide whether to surface the "clear all filters" link in the
-	// header. We only show the link when 2+ are active; one filter is
-	// trivially clearable via its own dropdown / dismiss pill, and a
-	// single-purpose "clear" affordance there would just be noise.
-	const activeFilterCount =
-		(selectedProjectId ? 1 : 0) +
-		(selectedTag ? 1 : 0) +
-		(selectedRepo ? 1 : 0) +
-		(selectedLanguage ? 1 : 0) +
-		(selectedBundleId ? 1 : 0);
-
-	const clearAllFilters = () => {
-		setSelectedProjectId(undefined);
-		setSelectedTag(undefined);
-		setSelectedRepo(undefined);
-		setSelectedLanguage(undefined);
-		setSelectedBundleId(undefined);
-	};
+	// would surprise anyone who actually tries it. The "clear all filters"
+	// link only shows when 2+ are active; one filter is trivially clearable
+	// via its own dropdown / dismiss pill.
+	const {
+		selectedProjectId,
+		setSelectedProjectId,
+		selectedTag,
+		setSelectedTag,
+		selectedRepo,
+		setSelectedRepo,
+		selectedLanguage,
+		setSelectedLanguage,
+		selectedBundleId,
+		setSelectedBundleId,
+		activeFilterCount,
+		clearAllFilters,
+	} = useInsightsFilters();
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
 	const currentYear = new Date().getFullYear();
