@@ -214,7 +214,15 @@ function workspaceRoot(): string | null {
 async function openInsights(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("beats");
   const base = cfg.get<string>("webUrl", "http://localhost:8080");
-  const url = buildInsightsUrl(base, workspaceRoot());
+  // Pass the active editor's languageId alongside the workspace path
+  // when both are available — narrows the landing view to "today's
+  // work in this repo, in this language", which is usually what the
+  // user actually wants when hitting ⌘⇧P from within a file. Falls
+  // back to repo-only when no editor is active.
+  const url = buildInsightsUrl(base, {
+    repo: workspaceRoot(),
+    language: vscode.window.activeTextEditor?.document.languageId,
+  });
   await vscode.env.openExternal(vscode.Uri.parse(url));
 }
 

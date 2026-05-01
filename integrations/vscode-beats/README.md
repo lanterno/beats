@@ -38,9 +38,11 @@ machine.
 
 ⌘⇧P (or F1) → "Beats: Open Insights" opens your Beats web UI Insights
 page in the system browser, pre-filtered to the current workspace's
-repo path. Uses the same `?repo=` query string the page persists when
-you click a chip — so a deep link from the editor lands on the same
-filtered view a click would.
+repo path AND the active editor's language id when both are
+available. Uses the same `?repo=…&language=…` URL the page persists
+when you click chips — so a deep link from the editor lands on the
+same filtered view a chip click would. Bare `/insights` when no
+workspace and no editor are active.
 
 ## Status bar
 
