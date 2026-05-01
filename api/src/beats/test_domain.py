@@ -4126,3 +4126,327 @@ class TestOuraServiceDisconnect:
 
         svc = OuraService(_FakeOuraIntegrationRepo(integration=None))
         assert await svc.disconnect() is False
+
+
+# =============================================================================
+# Fitbit Service — OAuth flow + biometric fetch with token refresh
+# =============================================================================
+
+
+class _FakeFitbitIntegrationRepo:
+    def __init__(self, integration=None):
+        self._integration = integration
+
+    async def get(self):
+        return self._integration
+
+    async def upsert(self, integration):
+        self._integration = integration
+        return integration
+
+    async def delete(self) -> bool:
+        had = self._integration is not None
+        self._integration = None
+        return had
+
+
+def _fitbit_settings():
+    """Build a Settings instance with deterministic Fitbit creds.
+    Avoids reading .env files. Uses the underlying field names
+    (validation_alias kwargs would not be resolved by ty)."""
+    from beats.settings import Settings
+
+    return Settings(
+        fitbit_client_id="cid-fb",
+        fitbit_client_secret="csec-fb",
+        fitbit_redirect_uri="https://beats.test/oauth/fitbit",
+    )
+
+
+def _no_op_raise_for_status(self):
+    """Drop-in raise_for_status that mirrors httpx.Response: no-op
+    on 2xx, raises HTTPStatusError on 4xx/5xx."""
+    if self.status_code >= 400:
+        import httpx
+
+        raise httpx.HTTPStatusError("err", request=None, response=None)  # type: ignore[arg-type]
+
+
+class TestFitbitAuthUrl:
+    """get_auth_url builds the OAuth consent URL deterministically.
+    Pin every required parameter — Fitbit will reject the redirect
+    silently if any are missing or misnamed, leaving the user on
+    a "loading…" screen with no error."""
+
+    def test_includes_client_id_redirect_response_type_and_scope(self):
+        from beats.domain.fitbit import FitbitService
+
+        svc = FitbitService(_fitbit_settings(), _FakeFitbitIntegrationRepo())
+        url = svc.get_auth_url()
+        assert url.startswith("https://www.fitbit.com/oauth2/authorize?")
+        assert "client_id=cid-fb" in url
+        # redirect_uri is URL-encoded (colons + slashes escaped)
+        assert "redirect_uri=https%3A%2F%2Fbeats.test%2Foauth%2Ffitbit" in url
+        assert "response_type=code" in url
+        # scope = "activity heartrate sleep" — pin the three tokens
+        assert "activity" in url
+        assert "heartrate" in url
+        assert "sleep" in url
+
+
+class TestFitbitExchangeCode:
+    """exchange_code POSTs the auth code + creds to Fitbit's token
+    endpoint and persists the tokens. Pin both the four-field
+    persisted shape and the token_expiry math (now + expires_in)."""
+
+    async def test_happy_path_persists_all_four_fields(self, monkeypatch):
+        from beats.domain.fitbit import FitbitService
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "oauth2/token": _FakeHTTPResponse(
+                    200,
+                    {
+                        "access_token": "at-fb",
+                        "refresh_token": "rt-fb",
+                        "expires_in": 28800,
+                        "user_id": "fb-user-1",
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        repo = _FakeFitbitIntegrationRepo()
+        svc = FitbitService(_fitbit_settings(), repo)
+        before = datetime.now(UTC)
+        integration = await svc.exchange_code("auth-code")
+        after = datetime.now(UTC)
+
+        assert integration.access_token == "at-fb"
+        assert integration.refresh_token == "rt-fb"
+        assert integration.fitbit_user_id == "fb-user-1"
+        # token_expiry ≈ now + 28800 sec
+        assert integration.token_expiry is not None
+        expiry = integration.token_expiry
+        assert before + timedelta(seconds=28799) <= expiry
+        assert expiry <= after + timedelta(seconds=28801)
+        # Persisted, not just returned
+        assert (await repo.get()).access_token == "at-fb"
+
+
+class TestFitbitEnsureFreshToken:
+    """_ensure_fresh_token returns the integration as-is when the
+    token is still valid; otherwise it refreshes via the
+    refresh_token grant and persists.
+
+    Risk: a regression here would either (a) fire a refresh on
+    every request (rate-limit) or (b) skip refreshing on an
+    expired token (every fetch fails)."""
+
+    async def test_returns_same_when_not_expired(self, monkeypatch):
+        """token_expiry > now → return integration unchanged, no
+        HTTP call. Patched httpx raises if invoked — the test
+        would fail loudly if a regression started spamming
+        refreshes."""
+        from beats.domain.fitbit import FitbitService
+        from beats.domain.models import FitbitIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {"": RuntimeError("should not refresh when token still valid")},
+        )
+
+        future = datetime.now(UTC) + timedelta(hours=2)
+        existing = FitbitIntegration(
+            access_token="at-current",
+            refresh_token="rt",
+            token_expiry=future,
+        )
+        repo = _FakeFitbitIntegrationRepo(integration=existing)
+        svc = FitbitService(_fitbit_settings(), repo)
+        result = await svc._ensure_fresh_token(existing)
+        assert result.access_token == "at-current"
+
+    async def test_refreshes_when_expired(self, monkeypatch):
+        """token_expiry in the past → POST refresh_token grant,
+        persist new access_token + token_expiry. Pin so an expired
+        token doesn't silently leak through to the API call."""
+        from beats.domain.fitbit import FitbitService
+        from beats.domain.models import FitbitIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "oauth2/token": _FakeHTTPResponse(
+                    200,
+                    {
+                        "access_token": "at-NEW",
+                        "refresh_token": "rt-NEW",
+                        "expires_in": 28800,
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        past = datetime.now(UTC) - timedelta(hours=1)
+        stale = FitbitIntegration(
+            access_token="at-OLD",
+            refresh_token="rt-OLD",
+            token_expiry=past,
+        )
+        repo = _FakeFitbitIntegrationRepo(integration=stale)
+        svc = FitbitService(_fitbit_settings(), repo)
+        refreshed = await svc._ensure_fresh_token(stale)
+        assert refreshed.access_token == "at-NEW"
+        assert refreshed.refresh_token == "rt-NEW"
+        # Persisted, not just returned
+        assert (await repo.get()).access_token == "at-NEW"
+
+    async def test_refresh_preserves_existing_refresh_token_when_omitted(self, monkeypatch):
+        """Fitbit sometimes omits refresh_token from the refresh
+        response (when the existing one is still valid). Pin that
+        we keep the existing refresh_token rather than blanking it
+        — losing the refresh token would force a full re-auth."""
+        from beats.domain.fitbit import FitbitService
+        from beats.domain.models import FitbitIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "oauth2/token": _FakeHTTPResponse(
+                    200,
+                    {
+                        "access_token": "at-NEW",
+                        # No refresh_token in response
+                        "expires_in": 28800,
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        past = datetime.now(UTC) - timedelta(hours=1)
+        stale = FitbitIntegration(
+            access_token="at-OLD",
+            refresh_token="rt-keep",
+            token_expiry=past,
+        )
+        repo = _FakeFitbitIntegrationRepo(integration=stale)
+        svc = FitbitService(_fitbit_settings(), repo)
+        refreshed = await svc._ensure_fresh_token(stale)
+        assert refreshed.refresh_token == "rt-keep"
+
+
+class TestFitbitFetchDaily:
+    """fetch_daily aggregates sleep + heart rate + steps. Mirrors
+    the Oura per-endpoint resilience pattern — one endpoint's
+    failure must not drop another's data."""
+
+    async def test_no_integration_returns_empty(self, monkeypatch):
+        from beats.domain.fitbit import FitbitService
+
+        _patch_httpx(
+            monkeypatch,
+            {"": RuntimeError("should not have called HTTP without integration")},
+        )
+        svc = FitbitService(_fitbit_settings(), _FakeFitbitIntegrationRepo(None))
+        assert await svc.fetch_daily(date(2026, 4, 1)) == {}
+
+    async def test_aggregates_sleep_hr_and_steps(self, monkeypatch):
+        from beats.domain.fitbit import FitbitService
+        from beats.domain.models import FitbitIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                # Substring matches; first-match-wins. Order so the
+                # most-specific routes match first.
+                "/sleep/": _FakeHTTPResponse(
+                    200,
+                    {
+                        "summary": {
+                            "totalMinutesAsleep": 420,
+                            "totalTimeInBed": 480,
+                        }
+                    },
+                ),
+                "/heart/": _FakeHTTPResponse(
+                    200, {"activities-heart": [{"value": {"restingHeartRate": 58}}]}
+                ),
+                "/activities/date/": _FakeHTTPResponse(200, {"summary": {"steps": 9876}}),
+            },
+        )
+        future = datetime.now(UTC) + timedelta(hours=2)
+        repo = _FakeFitbitIntegrationRepo(
+            integration=FitbitIntegration(
+                access_token="at", refresh_token="rt", token_expiry=future
+            )
+        )
+        svc = FitbitService(_fitbit_settings(), repo)
+        result = await svc.fetch_daily(date(2026, 4, 1))
+        assert result["source"] == "fitbit"
+        assert result["sleep_minutes"] == 420
+        assert result["sleep_efficiency"] == 420 / 480
+        assert result["resting_hr_bpm"] == 58
+        assert result["steps"] == 9876
+
+    async def test_hr_failure_does_not_drop_sleep_or_steps(self, monkeypatch):
+        """HR endpoint raises → sleep + steps still land. Pin
+        per-endpoint resilience — a flaky Fitbit backend can't
+        zero out the user's whole day."""
+        import httpx
+
+        from beats.domain.fitbit import FitbitService
+        from beats.domain.models import FitbitIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "/sleep/": _FakeHTTPResponse(
+                    200,
+                    {
+                        "summary": {
+                            "totalMinutesAsleep": 400,
+                            "totalTimeInBed": 460,
+                        }
+                    },
+                ),
+                "/heart/": httpx.ConnectError("hr down"),
+                "/activities/date/": _FakeHTTPResponse(200, {"summary": {"steps": 5000}}),
+            },
+        )
+        future = datetime.now(UTC) + timedelta(hours=2)
+        repo = _FakeFitbitIntegrationRepo(
+            integration=FitbitIntegration(
+                access_token="at", refresh_token="rt", token_expiry=future
+            )
+        )
+        svc = FitbitService(_fitbit_settings(), repo)
+        result = await svc.fetch_daily(date(2026, 4, 1))
+        assert result["sleep_minutes"] == 400
+        assert result["steps"] == 5000
+        assert "resting_hr_bpm" not in result
+
+
+class TestFitbitDisconnect:
+    async def test_disconnect_returns_bool(self):
+        from beats.domain.fitbit import FitbitService
+        from beats.domain.models import FitbitIntegration
+
+        svc_full = FitbitService(
+            _fitbit_settings(),
+            _FakeFitbitIntegrationRepo(integration=FitbitIntegration(access_token="at")),
+        )
+        assert await svc_full.disconnect() is True
+
+        svc_empty = FitbitService(_fitbit_settings(), _FakeFitbitIntegrationRepo(None))
+        assert await svc_empty.disconnect() is False
