@@ -55,7 +55,6 @@ Install: `lefthook install` (from repo root)
 | API lint               | api/                          | `uv run --group dev ruff check`  |
 | API typecheck          | api/                          | `uv run --group dev ty check`    |
 | API test               | api/                          | `uv run --group dev pytest src/` |
-| API contracts          | api/                          | `hurl --test tests/hurl/*.hurl`  |
 | UI lint                | ui/                           | `pnpm lint`                      |
 | UI lint fix            | ui/                           | `pnpm lint:fix`                  |
 | UI typecheck           | ui/                           | `pnpm typecheck`                 |
@@ -72,9 +71,10 @@ Install: `lefthook install` (from repo root)
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest`.
   Set `BEATS_TEST_ENV=1` to skip testcontainers (e.g., in Docker Compose or CI with service containers).
+  The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo) so a separate hurl runner isn't needed for routine work.
 - **UI unit tests** are in `client/**/*.test.ts` (Vitest).
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
-- **API contract tests** are in `api/tests/hurl/` (Hurl).
+- **`api/tests/hurl/`** holds standalone HTTP contract tests dating from before the WebAuthn/JWT auth migration; they still reference `X-API-Token` and are not run from CI or any hook. Treat them as historical until reauthored to mint a JWT in a setup step.
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test). Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
 - **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
