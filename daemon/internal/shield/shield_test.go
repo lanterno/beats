@@ -102,3 +102,46 @@ func TestShield_TimerStops_ResetsState(t *testing.T) {
 		t.Errorf("drift fired across a timer-stop boundary: %d events", len(fired))
 	}
 }
+
+// formatDriftMessage builds the body of the system notification
+// fired when distraction crosses threshold. Replaces an earlier
+// version that said "for 30s" verbatim and rendered raw bundle
+// IDs — both lied about reality when threshold ≠ 30s or the app
+// had a friendly label.
+
+func TestFormatDriftMessage_KnownBundleUsesFriendlyLabel(t *testing.T) {
+	got := formatDriftMessage("com.twitter.twitter-mac", 45*time.Second)
+	want := "You've been on Twitter for 45s while your timer is running."
+	if got != want {
+		t.Errorf("expected friendly label, got %q", got)
+	}
+}
+
+func TestFormatDriftMessage_UnknownBundleFallsBackToTrailingSegment(t *testing.T) {
+	// bundle.ShortLabel falls back to the last reverse-DNS segment
+	// for unknown ids — the message stays readable rather than
+	// dumping "com.unknown.SomeApp" verbatim.
+	got := formatDriftMessage("com.unknown.SomeApp", 30*time.Second)
+	if got != "You've been on SomeApp for 30s while your timer is running." {
+		t.Errorf("expected fallback segment, got %q", got)
+	}
+}
+
+func TestFormatDriftMessage_RoundsDurationToSecond(t *testing.T) {
+	// Sub-second precision in a system notification reads as
+	// noise. duration.Round(time.Second) keeps the message clean.
+	got := formatDriftMessage("com.spotify.client", 35*time.Second+200*time.Millisecond)
+	if got != "You've been on Spotify for 35s while your timer is running." {
+		t.Errorf("expected rounded duration, got %q", got)
+	}
+}
+
+func TestFormatDriftMessage_ReflectsActualThresholdNot30sLiteral(t *testing.T) {
+	// The previous implementation hardcoded "for 30s" regardless
+	// of the actual elapsed time. Pin the dynamic version: a 90s
+	// drift should say "for 1m30s", not "for 30s".
+	got := formatDriftMessage("com.twitter.twitter-mac", 90*time.Second)
+	if got != "You've been on Twitter for 1m30s while your timer is running." {
+		t.Errorf("expected actual elapsed time, got %q", got)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/collector"
 	"github.com/ahmedElghable/beats/daemon/internal/notify"
 )
@@ -83,7 +84,7 @@ func (t *Tracker) OnSample(sample collector.Sample, timerRunning bool) {
 		if duration >= t.threshold && duration < t.threshold+5*time.Second {
 			// Emit once when crossing threshold
 			t.emitDrift(duration)
-			sendDriftNotification(t.distractionApp)
+			sendDriftNotification(t.distractionApp, duration)
 		}
 	}
 }
@@ -104,9 +105,21 @@ func (t *Tracker) reset() {
 	t.distractionApp = ""
 }
 
-func sendDriftNotification(bundleID string) {
-	notify.Send(
-		"Drift detected",
-		fmt.Sprintf("You've been on %s for 30s while your timer is running.", bundleID),
-	)
+// sendDriftNotification fires the OS-level "drift detected" alert
+// when distraction duration crosses the threshold. The message is
+// rendered by formatDriftMessage so the body can be unit-tested
+// without shelling out to osascript / notify-send.
+func sendDriftNotification(bundleID string, duration time.Duration) {
+	notify.Send("Drift detected", formatDriftMessage(bundleID, duration))
+}
+
+// formatDriftMessage builds the body of the drift notification.
+// Renders the human-readable bundle name (e.g. "Twitter" instead
+// of "com.twitter.twitter-mac") and the actual elapsed seconds
+// rather than hardcoding the threshold — the previous version said
+// "for 30s" verbatim, which both showed a developer-style bundle id
+// and lied about the duration when threshold ≠ 30s.
+func formatDriftMessage(bundleID string, duration time.Duration) string {
+	return fmt.Sprintf("You've been on %s for %s while your timer is running.",
+		bundle.ShortLabel(bundleID), duration.Round(time.Second))
 }

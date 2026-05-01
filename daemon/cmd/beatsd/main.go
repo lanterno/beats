@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/autotimer"
+	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/collector"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
@@ -168,7 +169,7 @@ func main() {
 			go pollTimerContext(ctx, c, &timerRunning)
 		}
 		shieldTracker := shield.NewTracker(func(ev shield.DriftEvent) {
-			fmt.Printf("drift: %s for %s\n", ev.BundleID, ev.Duration.Round(time.Second))
+			fmt.Printf("drift: %s for %s\n", bundle.ShortLabel(ev.BundleID), ev.Duration.Round(time.Second))
 		})
 
 		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
