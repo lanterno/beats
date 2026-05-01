@@ -151,6 +151,29 @@ describe("FlowHeadline", () => {
 		expect(params.get("repo")).toBe("/Users/me/code/beats");
 	});
 
+	it("clicks 'using <app>' to deep-link Insights pre-filtered by bundle", () => {
+		// FlowHeadline now surfaces the top app axis too, with the
+		// human label (e.g. "VS Code") rendered but the raw bundle id
+		// passed through as the filter value — same contract the
+		// FlowByApp click-to-filter uses.
+		let lastSearch = "";
+		const LocationProbe = () => {
+			lastSearch = useLocation().search;
+			return null;
+		};
+		render(
+			<MemoryRouter>
+				<FlowHeadline />
+				<LocationProbe />
+			</MemoryRouter>,
+		);
+
+		fireEvent.click(screen.getByText("VS Code"));
+
+		const params = new URLSearchParams(lastSearch);
+		expect(params.get("bundle")).toBe("com.microsoft.VSCode");
+	});
+
 	it("clicks 'in <language>' to deep-link Insights pre-filtered by language", () => {
 		let lastSearch = "";
 		const LocationProbe = () => {

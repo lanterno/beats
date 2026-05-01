@@ -15,6 +15,7 @@
  */
 import { Link, useNavigate } from "react-router-dom";
 import { useFlowWindowsSummary } from "@/entities/session";
+import { shortBundleLabel } from "@/shared/lib/bundleLabel";
 
 interface YesterdayRange {
 	start: string;
@@ -95,6 +96,18 @@ export function FlowHeadline() {
 								title={`View Insights filtered to ${data.top_language.key}`}
 								onClick={() =>
 									navigate(`/insights?language=${encodeURIComponent(data.top_language!.key)}`)
+								}
+							/>
+						</span>
+					)}
+					{data.top_bundle && (
+						<span>
+							using{" "}
+							<DeepLinkSpan
+								label={shortBundleLabel(data.top_bundle.key)}
+								title={`View Insights filtered to ${data.top_bundle.key}`}
+								onClick={() =>
+									navigate(`/insights?bundle=${encodeURIComponent(data.top_bundle!.key)}`)
 								}
 							/>
 						</span>

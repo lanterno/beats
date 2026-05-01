@@ -14,49 +14,8 @@
  */
 import { useMemo } from "react";
 import { useFlowWindows } from "@/entities/session";
+import { shortBundleLabel } from "@/shared/lib/bundleLabel";
 import { aggregateFlowBy } from "@/shared/lib/flowAggregation";
-
-// Best-effort mapping from common bundle ids → human labels. Anything
-// not listed falls through to the bundle id itself, which is at least
-// recognizable to anyone who's seen `osascript` output.
-const APP_LABELS: Record<string, string> = {
-	"com.microsoft.VSCode": "VS Code",
-	"com.apple.dt.Xcode": "Xcode",
-	"com.jetbrains.intellij": "IntelliJ",
-	"com.jetbrains.WebStorm": "WebStorm",
-	"com.jetbrains.pycharm": "PyCharm",
-	"com.jetbrains.goland": "GoLand",
-	"com.googlecode.iterm2": "iTerm",
-	"com.apple.Terminal": "Terminal",
-	"com.mitchellh.ghostty": "Ghostty",
-	"net.kovidgoyal.kitty": "Kitty",
-	"com.tinyspeck.slackmacgap": "Slack",
-	"com.hnc.Discord": "Discord",
-	"com.tdesktop.Telegram": "Telegram",
-	"com.google.Chrome": "Chrome",
-	"com.apple.Safari": "Safari",
-	"org.mozilla.firefox": "Firefox",
-	"com.brave.Browser": "Brave",
-	"com.figma.Desktop": "Figma",
-	"com.linear.linear": "Linear",
-	"notion.id": "Notion",
-	"md.obsidian": "Obsidian",
-	"com.apple.mail": "Mail",
-	"com.spotify.client": "Spotify",
-	"com.apple.Music": "Music",
-	"com.apple.iCal": "Calendar",
-	"com.twitter.twitter-mac": "Twitter",
-};
-
-function shortBundleLabel(id: string): string {
-	const known = APP_LABELS[id];
-	if (known) return known;
-	// Fallback: the last segment of a reverse-DNS bundle id is usually the
-	// most recognizable piece. "com.foo.MyApp" → "MyApp". If there are no
-	// dots (rare), return as-is.
-	const dot = id.lastIndexOf(".");
-	return dot >= 0 ? id.slice(dot + 1) : id;
-}
 
 interface Props {
 	projectId?: string;
