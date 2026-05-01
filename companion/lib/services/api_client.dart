@@ -194,37 +194,51 @@ class ApiClient {
 
   /// Returns the union of all tags this user has ever attached to a beat,
   /// alphabetized. Used by the post-stop sheet to surface chips.
+  ///
+  /// Throws [ApiException] on non-200 — aligns with the rest of the
+  /// client (start/stopTimer, getProjects, etc.). Callers that want
+  /// to gracefully degrade (e.g. tag chips are decoration, not
+  /// blocking) wrap in try/catch and ignore.
   Future<List<String>> getTags() async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/analytics/tags'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Tags failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<String>();
   }
 
   /// Returns one entry per day in the given year (default: current year).
   /// Each entry: {date: 'YYYY-MM-DD', total_minutes: int, session_count: int, project_count: int}.
+  ///
+  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getHeatmap({int? year}) async {
     final query = year != null ? '?year=$year' : '';
     final resp = await http.get(
       Uri.parse('$baseUrl/api/analytics/heatmap$query'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Heatmap failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
 
   // ---- Flow Score ----
 
+  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getFlowWindows(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/signals/flow-windows?start=$start&end=$end'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Flow windows failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
@@ -265,12 +279,15 @@ class ApiClient {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
+  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getSignalSummaries(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/signals/summaries?start=$start&end=$end'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Signal summaries failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
@@ -316,13 +333,16 @@ class ApiClient {
 
   // ---- Intentions ----
 
+  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getIntentions({String? date}) async {
     final query = date != null ? '?target_date=$date' : '';
     final resp = await http.get(
       Uri.parse('$baseUrl/api/intentions$query'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'List intentions failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
@@ -377,24 +397,31 @@ class ApiClient {
 
   /// Returns daily notes between [start] and [end], inclusive (YYYY-MM-DD).
   /// Used by the mood sparkline on the coach screen.
+  ///
+  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getDailyNotesRange(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/daily-notes/range?start=$start&end=$end'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Daily notes failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
 
   // ---- Biometrics ----
 
+  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getBiometrics(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/biometrics/?start=$start&end=$end'),
       headers: _headers,
     );
-    if (resp.statusCode != 200) return [];
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Biometrics failed');
+    }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
   }
