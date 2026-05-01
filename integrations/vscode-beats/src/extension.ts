@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { buildInsightsUrl } from "./insightsUrl";
 
 interface Heartbeat {
   editor: "vscode";
@@ -110,11 +111,8 @@ function workspaceRoot(): string | null {
  */
 async function openInsights(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("beats");
-  const base = cfg.get<string>("webUrl", "http://localhost:8080").replace(/\/$/, "");
-  const repo = workspaceRoot();
-  const url = repo
-    ? `${base}/insights?repo=${encodeURIComponent(repo)}`
-    : `${base}/insights`;
+  const base = cfg.get<string>("webUrl", "http://localhost:8080");
+  const url = buildInsightsUrl(base, workspaceRoot());
   await vscode.env.openExternal(vscode.Uri.parse(url));
 }
 

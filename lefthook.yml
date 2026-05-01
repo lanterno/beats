@@ -69,3 +69,11 @@ pre-push:
     companion-test:
       root: companion/
       run: flutter test
+    # The VS Code extension uses node --test (built-in, no framework
+    # dep) for its pure-helper tests. Currently covers buildInsightsUrl;
+    # any additional helpers extracted from extension.ts get caught
+    # here for free.
+    vscode-extension-test:
+      root: integrations/vscode-beats/
+      glob: "*.{ts,json}"
+      run: npm test

@@ -65,7 +65,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "tsc -p ./ && node --test 'out/**/*.test.js'"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
