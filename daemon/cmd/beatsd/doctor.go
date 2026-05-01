@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -98,17 +100,61 @@ func checkAPI(cfg *config.Config) (string, error) {
 	return fmt.Sprintf("%s (%dms)", cfg.API.BaseURL, time.Since(start).Milliseconds()), nil
 }
 
-// checkEditorPort: is the loopback port for editor heartbeats free? The
-// daemon will gracefully log + continue if it's taken, but it means the
-// VS Code extension can't deliver heartbeats.
+// checkEditorPort: is the loopback port for editor heartbeats either
+// free, or already held by *our* running daemon? Either is fine — what
+// we want to flag is "port taken by something else", which would prevent
+// the editor extension from talking to beatsd.
+//
+// When the bind fails we probe http://127.0.0.1:<port>/health: if it
+// responds with our HealthResponse shape we treat that as "our daemon
+// is already up" and pass the check (with the uptime in the detail).
+// Anything else is a real conflict.
+//
+// This means `beatsd doctor` works the same whether `beatsd run` is up
+// or not — previously the doctor reported failure on a healthy install.
 func checkEditorPort() (string, error) {
 	addr := fmt.Sprintf("127.0.0.1:%d", editor.DefaultPort)
 	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		return addr, fmt.Errorf("port in use — another beatsd already running?")
+	if err == nil {
+		_ = l.Close()
+		return fmt.Sprintf("%s available", addr), nil
 	}
-	_ = l.Close()
-	return fmt.Sprintf("%s available", addr), nil
+	if detail, ok := probeOwnDaemon(editor.DefaultPort); ok {
+		return detail, nil
+	}
+	return addr, fmt.Errorf("port in use by something other than beatsd — kill the conflicting process or change the port")
+}
+
+// probeOwnDaemon hits http://127.0.0.1:<port>/health and reports
+// whether the responder looks like one of our own beatsd processes.
+// "Looks like ours" is a JSON-decodable HealthResponse with `ok=true`
+// — sufficient to rule out an unrelated process that happens to bind
+// the port. Returns a human-readable detail ("running · uptime 12m")
+// alongside the boolean so callers don't have to re-render it.
+func probeOwnDaemon(port int) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
+	if err != nil {
+		return "", false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", false
+	}
+	var body struct {
+		OK        bool  `json:"ok"`
+		UptimeSec int64 `json:"uptime_sec"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || !body.OK {
+		return "", false
+	}
+	return fmt.Sprintf("our daemon already running · uptime %s", formatUptimeShort(body.UptimeSec)), true
 }
 
 // checkFlowData: hits /api/signals/flow-windows/summary for the last

@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/editor"
@@ -30,10 +31,11 @@ func TestCheckEditorPort_OK(t *testing.T) {
 	}
 }
 
-func TestCheckEditorPort_FailsWhenPortAlreadyBound(t *testing.T) {
-	// Bind the listener ourselves, then call the doctor check. It
-	// should detect the conflict and return an error pointing at the
-	// "another beatsd already running" possibility.
+func TestCheckEditorPort_FailsWhenPortBoundByForeignProcess(t *testing.T) {
+	// Bind the listener ourselves with a plain TCP listener (no /health
+	// responder). The doctor should detect the conflict and return an
+	// error — this is the genuine "something else stole the port" case
+	// users actually want flagged.
 	addr := net.JoinHostPort("127.0.0.1", portString(editor.DefaultPort))
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -43,10 +45,53 @@ func TestCheckEditorPort_FailsWhenPortAlreadyBound(t *testing.T) {
 
 	_, gotErr := checkEditorPort()
 	if gotErr == nil {
-		t.Fatal("expected an error when port is in use, got nil")
+		t.Fatal("expected an error when port is in use by a non-beatsd process, got nil")
 	}
-	if !strings.Contains(gotErr.Error(), "in use") {
-		t.Errorf("expected 'in use' in error, got %q", gotErr.Error())
+	if !strings.Contains(gotErr.Error(), "port in use") {
+		t.Errorf("expected 'port in use' in error, got %q", gotErr.Error())
+	}
+}
+
+func TestCheckEditorPort_PassesWhenPortHeldByOwnDaemon(t *testing.T) {
+	// Stand up a tiny http server on the editor port that responds
+	// to /health with the same shape `editor.HealthResponse` carries.
+	// `beatsd doctor` should treat that as "our daemon is already up"
+	// — the historical failure-on-bound-port behavior was a UX bug
+	// when running `doctor` on a healthy install.
+	addr := net.JoinHostPort("127.0.0.1", portString(editor.DefaultPort))
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Skipf("could not bind %s ourselves: %v", addr, err)
+	}
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/health" {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":              true,
+				"uptime_sec":      120,
+				"version":         "test",
+				"editor_count":    0,
+				"windows_emitted": 0,
+			})
+		}),
+		ReadHeaderTimeout: 1 * time.Second,
+	}
+	go func() { _ = srv.Serve(l) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	detail, err := checkEditorPort()
+	if err != nil {
+		t.Fatalf("expected port-bound-by-our-daemon to pass, got: %v", err)
+	}
+	if !strings.Contains(detail, "our daemon already running") {
+		t.Errorf("expected detail to identify our own daemon, got %q", detail)
+	}
+	if !strings.Contains(detail, "uptime") {
+		t.Errorf("expected detail to include uptime, got %q", detail)
 	}
 }
 
