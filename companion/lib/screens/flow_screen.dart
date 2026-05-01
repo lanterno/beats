@@ -1,11 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../services/bundle_label.dart';
 import '../services/flow_summary.dart';
 import '../services/insights_url.dart';
+import '../services/launch_insights.dart';
 import '../services/repo_path.dart';
 import '../services/token_storage.dart';
 import '../theme/beats_refresh.dart';
@@ -713,27 +713,11 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   }
 
   /// Opens the configured Beats web UI's Insights page filtered to
-  /// the given axis. On launch failure (no URL handler, malformed
-  /// URL) shows a SnackBar with the failed URL so the user can spot
-  /// a misconfigured `beats_web_url` pref — silent failure was the
-  /// previous behavior and made the feature feel broken when the
-  /// web URL wasn't reachable.
-  Future<void> _launchInsights(InsightsFilter filter) async {
-    final url = buildInsightsUrl(_webUrl, filter);
-    final uri = Uri.parse(url);
-    final canLaunch = await canLaunchUrl(uri);
-    if (canLaunch) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Could not open $url'),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
+  /// the given axis. Routes through the shared launchInsights helper
+  /// so the SnackBar-on-failure UX stays consistent across companion
+  /// screens.
+  Future<void> _launchInsights(InsightsFilter filter) =>
+      launchInsights(context, _webUrl, filter);
 
   /// Empty-state subtitle lines for the "no data today" case. Two
   /// rows when yesterday has top_repo / top_language data, one row

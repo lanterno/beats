@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../services/flow_summary.dart';
-import '../services/insights_url.dart';
+import '../services/launch_insights.dart';
 import '../services/token_storage.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
@@ -532,23 +531,9 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   /// Opens the configured Beats web UI's Insights page (unfiltered).
-  /// Same SnackBar-on-failure pattern as FlowScreen so a misconfigured
-  /// beats_web_url surfaces audibly rather than as a silent no-op.
-  Future<void> _launchInsights() async {
-    final url = buildInsightsUrl(_webUrl);
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Could not open $url'),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
+  /// Routes through the shared launchInsights helper so the launch
+  /// + SnackBar-on-failure UX stays consistent with FlowScreen.
+  Future<void> _launchInsights() => launchInsights(context, _webUrl);
 
   String? _briefTimestamp() {
     final raw = _brief?['created_at'] as String?;
