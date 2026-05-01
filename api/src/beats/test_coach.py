@@ -20,6 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from beats.coach import brief as brief_module
 from beats.coach import chat as chat_module
+from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import review as review_module
 from beats.coach.gateway import (
     SONNET_CACHE_READ_PER_MTOK,
@@ -1442,3 +1443,179 @@ class TestHandleChatTurn:
         assert calls[0]["purpose"] == "chat"
         assert calls[0]["user_id"] == "user-99"
         assert calls[0]["tools"] is not None  # tools registered every call
+
+
+class TestRewriteCoachMemory:
+    """Nightly memory compaction. Reads the last 7 days, asks the LLM
+    for a Markdown summary, persists via MemoryStore (which keeps the
+    versioned history). The risk this guards against is silent loss
+    of personality — a memory rewrite that succeeds-with-empty would
+    overwrite the user's prior memory with a blank document."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self, monkeypatch):
+        await Database.connect()
+        await Database.get_db()[COACH_MEMORY_COLLECTION].delete_many({})
+
+        # Stub the heavy upstream — _recent_data_summary calls many
+        # repos to build the per-day/intention/mood/review prompt
+        # block. Tested independently at the IntelligenceService /
+        # repo level; here we just need a deterministic stub.
+        async def fake_summary(_user_id):
+            return "## Recent\nfoo did things"
+
+        monkeypatch.setattr(memory_rewrite_module, "_recent_data_summary", fake_summary)
+
+        # Stub build_coach_messages: same shape as elsewhere.
+        async def fake_build(_user_id, prompt, **_):
+            return ("system", [{"role": "user", "content": prompt}], None)
+
+        monkeypatch.setattr(memory_rewrite_module, "build_coach_messages", fake_build)
+
+        yield
+        await Database.disconnect()
+
+    @pytest.fixture
+    def patch_complete(self, monkeypatch):
+        """Returns a setter for the canned LLM response + a captured-
+        kwargs dict, identical pattern to the chat / brief / review
+        fixtures."""
+        captured: dict = {}
+
+        async def factory(text: str = "# Coach memory\n\nUser ships at night."):
+            async def fake_complete(**kwargs):
+                captured["kwargs"] = kwargs
+                from anthropic.types import TextBlock as _TB
+
+                return GatewayResponse(
+                    content=[_TB(type="text", text=text, citations=None)],
+                    model="claude-opus-4-7",
+                    input_tokens=2000,
+                    output_tokens=500,
+                    cache_creation_input_tokens=0,
+                    cache_read_input_tokens=0,
+                    cost_usd=0.04,
+                    stop_reason="end_turn",
+                )
+
+            monkeypatch.setattr(memory_rewrite_module, "complete", fake_complete)
+
+        return factory, captured
+
+    async def test_persists_rewritten_memory_via_memory_store(self, patch_complete):
+        """Happy path: LLM returns Markdown, rewrite_coach_memory
+        strips and persists via MemoryStore. The next read sees the
+        new content."""
+        factory, _ = patch_complete
+        await factory("# Coach memory\n\nNew personality.")
+
+        result = await memory_rewrite_module.rewrite_coach_memory("user-1")
+        assert result == "# Coach memory\n\nNew personality."
+
+        # Read it back through the same store the API uses.
+        client, db = _async_db()
+        try:
+            store = MemoryStore(db, "user-1")
+            assert await store.read() == "# Coach memory\n\nNew personality."
+        finally:
+            client.close()
+
+    async def test_strips_whitespace_around_llm_output(self, patch_complete):
+        """LLM may emit leading/trailing newlines (Anthropic models
+        often do). Pin the strip — without it, the persisted memory
+        starts with blank lines that render oddly in the
+        UserContextBlock."""
+        factory, _ = patch_complete
+        await factory("\n\n  # Real content\n\n  ")
+
+        result = await memory_rewrite_module.rewrite_coach_memory("user-1")
+        assert result == "# Real content"
+
+    async def test_passes_purpose_memory_rewrite_to_gateway(self, patch_complete):
+        """Cost-bucket tag — the dashboard distinguishes memory_rewrite
+        from chat/brief/review so a single weekly rewrite cost (a
+        few cents per user) doesn't get hidden in the chat bucket."""
+        factory, captured = patch_complete
+        await factory()
+
+        await memory_rewrite_module.rewrite_coach_memory("user-99")
+        assert captured["kwargs"]["purpose"] == "memory_rewrite"
+        assert captured["kwargs"]["user_id"] == "user-99"
+
+    async def test_uses_low_temperature_for_consistency(self, patch_complete):
+        """Memory rewrites should be more conservative than chat
+        (temperature=0.3 vs 0.7). Pin so a refactor that drops the
+        kwargs to defaults doesn't make memory rewrites stylistically
+        unstable across weeks."""
+        factory, captured = patch_complete
+        await factory()
+
+        await memory_rewrite_module.rewrite_coach_memory("user-1")
+        assert captured["kwargs"]["temperature"] == 0.3
+        assert captured["kwargs"]["max_tokens"] == 2048
+
+    async def test_includes_recent_data_summary_in_prompt(self, patch_complete, monkeypatch):
+        """The user prompt must contain the recent data block so the
+        LLM has fresh context. Pin so a refactor that drops the
+        summary or builds the prompt without it doesn't silently
+        produce stale memory."""
+
+        async def fake_summary(_user_id):
+            return "## SENTINEL DATA\nproject X dominated"
+
+        monkeypatch.setattr(memory_rewrite_module, "_recent_data_summary", fake_summary)
+
+        factory, captured = patch_complete
+        await factory()
+        await memory_rewrite_module.rewrite_coach_memory("user-1")
+
+        # The prompt that went to build_coach_messages includes the
+        # sentinel + the rewrite directive.
+        sent_messages = captured["kwargs"]["messages"]
+        prompt_text = sent_messages[0]["content"]
+        assert "## SENTINEL DATA" in prompt_text
+        assert "project X dominated" in prompt_text
+
+    async def test_overwrites_existing_memory_via_history(self, patch_complete):
+        """Second rewrite shouldn't lose the first — MemoryStore's
+        $push history machinery survives. The current memory after
+        rewrite #2 is the new content; the previous (rewrite #1's
+        output) lives in history. Locks the read-old-write-new flow
+        end-to-end (chat.py never re-reads memory between rewrites,
+        but a future "see what coach used to think" feature would)."""
+        factory, _ = patch_complete
+
+        await factory("# v1 memory")
+        await memory_rewrite_module.rewrite_coach_memory("user-1")
+
+        await factory("# v2 memory")
+        await memory_rewrite_module.rewrite_coach_memory("user-1")
+
+        client, db = _async_db()
+        try:
+            doc = await db[COACH_MEMORY_COLLECTION].find_one({"user_id": "user-1"})
+            assert doc is not None
+            assert doc["content"] == "# v2 memory"
+            history = doc.get("history", [])
+            # Two rewrites → two history entries (one with the
+            # empty pre-state, one with v1).
+            assert len(history) == 2
+            assert [h["content"] for h in history] == ["", "# v1 memory"]
+        finally:
+            client.close()
+
+    async def test_isolates_users(self, patch_complete):
+        """A rewrite for user A doesn't touch user B's memory."""
+        factory, _ = patch_complete
+
+        await factory("# A's memory")
+        await memory_rewrite_module.rewrite_coach_memory("user-a")
+
+        client, db = _async_db()
+        try:
+            store_a = MemoryStore(db, "user-a")
+            store_b = MemoryStore(db, "user-b")
+            assert await store_a.read() == "# A's memory"
+            assert await store_b.read() is None
+        finally:
+            client.close()
