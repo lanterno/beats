@@ -6,6 +6,7 @@ import {
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { describeError } from "@/shared/api";
 import { Button } from "@/shared/ui";
 import {
 	getCurrentUser,
@@ -75,11 +76,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 			setRegistrationOptions(result);
 			setMode("register-passkey");
 		} catch (err) {
-			if (err instanceof Error) {
-				setError(err.message);
-			} else {
-				setError("Failed to start registration. Please try again.");
-			}
+			setError(describeError(err, "Failed to start registration. Please try again."));
 		} finally {
 			setIsProcessing(false);
 		}
@@ -107,14 +104,14 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				setError("Registration failed. Please try again.");
 			}
 		} catch (err) {
-			if (err instanceof Error) {
-				if (err.name === "NotAllowedError") {
-					setError("Registration was cancelled or timed out.");
-				} else {
-					setError(err.message || "Registration failed. Please try again.");
-				}
+			// WebAuthn surfaces a user-cancellation as `NotAllowedError`
+			// — keep the friendly "cancelled or timed out" copy for that
+			// case rather than falling through to the API detail (which
+			// is empty here anyway).
+			if (err instanceof Error && err.name === "NotAllowedError") {
+				setError("Registration was cancelled or timed out.");
 			} else {
-				setError("Registration failed. Please try again.");
+				setError(describeError(err, "Registration failed. Please try again."));
 			}
 		} finally {
 			setIsProcessing(false);
@@ -140,14 +137,13 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				setError("Authentication failed. Please try again.");
 			}
 		} catch (err) {
-			if (err instanceof Error) {
-				if (err.name === "NotAllowedError") {
-					setError("Authentication was cancelled or timed out.");
-				} else {
-					setError(err.message || "Authentication failed. Please try again.");
-				}
+			// Same NotAllowedError-as-cancellation rule as register —
+			// kept inline rather than extracted because the friendly
+			// copy differs ("Authentication" vs "Registration").
+			if (err instanceof Error && err.name === "NotAllowedError") {
+				setError("Authentication was cancelled or timed out.");
 			} else {
-				setError("Authentication failed. Please try again.");
+				setError(describeError(err, "Authentication failed. Please try again."));
 			}
 		} finally {
 			setIsProcessing(false);

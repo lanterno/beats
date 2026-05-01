@@ -381,7 +381,7 @@ function PasskeysSection() {
 			await loadCredentials();
 			toast.success("Passkey removed");
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Failed to remove passkey");
+			toast.error(describeError(err, "Failed to remove passkey"));
 		} finally {
 			setDeleting(null);
 		}
