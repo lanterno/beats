@@ -2176,6 +2176,88 @@ class TestIntelligenceAPI:
             resp = client.request(method, path)
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
+    # ── Endpoint smoke coverage ──────────────────────────────────────
+    # These exercise the GET endpoints that the existing tests in
+    # this class don't hit — pinning the URL/method mapping +
+    # response shape on the empty-user path. The IntelligenceService
+    # logic itself is covered in test_domain.py; here we just want
+    # the route handlers to actually run.
+
+    def test_generate_digest_default_week_returns_envelope(self):
+        """POST /digests/generate without ?week_of= computes for the
+        previous week. Pin the response shape (week_of, total_hours,
+        session_count, project_breakdown) so the dashboard can bind
+        to it."""
+        resp = client.post(
+            "/api/intelligence/digests/generate",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "week_of" in body
+        assert "total_hours" in body
+        assert "session_count" in body
+        assert "project_breakdown" in body
+        # Default-week branch picks last completed week (today.weekday + 7
+        # days back), so week_of is in the past
+        assert body["week_of"] < datetime.now(UTC).date().isoformat()
+
+    def test_suggestions_returns_list_for_empty_user(self):
+        """GET /suggestions on a user with no projects → []. Pin so
+        a fresh account doesn't 500 on the dashboard's Daily Plan
+        widget."""
+        resp = client.get("/api/intelligence/suggestions", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_suggestions_accepts_date_query_param(self):
+        """The optional ?date=YYYY-MM-DD param overrides today.
+        Pin the alias — Pydantic uses `date` as the query param
+        name (alias of `target_date`)."""
+        resp = client.get(
+            "/api/intelligence/suggestions?date=2026-04-15",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    def test_focus_scores_returns_list_for_empty_user(self):
+        """GET /focus-scores on a no-data day → []. Pin the empty-day
+        contract — the UI's Focus Quality chart binds to the array
+        and would crash on a dict."""
+        resp = client.get("/api/intelligence/focus-scores", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_mood_returns_envelope_for_empty_user(self):
+        """GET /mood with no notes → {correlation:{r,description},
+        high_mood_avg_hours, low_mood_avg_hours, mood_trend}.
+        Pin the keys — the Mood panel binds to the correlation
+        nested object directly."""
+        resp = client.get("/api/intelligence/mood", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "correlation" in body
+        assert body["correlation"]["r"] == 0
+        assert body["correlation"]["description"] == "neutral"
+        assert body["high_mood_avg_hours"] == 0
+        assert body["low_mood_avg_hours"] == 0
+        assert body["mood_trend"] == []
+
+    def test_estimation_accuracy_returns_list_for_empty_user(self):
+        """GET /estimation with no intentions → []. Pin so the
+        Estimation Accuracy section renders an empty state."""
+        resp = client.get("/api/intelligence/estimation", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_project_health_returns_list_for_empty_user(self):
+        """GET /project-health with no projects → []. Pin the empty
+        contract for first-run users."""
+        resp = client.get("/api/intelligence/project-health", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
 
 class TestAutoStartAPI:
     """/api/auto-start — webhook-triggered auto-start rules. Pinned
