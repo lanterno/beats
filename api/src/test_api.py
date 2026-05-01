@@ -2884,6 +2884,120 @@ class TestRegisterStartOrphanRetry:
         sync_client.close()
 
 
+class TestAuthRouterErrorPaths:
+    """Error-path coverage for the unauthenticated /api/auth/*
+    endpoints. The happy-path crypto verification needs a real
+    authenticator, but the pre-checks (existing-with-credentials,
+    no-pending-registration, no-pending-authentication, malformed
+    credential) are all reachable via plain HTTP and worth pinning
+    — these are the user-facing error envelopes."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_session_manager(self):
+        """The auth router's SessionManager is a process-global
+        singleton. Earlier tests in the suite (e.g. orphan-retry,
+        rate-limit) call /register/start or /login/options, which
+        leave challenges and pending registrations in memory.
+        Clear them before each test in this class so the
+        no-pending-registration paths actually fire."""
+        from beats.api.routers.auth import _session_manager
+
+        _session_manager._challenges.clear()
+        _session_manager._pending_registrations.clear()
+        yield
+
+    def _db(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        return sync_client, sync_client[db_name]
+
+    def test_register_start_existing_email_with_credentials_returns_409(self):
+        """A user row with at least one credential → 409 on
+        register/start (the email is "really registered"). Pin the
+        409 vs the 200 orphan-retry path (test_orphan_user_can_retry_register_start
+        covers the 200 case)."""
+        from bson import ObjectId
+
+        sync_client, db = self._db()
+        email = "already-registered@example.com"
+        user_id = ObjectId()
+        db.users.insert_one({"_id": user_id, "email": email, "display_name": "Already"})
+        # Add a credential — turns the user from orphan into "real"
+        db.credentials.insert_one(
+            {
+                "user_id": str(user_id),
+                "credential_id": "cred-existing",
+                "public_key": "pk",
+                "sign_count": 0,
+                "created_at": "2026-04-01T00:00:00",
+            }
+        )
+        sync_client.close()
+
+        resp = client.post(
+            "/api/auth/register/start",
+            json={"email": email, "display_name": "Retry"},
+        )
+        assert resp.status_code == 409
+        assert "already registered" in resp.json()["detail"].lower()
+
+    def test_register_verify_without_pending_returns_400(self):
+        """POST /register/verify before /register/start was called
+        → 400 "No pending registration found". Pin the user-facing
+        envelope so an attacker who skips the challenge step gets
+        a clear error rather than crashing the verify path."""
+        resp = client.post(
+            "/api/auth/register/verify",
+            json={
+                "credential": {
+                    "id": "fake",
+                    "rawId": "fake",
+                    "response": {},
+                    "type": "public-key",
+                },
+                "device_name": "Test",
+            },
+        )
+        assert resp.status_code == 400
+        assert "No pending registration" in resp.json()["detail"]
+
+    def test_login_verify_with_invalid_credential_returns_401(self):
+        """POST /login/verify without a pending challenge / with an
+        unknown credential → 401. Pin the 401 envelope (ValueError
+        from WebAuthnManager.verify_authentication maps to
+        UNAUTHORIZED, not BAD_REQUEST)."""
+        resp = client.post(
+            "/api/auth/login/verify",
+            json={
+                "credential": {
+                    "id": "nonexistent-cred",
+                    "rawId": "nonexistent-cred",
+                    "response": {},
+                    "type": "public-key",
+                }
+            },
+        )
+        assert resp.status_code == 401
+
+    def test_login_options_returns_options_dict(self):
+        """GET /login/options returns a dict with rpId + challenge +
+        empty allowCredentials. Pin the empty allowCredentials list
+        so a regression doesn't start leaking registered credential
+        IDs to unauthenticated callers (would let an attacker
+        enumerate user existence)."""
+        resp = client.get("/api/auth/login/options")
+        assert resp.status_code == 200
+        opts = resp.json()["options"]
+        assert "challenge" in opts
+        assert opts["allowCredentials"] == []
+        assert "rpId" in opts
+
+
 class TestRateLimiting:
     """Test that auth endpoints are rate-limited."""
 
