@@ -1801,3 +1801,187 @@ class TestPatternDetectorsGoalPacing:
         projects = [_project("p1", "Alpha", weekly_goal=10.0)]
         svc = self._service()
         assert svc._detect_goal_pacing(beats, projects, friday) == []
+
+
+class TestGenerateWeeklyDigest:
+    """generate_weekly_digest — aggregates a week's beats into a
+    WeeklyDigest with totals, top project, longest day, vs-last-week
+    delta, streak, observation, and a simplified productivity score.
+
+    Risk: a regression in any of these would silently change the
+    weekly summary email/UI without surfacing as a 500 — the digest
+    would just become subtly wrong. These tests pin every field."""
+
+    @staticmethod
+    def _monday_at(week_monday: date, *, day_offset: int, hour: int) -> datetime:
+        return datetime.combine(
+            week_monday + timedelta(days=day_offset),
+            datetime.min.time(),
+            tzinfo=UTC,
+        ).replace(hour=hour)
+
+    async def test_empty_week_returns_zeros_with_fallback_observation(self):
+        """No beats → totals are zero, top/longest fields default,
+        vs_last_week_pct is None, and the observation falls through
+        to the "you tracked Xh across N sessions" sentence."""
+        monday = date(2026, 4, 27)  # known Monday
+        svc = _intel_service()
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.week_of == monday
+        assert digest.total_hours == 0
+        assert digest.session_count == 0
+        assert digest.active_days == 0
+        assert digest.top_project_id is None
+        assert digest.top_project_name is None
+        assert digest.top_project_hours == 0
+        assert digest.vs_last_week_pct is None
+        assert digest.longest_day is None
+        assert digest.longest_day_hours == 0
+        assert digest.best_streak == 0
+        assert digest.project_breakdown == []
+        assert "0.0h" in digest.observation
+        assert "0 sessions" in digest.observation
+
+    async def test_single_project_single_day_pins_top_and_longest(self):
+        """One 90-min beat on Wednesday → top_project = that project,
+        longest_day = "Wednesday", longest_day_hours = 1.5."""
+        monday = date(2026, 4, 27)
+        wed = self._monday_at(monday, day_offset=2, hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=wed, end=wed + timedelta(minutes=90))]
+        projects = [_project("p1", "Alpha", weekly_goal=5.0)]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.total_hours == 1.5
+        assert digest.session_count == 1
+        assert digest.active_days == 1
+        assert digest.top_project_id == "p1"
+        assert digest.top_project_name == "Alpha"
+        assert digest.top_project_hours == 1.5
+        assert digest.longest_day == "Wednesday"
+        assert digest.longest_day_hours == 1.5
+
+    async def test_project_breakdown_sorted_descending_by_minutes(self):
+        """Breakdown list is sorted by minutes desc — the UI relies
+        on index 0 being the top project."""
+        monday = date(2026, 4, 27)
+        s_a = self._monday_at(monday, day_offset=0, hour=9)
+        s_b = self._monday_at(monday, day_offset=1, hour=9)
+        s_c = self._monday_at(monday, day_offset=2, hour=9)
+        beats = [
+            Beat(id="b1", project_id="p1", start=s_a, end=s_a + timedelta(minutes=30)),
+            Beat(id="b2", project_id="p2", start=s_b, end=s_b + timedelta(minutes=120)),
+            Beat(id="b3", project_id="p3", start=s_c, end=s_c + timedelta(minutes=60)),
+        ]
+        projects = [_project("p1", "Alpha"), _project("p2", "Beta"), _project("p3", "Gamma")]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        names = [row["name"] for row in digest.project_breakdown]
+        assert names == ["Beta", "Gamma", "Alpha"]
+        assert digest.top_project_id == "p2"
+        assert digest.top_project_name == "Beta"
+        assert digest.top_project_hours == 2.0
+
+    async def test_vs_last_week_pct_uses_prev_week_minutes(self):
+        """Prev week 60 min, this week 90 min → +50.0%."""
+        monday = date(2026, 4, 27)
+        prev_monday = monday - timedelta(days=7)
+        this_s = self._monday_at(monday, day_offset=1, hour=10)
+        prev_s = datetime.combine(
+            prev_monday + timedelta(days=1), datetime.min.time(), tzinfo=UTC
+        ).replace(hour=10)
+        beats = [
+            Beat(id="b1", project_id="p1", start=this_s, end=this_s + timedelta(minutes=90)),
+            Beat(id="b0", project_id="p1", start=prev_s, end=prev_s + timedelta(minutes=60)),
+        ]
+        projects = [_project("p1", "Alpha")]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.vs_last_week_pct == 50.0
+
+    async def test_vs_last_week_none_when_no_prev_activity(self):
+        """No prev-week beats → vs_last_week_pct is None (not 0, not
+        +inf). Pin so the UI's "vs last week" chip can render
+        "first week tracked" rather than "+0%"."""
+        monday = date(2026, 4, 27)
+        s = self._monday_at(monday, day_offset=1, hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=60))]
+        projects = [_project("p1", "Alpha")]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.vs_last_week_pct is None
+
+    async def test_best_streak_counts_consecutive_days_ending_sunday(self):
+        """Beats Fri-Sat-Sun → streak of 3. Streak walks backward
+        from sunday and breaks at the first inactive day."""
+        monday = date(2026, 4, 27)
+        beats = []
+        for offset in (4, 5, 6):  # Fri, Sat, Sun
+            s = self._monday_at(monday, day_offset=offset, hour=10)
+            beats.append(
+                Beat(id=f"b{offset}", project_id="p1", start=s, end=s + timedelta(minutes=30))
+            )
+        projects = [_project("p1", "Alpha")]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.best_streak == 3
+
+    async def test_best_streak_zero_when_sunday_inactive(self):
+        """Mon-Sat active, Sun off → streak = 0. The walk starts at
+        Sunday; if Sunday is empty it breaks immediately. This is
+        intentional — pin so a refactor doesn't accidentally make
+        the streak walk start from "last active day"."""
+        monday = date(2026, 4, 27)
+        beats = []
+        for offset in range(6):  # Mon..Sat, no Sun
+            s = self._monday_at(monday, day_offset=offset, hour=10)
+            beats.append(
+                Beat(id=f"b{offset}", project_id="p1", start=s, end=s + timedelta(minutes=30))
+            )
+        projects = [_project("p1", "Alpha")]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.best_streak == 0
+
+    async def test_active_days_counts_distinct_dates_only(self):
+        """Two beats on the same day → active_days = 1, session_count = 2."""
+        monday = date(2026, 4, 27)
+        morning = self._monday_at(monday, day_offset=2, hour=9)
+        afternoon = self._monday_at(monday, day_offset=2, hour=14)
+        beats = [
+            Beat(id="b1", project_id="p1", start=morning, end=morning + timedelta(minutes=30)),
+            Beat(id="b2", project_id="p1", start=afternoon, end=afternoon + timedelta(minutes=45)),
+        ]
+        projects = [_project("p1", "Alpha")]
+        svc = _intel_service(beats=beats, projects=projects)
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.active_days == 1
+        assert digest.session_count == 2
+
+    async def test_unknown_project_renders_as_unknown(self):
+        """A beat referencing a project_id not in the project list
+        (e.g. archived during the week) → row in breakdown labeled
+        "Unknown" rather than crashing."""
+        monday = date(2026, 4, 27)
+        s = self._monday_at(monday, day_offset=1, hour=10)
+        beats = [Beat(id="b1", project_id="ghost", start=s, end=s + timedelta(minutes=30))]
+        svc = _intel_service(beats=beats, projects=[])
+
+        digest = await svc.generate_weekly_digest(monday)
+
+        assert digest.top_project_name == "Unknown"
+        assert digest.project_breakdown[0]["name"] == "Unknown"
