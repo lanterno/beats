@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../services/flow_summary.dart';
+import '../services/insights_url.dart';
+import '../services/token_storage.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
@@ -40,6 +43,11 @@ class _CoachScreenState extends State<CoachScreen> {
   int? _flowPeak;
   int? _flowCount;
   bool _flowIsToday = true;
+  // Loaded once in _refresh so the strip-tap can build a URL without
+  // touching SharedPreferences synchronously. Default matches the
+  // daemon's [ui] base_url default.
+  String _webUrl = 'http://localhost:8080';
+  final TokenStorage _storage = TokenStorage();
 
   // Per-question editing state, keyed by question index.
   final Map<int, TextEditingController> _answerControllers = {};
@@ -75,6 +83,7 @@ class _CoachScreenState extends State<CoachScreen> {
     try {
       final brief = await widget.client.getTodayBrief();
       final review = await widget.client.getTodayReview();
+      final webUrl = await _storage.loadWebUrl();
 
       // Today's flow headline — single round-trip via /summary so
       // we don't paginate windows on the coach screen. Failure is
@@ -134,6 +143,7 @@ class _CoachScreenState extends State<CoachScreen> {
           _flowPeak = flowPeak;
           _flowCount = flowCount;
           _flowIsToday = flowIsToday;
+          _webUrl = webUrl;
           _loading = false;
         });
         if (_noteController.text != _todayNote) {
@@ -480,28 +490,63 @@ class _CoachScreenState extends State<CoachScreen> {
       fontSize: 14,
       letterSpacing: 0,
     );
-    return Row(
-      children: [
-        Container(
-            width: 3,
-            height: 14,
-            decoration: BoxDecoration(
-                color: BeatsColors.green, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 10),
-        Text(_flowIsToday ? 'TODAY' : 'YESTERDAY',
-            style: labelStyle.copyWith(color: BeatsColors.green)),
-        const SizedBox(width: 16),
-        Text('AVG', style: labelStyle),
-        const SizedBox(width: 6),
-        Text('$_flowAvg', style: numStyle),
-        const SizedBox(width: 14),
-        Text('PEAK', style: labelStyle),
-        const SizedBox(width: 6),
-        Text('$_flowPeak', style: numStyle),
-        const SizedBox(width: 14),
-        Text('${_flowCount}W',
-            style: labelStyle.copyWith(color: BeatsColors.textTertiary)),
-      ],
+    // Whole strip is tappable — opens the unfiltered Insights view.
+    // Coach screen is a "summary" surface, no specific axis to deep-
+    // link by; the whole-strip tap matches FlowScreen's per-axis tap
+    // pattern in spirit (tap the flow info → go to Insights). The
+    // ↗ glyph is the same affordance cue the FlowScreen rows use.
+    return InkWell(
+      onTap: _launchInsights,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          children: [
+            Container(
+                width: 3,
+                height: 14,
+                decoration: BoxDecoration(
+                    color: BeatsColors.green, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 10),
+            Text(_flowIsToday ? 'TODAY' : 'YESTERDAY',
+                style: labelStyle.copyWith(color: BeatsColors.green)),
+            const SizedBox(width: 16),
+            Text('AVG', style: labelStyle),
+            const SizedBox(width: 6),
+            Text('$_flowAvg', style: numStyle),
+            const SizedBox(width: 14),
+            Text('PEAK', style: labelStyle),
+            const SizedBox(width: 6),
+            Text('$_flowPeak', style: numStyle),
+            const SizedBox(width: 14),
+            Text('${_flowCount}W',
+                style: labelStyle.copyWith(color: BeatsColors.textTertiary)),
+            const SizedBox(width: 10),
+            Text('↗',
+                style: labelStyle.copyWith(
+                    color: BeatsColors.textTertiary, fontSize: 9)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Opens the configured Beats web UI's Insights page (unfiltered).
+  /// Same SnackBar-on-failure pattern as FlowScreen so a misconfigured
+  /// beats_web_url surfaces audibly rather than as a silent no-op.
+  Future<void> _launchInsights() async {
+    final url = buildInsightsUrl(_webUrl);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not open $url'),
+        duration: const Duration(seconds: 4),
+      ),
     );
   }
 
