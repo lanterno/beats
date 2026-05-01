@@ -1457,6 +1457,82 @@ class TestCoachBriefAndReviewErrorPaths:
         assert "memory rewrite blew up" not in text
 
 
+class TestAnalyticsRouterEndpoints:
+    """Smoke tests for /api/analytics/rhythm, /gaps, /tags. The
+    existing device-token tests stop at 403 / no-data and don't
+    exercise the route bodies; this class hits each endpoint with
+    a session token + (where needed) seeded data so the route
+    handlers actually run."""
+
+    def _create_project(self) -> str:
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Analytics Probe"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        return resp.json()["id"]
+
+    def test_rhythm_returns_48_slots_for_session_token(self):
+        """GET /api/analytics/rhythm returns 48 half-hour slots
+        (one for every 30-minute window in a day). Pin so the
+        chart never renders holes — even on an empty account
+        all 48 slots are present with minutes=0."""
+        resp = client.get("/api/analytics/rhythm", headers=auth_headers)
+        assert resp.status_code == 200
+        slots = resp.json()
+        assert len(slots) == 48
+        # Each slot has a slot index 0..47 and a minutes field
+        assert {s["slot"] for s in slots} == set(range(48))
+        assert all("minutes" in s for s in slots)
+
+    def test_gaps_returns_list_for_session_token(self):
+        """GET /api/analytics/gaps returns a list (possibly empty
+        for a no-data day). Pin the array shape — the dashboard's
+        Untracked Gaps panel iterates directly on the response."""
+        resp = client.get("/api/analytics/gaps", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert isinstance(body, list)
+
+    def test_tags_returns_sorted_unique_tags_from_user_beats(self):
+        """GET /api/analytics/tags surfaces every unique tag across
+        the user's beats, sorted alphabetically. Pin the
+        deduplication + sort — the companion app's tag-suggestion
+        chips bind to this list directly."""
+        project_id = self._create_project()
+        # Start + stop a timer to create one completed beat
+        client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-01T09:00:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-01T09:30:00Z"},
+            headers=auth_headers,
+        )
+        # Find that beat's id and update with tags
+        resp = client.get("/api/beats/", headers=auth_headers)
+        assert resp.status_code == 200
+        beats = resp.json()
+        assert len(beats) >= 1
+        beat = beats[0]
+        # Update via PUT — same shape as the companion's post-stop edit
+        beat["tags"] = ["focus", "morning", "focus"]  # dedup probe
+        client.put(
+            "/api/beats/",
+            json=beat,
+            headers=auth_headers,
+        )
+
+        resp = client.get("/api/analytics/tags", headers=auth_headers)
+        assert resp.status_code == 200
+        tags = resp.json()
+        # Deduplicated AND sorted
+        assert tags == ["focus", "morning"]
+
+
 class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:
     {detail: str, code: str, fields?: list}."""
