@@ -110,13 +110,18 @@ Install: `lefthook install` (from repo root)
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
 | `/api/intentions` | Daily intentions |
 | `/api/daily-notes` | End-of-day notes with mood |
-| `/api/intelligence` | Digests, score, patterns, suggestions, focus scores |
+| `/api/intelligence` | Digests, score, patterns, suggestions, focus scores, inbox |
 | `/api/plans` | Weekly plans, recurring intentions, reviews, streaks |
 | `/api/webhooks` | Webhook CRUD, daily summary trigger |
+| `/api/coach` | Brief generation, streaming chat, end-of-day reviews, usage, memory |
+| `/api/biometrics` | Daily health data from companion app / HealthKit / Health Connect |
 | `/api/calendar` | Google Calendar OAuth + events |
 | `/api/github` | GitHub OAuth + status |
+| `/api/fitbit` | Fitbit OAuth + status |
+| `/api/oura` | Oura personal-access-token connection + status |
+| `/api/signals` | Daemon-emitted flow windows and signal summaries |
 | `/api/auto-start` | Auto-start rules + webhook trigger |
-| `/api/device` | Wall clock status, favorites, heartbeat |
+| `/api/device` | Wall clock status, favorites, weekly bars, heartbeat, pairing |
 | `/api/export` | CSV/JSON export and import |
-| `/api/account` | User account management |
+| `/api/account` | User account management (me, refresh, credentials, logout) |
 | `/api/auth` | WebAuthn registration + login (public) |
