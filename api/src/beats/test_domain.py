@@ -3309,3 +3309,182 @@ class TestProjectServiceCrud:
         svc = _project_service(projects=[active, archived])
         result = await svc.list_projects(archived=True)
         assert [p.id for p in result] == ["p2"]
+
+
+class TestProjectServiceTimeAggregations:
+    """Five aggregation methods that power the project-detail page:
+    get_today_time, get_week_breakdown, get_monthly_totals,
+    get_daily_average, get_daily_summary.
+
+    These all run on date.today() (local-time), so tests synthesize
+    data relative to that anchor rather than pinning a fixed date.
+
+    Risk: these are the per-project numbers users actually look at.
+    A regression in window math (off-by-one on Mon vs Sun week
+    boundaries, "today" slop, YYYY-MM key drift) would silently
+    misreport every user's weekly progress."""
+
+    @staticmethod
+    def _at(d: date, hour: int = 9) -> datetime:
+        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
+
+    @staticmethod
+    def _completed(id_: str, project_id: str, day: date, hour: int = 9, minutes: int = 60) -> Beat:
+        s = TestProjectServiceTimeAggregations._at(day, hour)
+        return Beat(id=id_, project_id=project_id, start=s, end=s + timedelta(minutes=minutes))
+
+    # ---------------- get_today_time ----------------
+
+    async def test_today_time_empty_returns_zero(self):
+        svc = _project_service(projects=[_project("p1", "Alpha")])
+        result = await svc.get_today_time("p1")
+        assert result == timedelta()
+
+    async def test_today_time_only_counts_today(self):
+        """Beats from yesterday must NOT count toward today. Pin
+        so a refactor can't accidentally use a date range with
+        slop on either side and inflate today's number."""
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        beats = [
+            self._completed("b-today", "p1", today, minutes=45),
+            self._completed("b-yest", "p1", yesterday, minutes=120),
+        ]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        result = await svc.get_today_time("p1")
+        assert result == timedelta(minutes=45)
+
+    # ---------------- get_week_breakdown ----------------
+
+    async def test_week_breakdown_returns_seven_days_plus_total(self):
+        """Dict has all 7 weekday names so the UI always renders a
+        full bar chart, plus total_hours, effective_goal, and
+        effective_goal_type. Pin the shape so the chart can't
+        render holes on quiet days."""
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        beats = [
+            self._completed("b1", "p1", monday, minutes=60),
+            self._completed("b2", "p1", monday + timedelta(days=2), minutes=30),
+        ]
+        svc = _project_service(projects=[_project("p1", "Alpha", weekly_goal=5.0)], beats=beats)
+        result = await svc.get_week_breakdown("p1")
+        for day_name in (
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ):
+            assert day_name in result
+        assert result["total_hours"] == 1.5  # 60 + 30 min
+        assert result["effective_goal"] == 5.0
+        assert result["effective_goal_type"] == "target"
+
+    async def test_week_breakdown_weeks_ago_shifts_window(self):
+        """weeks_ago=1 looks at last week, not this one. Pin so a
+        regression can't ignore the parameter and silently always
+        return the current week."""
+        today = date.today()
+        last_monday = today - timedelta(days=today.weekday()) - timedelta(weeks=1)
+        beats = [self._completed("b1", "p1", last_monday, minutes=120)]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        this_week = await svc.get_week_breakdown("p1", weeks_ago=0)
+        last_week = await svc.get_week_breakdown("p1", weeks_ago=1)
+        assert this_week["total_hours"] == 0
+        assert last_week["total_hours"] == 2.0
+
+    async def test_week_breakdown_include_log_details(self):
+        """include_log_details=True swaps each day's duration string
+        for a list of log dicts. Pin the shape — the project-detail
+        Logs tab binds to {id, start, end, duration} per entry."""
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        beats = [self._completed("b1", "p1", monday, minutes=60)]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        result = await svc.get_week_breakdown("p1", weeks_ago=0, include_log_details=True)
+        monday_logs = result["Monday"]
+        assert isinstance(monday_logs, list)
+        assert len(monday_logs) == 1
+        log = monday_logs[0]
+        assert set(log.keys()) == {"id", "start", "end", "duration"}
+        assert log["id"] == "b1"
+
+    # ---------------- get_monthly_totals ----------------
+
+    async def test_monthly_totals_empty_returns_zero(self):
+        svc = _project_service(projects=[_project("p1", "Alpha")])
+        result = await svc.get_monthly_totals("p1")
+        assert result == {
+            "durations_per_month": {},
+            "total_minutes": 0,
+            "warnings": [],
+        }
+
+    async def test_monthly_totals_groups_by_year_month(self):
+        """Two April beats + one May beat → two month keys with
+        hours rounded to 2 decimals. Pin the YYYY-MM key format
+        the UI sorts on."""
+        beats = [
+            self._completed("b1", "p1", date(2026, 4, 1), minutes=60),
+            self._completed("b2", "p1", date(2026, 4, 15), minutes=30),
+            self._completed("b3", "p1", date(2026, 5, 1), minutes=120),
+        ]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        result = await svc.get_monthly_totals("p1")
+        assert result["durations_per_month"] == {"2026-04": 1.5, "2026-05": 2.0}
+        assert result["total_minutes"] == 90 + 120
+
+    async def test_monthly_totals_warns_on_runaway_beat(self):
+        """A beat over 24h (forgotten timer) emits a warning rather
+        than silently inflating the total. Pin so the warning
+        always surfaces."""
+        s = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        runaway = Beat(id="b-runaway", project_id="p1", start=s, end=s + timedelta(hours=30))
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=[runaway])
+        result = await svc.get_monthly_totals("p1")
+        assert len(result["warnings"]) == 1
+        assert "b-runaway" in result["warnings"][0]
+        assert "24 hours" in result["warnings"][0]
+
+    # ---------------- get_daily_average ----------------
+
+    async def test_daily_average_empty_returns_zero(self):
+        svc = _project_service(projects=[_project("p1", "Alpha")])
+        result = await svc.get_daily_average("p1")
+        assert result == {"avg_minutes": 0, "days_tracked": 0}
+
+    async def test_daily_average_aggregates_per_day(self):
+        """Two beats on day A (45+15=60) + one beat on day B (120)
+        → avg_minutes=90, days_tracked=2. Pin the per-day grouping
+        so the metric doesn't degenerate to "avg per session"."""
+        today = date.today()
+        d1 = today - timedelta(days=2)
+        d2 = today - timedelta(days=4)
+        beats = [
+            self._completed("b1", "p1", d1, hour=9, minutes=45),
+            self._completed("b2", "p1", d1, hour=14, minutes=15),
+            self._completed("b3", "p1", d2, hour=10, minutes=120),
+        ]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        result = await svc.get_daily_average("p1")
+        assert result == {"avg_minutes": 90, "days_tracked": 2}
+
+    # ---------------- get_daily_summary ----------------
+
+    async def test_daily_summary_groups_by_day(self):
+        """Returns {day_str: total_duration_str}. Two beats same
+        day combine; the str-keyed shape is what the UI iterates.
+        Pin so the key format can't drift to e.g. "Apr 1, 2026"."""
+        d1 = date(2026, 4, 1)
+        d2 = date(2026, 4, 2)
+        beats = [
+            self._completed("b1", "p1", d1, hour=9, minutes=30),
+            self._completed("b2", "p1", d1, hour=14, minutes=30),
+            self._completed("b3", "p1", d2, hour=9, minutes=60),
+        ]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        result = await svc.get_daily_summary("p1")
+        assert result == {"2026-04-01": "1:00:00", "2026-04-02": "1:00:00"}
