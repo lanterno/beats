@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 import jwt
+import pytest
 
 # =============================================================================
 # SessionManager — JWT tokens, WebAuthn challenges, revocation
@@ -297,3 +298,380 @@ class TestSessionManagerChallenges:
         sm._challenges[b64_key].created_at = time.time() - session_mod.CHALLENGE_TTL - 1
         sm._cleanup_expired_challenges()
         assert sm.get_pending_registration_user_id("registration") is None
+
+
+# =============================================================================
+# WebAuthnManager — registration + authentication orchestration
+# =============================================================================
+
+
+class _FakeCredentialStorage:
+    """In-memory credential storage. Mirrors MongoCredentialStorage's
+    surface — the methods WebAuthnManager calls."""
+
+    def __init__(self):
+        self._creds: list[tuple[str, object]] = []
+
+    async def is_registered(self, user_id: str | None = None) -> bool:
+        if user_id:
+            return any(uid == user_id for uid, _ in self._creds)
+        return len(self._creds) > 0
+
+    async def get_credentials(self, user_id: str | None = None):
+        if user_id:
+            return [c for uid, c in self._creds if uid == user_id]
+        return [c for _, c in self._creds]
+
+    async def get_credential_ids(self, user_id: str | None = None) -> list[str]:
+        creds = await self.get_credentials(user_id)
+        return [c.credential_id for c in creds]
+
+    async def get_credential_by_id(self, credential_id: str):
+        for _, c in self._creds:
+            if c.credential_id == credential_id:
+                return c
+        return None
+
+    async def get_user_id_for_credential(self, credential_id: str) -> str | None:
+        for uid, c in self._creds:
+            if c.credential_id == credential_id:
+                return uid
+        return None
+
+    async def save_credential(
+        self, user_id, credential_id, public_key, sign_count, device_name=None
+    ):
+        from beats.auth.storage import StoredCredential
+
+        cred = StoredCredential(
+            credential_id=credential_id,
+            public_key=public_key,
+            sign_count=sign_count,
+            created_at="2026-04-01T00:00:00",
+            device_name=device_name,
+        )
+        self._creds.append((user_id, cred))
+        return cred
+
+    async def delete_credential(self, credential_id, user_id) -> bool:
+        for i, (uid, c) in enumerate(self._creds):
+            if uid == user_id and c.credential_id == credential_id:
+                self._creds.pop(i)
+                return True
+        return False
+
+    async def count_credentials(self, user_id: str) -> int:
+        return sum(1 for uid, _ in self._creds if uid == user_id)
+
+
+class _FakeUserRepo:
+    def __init__(self, users: list | None = None):
+        self._users = users or []
+
+    async def get_by_id(self, user_id: str):
+        for u in self._users:
+            if u.id == user_id:
+                return u
+        return None
+
+
+def _wam(
+    *,
+    storage=None,
+    session=None,
+    user_repo=None,
+    rp_id="beats.test",
+    rp_name="Beats",
+    origin="https://beats.test",
+):
+    from beats.auth.webauthn import WebAuthnManager
+
+    return WebAuthnManager(
+        rp_id=rp_id,
+        rp_name=rp_name,
+        origin=origin,
+        credential_storage=storage or _FakeCredentialStorage(),
+        session_manager=session or _sm(),
+        user_repo=user_repo or _FakeUserRepo(),
+    )
+
+
+def _user(
+    id_: str = "user-1",
+    email: str = "ahmed@example.com",
+    display_name: str | None = "Ahmed",
+):
+    from beats.domain.models import User
+
+    return User(id=id_, email=email, display_name=display_name)
+
+
+class TestWebAuthnRegistrationOptions:
+    """get_registration_options builds the dict the browser hands
+    to navigator.credentials.create. Two side effects: the
+    challenge is stored on SessionManager AND the
+    pending-registration user_id is recorded — so verify_*
+    can find both."""
+
+    async def test_returns_options_dict_with_required_keys(self):
+        wam = _wam()
+        out = await wam.get_registration_options(_user())
+        for key in (
+            "rp",
+            "user",
+            "challenge",
+            "pubKeyCredParams",
+            "authenticatorSelection",
+            "attestation",
+            "excludeCredentials",
+        ):
+            assert key in out, f"missing key {key!r}"
+        assert out["rp"]["id"] == "beats.test"
+        assert out["rp"]["name"] == "Beats"
+        assert out["user"]["name"] == "ahmed@example.com"
+        assert out["user"]["displayName"] == "Ahmed"
+        assert "id" in out["user"]
+        # authenticatorSelection: residentKey REQUIRED, userVerification PREFERRED
+        assert out["authenticatorSelection"]["residentKey"] == "required"
+        assert out["authenticatorSelection"]["userVerification"] == "preferred"
+
+    async def test_stores_challenge_and_pending_registration(self):
+        """Side effect: SessionManager has a "registration" challenge
+        AND the pending-registration map points to the user. Pin
+        both so verify_registration can find them."""
+        sm = _sm()
+        wam = _wam(session=sm)
+        await wam.get_registration_options(_user(id_="user-42"))
+        assert sm.get_current_challenge("registration") is not None
+        assert sm.get_pending_registration_user_id("registration") == "user-42"
+
+    async def test_excludes_existing_credentials(self):
+        """A user with an existing credential gets it surfaced in
+        excludeCredentials so the browser refuses to register the
+        same authenticator twice. Pin so a second registration
+        attempt with the same hardware shows a useful error rather
+        than silently overwriting."""
+        storage = _FakeCredentialStorage()
+        await storage.save_credential(
+            user_id="user-1",
+            credential_id="AQIDBA",  # valid base64url, decodes to 4 bytes
+            public_key="AQID",
+            sign_count=0,
+        )
+        wam = _wam(storage=storage)
+        out = await wam.get_registration_options(_user())
+        ids = [c["id"] for c in out["excludeCredentials"]]
+        assert "AQIDBA" in ids
+
+    async def test_user_without_display_name_falls_back_to_email(self):
+        """display_name=None → user.displayName is the email. Pin
+        so the browser's native picker shows a non-empty label."""
+        wam = _wam()
+        out = await wam.get_registration_options(_user(display_name=None))
+        assert out["user"]["displayName"] == "ahmed@example.com"
+
+
+class TestWebAuthnRegistrationVerificationGuards:
+    """verify_registration's crypto path needs a real authenticator
+    signature, so cover the PRE-checks (business logic) here. The
+    crypto path is exercised by HTTP integration tests in test_api."""
+
+    async def test_max_credentials_per_user_blocks_new_registration(self):
+        """A user at MAX_CREDENTIALS_PER_USER (10) → ValueError
+        BEFORE the crypto path runs. Pin so a malicious or buggy
+        client can't register unbounded keys."""
+        from beats.auth.webauthn import MAX_CREDENTIALS_PER_USER
+
+        storage = _FakeCredentialStorage()
+        for i in range(MAX_CREDENTIALS_PER_USER):
+            await storage.save_credential(
+                user_id="user-1",
+                credential_id=f"cred-{i}",
+                public_key=f"pk-{i}",
+                sign_count=0,
+            )
+        wam = _wam(storage=storage)
+        with pytest.raises(ValueError, match="Maximum"):
+            await wam.verify_registration(credential={}, user=_user())
+
+    async def test_no_pending_challenge_raises(self):
+        """verify_registration without a prior get_registration_options
+        call → ValueError. Pin so an attacker who skips the challenge
+        step gets rejected at the service layer."""
+        wam = _wam()
+        with pytest.raises(ValueError, match="No pending registration"):
+            await wam.verify_registration(credential={}, user=_user())
+
+
+class TestWebAuthnAuthenticationOptions:
+    """get_authentication_options uses an empty allowCredentials list
+    so the browser triggers its native picker for discoverable
+    credentials. Pin the empty-list invariant — exposing registered
+    credential IDs to unauthenticated callers leaks user existence."""
+
+    async def test_returns_options_with_empty_allow_credentials(self):
+        wam = _wam()
+        out = await wam.get_authentication_options()
+        assert out["rpId"] == "beats.test"
+        assert out["allowCredentials"] == []
+        assert "challenge" in out
+        assert out["userVerification"] == "preferred"
+
+    async def test_stores_authentication_challenge(self):
+        sm = _sm()
+        wam = _wam(session=sm)
+        await wam.get_authentication_options()
+        assert sm.get_current_challenge("authentication") is not None
+        # Pin: it's NOT also a registration challenge
+        assert sm.get_current_challenge("registration") is None
+
+
+class TestWebAuthnAuthenticationVerificationGuards:
+    """Pin the pre-checks of verify_authentication without needing
+    a real authenticator signature."""
+
+    async def test_no_pending_challenge_raises(self):
+        wam = _wam()
+        with pytest.raises(ValueError, match="No pending authentication"):
+            await wam.verify_authentication(credential={"id": "any"})
+
+    async def test_unknown_credential_raises(self):
+        """Credential ID not in storage → ValueError "Credential
+        not found". Pin so an attacker can't probe for valid
+        credential IDs by checking which error fires."""
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, challenge_type="authentication")
+        wam = _wam(session=sm)
+        with pytest.raises(ValueError, match="Credential not found"):
+            await wam.verify_authentication(credential={"id": "ghost"})
+
+    async def test_credential_without_user_raises(self):
+        """A credential that exists but isn't mapped to a user
+        (orphaned data) → ValueError "No user found". Pin so a
+        partial DB state doesn't auth the wrong user."""
+        from beats.auth.storage import StoredCredential
+
+        storage = _FakeCredentialStorage()
+        # Insert orphaned credential directly — empty user_id
+        storage._creds.append(
+            (
+                "",
+                StoredCredential(
+                    credential_id="orphan",
+                    public_key="pk",
+                    sign_count=0,
+                    created_at="2026-04-01T00:00:00",
+                ),
+            )
+        )
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, challenge_type="authentication")
+        wam = _wam(storage=storage, session=sm)
+        with pytest.raises(ValueError, match="No user"):
+            await wam.verify_authentication(credential={"id": "orphan"})
+
+
+class TestWebAuthnIsRegistered:
+    """is_registered passes through to storage."""
+
+    async def test_no_credentials_returns_false(self):
+        wam = _wam()
+        assert await wam.is_registered() is False
+
+    async def test_with_credentials_returns_true(self):
+        storage = _FakeCredentialStorage()
+        await storage.save_credential(
+            user_id="user-1",
+            credential_id="cred-1",
+            public_key="pk",
+            sign_count=0,
+        )
+        wam = _wam(storage=storage)
+        assert await wam.is_registered() is True
+
+
+class TestWebAuthnGetCredentialsInfo:
+    """get_credentials_info shapes stored credentials into the
+    UI-facing dict {id, device_name, created_at}."""
+
+    async def test_empty_returns_empty_list(self):
+        wam = _wam()
+        assert await wam.get_credentials_info("user-1") == []
+
+    async def test_returns_credentials_with_expected_shape(self):
+        storage = _FakeCredentialStorage()
+        await storage.save_credential(
+            user_id="user-1",
+            credential_id="cred-1",
+            public_key="pk-1",
+            sign_count=0,
+            device_name="iPhone",
+        )
+        wam = _wam(storage=storage)
+        out = await wam.get_credentials_info("user-1")
+        assert len(out) == 1
+        entry = out[0]
+        assert set(entry.keys()) == {"id", "device_name", "created_at"}
+        assert entry["id"] == "cred-1"
+        assert entry["device_name"] == "iPhone"
+
+
+class TestWebAuthnDeleteCredential:
+    """delete_credential refuses to delete a user's only credential.
+    Pin so a user who hits "remove" on their last passkey doesn't
+    lock themselves out — the API surface forces them to register
+    a new one first."""
+
+    async def test_cannot_delete_last_credential(self):
+        storage = _FakeCredentialStorage()
+        await storage.save_credential(
+            user_id="user-1",
+            credential_id="only-one",
+            public_key="pk",
+            sign_count=0,
+        )
+        wam = _wam(storage=storage)
+        with pytest.raises(ValueError, match="only passkey"):
+            await wam.delete_credential("only-one", "user-1")
+        # Confirm the credential is still there
+        assert await storage.count_credentials("user-1") == 1
+
+    async def test_can_delete_when_multiple_exist(self):
+        storage = _FakeCredentialStorage()
+        await storage.save_credential(
+            user_id="user-1",
+            credential_id="cred-1",
+            public_key="pk-1",
+            sign_count=0,
+        )
+        await storage.save_credential(
+            user_id="user-1",
+            credential_id="cred-2",
+            public_key="pk-2",
+            sign_count=0,
+        )
+        wam = _wam(storage=storage)
+        assert await wam.delete_credential("cred-1", "user-1") is True
+        assert await storage.count_credentials("user-1") == 1
+
+    async def test_delete_scoped_to_owning_user(self):
+        """User A cannot delete User B's credential — pin the
+        scoping so a compromised account can't strip another
+        user's passkeys."""
+        storage = _FakeCredentialStorage()
+        # B has 2, A has 2 (so the last-one guard doesn't fire on A)
+        for uid, cid in [
+            ("user-B", "b1"),
+            ("user-B", "b2"),
+            ("user-A", "a1"),
+            ("user-A", "a2"),
+        ]:
+            await storage.save_credential(
+                user_id=uid, credential_id=cid, public_key="pk", sign_count=0
+            )
+        wam = _wam(storage=storage)
+        # User A tries to delete User B's credential
+        result = await wam.delete_credential("b1", "user-A")
+        assert result is False
+        # B's credentials are intact
+        assert await storage.count_credentials("user-B") == 2
