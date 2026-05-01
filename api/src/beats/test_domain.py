@@ -2340,3 +2340,194 @@ class TestSuggestDailyPlan:
         svc = _intel_service(projects=projects)
         result = await svc.suggest_daily_plan(self.FRIDAY)
         assert result[0]["project_name"] == "Alpha"
+
+
+class TestFindPeakBlock:
+    """_find_peak_block buckets beats into 12 two-hour blocks and
+    returns the block with the most total minutes. The default of
+    block 4 (8-10 AM) when there's no data is intentional — pin it
+    so a refactor doesn't accidentally promote midnight."""
+
+    def _svc(self):
+        return _intel_service()
+
+    @staticmethod
+    def _beat_at(hour: int, minutes: int, *, day: date | None = None) -> Beat:
+        d = day or date(2026, 4, 1)
+        s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
+        return Beat(
+            id=f"b-{hour}-{minutes}", project_id="p1", start=s, end=s + timedelta(minutes=minutes)
+        )
+
+    def test_empty_returns_default_block_4(self):
+        """No beats → block 4 (8-10 AM). Pin so the default never
+        becomes block 0 (midnight) — a midnight peak would mislabel
+        every user's "you usually work at" sentence."""
+        assert self._svc()._find_peak_block([]) == 4
+
+    def test_picks_block_with_most_total_minutes(self):
+        """Three beats: 30 min in block 4 (9 AM), 90 min in
+        block 7 (14:00), 30 min in block 9 (18:00). Block 7 wins."""
+        beats = [
+            self._beat_at(9, 30),
+            self._beat_at(14, 90),
+            self._beat_at(18, 30),
+        ]
+        assert self._svc()._find_peak_block(beats) == 7
+
+    def test_buckets_by_two_hour_window(self):
+        """Beats at 8 AM and 9 AM both land in block 4 (hour//2);
+        their minutes accumulate before being compared to other
+        blocks. Pin the //2 floor."""
+        beats = [
+            self._beat_at(8, 30),  # block 4
+            self._beat_at(9, 30),  # block 4
+            self._beat_at(14, 45),  # block 7
+        ]
+        # Block 4: 60 min, block 7: 45 min → 4 wins
+        assert self._svc()._find_peak_block(beats) == 4
+
+
+class TestFocusScoreForBeat:
+    """_focus_score_for_beat = length(0-40) + peak(0-30) + frag(0-30),
+    clamped to [0, 100]. Each component is bucketed; the boundaries
+    matter for downstream rendering ("deep work" vs "shallow")."""
+
+    def _svc(self):
+        return _intel_service()
+
+    @staticmethod
+    def _beat(hour: int, minutes: int, *, id_: str = "b") -> Beat:
+        s = datetime(2026, 4, 1, hour, 0, tzinfo=UTC)
+        return Beat(id=id_, project_id="p1", start=s, end=s + timedelta(minutes=minutes))
+
+    def test_length_buckets_pin_each_threshold(self):
+        """Length component buckets: <10→5, <25→15, <45→25, <90→35, ≥90→40."""
+        svc = self._svc()
+        cases = [(8, 5), (20, 15), (30, 25), (60, 35), (120, 40)]
+        for mins, expected in cases:
+            b = self._beat(9, mins)
+            r = svc._focus_score_for_beat(b, [b], 0, peak_block=4)
+            assert r["components"]["length"] == expected, (
+                f"{mins}min should map to length={expected}"
+            )
+
+    def test_peak_component_same_block_full_credit(self):
+        """Beat in the user's peak 2-hour block → peak component=30."""
+        b = self._beat(9, 60)  # 9 AM = block 4
+        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        assert r["components"]["peak_hours"] == 30
+
+    def test_peak_component_adjacent_block_partial(self):
+        """One block away from peak → 20."""
+        b = self._beat(11, 60)  # block 5; peak=4
+        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        assert r["components"]["peak_hours"] == 20
+
+    def test_peak_component_far_block_minimum(self):
+        """Two or more blocks away from peak → 10."""
+        b = self._beat(20, 60)  # block 10; peak=4
+        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        assert r["components"]["peak_hours"] == 10
+
+    def test_no_neighbors_no_fragmentation_penalty(self):
+        """A solo beat (only one on the day) has frag=30 — no
+        adjacent gap to check. Pin so a refactor doesn't apply
+        the penalty unconditionally."""
+        b = self._beat(9, 60)
+        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        assert r["components"]["fragmentation"] == 30
+
+    def test_fragmentation_penalty_when_close_to_prev(self):
+        """Gap to previous beat < 5 min → frag drops by 15.
+        Pattern: prev ends 9:30, this starts 9:33 → 3 min gap → penalty."""
+        prev = self._beat(9, 30, id_="prev")  # 9:00-9:30
+        s = datetime(2026, 4, 1, 9, 33, tzinfo=UTC)
+        cur = Beat(id="cur", project_id="p1", start=s, end=s + timedelta(minutes=20))
+        r = self._svc()._focus_score_for_beat(cur, [prev, cur], 1, peak_block=4)
+        assert r["components"]["fragmentation"] == 15  # 30 - 15
+
+    def test_fragmentation_penalty_double_when_both_neighbors_close(self):
+        """Sandwiched between two close neighbors → 30 - 15 - 15 = 0.
+        Pin so the two penalties stack; the floor is min=0 from the
+        component itself, not a clamp."""
+        prev = self._beat(9, 30, id_="prev")  # 9:00-9:30
+        cur_s = datetime(2026, 4, 1, 9, 33, tzinfo=UTC)
+        cur = Beat(id="cur", project_id="p1", start=cur_s, end=cur_s + timedelta(minutes=10))
+        # cur ends 9:43. Next starts 9:46 → 3 min gap.
+        nxt_s = datetime(2026, 4, 1, 9, 46, tzinfo=UTC)
+        nxt = Beat(id="nxt", project_id="p1", start=nxt_s, end=nxt_s + timedelta(minutes=20))
+        r = self._svc()._focus_score_for_beat(cur, [prev, cur, nxt], 1, peak_block=4)
+        assert r["components"]["fragmentation"] == 0
+
+    def test_no_penalty_when_gap_at_least_5min(self):
+        """Gap of exactly 5 min → no penalty (the boundary is `< 5`)."""
+        prev = self._beat(9, 30, id_="prev")  # ends 9:30
+        cur_s = datetime(2026, 4, 1, 9, 35, tzinfo=UTC)  # exactly 5 min gap
+        cur = Beat(id="cur", project_id="p1", start=cur_s, end=cur_s + timedelta(minutes=20))
+        r = self._svc()._focus_score_for_beat(cur, [prev, cur], 1, peak_block=4)
+        assert r["components"]["fragmentation"] == 30
+
+    def test_total_score_sums_components(self):
+        """Total = length + peak + frag, clamped to [0, 100]. A 90+
+        minute beat in the peak block with no close neighbors hits
+        the 100 ceiling: 40 + 30 + 30 = 100."""
+        b = self._beat(9, 120)
+        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        assert r["score"] == 100
+
+
+class TestComputeFocusScores:
+    """compute_focus_scores threads three pieces together: load the
+    target day's beats, derive peak_block from 30 days of recent
+    activity, and score each beat in chronological order."""
+
+    async def test_empty_day_returns_empty(self):
+        target = date(2026, 5, 1)
+        svc = _intel_service()
+        assert await svc.compute_focus_scores(target) == []
+
+    async def test_returns_one_row_per_beat_with_components(self):
+        """One beat on the target day → one row with score and
+        component dict. Pin the response shape — the UI binds to
+        `score` + `components.length/peak_hours/fragmentation`."""
+        target = date(2026, 5, 1)
+        s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(hour=9)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=60))]
+        svc = _intel_service(beats=beats)
+        result = await svc.compute_focus_scores(target)
+        assert len(result) == 1
+        assert result[0]["beat_id"] == "b1"
+        assert "score" in result[0]
+        comps = result[0]["components"]
+        assert set(comps.keys()) == {"length", "peak_hours", "fragmentation"}
+
+    async def test_sorts_beats_chronologically_for_fragmentation(self):
+        """Two beats inserted out of order in the repo are still
+        scored in chronological order, so fragmentation gaps are
+        computed correctly. Pin so a regression that removed the
+        sort would silently break frag scoring on disordered data."""
+        target = date(2026, 5, 1)
+        early_s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(hour=9)
+        late_s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(
+            hour=9, minute=33
+        )
+        early = Beat(
+            id="early",
+            project_id="p1",
+            start=early_s,
+            end=early_s + timedelta(minutes=30),
+        )
+        late = Beat(
+            id="late",
+            project_id="p1",
+            start=late_s,
+            end=late_s + timedelta(minutes=20),
+        )
+        # Repo returns them out of order
+        svc = _intel_service(beats=[late, early])
+        result = await svc.compute_focus_scores(target)
+        # Result is sorted: early first, then late
+        assert [r["beat_id"] for r in result] == ["early", "late"]
+        # Late has a 3-min gap from early → frag penalty
+        assert result[1]["components"]["fragmentation"] == 15
