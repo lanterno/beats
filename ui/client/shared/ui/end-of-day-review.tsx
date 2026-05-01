@@ -4,7 +4,7 @@
  */
 
 import { Moon, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn, formatDuration } from "@/shared/lib";
 
 const MOODS = [
@@ -51,37 +51,62 @@ export function EndOfDayReview({
 		}
 	}, [totalMinutesToday]);
 
-	const dismiss = () => {
+	const dismiss = useCallback(() => {
 		const today = new Date().toISOString().slice(0, 10);
 		localStorage.setItem(REVIEW_DISMISSED_KEY, today);
 		setOpen(false);
-	};
+	}, []);
 
 	const handleSave = () => {
 		onSave(note, mood);
 		dismiss();
 	};
 
+	// Escape closes the dialog. Listening at the document level (rather
+	// than a key handler on the panel) means the user doesn't need to
+	// land focus inside the modal first — pressing Esc anywhere works,
+	// matching native dialog behavior.
+	useEffect(() => {
+		if (!open) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") dismiss();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [open, dismiss]);
+
 	if (!open) return null;
 
 	return (
 		<div className="fixed inset-0 z-[150] flex items-center justify-center">
-			<div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={dismiss} />
+			<button
+				type="button"
+				aria-label="Dismiss end-of-day review"
+				className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-default"
+				onClick={dismiss}
+			/>
 			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="eod-review-title"
 				className="relative w-full max-w-sm rounded-xl border border-border bg-card shadow-card overflow-hidden mx-4"
 				style={{ animation: "fadeSlideIn 200ms ease-out both" }}
 			>
 				{/* Header */}
 				<div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
 					<div className="flex items-center gap-2">
-						<Moon className="w-4 h-4 text-accent" />
-						<span className="text-sm font-medium text-foreground">How was your day?</span>
+						<Moon className="w-4 h-4 text-accent" aria-hidden="true" />
+						<span id="eod-review-title" className="text-sm font-medium text-foreground">
+							How was your day?
+						</span>
 					</div>
 					<button
+						type="button"
 						onClick={dismiss}
+						aria-label="Close"
 						className="p-1 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
 					>
-						<X className="w-4 h-4" />
+						<X className="w-4 h-4" aria-hidden="true" />
 					</button>
 				</div>
 
@@ -122,6 +147,7 @@ export function EndOfDayReview({
 						<div className="flex gap-1">
 							{MOODS.map((m) => (
 								<button
+									type="button"
 									key={m.value}
 									onClick={() => setMood(mood === m.value ? undefined : m.value)}
 									className={cn(
@@ -131,8 +157,10 @@ export function EndOfDayReview({
 											: "hover:bg-secondary/40",
 									)}
 									title={m.label}
+									aria-label={`Mood: ${m.label}`}
+									aria-pressed={mood === m.value}
 								>
-									{m.emoji}
+									<span aria-hidden="true">{m.emoji}</span>
 								</button>
 							))}
 						</div>
@@ -150,12 +178,14 @@ export function EndOfDayReview({
 					{/* Actions */}
 					<div className="flex gap-2">
 						<button
+							type="button"
 							onClick={dismiss}
 							className="flex-1 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
 						>
 							Skip
 						</button>
 						<button
+							type="button"
 							onClick={handleSave}
 							className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 						>
