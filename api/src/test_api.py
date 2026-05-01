@@ -1915,6 +1915,49 @@ class TestIdempotentReplay:
             headers=auth_headers,
         )
 
+    def test_failed_mutation_is_not_cached_for_replay(self):
+        """A 4xx response on a guarded path MUST NOT be cached in
+        mutation_log — the user must be able to fix and retry
+        with the same client id. Pin the non-2xx skip branch
+        in the middleware: a regression that cached failures
+        would lock the user out of retrying the same operation.
+
+        Idempotency middleware ONLY covers /api/projects/{id}/start
+        and /stop (per IDEMPOTENT_PATH_SUFFIXES) — so we trigger
+        the failure on /start with a malformed body."""
+        project_id = self._create_project()
+        headers = {**auth_headers, "X-Client-Id": "test-failed-mutation-start"}
+
+        # First call: malformed body (missing required `time` field
+        # would 422; sending a wrong type does the same)
+        first = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "not-an-iso-datetime"},
+            headers=headers,
+        )
+        # Either 422 (validation) or 400 (parse) — both are 4xx and
+        # MUST NOT be cached. Pin the >=400 contract.
+        assert first.status_code >= 400
+        assert first.headers.get("X-Idempotent-Replay") is None
+
+        # Retry with same client id and a valid body — executes
+        # fresh, NOT a replay of the cached failure
+        second = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-16T12:00:00Z"},
+            headers=headers,
+        )
+        assert second.status_code in (200, 201), second.text
+        # Pin: fresh execution, not a replay
+        assert second.headers.get("X-Idempotent-Replay") is None
+
+        # Clean up
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-16T12:00:30Z"},
+            headers=auth_headers,
+        )
+
 
 class TestSignedSqliteExport:
     """The signed SQLite export must round-trip cleanly and reject tampering."""
