@@ -483,12 +483,19 @@ async def post_drift_event(
     user_id: CurrentUserId,
     repo: FlowWindowRepoDep,
 ) -> dict[str, str]:
-    """Record a distraction drift event from the daemon."""
+    """Record a distraction drift event from the daemon.
+
+    Stores the drift as a FlowWindow with category="drift", flow
+    score 0, and an end timestamp computed from the request's
+    duration_seconds — previous versions set window_end to
+    started_at, dropping the duration field on the floor and
+    making "total distraction time" uncomputable from the data.
+    """
     device_id = getattr(request.state, "device_id", "")
     window = FlowWindow(
         device_id=device_id,
         window_start=body.started_at,
-        window_end=body.started_at,
+        window_end=body.started_at + timedelta(seconds=body.duration_seconds),
         flow_score=0.0,
         dominant_bundle_id=body.bundle_id,
         dominant_category="drift",

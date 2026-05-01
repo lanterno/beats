@@ -1530,10 +1530,11 @@ class TestSignalsAPI:
         with category="drift" so the UI's history view can filter."""
         _, device_headers = self._pair_device()
         now = datetime.now(UTC)
+        started_at = now - timedelta(seconds=45)
         resp = client.post(
             "/api/signals/drift",
             json={
-                "started_at": (now - timedelta(seconds=45)).isoformat(),
+                "started_at": started_at.isoformat(),
                 "duration_seconds": 45.0,
                 "bundle_id": "com.twitter.twitter-mac",
             },
@@ -1556,7 +1557,17 @@ class TestSignalsAPI:
         windows = resp.json()
         drift_windows = [w for w in windows if w.get("dominant_category") == "drift"]
         assert len(drift_windows) >= 1, windows
-        assert any(w.get("dominant_bundle_id") == "com.twitter.twitter-mac" for w in drift_windows)
+        target = next(
+            w for w in drift_windows if w.get("dominant_bundle_id") == "com.twitter.twitter-mac"
+        )
+        # The endpoint used to set window_end == window_start, dropping
+        # duration_seconds on the floor. Lock in that the duration is
+        # actually preserved: window_end - window_start ≈ 45s, so a
+        # downstream analytics view can compute "total drift time".
+        window_start = datetime.fromisoformat(target["window_start"])
+        window_end = datetime.fromisoformat(target["window_end"])
+        elapsed = (window_end - window_start).total_seconds()
+        assert 44.5 <= elapsed <= 45.5, f"expected ≈45s window, got {elapsed}s"
 
     def test_post_drift_event_requires_auth(self):
         """A drift event with no auth gets 401 — same as every
