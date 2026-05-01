@@ -46,12 +46,6 @@ unsigned long lastHeartbeat = 0;
 // Helpers
 // ============================================================================
 
-CRGB hexToRgb(const String& hex) {
-    if (hex.length() < 7) return CRGB(0x88, 0x88, 0x88);
-    long val = strtol(hex.substring(1).c_str(), NULL, 16);
-    return CRGB((val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF);
-}
-
 int readBatteryPercent() {
     int raw = analogRead(BATTERY_PIN);
     // ESP32 ADC: 0-4095, with voltage divider mapping 4.2V -> ~2500
@@ -118,11 +112,11 @@ void setup() {
 
     // Initial display
     if (status.is_active) {
-        leds.setActiveColor(hexToRgb(status.project_color));
-        eink.showActiveTimer(status.project_name, status.elapsed_seconds,
+        leds.setActiveColor(status.project_color);
+        eink.showActiveTimer(status.project_name, status.elapsed_minutes * 60,
                              status.today_minutes, 0);
     } else {
-        leds.showEnergyMeter(status.energy_leds, hexToRgb(status.theme_accent));
+        leds.showEnergyMeter(status.energy_leds, status.theme_accent);
         eink.showIdleSummary(status.today_minutes, 0, 0);
     }
 }
@@ -153,7 +147,7 @@ void loop() {
             String projectId = favorites[currentFavoriteIndex].id;
             if (api.startTimer(projectId)) {
                 Serial.println("Timer started for " + favorites[currentFavoriteIndex].name);
-                leds.setActiveColor(hexToRgb(favorites[currentFavoriteIndex].color));
+                leds.setActiveColor(favorites[currentFavoriteIndex].color);
             }
         }
         // Force immediate status refresh
@@ -165,7 +159,7 @@ void loop() {
         if (favoriteCount > 0) {
             currentFavoriteIndex = (currentFavoriteIndex + 1) % favoriteCount;
             String name = favorites[currentFavoriteIndex].name;
-            CRGB color = hexToRgb(favorites[currentFavoriteIndex].color);
+            CRGB color = favorites[currentFavoriteIndex].color;
             leds.setColor(color);
             eink.showStatusLine(name);
             Serial.println("Selected: " + name);
@@ -239,13 +233,13 @@ void loop() {
 
             // Update LEDs based on state
             if (status.is_active) {
-                leds.setActiveColor(hexToRgb(status.project_color));
+                leds.setActiveColor(status.project_color);
             } else if (wasActive) {
                 // Just stopped — fade out
                 leds.fadeToBlack();
             } else {
                 // Idle — ambient energy meter
-                leds.showEnergyMeter(status.energy_leds, hexToRgb(status.theme_accent));
+                leds.showEnergyMeter(status.energy_leds, status.theme_accent);
             }
         }
     }
@@ -290,7 +284,7 @@ void loop() {
 
             case DisplayMode::POMODORO:
                 eink.showPomodoro(pomodoro.remainingSeconds(), pomodoro.isBreak());
-                leds.pulseAnimation(hexToRgb(status.theme_accent), now);
+                leds.pulseAnimation(status.theme_accent, now);
                 break;
 
             case DisplayMode::DOCK:

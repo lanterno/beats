@@ -2,22 +2,30 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <FastLED.h>
 
+// DeviceStatus mirrors GET /api/device/status. Field names stay
+// firmware-idiomatic (is_active vs the API's clocked_in,
+// today_minutes vs daily_total_minutes); the parser in
+// api_client.cpp does the renaming. Colors are pre-parsed to
+// CRGB so main.cpp can pass them straight to LedStrip without
+// a hexToRgb step — the API now returns three-int RGB lists,
+// not hex strings.
 struct DeviceStatus {
     bool is_active;
     String project_id;
     String project_name;
-    String project_color;  // hex e.g. "#5B9CF6"
-    int elapsed_seconds;
+    CRGB project_color;
+    int elapsed_minutes;
     int today_minutes;
     int energy_leds;  // 0-7
-    String theme_accent;
+    CRGB theme_accent;
 };
 
 struct FavoriteProject {
     String id;
     String name;
-    String color;
+    CRGB color;
 };
 
 class ApiClient {
