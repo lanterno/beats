@@ -1362,30 +1362,66 @@ class TestHandleChatTurn:
         last = round2_messages[-1]
         assert last["content"][0]["content"] == big_payload  # full size
 
-    async def test_max_rounds_falls_back_to_limit_message(self, patch_complete, patch_execute_tool):
-        """If the LLM keeps calling tools forever, the loop bails at
-        round 5 with a fixed "reached the tool-call limit" text +
-        done. Pin the cap and the user-visible message — without
-        this guard a runaway LLM would spin until the request times
-        out, costing 5× the budgeted call."""
+    async def test_max_tool_turns_constant_value(self):
+        """Locks the constant value at 8. Changing this is a pricing
+        decision (each round = one full LLM call) so should be
+        deliberate. Bumping from 5 (the previous inline cap) gives
+        legitimate research-style turns headroom for a 4-5 tool
+        chain plus a clarifying follow-up."""
+        assert chat_module.MAX_TOOL_TURNS == 8
+
+    async def test_tool_loop_exhaustion_emits_typed_error_event(
+        self, patch_complete, patch_execute_tool
+    ):
+        """When the LLM can't produce text within MAX_TOOL_TURNS rounds,
+        the handler emits a typed `error` event (NOT a faked text
+        event) followed by `done`. Pin the event shape — the UI's
+        error-branch handler reads `event.error` and renders it
+        distinctly from a model-authored text turn. Without the typed
+        event, a "the coach kept failing tool calls" outcome would
+        look identical to a normal coach reply."""
         responses, _ = patch_complete
 
-        # Queue 5 rounds of pure tool_use (no text), so the loop never
-        # finds a non-tool response.
-        for i in range(5):
+        # Queue MAX_TOOL_TURNS rounds of pure tool_use (no text), so
+        # the loop never finds a non-tool response and falls through.
+        for i in range(chat_module.MAX_TOOL_TURNS):
             responses.append(_resp([_fake_tool_use("get_score", {}, f"tu_{i}")]))
 
         events = await self._drain(
             chat_module.handle_chat_turn(user_id="user-1", message="loop", conversation_id="c-1")
         )
 
-        # Last two events: the limit-hit text + done.
-        text_events = [ev for ev in events if ev["type"] == "text"]
-        # Final text event is the limit message (other text events
-        # would only appear if a round emitted text alongside its
-        # tool_use; we queued pure tool_use so it's the only one).
-        assert any("reached the tool-call limit" in ev["text"].lower() for ev in text_events)
-        assert events[-1]["type"] == "done"
+        # No text events should appear — we queued only tool_use.
+        assert not any(ev["type"] == "text" for ev in events)
+
+        # Final two events: typed error + done. Same shape the /chat
+        # router uses for budget-exceeded so the UI's existing error
+        # handler renders it without changes.
+        error_events = [ev for ev in events if ev["type"] == "error"]
+        assert len(error_events) == 1
+        assert "tool-call limit" in error_events[0]["error"].lower()
+        assert error_events[0]["code"] == 502
+        assert events[-1] == {"type": "done", "conversation_id": "c-1"}
+
+    async def test_loop_does_not_call_complete_more_than_max_turns(
+        self, patch_complete, patch_execute_tool
+    ):
+        """Hard upper bound on LLM calls per chat turn. Pin so a
+        future refactor that changes the loop structure can't
+        accidentally let the cap leak."""
+        responses, calls = patch_complete
+
+        # Queue more responses than the cap; the loop must stop early.
+        for i in range(chat_module.MAX_TOOL_TURNS + 5):
+            responses.append(_resp([_fake_tool_use("get_score", {}, f"tu_{i}")]))
+
+        await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="loop", conversation_id="c-1")
+        )
+
+        # complete() called exactly MAX_TOOL_TURNS times — no more,
+        # no fewer. Locks the per-turn LLM cost ceiling.
+        assert len(calls) == chat_module.MAX_TOOL_TURNS
 
     async def test_history_is_loaded_in_chronological_order(self, patch_complete):
         """Messages persist with descending sort by created_at, but

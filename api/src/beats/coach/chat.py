@@ -36,6 +36,17 @@ logger = logging.getLogger(__name__)
 MAX_HISTORY_TURNS = 20
 TOOL_RESULT_DISPLAY_LIMIT = 500
 
+# Hard ceiling on tool-use rounds in a single chat turn. Each round
+# is a full LLM call, so a runaway LLM that keeps calling tools
+# without producing user-visible text would otherwise spend N×
+# the budgeted cost per turn before any failure surfaces. Set to 8
+# rather than the previous 5 because legitimate research-style
+# turns can chain 4-5 tools (e.g. get_projects → get_beats →
+# get_intentions → get_patterns → text); 8 leaves headroom for a
+# clarifying follow-up before the cap kicks in. When exhausted,
+# we emit a typed error event the UI already handles, then done.
+MAX_TOOL_TURNS = 8
+
 
 async def _load_history(user_id: str, conversation_id: str) -> list[dict[str, Any]]:
     db = Database.get_db()
@@ -98,9 +109,9 @@ async def handle_chat_turn(
     repos = await build_repos(user_id)
     projects = await repos.project.list()
 
-    # Tool-use loop: keep calling until we get a non-tool response
-    max_rounds = 5
-    for _ in range(max_rounds):
+    # Tool-use loop: keep calling until we get a non-tool response,
+    # capped at MAX_TOOL_TURNS to prevent runaway cost.
+    for _ in range(MAX_TOOL_TURNS):
         result = await complete(
             user_id=user_id,
             system=system,
@@ -192,6 +203,20 @@ async def handle_chat_turn(
 
         all_messages.append({"role": "user", "content": tool_results})
 
-    # Exhausted tool rounds
-    yield {"type": "text", "text": "I've reached the tool-call limit for this turn."}
+    # Exhausted tool rounds — the LLM kept calling tools without
+    # producing a user-visible response. Emit a typed error event
+    # matching the budget-exceeded shape the router uses (the UI's
+    # error handler already appends event.error to the assistant
+    # message), then the terminal done event.
+    logger.warning(
+        "Chat turn exhausted MAX_TOOL_TURNS=%d for user=%s conv=%s",
+        MAX_TOOL_TURNS,
+        user_id,
+        conv_id,
+    )
+    yield {
+        "type": "error",
+        "error": "I've reached the tool-call limit for this turn. Try a more focused question.",
+        "code": 502,
+    }
     yield {"type": "done", "conversation_id": conv_id}
