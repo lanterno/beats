@@ -82,6 +82,16 @@ class WebAuthnManager:
         self.session.store_challenge(options.challenge, "registration")
         self.session.store_pending_registration(options.challenge, user.id or "")
 
+        # Walk authenticator_selection defensively: the call site above
+        # populates both fields, but AuthenticatorSelectionCriteria's
+        # pydantic model allows either to be None. Without this, a
+        # future refactor that passes a partial criteria would crash
+        # at `.value` access — not at the intended fallback. Same
+        # guard shape as `attestation` below.
+        auth_sel = options.authenticator_selection
+        resident_key = auth_sel.resident_key if auth_sel else None
+        user_verification = auth_sel.user_verification if auth_sel else None
+
         return {
             "rp": {"id": options.rp.id, "name": options.rp.name},
             "user": {
@@ -102,12 +112,8 @@ class WebAuthnManager:
                 for c in (options.exclude_credentials or [])
             ],
             "authenticatorSelection": {
-                "residentKey": options.authenticator_selection.resident_key.value
-                if options.authenticator_selection
-                else "preferred",
-                "userVerification": options.authenticator_selection.user_verification.value
-                if options.authenticator_selection
-                else "preferred",
+                "residentKey": resident_key.value if resident_key else "preferred",
+                "userVerification": user_verification.value if user_verification else "preferred",
             },
             "attestation": options.attestation.value if options.attestation else "none",
         }
