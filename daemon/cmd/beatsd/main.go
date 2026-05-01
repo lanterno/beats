@@ -36,8 +36,13 @@ func main() {
 	// Help is recognized BEFORE config loads — a user just looking
 	// for usage shouldn't fail because daemon.toml is missing or
 	// malformed. Exit 0 because asking for help isn't an error.
-	switch os.Args[1] {
-	case "--help", "-h", "help":
+	//
+	// `--help` / `-h` are recognized in any position so that
+	// `beatsd recent --help` and `beatsd run --help` work. The
+	// previous implementation only matched the first arg, so per-
+	// command help silently fell through to actually executing
+	// the command (which then failed on "not paired" or similar).
+	if hasHelpFlag(os.Args[1:]) {
 		printHelp()
 		return
 	}
@@ -386,6 +391,21 @@ func lastSlash(s string) int {
 		}
 	}
 	return -1
+}
+
+// hasHelpFlag reports whether any of the args is `--help`, `-h`, or
+// the bare `help` subcommand. Recognized in any position so per-
+// command help (e.g. `beatsd recent --help`) routes to the same
+// usage text the global form prints — without it, the recent
+// dispatch arm would just execute, ignore the unknown flag, and
+// fail with "not paired" or similar, leaving the user wondering.
+func hasHelpFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--help" || a == "-h" || a == "help" {
+			return true
+		}
+	}
+	return false
 }
 
 // printUsage writes the help text to stderr — used by error paths

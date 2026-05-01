@@ -93,3 +93,57 @@ func TestPrintHelp_StdoutMatchesPrintUsageStderr(t *testing.T) {
 			stdout, stderr)
 	}
 }
+
+// hasHelpFlag is the predicate that lets `beatsd recent --help`
+// (and friends) route to the same usage text the global form
+// prints. Tests pin the contract so a future refactor can't
+// silently drop a recognized form.
+
+func TestHasHelpFlag_RecognizesAllForms(t *testing.T) {
+	for _, args := range [][]string{
+		{"--help"},
+		{"-h"},
+		{"help"},
+	} {
+		if !hasHelpFlag(args) {
+			t.Errorf("expected hasHelpFlag(%v) to be true", args)
+		}
+	}
+}
+
+func TestHasHelpFlag_FindsHelpInAnyPosition(t *testing.T) {
+	// The whole reason this helper exists: per-command help. The
+	// flag should be recognized regardless of where it appears in
+	// the arg list, so `beatsd recent --minutes 30 --help` works
+	// the same as `beatsd recent --help`.
+	cases := [][]string{
+		{"recent", "--help"},
+		{"recent", "--minutes", "30", "--help"},
+		{"run", "--dry-run", "-h"},
+		{"--help", "recent"},
+	}
+	for _, args := range cases {
+		if !hasHelpFlag(args) {
+			t.Errorf("expected hasHelpFlag(%v) to be true", args)
+		}
+	}
+}
+
+func TestHasHelpFlag_NoMatchReturnsFalse(t *testing.T) {
+	for _, args := range [][]string{
+		{},
+		{"recent"},
+		{"recent", "--minutes", "60"},
+		{"--repo", "/some/path"},
+		// Defensive: a flag value that happens to be "-h" or "help"
+		// should NOT trigger help. We don't currently have any such
+		// flag values, but the simple-scan helper is fine to leave
+		// permissive — the cost of a false positive is showing help
+		// instead of running, not data loss. Locked in here so the
+		// permissiveness is at least documented.
+	} {
+		if hasHelpFlag(args) {
+			t.Errorf("expected hasHelpFlag(%v) to be false", args)
+		}
+	}
+}
