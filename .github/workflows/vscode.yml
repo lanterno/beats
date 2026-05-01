@@ -19,6 +19,13 @@ jobs:
           node-version: "20"
       - run: npm install
       - run: npm run compile
+      # Run the helper-level unit tests (buildInsightsUrl /
+      # formatStatusBar / shortRepoTail) before packaging. Lefthook
+      # runs them on push locally, but a contributor without the
+      # hook installed could push a regression through CI otherwise.
+      # `npm test` re-runs tsc internally — cheap, and keeps this
+      # step independent of the compile output above.
+      - run: npm test
       # Package as a sanity check — catches packaging-level issues
       # (missing files in .vscodeignore, version conflicts) on every PR
       # without needing a tag-driven release.

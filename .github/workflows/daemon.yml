@@ -17,6 +17,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+      # gofmt is enforced locally via lefthook, but a contributor
+      # without the hook installed could push unformatted Go through
+      # to CI otherwise. `gofmt -l` prints any unformatted file; if
+      # the output is non-empty, fail the run with a clear message.
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "gofmt would reformat the following files — run 'gofmt -w .' on them:"
+            echo "$out"
+            exit 1
+          fi
       - run: go vet ./...
       - run: go test ./... -v -race
 
