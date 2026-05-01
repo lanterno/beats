@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/ahmedElghable/beats/daemon/internal/client"
@@ -13,11 +14,15 @@ import (
 //
 // `Minutes` defaults to 60 when --minutes is absent or non-positive.
 // `Filter` is zero-valued when no filter flag is set. `AsJSON` is
-// false unless --json appears.
+// false unless --json appears. `Here` is true when --here appeared;
+// callers resolve it to a repo path via applyHereFlag at dispatch
+// time (kept out of parseFlowFlags so the parser stays pure — it
+// doesn't shell out to git).
 type flowFlags struct {
 	Minutes int
 	Filter  client.FlowWindowsFilter
 	AsJSON  bool
+	Here    bool
 }
 
 // parseFlowFlags walks a slice of subcommand arguments and pulls out the
@@ -52,9 +57,34 @@ func parseFlowFlags(args []string) flowFlags {
 			if i+1 < len(args) {
 				out.Filter.BundleID = args[i+1]
 			}
+		case "--here":
+			out.Here = true
 		case "--json":
 			out.AsJSON = true
 		}
 	}
 	return out
+}
+
+// applyHereFlag resolves the --here shorthand to a concrete repo
+// path on the filter, mirroring the same logic `beatsd open --here`
+// uses (gitToplevel(cwd) → falls back to cwd). When --here was not
+// passed, returns the input unchanged.
+//
+// Errors out if both --here and --repo were set — the same flag
+// would target the same field, so one of them is ambiguous noise
+// rather than a meaningful AND.
+func applyHereFlag(f flowFlags) (flowFlags, error) {
+	if !f.Here {
+		return f, nil
+	}
+	if f.Filter.EditorRepo != "" {
+		return f, fmt.Errorf("--here and --repo are mutually exclusive")
+	}
+	repo, err := resolveHereRepo()
+	if err != nil {
+		return f, err
+	}
+	f.Filter.EditorRepo = repo
+	return f, nil
 }

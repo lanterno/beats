@@ -206,14 +206,22 @@ func main() {
 		}
 
 	case "recent":
-		f := parseFlowFlags(args)
+		f, err := applyHereFlag(parseFlowFlags(args))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 		if err := runRecent(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "stats":
-		f := parseFlowFlags(args)
+		f, err := applyHereFlag(parseFlowFlags(args))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 		if err := runStats(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -225,7 +233,11 @@ func main() {
 		// the by-repo / by-app leaderboards still answer "where do I
 		// flow best when writing Go?" — same affordance the web cards
 		// give when you click a chip.
-		f := parseFlowFlags(args)
+		f, err := applyHereFlag(parseFlowFlags(args))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 		if err := runTop(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -382,12 +394,14 @@ Commands:
   recent        Print the last hour of flow windows in a small table
                   --minutes N      override the window (default 60)
                   --repo PATH      narrow to a specific editor workspace
+                  --here           shorthand for --repo $(git rev-parse --show-toplevel)
                   --language ID    narrow to a VS Code language id (e.g. go, dart)
                   --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
                   --json           emit raw windows as a JSON array (for piping into jq)
   top           Print top-5 leaderboards by repo / language / app for the recent window
                   --minutes N      override the window (default 60)
                   --repo PATH      narrow to a specific editor workspace
+                  --here           shorthand for --repo $(git rev-parse --show-toplevel)
                   --language ID    narrow to a VS Code language id (e.g. go, dart)
                   --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
                   --json           emit the three leaderboards as a JSON object (for piping into jq)
@@ -400,6 +414,7 @@ Commands:
   stats         Print a one-line headline summary (count · avg · peak · best repo)
                   --minutes N      override the window (default 60)
                   --repo PATH      narrow to a specific editor workspace
+                  --here           shorthand for --repo $(git rev-parse --show-toplevel)
                   --language ID    narrow to a VS Code language id
                   --bundle ID      narrow to a macOS bundle id
                   --json           emit the FlowWindowSummary object as JSON
