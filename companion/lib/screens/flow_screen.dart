@@ -40,6 +40,12 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   // editor heartbeats covered the day.
   String? _topRepo;
   String? _topLanguage;
+  // Yesterday's headline (avg + count) — only fetched + shown when
+  // today's slice is empty, so the "No flow data today" empty state
+  // can show useful context ("yesterday: avg 67 across 4h") rather
+  // than a static "start the daemon" prompt.
+  int? _yesterdayAvg;
+  int? _yesterdayCount;
 
   late AnimationController _glowController;
 
@@ -82,6 +88,28 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       final topLanguage =
           (flowSummary?['top_language'] as Map?)?['key'] as String?;
 
+      // When today is empty, fetch yesterday's headline so the empty
+      // state can render useful context. Single round-trip via the
+      // summary endpoint — no per-window pagination, no extra UI
+      // restructuring (today's sparkline / categories stay empty;
+      // only the empty-state copy gets enriched).
+      int? yAvg;
+      int? yCount;
+      if (windows.isEmpty) {
+        final yEnd = startOfDay;
+        final yStart = yEnd.subtract(const Duration(days: 1));
+        final ySummary = await widget.client.getFlowWindowsSummary(
+            yStart.toIso8601String(), yEnd.toIso8601String());
+        if (ySummary != null) {
+          final c = (ySummary['count'] as num?)?.toInt() ?? 0;
+          if (c > 0) {
+            yCount = c;
+            final a = (ySummary['avg'] as num?)?.toDouble() ?? 0.0;
+            yAvg = (a * 100).round();
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _windows = windows;
@@ -91,6 +119,8 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
           _totalSamples = total;
           _topRepo = topRepo;
           _topLanguage = topLanguage;
+          _yesterdayAvg = yAvg;
+          _yesterdayCount = yCount;
           _loading = false;
           _selectedWindowIndex = null;
         });
@@ -610,9 +640,22 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                               style: BeatsType.bodyMedium.copyWith(
                                 color: BeatsColors.textTertiary)),
                             const SizedBox(height: 4),
-                            Text('Start the daemon to begin collecting',
-                              style: BeatsType.bodySmall.copyWith(
-                                color: BeatsColors.textTertiary.withValues(alpha: 0.5))),
+                            // When yesterday has data, prefer the
+                            // contextual headline over the generic
+                            // "start the daemon" line — gives the
+                            // user something to chew on while they
+                            // wait for today's windows to accrue.
+                            if (_yesterdayAvg != null && _yesterdayCount != null)
+                              Text(
+                                  'Yesterday: avg $_yesterdayAvg/100 across $_yesterdayCount windows',
+                                  style: BeatsType.bodySmall.copyWith(
+                                      color: BeatsColors.textTertiary
+                                          .withValues(alpha: 0.5)))
+                            else
+                              Text('Start the daemon to begin collecting',
+                                  style: BeatsType.bodySmall.copyWith(
+                                      color: BeatsColors.textTertiary
+                                          .withValues(alpha: 0.5))),
                           ],
                         ),
                       ),
