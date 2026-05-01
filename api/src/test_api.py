@@ -1250,6 +1250,194 @@ class TestLogoutAndTokenRevocation:
         )
 
 
+class TestAccountAPI:
+    """/api/account/{me,refresh,credentials} — auth-critical endpoints
+    consumed by every authenticated client surface (UI, companion, daemon
+    pair flow). Previously zero coverage — tests pin the contract so a
+    future refactor can't quietly break passkey deletion semantics.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset_account_state(self, auth_info):
+        """clean_db is class-scoped, so credentials seeded in one test
+        leak into the next. Drop credentials and (re-)ensure the test
+        user exists before every test in this class. Also clear the
+        session manager's in-memory revoked-tokens set so a refresh-
+        test that revokes auth_info's token doesn't 401 every later
+        test that reuses auth_info["headers"]."""
+        import os
+        from datetime import UTC, datetime
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        from beats.api.routers.auth import _session_manager
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+        db.credentials.delete_many({})
+        # test_me_404 deletes the user; restore it so the rest of the
+        # tests can still resolve the JWT's sub.
+        db.users.update_one(
+            {"_id": ObjectId(auth_info["user_id"])},
+            {
+                "$set": {
+                    "email": "test@example.com",
+                    "display_name": "Test User",
+                    "created_at": datetime.now(UTC),
+                }
+            },
+            upsert=True,
+        )
+        sync.close()
+        _session_manager._revoked_tokens.clear()
+        yield
+
+    def _seed_credential(self, user_id: str, credential_id: str, device_name: str = "Test") -> None:
+        """Insert a credential row directly to skip the WebAuthn ceremony.
+        Schema is the same as auth/storage.py:save_credential writes."""
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        db = sync_client[db_name]
+        db.credentials.insert_one(
+            {
+                "user_id": user_id,
+                "credential_id": credential_id,
+                "public_key": "fake-public-key-base64url",
+                "sign_count": 0,
+                "created_at": "2026-04-30T10:00:00",
+                "device_name": device_name,
+            }
+        )
+        sync_client.close()
+
+    def test_me_returns_current_user(self, auth_info):
+        resp = client.get("/api/account/me", headers=auth_info["headers"])
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body == {"email": "test@example.com", "display_name": "Test User"}
+
+    def test_me_404_when_user_deleted_under_token(self, auth_info):
+        """Token still validates JWT-wise but the user row is gone — 404
+        rather than 200-with-empty. Locks in the behavior that lets a
+        deleted-account flow surface meaningfully on the client."""
+        import os
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        sync_client[db_name].users.delete_one({"_id": ObjectId(auth_info["user_id"])})
+        sync_client.close()
+
+        resp = client.get("/api/account/me", headers=auth_info["headers"])
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_refresh_issues_a_new_working_token(self, auth_info):
+        resp = client.post("/api/account/refresh", headers=auth_info["headers"])
+        assert resp.status_code == 200, resp.text
+        new_token = resp.json()["token"]
+        assert new_token and new_token != auth_info["headers"]["Authorization"].split(" ", 1)[1]
+
+        # The new token actually works on a protected endpoint.
+        new_headers = {"Authorization": f"Bearer {new_token}"}
+        assert client.get("/api/projects/", headers=new_headers).status_code == 200
+
+    def test_refresh_without_bearer_returns_401(self):
+        resp = client.post("/api/account/refresh")
+        # The auth middleware fires before the handler — MISSING_TOKEN, not
+        # the handler's "Bearer token required". Either way it's a 401.
+        assert resp.status_code == 401
+
+    def test_refresh_with_invalid_token_returns_401(self):
+        resp = client.post(
+            "/api/account/refresh",
+            headers={"Authorization": "Bearer not-a-jwt"},
+        )
+        assert resp.status_code == 401
+
+    def test_credentials_list_empty_for_fresh_user(self, auth_info):
+        resp = client.get("/api/account/credentials", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_credentials_list_returns_seeded_creds(self, auth_info):
+        self._seed_credential(auth_info["user_id"], "cred-A", "Mac")
+        self._seed_credential(auth_info["user_id"], "cred-B", "iPhone")
+
+        resp = client.get("/api/account/credentials", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        ids = sorted(c["id"] for c in body)
+        assert ids == ["cred-A", "cred-B"]
+        names = sorted(c["device_name"] for c in body)
+        assert names == ["Mac", "iPhone"]
+
+    def test_delete_credential_removes_non_last(self, auth_info):
+        self._seed_credential(auth_info["user_id"], "cred-keep")
+        self._seed_credential(auth_info["user_id"], "cred-doomed")
+
+        resp = client.delete(
+            "/api/account/credentials/cred-doomed",
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 204, resp.text
+
+        # Only the survivor remains.
+        listing = client.get("/api/account/credentials", headers=auth_info["headers"]).json()
+        assert [c["id"] for c in listing] == ["cred-keep"]
+
+    def test_delete_last_credential_blocked(self, auth_info):
+        """Locks in the "must keep at least one passkey" guard. Without
+        this, a user could nuke their last credential and lock themselves
+        out — the very scenario auth.py's orphan-retry doesn't recover
+        from (orphan happens *before* the user has any credential, this
+        guard prevents them from getting *back* into that state)."""
+        self._seed_credential(auth_info["user_id"], "cred-only")
+
+        resp = client.delete(
+            "/api/account/credentials/cred-only",
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 400, resp.text
+        assert "only passkey" in resp.json()["detail"].lower()
+
+    def test_delete_nonexistent_credential_returns_404(self, auth_info):
+        # Seed two so the keep-at-least-one guard (count <= 1) doesn't
+        # short-circuit our 404 path. delete_credential checks the count
+        # before checking existence — a single seeded credential plus a
+        # request for a different ID would 400 with "only passkey", which
+        # isn't the branch we're documenting here.
+        self._seed_credential(auth_info["user_id"], "cred-real-1")
+        self._seed_credential(auth_info["user_id"], "cred-real-2")
+
+        resp = client.delete(
+            "/api/account/credentials/cred-does-not-exist",
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 404
+
+    def test_account_endpoints_require_auth(self):
+        for method, path in [
+            ("GET", "/api/account/me"),
+            ("POST", "/api/account/refresh"),
+            ("GET", "/api/account/credentials"),
+            ("DELETE", "/api/account/credentials/anything"),
+        ]:
+            resp = client.request(method, path)
+            assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
 class TestDuplicateEmailPrevention:
     """Test that the unique index on users.email prevents duplicates."""
 
