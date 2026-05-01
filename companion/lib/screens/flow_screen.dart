@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../services/bundle_label.dart';
 import '../services/flow_summary.dart';
 import '../services/repo_path.dart';
 import '../theme/beats_refresh.dart';
@@ -41,6 +42,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   // editor heartbeats covered the day.
   String? _topRepo;
   String? _topLanguage;
+  String? _topBundle;
   // Yesterday's headline — only fetched + shown when today's slice
   // is empty, so the "No flow data today" empty state can show useful
   // context ("yesterday: avg 67 across 4h, mostly in code/beats /
@@ -89,6 +91,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       final headline = parseFlowSummary(flowSummary);
       final topRepo = headline?.topRepo;
       final topLanguage = headline?.topLanguage;
+      final topBundle = headline?.topBundle;
 
       // When today is empty, fetch yesterday's headline so the empty
       // state can render useful context. Single round-trip via the
@@ -113,6 +116,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
           _totalSamples = total;
           _topRepo = topRepo;
           _topLanguage = topLanguage;
+          _topBundle = topBundle;
           _yesterday = yesterday;
           _loading = false;
           _selectedWindowIndex = null;
@@ -260,40 +264,35 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
     );
   }
 
-  /// "Best repo / best language today" line under the score gauge.
-  /// Sourced from /flow-windows/summary's top buckets. Repo path is
-  /// shortened to its last two segments (matches the daemon's
-  /// shortRepoTrail and the web's shortRepoPath); language id is
-  /// shown verbatim since there's no useful prettification (the web
-  /// has a label map but it's a small enhancement that would warrant
-  /// its own ship).
+  /// "Best repo / language / app today" line under the score gauge.
+  /// Sourced from /flow-windows/summary's top buckets. Three axes
+  /// match the web FlowHeadline pills; here they're labels-only
+  /// (companion isn't a place to deep-link out to a filtered
+  /// browser view — the FlowScreen IS the deep view). Wrap so a
+  /// narrow companion window doesn't clip the third axis.
   Widget _buildTopDimensionsLine() {
     final labelStyle = BeatsType.label.copyWith(color: BeatsColors.textSecondary);
     final valueStyle = BeatsType.label.copyWith(
       color: BeatsColors.textPrimary,
       letterSpacing: 0.5,
     );
-    final parts = <Widget>[];
-    if (_topRepo != null) {
-      parts.addAll([
-        Text('BEST REPO', style: labelStyle),
-        const SizedBox(width: 8),
-        Text(shortRepoTail(_topRepo!), style: valueStyle),
-      ]);
-    }
-    if (_topRepo != null && _topLanguage != null) {
-      parts.add(const SizedBox(width: 18));
-    }
-    if (_topLanguage != null) {
-      parts.addAll([
-        Text('LANG', style: labelStyle),
-        const SizedBox(width: 8),
-        Text(_topLanguage!, style: valueStyle),
-      ]);
-    }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: parts,
+    Widget axis(String label, String value) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: labelStyle),
+            const SizedBox(width: 8),
+            Text(value, style: valueStyle),
+          ],
+        );
+    final children = <Widget>[];
+    if (_topRepo != null) children.add(axis('BEST REPO', shortRepoTail(_topRepo!)));
+    if (_topLanguage != null) children.add(axis('LANG', _topLanguage!));
+    if (_topBundle != null) children.add(axis('APP', shortBundleLabel(_topBundle!)));
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 18,
+      runSpacing: 6,
+      children: children,
     );
   }
 
@@ -506,7 +505,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                 // single round-trip aggregate, not derived client-side.
                 // Hidden when both axes are empty — windows without editor
                 // heartbeats wouldn't have anything to surface here.
-                if (_topRepo != null || _topLanguage != null) ...[
+                if (_topRepo != null || _topLanguage != null || _topBundle != null) ...[
                   const SizedBox(height: 12),
                   _buildTopDimensionsLine(),
                 ],
