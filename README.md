@@ -2,20 +2,21 @@
 
 Personal time tracking that lives on your desk, in your browser, and in your pocket.
 
-A full-stack system with a **Python API**, **React SPA**, **Go daemon**, and **ESP32 wall clock** — deployed to Google Cloud.
+A full-stack system across six surfaces — Python API, React SPA, Go daemon, Flutter desktop companion, VS Code extension, and ESP32 wall clock — deployed to Google Cloud.
 
 ```
-┌─────────────┐     HTTP/REST     ┌─────────────┐     Motor      ┌──────────┐
-│   React UI  │ ◄──────────────► │  FastAPI     │ ◄────────────► │ MongoDB  │
-│  (Vite/TS)  │                   │  (Python)    │                │          │
-└─────────────┘                   └──────┬───────┘                └──────────┘
-                                         │
-                                    ┌────┴────┐
-                                    │         │
-                             ┌──────┴───────┐ ┌──────────────┐
-                             │  ESP32 Wall  │ │   beatsd     │
-                             │    Clock     │ │  (Go daemon) │
-                             └──────────────┘ └──────────────┘
+                            ┌─────────────┐
+                            │  FastAPI    │ ◄────► MongoDB
+                            │  (Python)   │
+                            └──────┬──────┘
+            ┌──────────────────────┼──────────────────────┐
+            │             ┌────────┼────────┐             │
+     ┌──────┴──────┐ ┌────┴────┐ ┌─┴──────┐ ┌─────────┐ ┌─┴────────┐
+     │  React UI   │ │ Flutter │ │ beatsd │ │ VS Code │ │  ESP32   │
+     │  (Vite/TS)  │ │  app    │ │ daemon │ │  ext    │ │  clock   │
+     └─────────────┘ └─────────┘ └───┬────┘ └────┬────┘ └──────────┘
+                                     │           │
+                                     └─heartbeat─┘
 ```
 
 ## Tech Stack
@@ -25,7 +26,9 @@ A full-stack system with a **Python API**, **React SPA**, **Go daemon**, and **E
 | **API** | Python 3.14, FastAPI, Motor (async MongoDB), Pydantic v2 |
 | **UI** | React 19, TypeScript, Vite, TanStack Query, Tailwind CSS v4 |
 | **Daemon** | Go 1.23, macOS/Linux signal collection, Flow Score engine |
-| **Wall Clock** | ESP32 firmware (Arduino/C++) |
+| **Companion** | Flutter (macOS/iOS/Android/Linux/Windows), HealthKit + Health Connect bridges |
+| **VS Code extension** | TypeScript, sends `{repo, branch, language}` heartbeats to the daemon |
+| **Wall Clock** | ESP32 firmware (Arduino/C++) with WS2812B LED + e-ink display |
 | **Infrastructure** | Terraform, GCP Cloud Run, Cloud Build, Artifact Registry |
 
 ## Quick Start
@@ -47,12 +50,14 @@ A [devcontainer](.devcontainer/devcontainer.json) is provided for VS Code / GitH
 ## Repository Layout
 
 ```
-api/           Python API (FastAPI + Motor/MongoDB)
-ui/            React SPA (Vite + TypeScript)
-daemon/        Go daemon — ambient signal collection + Flow Score
-wall-clock/    ESP32 firmware + docs
-terraform/     GCP infrastructure-as-code
-docs/          Design documents for upcoming integrations
+api/                          Python API (FastAPI + Motor/MongoDB)
+ui/                           React SPA (Vite + TypeScript)
+daemon/                       Go daemon — ambient signal collection + Flow Score
+companion/                    Flutter desktop companion (timer, coach, integrations)
+integrations/vscode-beats/    VS Code extension (workspace heartbeats + status bar)
+wall-clock/                   ESP32 firmware + docs
+terraform/                    GCP infrastructure-as-code
+docs/                         Design notes
 ```
 
 ## Daemon (`beatsd`)
@@ -81,33 +86,45 @@ beatsd open --here            # open Insights filtered to the current repo
 
 Every read-side command (`recent`, `top`, `stats`, `status`, `doctor`, `config`, `version`) supports `--json` for shell pipelines. `--here` is shorthand for `--repo $(git rev-parse --show-toplevel)`. See [daemon/README.md](daemon/README.md) for the full table. The daemon also supports auto-timer suggestions (notifies you to start tracking when sustained focus is detected) and a distraction shield (alerts when you drift to non-work apps during a timer).
 
-### Planned integrations
+### Companion surfaces
 
-These require separate projects/repos. Design documents are in `docs/`:
+The Flutter app and VS Code extension are shipped in this repo:
+
+| Surface | Path | What it does |
+|---------|------|--------------|
+| Flutter companion | [`companion/`](companion/) | Desktop/mobile app — timer, coach chat, end-of-day reflections, tray icon, post-stop tagging. Bridges HealthKit (iOS/macOS) and Health Connect (Android) to `/api/biometrics`. |
+| VS Code extension | [`integrations/vscode-beats/`](integrations/vscode-beats/) | Sends `{repo, branch, language}` heartbeats to the daemon so flow windows carry editor context. Shows the live flow score in the status bar. |
+
+### Design notes
 
 | Document | What it covers |
 |----------|---------------|
-| [Flutter Companion App](docs/flutter-companion.md) | Cross-platform app (iOS/Android/macOS/Windows/Linux) bridging HealthKit and Health Connect to the API |
-| [VS Code Extension](docs/vscode-extension.md) | Editor plugin that sends `{repo, branch}` heartbeats to the daemon for project-aware flow scoring |
 | [Homebrew Tap](docs/homebrew-tap.md) | `brew install` distribution with cross-compiled binaries and `brew services` LaunchAgent |
 | [CGEventTap Cadence](docs/cgeventtap-cadence.md) | Replaces the cadence stub with real input event counting via macOS Accessibility API |
+| [Flutter Companion](docs/flutter-companion.md) | Original design doc — most of this is now implemented |
+| [VS Code Extension](docs/vscode-extension.md) | Original design doc — heartbeat shape and status-bar contract |
 
 ## Testing
 
 ```bash
-# API
-cd api && uv run --group dev pytest src/ -v   # Unit + integration (testcontainers)
-cd api && hurl --test tests/hurl/*.hurl       # Contract tests
-
-# Daemon
-cd daemon && go test ./... -v                 # Unit tests (scorer, parser, client)
+# API — unit + HTTP contract end-to-end (testcontainers spins up MongoDB)
+cd api && uv run --group dev pytest src/ -v
 
 # UI
-cd ui && pnpm test              # Vitest unit tests
-cd ui && pnpm e2e               # Playwright E2E (needs API + UI running)
+cd ui && pnpm test                              # Vitest unit tests
+cd ui && pnpm e2e                               # Playwright E2E (needs API + UI running)
+
+# Daemon (scorer, autotimer, shield, collector)
+cd daemon && go test ./...
+
+# Companion
+cd companion && flutter analyze && flutter test
+
+# VS Code extension
+cd integrations/vscode-beats && npm test
 ```
 
-API integration tests spin up a real MongoDB via [testcontainers](https://testcontainers.com/) — no manual database setup needed. Just have Docker running.
+API integration tests spin up a real MongoDB via [testcontainers](https://testcontainers.com/) — no manual database setup needed, just Docker running. The pytest suite covers the HTTP contract end-to-end; the older `tests/hurl/` files are historical and not run from CI.
 
 ## Code Quality
 
