@@ -20,13 +20,16 @@ export interface HealthSummary {
 }
 
 /** Subset of the API's FlowWindowSummaryResponse the status bar uses.
- * Fields not used here (top_repo, top_language, etc.) are documented
- * separately on the daemon's GET /summary; this shape is intentionally
- * narrow so a server change adding new fields doesn't ripple through. */
+ * Stays narrow so a server change adding new fields doesn't ripple
+ * through; topRepo / topLanguage are surfaced in the tooltip when
+ * present, omitted cleanly when null (no editor heartbeats covered
+ * the slice). */
 export interface FlowSummary {
 	count: number;
 	avg: number;
 	peak: number;
+	topRepo?: string;
+	topLanguage?: string;
 }
 
 export interface StatusBarText {
@@ -66,9 +69,31 @@ export function formatStatusBar(
 		tooltipLines.push(
 			`Today: avg ${avg}/100 · peak ${peak}/100 · ${summary.count} windows`,
 		);
+		// Best-axis line — same info the home FlowHeadline shows, in
+		// the editor that's producing the heartbeats. Omitted cleanly
+		// when no editor context covered the slice (the tooltip would
+		// just say "best on : in" otherwise).
+		const bestParts: string[] = [];
+		if (summary.topRepo) bestParts.push(`best on ${shortRepoTail(summary.topRepo)}`);
+		if (summary.topLanguage) bestParts.push(`in ${summary.topLanguage}`);
+		if (bestParts.length > 0) {
+			tooltipLines.push(bestParts.join(" · "));
+		}
 	}
 	tooltipLines.push("\nClick to open Insights.");
 	return { text, tooltip: tooltipLines.join("\n") };
+}
+
+/**
+ * Last two path segments of a repo path. Cross-language parity with
+ * the daemon's shortRepoTrail (Go) and the companion's shortRepoTail
+ * (Dart) — same algorithm, kept consistent so users see the same
+ * shortened display string everywhere.
+ */
+export function shortRepoTail(repo: string): string {
+	const parts = repo.split(/[\\/]/).filter(Boolean);
+	if (parts.length <= 2) return repo;
+	return parts.slice(-2).join("/");
 }
 
 /**

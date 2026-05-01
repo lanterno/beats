@@ -49,8 +49,9 @@ heartbeats are landing — and once today's flow data has accrued, the
 current avg score:
 
 - `⚡ Beats 67` — daemon connected, today's avg flow score is 67/100.
-  Tooltip carries avg + peak + window count plus the daemon version
-  and uptime.
+  Tooltip carries avg + peak + window count, today's best repo + best
+  language (when editor heartbeats covered the slice), plus the
+  daemon version and uptime.
 - `⚡ Beats` — daemon connected but no flow data yet today (early
   morning before any windows accrued, or summary endpoint
   unavailable).

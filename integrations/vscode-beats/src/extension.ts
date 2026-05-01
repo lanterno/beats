@@ -145,8 +145,16 @@ async function refreshHealth(): Promise<void> {
           count: number;
           avg: number;
           peak: number;
+          top_repo: { key: string } | null;
+          top_language: { key: string } | null;
         };
-        summary = { count: body.count, avg: body.avg, peak: body.peak };
+        summary = {
+          count: body.count,
+          avg: body.avg,
+          peak: body.peak,
+          topRepo: body.top_repo?.key,
+          topLanguage: body.top_language?.key,
+        };
       }
       // 503 (no fetcher) and 502 (upstream error) intentionally fall
       // through with summary=null — the status bar still shows the

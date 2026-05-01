@@ -3,7 +3,7 @@
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { formatStatusBar, formatUptime } from "./statusBar";
+import { formatStatusBar, formatUptime, shortRepoTail } from "./statusBar";
 
 describe("formatStatusBar", () => {
 	it("offline: shows the slash icon when health is null", () => {
@@ -97,6 +97,32 @@ describe("formatStatusBar", () => {
 		assert.doesNotMatch(tooltip, /Today/);
 	});
 
+	it("connected with topRepo/topLanguage: surfaces them in the tooltip", () => {
+		const { tooltip } = formatStatusBar(
+			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1 },
+			{
+				count: 23,
+				avg: 0.67,
+				peak: 0.91,
+				topRepo: "/Users/me/code/beats",
+				topLanguage: "go",
+			},
+		);
+		assert.match(tooltip, /best on code\/beats/);
+		assert.match(tooltip, /in go/);
+	});
+
+	it("connected without top_* axes: omits the best-on line cleanly", () => {
+		// The /summary response sets top_repo/top_language to null when
+		// no editor heartbeats covered the slice. The tooltip should
+		// skip that line rather than render "best on  · in".
+		const { tooltip } = formatStatusBar(
+			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1 },
+			{ count: 23, avg: 0.67, peak: 0.91 },
+		);
+		assert.doesNotMatch(tooltip, /best on/);
+	});
+
 	it("connected with no summary fetched: same as plain 'Beats'", () => {
 		// Distinct from "summary fetched but empty" — this is the path
 		// where the daemon returned 503 (no fetcher) or 502 (upstream
@@ -140,5 +166,28 @@ describe("formatUptime", () => {
 		// but a clock skew between daemon and editor could in theory
 		// produce that. Don't render "-12s" in the tooltip.
 		assert.equal(formatUptime(-12), "0s");
+	});
+});
+
+describe("shortRepoTail", () => {
+	// Cross-language parity with the daemon's shortRepoTrail and the
+	// companion's shortRepoTail. Each assertion here mirrors a case
+	// in those tests so a refactor in one language can't silently
+	// drift from the others.
+
+	it("returns the last two segments for nested paths", () => {
+		assert.equal(shortRepoTail("/Users/me/code/beats"), "code/beats");
+	});
+
+	it("returns the original when there are fewer than three segments", () => {
+		assert.equal(shortRepoTail("a/b"), "a/b");
+	});
+
+	it("handles Windows-style backslash separators", () => {
+		assert.equal(shortRepoTail("C:\\Users\\me\\code\\beats"), "code/beats");
+	});
+
+	it("collapses repeated separators", () => {
+		assert.equal(shortRepoTail("//Users//me//code//beats"), "code/beats");
 	});
 });
