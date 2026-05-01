@@ -326,6 +326,222 @@ func TestDescribeErrorBody_JsonShapeNotEnvelopeFallsBackToRaw(t *testing.T) {
 	}
 }
 
+// --- GetFlowWindowsSummary ---
+
+func TestGetFlowWindowsSummary_DecodesPayload(t *testing.T) {
+	// Happy path: the daemon's `beatsd stats` and the
+	// VS Code extension's tooltip both parse the same /summary
+	// shape — locking the field mapping here so a wire-level
+	// rename surfaces immediately.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/signals/flow-windows/summary" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"count": 47, "avg": 0.62, "peak": 0.91,
+			"peak_at": "2026-05-01T14:32:00Z",
+			"top_repo":     {"key": "/Users/me/code/beats", "avg": 0.74, "count": 32},
+			"top_language": {"key": "go", "avg": 0.71, "count": 30},
+			"top_bundle":   {"key": "com.microsoft.VSCode", "avg": 0.69, "count": 40}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	now := time.Now()
+	got, err := c.GetFlowWindowsSummary(context.Background(), now.Add(-time.Hour), now, FlowWindowsFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Count != 47 || got.Avg != 0.62 || got.Peak != 0.91 {
+		t.Errorf("scalar fields wrong: %+v", got)
+	}
+	if got.PeakAt == nil {
+		t.Fatal("peak_at must decode to a non-nil pointer when present")
+	}
+	if got.TopRepo == nil || got.TopRepo.Key != "/Users/me/code/beats" {
+		t.Errorf("top_repo wrong: %+v", got.TopRepo)
+	}
+	if got.TopLanguage == nil || got.TopLanguage.Key != "go" {
+		t.Errorf("top_language wrong: %+v", got.TopLanguage)
+	}
+	if got.TopBundle == nil || got.TopBundle.Key != "com.microsoft.VSCode" {
+		t.Errorf("top_bundle wrong: %+v", got.TopBundle)
+	}
+}
+
+func TestGetFlowWindowsSummary_PassesFilterParams(t *testing.T) {
+	// Same regression class as TestGetFlowWindowsFiltered_EncodesQueryParams
+	// but for /summary. Both endpoints share the filter param contract;
+	// without this test, a typo in one URL builder could go unnoticed.
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"count":0,"avg":0,"peak":0,"peak_at":null,"top_repo":null,"top_language":null,"top_bundle":null}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	now := time.Now()
+	_, err := c.GetFlowWindowsSummary(context.Background(), now.Add(-time.Hour), now, FlowWindowsFilter{
+		EditorRepo:     "/me/code",
+		EditorLanguage: "go",
+		BundleID:       "com.microsoft.VSCode",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("editor_repo") != "/me/code" ||
+		got.Get("editor_language") != "go" ||
+		got.Get("bundle_id") != "com.microsoft.VSCode" {
+		t.Errorf("filter params not on URL: %v", got)
+	}
+}
+
+func TestGetFlowWindowsSummary_SurfacesErrorEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"detail":"Database hiccup","code":"DB_UNAVAILABLE"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	now := time.Now()
+	_, err := c.GetFlowWindowsSummary(context.Background(), now.Add(-time.Hour), now, FlowWindowsFilter{})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"503", "Database hiccup", "DB_UNAVAILABLE"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error, got: %v", want, err)
+		}
+	}
+}
+
+// --- GetTimerContext ---
+
+func TestGetTimerContext_DecodesPayload(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/signals/timer-context" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"timer_running":true,"project_id":"p1","project_category":"coding"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	got, err := c.GetTimerContext(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.TimerRunning || got.ProjectID != "p1" || got.ProjectCategory != "coding" {
+		t.Errorf("decode wrong: %+v", got)
+	}
+}
+
+func TestGetTimerContext_SurfacesErrorEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"detail":"Token expired","code":"UNAUTHORIZED"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	_, err := c.GetTimerContext(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "Token expired") {
+		t.Errorf("envelope detail not in error: %v", err)
+	}
+}
+
+// --- SuggestTimer ---
+
+func TestSuggestTimer_DecodesPayloadAndForwardsRequest(t *testing.T) {
+	// Locks in two contracts at once: the request body shape the API
+	// expects (since the autotimer tracker passes a hand-built struct)
+	// and the response decode. Without this test a rename on either
+	// side could silently desync.
+	var gotBody FlowWindowRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/signals/suggest-timer" || r.Method != http.MethodPost {
+			t.Errorf("unexpected method/path: %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"should_suggest":true,"project_id":"p1","project_name":"Beats"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	now := time.Date(2026, 5, 1, 14, 0, 0, 0, time.UTC)
+	got, err := c.SuggestTimer(context.Background(), FlowWindowRequest{
+		WindowStart: now, WindowEnd: now.Add(time.Minute),
+		FlowScore: 0.85, DominantCategory: "coding",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.ShouldSuggest || got.ProjectName != "Beats" {
+		t.Errorf("response decode wrong: %+v", got)
+	}
+	if gotBody.FlowScore != 0.85 || gotBody.DominantCategory != "coding" {
+		t.Errorf("request body lost fields in transit: %+v", gotBody)
+	}
+}
+
+func TestSuggestTimer_SurfacesErrorEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"detail":"Suggester crashed","code":"INTERNAL_ERROR"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	_, err := c.SuggestTimer(context.Background(), FlowWindowRequest{})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "Suggester crashed") {
+		t.Errorf("envelope detail not in error: %v", err)
+	}
+}
+
+// --- PostDriftEvent (postJSON happy path coverage) ---
+
+func TestPostDriftEvent_PostsToCorrectEndpoint(t *testing.T) {
+	// PostDriftEvent delegates to postJSON; this test mostly proves the
+	// path + body wire up correctly so the shield package can rely on
+	// the contract without round-tripping through HTTP itself.
+	var gotBody DriftEventRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/signals/drift" || r.Method != http.MethodPost {
+			t.Errorf("unexpected method/path: %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer drift-tok" {
+			t.Errorf("missing or wrong auth header: %q", r.Header.Get("Authorization"))
+		}
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "drift-tok")
+	when := time.Date(2026, 5, 1, 9, 30, 0, 0, time.UTC)
+	if err := c.PostDriftEvent(context.Background(), DriftEventRequest{
+		StartedAt: when, DurationSeconds: 42, BundleID: "com.apple.Safari",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotBody.BundleID != "com.apple.Safari" || gotBody.DurationSeconds != 42 {
+		t.Errorf("drift body lost fields: %+v", gotBody)
+	}
+}
+
 // End-to-end check that GetFlowWindowsFiltered surfaces the API's
 // error detail in its returned error. Locks in that the rewired
 // error path actually reaches the user — not just that the helper
