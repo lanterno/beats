@@ -37,12 +37,13 @@ type DriftEvent struct {
 
 // Tracker monitors for distraction apps while a timer is running.
 type Tracker struct {
-	distractions     map[string]bool
-	distractionStart time.Time
-	distractionApp   string
-	inDistraction    bool
-	threshold        time.Duration // how long before it counts as drift
-	onDrift          func(DriftEvent)
+	distractions        map[string]bool
+	distractionStart    time.Time
+	distractionApp      string
+	inDistraction       bool
+	notifiedThisSession bool          // notification already fired for this session — don't re-spam
+	threshold           time.Duration // how long before it counts as drift
+	onDrift             func(DriftEvent)
 }
 
 // NewTracker creates a distraction shield tracker.
@@ -71,20 +72,28 @@ func (t *Tracker) OnSample(sample collector.Sample, timerRunning bool) {
 		t.distractionStart = sample.CollectedAt
 		t.distractionApp = sample.BundleID
 	} else if !isDistraction && t.inDistraction {
-		// Leaving distraction — check if it exceeded threshold
+		// Leaving distraction — emit ONE drift event with the final
+		// duration. The notification has already fired at the
+		// threshold-crossing sample (below); the API record only
+		// lands here so each drift session produces exactly one
+		// FlowWindow with category="drift".
 		duration := sample.CollectedAt.Sub(t.distractionStart)
 		if duration >= t.threshold {
 			t.emitDrift(duration)
 		}
 		t.reset()
 	}
-	// If still in distraction, check threshold on each sample
-	if t.inDistraction {
+	// While still in distraction, fire the user-facing notification
+	// once when crossing threshold. NO emitDrift here — that would
+	// double-post (once at threshold-crossing, once at leave) for
+	// every drift session longer than the threshold. The 5s window
+	// is wide enough that a 5s-cadence collector hits exactly one
+	// sample inside it.
+	if t.inDistraction && !t.notifiedThisSession {
 		duration := sample.CollectedAt.Sub(t.distractionStart)
-		if duration >= t.threshold && duration < t.threshold+5*time.Second {
-			// Emit once when crossing threshold
-			t.emitDrift(duration)
+		if duration >= t.threshold {
 			sendDriftNotification(t.distractionApp, duration)
+			t.notifiedThisSession = true
 		}
 	}
 }
@@ -101,6 +110,7 @@ func (t *Tracker) emitDrift(duration time.Duration) {
 
 func (t *Tracker) reset() {
 	t.inDistraction = false
+	t.notifiedThisSession = false
 	t.distractionStart = time.Time{}
 	t.distractionApp = ""
 }

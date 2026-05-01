@@ -30,22 +30,32 @@ func TestShield_NoTimer_NoDrift(t *testing.T) {
 	}
 }
 
-func TestShield_DriftFiresAfterThreshold(t *testing.T) {
+func TestShield_DriftFiresExactlyOnceAtLeave(t *testing.T) {
 	var fired []DriftEvent
 	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 
-	// Enter Twitter at t=0, stay there past the 30s threshold.
-	for i := 0; i <= 35; i += 5 {
+	// Enter Twitter at t=0, stay there past the 30s threshold,
+	// then leave to a non-distraction app at t=45.
+	for i := 0; i <= 40; i += 5 {
 		tracker.OnSample(sample(start, i, "com.twitter.twitter-mac"), true)
 	}
+	tracker.OnSample(sample(start, 45, "com.apple.dt.Xcode"), true)
 
-	if len(fired) == 0 {
-		t.Fatal("expected at least one drift event after threshold")
+	// Exactly ONE drift event per session — the previous
+	// implementation emitted at threshold-crossing AND at leave,
+	// double-posting to the API. Locks in that the API now sees
+	// one record per drift session, with the FINAL duration (45s),
+	// not an intermediate threshold-crossing duration.
+	if len(fired) != 1 {
+		t.Fatalf("expected exactly 1 drift event per session, got %d: %+v", len(fired), fired)
 	}
 	if fired[0].BundleID != "com.twitter.twitter-mac" {
 		t.Errorf("wrong bundle in drift: %s", fired[0].BundleID)
+	}
+	if fired[0].Duration != 45*time.Second {
+		t.Errorf("expected final duration 45s, got %s", fired[0].Duration)
 	}
 }
 
@@ -100,6 +110,35 @@ func TestShield_TimerStops_ResetsState(t *testing.T) {
 
 	if len(fired) != 0 {
 		t.Errorf("drift fired across a timer-stop boundary: %d events", len(fired))
+	}
+}
+
+func TestShield_LongDriftDoesNotEmitOnEverySample(t *testing.T) {
+	// Regression guard: the previous implementation emitted at the
+	// threshold-crossing sample, which meant a 5-second-cadence
+	// collector hitting the 30..35s window would fire emitDrift.
+	// On a 1-second-cadence collector that window would have fired
+	// emitDrift 5 separate times (30,31,32,33,34s), each landing as
+	// a separate API record. Even with the realistic 5s cadence,
+	// the leave-sample's emit was a second copy. Both regressed.
+	var fired []DriftEvent
+	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+
+	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+
+	// 5-minute drift, sampled every 1s. Old code would have emitted
+	// at 30s, 31s, 32s, 33s, 34s (5 times in the 5s window) plus
+	// once at leave = 6 events. New code emits exactly once at leave.
+	for i := 0; i <= 300; i++ {
+		tracker.OnSample(sample(start, i, "com.twitter.twitter-mac"), true)
+	}
+	tracker.OnSample(sample(start, 301, "com.apple.dt.Xcode"), true)
+
+	if len(fired) != 1 {
+		t.Fatalf("expected exactly 1 drift event regardless of sample cadence, got %d", len(fired))
+	}
+	if fired[0].Duration != 301*time.Second {
+		t.Errorf("expected final 301s duration, got %s", fired[0].Duration)
 	}
 }
 
