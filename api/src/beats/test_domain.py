@@ -2531,3 +2531,325 @@ class TestComputeFocusScores:
         assert [r["beat_id"] for r in result] == ["early", "late"]
         # Late has a 3-min gap from early → frag penalty
         assert result[1]["components"]["fragmentation"] == 15
+
+
+class TestGetMoodCorrelation:
+    """get_mood_correlation aggregates the last 90 days into a
+    mood-vs-hours story: 7-day rolling mood trend, hi/lo bucketed
+    averages, and a Pearson r (only computed at ≥10 pairs).
+
+    Risk: a sign flip in the Pearson math would silently flip every
+    user's "your best work happens when..." narrative. These tests
+    pin the buckets and the gate."""
+
+    @staticmethod
+    def _at(d: date, hour: int) -> datetime:
+        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
+
+    async def test_empty_returns_zero_neutral_defaults(self):
+        """No notes / beats → r=0, description="neutral", all
+        averages 0, mood_trend empty. Pin so the dashboard can
+        render the empty state."""
+        svc = _intel_service()
+        result = await svc.get_mood_correlation()
+        assert result["correlation"]["r"] == 0
+        assert result["correlation"]["description"] == "neutral"
+        assert result["high_mood_avg_hours"] == 0
+        assert result["low_mood_avg_hours"] == 0
+        assert result["mood_trend"] == []
+
+    async def test_high_low_buckets_split_at_4_and_2(self):
+        """mood ≥ 4 → high bucket; mood ≤ 2 → low bucket; mood = 3
+        in neither. Pin so a refactor doesn't accidentally include
+        the neutral middle on either side."""
+        today = datetime.now(UTC).date()
+        notes = []
+        beats = []
+        # Three high-mood days with 4h each
+        for i in range(3):
+            d = today - timedelta(days=i + 1)
+            notes.append(DailyNote(date=d, mood=5))
+            beats.append(
+                Beat(
+                    id=f"h{i}",
+                    project_id="p1",
+                    start=self._at(d, 9),
+                    end=self._at(d, 13),
+                )
+            )
+        # Three low-mood days with 1h each
+        for i in range(3):
+            d = today - timedelta(days=i + 10)
+            notes.append(DailyNote(date=d, mood=1))
+            beats.append(
+                Beat(
+                    id=f"l{i}",
+                    project_id="p1",
+                    start=self._at(d, 9),
+                    end=self._at(d, 10),
+                )
+            )
+        # One neutral day — should land in neither bucket
+        d = today - timedelta(days=20)
+        notes.append(DailyNote(date=d, mood=3))
+        beats.append(
+            Beat(
+                id="n0",
+                project_id="p1",
+                start=self._at(d, 9),
+                end=self._at(d, 19),  # 10h — would skew either bucket
+            )
+        )
+        svc = _intel_service(beats=beats, notes=notes)
+        result = await svc.get_mood_correlation()
+        assert result["high_mood_avg_hours"] == 4.0
+        assert result["low_mood_avg_hours"] == 1.0
+
+    async def test_pearson_gated_at_10_pairs(self):
+        """Below 10 mood-tagged days → r stays at 0 even if data
+        would correlate. Pin the gate so a tiny sample doesn't
+        produce a confident-looking but noisy r."""
+        today = datetime.now(UTC).date()
+        notes = []
+        beats = []
+        # 9 days, perfect correlation
+        for i in range(9):
+            d = today - timedelta(days=i + 1)
+            notes.append(DailyNote(date=d, mood=min(5, i + 1)))
+            beats.append(
+                Beat(
+                    id=f"b{i}",
+                    project_id="p1",
+                    start=self._at(d, 9),
+                    end=self._at(d, 9 + i + 1),
+                )
+            )
+        svc = _intel_service(beats=beats, notes=notes)
+        result = await svc.get_mood_correlation()
+        assert result["correlation"]["r"] == 0
+        assert result["correlation"]["description"] == "neutral"
+
+    async def test_strong_positive_correlation_renders_positive(self):
+        """≥10 pairs with high mood ↔ high hours, low ↔ low →
+        r > 0.3 → description "positive"."""
+        today = datetime.now(UTC).date()
+        notes = []
+        beats = []
+        for i in range(10):
+            d = today - timedelta(days=i + 1)
+            mood = (i % 5) + 1  # cycles 1..5
+            hours = mood  # perfectly correlated
+            notes.append(DailyNote(date=d, mood=mood))
+            beats.append(
+                Beat(
+                    id=f"b{i}",
+                    project_id="p1",
+                    start=self._at(d, 9),
+                    end=self._at(d, 9) + timedelta(hours=hours),
+                )
+            )
+        svc = _intel_service(beats=beats, notes=notes)
+        result = await svc.get_mood_correlation()
+        assert result["correlation"]["r"] > 0.3
+        assert result["correlation"]["description"] == "positive"
+
+
+class TestGetEstimationAccuracy:
+    """get_estimation_accuracy compares planned (intentions) vs
+    actual minutes per (project, day), aggregates per project,
+    classifies bias as underestimate (>110%) / overestimate (<90%)
+    / accurate, and sorts most-biased first."""
+
+    @staticmethod
+    def _at(d: date, hour: int) -> datetime:
+        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
+
+    async def test_empty_returns_empty(self):
+        svc = _intel_service()
+        result = await svc.get_estimation_accuracy()
+        assert result == []
+
+    async def test_skips_project_with_fewer_than_two_days(self):
+        """A single planned day isn't a habit — skip the project.
+        Pin so a one-off bad estimate doesn't headline the
+        accuracy panel."""
+        today = datetime.now(UTC).date()
+        d = today - timedelta(days=1)
+        intentions = [Intention(project_id="p1", date=d, planned_minutes=60)]
+        beats = [
+            Beat(
+                id="b1",
+                project_id="p1",
+                start=self._at(d, 9),
+                end=self._at(d, 11),  # 2h actual vs 1h planned
+            )
+        ]
+        projects = [_project("p1", "Alpha")]
+        svc = _intel_service(beats=beats, intentions=intentions, projects=projects)
+        assert await svc.get_estimation_accuracy() == []
+
+    async def test_bias_buckets_pinned(self):
+        """Three projects: one underestimate (200%), one
+        overestimate (50%), one accurate (100%). Each bucket
+        threshold pinned: >110 / <90 / between."""
+        today = datetime.now(UTC).date()
+        intentions = []
+        beats = []
+        # p1: planned 60m × 3 days, actual 120m × 3 → 200%
+        for i in range(3):
+            d = today - timedelta(days=i + 1)
+            intentions.append(Intention(project_id="p1", date=d, planned_minutes=60))
+            beats.append(
+                Beat(
+                    id=f"u{i}",
+                    project_id="p1",
+                    start=self._at(d, 9),
+                    end=self._at(d, 11),
+                )
+            )
+        # p2: planned 120m × 3 days, actual 60m × 3 → 50%
+        for i in range(3):
+            d = today - timedelta(days=i + 10)
+            intentions.append(Intention(project_id="p2", date=d, planned_minutes=120))
+            beats.append(
+                Beat(
+                    id=f"o{i}",
+                    project_id="p2",
+                    start=self._at(d, 9),
+                    end=self._at(d, 10),
+                )
+            )
+        # p3: planned 60m × 3 days, actual 60m × 3 → 100%
+        for i in range(3):
+            d = today - timedelta(days=i + 20)
+            intentions.append(Intention(project_id="p3", date=d, planned_minutes=60))
+            beats.append(
+                Beat(
+                    id=f"a{i}",
+                    project_id="p3",
+                    start=self._at(d, 9),
+                    end=self._at(d, 10),
+                )
+            )
+        projects = [
+            _project("p1", "Under"),
+            _project("p2", "Over"),
+            _project("p3", "Spot"),
+        ]
+        svc = _intel_service(beats=beats, intentions=intentions, projects=projects)
+        result = await svc.get_estimation_accuracy()
+
+        by_pid = {r["project_id"]: r for r in result}
+        assert by_pid["p1"]["bias"] == "underestimate"
+        assert by_pid["p1"]["accuracy_pct"] == 200.0
+        assert by_pid["p2"]["bias"] == "overestimate"
+        assert by_pid["p2"]["accuracy_pct"] == 50.0
+        assert by_pid["p3"]["bias"] == "accurate"
+        assert by_pid["p3"]["accuracy_pct"] == 100.0
+
+        # Sort: most-biased (largest |accuracy-100|) first.
+        # |200-100|=100, |50-100|=50, |100-100|=0
+        assert [r["project_id"] for r in result] == ["p1", "p2", "p3"]
+
+
+class TestGetProjectHealth:
+    """get_project_health surfaces stale projects and downward
+    weekly trends. Two alert paths:
+      - No activity in ≥14 days despite a weekly goal
+      - 3 consecutive weeks of declining hours
+
+    Risk: silent regressions here would let a fading project go
+    unnoticed for weeks before the user picks up on it."""
+
+    @staticmethod
+    def _at(d: date, hour: int) -> datetime:
+        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
+
+    async def test_empty_projects_returns_empty(self):
+        svc = _intel_service()
+        assert await svc.get_project_health() == []
+
+    async def test_days_since_last_none_when_no_beats(self):
+        """A project with no recent beats has days_since_last=None
+        (not 0, not "never"). Pin so the UI can branch on null
+        rather than parse a sentinel."""
+        projects = [_project("p1", "Cold")]
+        svc = _intel_service(projects=projects)
+        result = await svc.get_project_health()
+        assert len(result) == 1
+        assert result[0]["days_since_last"] is None
+
+    async def test_stale_with_goal_emits_alert(self):
+        """Last beat 14+ days ago AND project has a weekly goal →
+        alert. Below the threshold, no alert. Pin both sides so
+        a reminder can't accidentally fire on a fresh project."""
+        today = datetime.now(UTC).date()
+        old = today - timedelta(days=20)
+        beats = [
+            Beat(
+                id="b1",
+                project_id="p1",
+                start=self._at(old, 9),
+                end=self._at(old, 11),
+            )
+        ]
+        projects = [_project("p1", "Stale", weekly_goal=5.0)]
+        svc = _intel_service(beats=beats, projects=projects)
+        result = await svc.get_project_health()
+        assert result[0]["days_since_last"] == 20
+        assert result[0]["alert"] is not None
+        assert "20 days" in result[0]["alert"]
+
+    async def test_stale_without_goal_no_alert(self):
+        """No weekly goal → no stale alert even after a long gap.
+        A casual project the user works on intermittently shouldn't
+        nag."""
+        today = datetime.now(UTC).date()
+        old = today - timedelta(days=20)
+        beats = [
+            Beat(
+                id="b1",
+                project_id="p1",
+                start=self._at(old, 9),
+                end=self._at(old, 10),
+            )
+        ]
+        projects = [_project("p1", "Casual", weekly_goal=None)]
+        svc = _intel_service(beats=beats, projects=projects)
+        result = await svc.get_project_health()
+        assert result[0]["alert"] is None
+
+    async def test_alerted_projects_sorted_first(self):
+        """Sort key: (alert is None, project_name). Projects WITH
+        alerts come first; within the alerted/clean groups, sorted
+        alphabetically. Pin so the UI always shows the urgent
+        items at the top of the list."""
+        today = datetime.now(UTC).date()
+        # Stale beat must be inside the 4-week query window
+        # (today - 28 days) but past the 14-day stale threshold.
+        old = today - timedelta(days=20)
+        recent = today - timedelta(days=2)
+        beats = [
+            Beat(
+                id="b_old",
+                project_id="p1",
+                start=self._at(old, 9),
+                end=self._at(old, 10),
+            ),
+            Beat(
+                id="b_recent",
+                project_id="p2",
+                start=self._at(recent, 9),
+                end=self._at(recent, 10),
+            ),
+        ]
+        projects = [
+            _project("p2", "Beta", weekly_goal=5.0),  # active, no alert
+            _project("p1", "Alpha", weekly_goal=5.0),  # stale, alert
+        ]
+        svc = _intel_service(beats=beats, projects=projects)
+        result = await svc.get_project_health()
+        # Alpha (alerted) first, Beta (no alert) second
+        assert [r["project_name"] for r in result] == ["Alpha", "Beta"]
+        assert result[0]["alert"] is not None
+        assert result[1]["alert"] is None
