@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/autotimer"
@@ -53,7 +54,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Handle both SIGINT (Ctrl-C) and SIGTERM (systemctl stop /
+	// docker stop / launchd unload) so the run loop unwinds
+	// cleanly under any standard shutdown path. Without SIGTERM
+	// the in-flight HTTP requests don't get cancelled, the editor
+	// listener doesn't Stop(), and the process dies on the
+	// service manager's grace-period timeout instead of exiting
+	// promptly.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	// Check for --dry-run flag
