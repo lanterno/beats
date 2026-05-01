@@ -17,6 +17,11 @@ export interface HealthSummary {
 	version: string;
 	uptimeSec: number;
 	editorCount: number;
+	/** How many flow windows this daemon process has POSTed since
+	 * startup. A 0 here on a daemon that's been up for a while is a
+	 * useful "is the collector actually producing?" signal — usually
+	 * means Accessibility permission was revoked mid-session. */
+	windowsEmitted: number;
 }
 
 /** Subset of the API's FlowWindowSummaryResponse the status bar uses.
@@ -58,9 +63,19 @@ export function formatStatusBar(
 	// than a binary connected/offline indicator. Falls back to plain
 	// "Beats" early in the morning before any flow data has accrued.
 	let text = "$(zap) Beats";
+	// Build the daemon-info line with `· N emitted` appended when the
+	// counter is non-zero. Daemons started more than a minute ago
+	// with 0 emitted windows often mean Accessibility permission got
+	// revoked — surfacing the count gives the user something concrete
+	// to spot.
+	const daemonLine =
+		`${health.editorCount} ${editorWord} sending heartbeats · uptime ${formatUptime(health.uptimeSec)}` +
+		(health.windowsEmitted > 0
+			? ` · ${health.windowsEmitted} emitted`
+			: "");
 	const tooltipLines = [
 		`Beats daemon connected (${v})`,
-		`${health.editorCount} ${editorWord} sending heartbeats · uptime ${formatUptime(health.uptimeSec)}`,
+		daemonLine,
 	];
 	if (summary && summary.count > 0) {
 		const avg = Math.round(summary.avg * 100);

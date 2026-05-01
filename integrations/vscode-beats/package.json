@@ -2,7 +2,7 @@
   "name": "beats-vscode",
   "displayName": "Beats",
   "description": "Workspace heartbeats for the Beats time-tracking daemon — improves Flow Score accuracy by telling the daemon which git repo you're editing.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "lanterno",
   "license": "MIT",
   "engines": {

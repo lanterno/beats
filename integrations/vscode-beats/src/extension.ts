@@ -120,12 +120,17 @@ async function refreshHealth(): Promise<void> {
         version: string;
         uptime_sec: number;
         editor_count: number;
+        windows_emitted?: number;
       };
       health = {
         ok: body.ok,
         version: body.version,
         uptimeSec: body.uptime_sec,
         editorCount: body.editor_count,
+        // Defensive default: older daemons (pre /health.windows_emitted)
+        // don't send the field. Treat that as 0 so the tooltip just
+        // omits the chunk rather than rendering "undefined emitted".
+        windowsEmitted: body.windows_emitted ?? 0,
       };
     }
   } catch {
