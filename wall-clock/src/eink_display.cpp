@@ -112,11 +112,18 @@ void EinkDisplay::showIdleSummary(int todayMinutes, int weekMinutes, int goalPct
 void EinkDisplay::showClock(int todayMinutes) {
     clearAndPrepare();
 
-    // Current time
+    // Current time. getLocalTime returns false if NTP hasn't synced
+    // yet (default 5s wait); without the check, timeinfo's
+    // tm_hour/tm_min are uninitialized stack and the display
+    // could show anything from 00:00 to 99:99. Render "--:--"
+    // until sync completes so the user knows to wait.
     struct tm timeinfo;
-    getLocalTime(&timeinfo);
     char timeBuf[8];
-    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    if (getLocalTime(&timeinfo)) {
+        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    } else {
+        snprintf(timeBuf, sizeof(timeBuf), "--:--");
+    }
     drawCenteredText(String(timeBuf), 60, 2);
 
     // Today's total below
@@ -176,11 +183,16 @@ void EinkDisplay::showPomodoro(int remainingSeconds, bool isBreak) {
 void EinkDisplay::showDock(int todayMinutes, int batteryPct) {
     clearAndPrepare();
 
-    // Clock
+    // Clock — same NTP-not-synced guard as showClock; without it
+    // the dock view could render uninitialized hour/minute fields
+    // when the device boots into the dock state before sync.
     struct tm timeinfo;
-    getLocalTime(&timeinfo);
     char timeBuf[8];
-    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    if (getLocalTime(&timeinfo)) {
+        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    } else {
+        snprintf(timeBuf, sizeof(timeBuf), "--:--");
+    }
     drawCenteredText(String(timeBuf), 55, 2);
 
     // Today's total
