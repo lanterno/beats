@@ -9,7 +9,10 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.API.BaseURL != "http://localhost:7999" {
-		t.Errorf("expected default base_url http://localhost:7999, got %s", cfg.API.BaseURL)
+		t.Errorf("expected default api.base_url http://localhost:7999, got %s", cfg.API.BaseURL)
+	}
+	if cfg.UI.BaseURL != "http://localhost:8080" {
+		t.Errorf("expected default ui.base_url http://localhost:8080, got %s", cfg.UI.BaseURL)
 	}
 }
 

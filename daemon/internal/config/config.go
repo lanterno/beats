@@ -11,6 +11,7 @@ import (
 // Config is the top-level daemon configuration.
 type Config struct {
 	API       APIConfig       `toml:"api"`
+	UI        UIConfig        `toml:"ui"`
 	Collector CollectorConfig `toml:"collector"`
 }
 
@@ -18,6 +19,14 @@ type Config struct {
 type APIConfig struct {
 	BaseURL     string `toml:"base_url"`
 	DeviceToken string `toml:"-"` // Set at runtime from keychain, not config file
+}
+
+// UIConfig holds the web UI URL — used by `beatsd open` to deep-link
+// the analytics page in the system browser. Distinct from API.BaseURL
+// because deployments commonly host the API and the SPA on different
+// hosts (api.example.com vs app.example.com).
+type UIConfig struct {
+	BaseURL string `toml:"base_url"`
 }
 
 // CollectorConfig controls signal collection timing.
@@ -31,6 +40,9 @@ func DefaultConfig() *Config {
 	return &Config{
 		API: APIConfig{
 			BaseURL: "http://localhost:7999",
+		},
+		UI: UIConfig{
+			BaseURL: "http://localhost:8080",
 		},
 		Collector: CollectorConfig{
 			PollIntervalSec:  5,
