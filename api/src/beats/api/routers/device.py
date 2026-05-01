@@ -265,14 +265,18 @@ async def exchange_pair_code(
     """
     code_hash = hashlib.sha256(body.code.encode()).hexdigest()
     pairing_code = await pairing_repo.find_by_hash(code_hash)
-    if not pairing_code:
+    if not pairing_code or pairing_code.id is None:
+        # `id` is Optional on the pydantic model (the standard
+        # post-Mongo shape) but is always populated for a row that
+        # came back from `find_by_hash`. Treat the impossible None as
+        # "not found" rather than crashing — same client-facing 404.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid or expired pairing code",
         )
 
     # One-time use: delete immediately
-    await pairing_repo.delete(pairing_code.id)  # type: ignore[arg-type]
+    await pairing_repo.delete(pairing_code.id)
 
     # Create device registration
     device_id = str(uuid.uuid4())
