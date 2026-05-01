@@ -1,43 +1,52 @@
 # VS Code Extension — `beats-vscode`
 
-> **Status: end-to-end shipped, persisted on the API.** The VS Code
-> extension at `integrations/vscode-beats/` posts heartbeats to the
-> daemon's editor listener at `daemon/internal/editor/listener.go`,
+> **Status: end-to-end shipped, persisted on the API.**
+>
+> The VS Code extension at `integrations/vscode-beats/` posts heartbeats
+> to the daemon's editor listener at `daemon/internal/editor/listener.go`,
 > which exposes the most recent fresh beat to the collector loop. Each
 > flow window carries the active editor's workspace + branch + language
-> alongside the existing flow signals, and those three fields are
-> persisted on the `FlowWindow` document and exposed via
-> `GET /api/signals/flow-windows` as `editor_repo`, `editor_branch`,
-> `editor_language`. The endpoint accepts optional `editor_repo`,
-> `editor_language`, and `bundle_id` query params for server-side
-> filtering, and the web Insights page wires all three onto
-> click-to-filter rows in the "Flow by repo" / "Flow by language" /
-> "Flow by app" cards (filters AND-compose). The "Flow rhythm" card
-> bins the same 7-day window data by hour-of-day so the user can see
-> *when* in their day they tend to flow best — answer changes when a
-> filter chip is set ("when do I flow best on Go work?"). The "Flow
-> by weekday" sibling pulls 28 days and bins by day-of-week so each
-> weekday slot has at least ~4 samples, answering "do I flow better
-> on Tuesdays or Fridays?". When two or more filters are active, an
-> "× clear all filters" link in the Insights header resets the page
-> in one click. Every filter on the Insights page (the project + tag
-> dropdowns and the click-to-filter chips) is persisted in the URL —
-> `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view
-> is bookmarkable and shareable. The same per-window slice is
-> reachable from the terminal via `beatsd recent --repo …
-> --language … --bundle …`, or downloadable as CSV via the "↓ csv"
-> link in the chip row (`GET /api/signals/flow-windows.csv` accepts
-> the same filter params as the JSON endpoint).
-> `GET /api/signals/flow-windows/summary` returns single-round-trip
-> aggregate stats — avg / peak / count plus the top bucket on each
-> grouping axis — for callers (CLIs, the companion) that want the
-> headline without fetching every row. The home page renders a
-> "Flow today" headline card backed by this endpoint, and the
-> daemon's `beatsd stats` command prints the same summary as a
-> one-liner for shell prompts. The Insights page's "Flow trend"
-> card fans out 12 parallel summary calls (one per ISO week) to
-> render a quarterly trend line — answering "is my flow heading
-> up or down?" at a glance.
+> alongside the existing flow signals, persisted on the `FlowWindow`
+> document and exposed downstream:
+>
+> **API** — `GET /api/signals/flow-windows` returns the rows with
+> `editor_repo`, `editor_branch`, `editor_language` fields. Optional
+> filters (AND-composed): `editor_repo`, `editor_language`, `bundle_id`,
+> `project_id`. Companion endpoints:
+> - `GET /api/signals/flow-windows/summary` — single round-trip aggregate
+>   (avg / peak / count + top bucket per axis) for callers wanting the
+>   headline without paginating rows.
+> - `GET /api/signals/flow-windows.csv` — same slice as a CSV download.
+>
+> **Web Insights page** — eight Flow* cards plot the data along
+> different axes:
+> - `FlowToday` (sparkline, today), `FlowThisWeek` (7-day bars),
+>   `FlowTrend` (12-week line).
+> - `FlowRhythm` (hour-of-day, 7 days) and `FlowByWeekday` (day-of-week,
+>   28 days) — *when* you flow best.
+> - `FlowByRepo` / `FlowByLanguage` / `FlowByApp` — clickable rows that
+>   set page-wide filter chips. `BestMoment` highlights the peak window
+>   of the week.
+>
+> **Filter UX** — every filter (project + tag dropdowns plus the three
+> click-to-filter chips) persists in the URL —
+> `?project=…&tag=…&repo=…&language=…&bundle=…` — so a filtered view is
+> bookmarkable and shareable. When 2+ are active, an
+> "× clear all filters" link in the header resets the page in one click.
+> The chip row also surfaces a "↓ csv" download link for the visible
+> slice.
+>
+> **Home page** — `FlowHeadline` card renders today's avg / peak / count
+> + best repo + best language using `/summary` (single round-trip).
+> Tapping jumps to `/insights`.
+>
+> **Terminal** — `beatsd recent`, `beatsd top`, and `beatsd stats` all
+> consume the same filter params:
+> - `beatsd recent --repo … --language … --bundle … [--json]` — table
+>   or pipeable JSON of recent windows.
+> - `beatsd top` — three top-5 leaderboards (by repo / language / app).
+> - `beatsd stats [filters] [--json]` — one-line headline for shell
+>   prompts, hits `/summary` directly.
 
 Companion extension for the Beats daemon. Emits workspace heartbeats so the
 daemon can detect which git repo you're working in and improve Flow Score
