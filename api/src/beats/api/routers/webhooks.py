@@ -120,7 +120,16 @@ async def dispatch_webhook_event(
     payload: dict,
     repo: WebhookRepoDep,
 ) -> None:
-    """Fire-and-forget webhook dispatch for a timer event."""
+    """Fire-and-forget webhook dispatch for a timer event.
+
+    The docstring used to claim "fire-and-forget" but the function
+    awaited the actual HTTP delivery — so a single slow webhook URL
+    could block timer start/stop for up to 10s × N webhooks. Now
+    truly fire-and-forget: the repo lookup is awaited (we need the
+    webhook list before scheduling), but the HTTP POSTs run in
+    detached background tasks. Callers return immediately to the
+    user; webhook delivery happens out-of-band.
+    """
     webhooks = await repo.list_by_event(event)
     if not webhooks:
         return
@@ -138,5 +147,10 @@ async def dispatch_webhook_event(
         except Exception:
             logger.warning("Webhook delivery failed for %s to %s", event, url)
 
-    tasks = [_send(w.url) for w in webhooks]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    # Detach delivery so the request that triggered the dispatch
+    # returns to the user without waiting on each webhook URL's
+    # response. Tasks reference is dropped intentionally — these
+    # are best-effort and a slow user-supplied URL must not block
+    # the timer start/stop response.
+    for w in webhooks:
+        asyncio.create_task(_send(w.url))
