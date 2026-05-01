@@ -1518,6 +1518,77 @@ class TestSignalsAPI:
         data = resp.json()
         return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}
 
+    def test_post_drift_event_records_flow_window_with_drift_category(self):
+        """POST /api/signals/drift records a FlowWindow with category=drift.
+
+        The daemon's distraction shield POSTs to this endpoint when
+        the user drifts to a known time-sink while a timer is running
+        (commit a3b8f3f). Until that commit shipped, the endpoint
+        existed but no caller invoked it — and there was no API-side
+        test to catch a regression. Locks in the behavior the daemon
+        relies on: 201 + an id, and the resulting record reads back
+        with category="drift" so the UI's history view can filter."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        resp = client.post(
+            "/api/signals/drift",
+            json={
+                "started_at": (now - timedelta(seconds=45)).isoformat(),
+                "duration_seconds": 45.0,
+                "bundle_id": "com.twitter.twitter-mac",
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert "id" in resp.json()
+
+        # Read back: the drift event should be findable as a flow
+        # window with category="drift" and the bundle id we sent.
+        resp = client.get(
+            "/api/signals/flow-windows",
+            params={
+                "start": (now - timedelta(minutes=5)).isoformat(),
+                "end": (now + timedelta(minutes=5)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        windows = resp.json()
+        drift_windows = [w for w in windows if w.get("dominant_category") == "drift"]
+        assert len(drift_windows) >= 1, windows
+        assert any(w.get("dominant_bundle_id") == "com.twitter.twitter-mac" for w in drift_windows)
+
+    def test_post_drift_event_requires_auth(self):
+        """A drift event with no auth gets 401 — same as every
+        other write endpoint."""
+        resp = client.post(
+            "/api/signals/drift",
+            json={
+                "started_at": datetime.now(UTC).isoformat(),
+                "duration_seconds": 30.0,
+                "bundle_id": "com.spotify.client",
+            },
+        )
+        assert resp.status_code == 401
+
+    def test_post_drift_event_validates_required_fields(self):
+        """Missing required fields (started_at / duration_seconds /
+        bundle_id) trip the unified 422 envelope, same shape the
+        daemon's describeErrorBody knows how to surface."""
+        _, device_headers = self._pair_device()
+        resp = client.post(
+            "/api/signals/drift",
+            json={},  # missing all three required fields
+            headers=device_headers,
+        )
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        # All three required fields should appear in the envelope's
+        # fields[] array — locked in so the UI/daemon can render them.
+        paths = {f["path"] for f in body["fields"]}
+        assert {"started_at", "duration_seconds", "bundle_id"}.issubset(paths), paths
+
     def test_post_flow_window_with_device_token(self):
         """Device token can POST a flow window."""
         _, device_headers = self._pair_device()
