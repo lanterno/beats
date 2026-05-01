@@ -3187,3 +3187,210 @@ class TestBuildDayContext:
         repos = _FakeCoachRepos(projects=[], beats=[beat])
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "11:00 — ? (30m)" in out
+
+
+class TestGatewayRetryAndMissingKey:
+    """gateway._get_client error path + gateway.complete retry logic.
+
+    Why these matter: Anthropic returns 429 / 5xx semi-routinely
+    under high concurrency or model-pool failover. The retry path
+    is the difference between "the user sees a transient blip"
+    and "the user sees a 502 every time the model pool warms".
+    Pin both the retry-then-succeed path and the eventual-raise
+    so a regression in MAX_RETRIES or the status-code list
+    surfaces as a test failure, not a paged incident."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    @staticmethod
+    def _make_fake_response():
+        """A _FakeMessage that mimics the Anthropic SDK's success
+        shape — returned after retries succeed."""
+        from anthropic.types import TextBlock as _TB
+
+        class _FakeUsage:
+            input_tokens = 100
+            output_tokens = 50
+            cache_creation_input_tokens = 0
+            cache_read_input_tokens = 0
+
+        class _FakeMessage:
+            content = [_TB(type="text", text="ok", citations=None)]
+            model = "claude-opus-4-7"
+            usage = _FakeUsage()
+            stop_reason = "end_turn"
+
+        return _FakeMessage()
+
+    @staticmethod
+    def _make_api_error(status_code: int):
+        """Build an anthropic.APIStatusError with the given code.
+        The SDK requires a real httpx.Response (not a duck-typed
+        stub) so we construct one. The gateway only branches on
+        exc.status_code so the body is irrelevant."""
+        import anthropic
+        import httpx
+
+        request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+        response = httpx.Response(status_code=status_code, request=request)
+        return anthropic.APIStatusError(
+            message=f"err-{status_code}",
+            response=response,
+            body=None,
+        )
+
+    def test_get_client_raises_when_no_api_key(self, monkeypatch):
+        """_get_client → RuntimeError when ANTHROPIC_API_KEY isn't
+        configured. Pin so a self-host that forgot to set the env
+        var gets a clear error rather than a confusing 500 deep
+        inside the Anthropic SDK."""
+        from beats import settings as settings_module
+        from beats.coach import gateway
+
+        monkeypatch.setattr(settings_module.settings, "anthropic_api_key", "")
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+            gateway._get_client()
+
+    async def test_complete_retries_on_429_then_succeeds(self, monkeypatch):
+        """First call → 429, second call → 200. The gateway
+        should retry and return the second response without
+        bubbling the 429 to the caller. Pin so a transient
+        rate-limit blip doesn't surface to the user."""
+        from beats import settings as settings_module
+        from beats.coach import gateway
+
+        # Avoid sleeping in tests — collapse the backoff to 0.
+        monkeypatch.setattr(gateway, "BASE_DELAY_S", 0.0)
+        # Settings need a fake API key so _get_client doesn't bail
+        monkeypatch.setattr(settings_module.settings, "anthropic_api_key", "sk-test")
+
+        call_count = {"n": 0}
+
+        class _FakeMessages:
+            async def create(self_inner, **_kwargs):
+                call_count["n"] += 1
+                if call_count["n"] == 1:
+                    raise self.__class__._make_api_error(429)
+                return self.__class__._make_fake_response()
+
+        class _FakeClient:
+            messages = _FakeMessages()
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: _FakeClient())
+
+        result = await gateway.complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+        assert call_count["n"] == 2
+        assert result.input_tokens == 100
+
+    async def test_complete_retries_on_5xx_then_succeeds(self, monkeypatch):
+        """503 should also trigger a retry. Pin the full retryable
+        list (429/500/502/503/529) — the smaller test above pins
+        429 specifically."""
+        from beats import settings as settings_module
+        from beats.coach import gateway
+
+        monkeypatch.setattr(gateway, "BASE_DELAY_S", 0.0)
+        monkeypatch.setattr(settings_module.settings, "anthropic_api_key", "sk-test")
+
+        call_count = {"n": 0}
+
+        class _FakeMessages:
+            async def create(self_inner, **_kwargs):
+                call_count["n"] += 1
+                if call_count["n"] == 1:
+                    raise self.__class__._make_api_error(503)
+                return self.__class__._make_fake_response()
+
+        class _FakeClient:
+            messages = _FakeMessages()
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: _FakeClient())
+
+        result = await gateway.complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+        assert call_count["n"] == 2
+        assert result.output_tokens == 50
+
+    async def test_complete_does_not_retry_on_401(self, monkeypatch):
+        """A 401 (bad API key) is NOT in the retryable list — must
+        raise immediately. Pin so a misconfigured deploy fails
+        fast rather than wasting MAX_RETRIES round-trips on a
+        guaranteed-failure call."""
+        import anthropic
+
+        from beats import settings as settings_module
+        from beats.coach import gateway
+
+        monkeypatch.setattr(gateway, "BASE_DELAY_S", 0.0)
+        monkeypatch.setattr(settings_module.settings, "anthropic_api_key", "sk-test")
+
+        call_count = {"n": 0}
+
+        class _FakeMessages:
+            async def create(self_inner, **_kwargs):
+                call_count["n"] += 1
+                raise self.__class__._make_api_error(401)
+
+        class _FakeClient:
+            messages = _FakeMessages()
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: _FakeClient())
+
+        with pytest.raises(anthropic.APIStatusError):
+            await gateway.complete(
+                user_id="user-1",
+                system="sys",
+                messages=[{"role": "user", "content": "hi"}],
+                purpose="chat",
+            )
+        # ONE attempt, no retries
+        assert call_count["n"] == 1
+
+    async def test_complete_eventually_raises_after_max_retries(self, monkeypatch):
+        """Repeated 429s → after MAX_RETRIES attempts the gateway
+        re-raises the last exception. Pin so a fully-saturated
+        Anthropic backend doesn't loop forever and the caller can
+        surface a 502 to the user."""
+        import anthropic
+
+        from beats import settings as settings_module
+        from beats.coach import gateway
+
+        monkeypatch.setattr(gateway, "BASE_DELAY_S", 0.0)
+        monkeypatch.setattr(settings_module.settings, "anthropic_api_key", "sk-test")
+
+        call_count = {"n": 0}
+
+        class _FakeMessages:
+            async def create(self_inner, **_kwargs):
+                call_count["n"] += 1
+                raise self.__class__._make_api_error(429)
+
+        class _FakeClient:
+            messages = _FakeMessages()
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: _FakeClient())
+
+        with pytest.raises(anthropic.APIStatusError):
+            await gateway.complete(
+                user_id="user-1",
+                system="sys",
+                messages=[{"role": "user", "content": "hi"}],
+                purpose="chat",
+            )
+        # Exactly MAX_RETRIES attempts (no more, no fewer)
+        assert call_count["n"] == gateway.MAX_RETRIES
