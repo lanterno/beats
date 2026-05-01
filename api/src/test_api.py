@@ -1480,6 +1480,167 @@ class TestSignedSqliteExport:
         assert "match manifest" in imported.text.lower()
 
 
+class TestCsvAndJsonExport:
+    """The CSV-sessions and full-JSON export endpoints, plus the
+    JSON-import round trip. Pin the response shape (Content-Type,
+    Content-Disposition, header row, JSON keys) — these power the
+    user's Settings → Export panel and the cross-deploy migration
+    path."""
+
+    def _create_project(self, name: str) -> str:
+        res = client.post(
+            "/api/projects/",
+            json={"name": name, "description": "csv probe"},
+            headers=auth_headers,
+        )
+        assert res.status_code == 201, res.text
+        return res.json()["id"]
+
+    def test_csv_sessions_export_empty(self):
+        """No completed beats → CSV with header row only. Pin the
+        7-column header so a refactor doesn't silently rename a
+        column the user's spreadsheets bind to."""
+        resp = client.get("/api/export/csv/sessions", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/csv")
+        # Filename is dated for the user
+        cd = resp.headers.get("content-disposition", "")
+        assert "beats_sessions_" in cd
+        assert ".csv" in cd
+        # Header row pinned
+        first_line = resp.text.splitlines()[0]
+        assert first_line == "date,project,start,end,duration_minutes,note,tags"
+
+    def test_csv_sessions_export_with_data(self):
+        """A completed beat renders one row with the project name
+        resolved (not the project_id) and tags joined with `;`.
+        Pin both — users' downstream spreadsheets parse on those
+        specific separators."""
+        project_id = self._create_project("CSV Probe")
+        # Start + stop a timer to create a completed beat
+        client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-16T09:00:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-16T09:30:00Z"},
+            headers=auth_headers,
+        )
+        resp = client.get("/api/export/csv/sessions", headers=auth_headers)
+        assert resp.status_code == 200
+        lines = resp.text.strip().splitlines()
+        # Header + at least one data row
+        assert len(lines) >= 2
+        data_row = lines[1]
+        # Project name resolved
+        assert "CSV Probe" in data_row
+        # 30-minute duration
+        assert ",30," in data_row
+
+    def test_csv_sessions_export_filters_by_project(self):
+        """`?project_id=X` scopes the export to one project. Pin so
+        a regression doesn't leak other projects' rows when the
+        user clicks "Export this project"."""
+        a_id = self._create_project("CSV Filter A")
+        b_id = self._create_project("CSV Filter B")
+        for pid in (a_id, b_id):
+            client.post(
+                f"/api/projects/{pid}/start",
+                json={"time": "2026-04-17T09:00:00Z"},
+                headers=auth_headers,
+            )
+            client.post(
+                "/api/projects/stop",
+                json={"time": "2026-04-17T09:15:00Z"},
+                headers=auth_headers,
+            )
+        resp = client.get(
+            "/api/export/csv/sessions",
+            params={"project_id": a_id},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        # Filter A appears, Filter B does NOT
+        assert "CSV Filter A" in resp.text
+        assert "CSV Filter B" not in resp.text
+
+    def test_full_json_export_shape(self):
+        """GET /api/export/full returns a JSON envelope with the
+        five top-level keys the import endpoint reads back. Pin so
+        the export → reimport round trip can't drift."""
+        self._create_project("JSON Probe")
+        resp = client.get("/api/export/full", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/json")
+        body = resp.json()
+        assert set(body.keys()) >= {
+            "exported_at",
+            "version",
+            "projects",
+            "beats",
+            "intentions",
+            "daily_notes",
+        }
+        # version is a string
+        assert isinstance(body["version"], str)
+        # The JSON-format export uses the legacy "1.0" version
+        # (the signed SQLite export uses "sqlite-1")
+        assert body["version"] == "1.0"
+
+    def test_full_json_round_trip(self):
+        """Export → Import round-trip: posting the exported JSON
+        back to /api/export/import upserts the rows by ID. Pin so
+        a user can move data between deploys (the doc-stated use
+        case for this pair of endpoints)."""
+        self._create_project("Round Trip")
+        export = client.get("/api/export/full", headers=auth_headers)
+        assert export.status_code == 200
+
+        # Re-upload as multipart file
+        imported = client.post(
+            "/api/export/import",
+            files={"file": ("backup.json", export.content, "application/json")},
+            headers=auth_headers,
+        )
+        assert imported.status_code == 200
+        body = imported.json()
+        assert body["status"] == "ok"
+        assert body["imported"]["projects"] >= 1
+
+    def test_sqlite_import_rejects_non_zip_blob(self):
+        """POST /api/export/sqlite/import with a non-zip file →
+        400 "not a zip". Pin the user-facing envelope so a malformed
+        upload doesn't 500 the import flow."""
+        resp = client.post(
+            "/api/export/sqlite/import",
+            files={"file": ("garbage.zip", b"not a zip file at all", "application/zip")},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+        assert "not a zip" in resp.text.lower()
+
+    def test_sqlite_import_rejects_zip_missing_entries(self):
+        """A zip without manifest.json / data.sqlite / manifest.sig →
+        400 "missing entries". Pin so a bundle from another tool
+        can't be silently imported."""
+        import io
+        import zipfile
+
+        bad_zip = io.BytesIO()
+        with zipfile.ZipFile(bad_zip, "w") as zf:
+            # Only one of three required entries
+            zf.writestr("data.sqlite", b"\x00" * 16)
+        resp = client.post(
+            "/api/export/sqlite/import",
+            files={"file": ("incomplete.zip", bad_zip.getvalue(), "application/zip")},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+        assert "missing entries" in resp.text.lower()
+
+
 class TestIntelligenceInbox:
     """Smoke tests for the aggregated Intelligence Inbox endpoint."""
 
