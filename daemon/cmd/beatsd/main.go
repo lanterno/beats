@@ -359,6 +359,7 @@ func writeUsage(out *os.File) {
 Commands:
   pair <code>   Exchange a pairing code for a device token
   run           Start the signal collector daemon
+                  --dry-run        print computed flow windows without posting to the API
   doctor        Check pairing, API reachability, Accessibility permission, ports
   status        Print whether a daemon is running, timer state, and API reachability
   recent        Print the last hour of flow windows in a small table
@@ -384,8 +385,5 @@ Commands:
   unpair        Remove the device token from the keychain
   version       Print version info
   config        Print the loaded daemon config (API + UI URLs, collector intervals)
-                  --json           emit as a JSON object (for piping into jq)
-
-Flags:
-  --dry-run     Print what would be sent without posting to the API`)
+                  --json           emit as a JSON object (for piping into jq)`)
 }
