@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -181,90 +180,26 @@ func main() {
 		}
 
 	case "recent":
-		// Optional flags after the subcommand. We parse inline rather
-		// than reaching for the flag package — the option set is small
-		// and matches what `beatsd recent --help` would document.
-		minutes := 60
-		var filter client.FlowWindowsFilter
-		var asJSON bool
-		for i := 1; i < len(args); i++ {
-			switch args[i] {
-			case "--minutes":
-				if i+1 < len(args) {
-					if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
-						minutes = v
-					}
-				}
-			case "--repo":
-				if i+1 < len(args) {
-					filter.EditorRepo = args[i+1]
-				}
-			case "--language":
-				if i+1 < len(args) {
-					filter.EditorLanguage = args[i+1]
-				}
-			case "--bundle":
-				if i+1 < len(args) {
-					filter.BundleID = args[i+1]
-				}
-			case "--json":
-				asJSON = true
-			}
-		}
-		if err := runRecent(cfg, minutes, filter, asJSON); err != nil {
+		f := parseFlowFlags(args)
+		if err := runRecent(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "stats":
-		// Same flag surface as `recent` minus the table — this is the
-		// one-line headline mode, useful for shell prompts/status bars.
-		minutes := 60
-		var filter client.FlowWindowsFilter
-		var asJSON bool
-		for i := 1; i < len(args); i++ {
-			switch args[i] {
-			case "--minutes":
-				if i+1 < len(args) {
-					if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
-						minutes = v
-					}
-				}
-			case "--repo":
-				if i+1 < len(args) {
-					filter.EditorRepo = args[i+1]
-				}
-			case "--language":
-				if i+1 < len(args) {
-					filter.EditorLanguage = args[i+1]
-				}
-			case "--bundle":
-				if i+1 < len(args) {
-					filter.BundleID = args[i+1]
-				}
-			case "--json":
-				asJSON = true
-			}
-		}
-		if err := runStats(cfg, minutes, filter, asJSON); err != nil {
+		f := parseFlowFlags(args)
+		if err := runStats(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "top":
-		// Same `--minutes N` parsing as `recent`. No filter flags here:
-		// the whole point of `top` is to discover which repo / language /
-		// app the user has been flowing on, so pre-narrowing by any of
-		// those fields would be self-defeating.
-		minutes := 60
-		for i := 1; i < len(args); i++ {
-			if args[i] == "--minutes" && i+1 < len(args) {
-				if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
-					minutes = v
-				}
-			}
-		}
-		if err := runTop(cfg, minutes); err != nil {
+		// `top` only honors --minutes — the filter flags would defeat its
+		// purpose (discovering which repo/language/app you've been
+		// flowing on). parseFlowFlags still parses them but we just read
+		// the minutes field.
+		f := parseFlowFlags(args)
+		if err := runTop(cfg, f.Minutes); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
