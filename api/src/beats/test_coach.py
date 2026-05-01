@@ -3188,6 +3188,95 @@ class TestBuildDayContext:
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "11:00 — ? (30m)" in out
 
+    async def test_calendar_block_renders_timed_and_all_day_events(self, monkeypatch):
+        """When the user has a connected calendar_integrations doc,
+        build_day_context fetches today's events and renders them
+        under "### Calendar today". Two event shapes pinned:
+          - timed event ("dateTime") → "  HH:MM–HH:MM <summary>"
+          - all-day event (only "date") → "  all-day <summary>"
+
+        The previous calendar block had two latent bugs (wrong
+        constructor args + wrong method name) that the broad
+        except hid — pin so a regression in the inline import
+        chain or the events-shape parsing surfaces."""
+        from beats.domain import calendar as calendar_module
+
+        # Seed an enabled calendar integration so the cal_doc lookup
+        # passes — we don't care about its fields beyond enabled=True
+        # because we mock fetch_events to short-circuit the HTTP call
+        db = Database.get_db()
+        await db.calendar_integrations.insert_one(
+            {
+                "user_id": "user-1",
+                "provider": "google",
+                "access_token": "ya29",
+                "refresh_token": "rt",
+                "enabled": True,
+                "calendar_ids": ["primary"],
+            }
+        )
+
+        async def fake_fetch_events(self, start, end):  # noqa: ARG001
+            return [
+                {
+                    "summary": "Standup",
+                    "start": "2026-04-01T09:00:00Z",
+                    "end": "2026-04-01T09:30:00Z",
+                    "all_day": False,
+                },
+                {
+                    "summary": "Holiday",
+                    "start": "2026-04-01",
+                    "end": "2026-04-02",
+                    "all_day": True,
+                },
+            ]
+
+        monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
+
+        target = date(2026, 4, 1)
+        repos = _FakeCoachRepos()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        assert "### Calendar today" in out
+        # Timed event: HH:MM–HH:MM extracted from RFC3339
+        assert "  09:00–09:30 Standup" in out
+        # All-day event: "  all-day <summary>"
+        assert "  all-day Holiday" in out
+
+    async def test_calendar_block_omitted_when_fetch_raises(self, monkeypatch):
+        """If CalendarService.fetch_events raises (revoked OAuth,
+        network down, expired token), the broad except in
+        build_day_context swallows it and the calendar block is
+        silently omitted. Pin so the day-context generator stays
+        best-effort — a flaky calendar must NOT break the coach
+        prompt for unrelated features."""
+        from beats.domain import calendar as calendar_module
+
+        db = Database.get_db()
+        await db.calendar_integrations.insert_one(
+            {
+                "user_id": "user-1",
+                "provider": "google",
+                "access_token": "ya29",
+                "refresh_token": "rt",
+                "enabled": True,
+                "calendar_ids": ["primary"],
+            }
+        )
+
+        async def fake_fetch_events(self, start, end):  # noqa: ARG001
+            raise RuntimeError("calendar quota exhausted")
+
+        monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
+
+        target = date(2026, 4, 1)
+        repos = _FakeCoachRepos()
+        out = await context_module.build_day_context("user-1", repos, target_date=target)
+        # Calendar header is omitted (fetch threw, except branch hit)
+        assert "### Calendar today" not in out
+        # The rest of the day context still renders
+        assert "## Today: 2026-04-01" in out
+
 
 class TestGatewayRetryAndMissingKey:
     """gateway._get_client error path + gateway.complete retry logic.
