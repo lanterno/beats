@@ -217,7 +217,11 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
         await _loadRecents();
       }
       await _refresh();
-    } catch (e) { setState(() => _error = '$e'); await _refresh(); }
+    } catch (e) {
+      _showErrorSnack('Couldn\'t start timer', e);
+      setState(() => _error = '$e');
+      await _refresh();
+    }
   }
 
   /// Threshold under which a stop tap looks accidental — sub-5s sessions
@@ -284,7 +288,27 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       if (mounted && beat['id'] != null) {
         unawaited(_promptPostStopNote(beat));
       }
-    } catch (e) { setState(() => _error = '$e'); if (was) await _refresh(); }
+    } catch (e) {
+      _showErrorSnack('Couldn\'t stop timer', e);
+      setState(() => _error = '$e');
+      if (was) await _refresh();
+    }
+  }
+
+  /// Show a SnackBar for a failed action. Action errors only stay in
+  /// [_error] briefly — the next [_refresh] tick clears the field —
+  /// so the inline display is unreliable for momentary failures. The
+  /// SnackBar is the visible-but-dismissible signal the user gets.
+  void _showErrorSnack(String prefix, Object e) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      content: Text('$prefix: $e', style: BeatsType.bodyMedium),
+      backgroundColor: BeatsColors.red,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 6),
+    ));
   }
 
   Future<void> _promptPostStopNote(Map<String, dynamic> beat) async {
