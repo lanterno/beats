@@ -12,6 +12,19 @@ pre-commit:
       root: ui/
       glob: "*.{ts,tsx}"
       run: pnpm biome check client/
+    # Catches stale struct-literal alignment + import order without
+    # running the whole test suite. gofmt -l prints any unformatted
+    # file; if the output is non-empty, fail the commit.
+    daemon-fmt:
+      root: daemon/
+      glob: "*.go"
+      run: |
+        out=$(gofmt -l {staged_files})
+        if [ -n "$out" ]; then
+          echo "gofmt would reformat the following files — run 'gofmt -w' on them:"
+          echo "$out"
+          exit 1
+        fi
 
 pre-push:
   commands:
@@ -27,3 +40,17 @@ pre-push:
     ui-api-types:
       root: ui/
       run: pnpm gen:types:check
+    # The daemon's tests cover the Go client, the cmd/beatsd dispatch
+    # arms, the editor listener, the autotimer / shield logic, and
+    # the collector scorer. Without this hook a Go-only regression
+    # could land on main and only surface when someone tries to
+    # build a release.
+    daemon-test:
+      root: daemon/
+      run: go test ./...
+    # `go vet` catches a different class of issue from the test suite
+    # (printf format mismatches, struct-tag typos, lock-by-value).
+    # Cheap to run, real safety net.
+    daemon-vet:
+      root: daemon/
+      run: go vet ./...
