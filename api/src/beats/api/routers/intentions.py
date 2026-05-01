@@ -47,9 +47,16 @@ async def update_intention(
     intention_id: str,
     body: UpdateIntentionRequest,
 ) -> IntentionResponse:
-    """Update an intention (toggle completion or change planned minutes)."""
-    intentions = await repo.list_by_date(datetime.now(UTC).date())
-    intention = next((i for i in intentions if i.id == intention_id), None)
+    """Update an intention (toggle completion or change planned minutes).
+
+    Looks up by id directly. The previous implementation listed
+    today's intentions and filtered, which silently 404'd any
+    update on yesterday-or-earlier intentions — even though the
+    list endpoint accepted target_date for any day. Asymmetric
+    surface: users could VIEW historical intentions but couldn't
+    toggle them off.
+    """
+    intention = await repo.get_by_id(intention_id)
     if not intention:
         raise HTTPException(status_code=404, detail="Intention not found")
 

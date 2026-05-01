@@ -372,6 +372,9 @@ class IntentionRepository(ABC):
     async def list_all(self) -> list[Intention]: ...
 
     @abstractmethod
+    async def get_by_id(self, intention_id: str) -> Intention | None: ...
+
+    @abstractmethod
     async def create(self, intention: Intention) -> Intention: ...
 
     @abstractmethod
@@ -398,6 +401,12 @@ class MongoIntentionRepository(MongoUserScoped, IntentionRepository):
         )
         docs = await cursor.to_list(length=None)
         return [Intention(**serialize_from_document(doc)) for doc in docs]
+
+    async def get_by_id(self, intention_id: str) -> Intention | None:
+        doc = await self.collection.find_one(self._q({"_id": ObjectId(intention_id)}))
+        if not doc:
+            return None
+        return Intention(**serialize_from_document(doc))
 
     async def create(self, intention: Intention) -> Intention:
         data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))

@@ -792,6 +792,64 @@ class TestErrorEnvelope:
         assert "No timer" in body["detail"]
 
 
+class TestIntentionsAPI:
+    """Intentions endpoints — list, create, patch, delete."""
+
+    def _create_project(self) -> str:
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Intention Test Project"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_patch_finds_intention_by_id_regardless_of_date(self):
+        """Regression guard: PATCH /api/intentions/{id} used to scan
+        only today's intentions and 404 anything older — even though
+        the GET endpoint accepts a target_date for any day. Locks in
+        that the lookup is now by id, so a user can toggle off an
+        intention from yesterday or earlier (the companion app's
+        intentions screen surfaces them).
+        """
+        project_id = self._create_project()
+        # Create an intention dated yesterday so PATCH can't find it
+        # if it's still doing the today-only filter.
+        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+        resp = client.post(
+            "/api/intentions",
+            json={
+                "project_id": project_id,
+                "date": yesterday,
+                "planned_minutes": 60,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        intention_id = resp.json()["id"]
+
+        # Toggle completed — must succeed even though the intention
+        # belongs to yesterday, not today.
+        resp = client.patch(
+            f"/api/intentions/{intention_id}",
+            json={"completed": True},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["completed"] is True
+
+    def test_patch_returns_404_for_unknown_intention_id(self):
+        """A genuinely missing id still 404s — important to keep the
+        existing behavior since the companion's error toast routes
+        on this status code."""
+        resp = client.patch(
+            "/api/intentions/507f1f77bcf86cd799439011",
+            json={"completed": True},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 404
+
+
 class TestDailyNotes:
     """Daily-notes endpoints: upsert (PUT + POST alias), single-day get,
     and the date-range list used by mood sparklines."""
