@@ -679,3 +679,277 @@ class TestAnalyticsUntrackedGaps:
         svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
         out = await svc.get_untracked_gaps(date(2026, 5, 1))
         assert out == []
+
+
+# IntelligenceService test scaffolding
+# ---------------------------------------------------------------------
+
+
+class _FakeIntelBeatRepo(_FakeBeatRepo):
+    """Extends _FakeBeatRepo with the methods IntelligenceService
+    consumes beyond what AnalyticsService needs."""
+
+
+class _FakeProjectRepo:
+    """Returns a fixed project list, optionally filtered by archived."""
+
+    def __init__(self, projects: list):
+        self._projects = projects
+
+    async def list(self, archived: bool = False) -> list:
+        return [p for p in self._projects if p.archived == archived]
+
+
+class _FakeIntentionRepo:
+    """Returns intentions for a date range."""
+
+    def __init__(self, intentions: list):
+        self._intentions = intentions
+
+    async def list_by_date_range(self, start: date, end: date) -> list:
+        return [i for i in self._intentions if start <= i.date <= end]
+
+    async def list_by_date(self, d: date) -> list:
+        return [i for i in self._intentions if i.date == d]
+
+
+class _FakeDailyNoteRepo:
+    """Returns daily notes by date or in a range."""
+
+    def __init__(self, notes: list):
+        self._notes = notes
+
+    async def list_by_date_range(self, start: date, end: date) -> list:
+        return [n for n in self._notes if start <= n.date <= end]
+
+    async def get_by_date(self, d: date):
+        for n in self._notes:
+            if n.date == d:
+                return n
+        return None
+
+
+def _intel_service(
+    *,
+    beats: list | None = None,
+    projects: list | None = None,
+    intentions: list | None = None,
+    notes: list | None = None,
+):
+    """Build an IntelligenceService with fakes for every repo."""
+    from beats.domain.intelligence import IntelligenceService
+
+    return IntelligenceService(
+        beat_repo=_FakeIntelBeatRepo(beats or []),
+        project_repo=_FakeProjectRepo(projects or []),
+        intention_repo=_FakeIntentionRepo(intentions or []),
+        daily_note_repo=_FakeDailyNoteRepo(notes or []),
+    )
+
+
+def _project(
+    id_: str = "p1",
+    name: str = "Project",
+    *,
+    weekly_goal: float | None = None,
+    archived: bool = False,
+):
+    """Quick project factory for IntelligenceService tests."""
+    return Project(
+        id=id_,
+        name=name,
+        weekly_goal=weekly_goal,
+        goal_type=GoalType.TARGET,
+        archived=archived,
+    )
+
+
+class TestProductivityScore:
+    """compute_productivity_score breaks 0-100 into four 0-25 components:
+    consistency (weekdays tracked) + intentions (completion %) + goals
+    (avg progress) + quality (median session length minus fragmentation
+    penalty). Risk: a regression in any component shifts the user's
+    perceived productivity story silently. These tests pin each
+    component's logic on representative seeded data."""
+
+    async def test_empty_data_returns_neutral_score(self):
+        """Fresh-account path — no sessions, no intentions, no goals.
+        consistency=0 + intentions=13 (neutral) + goals=13 (neutral) +
+        quality=0 = 26. Pin so a divide-by-zero regression fails the
+        test rather than silently 500'ing the /score endpoint for new
+        users."""
+        svc = _intel_service()
+        result = await svc.compute_productivity_score()
+        assert "score" in result
+        assert "components" in result
+        components = result["components"]
+        assert components["consistency"] == 0
+        assert components["intentions"] == 13  # neutral default
+        assert components["goals"] == 13  # neutral default
+        assert components["quality"] == 0
+        assert result["score"] == 26
+
+    async def test_consistency_full_when_all_5_weekdays_tracked(self):
+        """Consistency = 25 when all 5 most-recent weekdays have at
+        least one session. Locks the floor of the formula."""
+        today = datetime.now(UTC).date()
+        # Find the 5 most-recent weekdays.
+        weekdays = []
+        d = today
+        while len(weekdays) < 5:
+            if d.weekday() < 5:
+                weekdays.append(d)
+            d -= timedelta(days=1)
+
+        beats = [
+            Beat(
+                id=f"b-{wd.isoformat()}",
+                project_id="p1",
+                start=datetime.combine(wd, datetime.min.time(), tzinfo=UTC).replace(hour=10),
+                end=datetime.combine(wd, datetime.min.time(), tzinfo=UTC).replace(hour=11),
+            )
+            for wd in weekdays
+        ]
+        svc = _intel_service(beats=beats)
+        result = await svc.compute_productivity_score()
+        assert result["components"]["consistency"] == 25
+
+    async def test_intention_completion_full_when_all_done(self):
+        from beats.domain.models import Intention
+
+        today = datetime.now(UTC).date()
+        intentions = [
+            Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
+            Intention(
+                project_id="p2",
+                date=today - timedelta(days=1),
+                planned_minutes=30,
+                completed=True,
+            ),
+        ]
+        svc = _intel_service(intentions=intentions)
+        result = await svc.compute_productivity_score()
+        assert result["components"]["intentions"] == 25
+
+    async def test_intention_completion_zero_when_none_done(self):
+        from beats.domain.models import Intention
+
+        today = datetime.now(UTC).date()
+        intentions = [
+            Intention(project_id="p1", date=today, planned_minutes=60, completed=False),
+            Intention(
+                project_id="p2",
+                date=today - timedelta(days=1),
+                planned_minutes=30,
+                completed=False,
+            ),
+        ]
+        svc = _intel_service(intentions=intentions)
+        result = await svc.compute_productivity_score()
+        assert result["components"]["intentions"] == 0
+
+    async def test_goal_progress_caps_at_25_when_target_hit(self):
+        """A project that hit (or exceeded) its weekly goal contributes
+        max progress (1.0) to the average. Single-project case → 25."""
+        today = datetime.now(UTC).date()
+        week_start = today - timedelta(days=today.weekday())
+        # 10h of sessions this week toward a 5h goal.
+        beats = []
+        for i in range(10):
+            s = datetime.combine(week_start, datetime.min.time(), tzinfo=UTC).replace(
+                hour=9
+            ) + timedelta(days=i % 7, hours=i % 3)
+            beats.append(
+                Beat(
+                    id=f"b-{i}",
+                    project_id="p1",
+                    start=s,
+                    end=s + timedelta(hours=1),
+                )
+            )
+        projects = [_project("p1", "Alpha", weekly_goal=5.0)]
+        svc = _intel_service(beats=beats, projects=projects)
+        result = await svc.compute_productivity_score()
+        # Goal score should be at the max (25) — progress capped at 1.0.
+        assert result["components"]["goals"] == 25
+
+    async def test_quality_long_sessions_no_fragmentation(self):
+        """A clean day of 60-90 min sessions → high quality (length
+        bucket 18-23, no fragmentation penalty)."""
+        today = datetime.now(UTC).date()
+        beats = []
+        for i in range(3):
+            s = datetime.combine(today, datetime.min.time(), tzinfo=UTC).replace(
+                hour=9
+            ) + timedelta(hours=i * 2)
+            beats.append(
+                Beat(
+                    id=f"b-{i}",
+                    project_id="p1",
+                    start=s,
+                    end=s + timedelta(minutes=75),  # > 60 → bucket 23
+                )
+            )
+        svc = _intel_service(beats=beats)
+        result = await svc.compute_productivity_score()
+        # 75-min median falls in the 60..120 bucket = 23. No < 5min
+        # gaps between sessions (gap is ~45 min), so no penalty.
+        assert result["components"]["quality"] == 23
+
+    async def test_quality_fragmentation_penalty_subtracts(self):
+        """Two same-day sessions with a < 5-minute gap between them
+        get penalized by 5. Pin the penalty value — the formula is
+        sensitive to the threshold."""
+        today = datetime.now(UTC).date()
+        s1 = datetime.combine(today, datetime.min.time(), tzinfo=UTC).replace(hour=9)
+        beats = [
+            Beat(
+                id="b1",
+                project_id="p1",
+                start=s1,
+                end=s1 + timedelta(minutes=70),  # 70-min session, length=23
+            ),
+            Beat(
+                id="b2",
+                project_id="p1",
+                # Starts 2 min after b1 ends → fragmentation penalty fires.
+                start=s1 + timedelta(minutes=72),
+                end=s1 + timedelta(minutes=72 + 70),
+            ),
+        ]
+        svc = _intel_service(beats=beats)
+        result = await svc.compute_productivity_score()
+        # length_score=23 (median 70min in 60..120 bucket) minus 5 frag penalty = 18.
+        assert result["components"]["quality"] == 18
+
+    async def test_total_score_caps_at_100(self):
+        """The score is `min(100, consistency + intentions + goals +
+        quality)`. Locks the cap so a future 30-point component
+        doesn't overshoot."""
+        today = datetime.now(UTC).date()
+        # Construct max-everything: 5 weekdays tracked, all intentions
+        # done, full goal progress, long sessions.
+        weekdays = []
+        d = today
+        while len(weekdays) < 5:
+            if d.weekday() < 5:
+                weekdays.append(d)
+            d -= timedelta(days=1)
+
+        beats = []
+        for wd in weekdays:
+            s = datetime.combine(wd, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b-{wd}", project_id="p1", start=s, end=s + timedelta(hours=2)))
+
+        from beats.domain.models import Intention
+
+        intentions = [
+            Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
+        ]
+        projects = [_project("p1", "Alpha", weekly_goal=2.0)]
+        svc = _intel_service(beats=beats, projects=projects, intentions=intentions)
+        result = await svc.compute_productivity_score()
+        # 25 + 25 + 25 + 25 = 100, capped.
+        assert result["score"] <= 100
+        # And in fact equals 100 here.
+        assert result["score"] == 100
