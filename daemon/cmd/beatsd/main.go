@@ -220,12 +220,13 @@ func main() {
 		}
 
 	case "top":
-		// `top` honors --minutes and --json. The filter flags would
-		// defeat its purpose (discovering which repo/language/app you've
-		// been flowing on), so we ignore them even though parseFlowFlags
-		// happens to parse them.
+		// `top` honors the same flag set as `recent` / `stats`. Cross-
+		// axis filtering is genuinely useful: filter by language and
+		// the by-repo / by-app leaderboards still answer "where do I
+		// flow best when writing Go?" — same affordance the web cards
+		// give when you click a chip.
 		f := parseFlowFlags(args)
-		if err := runTop(cfg, f.Minutes, f.AsJSON); err != nil {
+		if err := runTop(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -370,6 +371,9 @@ Commands:
                   --json           emit raw windows as a JSON array (for piping into jq)
   top           Print top-5 leaderboards by repo / language / app for the recent window
                   --minutes N      override the window (default 60)
+                  --repo PATH      narrow to a specific editor workspace
+                  --language ID    narrow to a VS Code language id (e.g. go, dart)
+                  --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
                   --json           emit the three leaderboards as a JSON object (for piping into jq)
   open          Open the Beats web UI Insights page in the system browser
                   --repo PATH      deep-link by editor workspace (?repo=…)

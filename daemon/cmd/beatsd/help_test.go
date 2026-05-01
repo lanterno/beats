@@ -58,6 +58,30 @@ func TestPrintUsage_WritesToStderr(t *testing.T) {
 	}
 }
 
+func TestPrintHelp_TopStanzaListsFilterFlags(t *testing.T) {
+	// `top` was extended to honor --repo / --language / --bundle so
+	// users can filter the leaderboards the same way `recent` and
+	// `stats` allow. The help text needs to advertise that — without
+	// it the feature is invisible. Locks the top stanza to the same
+	// filter-flag list, so a future drift between dispatch and help
+	// surfaces here rather than as a confused user.
+	out := captureFile(t, &os.Stdout, printHelp)
+	topIdx := strings.Index(out, "top ")
+	if topIdx == -1 {
+		t.Fatalf("top stanza missing from help:\n%s", out)
+	}
+	statsIdx := strings.Index(out, "stats ")
+	if statsIdx == -1 || statsIdx <= topIdx {
+		t.Fatalf("expected stats stanza after top stanza in help:\n%s", out)
+	}
+	topStanza := out[topIdx:statsIdx]
+	for _, want := range []string{"--repo", "--language", "--bundle"} {
+		if !strings.Contains(topStanza, want) {
+			t.Errorf("expected top stanza to advertise %q, got:\n%s", want, topStanza)
+		}
+	}
+}
+
 func TestPrintHelp_StdoutMatchesPrintUsageStderr(t *testing.T) {
 	// Help and usage should print byte-identical text — the only
 	// difference is which stream they target. Locks in that a

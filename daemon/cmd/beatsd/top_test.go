@@ -95,7 +95,7 @@ func TestFormatTop_RendersAllThreeSections(t *testing.T) {
 			EditorLanguage:   "go",
 		},
 	}
-	out := formatTop(windows, 60)
+	out := formatTop(windows, 60, client.FlowWindowsFilter{})
 
 	for _, want := range []string{"BY REPO", "BY LANGUAGE", "BY APP", "code/beats", "go", "coding"} {
 		if !strings.Contains(out, want) {
@@ -105,9 +105,42 @@ func TestFormatTop_RendersAllThreeSections(t *testing.T) {
 }
 
 func TestFormatTop_EmptyShowsHelpfulHint(t *testing.T) {
-	out := formatTop(nil, 60)
+	out := formatTop(nil, 60, client.FlowWindowsFilter{})
 	if !strings.Contains(out, "no flow windows") {
 		t.Errorf("expected helpful empty-state hint, got: %s", out)
+	}
+	if !strings.Contains(out, "beatsd run") {
+		t.Errorf("unfiltered empty state should suggest checking the daemon, got: %s", out)
+	}
+}
+
+func TestFormatTop_EmptyWithFilterBlamesFilter(t *testing.T) {
+	// Same context-aware hint stats/recent use — when the user has
+	// narrowed the slice to nothing, point at the filter rather than
+	// the daemon process.
+	out := formatTop(nil, 60, client.FlowWindowsFilter{EditorLanguage: "rust"})
+	if !strings.Contains(out, "filter") {
+		t.Errorf("filtered empty should mention the filter, got: %s", out)
+	}
+	if strings.Contains(out, "beatsd run") {
+		t.Errorf("filtered empty should NOT blame the daemon, got: %s", out)
+	}
+}
+
+func TestFormatTop_FilterCaptionAppendedToHeader(t *testing.T) {
+	// When a filter is active, the caption (e.g. "lang=go") should land
+	// in the header so the user can tell which slice the leaderboards
+	// represent — mirrors the recent/stats behavior.
+	now := time.Date(2026, 5, 1, 14, 0, 0, 0, time.UTC)
+	windows := []client.FlowWindowRecord{
+		{
+			WindowStart: now, FlowScore: 0.9,
+			EditorRepo: "/Users/me/code/beats", EditorLanguage: "go",
+		},
+	}
+	out := formatTop(windows, 60, client.FlowWindowsFilter{EditorLanguage: "go"})
+	if !strings.Contains(out, "lang=go") {
+		t.Errorf("expected filter caption in header, got:\n%s", out)
 	}
 }
 
@@ -119,7 +152,7 @@ func TestFormatTop_LeaderboardWithNoEntriesShowsDash(t *testing.T) {
 	windows := []client.FlowWindowRecord{
 		{FlowScore: 0.5, DominantCategory: "browser"},
 	}
-	out := formatTop(windows, 60)
+	out := formatTop(windows, 60, client.FlowWindowsFilter{})
 
 	// Find each header and confirm structure under it.
 	repoIdx := strings.Index(out, "BY REPO")

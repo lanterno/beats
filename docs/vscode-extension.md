@@ -44,7 +44,10 @@
 > consume the same filter params:
 > - `beatsd recent --repo … --language … --bundle … [--json]` — table
 >   or pipeable JSON of recent windows.
-> - `beatsd top` — three top-5 leaderboards (by repo / language / app).
+> - `beatsd top [filters] [--json]` — three top-5 leaderboards (by repo /
+>   language / app). Filters narrow the slice the leaderboards are computed
+>   from, so `beatsd top --language go` answers "in my Go time, which
+>   repos and apps win?".
 > - `beatsd stats [filters] [--json]` — one-line headline for shell
 >   prompts, hits `/summary` directly.
 

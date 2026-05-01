@@ -18,11 +18,17 @@ import (
 // page. Useful at a terminal: "what have I been flowing on, ranked?"
 // without switching to the browser.
 //
+// `filter` narrows the slice the same way `recent` and `stats` do —
+// cross-axis filtering is the same affordance the web cards offer
+// (filter by language, see which repos and apps win in that slice).
+// The filtered axis itself just shows one bucket; the other two stay
+// useful, which is the whole point.
+//
 // When `asJSON` is true the leaderboards are emitted as a single JSON
 // object keyed by axis ({"by_repo": [...], "by_language": [...],
 // "by_app": [...]}) instead of the table — symmetric with `recent
 // --json` and `stats --json`, intended for shell pipelines.
-func runTop(cfg *config.Config, minutes int, asJSON bool) error {
+func runTop(cfg *config.Config, minutes int, filter client.FlowWindowsFilter, asJSON bool) error {
 	if minutes <= 0 {
 		minutes = 60
 	}
@@ -35,7 +41,7 @@ func runTop(cfg *config.Config, minutes int, asJSON bool) error {
 
 	end := time.Now().UTC()
 	start := end.Add(-time.Duration(minutes) * time.Minute)
-	windows, err := c.GetFlowWindows(ctx, start, end)
+	windows, err := c.GetFlowWindowsFiltered(ctx, start, end, filter)
 	if err != nil {
 		return err
 	}
@@ -48,7 +54,7 @@ func runTop(cfg *config.Config, minutes int, asJSON bool) error {
 		fmt.Print(out)
 		return nil
 	}
-	fmt.Print(formatTop(windows, minutes))
+	fmt.Print(formatTop(windows, minutes, filter))
 	return nil
 }
 
@@ -112,14 +118,25 @@ type topBucket struct {
 }
 
 // formatTop assembles the three leaderboards into a single string.
-// Extracted so it's testable without an HTTP fixture.
-func formatTop(windows []client.FlowWindowRecord, minutesRequested int) string {
+// Extracted so it's testable without an HTTP fixture. The `filter`
+// is rendered into the caption (and the empty-state hint) so the
+// user can see at a glance which slice they're staring at — same
+// rule the recent/stats forms use.
+func formatTop(windows []client.FlowWindowRecord, minutesRequested int, filter client.FlowWindowsFilter) string {
 	if len(windows) == 0 {
-		return fmt.Sprintf("  no flow windows in the last %d min — is `beatsd run` up?\n", minutesRequested)
+		hint := "is `beatsd run` up?"
+		if !filterIsEmpty(filter) {
+			hint = "no rows for the active filter — try widening or dropping it"
+		}
+		return fmt.Sprintf("  no flow windows in the last %d min — %s\n", minutesRequested, hint)
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "  last %d min · %d windows\n\n", minutesRequested, len(windows))
+	if caption := filterCaption(filter); caption != "" {
+		fmt.Fprintf(&b, "  last %d min · %d windows · %s\n\n", minutesRequested, len(windows), caption)
+	} else {
+		fmt.Fprintf(&b, "  last %d min · %d windows\n\n", minutesRequested, len(windows))
+	}
 
 	writeLeaderboard(&b, "BY REPO", aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return shortRepoTrail(w.EditorRepo)
