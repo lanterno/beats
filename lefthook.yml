@@ -25,6 +25,13 @@ pre-commit:
           echo "$out"
           exit 1
         fi
+    # `flutter analyze` is the Dart equivalent of biome — runs in <2s
+    # on the touched files alone and catches a long tail of
+    # diagnostics (unused imports, type warnings, deprecated API).
+    companion-analyze:
+      root: companion/
+      glob: "*.dart"
+      run: flutter analyze {staged_files}
 
 pre-push:
   commands:
@@ -54,3 +61,11 @@ pre-push:
     daemon-vet:
       root: daemon/
       run: go vet ./...
+    # The companion has 37 unit/widget tests covering api_client,
+    # tag parsing, recent projects, notification dedupe, repo-path
+    # display, and the pairing widget. Without this hook a Dart-only
+    # regression would land silently — same gap daemon-test closed
+    # for the Go side.
+    companion-test:
+      root: companion/
+      run: flutter test
