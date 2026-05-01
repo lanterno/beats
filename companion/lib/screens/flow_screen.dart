@@ -1,10 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../services/bundle_label.dart';
 import '../services/flow_summary.dart';
+import '../services/insights_url.dart';
 import '../services/repo_path.dart';
+import '../services/token_storage.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
@@ -43,6 +46,13 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   String? _topRepo;
   String? _topLanguage;
   String? _topBundle;
+  // Loaded once in _refresh so the BEST REPO / LANG / APP rows can
+  // build their own deep-link URLs without refetching prefs on every
+  // tap. Default falls back to the same value TokenStorage returns
+  // (http://localhost:8080) so a launch attempt before the load
+  // completes still goes somewhere reasonable.
+  String _webUrl = 'http://localhost:8080';
+  final TokenStorage _storage = TokenStorage();
   // Yesterday's headline — only fetched + shown when today's slice
   // is empty, so the "No flow data today" empty state can show useful
   // context ("yesterday: avg 67 across 4h, mostly in code/beats /
@@ -66,6 +76,10 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
     final now = DateTime.now().toUtc();
     final startOfDay = DateTime.utc(now.year, now.month, now.day);
     try {
+      // Load the web URL alongside the data fetches. Cheap (single
+      // SharedPreferences read) and lets the tappable rows build
+      // their deep links without coupling render to async I/O.
+      final webUrl = await _storage.loadWebUrl();
       final windows = await widget.client.getFlowWindows(
           startOfDay.toIso8601String(), now.toIso8601String());
       final summaries = await widget.client.getSignalSummaries(
@@ -117,6 +131,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
           _topRepo = topRepo;
           _topLanguage = topLanguage;
           _topBundle = topBundle;
+          _webUrl = webUrl;
           _yesterday = yesterday;
           _loading = false;
           _selectedWindowIndex = null;
@@ -266,28 +281,58 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
 
   /// "Best repo / language / app today" line under the score gauge.
   /// Sourced from /flow-windows/summary's top buckets. Three axes
-  /// match the web FlowHeadline pills; here they're labels-only
-  /// (companion isn't a place to deep-link out to a filtered
-  /// browser view — the FlowScreen IS the deep view). Wrap so a
-  /// narrow companion window doesn't clip the third axis.
+  /// match the web FlowHeadline pills, and like those pills they're
+  /// tappable — opens the system browser at the configured web UI
+  /// pre-filtered to the tapped axis (matches what a chip click on
+  /// the web Insights page would produce).
+  ///
+  /// Wrap so a narrow companion window doesn't clip the third axis.
   Widget _buildTopDimensionsLine() {
     final labelStyle = BeatsType.label.copyWith(color: BeatsColors.textSecondary);
     final valueStyle = BeatsType.label.copyWith(
       color: BeatsColors.textPrimary,
       letterSpacing: 0.5,
     );
-    Widget axis(String label, String value) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: labelStyle),
-            const SizedBox(width: 8),
-            Text(value, style: valueStyle),
-          ],
-        );
+    Widget axis(String label, String value, InsightsFilter filter) {
+      return InkWell(
+        onTap: () => _launchInsights(filter),
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: labelStyle),
+              const SizedBox(width: 8),
+              Text(value, style: valueStyle),
+            ],
+          ),
+        ),
+      );
+    }
+
     final children = <Widget>[];
-    if (_topRepo != null) children.add(axis('BEST REPO', shortRepoTail(_topRepo!)));
-    if (_topLanguage != null) children.add(axis('LANG', _topLanguage!));
-    if (_topBundle != null) children.add(axis('APP', shortBundleLabel(_topBundle!)));
+    if (_topRepo != null) {
+      children.add(axis(
+        'BEST REPO',
+        shortRepoTail(_topRepo!),
+        InsightsFilter(repo: _topRepo),
+      ));
+    }
+    if (_topLanguage != null) {
+      children.add(axis(
+        'LANG',
+        _topLanguage!,
+        InsightsFilter(language: _topLanguage),
+      ));
+    }
+    if (_topBundle != null) {
+      children.add(axis(
+        'APP',
+        shortBundleLabel(_topBundle!),
+        InsightsFilter(bundle: _topBundle),
+      ));
+    }
     return Wrap(
       alignment: WrapAlignment.center,
       spacing: 18,
@@ -654,6 +699,19 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
         ),
       ),
     );
+  }
+
+  /// Opens the configured Beats web UI's Insights page filtered to
+  /// the given axis. Failure is silent — url_launcher returns false
+  /// when no handler is available, and we don't want to spam an
+  /// error UI for a feature the user can mostly accomplish via the
+  /// pairing-screen-configured web URL anyway.
+  Future<void> _launchInsights(InsightsFilter filter) async {
+    final url = buildInsightsUrl(_webUrl, filter);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   /// Empty-state subtitle lines for the "no data today" case. Two
