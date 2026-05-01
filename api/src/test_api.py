@@ -721,6 +721,331 @@ class TestCoachEndpoints:
         assert response.status_code == 401
 
 
+class TestCoachRouterGapFill:
+    """Coach routes whose logic isn't covered by the smoke suite —
+    /chat/history pagination + filtering, /usage with seeded rows,
+    /review/start + /review/answer happy paths, and the
+    BUDGET_EXCEEDED 429 envelope. Mocks the LLM-touching modules so
+    the tests run deterministically; uses real Mongo via testcontainers
+    for the persistence assertions."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_coach_collections(self, auth_info):
+        """Wipe the coach collections this class writes to so tests
+        don't pollute each other's reads."""
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+        for coll in (
+            "coach_conversations",
+            "llm_usage",
+            "review_answers",
+        ):
+            db[coll].delete_many({})
+        sync.close()
+        yield
+
+    def _seed_message(
+        self,
+        auth_info,
+        conversation_id: str,
+        role: str,
+        content: str,
+        seconds_ago: int = 0,
+    ) -> None:
+        """Insert a row directly into coach_conversations. The router's
+        /chat/history sorts by created_at desc, so this lets us seed
+        a deterministic timeline."""
+        import os
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+        from datetime import timedelta as _td
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        sync[db_name].coach_conversations.insert_one(
+            {
+                "_id": ObjectId(),
+                "user_id": auth_info["user_id"],
+                "conversation_id": conversation_id,
+                "role": role,
+                "content": content,
+                "created_at": _dt.now(_UTC) - _td(seconds=seconds_ago),
+            }
+        )
+        sync.close()
+
+    def _seed_usage(
+        self,
+        auth_info,
+        cost_usd: float,
+        *,
+        purpose: str = "chat",
+        days_ago: int = 0,
+    ) -> None:
+        import os
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        sync[db_name].llm_usage.insert_one(
+            {
+                "_id": ObjectId(),
+                "user_id": auth_info["user_id"],
+                "model": "claude-opus-4-7",
+                "input_tokens": 1000,
+                "output_tokens": 500,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cost_usd": cost_usd,
+                "purpose": purpose,
+                "ts": _dt.now(_UTC) - timedelta(days=days_ago),
+            }
+        )
+        sync.close()
+
+    # ── /chat/history ────────────────────────────────────────────────
+
+    def test_chat_history_empty_returns_empty_list(self, auth_info):
+        resp = client.get("/api/coach/chat/history", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_chat_history_returns_chronological_order(self, auth_info):
+        """Router fetches descending then reverses → chronological for
+        the UI. Pin so a refactor that drops the .reverse() doesn't
+        feed the chat UI history backwards."""
+        # Newest first by creation time, but the router reverses to
+        # oldest-first for the UI. Seed in non-chronological insert
+        # order to verify the sort.
+        self._seed_message(auth_info, "c-1", "user", "FIRST", seconds_ago=300)
+        self._seed_message(auth_info, "c-1", "assistant", "SECOND", seconds_ago=200)
+        self._seed_message(auth_info, "c-1", "user", "THIRD", seconds_ago=100)
+
+        resp = client.get("/api/coach/chat/history", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        contents = [m["content"] for m in resp.json()]
+        # Oldest first.
+        assert contents == ["FIRST", "SECOND", "THIRD"]
+
+    def test_chat_history_filters_by_conversation_id(self, auth_info):
+        self._seed_message(auth_info, "c-1", "user", "in c1")
+        self._seed_message(auth_info, "c-2", "user", "in c2")
+
+        resp = client.get(
+            "/api/coach/chat/history?conversation_id=c-1",
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 200
+        contents = [m["content"] for m in resp.json()]
+        assert contents == ["in c1"]
+
+    def test_chat_history_respects_limit(self, auth_info):
+        for i in range(5):
+            self._seed_message(auth_info, "c-1", "user", f"msg {i}", seconds_ago=100 - i)
+
+        resp = client.get("/api/coach/chat/history?limit=3", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 3
+
+    def test_chat_history_validates_limit_bounds(self, auth_info):
+        # Router declares Query(default=50, ge=1, le=200).
+        for q in ("?limit=0", "?limit=201"):
+            resp = client.get(f"/api/coach/chat/history{q}", headers=auth_info["headers"])
+            assert resp.status_code == 422
+
+    # ── /usage ───────────────────────────────────────────────────────
+
+    def test_usage_aggregates_seeded_rows_by_day(self, auth_info):
+        """The /usage endpoint groups llm_usage rows by day and sums.
+        Pin: today's rows roll up; the response shape carries the
+        budget alongside the daily breakdown."""
+        self._seed_usage(auth_info, 0.10, purpose="chat")
+        self._seed_usage(auth_info, 0.20, purpose="brief")
+        # Yesterday — separate bucket.
+        self._seed_usage(auth_info, 0.05, purpose="chat", days_ago=1)
+
+        resp = client.get("/api/coach/usage", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "days" in body
+        assert "month_total_usd" in body
+        assert "budget_usd" in body
+        # Today's total = 0.30, yesterday = 0.05.
+        days = {d["date"]: d for d in body["days"]}
+        assert len(days) == 2
+        # Both days have non-zero cost.
+        for d in body["days"]:
+            assert d["cost_usd"] > 0
+            assert d["calls"] >= 1
+
+    def test_usage_validates_days_param(self, auth_info):
+        # ge=1, le=90.
+        for q in ("?days=0", "?days=91"):
+            resp = client.get(f"/api/coach/usage{q}", headers=auth_info["headers"])
+            assert resp.status_code == 422
+
+    # ── /review/start + /review/answer ───────────────────────────────
+
+    def test_review_start_returns_questions_after_generation(self, auth_info, monkeypatch):
+        """Router calls generate_review_questions then reads the
+        persisted doc. Mock the LLM-touching call; verify the response
+        shape matches what the UI parses."""
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        from beats.api.routers import coach as coach_router
+
+        # Stub the heavy generate_review_questions to write a doc and
+        # return — exactly what the real one does after the LLM call.
+        async def fake_generate(user_id, target_date=None):
+            import os
+
+            from bson import ObjectId
+            from pymongo import MongoClient
+
+            dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+            db_name = os.environ.get("DB_NAME", "beats_test")
+            sync = MongoClient(dsn)
+            today = (target_date or _dt.now(_UTC).date()).isoformat()
+            sync[db_name].review_answers.insert_one(
+                {
+                    "_id": ObjectId(),
+                    "user_id": user_id,
+                    "date": today,
+                    "questions": [
+                        {"question": "Q1", "derived_from": {"kind": "x"}},
+                        {"question": "Q2", "derived_from": {"kind": "y"}},
+                        {"question": "Q3", "derived_from": {"kind": "z"}},
+                    ],
+                    "answers": [None, None, None],
+                }
+            )
+            sync.close()
+            return []
+
+        monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
+
+        resp = client.post("/api/coach/review/start", headers=auth_info["headers"])
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "date" in body
+        assert "questions" in body
+        assert len(body["questions"]) == 3
+        # Each question carries the documented shape.
+        for q in body["questions"]:
+            assert "question" in q
+            assert "derived_from" in q
+
+    def test_review_start_budget_exceeded_returns_429_with_envelope(self, auth_info, monkeypatch):
+        """When the user's monthly budget is over, the router maps
+        BudgetExceeded → 429 with code=BUDGET_EXCEEDED. Pin the
+        envelope shape; clients use the code to render
+        "monthly LLM budget reached" instead of "rate limited"."""
+        from beats.api.routers import coach as coach_router
+        from beats.coach.usage import BudgetExceeded
+
+        async def fake_generate(_user_id, _target_date=None):
+            raise BudgetExceeded(spent=15.0, limit=10.0)
+
+        monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
+
+        resp = client.post("/api/coach/review/start", headers=auth_info["headers"])
+        assert resp.status_code == 429
+        body = resp.json()
+        assert body["code"] == "BUDGET_EXCEEDED"
+
+    def test_review_start_generic_failure_returns_502(self, auth_info, monkeypatch):
+        """Any other exception during generation surfaces as 502
+        with the friendly "coach is resting" message — distinct
+        from BUDGET_EXCEEDED so clients can tell "your budget is
+        over" from "the LLM API is down"."""
+        from beats.api.routers import coach as coach_router
+
+        async def fake_generate(_user_id, _target_date=None):
+            raise RuntimeError("anthropic 500")
+
+        monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
+
+        resp = client.post("/api/coach/review/start", headers=auth_info["headers"])
+        assert resp.status_code == 502
+        body = resp.json()
+        assert "coach is resting" in body["detail"]
+
+    def test_review_answer_persists_and_returns_ok(self, auth_info):
+        """Seed a review doc, post an answer, verify it landed in the
+        right slot."""
+        # Seed
+        import os
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        today = _dt.now(_UTC).date().isoformat()
+        sync = MongoClient(dsn)
+        sync[db_name].review_answers.insert_one(
+            {
+                "_id": ObjectId(),
+                "user_id": auth_info["user_id"],
+                "date": today,
+                "questions": [
+                    {"question": "Q1", "derived_from": {"kind": "x"}},
+                ],
+                "answers": [None],
+            }
+        )
+        sync.close()
+
+        resp = client.post(
+            "/api/coach/review/answer",
+            json={"date": today, "question_index": 0, "answer": "my answer"},
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
+
+        # Verify persistence.
+        sync = MongoClient(dsn)
+        doc = sync[db_name].review_answers.find_one(
+            {"user_id": auth_info["user_id"], "date": today}
+        )
+        sync.close()
+        assert doc is not None
+        assert doc["answers"][0]["text"] == "my answer"
+
+    def test_review_answer_invalid_date_returns_400_envelope(self, auth_info):
+        """The handler raises with code=INVALID_DATE on bad date input
+        (locks the override pattern that this session's coach error-
+        codes commit established)."""
+        resp = client.post(
+            "/api/coach/review/answer",
+            json={"date": "not-a-date", "question_index": 0, "answer": "x"},
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["code"] == "INVALID_DATE"
+
+
 class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:
     {detail: str, code: str, fields?: list}."""
