@@ -1438,6 +1438,197 @@ class TestAccountAPI:
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
 
+class TestWebhooksAPI:
+    """/api/webhooks/* — CRUD + the daily-summary dispatch path. The
+    dispatch path is the important one: it's fire-and-forget, was
+    previously broken by an asyncio GC race (tasks reaped mid-flight
+    because nothing held a strong ref), and now uses a module-level
+    set to pin task references. Tests pin both the CRUD contract and
+    the GC-race fix so a future refactor can't quietly regress."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_webhooks_state(self):
+        import os
+
+        from pymongo import MongoClient
+
+        from beats.api.routers.webhooks import _pending_dispatches
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        sync[db_name].webhooks.delete_many({})
+        sync.close()
+        # Drain any in-flight dispatches from a previous test so this
+        # test's assertions about set membership aren't polluted.
+        _pending_dispatches.clear()
+        yield
+
+    # ── CRUD ──────────────────────────────────────────────────────────
+
+    def test_list_webhooks_empty_initially(self):
+        resp = client.get("/api/webhooks/", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_create_then_list_webhook(self):
+        resp = client.post(
+            "/api/webhooks/",
+            json={
+                "url": "https://example.test/hook",
+                "events": ["timer.start", "timer.stop"],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        created = resp.json()
+        assert created["url"] == "https://example.test/hook"
+        assert created["events"] == ["timer.start", "timer.stop"]
+        assert created["active"] is True
+        assert created["id"]
+
+        listing = client.get("/api/webhooks/", headers=auth_headers).json()
+        assert len(listing) == 1
+        assert listing[0]["id"] == created["id"]
+
+    def test_create_uses_default_events_when_omitted(self):
+        # Default in CreateWebhookRequest is ["timer.start", "timer.stop"]
+        # — locks the contract so a future change to the default is a
+        # deliberate API break.
+        resp = client.post(
+            "/api/webhooks/",
+            json={"url": "https://default-events.test/hook"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["events"] == ["timer.start", "timer.stop"]
+
+    def test_delete_webhook(self):
+        created = client.post(
+            "/api/webhooks/",
+            json={"url": "https://doomed.test/hook"},
+            headers=auth_headers,
+        ).json()
+
+        resp = client.delete(f"/api/webhooks/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] is True
+
+        assert client.get("/api/webhooks/", headers=auth_headers).json() == []
+
+    # ── Daily summary dispatch ────────────────────────────────────────
+
+    def test_daily_summary_returns_payload_shape(self):
+        """Even with no beats and no subscribed webhooks, the endpoint
+        produces the canonical payload shape that subscribers can rely
+        on. Pins the schema."""
+        resp = client.post(
+            "/api/webhooks/daily-summary/trigger",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        # Required keys present even when there's nothing to report.
+        for key in (
+            "date",
+            "total_minutes",
+            "session_count",
+            "project_breakdown",
+            "intentions",
+            "daily_note",
+            "mood",
+        ):
+            assert key in body, f"missing {key} in payload"
+        assert body["total_minutes"] == 0
+        assert body["session_count"] == 0
+        assert body["project_breakdown"] == []
+        assert body["intentions"] == []
+        assert body["daily_note"] is None
+        assert body["mood"] is None
+
+    def test_daily_summary_dispatch_pins_task_against_gc(self, monkeypatch):
+        """The asyncio GC race fix: dispatch_webhook_event creates
+        background tasks via asyncio.create_task and *must* hold a
+        strong reference to each so the GC doesn't reap them
+        mid-flight (the create_task docs warn about this explicitly).
+        The module keeps an _pending_dispatches set; tasks discard
+        themselves on completion.
+
+        Test: monkeypatch httpx.AsyncClient with a fake whose POST
+        never returns until we let it. After triggering the dispatch,
+        assert the task IS in _pending_dispatches (the strong ref is
+        held). If the fix regressed (e.g. someone replaced the set
+        with create_task and forgot the pin), the assertion still
+        passes if the GC hasn't run yet — but the live set membership
+        is the contract we're locking."""
+        import asyncio as _asyncio
+
+        from beats.api.routers import webhooks as wh
+
+        # Subscribe a webhook to the daily.summary event so the
+        # dispatch loop has work to do.
+        client.post(
+            "/api/webhooks/",
+            json={
+                "url": "https://blackhole.test/hook",
+                "events": ["daily.summary"],
+            },
+            headers=auth_headers,
+        )
+
+        # Replace AsyncClient.post with a coroutine that hangs forever
+        # — a real slow webhook URL. The dispatch task remains alive
+        # and visible in _pending_dispatches while we inspect it.
+        gate = _asyncio.Event()  # never set → task pends
+
+        class _FakeAsyncClient:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                await gate.wait()
+
+        monkeypatch.setattr(wh.httpx, "AsyncClient", _FakeAsyncClient)
+
+        # Trigger.
+        resp = client.post("/api/webhooks/daily-summary/trigger", headers=auth_headers)
+        assert resp.status_code == 200
+
+        # The task should be live in the pinning set. If the fix were
+        # regressed (no strong ref), the GC could have already reaped
+        # it; the set is the canonical pin and the contract we're
+        # locking in.
+        assert len(wh._pending_dispatches) >= 1, (
+            "dispatch task missing from _pending_dispatches — the GC-pinning "
+            "guarantee is broken. See routers/webhooks.py:124."
+        )
+        # And the pinned task must not be done — the body is gated on
+        # an Event we never set, so it should still be running.
+        assert all(not t.done() for t in wh._pending_dispatches)
+
+        # Cleanly unblock and cancel so the test process exits clean.
+        for t in list(wh._pending_dispatches):
+            t.cancel()
+
+    # ── Auth ──────────────────────────────────────────────────────────
+
+    def test_webhook_endpoints_require_auth(self):
+        for method, path in [
+            ("GET", "/api/webhooks/"),
+            ("POST", "/api/webhooks/"),
+            ("DELETE", "/api/webhooks/anything"),
+            ("POST", "/api/webhooks/daily-summary/trigger"),
+        ]:
+            resp = client.request(method, path)
+            assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
 class TestPlanningAPI:
     """/api/plans/* — weekly plans, recurring intentions, weekly reviews,
     intention streaks. Previously zero coverage. Tests pin the
