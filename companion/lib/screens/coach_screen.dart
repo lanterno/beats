@@ -27,6 +27,14 @@ class _CoachScreenState extends State<CoachScreen> {
   /// Last 7 days of moods, keyed by ISO date — used for the sparkline.
   Map<String, int> _moodHistory = {};
 
+  /// Today's flow headline (avg / peak / count) for the small context
+  /// strip above the morning brief. Null when /summary is unreachable
+  /// or hasn't returned yet — the strip hides cleanly in that case so
+  /// the brief stays first-thing-the-user-sees.
+  int? _flowAvg;
+  int? _flowPeak;
+  int? _flowCount;
+
   // Per-question editing state, keyed by question index.
   final Map<int, TextEditingController> _answerControllers = {};
   final Set<int> _expandedQuestions = {};
@@ -62,6 +70,25 @@ class _CoachScreenState extends State<CoachScreen> {
       final brief = await widget.client.getTodayBrief();
       final review = await widget.client.getTodayReview();
 
+      // Today's flow headline — single round-trip via /summary so
+      // we don't paginate windows on the coach screen. Failure is
+      // non-fatal; the strip just hides.
+      final now = DateTime.now().toUtc();
+      final startOfDay = DateTime.utc(now.year, now.month, now.day);
+      final flowSummary = await widget.client.getFlowWindowsSummary(
+          startOfDay.toIso8601String(), now.toIso8601String());
+      int? flowAvg;
+      int? flowPeak;
+      int? flowCount;
+      if (flowSummary != null) {
+        final c = (flowSummary['count'] as num?)?.toInt() ?? 0;
+        if (c > 0) {
+          flowCount = c;
+          flowAvg = (((flowSummary['avg'] as num?)?.toDouble() ?? 0.0) * 100).round();
+          flowPeak = (((flowSummary['peak'] as num?)?.toDouble() ?? 0.0) * 100).round();
+        }
+      }
+
       // Pull the last 7 days of daily notes for the sparkline + today's row.
       final today = DateTime.now();
       String fmt(DateTime d) =>
@@ -91,6 +118,9 @@ class _CoachScreenState extends State<CoachScreen> {
           _moodHistory = moods;
           _todayMood = todayMood;
           _todayNote = todayNote ?? '';
+          _flowAvg = flowAvg;
+          _flowPeak = flowPeak;
+          _flowCount = flowCount;
           _loading = false;
         });
         if (_noteController.text != _todayNote) {
@@ -212,6 +242,14 @@ class _CoachScreenState extends State<CoachScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 100),
             children: [
+              // ── Today's flow headline (above the brief so the user
+              //    sees a quick "how today's actually going" before
+              //    they read morning intentions or fill the review). ──
+              if (_flowAvg != null && _flowCount != null) ...[
+                StaggeredEntrance(child: _buildFlowHeadline()),
+                const SizedBox(height: 24),
+              ],
+
               // ── Brief ──
               StaggeredEntrance(
                 child: Column(
@@ -418,6 +456,41 @@ class _CoachScreenState extends State<CoachScreen> {
 
   /// Returns a short local-time string for when today's brief was generated,
   /// e.g. "07:14". Returns null if there's no brief or the timestamp is missing.
+  /// Compact "TODAY  avg N · peak M · K windows" strip rendered above
+  /// the morning brief. Mirrors the FlowScreen stats line in style
+  /// (label-then-number, brutalist) so the two screens read as a set.
+  Widget _buildFlowHeadline() {
+    final labelStyle =
+        BeatsType.label.copyWith(color: BeatsColors.textSecondary, letterSpacing: 2);
+    final numStyle = BeatsType.label.copyWith(
+      color: BeatsColors.textPrimary,
+      fontSize: 14,
+      letterSpacing: 0,
+    );
+    return Row(
+      children: [
+        Container(
+            width: 3,
+            height: 14,
+            decoration: BoxDecoration(
+                color: BeatsColors.green, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 10),
+        Text('TODAY', style: labelStyle.copyWith(color: BeatsColors.green)),
+        const SizedBox(width: 16),
+        Text('AVG', style: labelStyle),
+        const SizedBox(width: 6),
+        Text('$_flowAvg', style: numStyle),
+        const SizedBox(width: 14),
+        Text('PEAK', style: labelStyle),
+        const SizedBox(width: 6),
+        Text('$_flowPeak', style: numStyle),
+        const SizedBox(width: 14),
+        Text('${_flowCount}W',
+            style: labelStyle.copyWith(color: BeatsColors.textTertiary)),
+      ],
+    );
+  }
+
   String? _briefTimestamp() {
     final raw = _brief?['created_at'] as String?;
     if (raw == null) return null;
