@@ -10,7 +10,7 @@ const (
 	idleThresholdSec = 30.0
 
 	// Weights for the composite flow score.
-	cadenceWeight  = 0.4
+	cadenceWeight   = 0.4
 	coherenceWeight = 0.4
 	categoryWeight  = 0.2
 )

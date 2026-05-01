@@ -11,12 +11,12 @@ import (
 
 // DefaultDistractionBundles are bundle IDs considered distracting during work.
 var DefaultDistractionBundles = map[string]bool{
-	"com.twitter.twitter-mac":       true,
-	"com.spotify.client":            true,
-	"com.apple.Music":               true,
-	"com.netflix.Netflix":           true,
-	"tv.twitch.studio":              true,
-	"com.hnc.Discord":               true, // when timer running on non-communication project
+	"com.twitter.twitter-mac": true,
+	"com.spotify.client":      true,
+	"com.apple.Music":         true,
+	"com.netflix.Netflix":     true,
+	"tv.twitch.studio":        true,
+	"com.hnc.Discord":         true, // when timer running on non-communication project
 }
 
 // DistractionBrowserPatterns are URL patterns that indicate browser-based distractions.

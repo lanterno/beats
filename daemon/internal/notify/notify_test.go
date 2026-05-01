@@ -31,12 +31,12 @@ func TestPsEscape_NoQuotesPassesThrough(t *testing.T) {
 
 func TestPsEscape_SingleQuoteIsDoubled(t *testing.T) {
 	cases := map[string]string{
-		"'":             "''",
-		"don't":         "don''t",
-		"a'b'c":         "a''b''c",
-		"'leading":      "''leading",
-		"trailing'":     "trailing''",
-		"both'sides'":   "both''sides''",
+		"'":           "''",
+		"don't":       "don''t",
+		"a'b'c":       "a''b''c",
+		"'leading":    "''leading",
+		"trailing'":   "trailing''",
+		"both'sides'": "both''sides''",
 	}
 	for in, want := range cases {
 		if got := psEscape(in); got != want {
