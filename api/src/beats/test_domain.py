@@ -3488,3 +3488,123 @@ class TestProjectServiceTimeAggregations:
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
         result = await svc.get_daily_summary("p1")
         assert result == {"2026-04-01": "1:00:00", "2026-04-02": "1:00:00"}
+
+
+# =============================================================================
+# Export bundle signing — Ed25519 sign/verify primitives
+# =============================================================================
+
+
+class TestExportSigning:
+    """Pure Ed25519 sign/verify primitives in domain.export_signing.
+
+    Why these tests matter: the signed-export contract is the only
+    tamper-evidence users have when restoring from a bundle. A
+    regression that accepted any signature would silently invalidate
+    every "this came from your account" guarantee. These tests pin
+    the security contract with no mocks — fast, definitive."""
+
+    def test_generate_keypair_returns_raw_32_byte_keys(self):
+        """Ed25519 raw keys are exactly 32 bytes each. Pin so an
+        accidental switch to PEM/DER would surface immediately
+        (we'd get hundreds of bytes, not 32)."""
+        from beats.domain.export_signing import generate_keypair
+
+        priv, pub = generate_keypair()
+        assert isinstance(priv, bytes)
+        assert isinstance(pub, bytes)
+        assert len(priv) == 32
+        assert len(pub) == 32
+
+    def test_keypair_is_unique_per_call(self):
+        """Two generate_keypair calls produce different keys.
+        Pin so a refactor to a fixed-seed RNG (would be a serious
+        security regression) gets caught."""
+        from beats.domain.export_signing import generate_keypair
+
+        priv1, pub1 = generate_keypair()
+        priv2, pub2 = generate_keypair()
+        assert priv1 != priv2
+        assert pub1 != pub2
+
+    def test_sign_returns_64_byte_signature(self):
+        """Ed25519 signatures are exactly 64 bytes. Pin the size
+        so the export manifest schema can rely on it."""
+        from beats.domain.export_signing import generate_keypair, sign
+
+        priv, _ = generate_keypair()
+        sig = sign(priv, b"hello world")
+        assert isinstance(sig, bytes)
+        assert len(sig) == 64
+
+    def test_sign_verify_round_trip(self):
+        """Happy path: sign with private, verify with the matching
+        public, no exception."""
+        from beats.domain.export_signing import generate_keypair, sign, verify
+
+        priv, pub = generate_keypair()
+        payload = b"export-manifest-v1\nbeats:42\n"
+        sig = sign(priv, payload)
+        # Should NOT raise
+        verify(pub, payload, sig)
+
+    def test_verify_rejects_modified_payload(self):
+        """Even a single-byte change in the payload must fail
+        verification. This is the entire reason we sign at all —
+        pin so it's never silently relaxed."""
+        from beats.domain.export_signing import (
+            SignatureMismatch,
+            generate_keypair,
+            sign,
+            verify,
+        )
+
+        priv, pub = generate_keypair()
+        original = b"beats:42"
+        tampered = b"beats:43"
+        sig = sign(priv, original)
+        with pytest.raises(SignatureMismatch):
+            verify(pub, tampered, sig)
+
+    def test_verify_rejects_signature_from_different_key(self):
+        """A signature from key A must not verify against key B's
+        public — pins cross-account isolation. If this regressed,
+        any export could be presented as coming from any account."""
+        from beats.domain.export_signing import (
+            SignatureMismatch,
+            generate_keypair,
+            sign,
+            verify,
+        )
+
+        priv_a, _ = generate_keypair()
+        _, pub_b = generate_keypair()
+        payload = b"manifest"
+        sig_from_a = sign(priv_a, payload)
+        with pytest.raises(SignatureMismatch):
+            verify(pub_b, payload, sig_from_a)
+
+    def test_verify_rejects_malformed_signature(self):
+        """A truncated or junk signature surfaces as
+        SignatureMismatch (not a generic crypto exception). Pin
+        the error envelope so the API layer can rely on a single
+        failure type when mapping to HTTP."""
+        from beats.domain.export_signing import (
+            SignatureMismatch,
+            generate_keypair,
+            verify,
+        )
+
+        _, pub = generate_keypair()
+        with pytest.raises(SignatureMismatch):
+            verify(pub, b"payload", b"too-short")
+
+    def test_verify_rejects_malformed_public_key(self):
+        """A junk public key (wrong length) is caught and wrapped
+        into SignatureMismatch with the underlying message — pin
+        so a corrupt manifest doesn't crash the import flow with
+        a leaked low-level exception."""
+        from beats.domain.export_signing import SignatureMismatch, verify
+
+        with pytest.raises(SignatureMismatch):
+            verify(b"\x00" * 16, b"payload", b"\x00" * 64)
