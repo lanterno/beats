@@ -38,7 +38,7 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 - `conftest.py` starts a `MongoDbContainer` via testcontainers, sets `DB_DSN`/`DB_NAME` env vars
 - The `test_client` fixture creates `TestClient(app)` inside a `with` block (triggers lifespan)
 - `clean_db` fixture drops all collections between test classes
-- Coverage threshold: 50% (`--cov-fail-under=50`)
+- Coverage threshold: 65% (`--cov-fail-under=65`)
 - Set `BEATS_TEST_ENV=1` to skip testcontainers (uses whatever `DB_DSN` is configured)
 
 ## Key Patterns

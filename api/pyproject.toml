@@ -70,7 +70,7 @@ missing-argument = "warn"  # pydantic-settings fills required fields from env va
 invalid-yield = "warn"  # Anthropic SDK stream event type mismatch
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=beats --cov-fail-under=50"
+addopts = "-q --cov=beats --cov-fail-under=65"
 testpaths = ["src"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
