@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
+from beats.domain.analytics import AnalyticsService
 from beats.domain.exceptions import (
     DomainException,
     InvalidEndTime,
@@ -478,3 +479,203 @@ class TestBiometricDayModel:
         assert b.steps == 8400
         assert b.sleep_minutes == 420
         assert b.readiness_score is None  # absent — not a required field
+
+
+class _FakeBeatRepo:
+    """In-memory BeatRepository fake for AnalyticsService tests.
+
+    Implements only the methods AnalyticsService consumes
+    (list_all_completed, list_completed_in_range). Constructed with
+    a fixed list of beats; deterministic, no Mongo.
+    """
+
+    def __init__(self, beats: list[Beat]):
+        self._beats = beats
+
+    async def list_all_completed(self) -> list[Beat]:
+        return [b for b in self._beats if b.end is not None]
+
+    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]:
+        return [b for b in self._beats if b.end is not None and start <= b.start.date() <= end]
+
+
+def _beat(start_iso: str, minutes: int, project_id: str = "p1", tags=None) -> Beat:
+    """Convenience factory: a completed beat starting at ISO time and lasting [minutes]."""
+    s = datetime.fromisoformat(start_iso).replace(tzinfo=UTC)
+    return Beat(
+        id="b-" + start_iso,
+        project_id=project_id,
+        start=s,
+        end=s + timedelta(minutes=minutes),
+        tags=list(tags or []),
+    )
+
+
+class TestAnalyticsDistributeToSlots:
+    """Pure helper: distribute a session's minutes into 48 half-hour
+    slots indexed 0..47. Tests the math directly without needing a
+    repo fake."""
+
+    def _slots(self, start_iso: str, end_iso: str) -> list[float]:
+        slots = [0.0] * 48
+        AnalyticsService._distribute_to_slots(
+            slots,
+            datetime.fromisoformat(start_iso),
+            datetime.fromisoformat(end_iso),
+        )
+        return slots
+
+    def test_session_within_a_single_slot(self):
+        # 09:00–09:20 → all 20min in slot 18 (9*2 + 0)
+        slots = self._slots("2026-05-01T09:00:00", "2026-05-01T09:20:00")
+        assert slots[18] == 20
+        assert sum(slots) == 20
+
+    def test_session_crossing_half_hour_boundary(self):
+        # 09:15–09:45 → 15min in slot 18 (9:00–9:30) + 15min in slot 19 (9:30–10:00)
+        slots = self._slots("2026-05-01T09:15:00", "2026-05-01T09:45:00")
+        assert slots[18] == 15
+        assert slots[19] == 15
+        assert sum(slots) == 30
+
+    def test_multi_hour_session(self):
+        # 08:00–10:00 → 30min in each of slots 16, 17, 18, 19
+        slots = self._slots("2026-05-01T08:00:00", "2026-05-01T10:00:00")
+        for i in (16, 17, 18, 19):
+            assert slots[i] == 30
+        assert sum(slots) == 120
+
+    def test_cross_midnight_clamps_to_end_of_day(self):
+        # 23:30 (start day) to 00:30 (next day) — only the 30min
+        # before midnight count; the post-midnight portion is dropped
+        # because the helper clamps to start-day midnight.
+        slots = self._slots("2026-05-01T23:30:00", "2026-05-02T00:30:00")
+        assert slots[47] == 30  # 23:30–24:00 is slot 47
+        assert sum(slots) == 30  # the 0:00–0:30 chunk is clamped away
+
+    def test_aligned_30_minute_boundary(self):
+        # 10:00–10:30 → all 30min in slot 20 only
+        slots = self._slots("2026-05-01T10:00:00", "2026-05-01T10:30:00")
+        assert slots[20] == 30
+        assert sum(slots) == 30
+
+    def test_zero_duration_session_does_nothing(self):
+        slots = self._slots("2026-05-01T09:00:00", "2026-05-01T09:00:00")
+        assert sum(slots) == 0
+
+
+class TestAnalyticsHeatmap:
+    """Pure aggregation: per-day totals/sessions/project counts for a year."""
+
+    @pytest.mark.asyncio
+    async def test_empty_repo_returns_empty_list(self):
+        svc = AnalyticsService(_FakeBeatRepo([]))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026)
+        assert out == []
+
+    @pytest.mark.asyncio
+    async def test_aggregates_per_day_and_counts_distinct_projects(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 60, project_id="p1"),
+            _beat("2026-05-01T11:00:00", 30, project_id="p2"),
+            _beat("2026-05-02T09:00:00", 45, project_id="p1"),
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026)
+        by_date = {d["date"]: d for d in out}
+        assert by_date["2026-05-01"]["total_minutes"] == 90
+        assert by_date["2026-05-01"]["session_count"] == 2
+        assert by_date["2026-05-01"]["project_count"] == 2
+        assert by_date["2026-05-02"]["total_minutes"] == 45
+        assert by_date["2026-05-02"]["session_count"] == 1
+        assert by_date["2026-05-02"]["project_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_filters_by_year_drops_other_years(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 60),
+            _beat("2025-05-01T09:00:00", 60),
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026)
+        assert [d["date"] for d in out] == ["2026-05-01"]
+
+    @pytest.mark.asyncio
+    async def test_filters_by_project_id(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 30, project_id="p1"),
+            _beat("2026-05-01T10:00:00", 30, project_id="p2"),
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026, project_id="p2")
+        assert len(out) == 1
+        assert out[0]["total_minutes"] == 30
+        assert out[0]["project_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_filters_by_tag(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 30, tags=["focus"]),
+            _beat("2026-05-01T10:00:00", 30, tags=["meeting"]),
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026, tag="focus")
+        assert len(out) == 1
+        assert out[0]["total_minutes"] == 30
+
+
+class TestAnalyticsUntrackedGaps:
+    """Pure logic: find gaps ≥ min_gap_minutes between sorted beats on a date."""
+
+    @pytest.mark.asyncio
+    async def test_empty_day_returns_no_gaps(self):
+        svc = AnalyticsService(_FakeBeatRepo([]))  # type: ignore[arg-type]
+        out = await svc.get_untracked_gaps(date(2026, 5, 1))
+        assert out == []
+
+    @pytest.mark.asyncio
+    async def test_finds_gap_above_threshold(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 30),  # ends 09:30
+            _beat("2026-05-01T10:00:00", 30),  # 30-min gap, ends 10:30
+            _beat("2026-05-01T11:00:00", 30),  # 30-min gap, ends 11:30
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_untracked_gaps(date(2026, 5, 1), min_gap_minutes=15)
+        assert len(out) == 2
+        assert all(g["duration_minutes"] == 30 for g in out)
+
+    @pytest.mark.asyncio
+    async def test_skips_gaps_below_threshold(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 30),  # ends 09:30
+            _beat("2026-05-01T09:35:00", 30),  # 5-min gap — below 15min threshold
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_untracked_gaps(date(2026, 5, 1), min_gap_minutes=15)
+        assert out == []
+
+    @pytest.mark.asyncio
+    async def test_threshold_is_inclusive(self):
+        beats = [
+            _beat("2026-05-01T09:00:00", 30),  # ends 09:30
+            _beat("2026-05-01T09:45:00", 30),  # exactly 15min gap
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_untracked_gaps(date(2026, 5, 1), min_gap_minutes=15)
+        assert len(out) == 1
+        assert out[0]["duration_minutes"] == 15
+
+    @pytest.mark.asyncio
+    async def test_overlapping_beats_produce_no_gap(self):
+        # If beat B starts before beat A ends, that's not a "gap" — the
+        # condition `next_start > current_end` is false. Pin the
+        # behavior so a refactor that uses >= doesn't accidentally
+        # produce zero-duration gaps.
+        beats = [
+            _beat("2026-05-01T09:00:00", 60),  # 09:00–10:00
+            _beat("2026-05-01T09:30:00", 30),  # overlaps
+        ]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_untracked_gaps(date(2026, 5, 1))
+        assert out == []
