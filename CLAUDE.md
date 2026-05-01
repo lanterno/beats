@@ -83,7 +83,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest`.
   Set `BEATS_TEST_ENV=1` to skip testcontainers (e.g., in Docker Compose or CI with service containers).
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo) so a separate hurl runner isn't needed for routine work.
-- **UI unit tests** are in `client/**/*.test.ts` (Vitest).
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env). The `.ts` files cover pure helpers in `shared/lib/`; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
 - **`api/tests/hurl/`** holds standalone HTTP contract tests dating from before the WebAuthn/JWT auth migration; they still reference `X-API-Token` and are not run from CI or any hook. Treat them as historical until reauthored to mint a JWT in a setup step.
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
