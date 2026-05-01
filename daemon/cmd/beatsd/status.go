@@ -61,7 +61,33 @@ func runStatus(cfg *config.Config) error {
 	} else {
 		fmt.Println("  timer:  idle")
 	}
+
+	fmt.Printf("  flow:   %s\n", flowStatusLine(ctx, c))
 	return nil
+}
+
+// flowStatusLine returns a one-line summary of the last hour's flow
+// data. Pulls from /api/signals/flow-windows/summary so it costs one
+// round-trip; "is the flow pipeline producing?" should be cheap to
+// answer.
+//
+// On API failure we return a soft "unavailable" message rather than
+// surfacing the error to the caller — `beatsd status` succeeded for
+// pair/daemon/api/timer; one slow flow call shouldn't fail the
+// command. The user already has `beatsd doctor` and `beatsd stats` for
+// deeper diagnostics if they need them.
+func flowStatusLine(ctx context.Context, c *client.Client) string {
+	end := time.Now().UTC()
+	start := end.Add(-time.Hour)
+	s, err := c.GetFlowWindowsSummary(ctx, start, end, client.FlowWindowsFilter{})
+	if err != nil {
+		return "unavailable"
+	}
+	if s.Count == 0 {
+		return "no windows in the last hour"
+	}
+	return fmt.Sprintf("%d windows · avg %d · peak %d (last hour)",
+		s.Count, int(s.Avg*100), int(s.Peak*100))
 }
 
 // portFree returns true if 127.0.0.1:port is currently bindable. Used as a
