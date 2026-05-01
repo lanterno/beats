@@ -258,3 +258,99 @@ func TestPostFlowWindowError(t *testing.T) {
 		t.Fatal("expected error for 403")
 	}
 }
+
+// describeErrorBody is the small helper that turns the API's unified
+// error envelope ({detail, code}) into the suffix the daemon attaches
+// to "<thing> failed (HTTP N)" sentences. Locked-in here so the
+// readable form a `beatsd recent` user sees doesn't quietly regress.
+func TestDescribeErrorBody_FullEnvelope(t *testing.T) {
+	got := describeErrorBody([]byte(`{"detail":"Project archived","code":"PROJECT_ARCHIVED"}`))
+	want := "Project archived [PROJECT_ARCHIVED]"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+func TestDescribeErrorBody_DetailOnly(t *testing.T) {
+	// Older API versions (pre-error-envelope) return just `{detail}`.
+	// Daemon should still surface the human message rather than only
+	// "(HTTP 404)" — that's the whole point of this helper.
+	got := describeErrorBody([]byte(`{"detail":"Invalid or expired pairing code"}`))
+	want := "Invalid or expired pairing code"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+func TestDescribeErrorBody_CodeOnly(t *testing.T) {
+	// Edge case — a router raised with a code but no message. The
+	// envelope helper falls back to the code so the user at least sees
+	// the machine-readable kind of failure.
+	got := describeErrorBody([]byte(`{"code":"RATE_LIMITED"}`))
+	want := "RATE_LIMITED"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+func TestDescribeErrorBody_NonJsonFallsBackToTrimmedRaw(t *testing.T) {
+	// Upstream proxies / load balancers can emit HTML 502s. The user
+	// shouldn't see the JSON parse error — we just surface the raw
+	// text trimmed of trailing newlines.
+	got := describeErrorBody([]byte("Bad Gateway\n"))
+	if got != "Bad Gateway" {
+		t.Errorf("expected trimmed raw fallback, got %q", got)
+	}
+}
+
+func TestDescribeErrorBody_EmptyReturnsEmpty(t *testing.T) {
+	// Status-code-only failures (network race, explicit 503 with no
+	// body) shouldn't render as "<thing> failed (HTTP 503): " with a
+	// trailing colon followed by nothing — callers branch on empty.
+	if got := describeErrorBody(nil); got != "" {
+		t.Errorf("expected empty for nil body, got %q", got)
+	}
+	if got := describeErrorBody([]byte{}); got != "" {
+		t.Errorf("expected empty for zero-length body, got %q", got)
+	}
+}
+
+func TestDescribeErrorBody_JsonShapeNotEnvelopeFallsBackToRaw(t *testing.T) {
+	// Some 4xx responses come from FastAPI's deeper internals or from
+	// proxies — JSON-shaped but not our envelope. Surface the raw
+	// JSON text rather than silently dropping it; "{}" tells the user
+	// SOMETHING came back even when there's no detail.
+	got := describeErrorBody([]byte(`{"unrelated":"shape"}`))
+	if got != `{"unrelated":"shape"}` {
+		t.Errorf("expected raw JSON when envelope keys absent, got %q", got)
+	}
+}
+
+// End-to-end check that GetFlowWindowsFiltered surfaces the API's
+// error detail in its returned error. Locks in that the rewired
+// error path actually reaches the user — not just that the helper
+// works in isolation.
+func TestGetFlowWindowsFiltered_ErrorEnvelopeReachesUserFacingError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"detail":"Device token expired","code":"UNAUTHORIZED"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "stale-token")
+	now := time.Now()
+	_, err := c.GetFlowWindowsFiltered(context.Background(), now.Add(-time.Hour), now, FlowWindowsFilter{})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "Device token expired") {
+		t.Errorf("expected detail to surface in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "UNAUTHORIZED") {
+		t.Errorf("expected machine-readable code to surface in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("expected status code to remain in error, got: %v", err)
+	}
+}

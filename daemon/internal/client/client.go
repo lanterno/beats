@@ -12,6 +12,49 @@ import (
 	"time"
 )
 
+// errorEnvelope mirrors the API's unified error shape (api/src/beats/api/errors.py):
+//
+//	{"detail": "human-readable message", "code": "MACHINE_READABLE_CODE"}
+//
+// We only need detail + code here — the optional `fields` array is
+// validation-error specific and useful enough on its own that callers
+// currently don't need to read it; if that changes we can grow this
+// struct.
+type errorEnvelope struct {
+	Detail string `json:"detail"`
+	Code   string `json:"code"`
+}
+
+// describeErrorBody parses the response body as the API's error envelope
+// and renders it as a single suffix the caller can attach to a
+// "<thing> failed (HTTP N)" sentence.
+//
+// Returns the raw body text when JSON parsing fails (older API versions
+// or upstream proxies returning HTML 502s), or an empty string for an
+// empty body so callers don't print a trailing colon followed by
+// nothing. The empty-body case matters: status-code-only failures
+// (e.g. a network race that returns 503 before the API can encode)
+// previously read fine because the format string didn't include `:%s`.
+func describeErrorBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var env errorEnvelope
+	if err := json.Unmarshal(body, &env); err == nil && (env.Detail != "" || env.Code != "") {
+		switch {
+		case env.Detail != "" && env.Code != "":
+			return fmt.Sprintf("%s [%s]", env.Detail, env.Code)
+		case env.Detail != "":
+			return env.Detail
+		default:
+			return env.Code
+		}
+	}
+	// Trim ASCII whitespace so a stray newline doesn't produce a
+	// "failed (HTTP 500): \n" rendering.
+	return string(bytes.TrimSpace(body))
+}
+
 // postJSON sends a JSON POST request to the given path with Bearer auth.
 func (c *Client) postJSON(ctx context.Context, path string, body any) error {
 	data, err := json.Marshal(body)
@@ -37,7 +80,10 @@ func (c *Client) postJSON(ctx context.Context, path string, body any) error {
 
 	if resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("request to %s failed (HTTP %d): %s", path, resp.StatusCode, string(respBody))
+		if detail := describeErrorBody(respBody); detail != "" {
+			return fmt.Errorf("request to %s failed (HTTP %d): %s", path, resp.StatusCode, detail)
+		}
+		return fmt.Errorf("request to %s failed (HTTP %d)", path, resp.StatusCode)
 	}
 
 	return nil
@@ -100,7 +146,10 @@ func (c *Client) ExchangePairCode(ctx context.Context, code, deviceName string) 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("exchange failed (HTTP %d): %s", resp.StatusCode, string(respBody))
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("exchange failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
+		return nil, fmt.Errorf("exchange failed (HTTP %d)", resp.StatusCode)
 	}
 
 	var result PairExchangeResponse
@@ -210,6 +259,10 @@ func (c *Client) GetFlowWindowsFiltered(
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("flow-windows GET failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
 		return nil, fmt.Errorf("flow-windows GET failed (HTTP %d)", resp.StatusCode)
 	}
 
@@ -278,6 +331,10 @@ func (c *Client) GetFlowWindowsSummary(
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("flow-windows summary GET failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
 		return nil, fmt.Errorf("flow-windows summary GET failed (HTTP %d)", resp.StatusCode)
 	}
 
@@ -313,6 +370,10 @@ func (c *Client) GetTimerContext(ctx context.Context) (*TimerContextResponse, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("timer-context failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
 		return nil, fmt.Errorf("timer-context failed (HTTP %d)", resp.StatusCode)
 	}
 
@@ -353,6 +414,10 @@ func (c *Client) SuggestTimer(ctx context.Context, w FlowWindowRequest) (*AutoTi
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("suggest-timer failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
 		return nil, fmt.Errorf("suggest-timer failed (HTTP %d)", resp.StatusCode)
 	}
 

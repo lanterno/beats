@@ -89,7 +89,12 @@ daemon/
 │   ├── autotimer/      Detects sustained high flow and asks the API for a
 │   │                    timer suggestion; fires native notifications.
 │   ├── client/         HTTP client — pairing exchange, flow window POST,
-│   │                    timer-context, suggest-timer endpoints.
+│   │                    timer-context, suggest-timer endpoints. Parses
+│   │                    the API's unified `{detail, code}` error
+│   │                    envelope so failures surface as readable
+│   │                    sentences ("flow-windows GET failed (HTTP 401):
+│   │                    Device token expired [UNAUTHORIZED]") instead
+│   │                    of bare status codes.
 │   ├── collector/      Sample loop, flow score computation, CGEventTap
 │   │                    cadence probe (cadence_darwin.go), non-darwin stub.
 │   ├── config/         TOML config loading.
