@@ -12,8 +12,10 @@
  * `err.message` would say only "Validation failed for 2 fields"
  * with no indication of which.
  */
+import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type ApiErrorField, apiClient } from "./client";
+import { clearAll, listPending } from "../lib/mutationQueue";
+import { ApiError, type ApiErrorField, apiClient, apiMutate } from "./client";
 
 const originalFetch = globalThis.fetch;
 
@@ -174,5 +176,126 @@ describe("apiClient — 401 side effect (smoke)", () => {
 		expect(err).toBeInstanceOf(ApiError);
 		expect(err.isUnauthorized()).toBe(true);
 		expect(err.code).toBe("UNAUTHORIZED");
+	});
+});
+
+// apiMutate is the offline-aware mutation wrapper used by every
+// write path (timer start/stop, beat update, intentions, …). The
+// "queue vs throw" decision is the load-bearing contract: a 4xx
+// reached the server and queueing it would compound user errors,
+// while a TypeError means the request never went out and queueing
+// is the whole point. These tests pin both branches so a refactor
+// of isNetworkError can't silently flip them.
+describe("apiMutate — queue vs throw", () => {
+	beforeEach(async () => {
+		// fake-indexeddb persists across tests in the same file; wipe
+		// the queue so each case starts from zero pending mutations.
+		await clearAll();
+	});
+
+	it("returns status:'sent' with the response body on a 200", async () => {
+		mockFetchOnce(200, { id: "p1", name: "Beats" });
+
+		const result = await apiMutate<{ id: string }>("POST", "/api/projects", {
+			name: "Beats",
+		});
+
+		expect(result.status).toBe("sent");
+		expect(result.data).toEqual({ id: "p1", name: "Beats" });
+		expect(result.clientId.length).toBeGreaterThan(8);
+		expect(await listPending()).toHaveLength(0);
+	});
+
+	it("attaches X-Client-Id by default for server-side idempotency", async () => {
+		// The sync engine relies on this header so a replayed mutation
+		// doesn't double-write. Default is on; opt-out via
+		// `idempotent: false`.
+		const fetchSpy = vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			statusText: "",
+			json: () => Promise.resolve({}),
+		}));
+		globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+		await apiMutate("POST", "/api/timer/start", {});
+
+		const init1 = (fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1];
+		const headers = init1.headers as Record<string, string>;
+		expect(headers["X-Client-Id"]).toBeTruthy();
+	});
+
+	it("omits X-Client-Id when idempotent:false is set", async () => {
+		const fetchSpy = vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			statusText: "",
+			json: () => Promise.resolve({}),
+		}));
+		globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+		await apiMutate("POST", "/api/anything", {}, { idempotent: false });
+
+		const init2 = (fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1];
+		const headers = (init2.headers ?? {}) as Record<string, string>;
+		expect(headers["X-Client-Id"]).toBeUndefined();
+	});
+
+	it("throws ApiError on 4xx and does NOT queue (request reached the server)", async () => {
+		// The whole reason apiMutate distinguishes network failure
+		// from response failure: queueing a 400 would replay it
+		// every reconnect and burn the user with the same error
+		// repeatedly. Lock the throw-not-queue branch.
+		mockFetchOnce(400, { detail: "name too short", code: "VALIDATION_ERROR" });
+
+		await expect(apiMutate("POST", "/api/projects", { name: "" })).rejects.toBeInstanceOf(ApiError);
+		expect(await listPending()).toHaveLength(0);
+	});
+
+	it("queues on TypeError (network unreachable) instead of throwing", async () => {
+		// fetch() throws a TypeError when DNS fails or there's no
+		// connectivity. apiMutate catches this and writes the
+		// mutation to IndexedDB; the sync engine drains it on
+		// reconnect.
+		globalThis.fetch = vi.fn(() =>
+			Promise.reject(new TypeError("Failed to fetch")),
+		) as unknown as typeof fetch;
+
+		const result = await apiMutate("POST", "/api/timer/start", { project_id: "p1" });
+
+		expect(result.status).toBe("queued");
+		expect(result.data).toBeUndefined();
+		expect(result.queueError).toBeUndefined();
+
+		const pending = await listPending();
+		expect(pending).toHaveLength(1);
+		expect(pending[0].method).toBe("POST");
+		expect(pending[0].path).toBe("/api/timer/start");
+		expect(pending[0].body).toEqual({ project_id: "p1" });
+		expect(pending[0].clientId).toBe(result.clientId);
+	});
+
+	it("respects queueOnFailure:false by throwing the network error", async () => {
+		// Some callers (e.g. an explicit "save & retry" UI button)
+		// want to handle the failure inline rather than silently
+		// queue. Opt-out path.
+		const networkErr = new TypeError("Failed to fetch");
+		globalThis.fetch = vi.fn(() => Promise.reject(networkErr)) as unknown as typeof fetch;
+
+		await expect(apiMutate("POST", "/api/anything", {}, { queueOnFailure: false })).rejects.toThrow(
+			"Failed to fetch",
+		);
+		expect(await listPending()).toHaveLength(0);
+	});
+
+	it("uses caller-supplied clientId verbatim (so retries dedupe)", async () => {
+		// The sync engine reuses the original clientId when replaying
+		// — letting the caller pin the id is the contract that
+		// makes retry-after-queue safe.
+		mockFetchOnce(200, {});
+
+		const result = await apiMutate("POST", "/api/anything", {}, { clientId: "fixed-123" });
+
+		expect(result.clientId).toBe("fixed-123");
 	});
 });
