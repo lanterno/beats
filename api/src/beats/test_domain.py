@@ -3608,3 +3608,273 @@ class TestExportSigning:
 
         with pytest.raises(SignatureMismatch):
             verify(b"\x00" * 16, b"payload", b"\x00" * 64)
+
+
+# =============================================================================
+# Export bundle SQLite — build_sqlite_bytes + manifest helpers
+# =============================================================================
+
+
+class TestExportSqlite:
+    """Pure helpers in domain.export_sqlite — no I/O beyond a temp
+    SQLite file, no framework dependencies. The export bundle is
+    user-facing data the user is expected to be able to open with
+    sqlite3 on the command line, so the schema and round-trip
+    behavior are part of the contract.
+
+    Risk: a regression in a column extractor (e.g. archived flag
+    flipped, tags blob stringified twice) would silently corrupt
+    every user's exports — the bundle would still parse, just be
+    wrong. Pin every typed column and the `data` JSON fallback."""
+
+    def _payload(self, **overrides):
+        from beats.domain.export_sqlite import ExportPayload
+
+        defaults = {
+            "projects": [
+                {
+                    "id": "p1",
+                    "user_id": "u1",
+                    "name": "Alpha",
+                    "description": "main project",
+                    "estimation": "small",
+                    "color": "#ff0000",
+                    "archived": False,
+                    "weekly_goal": 5.0,
+                    "goal_type": "target",
+                    "github_repo": "ahmed/beats",
+                }
+            ],
+            "beats": [
+                {
+                    "id": "b1",
+                    "user_id": "u1",
+                    "project_id": "p1",
+                    "start": "2026-04-01T09:00:00+00:00",
+                    "end": "2026-04-01T10:00:00+00:00",
+                    "note": "deep work",
+                    "tags": ["focus", "morning"],
+                }
+            ],
+            "intentions": [
+                {
+                    "id": "i1",
+                    "user_id": "u1",
+                    "project_id": "p1",
+                    "date": "2026-04-01",
+                    "planned_minutes": 90,
+                    "completed": True,
+                }
+            ],
+            "daily_notes": [
+                {
+                    "id": "n1",
+                    "user_id": "u1",
+                    "date": "2026-04-01",
+                    "note": "good day",
+                    "mood": 4,
+                }
+            ],
+        }
+        defaults.update(overrides)
+        return ExportPayload(**defaults)
+
+    def _query(self, sqlite_bytes: bytes, sql: str) -> list[tuple]:
+        """Open the bundle bytes as a real sqlite db and run a query.
+        Mirrors what a user would do with `sqlite3 export.db`."""
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as tmp:
+            Path(tmp.name).write_bytes(sqlite_bytes)
+            try:
+                conn = sqlite3.connect(tmp.name)
+                cur = conn.execute(sql)
+                rows = cur.fetchall()
+                conn.close()
+                return rows
+            finally:
+                Path(tmp.name).unlink(missing_ok=True)
+
+    # ---------------- build_sqlite_bytes ----------------
+
+    def test_returns_valid_sqlite_bytes(self):
+        """Output starts with the SQLite magic header and is a
+        non-trivial size. Pin so a regression that returned an
+        empty/text/JSON payload is caught immediately."""
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        out = build_sqlite_bytes(self._payload())
+        # The SQLite file format magic string is 16 bytes:
+        # "SQLite format 3\x00".
+        assert out.startswith(b"SQLite format 3\x00")
+        assert len(out) > 1024  # minimum meaningful db size
+
+    def test_empty_payload_still_produces_valid_db_with_schema(self):
+        """An empty export must still create the four tables —
+        otherwise opening the bundle with sqlite3 would error.
+        Pin the schema-always-applied invariant."""
+        from beats.domain.export_sqlite import (
+            ExportPayload,
+            build_sqlite_bytes,
+        )
+
+        empty = ExportPayload(projects=[], beats=[], intentions=[], daily_notes=[])
+        out = build_sqlite_bytes(empty)
+        tables = self._query(out, "SELECT name FROM sqlite_master WHERE type='table'")
+        names = {row[0] for row in tables}
+        assert {"projects", "beats", "intentions", "daily_notes"}.issubset(names)
+
+    def test_projects_typed_columns_round_trip(self):
+        """Project columns map to typed SQLite columns. Pin the
+        archived bool → 0/1 integer cast (would render as the
+        string "False" if the lambda regressed)."""
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        out = build_sqlite_bytes(self._payload())
+        rows = self._query(
+            out,
+            "SELECT id, name, archived, weekly_goal, goal_type FROM projects",
+        )
+        assert rows == [("p1", "Alpha", 0, 5.0, "target")]
+
+    def test_archived_true_serializes_as_one(self):
+        """archived=True must become integer 1 (not boolean True,
+        not the string "True"). SQLite is permissive about types
+        — pin so a regression doesn't silently flip the rendering
+        in downstream tooling."""
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        payload = self._payload(
+            projects=[
+                {"id": "pA", "user_id": "u1", "name": "A", "archived": True},
+                {"id": "pB", "user_id": "u1", "name": "B", "archived": False},
+            ]
+        )
+        out = build_sqlite_bytes(payload)
+        rows = self._query(out, "SELECT id, archived FROM projects ORDER BY id")
+        assert rows == [("pA", 1), ("pB", 0)]
+
+    def test_beats_tags_stored_as_json_blob(self):
+        """tags is a list — must be JSON-encoded into the column,
+        not str()'d. Pin so the column round-trips through json."""
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        out = build_sqlite_bytes(self._payload())
+        rows = self._query(out, "SELECT id, tags FROM beats")
+        assert len(rows) == 1
+        beat_id, tags_blob = rows[0]
+        assert beat_id == "b1"
+        # Must round-trip through json.loads; pin the format
+        import json
+
+        assert json.loads(tags_blob) == ["focus", "morning"]
+
+    def test_beats_missing_tags_become_empty_array(self):
+        """A beat without a `tags` key writes "[]" to the column,
+        not NULL or "null". Pin so downstream consumers can rely
+        on tags always parsing as a list."""
+        import json
+
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        payload = self._payload(
+            beats=[{"id": "bN", "user_id": "u1", "project_id": "p1", "start": "x"}]
+        )
+        out = build_sqlite_bytes(payload)
+        rows = self._query(out, "SELECT tags FROM beats WHERE id = 'bN'")
+        assert json.loads(rows[0][0]) == []
+
+    def test_intentions_completed_serialized_as_int(self):
+        """completed bool → 0/1 mirrors the archived treatment.
+        Pin both projects.archived and intentions.completed lambdas
+        — easy to slip if one is updated and the other isn't."""
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        out = build_sqlite_bytes(self._payload())
+        rows = self._query(out, "SELECT id, planned_minutes, completed FROM intentions")
+        assert rows == [("i1", 90, 1)]
+
+    def test_data_column_holds_full_row_json(self):
+        """Every table has a `data` column containing the original
+        dict serialized as JSON — the self-describing escape hatch
+        for fields not surfaced as typed columns. Pin so a
+        refactor doesn't drop the data column and silently lose
+        the long-tail metadata."""
+        import json
+
+        from beats.domain.export_sqlite import build_sqlite_bytes
+
+        out = build_sqlite_bytes(self._payload())
+        rows = self._query(out, "SELECT data FROM projects")
+        full = json.loads(rows[0][0])
+        assert full["id"] == "p1"
+        assert full["github_repo"] == "ahmed/beats"
+
+    # ---------------- build_manifest ----------------
+
+    def test_manifest_has_version_counts_and_hash(self):
+        """Manifest shape: {version, counts: {projects, beats,
+        intentions, daily_notes}, sqlite_sha256}. Pin the keys —
+        signed bundles outlive the code that wrote them, so the
+        format is a long-term contract."""
+        from beats.domain.export_sqlite import (
+            build_manifest,
+            build_sqlite_bytes,
+        )
+
+        payload = self._payload()
+        sqlite_bytes = build_sqlite_bytes(payload)
+        manifest = build_manifest(payload, sqlite_bytes, version="1.0")
+        assert manifest["version"] == "1.0"
+        assert manifest["counts"] == {
+            "projects": 1,
+            "beats": 1,
+            "intentions": 1,
+            "daily_notes": 1,
+        }
+        # sha256 hex is 64 chars
+        assert len(manifest["sqlite_sha256"]) == 64
+        assert all(c in "0123456789abcdef" for c in manifest["sqlite_sha256"])
+
+    def test_manifest_hash_matches_input_bytes(self):
+        """The sqlite_sha256 in the manifest is the actual
+        SHA-256 of the sqlite bytes — pin so a refactor that
+        accidentally hashes the manifest itself or the payload
+        struct can't slip in undetected."""
+        import hashlib
+
+        from beats.domain.export_sqlite import (
+            build_manifest,
+            build_sqlite_bytes,
+        )
+
+        sqlite_bytes = build_sqlite_bytes(self._payload())
+        manifest = build_manifest(self._payload(), sqlite_bytes, version="1.0")
+        assert manifest["sqlite_sha256"] == hashlib.sha256(sqlite_bytes).hexdigest()
+
+    # ---------------- canonical_manifest_bytes ----------------
+
+    def test_canonical_bytes_are_deterministic_regardless_of_key_order(self):
+        """Two manifests with the same content but different key
+        insertion order must produce identical canonical bytes —
+        otherwise the signature would not verify on import. Pin
+        the sort_keys=True invariant."""
+        from beats.domain.export_sqlite import canonical_manifest_bytes
+
+        a = {"a": 1, "b": 2, "c": {"x": 1, "y": 2}}
+        b = {"c": {"y": 2, "x": 1}, "b": 2, "a": 1}
+        assert canonical_manifest_bytes(a) == canonical_manifest_bytes(b)
+
+    def test_canonical_bytes_have_no_whitespace(self):
+        """Compact separators (',' and ':') — pin so a refactor
+        to a "pretty-printed" form doesn't silently change every
+        signature. Existing signed bundles would suddenly fail
+        verification at import time."""
+        from beats.domain.export_sqlite import canonical_manifest_bytes
+
+        out = canonical_manifest_bytes({"a": 1, "b": 2})
+        assert out == b'{"a":1,"b":2}'
+        assert b" " not in out
+        assert b"\n" not in out
