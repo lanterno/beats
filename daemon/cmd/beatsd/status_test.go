@@ -205,6 +205,90 @@ func TestDaemonStatusDetail_FallsBackToPlainRunningOnError(t *testing.T) {
 	}
 }
 
+// probeOwnDaemonHealth is the structured-counters form (uptime,
+// emitted, dropped) that powers the JSON status path and the
+// "0 emissions on long uptime" / windows_dropped diagnostics.
+// daemonStatusDetail covers the human-string wrapper above; this
+// test pins the full triple-return so a regression in the JSON
+// decode can't quietly drop windows_dropped (added in fc50109).
+
+func TestProbeOwnDaemonHealth_DecodesAllThreeCounters(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":              true,
+			"version":         "test",
+			"uptime_sec":      120,
+			"editor_count":    1,
+			"windows_emitted": 60,
+			"windows_dropped": 5,
+		})
+	}))
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+	uptime, emitted, dropped := probeOwnDaemonHealth(port)
+	if uptime != 120 {
+		t.Errorf("expected uptime=120, got %d", uptime)
+	}
+	if emitted != 60 {
+		t.Errorf("expected windows_emitted=60, got %d", emitted)
+	}
+	if dropped != 5 {
+		t.Errorf("expected windows_dropped=5, got %d", dropped)
+	}
+}
+
+func TestProbeOwnDaemonHealth_OmittedDroppedFieldDecodesAsZero(t *testing.T) {
+	// Older daemons (pre-fc50109) don't send windows_dropped on
+	// /health. Newer status code probing such an older daemon
+	// must decode the missing field as 0, not panic. Equivalent
+	// to the VS Code extension's `body.windows_dropped ?? 0`
+	// fallback — same defensive behavior, kept consistent.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":              true,
+			"version":         "test",
+			"uptime_sec":      120,
+			"editor_count":    1,
+			"windows_emitted": 60,
+			// no windows_dropped field
+		})
+	}))
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+	_, emitted, dropped := probeOwnDaemonHealth(port)
+	if emitted != 60 {
+		t.Errorf("expected windows_emitted=60, got %d", emitted)
+	}
+	if dropped != 0 {
+		t.Errorf("expected missing windows_dropped to decode as 0, got %d", dropped)
+	}
+}
+
+func TestProbeOwnDaemonHealth_FallsBackToZerosOnError(t *testing.T) {
+	// Same fallback rule as daemonStatusDetail — an unreachable
+	// loopback probe must not panic or hang. All three counters
+	// return zero so the caller can still mark the daemon as
+	// "running" (port is bound) without claiming uptime data
+	// it doesn't have.
+	uptime, emitted, dropped := probeOwnDaemonHealth(1) // port 1: refused
+	if uptime != 0 || emitted != 0 || dropped != 0 {
+		t.Errorf("expected all zeros on probe failure, got uptime=%d emitted=%d dropped=%d",
+			uptime, emitted, dropped)
+	}
+}
+
 // portFromURL extracts the port from an httptest.Server URL like
 // "http://127.0.0.1:54321". Cheap helper kept here rather than a
 // strconv chain at every callsite.
