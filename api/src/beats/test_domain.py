@@ -1538,3 +1538,266 @@ class TestPatternDetectorsSessionTrend:
         )
         svc = self._service()
         assert svc._detect_session_trend(beats, today) == []
+
+
+class TestPatternDetectorsMoodCorrelation:
+    """_detect_mood_correlation Pearson-correlates daily tracked
+    hours with the mood score from daily notes. Surfaces if ≥10
+    notes have moods AND |r| > 0.3. Body text changes between the
+    positive-r and negative-r framings."""
+
+    def _service(self):
+        return _intel_service()
+
+    def _note(self, d: date, mood: int | None, content: str = "") -> DailyNote:
+        return DailyNote(id=f"n-{d.isoformat()}", date=d, note=content, mood=mood)
+
+    async def test_fewer_than_10_notes_returns_no_card(self):
+        """The 10-note minimum prevents a single noisy week from
+        flipping the user's perceived productivity narrative."""
+        today = datetime.now(UTC).date()
+        notes = [self._note(today - timedelta(days=i), 4) for i in range(8)]
+        svc = self._service()
+        assert svc._detect_mood_correlation([], notes) == []
+
+    async def test_zero_correlation_returns_no_card(self):
+        """When daily hours are identical regardless of mood, the
+        denominator hits the zero-variance branch and no card fires."""
+        today = datetime.now(UTC).date()
+        notes = [self._note(today - timedelta(days=i), (i % 5) + 1) for i in range(12)]
+        beats = []
+        for i in range(12):
+            d = today - timedelta(days=i)
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(hours=2)))
+        svc = self._service()
+        assert svc._detect_mood_correlation(beats, notes) == []
+
+    async def test_strong_positive_correlation_fires_with_more_work_better_mood_body(self):
+        """When more hours correlate with higher mood, the body uses
+        the high-mood/high-hours framing."""
+        today = datetime.now(UTC).date()
+        notes = []
+        beats = []
+        for i in range(12):
+            d = today - timedelta(days=i)
+            mood = 1 if i < 6 else 5
+            hours = 1 if i < 6 else 5
+            notes.append(self._note(d, mood))
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(hours=hours)))
+        svc = self._service()
+        cards = svc._detect_mood_correlation(beats, notes)
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.type == "mood_correlation"
+        assert "mood 4+" in card.body
+        assert card.data["r"] >= 0.3
+        assert card.data["high_mood_avg_hours"] > card.data["low_mood_avg_hours"]
+
+    async def test_strong_negative_correlation_fires_with_lighter_days_body(self):
+        """Negative correlation flips the body to "lighter days,
+        mood higher"."""
+        today = datetime.now(UTC).date()
+        notes = []
+        beats = []
+        for i in range(12):
+            d = today - timedelta(days=i)
+            mood = 5 if i < 6 else 1
+            hours = 1 if i < 6 else 5
+            notes.append(self._note(d, mood))
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(hours=hours)))
+        svc = self._service()
+        cards = svc._detect_mood_correlation(beats, notes)
+        assert len(cards) == 1
+        assert "lighter days" in cards[0].body.lower()
+        assert cards[0].data["r"] <= -0.3
+
+
+class TestPatternDetectorsEstimationBias:
+    """_detect_estimation_bias compares planned (intentions) vs
+    actual (beats) per (project, date). When a project's average
+    ratio drifts outside [0.8, 1.2] across ≥3 days, fire a card."""
+
+    def _service(self):
+        return _intel_service()
+
+    async def test_fewer_than_3_planned_days_returns_no_card(self):
+        """The 3-day minimum prevents a one-off bad estimate from
+        being labeled as a habit."""
+        today = datetime.now(UTC).date()
+        intentions = [
+            Intention(project_id="p1", date=today, planned_minutes=60, completed=False),
+            Intention(
+                project_id="p1",
+                date=today - timedelta(days=1),
+                planned_minutes=60,
+                completed=False,
+            ),
+        ]
+        s = datetime.combine(today, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=120))]
+        svc = self._service()
+        cards = svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")})
+        assert cards == []
+
+    async def test_consistent_underestimate_fires_with_pct(self):
+        """Actual = 2× planned across 3 days → "underestimate" card
+        with the percentage in the body. Priority 3 — actionable."""
+        today = datetime.now(UTC).date()
+        intentions = []
+        beats = []
+        for i in range(3):
+            d = today - timedelta(days=i)
+            intentions.append(
+                Intention(project_id="p1", date=d, planned_minutes=60, completed=True)
+            )
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(minutes=120)))
+        svc = self._service()
+        cards = svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")})
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.type == "estimation_accuracy"
+        assert "underestimate" in card.title.lower()
+        assert "Alpha" in card.title
+        assert "100%" in card.body
+        assert card.priority == 3
+        assert card.data["avg_ratio"] == 2.0
+
+    async def test_consistent_overestimate_fires_with_lower_priority(self):
+        """Actual = 0.5× planned → "overestimate" card with priority
+        2 (less urgent — user is exceeding the plan in a good way)."""
+        today = datetime.now(UTC).date()
+        intentions = []
+        beats = []
+        for i in range(3):
+            d = today - timedelta(days=i)
+            intentions.append(
+                Intention(project_id="p1", date=d, planned_minutes=60, completed=True)
+            )
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(minutes=30)))
+        svc = self._service()
+        cards = svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")})
+        assert len(cards) == 1
+        card = cards[0]
+        assert "overestimate" in card.title.lower()
+        assert card.priority == 2
+        assert card.data["avg_ratio"] == 0.5
+
+    async def test_within_20_percent_returns_no_card(self):
+        """Ratio in [0.8, 1.2] is "good enough" — no card. Pin the
+        threshold so a slight habitual under/over doesn't drown the
+        dashboard in noise."""
+        today = datetime.now(UTC).date()
+        intentions = []
+        beats = []
+        for i in range(3):
+            d = today - timedelta(days=i)
+            intentions.append(
+                Intention(project_id="p1", date=d, planned_minutes=60, completed=True)
+            )
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(minutes=65)))
+        svc = self._service()
+        assert svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")}) == []
+
+
+class TestPatternDetectorsGoalPacing:
+    """_detect_goal_pacing fires Friday/Saturday/Sunday when a
+    project's weekly target goal is at < 50% with ≤3 days left.
+    Catches the "I forgot to work on X this week" pattern.
+
+    Risk: an over-aggressive pacing alert (firing on Mon when there
+    are 7 days left) would be noise."""
+
+    def _service(self):
+        return _intel_service()
+
+    def _friday_after(self, base: date) -> date:
+        from beats.domain.intelligence import _monday_of
+
+        return _monday_of(base) + timedelta(days=4)
+
+    async def test_no_projects_returns_no_card(self):
+        svc = self._service()
+        assert svc._detect_goal_pacing([], [], self._friday_after(datetime.now(UTC).date())) == []
+
+    async def test_skips_archived_projects(self):
+        archived = _project("p1", "Old", weekly_goal=5.0, archived=True)
+        svc = self._service()
+        result = svc._detect_goal_pacing(
+            [], [archived], self._friday_after(datetime.now(UTC).date())
+        )
+        assert result == []
+
+    async def test_skips_projects_without_goal(self):
+        no_goal = _project("p1", "Casual", weekly_goal=None)
+        svc = self._service()
+        result = svc._detect_goal_pacing(
+            [], [no_goal], self._friday_after(datetime.now(UTC).date())
+        )
+        assert result == []
+
+    async def test_early_in_week_skips_card(self):
+        """On Monday there are still 7 days left — even at 0%
+        progress, no pacing card fires. Threshold is days_left ≤ 3."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        projects = [_project("p1", "Alpha", weekly_goal=10.0)]
+        svc = self._service()
+        assert svc._detect_goal_pacing([], projects, this_monday) == []
+
+    async def test_friday_with_low_progress_fires(self):
+        """Friday + < 50% of goal tracked → card with remaining
+        hours and days_left in the data dict."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        friday = self._friday_after(today)
+        monday = _monday_of(friday)
+        s = datetime.combine(monday, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        # 1h tracked vs 10h goal → 10%, well under 50%.
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=1))]
+        projects = [_project("p1", "Alpha", weekly_goal=10.0)]
+        svc = self._service()
+        cards = svc._detect_goal_pacing(beats, projects, friday)
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.type == "goal_pacing"
+        assert "Alpha" in card.title
+        assert "9.0h" in card.title
+        assert card.priority == 4
+        assert card.data["days_left"] == 3
+        assert card.data["remaining"] == 9.0
+
+    async def test_friday_with_high_progress_skips(self):
+        """≥ 50% progress by Friday → no nag."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        friday = self._friday_after(today)
+        monday = _monday_of(friday)
+        s = datetime.combine(monday, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=6))]
+        projects = [_project("p1", "Alpha", weekly_goal=10.0)]
+        svc = self._service()
+        assert svc._detect_goal_pacing(beats, projects, friday) == []
+
+    async def test_goal_already_met_returns_no_card(self):
+        """remaining ≤ 0 → no card. "X to go" makes no sense when
+        the user is already at or over goal."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        friday = self._friday_after(today)
+        monday = _monday_of(friday)
+        s = datetime.combine(monday, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=10))]
+        projects = [_project("p1", "Alpha", weekly_goal=10.0)]
+        svc = self._service()
+        assert svc._detect_goal_pacing(beats, projects, friday) == []
