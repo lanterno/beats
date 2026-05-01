@@ -9,7 +9,9 @@ src/beats/
 ├── api/          Route handlers + Pydantic schemas
 │   ├── routers/  One file per resource — see CLAUDE.md (root) for the full route table
 │   ├── errors.py     Unified error envelope: {detail, code, fields?}
-│   ├── middleware/   Auth, idempotency, rate limit
+│   ├── middleware/   IdempotencyMiddleware (the auth middleware lives in
+│   │                  src/server.py; rate limits are decorator-based via
+│   │                  slowapi on the routes themselves)
 │   ├── schemas.py    Request/response Pydantic models
 │   └── dependencies.py
 ├── domain/       Business logic + models (no framework deps)
