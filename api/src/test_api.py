@@ -1329,6 +1329,134 @@ class TestCoachDeleteAndChatSse:
         assert body.rstrip().endswith("data: [DONE]")
 
 
+class TestCoachBriefAndReviewErrorPaths:
+    """Three coach endpoints with uncovered error envelopes:
+    /brief/generate (BudgetExceeded → 429, generic → 502),
+    /memory/rewrite (generic → 502, BudgetExceeded already
+    pinned by TestCoachRouterGapFill), and /brief/today happy
+    path (when a brief doc exists). Pin the user-facing envelopes
+    — the same shape contract the chat SSE branch follows."""
+
+    def _db(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        return sync, sync[db_name]
+
+    @pytest.fixture(autouse=True)
+    def _reset_briefs(self, auth_info):
+        sync, db = self._db()
+        db.daily_briefs.delete_many({})
+        db.coach_memory.delete_many({})
+        sync.close()
+        yield
+
+    def test_brief_today_returns_doc_when_exists(self, auth_info):
+        """GET /brief/today with a seeded brief → BriefResponse
+        envelope. Pin so the dashboard can render the brief
+        without a separate "no brief yet" empty state when one
+        exists."""
+        from datetime import UTC, date, datetime
+
+        sync, db = self._db()
+        today_iso = date.today().isoformat()
+        db.daily_briefs.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "date": today_iso,
+                "body": "You logged 2 hours on Alpha already.",
+                "created_at": datetime.now(UTC),
+            }
+        )
+        sync.close()
+
+        resp = client.get("/api/coach/brief/today", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        # BriefResponse pins date + body — pin the body field which
+        # the dashboard binds to. The exact `date` value is the
+        # ISO string we seeded.
+        assert body["date"] == today_iso
+        assert body["body"] == "You logged 2 hours on Alpha already."
+
+    def test_brief_generate_budget_exceeded_returns_429_envelope(self, monkeypatch, auth_info):
+        """POST /brief/generate when BudgetExceeded fires inside
+        generate_brief → 429 with BUDGET_EXCEEDED code (NOT the
+        generic RATE_LIMITED). Pin so the UI's "monthly LLM
+        budget reached" toast triggers from the right code."""
+        from beats.api.routers import coach as coach_router
+        from beats.coach.usage import BudgetExceeded
+
+        async def fake_generate_brief(*args, **kwargs):  # noqa: ARG001
+            raise BudgetExceeded(spent=12.50, limit=10.00)
+
+        monkeypatch.setattr(coach_router, "generate_brief", fake_generate_brief)
+
+        resp = client.post("/api/coach/brief/generate", headers=auth_info["headers"])
+        assert resp.status_code == 429
+        body = resp.json()
+        # Envelope: top-level `code` + `detail` (the unified
+        # error envelope flattens nested HTTPException details
+        # into the detail string)
+        assert body["code"] == "BUDGET_EXCEEDED"
+        assert "$12.50" in str(body)
+        assert "$10.00" in str(body)
+
+    def test_brief_generate_generic_failure_returns_502_envelope(self, monkeypatch, auth_info):
+        """Any other exception inside generate_brief → 502 with a
+        SANITIZED message. Pin so the actual exception text
+        ("anthropic exploded") doesn't leak to the user — only
+        the canned "the coach is resting" string surfaces."""
+        from beats.api.routers import coach as coach_router
+
+        async def fake_generate_brief(*args, **kwargs):  # noqa: ARG001
+            raise RuntimeError("anthropic exploded")
+
+        monkeypatch.setattr(coach_router, "generate_brief", fake_generate_brief)
+
+        resp = client.post("/api/coach/brief/generate", headers=auth_info["headers"])
+        assert resp.status_code == 502
+        text = resp.text
+        assert "coach is resting" in text
+        # Internal exception message MUST NOT leak
+        assert "anthropic exploded" not in text
+
+    def test_brief_generate_invalid_date_returns_400_envelope(self, auth_info):
+        """POST /brief/generate with a malformed date string → 400
+        with INVALID_DATE code. Pin so a typo doesn't 500 the
+        endpoint."""
+        resp = client.post(
+            "/api/coach/brief/generate",
+            json={"date": "not-a-date"},
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["code"] == "INVALID_DATE"
+
+    def test_memory_rewrite_generic_failure_returns_502(self, monkeypatch, auth_info):
+        """Generic exception inside rewrite_coach_memory → 502.
+        Pin so the rewrite endpoint doesn't expose internal error
+        text. BudgetExceeded → 429 path is already covered by
+        TestCoachRouterGapFill.test_memory_rewrite_budget_exceeded."""
+        from beats.api.routers import coach as coach_router
+
+        async def fake_rewrite(*args, **kwargs):  # noqa: ARG001
+            raise RuntimeError("memory rewrite blew up internally")
+
+        monkeypatch.setattr(coach_router, "rewrite_coach_memory", fake_rewrite)
+
+        resp = client.post("/api/coach/memory/rewrite", headers=auth_info["headers"])
+        assert resp.status_code == 502
+        text = resp.text
+        # Sanitized message; internal text not leaked
+        assert "memory rewrite blew up" not in text
+
+
 class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:
     {detail: str, code: str, fields?: list}."""
