@@ -83,7 +83,14 @@ void setup() {
     btnNextProject.begin();
     btnMode.begin();
 
-    // WiFi
+    // WiFi. setAutoReconnect+persistent reset to true after every
+    // begin() — calling them explicitly is harmless and documents
+    // the intent. Without auto-reconnect, the wall-clock connects
+    // once at boot and goes silent for the rest of its life if the
+    // AP blips: a failure mode for a device that's literally mounted
+    // on a wall and never gets power-cycled.
+    WiFi.setAutoReconnect(true);
+    WiFi.persistent(true);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     eink.showStatusLine("Connecting WiFi...");
 
