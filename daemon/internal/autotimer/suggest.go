@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/collector"
@@ -38,6 +39,7 @@ type Tracker struct {
 	client                Suggester
 	notify                Notifier
 	consecutiveHighFlow   int
+	firstHighFlowStart    time.Time // window_start of the first window in the current high-flow streak
 	lastSuggestedCategory string
 }
 
@@ -60,9 +62,19 @@ func NewTrackerWithNotifier(c Suggester, n Notifier) *Tracker {
 // It checks if sustained high flow warrants a timer suggestion.
 func (t *Tracker) OnFlowWindow(ctx context.Context, w collector.FlowWindow) {
 	if w.FlowScore >= FlowThreshold {
+		// Pin the start of the streak when consecutive count
+		// transitions from zero — used to compute actual elapsed
+		// minutes for the notification body, regardless of
+		// FlushIntervalSec. The previous code used the window
+		// count as a stand-in for minutes, which only worked when
+		// FlushIntervalSec was the default 60s.
+		if t.consecutiveHighFlow == 0 {
+			t.firstHighFlowStart = w.WindowStart
+		}
 		t.consecutiveHighFlow++
 	} else {
 		t.consecutiveHighFlow = 0
+		t.firstHighFlowStart = time.Time{}
 		t.lastSuggestedCategory = ""
 		return
 	}
@@ -102,9 +114,20 @@ func (t *Tracker) OnFlowWindow(ctx context.Context, w collector.FlowWindow) {
 	t.lastSuggestedCategory = w.DominantCategory
 	log.Printf("autotimer: suggesting timer for %q (project: %s)", suggestion.ProjectName, suggestion.ProjectID)
 
+	// Compute actual elapsed minutes from the first high-flow
+	// window's start. Falls back to the count (which equals minutes
+	// at the default 60s flush) if firstHighFlowStart was somehow
+	// never set — defensive belt for a flow that should have set it.
+	elapsedMin := t.consecutiveHighFlow
+	if !t.firstHighFlowStart.IsZero() {
+		elapsedMin = int(w.WindowEnd.Sub(t.firstHighFlowStart).Minutes())
+		if elapsedMin < 1 {
+			elapsedMin = 1
+		}
+	}
 	t.notify(
 		"Start timer?",
 		fmt.Sprintf("You've been focused on %s for %d minutes. Start tracking \"%s\"?",
-			w.DominantCategory, t.consecutiveHighFlow, suggestion.ProjectName),
+			w.DominantCategory, elapsedMin, suggestion.ProjectName),
 	)
 }

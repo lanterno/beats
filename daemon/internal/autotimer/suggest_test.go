@@ -3,6 +3,7 @@ package autotimer
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,19 @@ func window(start time.Time, offsetMin int, score float64, category string) coll
 	return collector.FlowWindow{
 		WindowStart:      start.Add(time.Duration(offsetMin) * time.Minute),
 		WindowEnd:        start.Add(time.Duration(offsetMin+1) * time.Minute),
+		FlowScore:        score,
+		DominantCategory: category,
+	}
+}
+
+// windowSec is window's variant for non-default flush cadences. Used by
+// the "30s flush" test below to produce 8 high-flow windows that span
+// only 4 minutes of wall-clock time (not 8) — would lie under the old
+// "%d minutes = %d windows" formatting.
+func windowSec(start time.Time, offsetSec, durationSec int, score float64, category string) collector.FlowWindow {
+	return collector.FlowWindow{
+		WindowStart:      start.Add(time.Duration(offsetSec) * time.Second),
+		WindowEnd:        start.Add(time.Duration(offsetSec+durationSec) * time.Second),
 		FlowScore:        score,
 		DominantCategory: category,
 	}
@@ -212,5 +226,38 @@ func TestTracker_ApiError_IsSwallowed(t *testing.T) {
 	}
 	if len(notif.calls) != 0 {
 		t.Errorf("expected 0 notifications when API errors, got %d", len(notif.calls))
+	}
+}
+
+func TestTracker_NotificationBodyReflectsActualMinutesNotWindowCount(t *testing.T) {
+	// The previous implementation used `consecutiveHighFlow` (window
+	// count) as the "minutes" value in the notification body — which
+	// happened to be correct only because FlushIntervalSec defaults to
+	// 60s. Reconfigure the daemon to flush every 30s and the message
+	// would lie ("for 8 minutes" when only 4 minutes have actually
+	// elapsed). Regression guard: 8 windows × 30s = 4 minutes.
+	api := &fakeSuggester{
+		response: client.AutoTimerSuggestion{ShouldSuggest: true, ProjectName: "Beats"},
+	}
+	notif := &notifications{}
+	tr := NewTrackerWithNotifier(api, notif.record)
+
+	start := time.Date(2026, 4, 30, 9, 0, 0, 0, time.UTC)
+	for i := 0; i < MinConsecutiveHighFlow; i++ {
+		// 30s windows back-to-back: window i covers [i*30, i*30+30) seconds.
+		tr.OnFlowWindow(context.Background(), windowSec(start, i*30, 30, 0.85, "coding"))
+	}
+	if len(notif.calls) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(notif.calls))
+	}
+	body := notif.calls[0][1]
+	// 8 windows × 30s = 240s = 4 minutes. The message must say "4
+	// minutes", NOT "8 minutes" (which would mean we regressed to
+	// using consecutiveHighFlow as the elapsed value).
+	if !strings.Contains(body, "for 4 minutes") {
+		t.Errorf("expected actual elapsed minutes in body, got: %q", body)
+	}
+	if strings.Contains(body, "for 8 minutes") {
+		t.Errorf("notification still uses window count as minutes — regression: %q", body)
 	}
 }
