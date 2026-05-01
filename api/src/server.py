@@ -48,6 +48,12 @@ PUBLIC_PREFIXES = ("/api/auth", "/health", "/talk/ding", "/api/device/pair/excha
 
 # Paths that device tokens (daemon) are allowed to access
 DEVICE_ALLOWED_PREFIXES = (
+    # Wall-clock firmware reads /status on a 10s poll for the timer
+    # state + today_minutes + theme. Without this prefix, the
+    # device-token middleware 403s every poll and the wall-clock
+    # never sees real data — only the test_device_status_shape_…
+    # coverage caught the absence.
+    "/api/device/status",
     "/api/device/heartbeat",
     "/api/device/favorites",
     "/api/signals",

@@ -1506,6 +1506,120 @@ class TestDevicePairingAPI:
         resp = client.get("/api/device/registrations", headers=auth_headers)
         assert not any(r["device_id"] == device_id for r in resp.json())
 
+    def test_device_status_shape_is_what_the_wall_clock_reads(self):
+        """GET /api/device/status returns the field shape the ESP32 wall
+        clock parser expects. Pinned because a contract drift on this
+        endpoint is what silently broke the firmware (commit 3e7c507):
+        every key was renamed (clocked_in vs is_active,
+        daily_total_minutes vs today_minutes, project_color_rgb as
+        int[3] vs hex string, etc.) without a paired test catching it.
+        """
+        # Pair a device — required because the endpoint is in the
+        # device-token-allowed prefix list.
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_headers = {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+        resp = client.get("/api/device/status", headers=device_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        # Required fields the wall clock unconditionally reads.
+        for key in (
+            "clocked_in",
+            "daily_total_minutes",
+            "energy_level",
+            "theme_accent_rgb",
+        ):
+            assert key in body, f"missing required key {key!r}: {body}"
+
+        # Type contract: theme_accent_rgb is a 3-int RGB list (the
+        # firmware passes it straight to FastLED's CRGB(r,g,b)).
+        assert isinstance(body["theme_accent_rgb"], list), body
+        assert len(body["theme_accent_rgb"]) == 3, body["theme_accent_rgb"]
+        for component in body["theme_accent_rgb"]:
+            assert isinstance(component, int) and 0 <= component <= 255, component
+
+        # When clocked_in is True, project_color_rgb / elapsed_minutes
+        # / project_name / project_id are also present. Default fresh-
+        # user state has no active timer so we don't exercise that
+        # branch here — but the firmware's struct provides defaults
+        # for all of them, so the un-clocked-in path is the
+        # interesting one to lock.
+        assert body["clocked_in"] is False
+        assert body["daily_total_minutes"] == 0
+        assert body["energy_level"] == 0
+
+    def test_device_favorites_shape_is_what_the_wall_clock_reads(self):
+        """GET /api/device/favorites returns each project with the
+        color_rgb field shape the firmware now reads (was
+        silently parsing a 'color' hex string that doesn't exist).
+        """
+        # Create a project so we have at least one favorite.
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Test Wall Clock Favorite"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+
+        # Pair + GET favorites with the device token.
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_headers = {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+        resp = client.get("/api/device/favorites", headers=device_headers)
+        assert resp.status_code == 200, resp.text
+        favorites = resp.json()
+        assert isinstance(favorites, list)
+        assert len(favorites) >= 1
+        for fav in favorites:
+            assert "id" in fav and "name" in fav, fav
+            # color_rgb is the int[3] the wall-clock's rgbFromArray reads.
+            # NOT "color" (the previously-misnamed hex-string key).
+            assert "color_rgb" in fav, fav
+            assert "color" not in fav, (
+                f"unexpected legacy 'color' key — wall-clock reads color_rgb: {fav}"
+            )
+            assert isinstance(fav["color_rgb"], list) and len(fav["color_rgb"]) == 3
+
+    def test_device_heartbeat_persists_telemetry_for_get(self):
+        """POST /api/device/heartbeat with telemetry stores the values;
+        GET /api/device/heartbeat returns them. Locks in the round-trip
+        the wall-clock's heartbeat tick (commit 45307e5) relies on for
+        the device-health dashboard.
+        """
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_headers = {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+        resp = client.post(
+            "/api/device/heartbeat",
+            json={
+                "battery_voltage": 4.05,
+                "wifi_rssi": -56,
+                "uptime_seconds": 14400,
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["battery_voltage"] == 4.05
+        assert body["wifi_rssi"] == -56
+        assert body["uptime_seconds"] == 14400
+
+        # GET should return the same values (single-device in-memory
+        # store; the next POST overwrites).
+        resp = client.get("/api/device/heartbeat", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["battery_voltage"] == 4.05
+        assert body["wifi_rssi"] == -56
+        assert body["uptime_seconds"] == 14400
+
 
 class TestSignalsAPI:
     """Test suite for signals (flow windows + signal summaries) endpoints."""
