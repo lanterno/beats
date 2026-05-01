@@ -1438,6 +1438,304 @@ class TestAccountAPI:
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
 
+class TestPlanningAPI:
+    """/api/plans/* — weekly plans, recurring intentions, weekly reviews,
+    intention streaks. Previously zero coverage. Tests pin the
+    template-application logic (day-of-week filter + dedup against
+    existing) and the streak math (current walks back from today, best
+    scans the full set), since those are the parts with real logic
+    rather than thin CRUD."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_planning_state(self, auth_info):
+        """clean_db is class-scoped — wipe the collections this class
+        writes to before each test."""
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+        for coll in (
+            "weekly_plans",
+            "recurring_intentions",
+            "weekly_reviews",
+            "intentions",
+        ):
+            db[coll].delete_many({})
+        sync.close()
+        yield
+
+    # ── Weekly plans ──────────────────────────────────────────────────
+
+    def test_get_weekly_plan_default_is_current_monday_empty_budgets(self):
+        from datetime import date, timedelta
+
+        resp = client.get("/api/plans/weekly", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        expected_monday = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+        assert body["week_of"] == expected_monday
+        assert body["budgets"] == []
+
+    def test_put_weekly_plan_then_get_round_trips(self):
+        resp = client.put(
+            "/api/plans/weekly",
+            json={
+                "week_of": "2026-04-27",
+                "budgets": [
+                    {"project_id": "p-alpha", "planned_hours": 12.5},
+                    {"project_id": "p-beta", "planned_hours": 6.0},
+                ],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+
+        # Read it back.
+        resp = client.get("/api/plans/weekly?week_of=2026-04-27", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["week_of"] == "2026-04-27"
+        budgets = sorted(body["budgets"], key=lambda b: b["project_id"])
+        assert [b["project_id"] for b in budgets] == ["p-alpha", "p-beta"]
+        assert {b["project_id"]: b["planned_hours"] for b in budgets} == {
+            "p-alpha": 12.5,
+            "p-beta": 6.0,
+        }
+
+    def test_put_weekly_plan_upserts(self):
+        # First write
+        client.put(
+            "/api/plans/weekly",
+            json={"week_of": "2026-05-04", "budgets": [{"project_id": "p1", "planned_hours": 5}]},
+            headers=auth_headers,
+        )
+        # Overwrite
+        client.put(
+            "/api/plans/weekly",
+            json={"week_of": "2026-05-04", "budgets": [{"project_id": "p2", "planned_hours": 10}]},
+            headers=auth_headers,
+        )
+        body = client.get("/api/plans/weekly?week_of=2026-05-04", headers=auth_headers).json()
+        # Only the second write survives — full replacement, not merge.
+        assert [b["project_id"] for b in body["budgets"]] == ["p2"]
+
+    # ── Recurring intentions ──────────────────────────────────────────
+
+    def test_create_then_list_recurring_intention(self):
+        resp = client.post(
+            "/api/plans/recurring",
+            json={"project_id": "p-x", "planned_minutes": 90, "days_of_week": [0, 2, 4]},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        created = resp.json()
+        assert created["project_id"] == "p-x"
+        assert created["planned_minutes"] == 90
+        assert created["days_of_week"] == [0, 2, 4]
+        assert created["enabled"] is True
+
+        listing = client.get("/api/plans/recurring", headers=auth_headers).json()
+        assert len(listing) == 1
+        assert listing[0]["project_id"] == "p-x"
+
+    def test_delete_recurring_intention(self):
+        created = client.post(
+            "/api/plans/recurring",
+            json={"project_id": "p-doomed"},
+            headers=auth_headers,
+        ).json()
+
+        resp = client.delete(f"/api/plans/recurring/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] is True
+
+        assert client.get("/api/plans/recurring", headers=auth_headers).json() == []
+
+    def test_apply_creates_intentions_for_matching_weekday(self):
+        """Templates whose days_of_week includes today's weekday should
+        produce intentions; others should not. Templates that match but
+        whose project already has an intention today should be skipped
+        (idempotent re-apply)."""
+        from datetime import date
+
+        today_dow = date.today().weekday()
+        other_dow = (today_dow + 1) % 7
+
+        # Matches today
+        client.post(
+            "/api/plans/recurring",
+            json={
+                "project_id": "fires-today",
+                "planned_minutes": 45,
+                "days_of_week": [today_dow],
+            },
+            headers=auth_headers,
+        )
+        # Doesn't match today
+        client.post(
+            "/api/plans/recurring",
+            json={
+                "project_id": "fires-other-day",
+                "planned_minutes": 30,
+                "days_of_week": [other_dow],
+            },
+            headers=auth_headers,
+        )
+
+        # First apply creates exactly the matching one.
+        resp = client.post("/api/plans/recurring/apply", headers=auth_headers)
+        assert resp.status_code == 200
+        first = resp.json()
+        assert first["created"] == 1
+        assert first["date"] == date.today().isoformat()
+
+        # Second apply is idempotent — the intention already exists.
+        resp = client.post("/api/plans/recurring/apply", headers=auth_headers)
+        assert resp.json()["created"] == 0
+
+    # ── Weekly reviews ────────────────────────────────────────────────
+
+    def test_get_weekly_review_default_returns_empty_shape(self):
+        from datetime import date, timedelta
+
+        resp = client.get("/api/plans/reviews/weekly", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        expected = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+        assert body == {
+            "week_of": expected,
+            "went_well": "",
+            "didnt_go_well": "",
+            "to_change": "",
+        }
+
+    def test_upsert_weekly_review_round_trip(self):
+        client.put(
+            "/api/plans/reviews/weekly",
+            json={
+                "week_of": "2026-04-27",
+                "went_well": "shipped feature X",
+                "didnt_go_well": "too many context switches",
+                "to_change": "block mornings for deep work",
+            },
+            headers=auth_headers,
+        )
+        body = client.get(
+            "/api/plans/reviews/weekly?week_of=2026-04-27", headers=auth_headers
+        ).json()
+        assert body["went_well"] == "shipped feature X"
+        assert body["didnt_go_well"] == "too many context switches"
+        assert body["to_change"] == "block mornings for deep work"
+
+    def test_recent_reviews_lists_in_recency_order(self):
+        for week, note in [
+            ("2026-03-30", "older"),
+            ("2026-04-06", "middle"),
+            ("2026-04-13", "newer"),
+        ]:
+            client.put(
+                "/api/plans/reviews/weekly",
+                json={"week_of": week, "went_well": note},
+                headers=auth_headers,
+            )
+
+        body = client.get("/api/plans/reviews/weekly/recent", headers=auth_headers).json()
+        assert len(body) == 3
+        # repo.list_recent is by week descending — newest first.
+        assert body[0]["week_of"] == "2026-04-13"
+        assert body[-1]["week_of"] == "2026-03-30"
+
+    # ── Streaks ───────────────────────────────────────────────────────
+
+    def test_streaks_zero_on_no_data(self):
+        resp = client.get("/api/plans/intention-streaks", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"current_streak": 0, "best_streak": 0}
+
+    def test_streaks_count_only_days_where_all_intentions_completed(self, auth_info):
+        """A day with one completed and one not-completed intention does
+        NOT count — the current/best streaks both walk only the
+        all-complete days. Locks in the predicate at planning.py:196."""
+        import os
+        from datetime import date, timedelta
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+
+        user_id = auth_info["user_id"]
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        # Today: two intentions, both completed → counts.
+        # Yesterday: two intentions, one not completed → does not count.
+        db.intentions.insert_many(
+            [
+                {
+                    "_id": ObjectId(),
+                    "user_id": user_id,
+                    "project_id": "p1",
+                    "date": today.isoformat(),
+                    "planned_minutes": 60,
+                    "completed": True,
+                },
+                {
+                    "_id": ObjectId(),
+                    "user_id": user_id,
+                    "project_id": "p2",
+                    "date": today.isoformat(),
+                    "planned_minutes": 60,
+                    "completed": True,
+                },
+                {
+                    "_id": ObjectId(),
+                    "user_id": user_id,
+                    "project_id": "p1",
+                    "date": yesterday.isoformat(),
+                    "planned_minutes": 60,
+                    "completed": True,
+                },
+                {
+                    "_id": ObjectId(),
+                    "user_id": user_id,
+                    "project_id": "p2",
+                    "date": yesterday.isoformat(),
+                    "planned_minutes": 60,
+                    "completed": False,  # ← breaks the streak
+                },
+            ]
+        )
+        sync.close()
+
+        body = client.get("/api/plans/intention-streaks", headers=auth_headers).json()
+        # Today is the only fully-complete day → current = 1, best = 1.
+        assert body == {"current_streak": 1, "best_streak": 1}
+
+    # ── Auth ──────────────────────────────────────────────────────────
+
+    def test_planning_endpoints_require_auth(self):
+        for method, path in [
+            ("GET", "/api/plans/weekly"),
+            ("PUT", "/api/plans/weekly"),
+            ("GET", "/api/plans/recurring"),
+            ("POST", "/api/plans/recurring"),
+            ("POST", "/api/plans/recurring/apply"),
+            ("GET", "/api/plans/reviews/weekly"),
+            ("PUT", "/api/plans/reviews/weekly"),
+            ("GET", "/api/plans/reviews/weekly/recent"),
+            ("GET", "/api/plans/intention-streaks"),
+        ]:
+            resp = client.request(method, path)
+            assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
 class TestDuplicateEmailPrevention:
     """Test that the unique index on users.email prevents duplicates."""
 
