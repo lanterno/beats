@@ -132,6 +132,24 @@ describe("aggregateFlowBy (generic)", () => {
 		expect(stats).toHaveLength(1);
 		expect(stats[0].key).toBe("go");
 	});
+
+	it("tie-breaks on avg score when minutes match — same rule as the daemon and API", () => {
+		// go and rust both have 2 windows (count=2). go has higher
+		// avg (0.85 vs 0.55), so go must come first. The previous
+		// implementation only sorted by minutes, leaving the tie
+		// resolution to insertion order — different from the
+		// Go aggregateBy and Python _top_bucket which both
+		// secondary-sort by avg.
+		const windows = [
+			w({ flow_score: 0.5, editor_language: "rust" }),
+			w({ flow_score: 0.6, editor_language: "rust" }),
+			w({ flow_score: 0.8, editor_language: "go" }),
+			w({ flow_score: 0.9, editor_language: "go" }),
+		];
+		const stats = aggregateFlowBy(windows, (win) => win.editor_language);
+		expect(stats[0].key).toBe("go");
+		expect(stats[1].key).toBe("rust");
+	});
 });
 
 describe("aggregateFlowByDay", () => {

@@ -54,7 +54,16 @@ export function aggregateFlowBy(
 			minutes: count,
 			count,
 		}))
-		.sort((a, b) => b.minutes - a.minutes)
+		.sort((a, b) => {
+			// Primary sort by minutes, tie-break on avg score so the
+			// higher-quality bucket surfaces first when minutes match.
+			// Same rule as the daemon's aggregateBy (Go) and the
+			// API's _top_bucket (Python) — kept in lockstep so a user
+			// toggling between web and `beatsd top` sees the same
+			// row order on tied minutes.
+			if (b.minutes !== a.minutes) return b.minutes - a.minutes;
+			return b.avg - a.avg;
+		})
 		.slice(0, limit);
 }
 
