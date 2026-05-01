@@ -179,9 +179,14 @@ func main() {
 				w.EditorLanguage = hb.Language
 			}
 
+			// app=<friendly label> rather than the raw bundle id —
+			// matches the readability of the drift-detected log line
+			// and the recent / top tables. The cat= field already
+			// carries the category fallback; if the bundle id is
+			// empty, ShortLabel returns "" cleanly.
 			fmt.Printf("flow: %.2f (coherence=%.2f idle=%.0f%% app=%s cat=%s switches=%d repo=%s)\n",
 				w.FlowScore, w.CoherenceScore, w.IdleFraction*100,
-				w.DominantBundleID, w.DominantCategory, w.ContextSwitches,
+				bundle.ShortLabel(w.DominantBundleID), w.DominantCategory, w.ContextSwitches,
 				shortRepo(w.EditorRepo))
 
 			if dryRun {
