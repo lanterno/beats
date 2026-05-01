@@ -2505,3 +2505,196 @@ class TestGatewayBudgetInvariant:
                 purpose="chat",
             )
         assert fake_client == ["create"]
+
+
+class TestGatewayCacheControlIntegration:
+    """The _apply_cache_control helper has unit-level tests in
+    TestApplyCacheControl. This class pins the *integration*: that
+    gateway.complete() actually feeds the cache-marked output to
+    client.messages.create() and that the response's cache fields
+    flow back into UsageTracker.record(). A regression that
+    bypassed _apply_cache_control would silently disable prompt
+    caching across the entire coach surface — ~10× cost increase
+    on cached calls with no error to surface it."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self, monkeypatch):
+        from beats import settings as settings_module
+
+        await Database.connect()
+        await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
+        # Disable budget enforcement so the tests focus on the
+        # cache-control integration.
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 0.0)
+        yield
+        await Database.disconnect()
+
+    @pytest.fixture
+    def fake_client(self, monkeypatch):
+        """Replace _get_client() with a fake whose .messages.create
+        records the kwargs and returns a deterministic Anthropic-
+        shaped response."""
+        from beats.coach import gateway
+
+        captured: dict = {"create_kwargs": None}
+
+        class _FakeUsage:
+            def __init__(self, input_tokens, output_tokens, cache_creation, cache_read):
+                self.input_tokens = input_tokens
+                self.output_tokens = output_tokens
+                self.cache_creation_input_tokens = cache_creation
+                self.cache_read_input_tokens = cache_read
+
+        class _FakeMessage:
+            def __init__(self):
+                from anthropic.types import TextBlock as _TB
+
+                self.content = [_TB(type="text", text="ok", citations=None)]
+                self.model = "claude-opus-4-7"
+                self.usage = _FakeUsage(1500, 80, 400, 800)
+                self.stop_reason = "end_turn"
+
+        class _FakeMessages:
+            async def create(self, **kwargs):
+                captured["create_kwargs"] = kwargs
+                return _FakeMessage()
+
+        class _FakeAnthropicClient:
+            messages = _FakeMessages()
+
+        def fake_get_client():
+            return _FakeAnthropicClient()
+
+        monkeypatch.setattr(gateway, "_get_client", fake_get_client)
+        return captured
+
+    async def test_complete_marks_system_block_with_cache_control(self, fake_client):
+        """Default CacheSpec → system block forwarded with the
+        ephemeral cache marker. A refactor that bypassed
+        _apply_cache_control (e.g. passed `system=system` directly)
+        would silently disable system caching — ~3× cost on every
+        cached call with no error."""
+        from beats.coach.gateway import complete
+
+        await complete(
+            user_id="user-1",
+            system="you are the coach",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+
+        kwargs = fake_client["create_kwargs"]
+        assert kwargs is not None
+        sys_blocks = kwargs["system"]
+        assert isinstance(sys_blocks, list)
+        assert sys_blocks[0]["cache_control"] == {"type": "ephemeral"}
+        assert sys_blocks[0]["text"] == "you are the coach"
+
+    async def test_complete_marks_indexed_messages_with_cache_control(self, fake_client):
+        """When the spec marks an index, that message's content gets
+        a cache_control breakpoint in the API call. brief.py and
+        review.py rely on this — their build_coach_messages produces
+        CacheSpec(cached_turn_indices=[0])."""
+        from beats.coach.gateway import CacheSpec, complete
+
+        await complete(
+            user_id="user-1",
+            system="sys",
+            messages=[
+                {"role": "user", "content": "cacheable user-context block"},
+                {"role": "assistant", "content": "ack"},
+                {"role": "user", "content": "hi"},
+            ],
+            cache_spec=CacheSpec(system_cached=True, cached_turn_indices=[0]),
+            purpose="chat",
+        )
+
+        kwargs = fake_client["create_kwargs"]
+        msgs = kwargs["messages"]
+        assert msgs[0]["content"] == [
+            {
+                "type": "text",
+                "text": "cacheable user-context block",
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+        # Message 1 (assistant ack) NOT converted — still bare string.
+        assert msgs[1]["content"] == "ack"
+
+    async def test_complete_routes_response_cache_fields_into_usage_record(self, fake_client):
+        """Round-trip: the fake returns usage with cache_creation=400,
+        cache_read=800. Those values must land in the persisted
+        llm_usage row. Without this, the cost dashboard's cache
+        breakdown would always show zero."""
+        from beats.coach.gateway import complete
+
+        await complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+
+        doc = await Database.get_db()[LLM_USAGE_COLLECTION].find_one({"user_id": "user-1"})
+        assert doc is not None
+        assert doc["cache_creation_input_tokens"] == 400
+        assert doc["cache_read_input_tokens"] == 800
+
+    async def test_gateway_response_carries_cache_fields_to_caller(self, fake_client):
+        """The GatewayResponse the caller receives carries the cache
+        fields. brief.py and review.py persist these into the
+        daily_briefs / review documents."""
+        from beats.coach.gateway import complete
+
+        result = await complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+
+        assert result.cache_creation_input_tokens == 400
+        assert result.cache_read_input_tokens == 800
+
+    async def test_complete_handles_response_without_cache_fields(self, monkeypatch):
+        """A non-cached response may not include cache_creation /
+        cache_read on the usage object. gateway.py:157-158 defends
+        with getattr(..., 0) or 0. Pin so a refactor that drops the
+        default doesn't AttributeError."""
+        from beats import settings as settings_module
+        from beats.coach import gateway
+        from beats.coach.gateway import complete
+
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 0.0)
+
+        class _BareUsage:
+            input_tokens = 100
+            output_tokens = 50
+            # NO cache_creation_input_tokens / cache_read_input_tokens.
+
+        class _BareMessage:
+            def __init__(self):
+                from anthropic.types import TextBlock as _TB
+
+                self.content = [_TB(type="text", text="ok", citations=None)]
+                self.model = "claude-opus-4-7"
+                self.usage = _BareUsage()
+                self.stop_reason = "end_turn"
+
+        class _BareMessages:
+            async def create(self, **_kwargs):
+                return _BareMessage()
+
+        class _BareClient:
+            messages = _BareMessages()
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: _BareClient())
+
+        result = await complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+        assert result.cache_creation_input_tokens == 0
+        assert result.cache_read_input_tokens == 0
