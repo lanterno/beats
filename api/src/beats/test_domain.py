@@ -3129,3 +3129,109 @@ class TestTimerServiceStatus:
         svc = _timer_service()
         status = await svc.get_status()
         assert status == {"isBeating": False}
+
+
+def _beat_service(beats: list[Beat] | None = None):
+    from beats.domain.services import BeatService
+
+    return BeatService(beat_repo=_FakeBeatRepoForServices(beats))
+
+
+class TestBeatServiceCrud:
+    """BeatService is a thin pass-through to BeatRepository — the
+    one piece of business logic is the end-after-start validation
+    on update. Pin that, plus the list filters."""
+
+    @staticmethod
+    def _completed(id_: str = "b1", start: datetime | None = None, minutes: int = 30) -> Beat:
+        s = start or datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        return Beat(id=id_, project_id="p1", start=s, end=s + timedelta(minutes=minutes))
+
+    async def test_create_round_trips(self):
+        svc = _beat_service()
+        b = self._completed("b-new")
+        created = await svc.create_beat(b)
+        assert created.id == "b-new"
+        again = await svc.get_beat("b-new")
+        assert again.id == "b-new"
+
+    async def test_get_raises_no_object_matched_on_missing_id(self):
+        from beats.domain.exceptions import NoObjectMatched
+
+        svc = _beat_service()
+        with pytest.raises(NoObjectMatched):
+            await svc.get_beat("ghost")
+
+    async def test_update_happy_path(self):
+        b = self._completed("b1", minutes=30)
+        svc = _beat_service([b])
+        new_end = b.start + timedelta(minutes=60)
+        updated = b.model_copy(update={"end": new_end})
+        result = await svc.update_beat(updated)
+        assert result.end == new_end
+
+    async def test_update_raises_invalid_end_time(self):
+        """end < start is rejected — would produce a negative
+        duration. Pin the guard at the service layer (mirrors the
+        rule TimerService.stop_timer enforces)."""
+        from beats.domain.exceptions import InvalidEndTime
+
+        b = self._completed("b1")
+        svc = _beat_service([b])
+        bad = b.model_copy(update={"end": b.start - timedelta(minutes=1)})
+        with pytest.raises(InvalidEndTime):
+            await svc.update_beat(bad)
+
+    async def test_update_allows_none_end_skipping_validation(self):
+        """end=None means the beat is active again (e.g. reverting
+        a stop). Validation only runs when end is set, so this
+        should NOT raise."""
+        b = self._completed("b1")
+        svc = _beat_service([b])
+        cleared = b.model_copy(update={"end": None})
+        result = await svc.update_beat(cleared)
+        assert result.end is None
+
+    async def test_delete_returns_true_when_present(self):
+        b = self._completed("b1")
+        svc = _beat_service([b])
+        assert await svc.delete_beat("b1") is True
+        from beats.domain.exceptions import NoObjectMatched
+
+        with pytest.raises(NoObjectMatched):
+            await svc.get_beat("b1")
+
+    async def test_delete_returns_false_when_missing(self):
+        """Deleting a non-existent id returns False rather than
+        raising — the API layer maps a False result to a 404 in
+        the route. Pin the bool contract."""
+        svc = _beat_service()
+        assert await svc.delete_beat("ghost") is False
+
+    async def test_list_no_filters_returns_all(self):
+        beats = [
+            self._completed("b1"),
+            self._completed("b2", start=datetime(2026, 4, 2, 9, 0, tzinfo=UTC)),
+        ]
+        svc = _beat_service(beats)
+        result = await svc.list_beats()
+        assert {b.id for b in result} == {"b1", "b2"}
+
+    async def test_list_filters_by_project_id(self):
+        b1 = self._completed("b1")
+        b2 = b1.model_copy(update={"id": "b2", "project_id": "p2"})
+        svc = _beat_service([b1, b2])
+        result = await svc.list_beats(project_id="p2")
+        assert [b.id for b in result] == ["b2"]
+
+    async def test_list_filters_by_date(self):
+        """date_filter narrows to a single calendar day. Pin so a
+        regression doesn't return adjacent-day beats and quietly
+        inflate "today" totals."""
+        d1 = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        d2 = datetime(2026, 4, 2, 9, 0, tzinfo=UTC)
+        b1 = self._completed("b1", start=d1)
+        b2 = self._completed("b2", start=d2)
+        svc = _beat_service([b1, b2])
+        result = await svc.list_beats(date_filter=date(2026, 4, 2))
+        assert [b.id for b in result] == ["b2"]
