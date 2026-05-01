@@ -19,6 +19,7 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from beats.coach import brief as brief_module
+from beats.coach import chat as chat_module
 from beats.coach import review as review_module
 from beats.coach.gateway import (
     SONNET_CACHE_READ_PER_MTOK,
@@ -32,6 +33,7 @@ from beats.coach.gateway import (
 )
 from beats.coach.memory import MemoryStore
 from beats.coach.repos import (
+    COACH_CONVERSATIONS_COLLECTION,
     COACH_MEMORY_COLLECTION,
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
@@ -1105,3 +1107,338 @@ class TestApplyCacheControl:
         assert sys_blocks[0]["cache_control"] == {"type": "ephemeral"}
         # No turn cached.
         assert msgs[0]["content"] == "hi"
+
+
+def _fake_tool_use(name: str, tool_input: dict, block_id: str = "tu_1"):
+    """Build an anthropic.types.ToolUseBlock so isinstance() in chat.py
+    narrows it correctly."""
+    from anthropic.types import ToolUseBlock
+
+    return ToolUseBlock(type="tool_use", id=block_id, name=name, input=tool_input)
+
+
+def _resp(content_blocks, **overrides) -> GatewayResponse:
+    """Wrap a list of content blocks into a GatewayResponse with
+    sensible defaults for the fields chat.py doesn't read."""
+    return GatewayResponse(
+        content=content_blocks,
+        model="claude-opus-4-7",
+        input_tokens=overrides.get("input_tokens", 100),
+        output_tokens=overrides.get("output_tokens", 50),
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        cost_usd=overrides.get("cost_usd", 0.001),
+        stop_reason=overrides.get("stop_reason", "end_turn"),
+    )
+
+
+class _FakeRepos:
+    """Stand-in for the CoachRepos dataclass — chat.py only calls
+    `.project.list()` to seed the tool dispatch context."""
+
+    class _ProjectRepo:
+        async def list(self):
+            return []
+
+    project = _ProjectRepo()
+
+
+class TestHandleChatTurn:
+    """The streaming chat turn — runs an LLM round, optionally executes
+    tools, optionally loops, and yields SSE events. Tested by replacing
+    `complete()` with a sequence of canned GatewayResponses and
+    `execute_tool` with a deterministic stub."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self, monkeypatch):
+        await Database.connect()
+        await Database.get_db()[COACH_CONVERSATIONS_COLLECTION].delete_many({})
+
+        # Replace the upstream context builder so we don't need to
+        # seed a fake user with full beats/projects history.
+        async def fake_build(user_id, message, history=None, **_):
+            messages = list(history or [])
+            messages.append({"role": "user", "content": message})
+            return ("system", messages, None)
+
+        monkeypatch.setattr(chat_module, "build_coach_messages", fake_build)
+
+        # Stub build_repos so we don't hit the project repo for real.
+        async def fake_build_repos(_user_id):
+            return _FakeRepos()
+
+        monkeypatch.setattr(chat_module, "build_repos", fake_build_repos)
+
+        yield
+        await Database.disconnect()
+
+    @pytest.fixture
+    def patch_complete(self, monkeypatch):
+        """Returns a setter that lets a test queue a sequence of
+        GatewayResponses; chat.py's tool-loop pulls one per round."""
+        responses: list[GatewayResponse] = []
+        captured_calls: list[dict] = []
+
+        async def fake_complete(**kwargs):
+            captured_calls.append(kwargs)
+            if not responses:
+                raise AssertionError("complete() called more times than expected")
+            return responses.pop(0)
+
+        monkeypatch.setattr(chat_module, "complete", fake_complete)
+        return responses, captured_calls
+
+    @pytest.fixture
+    def patch_execute_tool(self, monkeypatch):
+        """Records every tool call and returns a deterministic string."""
+        calls: list[tuple] = []
+
+        async def fake_execute(_user_id, name, tool_input, *, repos, projects):
+            calls.append((name, tool_input))
+            return f"<{name} result>"
+
+        monkeypatch.setattr(chat_module, "execute_tool", fake_execute)
+        return calls
+
+    async def _drain(self, gen):
+        events = []
+        async for ev in gen:
+            events.append(ev)
+        return events
+
+    async def test_text_only_response_emits_text_then_done(self, patch_complete):
+        """Happy path with no tool use — single LLM round, single text
+        block, terminates with the done event."""
+        from anthropic.types import TextBlock
+
+        responses, _calls = patch_complete
+        responses.append(_resp([TextBlock(type="text", text="hello there", citations=None)]))
+
+        events = await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="hi", conversation_id="c-1")
+        )
+
+        assert events[0] == {"type": "text", "text": "hello there"}
+        assert events[-1] == {"type": "done", "conversation_id": "c-1"}
+
+    async def test_persists_user_and_assistant_messages(self, patch_complete):
+        from anthropic.types import TextBlock
+
+        responses, _ = patch_complete
+        responses.append(_resp([TextBlock(type="text", text="reply", citations=None)]))
+
+        await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="hi", conversation_id="c-1")
+        )
+
+        rows = (
+            await Database.get_db()[COACH_CONVERSATIONS_COLLECTION]
+            .find({"conversation_id": "c-1"})
+            .to_list(10)
+        )
+        roles = sorted([r["role"] for r in rows])
+        # The user message and the assistant message both persist.
+        assert roles == ["assistant", "user"]
+        assistant = next(r for r in rows if r["role"] == "assistant")
+        assert assistant["content"] == "reply"
+
+    async def test_auto_generates_conversation_id_when_omitted(self, patch_complete):
+        """Locks the conversation_id contract — caller can pass None
+        and chat.py mints a uuid that flows through to the done event
+        and to every persisted row."""
+        from anthropic.types import TextBlock
+
+        responses, _ = patch_complete
+        responses.append(_resp([TextBlock(type="text", text="ok", citations=None)]))
+
+        events = await self._drain(chat_module.handle_chat_turn(user_id="user-1", message="hi"))
+
+        done = next(ev for ev in events if ev["type"] == "done")
+        cid = done["conversation_id"]
+        assert cid  # not empty
+        # And the persisted user message carries the same id.
+        row = await Database.get_db()[COACH_CONVERSATIONS_COLLECTION].find_one({"role": "user"})
+        assert row is not None
+        assert row["conversation_id"] == cid
+
+    async def test_tool_use_round_then_text_round(self, patch_complete, patch_execute_tool):
+        """Round 1: LLM emits tool_use → chat.py runs the tool, yields
+        tool_use + tool_result events. Round 2: LLM emits text → done.
+        Locks the loop's two-round happy path."""
+        from anthropic.types import TextBlock
+
+        responses, calls = patch_complete
+        responses.append(
+            _resp(
+                [
+                    TextBlock(type="text", text="let me check", citations=None),
+                    _fake_tool_use("get_score", {}, "tu_1"),
+                ]
+            )
+        )
+        responses.append(_resp([TextBlock(type="text", text="your score is X", citations=None)]))
+
+        events = await self._drain(
+            chat_module.handle_chat_turn(
+                user_id="user-1", message="how am I doing?", conversation_id="c-1"
+            )
+        )
+
+        # Sequence: round 1 text, tool_use, tool_result, round 2 text, done.
+        types = [ev["type"] for ev in events]
+        assert types == ["text", "tool_use", "tool_result", "text", "done"]
+
+        # Tool was actually invoked.
+        assert patch_execute_tool == [("get_score", {})]
+
+        # Round 2 received the tool_result in messages.
+        assert len(calls) == 2
+        round2_messages = calls[1]["messages"]
+        # Last user-role message in round 2 carries the tool_result block.
+        last = round2_messages[-1]
+        assert last["role"] == "user"
+        assert last["content"][0]["type"] == "tool_result"
+        assert last["content"][0]["content"] == "<get_score result>"
+
+    async def test_tool_execution_error_becomes_error_text(self, patch_complete, monkeypatch):
+        """A tool that raises an exception must NOT 500 the chat
+        stream — chat.py catches and surfaces "Error: ..." in the
+        tool_result so the LLM can recover and the user sees the
+        failure."""
+        from anthropic.types import TextBlock
+
+        async def failing_execute(*_args, **_kwargs):
+            raise RuntimeError("tool blew up")
+
+        monkeypatch.setattr(chat_module, "execute_tool", failing_execute)
+
+        responses, _ = patch_complete
+        responses.append(_resp([_fake_tool_use("get_score", {}, "tu_1")]))
+        responses.append(
+            _resp([TextBlock(type="text", text="couldn't fetch your score", citations=None)])
+        )
+
+        events = await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="score?", conversation_id="c-1")
+        )
+
+        tool_result = next(ev for ev in events if ev["type"] == "tool_result")
+        assert "Error: tool blew up" in tool_result["result"]
+
+    async def test_tool_result_truncated_in_sse_event_only(self, patch_complete, monkeypatch):
+        """The SSE event truncates the tool result to
+        TOOL_RESULT_DISPLAY_LIMIT chars (so the UI doesn't render a
+        novel), but the FULL text goes back to the LLM in the next
+        round's messages. Pin both halves — without the LLM-side
+        full-content guarantee, large tool outputs would silently
+        get truncated mid-thought."""
+        from anthropic.types import TextBlock
+
+        big_payload = "x" * 5000  # well over the 500-char display cap
+
+        async def big_execute(*_args, **_kwargs):
+            return big_payload
+
+        monkeypatch.setattr(chat_module, "execute_tool", big_execute)
+
+        responses, calls = patch_complete
+        responses.append(_resp([_fake_tool_use("search_beats", {}, "tu_1")]))
+        responses.append(_resp([TextBlock(type="text", text="ok", citations=None)]))
+
+        events = await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="search", conversation_id="c-1")
+        )
+
+        # SSE event truncated to display limit.
+        tool_result_event = next(ev for ev in events if ev["type"] == "tool_result")
+        assert len(tool_result_event["result"]) == chat_module.TOOL_RESULT_DISPLAY_LIMIT
+
+        # But the LLM message in round 2 has the FULL payload — locks
+        # the contract that the LLM gets to see what really came back.
+        round2_messages = calls[1]["messages"]
+        last = round2_messages[-1]
+        assert last["content"][0]["content"] == big_payload  # full size
+
+    async def test_max_rounds_falls_back_to_limit_message(self, patch_complete, patch_execute_tool):
+        """If the LLM keeps calling tools forever, the loop bails at
+        round 5 with a fixed "reached the tool-call limit" text +
+        done. Pin the cap and the user-visible message — without
+        this guard a runaway LLM would spin until the request times
+        out, costing 5× the budgeted call."""
+        responses, _ = patch_complete
+
+        # Queue 5 rounds of pure tool_use (no text), so the loop never
+        # finds a non-tool response.
+        for i in range(5):
+            responses.append(_resp([_fake_tool_use("get_score", {}, f"tu_{i}")]))
+
+        events = await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="loop", conversation_id="c-1")
+        )
+
+        # Last two events: the limit-hit text + done.
+        text_events = [ev for ev in events if ev["type"] == "text"]
+        # Final text event is the limit message (other text events
+        # would only appear if a round emitted text alongside its
+        # tool_use; we queued pure tool_use so it's the only one).
+        assert any("reached the tool-call limit" in ev["text"].lower() for ev in text_events)
+        assert events[-1]["type"] == "done"
+
+    async def test_history_is_loaded_in_chronological_order(self, patch_complete):
+        """Messages persist with descending sort by created_at, but
+        chat.py reverses to chronological for the LLM. Pin so a
+        refactor that drops the reverse() doesn't feed the LLM
+        history backwards."""
+        from anthropic.types import TextBlock
+
+        _td = timedelta
+        now = datetime.now(UTC)
+        await Database.get_db()[COACH_CONVERSATIONS_COLLECTION].insert_many(
+            [
+                {
+                    "user_id": "user-1",
+                    "conversation_id": "c-1",
+                    "role": "user",
+                    "content": "FIRST",
+                    "created_at": now - _td(minutes=10),
+                },
+                {
+                    "user_id": "user-1",
+                    "conversation_id": "c-1",
+                    "role": "assistant",
+                    "content": "SECOND",
+                    "created_at": now - _td(minutes=5),
+                },
+            ]
+        )
+
+        responses, calls = patch_complete
+        responses.append(_resp([TextBlock(type="text", text="ok", citations=None)]))
+
+        await self._drain(
+            chat_module.handle_chat_turn(user_id="user-1", message="THIRD", conversation_id="c-1")
+        )
+
+        # The fake build_coach_messages preserves history order; the
+        # call to complete() should see FIRST → SECOND → THIRD.
+        sent = calls[0]["messages"]
+        contents = [m["content"] for m in sent if isinstance(m.get("content"), str)]
+        # Should be [FIRST, SECOND, THIRD] in order.
+        assert contents == ["FIRST", "SECOND", "THIRD"]
+
+    async def test_passes_purpose_chat_to_gateway(self, patch_complete):
+        """The cost dashboard distinguishes chat from brief/review.
+        Pin so a refactor doesn't leak chat spend into the wrong
+        bucket."""
+        from anthropic.types import TextBlock
+
+        responses, calls = patch_complete
+        responses.append(_resp([TextBlock(type="text", text="ok", citations=None)]))
+
+        await self._drain(
+            chat_module.handle_chat_turn(user_id="user-99", message="hi", conversation_id="c-1")
+        )
+
+        assert calls[0]["purpose"] == "chat"
+        assert calls[0]["user_id"] == "user-99"
+        assert calls[0]["tools"] is not None  # tools registered every call
