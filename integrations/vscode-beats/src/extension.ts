@@ -31,6 +31,16 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  // ⌘⇧P → "Beats: Open Insights" — opens the configured web URL in
+  // the system browser, pre-filtered to the current workspace's repo
+  // path so the user lands on a view of *this* project's flow rather
+  // than the unfiltered default. Mirrors the click-to-filter chip on
+  // the web Insights page; closes the loop between heartbeat producer
+  // and analytics consumer in the same editor.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("beats.openInsights", openInsights)
+  );
+
   context.subscriptions.push({ dispose: stop });
 }
 
@@ -90,6 +100,22 @@ async function sendHeartbeat(): Promise<void> {
 function workspaceRoot(): string | null {
   const folder = vscode.workspace.workspaceFolders?.[0];
   return folder ? folder.uri.fsPath : null;
+}
+
+/**
+ * Opens the Beats Insights page in the system browser. When a workspace
+ * is open we pass `?repo=<absolute path>` so the page lands on the
+ * already-filtered view — same URL scheme the page uses for its
+ * click-to-filter chip persistence.
+ */
+async function openInsights(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("beats");
+  const base = cfg.get<string>("webUrl", "http://localhost:8080").replace(/\/$/, "");
+  const repo = workspaceRoot();
+  const url = repo
+    ? `${base}/insights?repo=${encodeURIComponent(repo)}`
+    : `${base}/insights`;
+  await vscode.env.openExternal(vscode.Uri.parse(url));
 }
 
 function gitBranch(): string | null {

@@ -31,6 +31,15 @@ machine.
 | `beats.daemonPort` | `37499` | Local TCP port the Beats daemon listens on. |
 | `beats.heartbeatIntervalSeconds` | `30` | Cadence in seconds (min 5). |
 | `beats.privacy.sendBranch` | `true` | Set to `false` to suppress branch names. |
+| `beats.webUrl` | `http://localhost:8080` | Base URL of your Beats web UI; the "Open Insights" command opens this. Set to your public URL for self-hosted deploys. |
+
+## Commands
+
+⌘⇧P (or F1) → "Beats: Open Insights" opens your Beats web UI Insights
+page in the system browser, pre-filtered to the current workspace's
+repo path. Uses the same `?repo=` query string the page persists when
+you click a chip — so a deep link from the editor lands on the same
+filtered view a click would.
 
 ## Install (development)
 
