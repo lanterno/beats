@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,95 @@ func TestFormatTop_LeaderboardWithNoEntriesShowsDash(t *testing.T) {
 	repoSection := out[repoIdx:langIdx]
 	if !strings.Contains(repoSection, "—") {
 		t.Errorf("expected placeholder dash under empty BY REPO, got:\n%s", repoSection)
+	}
+}
+
+func TestFormatTopJSON_RoundTripsAndAlwaysHasAllThreeAxes(t *testing.T) {
+	// JSON output must parse back into the documented topJSONOutput
+	// shape and always include all three axis keys (each may be []) so
+	// jq scripts don't need to guard against missing keys.
+	now := time.Date(2026, 5, 1, 14, 0, 0, 0, time.UTC)
+	windows := []client.FlowWindowRecord{
+		{
+			WindowStart:      now,
+			FlowScore:        0.9,
+			DominantBundleID: "com.microsoft.VSCode",
+			DominantCategory: "coding",
+			EditorRepo:       "/Users/me/code/beats",
+			EditorLanguage:   "go",
+		},
+		{
+			WindowStart:      now.Add(time.Minute),
+			FlowScore:        0.8,
+			DominantBundleID: "com.microsoft.VSCode",
+			DominantCategory: "coding",
+			EditorRepo:       "/Users/me/code/beats",
+			EditorLanguage:   "go",
+		},
+	}
+	out, err := formatTopJSON(windows)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("expected trailing newline so shell prompt lands cleanly, got %q", out)
+	}
+
+	var decoded topJSONOutput
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("output should round-trip through json.Unmarshal: %v\noutput: %s", err, out)
+	}
+	if len(decoded.ByRepo) != 1 || decoded.ByRepo[0].Key != "/Users/me/code/beats" {
+		t.Errorf("by_repo wrong, got %+v", decoded.ByRepo)
+	}
+	if len(decoded.ByLanguage) != 1 || decoded.ByLanguage[0].Key != "go" {
+		t.Errorf("by_language wrong, got %+v", decoded.ByLanguage)
+	}
+	if len(decoded.ByApp) != 1 || decoded.ByApp[0].Key != "com.microsoft.VSCode" {
+		t.Errorf("by_app should use the raw bundle id (not the 'coding' category label), got %+v", decoded.ByApp)
+	}
+}
+
+func TestFormatTopJSON_EmptyAxesAreArraysNotNull(t *testing.T) {
+	// Windows present but with no editor heartbeats — by_repo and
+	// by_language should be `[]`, not omitted or null. by_app falls
+	// back to dominant_category when bundle_id is empty.
+	windows := []client.FlowWindowRecord{
+		{FlowScore: 0.5, DominantCategory: "browser"},
+	}
+	out, err := formatTopJSON(windows)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, `"by_repo": []`) {
+		t.Errorf("expected by_repo to be an empty JSON array, got: %s", out)
+	}
+	if !strings.Contains(out, `"by_language": []`) {
+		t.Errorf("expected by_language to be an empty JSON array, got: %s", out)
+	}
+	// by_app should fall back to the category label since no bundle id
+	// was set on the input window.
+	if !strings.Contains(out, `"key": "browser"`) {
+		t.Errorf("expected by_app to use the category fallback, got: %s", out)
+	}
+}
+
+func TestFormatTopJSON_NoWindowsStillReturnsValidObject(t *testing.T) {
+	// jq users shouldn't have to special-case "no flow today" — empty
+	// input returns the same shape with empty arrays.
+	out, err := formatTopJSON(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var decoded topJSONOutput
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("empty output should still parse: %v", err)
+	}
+	if decoded.ByRepo == nil || decoded.ByLanguage == nil || decoded.ByApp == nil {
+		t.Errorf("empty axes should be [], not nil — got %+v", decoded)
+	}
+	if len(decoded.ByRepo) != 0 || len(decoded.ByLanguage) != 0 || len(decoded.ByApp) != 0 {
+		t.Errorf("expected empty arrays, got %+v", decoded)
 	}
 }

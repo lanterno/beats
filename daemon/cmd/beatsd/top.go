@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,7 +18,12 @@ import (
 // the FlowByRepo / FlowByLanguage / FlowByApp cards on the web Insights
 // page. Useful at a terminal: "what have I been flowing on, ranked?"
 // without switching to the browser.
-func runTop(cfg *config.Config, minutes int) error {
+//
+// When `asJSON` is true the leaderboards are emitted as a single JSON
+// object keyed by axis ({"by_repo": [...], "by_language": [...],
+// "by_app": [...]}) instead of the table — symmetric with `recent
+// --json` and `stats --json`, intended for shell pipelines.
+func runTop(cfg *config.Config, minutes int, asJSON bool) error {
 	if minutes <= 0 {
 		minutes = 60
 	}
@@ -41,17 +47,75 @@ func runTop(cfg *config.Config, minutes int) error {
 		return err
 	}
 
+	if asJSON {
+		out, err := formatTopJSON(windows)
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+		return nil
+	}
 	fmt.Print(formatTop(windows, minutes))
 	return nil
 }
 
+// topJSONOutput is the shape emitted by `beatsd top --json`. Always
+// includes all three axes (each may be an empty array) so downstream
+// `jq` scripts don't have to guard against missing keys.
+type topJSONOutput struct {
+	ByRepo     []topBucket `json:"by_repo"`
+	ByLanguage []topBucket `json:"by_language"`
+	ByApp      []topBucket `json:"by_app"`
+}
+
+// formatTopJSON renders the three leaderboards as a JSON object. Empty
+// arrays (never null) for missing axes — same rule as
+// `formatRecentJSON` since `jq` users would have to special-case null
+// otherwise.
+func formatTopJSON(windows []client.FlowWindowRecord) (string, error) {
+	out := topJSONOutput{
+		ByRepo: aggregateBy(windows, func(w client.FlowWindowRecord) string {
+			return w.EditorRepo
+		}),
+		ByLanguage: aggregateBy(windows, func(w client.FlowWindowRecord) string {
+			return w.EditorLanguage
+		}),
+		ByApp: aggregateBy(windows, func(w client.FlowWindowRecord) string {
+			// JSON consumers want the raw bundle id (or category fallback),
+			// not the human-readable "coding" label that the table form
+			// substitutes for terminal readability. Keeping the raw id
+			// lets jq filters cross-reference with /flow-windows JSON.
+			if w.DominantBundleID != "" {
+				return w.DominantBundleID
+			}
+			return w.DominantCategory
+		}),
+	}
+	if out.ByRepo == nil {
+		out.ByRepo = []topBucket{}
+	}
+	if out.ByLanguage == nil {
+		out.ByLanguage = []topBucket{}
+	}
+	if out.ByApp == nil {
+		out.ByApp = []topBucket{}
+	}
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode JSON: %w", err)
+	}
+	return string(b) + "\n", nil
+}
+
 // topBucket is one row of a leaderboard. Mirrors the shape used by the
 // JS aggregateFlowBy: avg score across the bucket, count of windows
-// (≈ tracked minutes since each window is ~1 min).
+// (≈ tracked minutes since each window is ~1 min). JSON tags match the
+// API's TopBucket schema for consistency across the daemon's `top`,
+// `stats`, and recent flows.
 type topBucket struct {
-	Key   string
-	Avg   float64
-	Count int
+	Key   string  `json:"key"`
+	Avg   float64 `json:"avg"`
+	Count int     `json:"count"`
 }
 
 // formatTop assembles the three leaderboards into a single string.

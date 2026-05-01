@@ -194,12 +194,12 @@ func main() {
 		}
 
 	case "top":
-		// `top` only honors --minutes — the filter flags would defeat its
-		// purpose (discovering which repo/language/app you've been
-		// flowing on). parseFlowFlags still parses them but we just read
-		// the minutes field.
+		// `top` honors --minutes and --json. The filter flags would
+		// defeat its purpose (discovering which repo/language/app you've
+		// been flowing on), so we ignore them even though parseFlowFlags
+		// happens to parse them.
 		f := parseFlowFlags(args)
-		if err := runTop(cfg, f.Minutes); err != nil {
+		if err := runTop(cfg, f.Minutes, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -294,6 +294,7 @@ Commands:
                   --json           emit raw windows as a JSON array (for piping into jq)
   top           Print top-5 leaderboards by repo / language / app for the recent window
                   --minutes N      override the window (default 60)
+                  --json           emit the three leaderboards as a JSON object (for piping into jq)
   stats         Print a one-line headline summary (count · avg · peak · best repo)
                   --minutes N      override the window (default 60)
                   --repo PATH      narrow to a specific editor workspace
