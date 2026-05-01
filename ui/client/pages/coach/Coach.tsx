@@ -32,7 +32,11 @@ export default function Coach() {
 		[handleSend],
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll triggers on state changes
+	// messages.length and currentTool are *trigger* deps: they drive when the
+	// scroll-to-bottom fires but aren't read inside the effect body. Biome's
+	// useExhaustiveDependencies flags this as "extra deps", but removing them
+	// breaks auto-scroll on new message / new tool. Suppression below applies.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only deps
 	useEffect(() => {
 		bottomRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [messages.length, currentTool]);
