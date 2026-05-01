@@ -64,11 +64,22 @@ A local daemon that observes your desktop and computes a Flow Score — a 0–1 
 beatsd pair <code>
 
 # Run the collector (or try dry-run first)
-beatsd --dry-run run
+beatsd run --dry-run
 beatsd run
 ```
 
-See [CLAUDE.md](CLAUDE.md) for full daemon commands. The daemon also supports auto-timer suggestions (notifies you to start tracking when sustained focus is detected) and a distraction shield (alerts when you drift to non-work apps during a timer).
+Once paired, the CLI gives you terminal-native access to your flow data without leaving the shell:
+
+```bash
+beatsd status                 # paired? daemon running? api reachable? today's flow
+beatsd doctor                 # validate every prerequisite ✓/✗
+beatsd recent --here          # last hour of windows in this repo, table form
+beatsd top --here --json      # top-5 leaderboards (repo/lang/app), pipeable into jq
+beatsd stats --language go    # one-line headline for `--repo X / --language Y / --bundle Z`
+beatsd open --here            # open Insights filtered to the current repo
+```
+
+Every read-side command (`recent`, `top`, `stats`, `status`, `doctor`, `config`, `version`) supports `--json` for shell pipelines. `--here` is shorthand for `--repo $(git rev-parse --show-toplevel)`. See [daemon/README.md](daemon/README.md) for the full table. The daemon also supports auto-timer suggestions (notifies you to start tracking when sustained focus is detected) and a distraction shield (alerts when you drift to non-work apps during a timer).
 
 ### Planned integrations
 
