@@ -3878,3 +3878,251 @@ class TestExportSqlite:
         assert out == b'{"a":1,"b":2}'
         assert b" " not in out
         assert b"\n" not in out
+
+
+# =============================================================================
+# Oura Service — personal access token + daily biometric fetch
+# =============================================================================
+
+
+class _FakeHTTPResponse:
+    """Minimal stand-in for httpx.Response used by integration tests."""
+
+    def __init__(self, status_code: int, json_data: dict | None = None):
+        self.status_code = status_code
+        self._json = json_data or {}
+
+    def json(self) -> dict:
+        return self._json
+
+
+class _FakeOuraIntegrationRepo:
+    """In-memory OuraIntegrationRepository fake."""
+
+    def __init__(self, integration=None):
+        self._integration = integration
+
+    async def get(self):
+        return self._integration
+
+    async def upsert(self, integration):
+        self._integration = integration
+        return integration
+
+    async def delete(self) -> bool:
+        had = self._integration is not None
+        self._integration = None
+        return had
+
+
+def _patch_httpx(monkeypatch, route_map: dict):
+    """Monkeypatch httpx.AsyncClient to return canned responses for
+    URLs that contain any key in `route_map`. Values may be a
+    _FakeHTTPResponse or an Exception instance to raise.
+
+    First-match-wins; order keys long-to-short if specificity matters.
+    """
+    import httpx
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self._routes = route_map
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, headers=None, params=None):
+            for key, value in self._routes.items():
+                if key in url:
+                    if isinstance(value, Exception):
+                        raise value
+                    return value
+            return _FakeHTTPResponse(404, {})
+
+        async def post(self, url, headers=None, params=None, data=None, json=None):
+            return await self.get(url, headers=headers, params=params)
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+
+
+class TestOuraServiceConnect:
+    """OuraService.connect validates a PAT against Oura's API
+    before persisting it. Pin the validate-then-persist sequence
+    so a bad token can't be silently saved."""
+
+    async def test_valid_pat_persists_integration(self, monkeypatch):
+        from beats.domain.oura import OuraService
+
+        _patch_httpx(
+            monkeypatch,
+            {"personal_info": _FakeHTTPResponse(200, {"id": "oura-user-42"})},
+        )
+        repo = _FakeOuraIntegrationRepo()
+        svc = OuraService(repo)
+        integration = await svc.connect("pat-good")
+        assert integration.access_token == "pat-good"
+        assert integration.oura_user_id == "oura-user-42"
+        # Pinned: actually upserted into the repo, not just returned
+        assert (await repo.get()).access_token == "pat-good"
+
+    async def test_invalid_pat_raises_and_does_not_persist(self, monkeypatch):
+        """A 401 from /personal_info → DomainException, AND the
+        repo stays empty. Pin the no-side-effects-on-failure
+        invariant — the user shouldn't see a "connected" badge if
+        the token never validated."""
+        from beats.domain.exceptions import DomainException
+        from beats.domain.oura import OuraService
+
+        _patch_httpx(
+            monkeypatch,
+            {"personal_info": _FakeHTTPResponse(401, {"error": "unauthorized"})},
+        )
+        repo = _FakeOuraIntegrationRepo()
+        svc = OuraService(repo)
+        with pytest.raises(DomainException):
+            await svc.connect("pat-bad")
+        assert await repo.get() is None
+
+
+class TestOuraServiceFetchDaily:
+    """fetch_daily aggregates sleep/readiness/HRV from three Oura
+    endpoints. Each call is wrapped in its own try/except so a
+    5xx on readiness shouldn't drop sleep data.
+
+    Risk: a regression that surfaces an HTTP exception from one
+    endpoint would silently zero out the entire day's biometrics.
+    Pin per-endpoint resilience."""
+
+    async def test_no_integration_returns_empty(self, monkeypatch):
+        """When the user hasn't connected Oura, fetch_daily must
+        return {} without making any HTTP calls. Pin so a
+        regression doesn't fire requests for not-connected users."""
+        from beats.domain.oura import OuraService
+
+        _patch_httpx(
+            monkeypatch,
+            {"": RuntimeError("should not have called HTTP without integration")},
+        )
+        repo = _FakeOuraIntegrationRepo(integration=None)
+        svc = OuraService(repo)
+        result = await svc.fetch_daily(date(2026, 4, 1))
+        assert result == {}
+
+    async def test_aggregates_sleep_readiness_and_hrv(self, monkeypatch):
+        """Happy path: all three endpoints return data → result
+        contains sleep_minutes, sleep_efficiency, readiness_score,
+        hrv_ms, resting_hr_bpm. Pin the field names — the
+        biometrics ingest pipeline binds to these keys."""
+        from beats.domain.models import OuraIntegration
+        from beats.domain.oura import OuraService
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "daily_sleep": _FakeHTTPResponse(
+                    200,
+                    {
+                        "data": [
+                            {
+                                "score": 85,
+                                "contributors": {"total_sleep": 27000},
+                            }
+                        ]
+                    },
+                ),
+                "daily_readiness": _FakeHTTPResponse(200, {"data": [{"score": 78}]}),
+                "/sleep": _FakeHTTPResponse(
+                    200,
+                    {"data": [{"average_hrv": 45.5, "lowest_heart_rate": 52}]},
+                ),
+            },
+        )
+        repo = _FakeOuraIntegrationRepo(
+            integration=OuraIntegration(access_token="pat", oura_user_id="u1")
+        )
+        svc = OuraService(repo)
+        result = await svc.fetch_daily(date(2026, 4, 1))
+        assert result["source"] == "oura"
+        assert result["sleep_minutes"] == 450  # 27000 / 60
+        assert result["sleep_efficiency"] == 0.85
+        assert result["readiness_score"] == 78
+        assert result["hrv_ms"] == 45.5
+        assert result["resting_hr_bpm"] == 52
+
+    async def test_readiness_failure_does_not_drop_sleep(self, monkeypatch):
+        """Readiness endpoint raises httpx.HTTPError → sleep data
+        still lands. Pin per-endpoint try/except so a flaky Oura
+        backend can't zero out the user's whole day."""
+        import httpx
+
+        from beats.domain.models import OuraIntegration
+        from beats.domain.oura import OuraService
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "daily_sleep": _FakeHTTPResponse(
+                    200,
+                    {
+                        "data": [
+                            {
+                                "score": 90,
+                                "contributors": {"total_sleep": 28800},
+                            }
+                        ]
+                    },
+                ),
+                "daily_readiness": httpx.ConnectError("network down"),
+                "/sleep": _FakeHTTPResponse(200, {"data": []}),
+            },
+        )
+        repo = _FakeOuraIntegrationRepo(integration=OuraIntegration(access_token="pat"))
+        svc = OuraService(repo)
+        result = await svc.fetch_daily(date(2026, 4, 1))
+        assert result["sleep_minutes"] == 480
+        assert "readiness_score" not in result
+
+    async def test_empty_response_arrays_yield_no_keys(self, monkeypatch):
+        """Each endpoint returns {"data": []} (no record for the
+        date) — result has only `source` and `date`. Pin so a
+        no-data day doesn't produce phantom zero values that
+        masquerade as real measurements."""
+        from beats.domain.models import OuraIntegration
+        from beats.domain.oura import OuraService
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "daily_sleep": _FakeHTTPResponse(200, {"data": []}),
+                "daily_readiness": _FakeHTTPResponse(200, {"data": []}),
+                "/sleep": _FakeHTTPResponse(200, {"data": []}),
+            },
+        )
+        repo = _FakeOuraIntegrationRepo(integration=OuraIntegration(access_token="pat"))
+        svc = OuraService(repo)
+        target = date(2026, 4, 1)
+        result = await svc.fetch_daily(target)
+        assert result == {"source": "oura", "date": target}
+
+
+class TestOuraServiceDisconnect:
+    """disconnect drops the stored integration. Pin the bool
+    contract — the API route maps True/False to 200/404."""
+
+    async def test_disconnect_returns_true_when_present(self):
+        from beats.domain.models import OuraIntegration
+        from beats.domain.oura import OuraService
+
+        repo = _FakeOuraIntegrationRepo(integration=OuraIntegration(access_token="pat"))
+        svc = OuraService(repo)
+        assert await svc.disconnect() is True
+        assert await repo.get() is None
+
+    async def test_disconnect_returns_false_when_absent(self):
+        from beats.domain.oura import OuraService
+
+        svc = OuraService(_FakeOuraIntegrationRepo(integration=None))
+        assert await svc.disconnect() is False
