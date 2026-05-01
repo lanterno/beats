@@ -53,13 +53,21 @@ bool ApiClient::getStatus(DeviceStatus& status) {
     return true;
 }
 
+// startTimer / stopTimer omit the `time` field so the API's
+// default_factory (datetime.now(UTC) on the server) records the
+// real wall-clock moment the request landed. The previous code
+// sent `{"time": "<millis-since-boot>"}` — a number like
+// "12345" — which is not a parseable ISO 8601 datetime. Either
+// the API was 422'ing every press, or it was accepting garbage
+// timestamps and storing them. Server-side default is correct
+// to within request latency (≤200ms over WiFi), which is
+// imperceptible for time tracking.
 bool ApiClient::startTimer(const String& projectId) {
-    String body = "{\"time\":\"" + String(millis()) + "\"}";
-    return httpPost("/api/projects/" + projectId + "/start", body);
+    return httpPost("/api/projects/" + projectId + "/start");
 }
 
 bool ApiClient::stopTimer() {
-    return httpPost("/api/projects/stop", "{\"time\":\"" + String(millis()) + "\"}");
+    return httpPost("/api/projects/stop");
 }
 
 bool ApiClient::getFavorites(FavoriteProject* projects, int& count, int maxCount) {
