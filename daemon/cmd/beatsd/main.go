@@ -170,6 +170,29 @@ func main() {
 		}
 		shieldTracker := shield.NewTracker(func(ev shield.DriftEvent) {
 			fmt.Printf("drift: %s for %s\n", bundle.ShortLabel(ev.BundleID), ev.Duration.Round(time.Second))
+			if dryRun {
+				return
+			}
+			// Persist the drift to the API so the user has a history
+			// to look back at (web UI surface drift events alongside
+			// flow windows). Fire-and-forget in a goroutine: this
+			// callback runs synchronously on the collector loop, and
+			// a slow API call here would stall the next sample. A
+			// post failure is logged but never propagated — drift
+			// detection still works locally even if the API leg is
+			// flaky.
+			go func(ev shield.DriftEvent) {
+				postCtx, postCancel := context.WithTimeout(ctx, 5*time.Second)
+				defer postCancel()
+				err := c.PostDriftEvent(postCtx, client.DriftEventRequest{
+					StartedAt:       ev.StartedAt,
+					DurationSeconds: ev.Duration.Seconds(),
+					BundleID:        ev.BundleID,
+				})
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "post drift: %v\n", err)
+				}
+			}(ev)
 		})
 
 		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
