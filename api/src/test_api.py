@@ -2638,6 +2638,51 @@ class TestSignalsAPI:
         body = resp.json()
         assert body["autostart_repos"] == ["/Users/me/code/example", "/Users/me/code/other"]
 
+    def test_update_project_rejects_invalid_goal_type_with_422(self):
+        """goal_type is a GoalType StrEnum at the schema layer, so an
+        invalid string ("dangerous") fails request validation with a
+        clean 422 + envelope `{detail, code, fields}` instead of
+        bubbling up as a 500 from Project() construction. Locks in
+        the contract — without the enum at the schema, an old client
+        passing a typoed goal_type would 500, hiding the actual
+        validation error from observability.
+        """
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Goal Type Test"},
+            headers=auth_headers,
+        )
+        project_id = resp.json()["id"]
+        resp = client.put(
+            "/api/projects/",
+            json={"id": project_id, "name": "Goal Type Test", "goal_type": "dangerous"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        # The fields[] entry surfaces the offending key and the
+        # allowed-values message — clients can show this verbatim.
+        paths = [f["path"] for f in body["fields"]]
+        assert "goal_type" in paths
+
+    def test_update_project_accepts_valid_goal_types(self):
+        """target and cap both round-trip cleanly."""
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Goal Type Round-Trip"},
+            headers=auth_headers,
+        )
+        project_id = resp.json()["id"]
+        for valid in ("target", "cap"):
+            resp = client.put(
+                "/api/projects/",
+                json={"id": project_id, "name": "Goal Type Round-Trip", "goal_type": valid},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 200, f"goal_type={valid} should be valid: {resp.text}"
+            assert resp.json()["goal_type"] == valid
+
     def test_timer_context_no_active_timer(self):
         """GET /api/signals/timer-context returns timer_running=false
         with empty project fields when no timer is running. The daemon's

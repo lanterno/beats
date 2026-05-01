@@ -42,7 +42,10 @@ class UpdateProjectRequest(BaseModel):
     color: str | None = None
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
-    goal_type: str = "target"  # "target" or "cap"
+    # GoalType is a StrEnum so the JSON wire format stays {"goal_type": "target"} —
+    # but invalid values now fail at request validation (clean 422 with the
+    # allowed list) instead of bubbling up as a 500 from Project() construction.
+    goal_type: GoalType = GoalType.TARGET
     github_repo: str | None = None  # "owner/repo"
     category: str | None = None  # Activity category for flow score matching
     autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths
