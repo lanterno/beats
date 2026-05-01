@@ -675,3 +675,81 @@ class TestWebAuthnDeleteCredential:
         assert result is False
         # B's credentials are intact
         assert await storage.count_credentials("user-B") == 2
+
+
+# =============================================================================
+# Settings — JWT_SECRET length validator
+# =============================================================================
+
+
+class TestJwtSecretValidator:
+    """JWT_SECRET must be at least 32 bytes (RFC 7518 §3.2 for
+    HS256). The validator is the only thing standing between a
+    deploy with a too-short shared secret and an attacker who
+    can mint session tokens.
+
+    Why this matters: pyjwt logs `InsecureKeyLengthWarning` on
+    short keys but still signs with them. A self-host that
+    forgot to set JWT_SECRET (and got the dev fallback) or
+    typed a 16-character password would have been silently
+    insecure. Pin so the validator fires before the app starts."""
+
+    def test_short_secret_rejected_at_construction(self, monkeypatch):
+        """An 11-byte secret (the previous .env.test value) is
+        now rejected by Settings(). Pin so a regression in the
+        validator surfaces immediately rather than after a
+        Settings refactor."""
+        from pydantic import ValidationError
+
+        from beats.settings import Settings
+
+        monkeypatch.setenv("JWT_SECRET", "test-secret")  # 11 bytes
+        with pytest.raises(ValidationError) as exc:
+            Settings()
+        # Error message tells the operator how to generate a key
+        msg = str(exc.value)
+        assert "32 bytes" in msg
+        assert "openssl rand" in msg
+
+    def test_exact_32_byte_secret_accepted(self, monkeypatch):
+        """The 32-byte boundary case is accepted (>=, not >).
+        Pin so a `openssl rand -base64 24` (which yields a
+        32-byte base64 string) is exactly at the threshold."""
+        from beats.settings import Settings
+
+        secret = "x" * 32
+        monkeypatch.setenv("JWT_SECRET", secret)
+        s = Settings()
+        assert s.jwt_secret == secret
+
+    def test_long_secret_accepted(self, monkeypatch):
+        """A typical openssl-generated 48-byte secret passes."""
+        from beats.settings import Settings
+
+        secret = "W2wIN5fOg1WaO7KSekBWsTnqFp4MnRVXIDEkOhWp9vRqEQ7+y/lqBvBe7yVe7Ev1"
+        monkeypatch.setenv("JWT_SECRET", secret)
+        s = Settings()
+        assert s.jwt_secret == secret
+
+    def test_byte_length_not_character_length(self, monkeypatch):
+        """The validator counts UTF-8 BYTES, not Python str
+        characters. A 32-character string with multi-byte
+        runes encodes to >32 bytes and passes; a 31-character
+        ASCII string fails. Pin so a refactor to len(v) instead
+        of len(v.encode('utf-8')) is caught."""
+        from pydantic import ValidationError
+
+        from beats.settings import Settings
+
+        # 31 ASCII chars = 31 bytes → should fail
+        short_ascii = "x" * 31
+        monkeypatch.setenv("JWT_SECRET", short_ascii)
+        with pytest.raises(ValidationError):
+            Settings()
+
+        # 11 chars × 3 bytes (em dashes are 3 bytes in UTF-8) = 33 bytes
+        # → should pass even though the str is short
+        multibyte = "—" * 11  # 11 em dashes = 33 bytes
+        monkeypatch.setenv("JWT_SECRET", multibyte)
+        s = Settings()
+        assert s.jwt_secret == multibyte

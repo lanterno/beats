@@ -2,8 +2,14 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# RFC 7518 §3.2 requires at least 32 bytes for HS256 HMAC keys.
+# Anything shorter is rejected: pyjwt logs InsecureKeyLengthWarning,
+# but more importantly an attacker who can guess or brute-force a
+# short shared secret can mint arbitrary session tokens for any user.
+JWT_SECRET_MIN_BYTES = 32
 
 # Get the api/ directory (parent of src/beats/)
 _api_dir = Path(__file__).resolve().parent.parent.parent
@@ -36,6 +42,21 @@ class Settings(BaseSettings):
 
     # JWT settings
     jwt_secret: str = Field(validation_alias="JWT_SECRET")
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _validate_jwt_secret_length(cls, v: str) -> str:
+        """JWT_SECRET must be at least 32 bytes (RFC 7518 §3.2 for
+        HS256). A shorter secret lets an attacker who can guess
+        or brute-force the shared key mint session tokens for
+        any user. Generate one with: `openssl rand -base64 48`."""
+        if len(v.encode("utf-8")) < JWT_SECRET_MIN_BYTES:
+            raise ValueError(
+                f"JWT_SECRET must be at least {JWT_SECRET_MIN_BYTES} bytes "
+                f"(got {len(v.encode('utf-8'))}). "
+                "Generate one with: openssl rand -base64 48"
+            )
+        return v
 
     # Google Calendar OAuth (optional)
     google_client_id: str = Field(default="", validation_alias="GOOGLE_CLIENT_ID")
