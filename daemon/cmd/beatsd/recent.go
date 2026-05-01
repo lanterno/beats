@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
 	"github.com/ahmedElghable/beats/daemon/internal/pair"
@@ -114,7 +115,7 @@ func formatRecentTable(
 		t := w.WindowStart.Local()
 		hh := fmt.Sprintf("%02d:%02d", t.Hour(), t.Minute())
 		score := fmt.Sprintf("%3d", int(w.FlowScore*100))
-		app := truncOrFallback(w.DominantCategory, w.DominantBundleID, 22)
+		app := truncOrFallback(w.DominantCategory, bundle.ShortLabel(w.DominantBundleID), 22)
 		repo := shortRepoTrail(w.EditorRepo)
 		fmt.Fprintf(&b, "  %-5s  %-3s  %-22s  %s\n", hh, score, app, repo)
 	}

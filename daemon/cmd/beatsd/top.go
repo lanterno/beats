@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
 	"github.com/ahmedElghable/beats/daemon/internal/pair"
@@ -138,7 +139,7 @@ func formatTop(windows []client.FlowWindowRecord, minutesRequested int) string {
 		// Prefer the human category label ("coding", "browser") and fall
 		// back to the bundle id for unknowns. Same logic the table form
 		// uses, kept in lockstep so the user sees consistent names.
-		return truncOrFallback(w.DominantCategory, w.DominantBundleID, 30)
+		return truncOrFallback(w.DominantCategory, bundle.ShortLabel(w.DominantBundleID), 30)
 	}))
 
 	return b.String()

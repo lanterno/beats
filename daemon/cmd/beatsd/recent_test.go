@@ -64,6 +64,32 @@ func TestFormatRecentTable_RendersHeaderAndRows(t *testing.T) {
 	}
 }
 
+func TestFormatRecentTable_RendersFriendlyAppNameWhenCategoryEmpty(t *testing.T) {
+	// When the daemon hasn't classified the frontmost app into a
+	// category (e.g. an unknown bundle), the table used to render the
+	// raw "com.microsoft.VSCode" — ugly. Now it routes through
+	// bundle.ShortLabel so the user sees "VS Code" instead. Same
+	// friendly-label set the web FlowHeadline + companion FlowScreen
+	// + `beatsd stats` use.
+	now := time.Date(2026, 5, 1, 14, 32, 0, 0, time.UTC)
+	windows := []client.FlowWindowRecord{
+		{
+			WindowStart:      now,
+			FlowScore:        0.7,
+			DominantCategory: "", // category empty → fallback to bundle
+			DominantBundleID: "com.microsoft.VSCode",
+		},
+	}
+	out := formatRecentTable(windows, 60, client.FlowWindowsFilter{})
+
+	if !strings.Contains(out, "VS Code") {
+		t.Errorf("expected friendly app label, got:\n%s", out)
+	}
+	if strings.Contains(out, "com.microsoft.VSCode") {
+		t.Errorf("expected raw bundle id to be replaced, got:\n%s", out)
+	}
+}
+
 func TestFormatRecentTable_FilterCaptionInHeader(t *testing.T) {
 	// When a filter is active, the header line should announce it so the
 	// user can tell at a glance which slice the table represents.
