@@ -20,6 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from beats.coach import brief as brief_module
 from beats.coach import chat as chat_module
+from beats.coach import context as context_module
 from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import review as review_module
 from beats.coach import tools as tools_module
@@ -2006,3 +2007,285 @@ class TestToolsDispatch:
         )
         assert "nonsense" in result
         assert "No sessions matching" in result
+
+
+class TestBuildSystemBlock:
+    """Pure function — returns COACH_PERSONA. Locked here so a
+    refactor that quietly changes the persona text is visible."""
+
+    def test_returns_non_empty_string(self):
+        result = context_module.build_system_block()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_returns_the_coach_persona(self):
+        from beats.coach.prompts import COACH_PERSONA
+
+        assert context_module.build_system_block() == COACH_PERSONA
+
+
+class TestBuildCoachMessages:
+    """build_coach_messages composes the (system, messages, spec) tuple
+    every coach call uses. The structure is load-bearing for prompt
+    caching (the cache_spec marks index 0 of messages as cached, which
+    is the user_ctx block — a refactor that re-orders the preamble
+    without updating the spec would silently miss the cache)."""
+
+    @pytest.fixture
+    def patched_context(self, monkeypatch):
+        """Stub build_repos / build_user_context / build_day_context so
+        we can drive the composition without real Mongo data."""
+
+        async def fake_build_repos(_user_id):
+            return _FakeCoachRepos()
+
+        async def fake_user_ctx(_user_id, _repos):
+            return "USER_CTX_BLOCK"
+
+        async def fake_day_ctx(_user_id, _repos, _target_date):
+            return "DAY_CTX_BLOCK"
+
+        monkeypatch.setattr(context_module, "build_repos", fake_build_repos)
+        monkeypatch.setattr(context_module, "build_user_context", fake_user_ctx)
+        monkeypatch.setattr(context_module, "build_day_context", fake_day_ctx)
+
+    async def test_returns_system_messages_and_spec(self, patched_context):
+        system, messages, spec = await context_module.build_coach_messages(
+            "user-1", "what should I do today?"
+        )
+        # System is the persona string.
+        assert isinstance(system, str)
+        assert len(system) > 0
+        # Spec marks system + first message index for caching.
+        assert spec.system_cached is True
+        assert spec.cached_turn_indices == [0]
+
+    async def test_preamble_is_user_assistant_user_assistant_user(self, patched_context):
+        """The preamble alternates user/assistant/user/assistant before
+        the actual user message — Anthropic's API requires user/assistant
+        alternation, and the fake "Context loaded." / "Ready." assistant
+        turns are how we keep the shape valid while loading large
+        cacheable context blocks. Pin the role sequence — a refactor
+        that drops one of the assistant acks would break the API call."""
+        _, messages, _ = await context_module.build_coach_messages("user-1", "hello")
+        roles = [m["role"] for m in messages]
+        # First 4 are the preamble, then the trailing user message.
+        assert roles[:5] == ["user", "assistant", "user", "assistant", "user"]
+
+    async def test_user_ctx_is_message_index_0(self, patched_context):
+        """Cache spec marks index 0 — that index MUST be the user
+        context block (the heavy 30-day aggregate that's cheap to cache).
+        A refactor that swapped index 0 for the day_ctx would silently
+        cache the wrong (volatile) content."""
+        _, messages, spec = await context_module.build_coach_messages("user-1", "hi")
+        assert spec.cached_turn_indices == [0]
+        assert messages[0]["content"] == "USER_CTX_BLOCK"
+
+    async def test_day_ctx_is_message_index_2(self, patched_context):
+        """Day context follows the user_ctx ack at index 1, lands at
+        index 2. NOT cached — it changes every day."""
+        _, messages, _ = await context_module.build_coach_messages("user-1", "hi")
+        assert messages[2]["content"] == "DAY_CTX_BLOCK"
+
+    async def test_user_message_is_last(self, patched_context):
+        _, messages, _ = await context_module.build_coach_messages("user-1", "what's my best week?")
+        assert messages[-1]["role"] == "user"
+        assert messages[-1]["content"] == "what's my best week?"
+
+    async def test_history_inserted_between_preamble_and_user_message(self, patched_context):
+        """History from prior turns goes after the preamble (index 4)
+        and before the new user message. Pin so a refactor doesn't put
+        history INSIDE the preamble (would break cache index 0) or
+        after the user message (would mean the LLM sees the new
+        question before the conversation it's responding to)."""
+        history = [
+            {"role": "user", "content": "earlier question"},
+            {"role": "assistant", "content": "earlier answer"},
+        ]
+        _, messages, _ = await context_module.build_coach_messages(
+            "user-1", "follow up", history=history
+        )
+        # Preamble (4) + history (2) + user message (1) = 7
+        assert len(messages) == 7
+        assert messages[4]["content"] == "earlier question"
+        assert messages[5]["content"] == "earlier answer"
+        assert messages[6]["content"] == "follow up"
+
+    async def test_no_history_omits_history_section(self, patched_context):
+        _, messages, _ = await context_module.build_coach_messages("user-1", "hi")
+        # Preamble (4) + user message (1) = 5
+        assert len(messages) == 5
+
+    async def test_target_date_threads_to_day_ctx(self, monkeypatch):
+        """Locks that target_date is passed through. Without this, a
+        brief generated for a past date would silently use today's
+        signals — confusing if a user asks the coach to brief
+        yesterday."""
+        captured = {}
+
+        async def fake_build_repos(_user_id):
+            return _FakeCoachRepos()
+
+        async def fake_user_ctx(_user_id, _repos):
+            return "USER"
+
+        async def fake_day_ctx(_user_id, _repos, target_date):
+            captured["target_date"] = target_date
+            return "DAY"
+
+        monkeypatch.setattr(context_module, "build_repos", fake_build_repos)
+        monkeypatch.setattr(context_module, "build_user_context", fake_user_ctx)
+        monkeypatch.setattr(context_module, "build_day_context", fake_day_ctx)
+
+        target = date(2026, 5, 1)
+        await context_module.build_coach_messages("user-1", "yesterday's brief", target_date=target)
+        assert captured["target_date"] == target
+
+
+class TestBuildUserContext:
+    """build_user_context is the heavy 30-day aggregate. Tests cover
+    the structural composition (header lines, sections) and the
+    productivity-score-unavailable fallback. Repo data uses small
+    in-memory fakes."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup_db(self):
+        """build_user_context reads from MemoryStore which uses
+        Database.get_db(). Connect for the duration of the test."""
+        await Database.connect()
+        await Database.get_db()[COACH_MEMORY_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    async def test_renders_section_headers_in_expected_order(self, monkeypatch):
+        """Pin the markdown structure the LLM consumes — section
+        order matters because the model gives early sections more
+        attention. A refactor that re-orders these would silently
+        change coach behavior."""
+        from beats.domain.intelligence import IntelligenceService
+
+        async def fake_score(_self):
+            return {
+                "score": 75,
+                "components": {
+                    "consistency": 80,
+                    "intentions": 70,
+                    "goals": 75,
+                    "quality": 75,
+                },
+            }
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
+
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha", weekly_goal=10)])
+        result = await context_module.build_user_context("user-1", repos)
+
+        # Expected sections in order.
+        sections = [
+            "## User profile (30-day window)",
+            "Active projects: Alpha",
+            "### Hours by project (last 30 days)",
+            "### Weekly totals",
+            "Productivity score: 75/100",
+            "### Weekly goals",
+            "## Coach memory",
+        ]
+        last_pos = -1
+        for s in sections:
+            pos = result.find(s)
+            assert pos > last_pos, f"section {s!r} out of order in:\n{result}"
+            last_pos = pos
+
+    async def test_score_unavailable_renders_fallback(self, monkeypatch):
+        """When IntelligenceService raises (fresh account, divide-by-
+        zero), the context should still render — with "Productivity
+        score: unavailable" instead of a Python traceback. Pin so a
+        refactor of the except-Exception swallow doesn't quietly
+        break the coach for new users."""
+        from beats.domain.intelligence import IntelligenceService
+
+        async def boom(_self):
+            raise ValueError("fresh user")
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", boom)
+
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
+        result = await context_module.build_user_context("user-1", repos)
+        assert "Productivity score: unavailable" in result
+
+    async def test_no_memory_renders_empty_marker(self, monkeypatch):
+        """First-run users have no coach_memory document. The context
+        should render the placeholder so the LLM doesn't see "None"
+        or an unterminated section. Pin the exact phrasing the cached
+        context expects."""
+        from beats.domain.intelligence import IntelligenceService
+
+        async def fake_score(_self):
+            return {
+                "score": 50,
+                "components": {
+                    "consistency": 50,
+                    "intentions": 50,
+                    "goals": 50,
+                    "quality": 50,
+                },
+            }
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
+
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
+        result = await context_module.build_user_context("user-1", repos)
+        assert "(No coach memory yet" in result
+
+    async def test_existing_memory_is_inlined(self, monkeypatch):
+        """When MemoryStore has content, that content appears verbatim
+        under the ## Coach memory section. Pin so a refactor of the
+        MemoryStore.read() call doesn't drop the user's persisted
+        personality from the cache."""
+        from beats.domain.intelligence import IntelligenceService
+
+        async def fake_score(_self):
+            return {
+                "score": 60,
+                "components": {
+                    "consistency": 60,
+                    "intentions": 60,
+                    "goals": 60,
+                    "quality": 60,
+                },
+            }
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
+
+        # Seed memory directly via MemoryStore.
+        client, db = _async_db()
+        try:
+            store = MemoryStore(db, "user-1")
+            await store.write("# Memory\n\nUser ships at night.")
+        finally:
+            client.close()
+
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
+        result = await context_module.build_user_context("user-1", repos)
+        assert "User ships at night." in result
+
+    async def test_no_goals_renders_no_goals_set(self, monkeypatch):
+        from beats.domain.intelligence import IntelligenceService
+
+        async def fake_score(_self):
+            return {
+                "score": 50,
+                "components": {
+                    "consistency": 50,
+                    "intentions": 50,
+                    "goals": 50,
+                    "quality": 50,
+                },
+            }
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
+
+        # Project with no weekly_goal.
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha", weekly_goal=None)])
+        result = await context_module.build_user_context("user-1", repos)
+        assert "(No goals set)" in result
