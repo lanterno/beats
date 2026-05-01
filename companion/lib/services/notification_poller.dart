@@ -62,15 +62,8 @@ class NotificationPoller {
       final id = (brief['id'] as String?) ?? (brief['date'] as String?);
       if (id == null) return;
       if (await _dedupe.alreadyNotified('brief', id)) return;
-      // Use the first ~80 chars of the brief body as a preview so the
-      // notification reads like a real prompt, not just "you have a brief".
-      final body = brief['body'] as String?;
-      String? preview;
-      if (body != null && body.isNotEmpty) {
-        final trimmed = body.replaceAll(RegExp(r'\s+'), ' ').trim();
-        preview = trimmed.length > 80 ? '${trimmed.substring(0, 80)}…' : trimmed;
-      }
-      await notifications.notifyBriefAvailable(preview: preview);
+      await notifications.notifyBriefAvailable(
+          preview: briefPreview(brief['body'] as String?));
       await _dedupe.markNotified('brief', id);
     } catch (_) {
       // Network blips, daemon offline, etc. — silent, retry next tick.
@@ -90,5 +83,22 @@ class NotificationPoller {
       // Same as above — best-effort.
     }
   }
+}
 
+/// Turns a brief's full body into the ~80-char preview the
+/// notification renders. Pure: extracted from NotificationPoller so
+/// the whitespace-collapse + truncation rules can be unit-tested
+/// without standing up an ApiClient.
+///
+/// - Empty / null body → null (notifications.notifyBriefAvailable
+///   handles null cleanly by rendering a generic title).
+/// - All whitespace runs (multiple spaces, tabs, newlines) collapse
+///   to a single space — briefs are markdown-ish and look weird in
+///   a one-line notification with hard line breaks.
+/// - Cap at 80 visible characters and append `…` when truncated.
+String? briefPreview(String? body) {
+  if (body == null || body.isEmpty) return null;
+  final trimmed = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (trimmed.isEmpty) return null;
+  return trimmed.length > 80 ? '${trimmed.substring(0, 80)}…' : trimmed;
 }
