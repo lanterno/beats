@@ -340,11 +340,20 @@ class ApiClient {
   }
 
   Future<void> toggleIntention(String id, bool completed) async {
-    await http.patch(
+    final resp = await http.patch(
       Uri.parse('$baseUrl/api/intentions/$id'),
       headers: _headers,
       body: jsonEncode({'completed': completed}),
     );
+    // Every other API-write method in this client checks the status
+    // code — toggleIntention used to be silently fire-and-forget, so
+    // a 401 (token expired) or 500 (server error) would leave the UI
+    // checkbox flipped while the server state stayed unchanged. Now
+    // throws like the rest, so callers get a SnackBar via the error
+    // envelope just like createIntention / upsertDailyNote.
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Toggle intention failed');
+    }
   }
 
   // ---- Daily Notes ----
