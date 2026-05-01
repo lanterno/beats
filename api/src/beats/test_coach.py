@@ -2325,3 +2325,183 @@ class TestBuildUserContext:
         repos = _FakeCoachRepos(projects=[_project("p1", "Alpha", weekly_goal=None)])
         result = await context_module.build_user_context("user-1", repos)
         assert "(No goals set)" in result
+
+
+class TestGatewayBudgetInvariant:
+    """Critical invariant: enforce_budget() must fire BEFORE any
+    client.messages.* call. If a user is over their monthly cap, the
+    next request must NOT spend more tokens. A regression here = the
+    cap exists in name only — every chat / brief / review still hits
+    Anthropic, the cost dashboard climbs forever, and the only signal
+    is the eventual response that the system surfaces.
+
+    The test pattern: seed an over-budget usage row, install a fake
+    Anthropic client that records every call, attempt complete() /
+    stream(), assert BudgetExceeded was raised AND the client
+    recorded zero calls."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    @pytest.fixture
+    def fake_client(self, monkeypatch):
+        """Replace _get_client() with a fake that records every call.
+        Returns the call list so tests can assert 'zero LLM calls
+        when over budget'."""
+        from beats.coach import gateway
+
+        calls: list[str] = []
+
+        class _FakeMessages:
+            async def create(self, **_kwargs):
+                calls.append("create")
+                raise AssertionError(
+                    "client.messages.create was called despite over-budget — "
+                    "enforce_budget() did NOT fire before spend"
+                )
+
+            def stream(self, **_kwargs):
+                calls.append("stream")
+                raise AssertionError(
+                    "client.messages.stream was called despite over-budget — "
+                    "enforce_budget() did NOT fire before spend"
+                )
+
+        class _FakeAnthropicClient:
+            messages = _FakeMessages()
+
+        def fake_get_client():
+            return _FakeAnthropicClient()
+
+        monkeypatch.setattr(gateway, "_get_client", fake_get_client)
+        return calls
+
+    async def _seed_over_budget(self, user_id: str, monkeypatch):
+        """Set a low monthly limit and seed a usage row over it.
+        Returns nothing; the next enforce_budget call will raise."""
+        from beats import settings as settings_module
+
+        # Force a low cap.
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 1.0)
+
+        tracker = UsageTracker(user_id)
+        await tracker.record(
+            model="claude-opus-4-7",
+            input_tokens=1000,
+            output_tokens=500,
+            cache_creation=0,
+            cache_read=0,
+            cost_usd=2.0,  # over the $1 cap
+            purpose="chat",
+        )
+
+    async def test_complete_does_not_call_anthropic_when_over_budget(
+        self, fake_client, monkeypatch
+    ):
+        """The cost-cap invariant: if the user is over budget,
+        gateway.complete() raises BudgetExceeded BEFORE any
+        client.messages.create(). The fake client's create() raises
+        AssertionError if it's ever called — the test fails LOUDLY
+        on a regression rather than silently overspending."""
+        from beats.coach.gateway import complete
+
+        await self._seed_over_budget("user-1", monkeypatch)
+
+        with pytest.raises(BudgetExceeded):
+            await complete(
+                user_id="user-1",
+                system="sys",
+                messages=[{"role": "user", "content": "hi"}],
+                purpose="chat",
+            )
+
+        # Zero recorded LLM calls — the invariant holds.
+        assert fake_client == []
+
+    async def test_stream_does_not_call_anthropic_when_over_budget(self, fake_client, monkeypatch):
+        """Same invariant for the streaming path. gateway.stream() is
+        an async generator — `iterating` it (via async for) is what
+        triggers enforce_budget. Pin both halves: BudgetExceeded
+        raises and the client records no stream() call."""
+        from beats.coach.gateway import stream
+
+        await self._seed_over_budget("user-1", monkeypatch)
+
+        async def _drain():
+            async for _ev in stream(
+                user_id="user-1",
+                system="sys",
+                messages=[{"role": "user", "content": "hi"}],
+                purpose="chat",
+            ):
+                pass  # pragma: no cover — should never reach
+
+        with pytest.raises(BudgetExceeded):
+            await _drain()
+
+        assert fake_client == []
+
+    async def test_complete_calls_anthropic_when_under_budget(self, fake_client, monkeypatch):
+        """Negative control: when under budget, the LLM call IS made.
+        Ensures the test scaffolding above doesn't accidentally pass
+        because complete() never reaches the LLM (which would make
+        the invariant test a tautology)."""
+        from beats import settings as settings_module
+        from beats.coach.gateway import complete
+
+        # High cap + no spend → enforce_budget passes.
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 100.0)
+
+        # The fake client raises AssertionError if called — that's
+        # exactly what we want to see now (it proves the call site
+        # IS reached when budget is fine). Catch the AssertionError
+        # to confirm the path executed, rather than the test failing.
+        with pytest.raises(AssertionError, match="enforce_budget"):
+            await complete(
+                user_id="user-1",
+                system="sys",
+                messages=[{"role": "user", "content": "hi"}],
+                purpose="chat",
+            )
+
+        # The fake recorded the create() attempt.
+        assert fake_client == ["create"]
+
+    async def test_zero_limit_disables_enforcement_so_call_proceeds(self, fake_client, monkeypatch):
+        """When coach_monthly_budget_usd <= 0, budget enforcement is
+        off (the documented "no cap" deploy mode from T1 #19). Even
+        with massive spend recorded, the LLM call must proceed. Pin
+        the bypass — without it, a self-host that hasn't configured
+        the cap would still get spuriously blocked."""
+        from beats import settings as settings_module
+        from beats.coach.gateway import complete
+
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 0.0)
+
+        # Big spend that WOULD trigger BudgetExceeded if the cap
+        # were active. With limit=0 it's a no-op.
+        tracker = UsageTracker("user-1")
+        await tracker.record(
+            model="claude-opus-4-7",
+            input_tokens=1000,
+            output_tokens=500,
+            cache_creation=0,
+            cache_read=0,
+            cost_usd=999.0,
+            purpose="chat",
+        )
+
+        # Should proceed past enforce_budget — the fake client's
+        # create() raises to confirm the path executes.
+        with pytest.raises(AssertionError, match="enforce_budget"):
+            await complete(
+                user_id="user-1",
+                system="sys",
+                messages=[{"role": "user", "content": "hi"}],
+                purpose="chat",
+            )
+        assert fake_client == ["create"]
