@@ -2853,3 +2853,279 @@ class TestGetProjectHealth:
         assert [r["project_name"] for r in result] == ["Alpha", "Beta"]
         assert result[0]["alert"] is not None
         assert result[1]["alert"] is None
+
+
+# =============================================================================
+# Domain Services — TimerService, BeatService, ProjectService
+# =============================================================================
+
+
+class _FakeBeatRepoForServices:
+    """In-memory BeatRepository fake for TimerService / BeatService.
+    Implements get_active, get_last, create, update, delete, list,
+    list_by_project, get_by_id with the same contract the real repo
+    exposes (raising NoObjectMatched where applicable)."""
+
+    def __init__(self, beats: list[Beat] | None = None):
+        self._beats: list[Beat] = list(beats or [])
+        self._counter = 1
+
+    async def get_active(self) -> Beat | None:
+        for b in self._beats:
+            if b.end is None:
+                return b
+        return None
+
+    async def get_last(self) -> Beat:
+        from beats.domain.exceptions import NoObjectMatched
+
+        completed = [b for b in self._beats if b.end is not None]
+        if not completed:
+            raise NoObjectMatched()
+        return max(completed, key=lambda b: b.end)
+
+    async def create(self, beat: Beat) -> Beat:
+        if beat.id is None:
+            beat = beat.model_copy(update={"id": f"b{self._counter}"})
+            self._counter += 1
+        self._beats.append(beat)
+        return beat
+
+    async def update(self, beat: Beat) -> Beat:
+        for i, b in enumerate(self._beats):
+            if b.id == beat.id:
+                self._beats[i] = beat
+                return beat
+        from beats.domain.exceptions import NoObjectMatched
+
+        raise NoObjectMatched()
+
+    async def delete(self, beat_id: str) -> bool:
+        for i, b in enumerate(self._beats):
+            if b.id == beat_id:
+                self._beats.pop(i)
+                return True
+        return False
+
+    async def get_by_id(self, beat_id: str) -> Beat:
+        for b in self._beats:
+            if b.id == beat_id:
+                return b
+        from beats.domain.exceptions import NoObjectMatched
+
+        raise NoObjectMatched()
+
+    async def list(
+        self, project_id: str | None = None, date_filter: date | None = None
+    ) -> list[Beat]:
+        out = list(self._beats)
+        if project_id is not None:
+            out = [b for b in out if b.project_id == project_id]
+        if date_filter is not None:
+            out = [b for b in out if b.start.date() == date_filter]
+        return out
+
+    async def list_by_project(self, project_id: str) -> list[Beat]:
+        return [b for b in self._beats if b.project_id == project_id]
+
+
+class _FakeProjectRepoForServices:
+    """In-memory ProjectRepository fake."""
+
+    def __init__(self, projects: list[Project] | None = None):
+        self._projects: list[Project] = list(projects or [])
+        self._counter = 1
+
+    async def exists(self, project_id: str) -> bool:
+        return any(p.id == project_id for p in self._projects)
+
+    async def get_by_id(self, project_id: str) -> Project:
+        for p in self._projects:
+            if p.id == project_id:
+                return p
+        from beats.domain.exceptions import ProjectNotFound
+
+        raise ProjectNotFound(project_id)
+
+    async def create(self, project: Project) -> Project:
+        if project.id is None:
+            project = project.model_copy(update={"id": f"p{self._counter}"})
+            self._counter += 1
+        self._projects.append(project)
+        return project
+
+    async def update(self, project: Project) -> Project:
+        for i, p in enumerate(self._projects):
+            if p.id == project.id:
+                self._projects[i] = project
+                return project
+        from beats.domain.exceptions import NoObjectMatched
+
+        raise NoObjectMatched()
+
+    async def list(self, archived: bool = False) -> list[Project]:
+        return [p for p in self._projects if p.archived == archived]
+
+
+def _timer_service(*, beats: list[Beat] | None = None, projects: list[Project] | None = None):
+    from beats.domain.services import TimerService
+
+    return TimerService(
+        beat_repo=_FakeBeatRepoForServices(beats),
+        project_repo=_FakeProjectRepoForServices(projects),
+    )
+
+
+class TestTimerServiceStart:
+    """TimerService.start_timer pre-flight checks: project must exist
+    and no other timer can be running. Pin both error paths so a
+    regression in either silently corrupts the timer state."""
+
+    async def test_creates_beat_with_now_when_project_exists(self):
+        projects = [_project("p1", "Alpha")]
+        svc = _timer_service(projects=projects)
+        before = datetime.now(UTC)
+        beat = await svc.start_timer("p1")
+        after = datetime.now(UTC)
+        assert beat.project_id == "p1"
+        assert beat.end is None
+        # Default start is "now" — clamped between before/after
+        assert before <= beat.start <= after
+
+    async def test_uses_custom_start_time_when_provided(self):
+        """A backdated start (e.g. user logging time after the fact)
+        is preserved verbatim. Pin so the now-default doesn't
+        silently override an explicit timestamp."""
+        projects = [_project("p1", "Alpha")]
+        svc = _timer_service(projects=projects)
+        custom = datetime(2026, 4, 1, 9, 30, tzinfo=UTC)
+        beat = await svc.start_timer("p1", start_time=custom)
+        assert beat.start == custom
+
+    async def test_raises_project_not_found(self):
+        from beats.domain.exceptions import ProjectNotFound
+
+        svc = _timer_service()
+        with pytest.raises(ProjectNotFound):
+            await svc.start_timer("ghost")
+
+    async def test_raises_timer_already_running(self):
+        """An active timer (end=None) on any project blocks a new
+        start. Pin so the multi-timer corruption can't slip in."""
+        from beats.domain.exceptions import TimerAlreadyRunning
+
+        projects = [_project("p1", "Alpha"), _project("p2", "Beta")]
+        active = Beat(
+            id="b-active",
+            project_id="p1",
+            start=datetime(2026, 4, 1, 9, 0, tzinfo=UTC),
+            end=None,
+        )
+        svc = _timer_service(beats=[active], projects=projects)
+        with pytest.raises(TimerAlreadyRunning) as exc:
+            await svc.start_timer("p2")
+        # The exception carries the conflicting project's name so
+        # the UI can render "Already tracking Alpha".
+        assert "Alpha" in str(exc.value) or exc.value.project_name == "Alpha"
+
+
+class TestTimerServiceStop:
+    """TimerService.stop_timer: requires an active beat and an
+    end-time at or after start. Pin both."""
+
+    async def test_stops_active_timer_with_now(self):
+        projects = [_project("p1", "Alpha")]
+        active = Beat(
+            id="b-active",
+            project_id="p1",
+            start=datetime(2026, 4, 1, 9, 0, tzinfo=UTC),
+            end=None,
+        )
+        svc = _timer_service(beats=[active], projects=projects)
+        before = datetime.now(UTC)
+        stopped = await svc.stop_timer()
+        assert stopped.id == "b-active"
+        assert stopped.end is not None
+        assert stopped.end >= before
+
+    async def test_stops_with_custom_end_time(self):
+        projects = [_project("p1", "Alpha")]
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        active = Beat(id="b1", project_id="p1", start=start, end=None)
+        svc = _timer_service(beats=[active], projects=projects)
+        end = datetime(2026, 4, 1, 10, 30, tzinfo=UTC)
+        stopped = await svc.stop_timer(end_time=end)
+        assert stopped.end == end
+
+    async def test_raises_no_active_timer(self):
+        from beats.domain.exceptions import NoActiveTimer
+
+        svc = _timer_service()
+        with pytest.raises(NoActiveTimer):
+            await svc.stop_timer()
+
+    async def test_raises_invalid_end_time_when_end_before_start(self):
+        """end < start would produce a negative duration. Pin the
+        guard so the validation can't be quietly removed."""
+        from beats.domain.exceptions import InvalidEndTime
+
+        projects = [_project("p1", "Alpha")]
+        start = datetime(2026, 4, 1, 10, 0, tzinfo=UTC)
+        active = Beat(id="b1", project_id="p1", start=start, end=None)
+        svc = _timer_service(beats=[active], projects=projects)
+        too_early = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        with pytest.raises(InvalidEndTime):
+            await svc.stop_timer(end_time=too_early)
+
+
+class TestTimerServiceStatus:
+    """get_status returns one of three shapes:
+      - {"isBeating": True, ...}   when an active timer exists
+      - {"isBeating": False, "last_beat": {...}}   when none active
+        but a previous completed beat exists
+      - {"isBeating": False}   on a brand-new account (no beats)
+
+    The shape matters — UIs (web + companion + wall-clock) all bind
+    to these keys."""
+
+    async def test_active_returns_is_beating_with_project(self):
+        projects = [_project("p1", "Alpha")]
+        active = Beat(
+            id="b1",
+            project_id="p1",
+            start=datetime(2026, 4, 1, 9, 0, tzinfo=UTC),
+            end=None,
+        )
+        svc = _timer_service(beats=[active], projects=projects)
+        status = await svc.get_status()
+        assert status["isBeating"] is True
+        assert status["project"]["id"] == "p1"
+        assert status["project"]["name"] == "Alpha"
+        assert "since" in status
+        assert "so_far" in status
+
+    async def test_no_active_returns_last_beat_metadata(self):
+        """No active timer but a completed beat exists → isBeating
+        False with last_beat block. The wall-clock uses last_beat.end
+        to know when to dim."""
+        projects = [_project("p1", "Alpha")]
+        last = Beat(
+            id="b-last",
+            project_id="p1",
+            start=datetime(2026, 4, 1, 9, 0, tzinfo=UTC),
+            end=datetime(2026, 4, 1, 10, 0, tzinfo=UTC),
+        )
+        svc = _timer_service(beats=[last], projects=projects)
+        status = await svc.get_status()
+        assert status["isBeating"] is False
+        assert status["last_beat"]["id"] == "b-last"
+        assert status["last_beat"]["project_id"] == "p1"
+        assert status["last_beat"]["end"] is not None
+
+    async def test_empty_account_returns_just_is_beating_false(self):
+        """Brand-new account: no active, no past beats →
+        {"isBeating": False} (no last_beat key). Pin so the UI's
+        first-run state isn't broken by a None.id crash."""
+        svc = _timer_service()
+        status = await svc.get_status()
+        assert status == {"isBeating": False}
