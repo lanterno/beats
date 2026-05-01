@@ -1438,6 +1438,136 @@ class TestAccountAPI:
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
 
+class TestDailyNotesAPI:
+    """/api/daily-notes — end-of-day reflections (note + mood). Consumed
+    by the EndOfDayReview modal in the UI and the coach's day context.
+    Previously zero coverage; tests pin GET/PUT/POST round-trip,
+    range listing, today-as-default, and the dual-method upsert."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_daily_notes(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        sync[db_name].daily_notes.delete_many({})
+        sync.close()
+        yield
+
+    def test_get_returns_null_when_no_note_for_today(self):
+        resp = client.get("/api/daily-notes", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() is None
+
+    def test_put_creates_note_and_get_returns_it(self):
+        resp = client.put(
+            "/api/daily-notes",
+            json={"date": "2026-05-01", "note": "shipped X", "mood": 4},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["note"] == "shipped X"
+        assert body["mood"] == 4
+        assert body["date"] == "2026-05-01"
+        assert body["id"]
+
+        # GET round-trips by date.
+        resp = client.get("/api/daily-notes?target_date=2026-05-01", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["note"] == "shipped X"
+
+    def test_put_is_idempotent_on_date(self):
+        """The repo upserts on (user_id, date), so a second write for
+        the same date overwrites — locks in that the EndOfDayReview's
+        re-saves don't pile up duplicate rows."""
+        for note, mood in [("first", 3), ("revised", 5)]:
+            resp = client.put(
+                "/api/daily-notes",
+                json={"date": "2026-05-01", "note": note, "mood": mood},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 200
+
+        body = client.get("/api/daily-notes?target_date=2026-05-01", headers=auth_headers).json()
+        assert body["note"] == "revised"
+        assert body["mood"] == 5
+
+    def test_post_alias_works_for_older_clients(self):
+        """The route accepts both PUT and POST so a client that posts
+        doesn't silently 405. Pins this — without the dual decorator
+        a stray POST would land somewhere unexpected."""
+        resp = client.post(
+            "/api/daily-notes",
+            json={"date": "2026-05-02", "note": "via POST", "mood": 3},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["note"] == "via POST"
+
+    def test_get_today_default_when_no_target_date(self):
+        from datetime import datetime as _dt
+
+        today = _dt.now(UTC).date().isoformat()
+        client.put(
+            "/api/daily-notes",
+            json={"date": today, "note": "today's reflection", "mood": 4},
+            headers=auth_headers,
+        )
+
+        # No target_date → defaults to today.
+        resp = client.get("/api/daily-notes", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body is not None
+        assert body["note"] == "today's reflection"
+
+    def test_range_returns_inclusive_window(self):
+        # Seed three days; query a window that covers two of them.
+        for d, note in [
+            ("2026-04-29", "before"),
+            ("2026-04-30", "in-window-1"),
+            ("2026-05-01", "in-window-2"),
+            ("2026-05-02", "after"),
+        ]:
+            client.put(
+                "/api/daily-notes",
+                json={"date": d, "note": note, "mood": 3},
+                headers=auth_headers,
+            )
+
+        resp = client.get(
+            "/api/daily-notes/range?start=2026-04-30&end=2026-05-01",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        notes = sorted(n["note"] for n in body)
+        assert notes == ["in-window-1", "in-window-2"]
+
+    def test_mood_is_optional(self):
+        resp = client.put(
+            "/api/daily-notes",
+            json={"date": "2026-05-03", "note": "no mood today"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["mood"] is None
+
+    def test_endpoints_require_auth(self):
+        for method, path in [
+            ("GET", "/api/daily-notes"),
+            ("GET", "/api/daily-notes/range?start=2026-01-01&end=2026-01-31"),
+            ("PUT", "/api/daily-notes"),
+            ("POST", "/api/daily-notes"),
+        ]:
+            resp = client.request(method, path)
+            assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
 class TestWebhooksAPI:
     """/api/webhooks/* — CRUD + the daily-summary dispatch path. The
     dispatch path is the important one: it's fire-and-forget, was
