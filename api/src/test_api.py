@@ -1066,6 +1066,269 @@ class TestCoachRouterGapFill:
         assert body["code"] == "BUDGET_EXCEEDED"
 
 
+class TestCoachDeleteAndChatSse:
+    """Three paths uncovered by other coach tests:
+
+    1. DELETE /api/coach/memory — destructive (drops the per-user
+       coach personality)
+    2. DELETE /api/coach/data — IRREVERSIBLE bulk delete across
+       five collections (memory + briefs + reviews + conversations
+       + usage)
+    3. /api/coach/chat SSE — the streaming endpoint's three
+       branches: happy-path event emission, BudgetExceeded → SSE
+       error event with code=429, generic Exception → 502 event
+
+    Both DELETE endpoints MUST be tested — they wipe user data
+    and a regression in the user-scoping query would let one user
+    nuke another's data."""
+
+    def _db(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        return sync, sync[db_name]
+
+    @pytest.fixture(autouse=True)
+    def _reset_coach_collections(self, auth_info):
+        sync, db = self._db()
+        for coll in (
+            "coach_memory",
+            "daily_briefs",
+            "review_answers",
+            "coach_conversations",
+            "llm_usage",
+        ):
+            db[coll].delete_many({})
+        sync.close()
+        yield
+
+    def _seed_all_coach_data(self, user_id: str):
+        """Insert one row in each of the five coach collections
+        for the given user. Used by the DELETE /data test to
+        verify all five are wiped in one shot."""
+        from datetime import UTC, datetime
+
+        sync, db = self._db()
+        db.coach_memory.insert_one(
+            {"user_id": user_id, "content": "be kind", "updated_at": datetime.now(UTC)}
+        )
+        db.daily_briefs.insert_one(
+            {
+                "user_id": user_id,
+                "date": "2026-04-01",
+                "brief": "morning",
+                "created_at": datetime.now(UTC),
+            }
+        )
+        db.review_answers.insert_one(
+            {
+                "user_id": user_id,
+                "date": "2026-04-01",
+                "questions": [],
+                "answers": [],
+            }
+        )
+        db.coach_conversations.insert_one(
+            {
+                "user_id": user_id,
+                "conversation_id": "c-1",
+                "role": "user",
+                "content": "hi",
+                "created_at": datetime.now(UTC),
+            }
+        )
+        db.llm_usage.insert_one(
+            {
+                "user_id": user_id,
+                "ts": datetime.now(UTC),
+                "model": "claude-opus-4-7",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost_usd": 0.01,
+                "purpose": "chat",
+            }
+        )
+        sync.close()
+
+    def _count_user_data(self, user_id: str) -> dict[str, int]:
+        sync, db = self._db()
+        out = {
+            coll: db[coll].count_documents({"user_id": user_id})
+            for coll in (
+                "coach_memory",
+                "daily_briefs",
+                "review_answers",
+                "coach_conversations",
+                "llm_usage",
+            )
+        }
+        sync.close()
+        return out
+
+    # ---------------- DELETE /api/coach/memory ----------------
+
+    def test_delete_memory_wipes_only_this_users_memory(self, auth_info):
+        """DELETE /memory drops the requesting user's coach memory
+        but leaves OTHER users' memory intact. Pin the user-scoping
+        — a regression here would let User A wipe User B's memory."""
+        sync, db = self._db()
+        # Seed the requesting user's memory + another user's memory
+        db.coach_memory.insert_one({"user_id": auth_info["user_id"], "content": "mine"})
+        db.coach_memory.insert_one({"user_id": "other-user", "content": "theirs"})
+        sync.close()
+
+        resp = client.delete("/api/coach/memory", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+        sync, db = self._db()
+        # Mine: gone. Theirs: intact.
+        assert db.coach_memory.count_documents({"user_id": auth_info["user_id"]}) == 0
+        assert db.coach_memory.count_documents({"user_id": "other-user"}) == 1
+        sync.close()
+
+    # ---------------- DELETE /api/coach/data ----------------
+
+    def test_delete_data_wipes_all_five_collections_for_user(self, auth_info):
+        """DELETE /data is the "factory reset" — it MUST wipe all
+        five coach collections (memory + briefs + reviews +
+        conversations + usage) for the requesting user. Pin all
+        five so a refactor that skips one (e.g. forgets the new
+        usage logs) is caught."""
+        self._seed_all_coach_data(auth_info["user_id"])
+
+        # Sanity: all five non-zero before the delete
+        before = self._count_user_data(auth_info["user_id"])
+        assert all(c == 1 for c in before.values()), before
+
+        resp = client.delete("/api/coach/data", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "all coach data" in body["deleted"]
+
+        # All five collections empty for this user
+        after = self._count_user_data(auth_info["user_id"])
+        assert all(c == 0 for c in after.values()), after
+
+    def test_delete_data_does_not_touch_other_users(self, auth_info):
+        """Cross-user safety — DELETE /data scopes to user_id.
+        Pin so a regression doesn't accidentally do an unscoped
+        delete_many({}) and nuke every user's data on the deploy."""
+        # Seed BOTH the requesting user AND a separate user.
+        self._seed_all_coach_data(auth_info["user_id"])
+        self._seed_all_coach_data("other-user")
+
+        resp = client.delete("/api/coach/data", headers=auth_info["headers"])
+        assert resp.status_code == 200
+
+        # The other user's five rows are intact
+        other_after = self._count_user_data("other-user")
+        assert all(c == 1 for c in other_after.values()), other_after
+
+    def test_delete_endpoints_require_auth(self):
+        """Both destructive endpoints must reject unauthenticated
+        requests. Pin the auth gate — an unauthenticated DELETE
+        on these would be a catastrophic data-wipe primitive."""
+        assert client.delete("/api/coach/memory").status_code == 401
+        assert client.delete("/api/coach/data").status_code == 401
+
+    # ---------------- /api/coach/chat SSE ----------------
+
+    def test_chat_sse_streams_events(self, monkeypatch):
+        """Happy path: handle_chat_turn yields events; the SSE
+        generator wraps each in `data: <json>\\n\\n` and ends
+        with `data: [DONE]\\n\\n`. Pin the framing — the UI's
+        SSE parser depends on the exact form."""
+        from beats.api.routers import coach as coach_router
+
+        async def fake_handle_chat_turn(**_kwargs):
+            yield {"type": "text", "text": "hello"}
+            yield {"type": "done", "conversation_id": "c-abc"}
+
+        monkeypatch.setattr(coach_router, "handle_chat_turn", fake_handle_chat_turn)
+
+        with client.stream(
+            "POST",
+            "/api/coach/chat",
+            json={"message": "hi"},
+            headers=auth_headers,
+        ) as resp:
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("text/event-stream")
+            body = "".join(resp.iter_text())
+
+        # Every event is on its own `data:` line, terminator is [DONE]
+        assert 'data: {"type": "text", "text": "hello"}' in body
+        assert '"conversation_id": "c-abc"' in body
+        assert body.rstrip().endswith("data: [DONE]")
+
+    def test_chat_sse_emits_budget_exceeded_envelope(self, monkeypatch):
+        """When BudgetExceeded fires inside the stream, the SSE
+        generator yields a typed error event with code=429. Pin
+        so the UI's "monthly budget reached" toast triggers from
+        the right code."""
+        from beats.api.routers import coach as coach_router
+        from beats.coach.usage import BudgetExceeded
+
+        async def fake_handle_chat_turn(**_kwargs):
+            yield {"type": "text", "text": "starting…"}
+            raise BudgetExceeded(spent=12.50, limit=10.00)
+
+        monkeypatch.setattr(coach_router, "handle_chat_turn", fake_handle_chat_turn)
+
+        with client.stream(
+            "POST",
+            "/api/coach/chat",
+            json={"message": "hi"},
+            headers=auth_headers,
+        ) as resp:
+            assert resp.status_code == 200
+            body = "".join(resp.iter_text())
+
+        # First event surfaces; then the 429 error event; then [DONE]
+        assert '"type": "text"' in body
+        assert '"type": "error"' in body
+        assert '"code": 429' in body
+        # The exception's stringified body propagates to the SSE event
+        assert "$12.50" in body
+        assert "$10.00" in body
+        assert body.rstrip().endswith("data: [DONE]")
+
+    def test_chat_sse_emits_generic_502_envelope_on_unexpected_failure(self, monkeypatch):
+        """Any other exception inside the stream → a generic 502
+        error event ("Coach is temporarily unavailable.") rather
+        than letting the connection just close. Pin so the UI sees
+        a structured error rather than an SSE truncation."""
+        from beats.api.routers import coach as coach_router
+
+        async def fake_handle_chat_turn(**_kwargs):
+            yield {"type": "text", "text": "starting…"}
+            raise RuntimeError("anthropic exploded")
+
+        monkeypatch.setattr(coach_router, "handle_chat_turn", fake_handle_chat_turn)
+
+        with client.stream(
+            "POST",
+            "/api/coach/chat",
+            json={"message": "hi"},
+            headers=auth_headers,
+        ) as resp:
+            assert resp.status_code == 200
+            body = "".join(resp.iter_text())
+
+        assert '"type": "error"' in body
+        assert '"code": 502' in body
+        assert "temporarily unavailable" in body
+        # Internal error message must NOT leak to the user
+        assert "anthropic exploded" not in body
+        assert body.rstrip().endswith("data: [DONE]")
+
+
 class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:
     {detail: str, code: str, fields?: list}."""
