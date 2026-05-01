@@ -150,3 +150,40 @@ func TestTruncate_EmptyInputReturnsEmpty(t *testing.T) {
 		t.Errorf("expected empty in/out, got %q", got)
 	}
 }
+
+// --- maskToken (main.go) ---
+
+// maskToken is used by `beatsd pair` to print a truncated prefix
+// of the existing device token when re-pairing. Tokens are
+// credentials; we never print the full value, just enough to
+// help the user confirm "yes, this is the device I meant to
+// re-pair". 6-char prefix matches the existing doctor.go
+// checkToken output for cross-command consistency.
+
+func TestMaskToken_LongTokenReturnsSixCharPrefix(t *testing.T) {
+	got := maskToken("tok_abc123def456ghi789")
+	if got != "tok_ab" {
+		t.Errorf("expected 6-char prefix, got %q", got)
+	}
+}
+
+func TestMaskToken_ShortTokenReturnedAsIs(t *testing.T) {
+	// Defensive: a token shorter than the mask length isn't really
+	// a real credential, but the helper must not panic on slice
+	// out-of-bounds. Returning as-is is fine — the caller appends
+	// "…" so output reads "previous token: short…" cleanly.
+	for _, in := range []string{"abc", "abcdef", "tok"} {
+		if got := maskToken(in); got != in {
+			t.Errorf("expected unchanged for short input %q, got %q", in, got)
+		}
+	}
+}
+
+func TestMaskToken_EmptyReturnsEmpty(t *testing.T) {
+	// The pair dispatch arm guards against empty before calling
+	// maskToken, but the helper itself should be safe regardless
+	// — callers may format unconditionally.
+	if got := maskToken(""); got != "" {
+		t.Errorf("expected empty in/out, got %q", got)
+	}
+}

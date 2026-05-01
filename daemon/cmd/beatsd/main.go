@@ -80,6 +80,18 @@ func main() {
 		code := args[1]
 		deviceName, _ := os.Hostname()
 
+		// Heads-up if we're about to overwrite an existing pairing.
+		// pair.Run silently replaces the keychain entry, which is the
+		// right behavior for "re-pair to a fresh code" but bites users
+		// who run `beatsd pair X` thinking it's an idempotent setup
+		// command. A keychain-read failure here isn't fatal — fall
+		// through to pair.Run, which will surface the real problem
+		// with better context.
+		if existing, err := pair.LoadToken(); err == nil && existing != "" {
+			fmt.Printf("Replacing existing pairing (previous token: %s…).\n",
+				maskToken(existing))
+		}
+
 		c := client.New(cfg.API.BaseURL, "")
 		deviceID, err := pair.Run(ctx, c, code, deviceName)
 		if err != nil {
@@ -414,6 +426,18 @@ func lastSlash(s string) int {
 		}
 	}
 	return -1
+}
+
+// maskToken returns a 6-char prefix of the device token, suitable
+// for log lines and "replacing existing pairing" notices. The
+// token itself is a credential — never print the full value.
+// Empty input returns empty so callers can format unconditionally.
+func maskToken(token string) string {
+	const prefixLen = 6
+	if len(token) <= prefixLen {
+		return token
+	}
+	return token[:prefixLen]
 }
 
 // hasHelpFlag reports whether any of the args is `--help`, `-h`, or
