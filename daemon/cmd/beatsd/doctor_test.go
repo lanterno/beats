@@ -1,11 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/editor"
 )
 
@@ -59,6 +63,75 @@ func TestCheckEventTap_NonDarwinFallsBackInformatively(t *testing.T) {
 	}
 	if !strings.Contains(detail, "stub fallback") {
 		t.Errorf("expected stub-fallback detail, got %q", detail)
+	}
+}
+
+// --- flowDataDetail ---
+
+// summaryFixture stands up an httptest server that responds to
+// /api/signals/flow-windows/summary with the given JSON payload + status.
+// Returns a wired Client so the doctor function can be exercised without
+// touching the keychain or hitting the real API.
+func summaryFixture(t *testing.T, body any, code int) *client.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/signals/flow-windows/summary" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(body)
+	}))
+	t.Cleanup(srv.Close)
+	return client.New(srv.URL, "test-token")
+}
+
+func TestFlowDataDetail_RendersCountAndAvgWhenWindowsExist(t *testing.T) {
+	c := summaryFixture(t, map[string]any{
+		"count": 47, "avg": 0.62, "peak": 0.84, "peak_at": nil,
+		"top_repo": nil, "top_language": nil, "top_bundle": nil,
+	}, http.StatusOK)
+
+	got := flowDataDetail(c)
+
+	for _, want := range []string{"47 windows", "avg 62", "last hour"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected detail to contain %q, got: %s", want, got)
+		}
+	}
+}
+
+func TestFlowDataDetail_EmptySliceMentionsBeatsdRun(t *testing.T) {
+	// The hint "(start `beatsd run` if not already running)" is the
+	// actionable nudge — locked in so a refactor doesn't strip it.
+	c := summaryFixture(t, map[string]any{
+		"count": 0, "avg": 0, "peak": 0, "peak_at": nil,
+		"top_repo": nil, "top_language": nil, "top_bundle": nil,
+	}, http.StatusOK)
+
+	got := flowDataDetail(c)
+
+	if !strings.Contains(got, "no windows in the last hour") {
+		t.Errorf("expected empty-state hint, got: %s", got)
+	}
+	if !strings.Contains(got, "beatsd run") {
+		t.Errorf("expected actionable suggestion, got: %s", got)
+	}
+}
+
+func TestFlowDataDetail_ApiFailureReturnsSoftMessage(t *testing.T) {
+	// API outage / token revoked — must NOT propagate the error
+	// (doctor would partially succeed otherwise) and instead show
+	// a soft "summary fetch failed" detail. The user-facing check
+	// stays in the ✓ column because doctor's contract is "validate
+	// setup", not "validate live data".
+	c := summaryFixture(t, map[string]any{"detail": "boom"}, http.StatusInternalServerError)
+
+	got := flowDataDetail(c)
+
+	if got != "summary fetch failed" {
+		t.Errorf("expected 'summary fetch failed' on API error, got: %s", got)
 	}
 }
 

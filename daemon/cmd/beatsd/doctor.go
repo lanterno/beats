@@ -26,6 +26,7 @@ func runDoctor(cfg *config.Config) error {
 		{name: "API reachable", fn: func() (string, error) { return checkAPI(cfg) }},
 		{name: "Editor listener port", fn: checkEditorPort},
 		{name: "Input event tap (cadence)", fn: checkEventTap},
+		{name: "Flow data flowing", fn: func() (string, error) { return checkFlowData(cfg) }},
 	}
 
 	allPassed := true
@@ -108,6 +109,45 @@ func checkEditorPort() (string, error) {
 	}
 	_ = l.Close()
 	return fmt.Sprintf("%s available", addr), nil
+}
+
+// checkFlowData: hits /api/signals/flow-windows/summary for the last
+// hour to validate the full analytics pipeline (keychain → API →
+// flow windows). Pure setup probes (token + API + listener) only
+// confirm the daemon CAN talk to the API; this confirms the daemon
+// IS getting flow data through.
+//
+// Detail-only — never fails. A user running `beatsd doctor` right
+// after `beatsd pair` legitimately has zero windows; failing on that
+// would block startup scripts that chain `beatsd doctor && beatsd
+// run`. The detail string surfaces the count so the user can spot a
+// mismatch with the daemon they expect to be running.
+func checkFlowData(cfg *config.Config) (string, error) {
+	token, err := pair.LoadToken()
+	if err != nil || token == "" {
+		return "skipped: no token", nil
+	}
+	c := client.New(cfg.API.BaseURL, token)
+	return flowDataDetail(c), nil
+}
+
+// flowDataDetail is the testable inner of checkFlowData. Splitting out
+// the keychain access lets tests stand up an httptest server and pass
+// a real client.Client without writing a token to the user's
+// keychain.
+func flowDataDetail(c *client.Client) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	end := time.Now().UTC()
+	start := end.Add(-time.Hour)
+	s, err := c.GetFlowWindowsSummary(ctx, start, end, client.FlowWindowsFilter{})
+	if err != nil {
+		return "summary fetch failed"
+	}
+	if s.Count == 0 {
+		return "no windows in the last hour (start `beatsd run` if not already running)"
+	}
+	return fmt.Sprintf("%d windows · avg %d (last hour)", s.Count, int(s.Avg*100))
 }
 
 // checkEventTap: is macOS Accessibility permission granted? Uses
