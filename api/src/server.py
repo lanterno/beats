@@ -56,6 +56,7 @@ DEVICE_ALLOWED_PREFIXES = (
     "/api/device/status",
     "/api/device/heartbeat",
     "/api/device/favorites",
+    "/api/device/weekly",
     "/api/signals",
     "/api/biometrics/daily",
     "/api/timer",

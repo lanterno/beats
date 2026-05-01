@@ -4,7 +4,7 @@ import base64
 import hashlib
 import os
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel
@@ -153,6 +153,34 @@ async def get_favorites(
         )
         for p in projects[:9]  # Max 9 for firmware UI
     ]
+
+
+class DeviceWeeklyDay(BaseModel):
+    date: date
+    minutes: int
+
+
+class DeviceWeeklyResponse(BaseModel):
+    """Last seven days of tracked minutes — purpose-built for the
+    wall-clock's weekly bar display. Tiny payload (~7 × ~30 bytes)
+    so the ESP32 doesn't have to parse the full /api/analytics/heatmap
+    just to render seven bars."""
+
+    days: list[DeviceWeeklyDay]
+
+
+@router.get("/weekly", response_model=DeviceWeeklyResponse)
+async def get_device_weekly(beat_service: BeatServiceDep) -> DeviceWeeklyResponse:
+    """Last 7 days of total tracked minutes, oldest first."""
+    today = date.today()
+    days: list[DeviceWeeklyDay] = []
+    # Six days ago through today, inclusive — seven days total.
+    for offset in range(6, -1, -1):
+        d = today - timedelta(days=offset)
+        beats = await beat_service.beat_repo.list(date_filter=d)
+        total_seconds = sum(b.duration.total_seconds() for b in beats if not b.is_active)
+        days.append(DeviceWeeklyDay(date=d, minutes=int(total_seconds / 60)))
+    return DeviceWeeklyResponse(days=days)
 
 
 @router.post("/heartbeat", response_model=DeviceHeartbeatResponse)

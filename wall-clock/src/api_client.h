@@ -36,6 +36,14 @@ public:
     bool startTimer(const String& projectId);
     bool stopTimer();
     bool getFavorites(FavoriteProject* projects, int& count, int maxCount = 9);
+
+    // getWeeklyMinutes fills [dayMins] with the last 7 days of total
+    // tracked minutes, oldest first (so dayMins[0] is six days ago,
+    // dayMins[6] is today). Returns false on any HTTP / parse error;
+    // the array is left untouched in that case so the caller's
+    // previous values remain on screen until the next successful
+    // fetch.
+    bool getWeeklyMinutes(int dayMins[7]);
     // postHeartbeat sends device telemetry. -1 / NaN values get
     // omitted so the API stores whichever fields the caller has
     // measurements for. Heartbeat is the canonical "I'm alive"

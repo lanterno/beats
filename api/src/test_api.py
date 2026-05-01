@@ -2415,6 +2415,38 @@ class TestDevicePairingAPI:
             )
             assert isinstance(fav["color_rgb"], list) and len(fav["color_rgb"]) == 3
 
+    def test_device_weekly_returns_seven_days_oldest_first(self):
+        """GET /api/device/weekly returns last 7 days of minute totals
+        — the wall-clock parses these directly into its weekly bar
+        display. Ordering is oldest → newest so the firmware can render
+        left-to-right without re-sorting."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code = resp.json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        device_headers = {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+        resp = client.get("/api/device/weekly", headers=device_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "days" in body
+        assert len(body["days"]) == 7
+
+        # Ordering: oldest → newest. Six days ago to today inclusive.
+        from datetime import date, timedelta
+
+        today = date.today()
+        expected_dates = [
+            (today - timedelta(days=offset)).isoformat() for offset in range(6, -1, -1)
+        ]
+        assert [d["date"] for d in body["days"]] == expected_dates
+
+        # Each entry has the minimal shape the firmware parses.
+        for entry in body["days"]:
+            assert "date" in entry
+            assert "minutes" in entry
+            assert isinstance(entry["minutes"], int)
+            assert entry["minutes"] >= 0
+
     def test_device_heartbeat_persists_telemetry_for_get(self):
         """POST /api/device/heartbeat with telemetry stores the values;
         GET /api/device/heartbeat returns them. Locks in the round-trip

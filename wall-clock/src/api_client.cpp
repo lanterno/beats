@@ -116,6 +116,29 @@ bool ApiClient::getFavorites(FavoriteProject* projects, int& count, int maxCount
     return true;
 }
 
+bool ApiClient::getWeeklyMinutes(int dayMins[7]) {
+    JsonDocument doc;
+    if (!httpGet("/api/device/weekly", doc)) return false;
+
+    // API contract: {"days": [{"date": "...", "minutes": N}, ...]} —
+    // exactly 7 entries, oldest first. We trust the count from the
+    // server but defensively cap so a future API change that
+    // accidentally returns 8 doesn't write past dayMins[6].
+    JsonArray days = doc["days"].as<JsonArray>();
+    if (days.isNull()) return false;
+
+    int i = 0;
+    for (JsonObject entry : days) {
+        if (i >= 7) break;
+        dayMins[i] = entry["minutes"] | 0;
+        i++;
+    }
+    // Zero-fill any short-read so the bar display doesn't render
+    // stale values from a previous successful fetch in the tail.
+    for (; i < 7; i++) dayMins[i] = 0;
+    return true;
+}
+
 bool ApiClient::postHeartbeat(float batteryVoltage, int wifiRssi, long uptimeSeconds) {
     // Build a minimal JSON body — omit fields the caller couldn't
     // measure (NAN voltage, negative rssi/uptime) so the API's

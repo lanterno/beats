@@ -42,6 +42,16 @@ unsigned long lastStatusPoll = 0;
 unsigned long lastEinkRefresh = 0;
 unsigned long lastHeartbeat = 0;
 
+// Cache for the weekly bar display. Refreshed every 5 minutes while
+// the display is in WEEKLY_PROGRESS mode, plus on-demand when the
+// user switches into that mode. Other modes don't pull this — the
+// bars don't change second-to-second and we don't want to burn radio
+// time on idle tabs.
+int weeklyMins[7] = {0};
+bool weeklyLoaded = false;
+unsigned long lastWeeklyFetch = 0;
+const unsigned long WEEKLY_FETCH_INTERVAL_MS = 5UL * 60UL * 1000UL;
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -293,8 +303,19 @@ void loop() {
                 break;
 
             case DisplayMode::WEEKLY_PROGRESS: {
-                int dayMins[7] = {0};  // TODO: fetch from API
-                eink.showWeeklyProgress(dayMins);
+                // Pull on first entry to this mode and every five
+                // minutes thereafter. Failures keep the previous
+                // values (or zeros if never loaded) — the bars
+                // don't flicker to empty on a transient WiFi blip.
+                unsigned long nowMs = millis();
+                bool stale = !weeklyLoaded || (nowMs - lastWeeklyFetch) > WEEKLY_FETCH_INTERVAL_MS;
+                if (stale) {
+                    if (api.getWeeklyMinutes(weeklyMins)) {
+                        weeklyLoaded = true;
+                        lastWeeklyFetch = nowMs;
+                    }
+                }
+                eink.showWeeklyProgress(weeklyMins);
                 break;
             }
 
