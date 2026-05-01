@@ -75,15 +75,35 @@ class TrayIconRenderer {
     return byteData!.buffer.asUint8List();
   }
 
-  static String? _hexFromRgb(List<int>? rgb) {
-    if (rgb == null || rgb.length < 3) return null;
-    String hex(int v) => v.clamp(0, 255).toRadixString(16).padLeft(2, '0');
-    return '${hex(rgb[0])}${hex(rgb[1])}${hex(rgb[2])}';
-  }
+  // Static methods kept for backwards-compat with the existing call
+  // sites; delegate to the pure top-level functions below so tests
+  // can hit them without instantiating the renderer.
+  static String? _hexFromRgb(List<int>? rgb) => trayHexFromRgb(rgb);
 
-  static ui.Color _parseHex(String hex) {
-    final cleaned = hex.replaceFirst('#', '');
-    final value = int.tryParse(cleaned, radix: 16) ?? 0x7A7A7A;
-    return ui.Color(0xFF000000 | value);
-  }
+  static ui.Color _parseHex(String hex) => trayParseHex(hex);
+}
+
+/// Pure helpers for the tray-icon color path, lifted out of
+/// [TrayIconRenderer] so they can be unit tested without spinning up
+/// `path_provider` or rasterizing PNGs. The rendering pipeline still
+/// lives in the renderer; these just normalize inputs.
+
+/// Encodes a project's [r, g, b] tuple as a six-char uppercase hex
+/// string (no `#`). Returns null when the list is missing or
+/// malformed — the caller falls back to the idle gray. Each
+/// component is clamped to 0..255 so a stray negative or 256+ value
+/// from upstream JSON doesn't blow up `toRadixString`.
+String? trayHexFromRgb(List<int>? rgb) {
+  if (rgb == null || rgb.length < 3) return null;
+  String hex(int v) => v.clamp(0, 255).toRadixString(16).padLeft(2, '0');
+  return '${hex(rgb[0])}${hex(rgb[1])}${hex(rgb[2])}';
+}
+
+/// Parses a hex string (with or without `#`) into a fully-opaque
+/// [ui.Color]. Falls back to the neutral gray on any parse error so
+/// the tray always has SOMETHING to render — never a blank icon.
+ui.Color trayParseHex(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  final value = int.tryParse(cleaned, radix: 16) ?? 0x7A7A7A;
+  return ui.Color(0xFF000000 | value);
 }
