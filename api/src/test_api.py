@@ -3573,6 +3573,88 @@ class TestAuthRouterErrorPaths:
         assert opts["allowCredentials"] == []
         assert "rpId" in opts
 
+    def test_register_start_brand_new_email_creates_user(self):
+        """POST /register/start with an email that has NO user row →
+        creates a new user (the `else` branch at line 133) and
+        returns its id. Pin both: 200 status AND a fresh user_id
+        is assigned (not the existing-user ObjectId)."""
+        sync_client, db = self._db()
+        email = "fresh-account@example.com"
+        # Confirm the email starts unknown
+        assert db.users.count_documents({"email": email}) == 0
+        sync_client.close()
+
+        resp = client.post(
+            "/api/auth/register/start",
+            json={"email": email, "display_name": "Fresh"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        new_user_id = body["user_id"]
+        assert new_user_id  # non-empty
+
+        # Exactly one user row created with the matching email
+        sync_client, db = self._db()
+        assert db.users.count_documents({"email": email}) == 1
+        sync_client.close()
+
+    def test_register_verify_value_error_returns_400_envelope(self, monkeypatch):
+        """When a pending registration challenge exists AND the user
+        is found, but webauthn.verify_registration raises ValueError
+        (malformed credential / signature mismatch), the response is
+        400 with the exception text in the detail. Pin the 400
+        envelope — distinct from the no-pending 400 (different
+        cause, same status)."""
+        from bson import ObjectId
+
+        from beats.api.routers import auth as auth_router
+
+        sync_client, db = self._db()
+        # Seed a user the verify handler will look up
+        user_id = str(ObjectId())
+        db.users.insert_one(
+            {
+                "_id": ObjectId(user_id),
+                "email": "verify-test@example.com",
+                "display_name": "Verify",
+            }
+        )
+        sync_client.close()
+
+        # Register a pending challenge for this user_id directly,
+        # bypassing the OAuth crypto roundtrip
+        challenge_bytes = b"X" * 32
+        auth_router._session_manager.store_challenge(challenge_bytes, "registration")
+        auth_router._session_manager.store_pending_registration(challenge_bytes, user_id)
+
+        # Make verify_registration raise ValueError — this is the
+        # branch that catches malformed credentials / sig mismatches
+        async def fake_verify_registration(*args, **kwargs):  # noqa: ARG001
+            raise ValueError("malformed credential blob")
+
+        # Patch through the WebAuthnDep — find the actual instance
+        # the router uses
+        from beats.auth.webauthn import WebAuthnManager
+
+        monkeypatch.setattr(WebAuthnManager, "verify_registration", fake_verify_registration)
+
+        resp = client.post(
+            "/api/auth/register/verify",
+            json={
+                "credential": {
+                    "id": "fake",
+                    "rawId": "fake",
+                    "response": {},
+                    "type": "public-key",
+                },
+                "device_name": "Test",
+            },
+        )
+        assert resp.status_code == 400
+        # Exception message propagates so the user sees the actual
+        # reason (not just a generic "registration failed")
+        assert "malformed credential blob" in resp.json()["detail"]
+
 
 class TestRateLimiting:
     """Test that auth endpoints are rate-limited."""
@@ -5245,6 +5327,30 @@ class TestOAuthIntegrationRouters:
         body = resp.json()
         assert body["connected"] is False
         assert body["github_username"] is None
+
+    def test_github_disconnect_returns_true_when_connected(self, auth_info):
+        """DELETE /api/github/disconnect with a connected integration
+        → disconnected:True and the doc is gone. Pin so the
+        Settings → Integrations panel's "Disconnect" button reflects
+        actual state change (mirrors the fitbit/calendar disconnect
+        contracts)."""
+        sync_client, db = self._db()
+        db.github_integrations.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "access_token": "gho_x",
+                "github_username": "ahmed",
+                "enabled": True,
+            }
+        )
+        sync_client.close()
+        resp = client.delete("/api/github/disconnect", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["disconnected"] is True
+        # Confirm the doc is gone
+        sync_client, db = self._db()
+        assert db.github_integrations.count_documents({"user_id": auth_info["user_id"]}) == 0
+        sync_client.close()
 
     # -------- /api/fitbit --------
 
