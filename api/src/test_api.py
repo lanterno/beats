@@ -4409,3 +4409,180 @@ class TestBiometricsAPI:
         resp = client.get("/api/oura/status", headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json()["connected"] is False
+
+
+class TestOAuthIntegrationRouters:
+    """Cross-cutting tests for the four OAuth integration routers
+    (calendar, github, fitbit, oura). All four follow the same
+    pattern: auth-url, connect, status, disconnect, plus a
+    domain-specific fetch endpoint.
+
+    These routers were at 56-74% coverage — most uncovered lines
+    are simple thin-wrapper endpoint bodies that only run when an
+    actual request hits them. Pin the URL/method mapping +
+    response shape so a refactor of the dependency injection or
+    response model can't silently break the OAuth callbacks.
+
+    The auth-url + status-disconnected + disconnect-when-empty
+    paths don't need any external HTTP and run against the empty
+    auth_info user. Connected-state tests seed the integration
+    doc directly in Mongo."""
+
+    def _db(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        return sync_client, sync_client[db_name]
+
+    @pytest.fixture(autouse=True)
+    def _reset_integrations(self, auth_info):
+        """Drop all integration docs after each test — so the
+        connected and disconnected variants don't bleed."""
+        sync_client, db = self._db()
+        try:
+            yield
+        finally:
+            for coll in (
+                "calendar_integrations",
+                "github_integrations",
+                "fitbit_integrations",
+                "oura_integrations",
+            ):
+                db[coll].delete_many({"user_id": auth_info["user_id"]})
+            sync_client.close()
+
+    # -------- /api/calendar --------
+
+    def test_calendar_auth_url_returns_google_consent_url(self, auth_info):
+        """GET /api/calendar/auth-url returns the Google OAuth URL.
+        Pin so a regression doesn't silently change the URL host
+        or strip required params."""
+        resp = client.get("/api/calendar/auth-url", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        url = resp.json()["url"]
+        assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+        # The two refresh-token-critical params must be in the URL
+        assert "access_type=offline" in url
+        assert "prompt=consent" in url
+
+    def test_calendar_status_connected_when_integration_exists(self, auth_info):
+        """GET /api/calendar/status with a connected integration →
+        connected: True, provider: 'google'. Pin the response
+        shape — the UI's Settings → Integrations panel binds
+        directly to these keys."""
+        sync_client, db = self._db()
+        db.calendar_integrations.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "provider": "google",
+                "access_token": "ya29",
+                "refresh_token": "rt",
+                "enabled": True,
+            }
+        )
+        sync_client.close()
+        resp = client.get("/api/calendar/status", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        assert body["provider"] == "google"
+
+    def test_calendar_status_disconnected_when_no_doc(self, auth_info):
+        """GET /api/calendar/status with no integration → connected:
+        False, provider: None. Pin so the UI can render the
+        "Connect Calendar" button on first load."""
+        resp = client.get("/api/calendar/status", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is False
+        assert body["provider"] is None
+
+    def test_calendar_events_empty_when_not_connected(self, auth_info):
+        """GET /api/calendar/events without an integration → []
+        (not 500, not "connection required" error). Pin so the
+        coach's day context falls through gracefully when the
+        user hasn't connected calendar."""
+        resp = client.get("/api/calendar/events", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_calendar_disconnect_returns_false_when_not_connected(self, auth_info):
+        """DELETE /api/calendar/disconnect without an integration →
+        disconnected: False (idempotent). Pin so a "disconnect"
+        button click on an already-disconnected account doesn't
+        500 the user."""
+        resp = client.delete("/api/calendar/disconnect", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["disconnected"] is False
+
+    # -------- /api/github --------
+
+    def test_github_auth_url_returns_github_consent_url(self, auth_info):
+        """GET /api/github/auth-url returns the GitHub OAuth URL."""
+        resp = client.get("/api/github/auth-url", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        url = resp.json()["url"]
+        assert url.startswith("https://github.com/login/oauth/authorize?")
+
+    def test_github_status_connected_when_integration_exists(self, auth_info):
+        """Status reports github_username when connected. Pin so
+        the UI can show "Connected as @ahmed" rather than a
+        generic "Connected" label. The key is `github_username`
+        (not `username`) — pin so a UI rename can't drift."""
+        sync_client, db = self._db()
+        db.github_integrations.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "access_token": "gho_x",
+                "github_username": "ahmed",
+                "enabled": True,
+            }
+        )
+        sync_client.close()
+        resp = client.get("/api/github/status", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        assert body["github_username"] == "ahmed"
+
+    def test_github_status_disconnected_when_no_doc(self, auth_info):
+        resp = client.get("/api/github/status", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is False
+        assert body["github_username"] is None
+
+    # -------- /api/fitbit --------
+
+    def test_fitbit_auth_url_returns_fitbit_consent_url(self, auth_info):
+        resp = client.get("/api/fitbit/auth-url", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        url = resp.json()["url"]
+        assert url.startswith("https://www.fitbit.com/oauth2/authorize?")
+
+    # -------- /api/oura --------
+
+    def test_oura_disconnect_returns_false_when_not_connected(self, auth_info):
+        """DELETE /api/oura/disconnect without an integration →
+        disconnected: False. Same idempotent contract as
+        calendar/disconnect."""
+        resp = client.delete("/api/oura/disconnect", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["disconnected"] is False
+
+    # -------- Auth wall — unauthenticated requests rejected --------
+
+    def test_calendar_auth_url_requires_auth(self):
+        """GET /api/calendar/auth-url without a token → 401.
+        Pin the auth gate so an unauthenticated caller can't
+        even discover the OAuth flow start URL."""
+        resp = client.get("/api/calendar/auth-url")
+        assert resp.status_code == 401
+
+    def test_oura_status_requires_auth(self):
+        resp = client.get("/api/oura/status")
+        assert resp.status_code == 401
