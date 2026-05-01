@@ -14,6 +14,7 @@
  */
 import { useState } from "react";
 import { downloadFile } from "@/shared/lib/downloadFile";
+import { shortRepoPath } from "@/shared/lib/flowAggregation";
 
 export interface FlowFilterChipsProps {
 	repo?: string;
@@ -37,7 +38,7 @@ export function FlowFilterChips({
 			{repo && (
 				<FilterPill
 					label="repo"
-					value={shortRepoTail(repo)}
+					value={shortRepoPath(repo)}
 					title={repo}
 					onClear={onClearRepo}
 					clearLabel="Clear repo filter"
@@ -137,11 +138,6 @@ function shortBundleTail(bundleId: string): string {
 	// fallback FlowByApp uses for unknown ids; good enough for a chip.
 	const dot = bundleId.lastIndexOf(".");
 	return dot >= 0 ? bundleId.slice(dot + 1) : bundleId;
-}
-
-function shortRepoTail(repo: string): string {
-	const parts = repo.split(/[\\/]/).filter(Boolean);
-	return parts.length > 2 ? parts.slice(-2).join("/") : parts.join("/") || repo;
 }
 
 function FilterPill({

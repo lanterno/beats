@@ -96,7 +96,7 @@ export default function Insights() {
 							type="button"
 							onClick={clearAllFilters}
 							className="text-[10px] px-2 py-0.5 rounded-full border border-muted-foreground/40 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-							title="Clear every filter on this page"
+							title="Clear every filter on this page (or press Esc)"
 						>
 							× clear all filters ({activeFilterCount})
 						</button>
