@@ -953,3 +953,133 @@ class TestProductivityScore:
         assert result["score"] <= 100
         # And in fact equals 100 here.
         assert result["score"] == 100
+
+
+class TestProductivityScoreHistory:
+    """compute_productivity_score_history powers the score sparkline.
+    The HTTP wrapper is already pinned by the route's range-validation
+    test (TestIntelligenceAPI.test_score_history_validates_weeks_range);
+    these tests pin the per-week aggregation logic underneath: which
+    weeks get included, in what order, and how each week's score is
+    computed independently."""
+
+    async def test_returns_n_entries(self):
+        """weeks=N produces exactly N history rows."""
+        svc = _intel_service()
+        result = await svc.compute_productivity_score_history(weeks=4)
+        assert len(result) == 4
+
+    async def test_default_weeks_is_eight(self):
+        svc = _intel_service()
+        result = await svc.compute_productivity_score_history()
+        assert len(result) == 8
+
+    async def test_empty_data_renders_neutral_score_per_week(self):
+        """Fresh-account → every week is the neutral baseline (no
+        sessions, no intentions, no goal projects). Pin so a regression
+        that would 500 on empty data fails the test instead."""
+        svc = _intel_service()
+        result = await svc.compute_productivity_score_history(weeks=4)
+        # Each week: consistency=0, intentions=13 (neutral), goals=13
+        # (neutral, no goal_projects), quality=0 → 26.
+        for entry in result:
+            assert entry["score"] == 26
+
+    async def test_entries_carry_week_of_and_score_keys(self):
+        svc = _intel_service()
+        result = await svc.compute_productivity_score_history(weeks=2)
+        for entry in result:
+            assert set(entry.keys()) == {"week_of", "score"}
+            # week_of is an ISO date string starting with YYYY-MM-DD.
+            assert len(entry["week_of"]) == 10
+            assert entry["week_of"][4] == "-"
+
+    async def test_entries_ordered_oldest_to_newest(self):
+        """The sparkline renders left-to-right chronologically. The
+        loop walks weeks=N..1 producing oldest first; pin so a
+        refactor that drops the descending walk doesn't reverse the
+        sparkline."""
+        svc = _intel_service()
+        result = await svc.compute_productivity_score_history(weeks=4)
+        weeks = [entry["week_of"] for entry in result]
+        # Strictly ascending.
+        assert weeks == sorted(weeks)
+        # And no duplicates.
+        assert len(set(weeks)) == len(weeks)
+
+    async def test_excludes_current_week(self):
+        """The loop runs `for w in range(weeks, 0, -1)` so the
+        smallest offset is 1 week — the CURRENT week is never
+        included. Pin so a future tweak that lets w=0 in (turning
+        the in-progress week's partial data into a misleading
+        sparkline endpoint) breaks the test."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        current_monday = _monday_of(today).isoformat()
+
+        svc = _intel_service()
+        result = await svc.compute_productivity_score_history(weeks=4)
+        weeks = {entry["week_of"] for entry in result}
+        assert current_monday not in weeks
+
+    async def test_week_with_all_completed_intentions_scores_higher(self):
+        """A historical week where the user completed all intentions
+        scores higher than an empty week. Pin so a regression in the
+        per-week intention aggregation doesn't silently flatten the
+        sparkline."""
+        from beats.domain.intelligence import _monday_of
+        from beats.domain.models import Intention
+
+        today = datetime.now(UTC).date()
+        # Place an intention 2 weeks ago, on the Monday.
+        two_weeks_ago_monday = _monday_of(today) - timedelta(weeks=2)
+        intentions = [
+            Intention(
+                project_id="p1",
+                date=two_weeks_ago_monday,
+                planned_minutes=60,
+                completed=True,
+            ),
+        ]
+        svc = _intel_service(intentions=intentions)
+        result = await svc.compute_productivity_score_history(weeks=4)
+        by_week = {e["week_of"]: e["score"] for e in result}
+
+        # The completed week scores higher than baseline (26):
+        # consistency 0 + intentions 25 + goals 13 + quality 0 = 38.
+        assert by_week[two_weeks_ago_monday.isoformat()] == 38
+        # An adjacent empty week stays at 26.
+        three_weeks_ago_monday = _monday_of(today) - timedelta(weeks=3)
+        assert by_week[three_weeks_ago_monday.isoformat()] == 26
+
+    async def test_each_week_is_sliced_independently(self):
+        """A session three weeks ago should NOT affect the score for
+        a week with no sessions. Pin per-week isolation so a
+        refactor that conflates ranges doesn't smear scores."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        three_weeks_ago_monday = _monday_of(today) - timedelta(weeks=3)
+        # One session, three weeks ago, on a weekday → that week
+        # gets +5 consistency.
+        s = datetime.combine(three_weeks_ago_monday, datetime.min.time(), tzinfo=UTC).replace(
+            hour=10
+        )
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=1))]
+        svc = _intel_service(beats=beats)
+        result = await svc.compute_productivity_score_history(weeks=4)
+        by_week = {e["week_of"]: e["score"] for e in result}
+
+        # Three-weeks-ago: 5 (consistency) + 13 + 13 + 18 (quality
+        # for 60-min session in <60 bucket — actually median 60 falls
+        # at "< 120" boundary so it's 23) = let's just assert it's
+        # higher than the empty baseline.
+        assert by_week[three_weeks_ago_monday.isoformat()] > 26
+        # And the OTHER weeks (no sessions in them) stay at the
+        # empty baseline.
+        for w in [
+            (_monday_of(today) - timedelta(weeks=2)).isoformat(),
+            (_monday_of(today) - timedelta(weeks=4)).isoformat(),
+        ]:
+            assert by_week[w] == 26
