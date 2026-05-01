@@ -50,15 +50,18 @@ The token persists across firmware flashes (it lives in source, not NVS). To rot
 
 - The clock connects to Wi-Fi, configures NTP via `pool.ntp.org`, then fetches today's status from `/api/device/status` every 10 seconds.
 - The mode button cycles `ACTIVE_TIMER` → `CLOCK` → `IDLE_SUMMARY` → `WEEKLY_PROGRESS` and back.
+- `WEEKLY_PROGRESS` fetches the last 7 days of tracked minutes from `/api/device/weekly` on first entry and refreshes every 5 minutes while the mode is active. Other modes don't pull this — radio is the dominant power draw.
 - A long-press on the mode button toggles a 25/5 Pomodoro.
 - USB-powered + idle + no-pomodoro auto-switches to the dock view.
+- Failed timer start/stop (any non-2xx, WiFi blip, etc.) flashes the LED strip red 3× so a rejected button press doesn't appear to vanish — the next forced status poll repaints from truth right after.
+- Heartbeats to `/api/device/heartbeat` carry battery voltage, WiFi RSSI, and uptime so the API can show "device last seen" + low-battery state in the Settings UI.
 
 If Wi-Fi drops mid-session the firmware auto-reconnects (`WiFi.setAutoReconnect(true)` in `setup()`), so you don't need to power-cycle.
 
 ## Limitations
 
 - The clock currently talks plain HTTP. Pointing `API_BASE_URL` at an `https://` host won't work — the firmware uses `HTTPClient::begin(url)` rather than the secure-client variant.
-- The `WEEKLY_PROGRESS` mode is scaffolded but draws an empty 7-day bar chart pending a `/api/device/week` endpoint (see the `// TODO` in `main.cpp`).
+- The display's e-ink refresh is full-redraw, not partial — every mode switch ghosts briefly. A partial-update mode is the obvious next firmware delta but blocked on a GxEPD2 driver upgrade.
 
 ## Layout
 
