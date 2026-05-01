@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestAggregateBy_GroupsAndOrders(t *testing.T) {
 	}
 	got := aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return w.EditorLanguage
-	})
+	}, DefaultTopLimit)
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 buckets, got %d", len(got))
@@ -45,7 +46,7 @@ func TestAggregateBy_SkipsEmptyKeys(t *testing.T) {
 	}
 	got := aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return w.EditorLanguage
-	})
+	}, DefaultTopLimit)
 
 	if len(got) != 1 || got[0].Key != "go" {
 		t.Errorf("expected only the 'go' bucket, got %+v", got)
@@ -61,25 +62,63 @@ func TestAggregateBy_TieBreaksOnAvgScore(t *testing.T) {
 	}
 	got := aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return w.EditorLanguage
-	})
+	}, DefaultTopLimit)
 
 	if got[0].Key != "go" {
 		t.Errorf("expected 'go' first on tied count + higher avg, got %+v", got)
 	}
 }
 
-func TestAggregateBy_CapsAtFive(t *testing.T) {
-	// Six distinct buckets; the helper should return only the top 5.
+func TestAggregateBy_CapsAtFiveByDefault(t *testing.T) {
+	// Six distinct buckets; the helper should return only the top 5
+	// when DefaultTopLimit is passed (matches the CLI default).
 	var windows []client.FlowWindowRecord
 	for _, lang := range []string{"a", "b", "c", "d", "e", "f"} {
 		windows = append(windows, client.FlowWindowRecord{FlowScore: 0.5, EditorLanguage: lang})
 	}
 	got := aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return w.EditorLanguage
-	})
+	}, DefaultTopLimit)
 
 	if len(got) != 5 {
 		t.Errorf("expected leaderboard capped at 5 rows, got %d", len(got))
+	}
+}
+
+func TestAggregateBy_RespectsCustomLimit(t *testing.T) {
+	// `beatsd top --limit 10` should let the caller see ten rows
+	// when the data has them. Locks in that the cap is honored as
+	// passed, not silently overridden.
+	var windows []client.FlowWindowRecord
+	for _, lang := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"} {
+		windows = append(windows, client.FlowWindowRecord{FlowScore: 0.5, EditorLanguage: lang})
+	}
+	got := aggregateBy(windows, func(w client.FlowWindowRecord) string {
+		return w.EditorLanguage
+	}, 10)
+
+	if len(got) != 10 {
+		t.Errorf("expected leaderboard capped at 10 rows, got %d", len(got))
+	}
+}
+
+func TestAggregateBy_ZeroLimitMeansNoCap(t *testing.T) {
+	// Internal-API contract: limit ≤ 0 means "surface every bucket".
+	// The CLI parser rejects --limit 0 (positive ints only), but
+	// programmatic callers can pass 0 to opt out of capping.
+	var windows []client.FlowWindowRecord
+	for i := 0; i < 20; i++ {
+		windows = append(windows, client.FlowWindowRecord{
+			FlowScore:      0.5,
+			EditorLanguage: fmt.Sprintf("lang%d", i),
+		})
+	}
+	got := aggregateBy(windows, func(w client.FlowWindowRecord) string {
+		return w.EditorLanguage
+	}, 0)
+
+	if len(got) != 20 {
+		t.Errorf("expected limit=0 to surface all 20 buckets, got %d", len(got))
 	}
 }
 
@@ -95,7 +134,7 @@ func TestFormatTop_RendersAllThreeSections(t *testing.T) {
 			EditorLanguage:   "go",
 		},
 	}
-	out := formatTop(windows, 60, client.FlowWindowsFilter{})
+	out := formatTop(windows, 60, client.FlowWindowsFilter{}, DefaultTopLimit)
 
 	for _, want := range []string{"BY REPO", "BY LANGUAGE", "BY APP", "code/beats", "go", "coding"} {
 		if !strings.Contains(out, want) {
@@ -105,7 +144,7 @@ func TestFormatTop_RendersAllThreeSections(t *testing.T) {
 }
 
 func TestFormatTop_EmptyShowsHelpfulHint(t *testing.T) {
-	out := formatTop(nil, 60, client.FlowWindowsFilter{})
+	out := formatTop(nil, 60, client.FlowWindowsFilter{}, DefaultTopLimit)
 	if !strings.Contains(out, "no flow windows") {
 		t.Errorf("expected helpful empty-state hint, got: %s", out)
 	}
@@ -118,7 +157,7 @@ func TestFormatTop_EmptyWithFilterBlamesFilter(t *testing.T) {
 	// Same context-aware hint stats/recent use — when the user has
 	// narrowed the slice to nothing, point at the filter rather than
 	// the daemon process.
-	out := formatTop(nil, 60, client.FlowWindowsFilter{EditorLanguage: "rust"})
+	out := formatTop(nil, 60, client.FlowWindowsFilter{EditorLanguage: "rust"}, DefaultTopLimit)
 	if !strings.Contains(out, "filter") {
 		t.Errorf("filtered empty should mention the filter, got: %s", out)
 	}
@@ -138,7 +177,7 @@ func TestFormatTop_FilterCaptionAppendedToHeader(t *testing.T) {
 			EditorRepo: "/Users/me/code/beats", EditorLanguage: "go",
 		},
 	}
-	out := formatTop(windows, 60, client.FlowWindowsFilter{EditorLanguage: "go"})
+	out := formatTop(windows, 60, client.FlowWindowsFilter{EditorLanguage: "go"}, DefaultTopLimit)
 	if !strings.Contains(out, "lang=go") {
 		t.Errorf("expected filter caption in header, got:\n%s", out)
 	}
@@ -152,7 +191,7 @@ func TestFormatTop_LeaderboardWithNoEntriesShowsDash(t *testing.T) {
 	windows := []client.FlowWindowRecord{
 		{FlowScore: 0.5, DominantCategory: "browser"},
 	}
-	out := formatTop(windows, 60, client.FlowWindowsFilter{})
+	out := formatTop(windows, 60, client.FlowWindowsFilter{}, DefaultTopLimit)
 
 	// Find each header and confirm structure under it.
 	repoIdx := strings.Index(out, "BY REPO")
@@ -191,7 +230,7 @@ func TestFormatTopJSON_RoundTripsAndAlwaysHasAllThreeAxes(t *testing.T) {
 			EditorLanguage:   "go",
 		},
 	}
-	out, err := formatTopJSON(windows)
+	out, err := formatTopJSON(windows, DefaultTopLimit)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -221,7 +260,7 @@ func TestFormatTopJSON_EmptyAxesAreArraysNotNull(t *testing.T) {
 	windows := []client.FlowWindowRecord{
 		{FlowScore: 0.5, DominantCategory: "browser"},
 	}
-	out, err := formatTopJSON(windows)
+	out, err := formatTopJSON(windows, DefaultTopLimit)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -242,7 +281,7 @@ func TestFormatTopJSON_EmptyAxesAreArraysNotNull(t *testing.T) {
 func TestFormatTopJSON_NoWindowsStillReturnsValidObject(t *testing.T) {
 	// jq users shouldn't have to special-case "no flow today" — empty
 	// input returns the same shape with empty arrays.
-	out, err := formatTopJSON(nil)
+	out, err := formatTopJSON(nil, DefaultTopLimit)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -255,7 +255,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
-		if err := runTop(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
+		limit := f.Limit
+		if limit == 0 {
+			limit = DefaultTopLimit
+		}
+		if err := runTop(cfg, f.Minutes, f.Filter, limit, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -563,6 +567,7 @@ Commands:
                   --here           shorthand for --repo $(git rev-parse --show-toplevel)
                   --language ID    narrow to a VS Code language id (e.g. go, dart)
                   --bundle ID      narrow to a macOS bundle id (e.g. com.microsoft.VSCode)
+                  --limit N        cap each axis at N rows (default 5)
                   --json           emit the three leaderboards as a JSON object (for piping into jq)
   open          Open the Beats web UI Insights page in the system browser
                   --repo PATH      deep-link by editor workspace (?repo=…)

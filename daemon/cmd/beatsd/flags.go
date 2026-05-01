@@ -23,6 +23,11 @@ type flowFlags struct {
 	Filter  client.FlowWindowsFilter
 	AsJSON  bool
 	Here    bool
+	// Limit caps leaderboard rows in `beatsd top`; 0 means "use the
+	// command default" (5). Only `top` reads this — recent and stats
+	// either return all rows in the window or a single summary, so
+	// limit doesn't apply there.
+	Limit int
 }
 
 // parseFlowFlags walks a slice of subcommand arguments and pulls out the
@@ -59,6 +64,12 @@ func parseFlowFlags(args []string) flowFlags {
 			}
 		case "--here":
 			out.Here = true
+		case "--limit":
+			if i+1 < len(args) {
+				if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+					out.Limit = v
+				}
+			}
 		case "--json":
 			out.AsJSON = true
 		}

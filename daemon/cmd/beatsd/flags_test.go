@@ -88,6 +88,23 @@ func TestParseFlowFlags_TopUseCase_OnlyMinutesMatter(t *testing.T) {
 	}
 }
 
+func TestParseFlowFlags_LimitFlag(t *testing.T) {
+	// `--limit N` is parsed only by `top`; recent / stats ignore it.
+	// 0 / negative / non-numeric values fall back to the zero value
+	// (which the dispatch arm replaces with DefaultTopLimit).
+	got := parseFlowFlags([]string{"top", "--limit", "10"})
+	if got.Limit != 10 {
+		t.Errorf("expected --limit 10 to set Limit=10, got %d", got.Limit)
+	}
+
+	for _, bad := range []string{"0", "-3", "ten", ""} {
+		out := parseFlowFlags([]string{"top", "--limit", bad})
+		if out.Limit != 0 {
+			t.Errorf("expected --limit %q to leave Limit at zero, got %d", bad, out.Limit)
+		}
+	}
+}
+
 func TestParseFlowFlags_HereFlag(t *testing.T) {
 	// `--here` is a boolean toggle (no value follows). Parser should
 	// flip Here without touching Filter.EditorRepo — resolution of

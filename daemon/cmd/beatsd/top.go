@@ -28,7 +28,7 @@ import (
 // object keyed by axis ({"by_repo": [...], "by_language": [...],
 // "by_app": [...]}) instead of the table — symmetric with `recent
 // --json` and `stats --json`, intended for shell pipelines.
-func runTop(cfg *config.Config, minutes int, filter client.FlowWindowsFilter, asJSON bool) error {
+func runTop(cfg *config.Config, minutes int, filter client.FlowWindowsFilter, limit int, asJSON bool) error {
 	if minutes <= 0 {
 		minutes = 60
 	}
@@ -47,14 +47,14 @@ func runTop(cfg *config.Config, minutes int, filter client.FlowWindowsFilter, as
 	}
 
 	if asJSON {
-		out, err := formatTopJSON(windows)
+		out, err := formatTopJSON(windows, limit)
 		if err != nil {
 			return err
 		}
 		fmt.Print(out)
 		return nil
 	}
-	fmt.Print(formatTop(windows, minutes, filter))
+	fmt.Print(formatTop(windows, minutes, filter, limit))
 	return nil
 }
 
@@ -71,14 +71,17 @@ type topJSONOutput struct {
 // arrays (never null) for missing axes — same rule as
 // `formatRecentJSON` since `jq` users would have to special-case null
 // otherwise.
-func formatTopJSON(windows []client.FlowWindowRecord) (string, error) {
+//
+// `limit` caps each axis. 0 (or negative) means "no cap" — surface
+// every distinct bucket. The CLI default is DefaultTopLimit (5).
+func formatTopJSON(windows []client.FlowWindowRecord, limit int) (string, error) {
 	out := topJSONOutput{
 		ByRepo: aggregateBy(windows, func(w client.FlowWindowRecord) string {
 			return w.EditorRepo
-		}),
+		}, limit),
 		ByLanguage: aggregateBy(windows, func(w client.FlowWindowRecord) string {
 			return w.EditorLanguage
-		}),
+		}, limit),
 		ByApp: aggregateBy(windows, func(w client.FlowWindowRecord) string {
 			// JSON consumers want the raw bundle id (or category fallback),
 			// not the human-readable "coding" label that the table form
@@ -88,7 +91,7 @@ func formatTopJSON(windows []client.FlowWindowRecord) (string, error) {
 				return w.DominantBundleID
 			}
 			return w.DominantCategory
-		}),
+		}, limit),
 	}
 	if out.ByRepo == nil {
 		out.ByRepo = []topBucket{}
@@ -122,7 +125,11 @@ type topBucket struct {
 // is rendered into the caption (and the empty-state hint) so the
 // user can see at a glance which slice they're staring at — same
 // rule the recent/stats forms use.
-func formatTop(windows []client.FlowWindowRecord, minutesRequested int, filter client.FlowWindowsFilter) string {
+//
+// `limit` caps each axis at that many rows. Pass 0 (or negative)
+// for "no cap"; CLI dispatch translates a missing --limit flag into
+// DefaultTopLimit (5).
+func formatTop(windows []client.FlowWindowRecord, minutesRequested int, filter client.FlowWindowsFilter, limit int) string {
 	if len(windows) == 0 {
 		hint := "is `beatsd run` up?"
 		if !filterIsEmpty(filter) {
@@ -140,28 +147,39 @@ func formatTop(windows []client.FlowWindowRecord, minutesRequested int, filter c
 
 	writeLeaderboard(&b, "BY REPO", aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return shortRepoTrail(w.EditorRepo)
-	}))
+	}, limit))
 	writeLeaderboard(&b, "BY LANGUAGE", aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		return w.EditorLanguage
-	}))
+	}, limit))
 	writeLeaderboard(&b, "BY APP", aggregateBy(windows, func(w client.FlowWindowRecord) string {
 		// Prefer the human category label ("coding", "browser") and fall
 		// back to the bundle id for unknowns. Same logic the table form
 		// uses, kept in lockstep so the user sees consistent names.
 		return truncOrFallback(w.DominantCategory, bundle.ShortLabel(w.DominantBundleID), 30)
-	}))
+	}, limit))
 
 	return b.String()
 }
 
+// DefaultTopLimit is the leaderboard row cap when no --limit is
+// passed. Five rows fits a terminal cleanly and matches the web
+// FlowByRepo / FlowByLanguage / FlowByApp cards' default depth.
+const DefaultTopLimit = 5
+
 // aggregateBy buckets windows by a key extracted via [keyOf], skipping
 // empty keys (windows that didn't carry an editor heartbeat in the
-// "by repo" / "by language" axes), then returns the top 5 by minutes
-// (count). Sort ties resolved by avg score descending so the user sees
-// the higher-quality bucket first when minutes match.
+// "by repo" / "by language" axes), then returns the top [limit] by
+// minutes (count). Sort ties resolved by avg score descending so the
+// user sees the higher-quality bucket first when minutes match.
+//
+// A limit of 0 (or negative) is treated as "no cap" — surfaces every
+// distinct bucket. Useful for `beatsd top --limit 0 --json` when a
+// downstream jq script wants to see every repo / language / app the
+// user has touched, not just the top few.
 func aggregateBy(
 	windows []client.FlowWindowRecord,
 	keyOf func(client.FlowWindowRecord) string,
+	limit int,
 ) []topBucket {
 	type acc struct {
 		sum   float64
@@ -192,8 +210,8 @@ func aggregateBy(
 		}
 		return out[i].Avg > out[j].Avg
 	})
-	if len(out) > 5 {
-		out = out[:5]
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out
 }
