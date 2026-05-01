@@ -46,12 +46,15 @@ unsigned long lastHeartbeat = 0;
 // Helpers
 // ============================================================================
 
-int readBatteryPercent() {
+float readBatteryVoltage() {
     int raw = analogRead(BATTERY_PIN);
     // ESP32 ADC: 0-4095, with voltage divider mapping 4.2V -> ~2500
-    float voltage = (raw / 4095.0f) * 3.3f * 2.0f;  // *2 for voltage divider
-    int pct = constrain((int)((voltage - 3.0f) / 1.2f * 100), 0, 100);
-    return pct;
+    return (raw / 4095.0f) * 3.3f * 2.0f;  // *2 for voltage divider
+}
+
+int readBatteryPercent() {
+    float voltage = readBatteryVoltage();
+    return constrain((int)((voltage - 3.0f) / 1.2f * 100), 0, 100);
 }
 
 bool isUsbPowered() {
@@ -247,7 +250,11 @@ void loop() {
     // ----- Heartbeat -----
     if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
         lastHeartbeat = now;
-        api.postHeartbeat();
+        // Send real telemetry so /api/device/heartbeat surfaces
+        // battery / signal / uptime to the dashboard. Earlier
+        // firmware sent an empty body, which made the heartbeat
+        // a pure last-seen ping with no diagnostic value.
+        api.postHeartbeat(readBatteryVoltage(), WiFi.RSSI(), (long)(now / 1000));
     }
 
     // ----- E-ink refresh -----

@@ -110,8 +110,32 @@ bool ApiClient::getFavorites(FavoriteProject* projects, int& count, int maxCount
     return true;
 }
 
-bool ApiClient::postHeartbeat() {
-    return httpPost("/api/device/heartbeat");
+bool ApiClient::postHeartbeat(float batteryVoltage, int wifiRssi, long uptimeSeconds) {
+    // Build a minimal JSON body — omit fields the caller couldn't
+    // measure (NAN voltage, negative rssi/uptime) so the API's
+    // pydantic model treats them as null rather than 0/garbage.
+    String body = "{";
+    bool first = true;
+    auto comma = [&]() {
+        if (!first) body += ",";
+        first = false;
+    };
+    if (!isnan(batteryVoltage)) {
+        comma();
+        body += "\"battery_voltage\":" + String(batteryVoltage, 2);
+    }
+    // WiFi.RSSI() returns negative dBm (e.g. -67); -1 is the
+    // sentinel meaning "caller didn't measure".
+    if (wifiRssi != -1) {
+        comma();
+        body += "\"wifi_rssi\":" + String(wifiRssi);
+    }
+    if (uptimeSeconds >= 0) {
+        comma();
+        body += "\"uptime_seconds\":" + String(uptimeSeconds);
+    }
+    body += "}";
+    return httpPost("/api/device/heartbeat", body);
 }
 
 bool ApiClient::getDashboard(DeviceStatus& status, String& nextEvent, int& goalPct) {

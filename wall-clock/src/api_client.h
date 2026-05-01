@@ -36,7 +36,13 @@ public:
     bool startTimer(const String& projectId);
     bool stopTimer();
     bool getFavorites(FavoriteProject* projects, int& count, int maxCount = 9);
-    bool postHeartbeat();
+    // postHeartbeat sends device telemetry. -1 / NaN values get
+    // omitted so the API stores whichever fields the caller has
+    // measurements for. Heartbeat is the canonical "I'm alive"
+    // ping; even on rev-A boards without a battery divider, a
+    // best-effort \`postHeartbeat(NAN, -1, uptime)\` keeps the
+    // last_seen timestamp fresh.
+    bool postHeartbeat(float batteryVoltage = NAN, int wifiRssi = -1, long uptimeSeconds = -1);
     bool getDashboard(DeviceStatus& status, String& nextEvent, int& goalPct);
 
 private:
