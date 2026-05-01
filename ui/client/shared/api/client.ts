@@ -18,6 +18,20 @@ import {
 // ============================================================================
 
 /**
+ * One entry in the {@link ApiError.fields} array. Mirrors the API's
+ * 422 validation envelope (api/src/beats/api/errors.py:95) so a form
+ * can show inline messages without re-parsing the response.
+ */
+export interface ApiErrorField {
+	/** Dot-joined path of the offending field, e.g. "name" or "items.0.qty". */
+	path: string;
+	/** Human message from pydantic, e.g. "field required". */
+	message: string;
+	/** Pydantic validation type, e.g. "missing", "string_too_short". */
+	type: string;
+}
+
+/**
  * API Error class for handling backend errors consistently.
  * Similar to backend's DomainException hierarchy.
  */
@@ -26,6 +40,7 @@ export class ApiError extends Error {
 		public readonly statusCode: number,
 		message: string,
 		public readonly code?: string,
+		public readonly fields?: ApiErrorField[],
 	) {
 		super(message);
 		this.name = "ApiError";
@@ -49,6 +64,27 @@ export class ApiError extends Error {
 	isBadRequest(): boolean {
 		return this.statusCode === 400;
 	}
+
+	isValidationError(): boolean {
+		return this.statusCode === 422;
+	}
+}
+
+/**
+ * Render a 422-style fields array as a human suffix appended to the
+ * envelope's `detail`. Skips empty paths/messages defensively so a
+ * malformed entry doesn't produce "name (), email ()" garbage.
+ */
+function appendFieldDetails(detail: string, fields: ApiErrorField[]): string {
+	const parts: string[] = [];
+	for (const f of fields) {
+		const path = (f.path ?? "").trim();
+		const message = (f.message ?? "").trim();
+		if (!path && !message) continue;
+		if (path && message) parts.push(`${path} (${message})`);
+		else parts.push(path || message);
+	}
+	return parts.length === 0 ? detail : `${detail}: ${parts.join(", ")}`;
 }
 
 // ============================================================================
@@ -116,9 +152,19 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 		}
 
 		const errorBody = await response.json().catch(() => ({}));
-		const message =
+		const fields = Array.isArray(errorBody.fields)
+			? (errorBody.fields as ApiErrorField[])
+			: undefined;
+		const baseMessage =
 			errorBody.detail || errorBody.message || `Request failed: ${response.statusText}`;
-		throw new ApiError(response.status, message, errorBody.code);
+		// Append the per-field messages to the human message so any
+		// caller that just renders err.message gets useful detail —
+		// "Validation failed for 2 fields: name (field required), email
+		// (invalid format)". Forms that need structured access still
+		// have err.fields untouched.
+		const message =
+			fields && fields.length > 0 ? appendFieldDetails(baseMessage, fields) : baseMessage;
+		throw new ApiError(response.status, message, errorBody.code, fields);
 	}
 
 	// Handle empty responses (204 No Content)
