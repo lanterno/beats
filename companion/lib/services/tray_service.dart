@@ -5,7 +5,12 @@ import 'package:system_tray/system_tray.dart';
 import 'api_client.dart';
 import 'tray_icon.dart';
 
-List<int> _hexToRgb(String? hex) {
+/// Decodes a project's hex color string (with or without `#`) into
+/// an [r, g, b] triple. Falls back to neutral gray on any parse
+/// failure so the tray icon never goes blank — same defensive
+/// strategy [trayParseHex] uses on the rendering side. Inverse of
+/// [trayHexFromRgb] (in tray_icon.dart) for the round-trip.
+List<int> trayHexToRgb(String? hex) {
   if (hex == null || hex.isEmpty) return [122, 122, 122];
   final cleaned = hex.replaceFirst('#', '');
   if (cleaned.length != 6) return [122, 122, 122];
@@ -14,6 +19,20 @@ List<int> _hexToRgb(String? hex) {
     int.tryParse(cleaned.substring(2, 4), radix: 16) ?? 122,
     int.tryParse(cleaned.substring(4, 6), radix: 16) ?? 122,
   ];
+}
+
+/// Formats an elapsed duration for the tray's right-side label.
+/// `<1h` reads as `MM:SS` (zero-padded — looks like a stopwatch),
+/// `≥1h` switches to `Hh MMm` (a stopwatch ticking past 99:59 looks
+/// silly in the menu bar). Negative durations clamp to "00:00" so a
+/// clock-skew between client and server can't render "-3:00".
+String formatTrayElapsed(Duration d) {
+  if (d.isNegative) return '00:00';
+  final h = d.inHours;
+  final m = d.inMinutes.remainder(60);
+  final s = d.inSeconds.remainder(60);
+  if (h > 0) return '${h}h ${m.toString().padLeft(2, '0')}m';
+  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
 
 /// macOS menu bar integration — live timer, quick-start, today's stats.
@@ -102,7 +121,7 @@ class TrayService {
         : '7A7A7A';
     if (targetHex == _currentIconHex) return;
     final rgb = _running && _projectColorHex != null
-        ? _hexToRgb(_projectColorHex)
+        ? trayHexToRgb(_projectColorHex)
         : null;
     final path = await _iconRenderer.iconForProject(rgb);
     await _tray.setImage(path);
@@ -112,7 +131,7 @@ class TrayService {
   void _tick() {
     if (_running && _startTime != null) {
       final elapsed = DateTime.now().toUtc().difference(_startTime!);
-      final display = _formatElapsed(elapsed);
+      final display = formatTrayElapsed(elapsed);
       _tray.setTitle('$display  $_projectName');
     } else {
       _tray.setTitle('');
@@ -126,7 +145,7 @@ class TrayService {
     if (_running && _projectName != null) {
       // ── Running state ──
       final elapsed = _startTime != null
-          ? _formatElapsed(DateTime.now().toUtc().difference(_startTime!))
+          ? formatTrayElapsed(DateTime.now().toUtc().difference(_startTime!))
           : '—';
       items.addAll([
         MenuItemLabel(label: '● $_projectName — $elapsed', enabled: false),
@@ -192,14 +211,6 @@ class TrayService {
       await _updateMenu();
       _tray.setTitle('');
     } catch (_) {}
-  }
-
-  String _formatElapsed(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '${h}h ${m.toString().padLeft(2, '0')}m';
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   void dispose() {
