@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -117,22 +116,13 @@ func TestBuildInsightsURL_OrderIsStable(t *testing.T) {
 	}
 }
 
-// captureStdout redirects os.Stdout for the duration of fn and returns
-// what was written. Pure stdlib (no testify / mocks added).
+// captureStdout is a thin wrapper around captureFile (in help_test.go)
+// that always targets os.Stdout. Kept as a separate name only to make
+// existing callsites read clearly — the verb here is "capture stdout"
+// not "capture this *os.File pointer".
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	orig := os.Stdout
-	os.Stdout = w
-	defer func() { os.Stdout = orig }()
-
-	fn()
-	_ = w.Close()
-	out, _ := io.ReadAll(r)
-	return string(out)
+	return captureFile(t, &os.Stdout, fn)
 }
 
 func TestRunOpen_PrintPathWritesBareURL(t *testing.T) {

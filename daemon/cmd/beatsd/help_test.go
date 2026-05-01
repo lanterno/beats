@@ -1,15 +1,19 @@
 package main
 
 import (
+	"io"
 	"os"
 	"strings"
 	"testing"
 )
 
 // captureFile redirects either os.Stdout or os.Stderr for the duration
-// of fn and returns what was written. Pure stdlib — same trick the
-// open_test.go captureStdout helper uses, factored here so writeUsage
-// can be tested against both streams.
+// of fn and returns what was written. Pure stdlib, no testify / mocks.
+// Used by the captureStdout wrapper in open_test.go too.
+//
+// Reads via io.ReadAll rather than a fixed-size buffer so a future
+// usage-text expansion (or a verbose JSON dump) doesn't silently
+// truncate at 64K.
 func captureFile(t *testing.T, target **os.File, fn func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
@@ -22,9 +26,8 @@ func captureFile(t *testing.T, target **os.File, fn func()) string {
 
 	fn()
 	_ = w.Close()
-	buf := make([]byte, 64*1024)
-	n, _ := r.Read(buf)
-	return string(buf[:n])
+	out, _ := io.ReadAll(r)
+	return string(out)
 }
 
 func TestPrintHelp_WritesUsageToStdout(t *testing.T) {
