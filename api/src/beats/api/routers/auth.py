@@ -114,15 +114,23 @@ async def register_start(
     webauthn: WebAuthnDep,
 ) -> RegisterStartResponse:
     """Start registration: create user and return WebAuthn options."""
-    # Check if email is already taken
+    # Check if email is already taken. A user who exists but has zero
+    # credentials is a previously-abandoned /register/start — let them
+    # retry instead of locking them out with 409 (they can't log in
+    # either, since they have no credential, so the only way out
+    # otherwise is customer support). Existing-with-credentials is a
+    # real conflict.
     existing = await user_repo.get_by_email(body.email)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
-
-    user = await user_repo.create(User(email=body.email, display_name=body.display_name))
+        creds = await webauthn.get_credentials_info(existing.id or "")
+        if creds:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered",
+            )
+        user = existing
+    else:
+        user = await user_repo.create(User(email=body.email, display_name=body.display_name))
 
     try:
         options = await webauthn.get_registration_options(user)

@@ -1243,6 +1243,49 @@ class TestDuplicateEmailPrevention:
         sync_client.close()
 
 
+class TestRegisterStartOrphanRetry:
+    """A user record without credentials is an abandoned /register/start.
+    The handler must let the same email retry instead of returning 409 —
+    the orphan can't log in (no credential exists for them) and would
+    otherwise be locked out forever.
+    """
+
+    def test_orphan_user_can_retry_register_start(self):
+        """register/start for an existing email with zero credentials reuses
+        the user instead of returning 409."""
+        import os
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync_client = MongoClient(dsn)
+        db = sync_client[db_name]
+
+        # Simulate an abandoned /register/start: a user row, no credentials.
+        email = "orphan-retry@example.com"
+        orphan_id = ObjectId()
+        db.users.insert_one({"_id": orphan_id, "email": email, "display_name": None})
+        sync_client.close()
+
+        # Same email comes back to retry registration. Should succeed and
+        # reuse the existing user_id (no second user row is created).
+        response = client.post(
+            "/api/auth/register/start",
+            json={"email": email, "display_name": "Retry"},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["user_id"] == str(orphan_id)
+
+        # And — exactly one user row for that email, not two.
+        sync_client = MongoClient(dsn)
+        db = sync_client[db_name]
+        assert db.users.count_documents({"email": email}) == 1
+        sync_client.close()
+
+
 class TestRateLimiting:
     """Test that auth endpoints are rate-limited."""
 
