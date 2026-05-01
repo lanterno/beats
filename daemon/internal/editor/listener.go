@@ -47,12 +47,21 @@ type Listener struct {
 	mu         sync.Mutex
 	heartbeats map[string]Heartbeat // keyed by editor name
 	server     *http.Server
+	startedAt  time.Time
+	version    string
 }
 
 // New constructs a listener. Call [Start] to bind the port; call [Latest]
-// from any goroutine to read the most recent fresh heartbeat.
-func New() *Listener {
-	return &Listener{heartbeats: make(map[string]Heartbeat)}
+// from any goroutine to read the most recent fresh heartbeat. The
+// `version` string is surfaced verbatim on /health so editor UX can
+// show e.g. "Beats: connected (v1.2.3)" — pass an empty string when
+// the version isn't known.
+func New(version string) *Listener {
+	return &Listener{
+		heartbeats: make(map[string]Heartbeat),
+		startedAt:  time.Now(),
+		version:    version,
+	}
 }
 
 // Start binds the listener to 127.0.0.1:port and begins accepting POST
@@ -72,6 +81,7 @@ func (l *Listener) Start(ctx context.Context, port int) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/heartbeat", l.handleHeartbeat)
+	mux.HandleFunc("/health", l.handleHealth)
 
 	l.server = &http.Server{
 		Handler:           mux,
@@ -139,6 +149,42 @@ func (l *Listener) All() map[string]Heartbeat {
 		}
 	}
 	return out
+}
+
+// HealthResponse is the public shape of GET /health on the editor
+// listener. Designed for editor extensions to probe in a setInterval —
+// JSON tag names are stable and snake_case to match the rest of the
+// API surface. `editor_count` reports how many distinct editors have
+// sent at least one fresh heartbeat (≤ MaxStaleness old).
+type HealthResponse struct {
+	OK          bool   `json:"ok"`
+	Version     string `json:"version"`
+	UptimeSec   int64  `json:"uptime_sec"`
+	EditorCount int    `json:"editor_count"`
+}
+
+// handleHealth serves a tiny status snapshot so editor extensions can
+// probe whether the daemon is running and ready to accept heartbeats.
+// Same loopback-only enforcement as /heartbeat. GET-only.
+func (l *Listener) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !isLoopback(host) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	resp := HealthResponse{
+		OK:          true,
+		Version:     l.version,
+		UptimeSec:   int64(time.Since(l.startedAt).Seconds()),
+		EditorCount: len(l.All()),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (l *Listener) handleHeartbeat(w http.ResponseWriter, r *http.Request) {

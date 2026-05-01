@@ -104,7 +104,7 @@ func main() {
 		// the VS Code extension and exposes the most recent one to the
 		// collector via Latest(). Failure to bind (e.g. port already in use)
 		// is non-fatal: the collector keeps working without editor context.
-		editorListener := editor.New()
+		editorListener := editor.New(version)
 		if err := editorListener.Start(ctx, editor.DefaultPort); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: editor listener: %v\n", err)
 		}

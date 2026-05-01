@@ -39,7 +39,7 @@ func postHeartbeat(t *testing.T, port int, hb Heartbeat) *http.Response {
 }
 
 func TestListener_AcceptsAndExposesHeartbeat(t *testing.T) {
-	listener := New()
+	listener := New("test-version")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -75,7 +75,7 @@ func TestListener_AcceptsAndExposesHeartbeat(t *testing.T) {
 }
 
 func TestListener_RejectsNonPost(t *testing.T) {
-	listener := New()
+	listener := New("test-version")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	port := freePort(t)
@@ -95,7 +95,7 @@ func TestListener_RejectsNonPost(t *testing.T) {
 }
 
 func TestListener_RejectsBadJSON(t *testing.T) {
-	listener := New()
+	listener := New("test-version")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	port := freePort(t)
@@ -119,7 +119,7 @@ func TestListener_RejectsBadJSON(t *testing.T) {
 }
 
 func TestListener_RejectsMissingEditor(t *testing.T) {
-	listener := New()
+	listener := New("test-version")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	port := freePort(t)
@@ -136,7 +136,7 @@ func TestListener_RejectsMissingEditor(t *testing.T) {
 }
 
 func TestListener_LatestPicksMostRecentEditor(t *testing.T) {
-	listener := New()
+	listener := New("test-version")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	port := freePort(t)
@@ -161,7 +161,7 @@ func TestListener_LatestPicksMostRecentEditor(t *testing.T) {
 }
 
 func TestListener_StaleEntriesAreSkipped(t *testing.T) {
-	listener := New()
+	listener := New("test-version")
 	// Build the heartbeat directly so we can predate ReceivedAt past
 	// MaxStaleness without sleeping for 90s.
 	listener.heartbeats["vscode"] = Heartbeat{
@@ -174,5 +174,76 @@ func TestListener_StaleEntriesAreSkipped(t *testing.T) {
 	}
 	if len(listener.All()) != 0 {
 		t.Error("stale heartbeat should not appear in All()")
+	}
+}
+
+func TestListener_HealthEndpointReportsStatus(t *testing.T) {
+	listener := New("v1.2.3-test")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	// Post a heartbeat first so editor_count > 0 in the response.
+	postResp := postHeartbeat(t, port, Heartbeat{
+		Editor: "vscode", Timestamp: time.Now().UTC(),
+	})
+	postResp.Body.Close()
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var got HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !got.OK {
+		t.Errorf("expected ok=true, got %+v", got)
+	}
+	if got.Version != "v1.2.3-test" {
+		t.Errorf("expected version 'v1.2.3-test' verbatim, got %q", got.Version)
+	}
+	if got.UptimeSec < 0 {
+		t.Errorf("uptime should be non-negative, got %d", got.UptimeSec)
+	}
+	if got.EditorCount != 1 {
+		t.Errorf("expected editor_count=1 after one heartbeat, got %d", got.EditorCount)
+	}
+}
+
+func TestListener_HealthRejectsNonGet(t *testing.T) {
+	// Method-allowed for /health is GET only — POST should 405.
+	// Mirror the same hygiene as /heartbeat which is POST-only.
+	listener := New("test-version")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://127.0.0.1:%d/health", port),
+		"application/json",
+		bytes.NewReader([]byte("{}")),
+	)
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 on POST /health, got %d", resp.StatusCode)
 	}
 }

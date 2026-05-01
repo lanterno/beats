@@ -102,6 +102,8 @@ func StartListener(ctx context.Context, port int) (getLatest func() *Heartbeat, 
 
 The collector loop calls `getLatest()` on each flush to populate `ActiveProjectID` by matching the heartbeat's `repo` path against projects' `autostart_repos`.
 
+The same listener also serves `GET /health` (loopback-only) returning `{ok, version, uptime_sec, editor_count}`. Editor extensions can probe it on a setInterval to drive a connected/disconnected status indicator without firing heartbeats that get silently dropped.
+
 ## Implementation Steps
 
 1. **Scaffold extension** — `npx @vscode/create-extension beats-vscode`. Minimal activation: `onStartupFinished`.
