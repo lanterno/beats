@@ -406,7 +406,9 @@ class _SparklinePainter extends CustomPainter {
 
     // Area
     final area = Path()..moveTo(0, size.height);
-    for (final p in points) area.lineTo(p.dx, p.dy);
+    for (final p in points) {
+      area.lineTo(p.dx, p.dy);
+    }
     area.lineTo(size.width, size.height);
     area.close();
     canvas.drawPath(area, Paint()
@@ -418,8 +420,11 @@ class _SparklinePainter extends CustomPainter {
     // Line
     final line = Path();
     for (var i = 0; i < points.length; i++) {
-      if (i == 0) line.moveTo(points[i].dx, points[i].dy);
-      else line.lineTo(points[i].dx, points[i].dy);
+      if (i == 0) {
+        line.moveTo(points[i].dx, points[i].dy);
+      } else {
+        line.lineTo(points[i].dx, points[i].dy);
+      }
     }
     canvas.drawPath(line, Paint()
       ..color = color.withValues(alpha: 0.6)
