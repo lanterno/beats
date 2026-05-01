@@ -115,6 +115,15 @@ async def trigger_daily_summary(
     return payload
 
 
+# Module-level set holding strong references to in-flight webhook
+# dispatch tasks. asyncio.create_task only stores a weak reference
+# internally — without keeping a strong ref somewhere, Python's GC
+# can reap the task mid-execution and the webhook silently never
+# fires. The standard pattern (per the asyncio.create_task docs)
+# is to track tasks in a set and discard on completion.
+_pending_dispatches: set[asyncio.Task] = set()
+
+
 async def dispatch_webhook_event(
     event: str,
     payload: dict,
@@ -149,8 +158,10 @@ async def dispatch_webhook_event(
 
     # Detach delivery so the request that triggered the dispatch
     # returns to the user without waiting on each webhook URL's
-    # response. Tasks reference is dropped intentionally — these
-    # are best-effort and a slow user-supplied URL must not block
-    # the timer start/stop response.
+    # response. Pin task references in _pending_dispatches so the
+    # GC doesn't reap them mid-flight — discard on done so the set
+    # doesn't grow unboundedly.
     for w in webhooks:
-        asyncio.create_task(_send(w.url))
+        task = asyncio.create_task(_send(w.url))
+        _pending_dispatches.add(task)
+        task.add_done_callback(_pending_dispatches.discard)
