@@ -11,6 +11,7 @@ The test_api.py suite covers the HTTP layer; this file covers the
 modules underneath.
 """
 
+import json
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -18,12 +19,14 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from beats.coach import brief as brief_module
+from beats.coach import review as review_module
 from beats.coach.gateway import GatewayResponse
 from beats.coach.memory import MemoryStore
 from beats.coach.repos import (
     COACH_MEMORY_COLLECTION,
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
+    REVIEW_ANSWERS_COLLECTION,
     fmt_minutes,
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker
@@ -621,3 +624,265 @@ class TestGetAndListBriefs:
         a_briefs = await brief_module.list_briefs("user-a")
         assert len(a_briefs) == 1
         assert a_briefs[0]["body"] == "A's brief"
+
+
+def _gateway_response_from_text(text: str) -> GatewayResponse:
+    """Builds a GatewayResponse whose content[0] is the given text. Used
+    by review tests to drive different LLM-output shapes through
+    generate_review_questions's parser."""
+    return GatewayResponse(
+        content=[_FakeTextBlock(text)],
+        model="claude-opus-4-7",
+        input_tokens=100,
+        output_tokens=50,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        cost_usd=0.001,
+        stop_reason="end_turn",
+    )
+
+
+class TestGenerateReviewQuestions:
+    """generate_review_questions calls the LLM, parses JSON, persists.
+    Pin: parse-success path persists what the LLM returned;
+    parse-failure path falls back to 3 generic questions (so the EOD
+    review never breaks the user's flow); upsert preserves prior
+    answers when re-generating."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        await Database.get_db()[REVIEW_ANSWERS_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    @pytest.fixture
+    def patched_gateway(self, monkeypatch):
+        captured: dict = {}
+
+        async def fake_build(user_id, prompt, target_date=None):
+            captured["build_args"] = {
+                "user_id": user_id,
+                "prompt": prompt,
+                "target_date": target_date,
+            }
+            return ("system", [{"role": "user", "content": prompt}], None)
+
+        monkeypatch.setattr(review_module, "build_coach_messages", fake_build)
+        return captured
+
+    async def test_parses_valid_json_array(self, monkeypatch, patched_gateway):
+        """Happy path: LLM returns a JSON array of question dicts;
+        each persists verbatim."""
+        questions_json = json.dumps(
+            [
+                {"question": "Did the auth refactor land?", "derived_from": {"kind": "intention"}},
+                {"question": "Why did the meeting overrun?", "derived_from": {"kind": "calendar"}},
+                {
+                    "question": "Mood is lower than last week — why?",
+                    "derived_from": {"kind": "mood"},
+                },
+            ]
+        )
+
+        async def fake_complete(**_kwargs):
+            return _gateway_response_from_text(questions_json)
+
+        monkeypatch.setattr(review_module, "complete", fake_complete)
+
+        from datetime import date as date_type
+
+        result = await review_module.generate_review_questions(
+            "user-1", target_date=date_type(2026, 5, 1)
+        )
+
+        assert len(result) == 3
+        assert result[0]["question"] == "Did the auth refactor land?"
+        assert result[2]["derived_from"]["kind"] == "mood"
+
+        # And the persisted doc carries the same questions.
+        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
+            {"user_id": "user-1", "date": "2026-05-01"}
+        )
+        assert stored is not None
+        assert len(stored["questions"]) == 3
+        assert stored["answers"] == [None, None, None]
+        assert "created_at" in stored
+        assert "updated_at" in stored
+
+    async def test_falls_back_when_llm_returns_garbage(self, monkeypatch, patched_gateway):
+        """If the LLM returns invalid JSON (model temperature spike,
+        prompt drift, anything), the user must still get a usable
+        review form. Pin the fallback — three generic questions
+        rather than a 500 or empty list."""
+
+        async def fake_complete(**_kwargs):
+            return _gateway_response_from_text("here are some questions: 1) why...")
+
+        monkeypatch.setattr(review_module, "complete", fake_complete)
+
+        result = await review_module.generate_review_questions("user-1")
+        assert len(result) == 3
+        # All fallback questions tagged so callers can tell the
+        # difference between AI-generated and stock prompts.
+        assert all(q["derived_from"]["kind"] == "fallback" for q in result)
+        # They're real strings, not empty placeholders.
+        assert all(q["question"] for q in result)
+
+    async def test_falls_back_when_llm_returns_non_array_json(self, monkeypatch, patched_gateway):
+        """Valid JSON but wrong shape (e.g. dict instead of list) →
+        same fallback. Pin so a future prompt change that produces
+        valid-but-wrong-shape output doesn't crash."""
+
+        async def fake_complete(**_kwargs):
+            return _gateway_response_from_text(json.dumps({"questions": []}))
+
+        monkeypatch.setattr(review_module, "complete", fake_complete)
+
+        result = await review_module.generate_review_questions("user-1")
+        assert len(result) == 3
+        assert all(q["derived_from"]["kind"] == "fallback" for q in result)
+
+    async def test_passes_purpose_review_to_gateway(self, monkeypatch, patched_gateway):
+        """purpose="review" tag separates review LLM spend from chat
+        and brief in the cost dashboard's per-purpose breakdown."""
+        captured = {}
+
+        async def fake_complete(**kwargs):
+            captured.update(kwargs)
+            return _gateway_response_from_text(json.dumps([]))
+
+        monkeypatch.setattr(review_module, "complete", fake_complete)
+
+        await review_module.generate_review_questions("user-99")
+        assert captured["purpose"] == "review"
+        assert captured["user_id"] == "user-99"
+
+    async def test_upsert_preserves_answers_on_regenerate(self, monkeypatch, patched_gateway):
+        """Locks $setOnInsert vs $set: a regenerate replaces questions
+        but does NOT reset answers. Without this, a user who answered
+        Q1 then triggered a regenerate would lose their progress."""
+        from datetime import date as date_type
+
+        target = date_type(2026, 5, 1)
+
+        async def fake_first(**_kwargs):
+            return _gateway_response_from_text(
+                json.dumps([{"question": "v1-q1", "derived_from": {"kind": "x"}}])
+            )
+
+        monkeypatch.setattr(review_module, "complete", fake_first)
+        await review_module.generate_review_questions("user-1", target_date=target)
+
+        # User answers Q1.
+        await review_module.save_answer("user-1", target, 0, "answered")
+
+        # Regenerate — different questions.
+        async def fake_second(**_kwargs):
+            return _gateway_response_from_text(
+                json.dumps([{"question": "v2-q1", "derived_from": {"kind": "y"}}])
+            )
+
+        monkeypatch.setattr(review_module, "complete", fake_second)
+        await review_module.generate_review_questions("user-1", target_date=target)
+
+        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
+            {"user_id": "user-1", "date": "2026-05-01"}
+        )
+        assert stored is not None
+        assert stored["questions"][0]["question"] == "v2-q1"
+        # Answer survived the regenerate (the $set updates questions
+        # but $setOnInsert wouldn't re-write answers).
+        assert stored["answers"][0]["text"] == "answered"
+
+
+class TestSaveAnswerAndReadbacks:
+    """save_answer is the per-question persist path the EOD modal
+    calls; get_review / list_reviews are the read paths the API
+    exposes. Pin atomicity, indexing, and the empty-state shapes."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        await Database.get_db()[REVIEW_ANSWERS_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    async def _seed_review(self, user_id: str, date_str: str, n_questions: int = 3) -> None:
+        await Database.get_db()[REVIEW_ANSWERS_COLLECTION].insert_one(
+            {
+                "user_id": user_id,
+                "date": date_str,
+                "questions": [{"question": f"Q{i}"} for i in range(n_questions)],
+                "answers": [None] * n_questions,
+            }
+        )
+
+    async def test_save_answer_writes_to_specific_index(self):
+        """Locks the $set on `answers.{i}` — atomically writes one
+        slot without touching the others. A user who has Q0 and Q2
+        answered must still see Q0 and Q2 after a Q1 update."""
+        from datetime import date as date_type
+
+        target = date_type(2026, 5, 1)
+        await self._seed_review("user-1", "2026-05-01")
+        await review_module.save_answer("user-1", target, 0, "first answer")
+        await review_module.save_answer("user-1", target, 2, "third answer")
+
+        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
+            {"user_id": "user-1", "date": "2026-05-01"}
+        )
+        assert stored is not None
+        assert stored["answers"][0]["text"] == "first answer"
+        assert stored["answers"][1] is None  # untouched
+        assert stored["answers"][2]["text"] == "third answer"
+        # Each answered slot carries an answered_at timestamp.
+        assert "answered_at" in stored["answers"][0]
+
+    async def test_save_answer_overwrites_same_index(self):
+        """Re-answering Q0 replaces, doesn't append. Pin so a refactor
+        to $push doesn't accumulate answers per slot."""
+        from datetime import date as date_type
+
+        target = date_type(2026, 5, 1)
+        await self._seed_review("user-1", "2026-05-01")
+        await review_module.save_answer("user-1", target, 0, "first")
+        await review_module.save_answer("user-1", target, 0, "revised")
+
+        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
+            {"user_id": "user-1", "date": "2026-05-01"}
+        )
+        assert stored is not None
+        assert stored["answers"][0]["text"] == "revised"
+
+    async def test_get_review_returns_none_for_missing(self):
+        from datetime import date as date_type
+
+        result = await review_module.get_review("user-1", target_date=date_type(2026, 5, 1))
+        assert result is None
+
+    async def test_get_review_strips_objectid(self):
+        from datetime import date as date_type
+
+        await self._seed_review("user-1", "2026-05-01")
+        result = await review_module.get_review("user-1", target_date=date_type(2026, 5, 1))
+        assert result is not None
+        assert "_id" not in result
+
+    async def test_list_reviews_descending_by_date(self):
+        await self._seed_review("user-1", "2026-04-29")
+        await self._seed_review("user-1", "2026-05-01")
+        await self._seed_review("user-1", "2026-04-30")
+
+        result = await review_module.list_reviews("user-1")
+        assert [r["date"] for r in result] == ["2026-05-01", "2026-04-30", "2026-04-29"]
+
+    async def test_list_reviews_isolates_users(self):
+        await self._seed_review("user-a", "2026-05-01")
+        await self._seed_review("user-b", "2026-05-01")
+
+        a = await review_module.list_reviews("user-a")
+        assert len(a) == 1
+        # The seeded shape distinguishes via the user_id (which is in
+        # the doc) — we just verify count to confirm the user_id
+        # filter excluded user-b's row.

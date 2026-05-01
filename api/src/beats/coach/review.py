@@ -46,11 +46,16 @@ async def generate_review_questions(user_id: str, target_date: date | None = Non
             text += block.text
 
     try:
-        questions = json.loads(text.strip())
-        if not isinstance(questions, list):
-            questions = []
-    except (json.JSONDecodeError, ValueError):  # fmt: skip
-        logger.warning("Failed to parse review questions: %s", text[:200])
+        parsed = json.loads(text.strip())
+        if not isinstance(parsed, list):
+            # Valid JSON but wrong shape (e.g. {"questions": [...]}) —
+            # raise so the fallback below fires. Without this, the user
+            # would see an empty review form, which surfaces as a
+            # never-finishing UI loop in the EOD modal.
+            raise ValueError(f"expected JSON array, got {type(parsed).__name__}")
+        questions = parsed
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Failed to parse review questions (%s): %s", exc, text[:200])
         questions = [
             {
                 "question": "What was the most meaningful thing you worked on today?",
