@@ -1985,3 +1985,171 @@ class TestGenerateWeeklyDigest:
 
         assert digest.top_project_name == "Unknown"
         assert digest.project_breakdown[0]["name"] == "Unknown"
+
+
+class TestGenerateObservation:
+    """_generate_observation picks one of four narrative branches in
+    a fixed priority order:
+      1. New project this week (>30 min)
+      2. Big delta on an existing project (|change| > 50%, both
+         weeks >30 min)
+      3. Most-productive day if any day_minutes
+      4. Fallback: "you tracked Xh across N sessions"
+
+    These tests pin the branch boundaries and the rendered phrasing.
+    Risk: a phrasing tweak that drops a key noun ("more"/"less", a
+    project name) would silently degrade the digest's narrative
+    without surfacing as a failure."""
+
+    def _svc(self):
+        return _intel_service()
+
+    def _projects(self, *names: str) -> dict:
+        return {f"p{i + 1}": _project(f"p{i + 1}", n) for i, n in enumerate(names)}
+
+    async def test_new_project_branch_fires_above_threshold(self):
+        """A project absent from prev week with >30 min logged →
+        "You started working on X this week" sentence."""
+        proj_minutes = {"p1": 120.0}
+        prev = {}  # not in prev
+        proj_map = self._projects("Alpha")
+        out = self._svc()._generate_observation(
+            proj_minutes, prev, proj_map, day_minutes={}, total_hours=2.0, session_count=2
+        )
+        assert "started working on Alpha" in out
+        assert "2.0h" in out
+
+    async def test_new_project_skipped_at_or_below_threshold(self):
+        """A new project with exactly 30 min does NOT trigger the
+        "started" sentence — falls through to the next branch.
+        Pin so a single short trial session doesn't headline the
+        digest as "you started X this week"."""
+        proj_minutes = {"p1": 30.0}
+        prev = {}
+        proj_map = self._projects("Alpha")
+        # No day_minutes, falls through to fallback
+        out = self._svc()._generate_observation(
+            proj_minutes, prev, proj_map, day_minutes={}, total_hours=0.5, session_count=1
+        )
+        assert "started" not in out
+        assert "0.5h across 1 sessions" in out
+
+    async def test_big_delta_increase_renders_more(self):
+        """Prev 60, this 120 → +100% → "100% more time on Alpha"."""
+        proj_minutes = {"p1": 120.0}
+        prev = {"p1": 60.0}
+        proj_map = self._projects("Alpha")
+        out = self._svc()._generate_observation(
+            proj_minutes, prev, proj_map, day_minutes={}, total_hours=2.0, session_count=2
+        )
+        assert "100% more time on Alpha" in out
+        assert "compared to last week" in out
+
+    async def test_big_delta_decrease_renders_less(self):
+        """Prev 200, this 60 → −70% → "70% less time on Alpha"."""
+        proj_minutes = {"p1": 60.0}
+        prev = {"p1": 200.0}
+        proj_map = self._projects("Alpha")
+        out = self._svc()._generate_observation(
+            proj_minutes, prev, proj_map, day_minutes={}, total_hours=1.0, session_count=1
+        )
+        assert "70% less time on Alpha" in out
+
+    async def test_big_delta_skipped_when_either_week_too_small(self):
+        """Both prev and curr must be >30 min for the delta branch
+        to fire — avoids noise from spike-from-zero or cliff-to-near-zero
+        artifacts the "new project" / "stale project" branches handle
+        elsewhere. Falls through to day-pattern."""
+        proj_minutes = {"p1": 35.0}
+        prev = {"p1": 20.0}  # below the 30-minute floor
+        proj_map = self._projects("Alpha")
+        long_day = date(2026, 4, 29)
+        out = self._svc()._generate_observation(
+            proj_minutes,
+            prev,
+            proj_map,
+            day_minutes={long_day: 35.0},
+            total_hours=0.6,
+            session_count=1,
+        )
+        assert "more time" not in out
+        assert "less time" not in out
+        # Falls through to day-pattern (Wednesday is 2026-04-29)
+        assert long_day.strftime("%A") in out
+
+    async def test_small_delta_skipped(self):
+        """|change| ≤ 50% → no delta sentence. 60 → 80 is +33%, below
+        the threshold."""
+        proj_minutes = {"p1": 80.0}
+        prev = {"p1": 60.0}
+        proj_map = self._projects("Alpha")
+        out = self._svc()._generate_observation(
+            proj_minutes, prev, proj_map, day_minutes={}, total_hours=1.3, session_count=1
+        )
+        assert "more time" not in out
+        assert "less time" not in out
+
+    async def test_day_pattern_fallback_when_no_project_signal(self):
+        """No new/delta projects but day_minutes present → "Your
+        most productive day was {Monday} with {X}h tracked"."""
+        long_day = date(2026, 4, 27)  # Monday
+        out = self._svc()._generate_observation(
+            proj_minutes={},
+            prev_proj_minutes={},
+            project_map={},
+            day_minutes={long_day: 240.0},
+            total_hours=4.0,
+            session_count=3,
+        )
+        assert "most productive day was Monday" in out
+        assert "4.0h" in out
+
+    async def test_terminal_fallback_when_nothing_to_say(self):
+        """No projects, no days, but session_count>0 → "You tracked
+        Xh across N sessions this week"."""
+        out = self._svc()._generate_observation(
+            proj_minutes={},
+            prev_proj_minutes={},
+            project_map={},
+            day_minutes={},
+            total_hours=0.0,
+            session_count=0,
+        )
+        assert out == "You tracked 0.0h across 0 sessions this week."
+
+    async def test_new_project_priority_over_day_pattern(self):
+        """When BOTH a new project and day_minutes are present, the
+        "new project" branch wins. Pin the priority so a refactor
+        doesn't accidentally promote day-pattern (which is a weaker
+        signal) above the project-level narrative."""
+        proj_minutes = {"p1": 90.0}
+        prev = {}
+        proj_map = self._projects("Alpha")
+        long_day = date(2026, 4, 27)
+        out = self._svc()._generate_observation(
+            proj_minutes,
+            prev,
+            proj_map,
+            day_minutes={long_day: 90.0},
+            total_hours=1.5,
+            session_count=2,
+        )
+        assert "started working on Alpha" in out
+        assert "most productive day" not in out
+
+    async def test_unknown_project_renders_as_a_project(self):
+        """If project_map doesn't contain the id (e.g. project was
+        archived/deleted between digest runs), the new-project
+        sentence renders "a project" rather than crashing on
+        None.name."""
+        proj_minutes = {"ghost": 60.0}
+        prev = {}
+        out = self._svc()._generate_observation(
+            proj_minutes,
+            prev,
+            project_map={},
+            day_minutes={},
+            total_hours=1.0,
+            session_count=1,
+        )
+        assert "started working on a project" in out
