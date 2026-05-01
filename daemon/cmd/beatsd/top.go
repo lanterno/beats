@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -11,7 +10,6 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
-	"github.com/ahmedElghable/beats/daemon/internal/pair"
 )
 
 // runTop fetches the last [minutes] minutes of flow windows and prints
@@ -29,16 +27,10 @@ func runTop(cfg *config.Config, minutes int, asJSON bool) error {
 		minutes = 60
 	}
 
-	token, err := pair.LoadToken()
+	c, ctx, cancel, err := authedClient(cfg, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("keychain read failed: %w", err)
+		return err
 	}
-	if token == "" {
-		return fmt.Errorf("not paired — run `beatsd pair <code>`")
-	}
-
-	c := client.New(cfg.API.BaseURL, token)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	end := time.Now().UTC()

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
-	"github.com/ahmedElghable/beats/daemon/internal/pair"
 )
 
 // runRecent prints the last [minutes] minutes of flow windows. Complements
@@ -32,16 +30,10 @@ func runRecent(cfg *config.Config, minutes int, filter client.FlowWindowsFilter,
 		minutes = 60
 	}
 
-	token, err := pair.LoadToken()
+	c, ctx, cancel, err := authedClient(cfg, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("keychain read failed: %w", err)
+		return err
 	}
-	if token == "" {
-		return fmt.Errorf("not paired — run `beatsd pair <code>`")
-	}
-
-	c := client.New(cfg.API.BaseURL, token)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	end := time.Now().UTC()
