@@ -248,6 +248,12 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "config":
+		if err := runConfig(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "version":
 		fmt.Print(collectVersionInfo())
 
@@ -352,6 +358,7 @@ Commands:
                   --json           emit the FlowWindowSummary object as JSON
   unpair        Remove the device token from the keychain
   version       Print version info
+  config        Print the loaded daemon config (API + UI URLs, collector intervals)
 
 Flags:
   --dry-run     Print what would be sent without posting to the API`)
