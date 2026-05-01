@@ -30,7 +30,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Pairing failed: ${resp.body}');
+      throw _apiError(resp, 'Pairing failed');
     }
     final data = jsonDecode(resp.body);
     return PairResult(
@@ -46,7 +46,7 @@ class ApiClient {
       body: '{}',
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Heartbeat failed: ${resp.body}');
+      throw _apiError(resp, 'Heartbeat failed');
     }
   }
 
@@ -57,7 +57,7 @@ class ApiClient {
       body: jsonEncode(data),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Biometric push failed: ${resp.body}');
+      throw _apiError(resp, 'Biometric push failed');
     }
   }
 
@@ -67,7 +67,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Failed to get Fitbit auth URL');
+      throw _apiError(resp, 'Failed to get Fitbit auth URL');
     }
     return jsonDecode(resp.body);
   }
@@ -78,7 +78,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Failed to get Fitbit status');
+      throw _apiError(resp, 'Failed to get Fitbit status');
     }
     return jsonDecode(resp.body);
   }
@@ -89,7 +89,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Failed to get Oura status');
+      throw _apiError(resp, 'Failed to get Oura status');
     }
     return jsonDecode(resp.body);
   }
@@ -101,7 +101,7 @@ class ApiClient {
       body: jsonEncode({'access_token': pat}),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Oura connection failed: ${resp.body}');
+      throw _apiError(resp, 'Oura connection failed');
     }
   }
 
@@ -111,7 +111,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Oura disconnect failed');
+      throw _apiError(resp, 'Oura disconnect failed');
     }
   }
 
@@ -121,7 +121,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Fitbit disconnect failed');
+      throw _apiError(resp, 'Fitbit disconnect failed');
     }
   }
 
@@ -133,7 +133,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Timer status failed: ${resp.body}');
+      throw _apiError(resp, 'Timer status failed');
     }
     return jsonDecode(resp.body);
   }
@@ -146,7 +146,7 @@ class ApiClient {
       body: jsonEncode({'time': time}),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Start timer failed: ${resp.body}');
+      throw _apiError(resp, 'Start timer failed');
     }
     return jsonDecode(resp.body);
   }
@@ -159,7 +159,7 @@ class ApiClient {
       body: jsonEncode({'time': time}),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Stop timer failed: ${resp.body}');
+      throw _apiError(resp, 'Stop timer failed');
     }
     return jsonDecode(resp.body);
   }
@@ -174,7 +174,7 @@ class ApiClient {
       body: jsonEncode(beat),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Update beat failed: ${resp.body}');
+      throw _apiError(resp, 'Update beat failed');
     }
   }
 
@@ -184,7 +184,7 @@ class ApiClient {
       headers: _headers,
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Projects failed: ${resp.body}');
+      throw _apiError(resp, 'Projects failed');
     }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
@@ -310,7 +310,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Save review answer failed: ${resp.body}');
+      throw _apiError(resp, 'Save review answer failed');
     }
   }
 
@@ -334,7 +334,7 @@ class ApiClient {
       body: jsonEncode({'project_id': projectId, 'planned_minutes': plannedMinutes}),
     );
     if (resp.statusCode != 201) {
-      throw ApiException(resp.statusCode, 'Create intention failed: ${resp.body}');
+      throw _apiError(resp, 'Create intention failed');
     }
     return jsonDecode(resp.body);
   }
@@ -362,7 +362,7 @@ class ApiClient {
       body: jsonEncode(body),
     );
     if (resp.statusCode != 200) {
-      throw ApiException(resp.statusCode, 'Save daily note failed: ${resp.body}');
+      throw _apiError(resp, 'Save daily note failed');
     }
   }
 
@@ -394,8 +394,110 @@ class ApiClient {
 class ApiException implements Exception {
   final int statusCode;
   final String message;
-  ApiException(this.statusCode, this.message);
+
+  /// Machine-readable code from the API's unified error envelope
+  /// (api/src/beats/api/errors.py: `{detail, code, fields?}`). Null
+  /// when the body isn't envelope-shaped (older API versions, proxy
+  /// 502s with HTML, etc.). Callers that want to branch on
+  /// "PROJECT_ARCHIVED vs RATE_LIMITED" use this — error toasts
+  /// just need [message].
+  final String? code;
+
+  ApiException(this.statusCode, this.message, {this.code});
 
   @override
   String toString() => 'ApiException($statusCode): $message';
+}
+
+/// Build the suffix that goes after "[verb] failed: " for an error
+/// response. Tries the unified API error envelope first
+/// (`{detail, code, fields?}`) so the user sees "Project archived
+/// [PROJECT_ARCHIVED]" rather than a raw JSON blob; falls back to
+/// the trimmed body text on non-JSON responses (proxy HTML 502s);
+/// returns "(empty body)" for status-only failures so the toast
+/// doesn't end with a trailing colon followed by nothing.
+///
+/// Mirrors the daemon-side `describeErrorBody` (Go) and the UI's
+/// 422 fields[] surfacing in ApiError so all three surfaces tell
+/// the user the same thing.
+// Exposed for tests in companion/test/api_client_test.dart. Not
+// part of the public ApiClient API; importers should use the
+// ApiException it produces, not call this directly.
+String describeErrorBody(String body) {
+  final trimmed = body.trim();
+  if (trimmed.isEmpty) return '(empty body)';
+  try {
+    final decoded = jsonDecode(trimmed);
+    if (decoded is Map<String, dynamic>) {
+      final detail = decoded['detail'];
+      final code = decoded['code'];
+      final fields = decoded['fields'];
+      final fieldSuffix = _formatFields(fields);
+      final detailStr = (detail is String && detail.isNotEmpty) ? detail : null;
+      final codeStr = (code is String && code.isNotEmpty) ? code : null;
+      if (detailStr != null && codeStr != null) {
+        return fieldSuffix.isEmpty
+            ? '$detailStr [$codeStr]'
+            : '$detailStr [$codeStr]: $fieldSuffix';
+      }
+      if (detailStr != null) {
+        return fieldSuffix.isEmpty ? detailStr : '$detailStr: $fieldSuffix';
+      }
+      if (codeStr != null) {
+        return fieldSuffix.isEmpty ? codeStr : '$codeStr: $fieldSuffix';
+      }
+    }
+  } on FormatException {
+    // Body wasn't JSON — fall through to the trimmed-raw fallback.
+  }
+  return trimmed;
+}
+
+/// Render a 422 fields list ([{path, message, type}, ...]) as a
+/// "name (field required), email (invalid format)" suffix. Returns
+/// "" if the input isn't a list, every entry is empty, or the
+/// caller passed null.
+String _formatFields(Object? fields) {
+  if (fields is! List) return '';
+  final parts = <String>[];
+  for (final entry in fields) {
+    if (entry is! Map) continue;
+    final path = (entry['path'] as Object?)?.toString().trim() ?? '';
+    final message = (entry['message'] as Object?)?.toString().trim() ?? '';
+    if (path.isEmpty && message.isEmpty) continue;
+    if (path.isNotEmpty && message.isNotEmpty) {
+      parts.add('$path ($message)');
+    } else {
+      parts.add(path.isEmpty ? message : path);
+    }
+  }
+  return parts.join(', ');
+}
+
+/// Extracts code from the envelope (or null if not present), so
+/// ApiException can carry a structured code for callers that want
+/// to branch. Best-effort — silent null on any decode hiccup.
+String? _envelopeCode(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      final code = decoded['code'];
+      if (code is String && code.isNotEmpty) return code;
+    }
+  } on FormatException {
+    // Non-JSON body, no code.
+  }
+  return null;
+}
+
+/// Build a fully-formatted ApiException for a non-200 [resp].
+/// Centralizes the "verb failed: [suffix]" rendering so the 12+ throw
+/// sites in [ApiClient] don't drift apart.
+ApiException _apiError(http.Response resp, String verb) {
+  final detail = describeErrorBody(resp.body);
+  return ApiException(
+    resp.statusCode,
+    '$verb: $detail',
+    code: _envelopeCode(resp.body),
+  );
 }
