@@ -10,15 +10,26 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/config"
 )
 
+// OpenFilter narrows the deep-link URL `beatsd open` opens. Each
+// field maps to the matching chip the user could set on the web
+// Insights page; all three are AND-composed at the page level via
+// useUrlParam.
+type OpenFilter struct {
+	Repo     string
+	Language string
+	Bundle   string
+}
+
 // runOpen launches the system browser at the configured Beats web UI's
-// Insights page, optionally deep-linked to a repo path. Mirrors the VS
-// Code extension's "Beats: Open Insights" command — terminal users get
-// the same one-keystroke jump to analytics without leaving the shell.
+// Insights page, optionally deep-linked to a filtered view. Mirrors
+// the VS Code extension's "Beats: Open Insights" command — terminal
+// users get the same one-keystroke jump to analytics without leaving
+// the shell.
 //
-// `repo` is the editor_repo path to filter by; pass an empty string for
-// the unfiltered view. We don't auto-detect cwd here because a user
-// running `beatsd open` from a directory that ISN'T a paired editor
-// workspace would land on a confusingly-empty filtered view.
+// All filter fields are optional; an empty filter opens the unfiltered
+// view. We don't auto-detect cwd here because a user running `beatsd
+// open` from a directory that ISN'T a paired editor workspace would
+// land on a confusingly-empty filtered view.
 //
 // When `printOnly` is true, the URL is written to stdout instead of
 // launching the browser. Designed for shell pipelines:
@@ -27,8 +38,8 @@ import (
 //	open "$(beatsd open --print)"
 //
 // — and as a fallback for users without a default browser configured.
-func runOpen(cfg *config.Config, repo string, printOnly bool) error {
-	url := buildInsightsURL(cfg.UI.BaseURL, repo)
+func runOpen(cfg *config.Config, filter OpenFilter, printOnly bool) error {
+	url := buildInsightsURL(cfg.UI.BaseURL, filter)
 	if printOnly {
 		// Bare URL on stdout, no decoration. Pipeable.
 		fmt.Println(url)
@@ -46,15 +57,29 @@ func runOpen(cfg *config.Config, repo string, printOnly bool) error {
 
 // buildInsightsURL is the testable inner of runOpen. Mirrors the
 // behavior of the VS Code extension's buildInsightsUrl (in
-// integrations/vscode-beats/src/insightsUrl.ts) so a deep link from
-// either the editor command or the daemon CLI lands on the same page
-// state the user would see by clicking a chip.
-func buildInsightsURL(base, repo string) string {
+// integrations/vscode-beats/src/insightsUrl.ts) and the home
+// FlowHeadline's pill onClick handlers — so a deep link from any of
+// those surfaces lands on the exact same page state.
+//
+// Param order is alphabetical (bundle, language, repo) — Go's
+// url.Values encodes that way deterministically, which keeps URLs
+// stable across daemon versions for diffing in shell history.
+func buildInsightsURL(base string, filter OpenFilter) string {
 	trimmed := strings.TrimRight(base, "/")
-	if repo == "" {
+	q := url.Values{}
+	if filter.Bundle != "" {
+		q.Set("bundle", filter.Bundle)
+	}
+	if filter.Language != "" {
+		q.Set("language", filter.Language)
+	}
+	if filter.Repo != "" {
+		q.Set("repo", filter.Repo)
+	}
+	if len(q) == 0 {
 		return trimmed + "/insights"
 	}
-	return trimmed + "/insights?repo=" + url.QueryEscape(repo)
+	return trimmed + "/insights?" + q.Encode()
 }
 
 // openBrowser invokes the system's URL handler. Cross-platform shim —

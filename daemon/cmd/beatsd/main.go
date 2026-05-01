@@ -218,22 +218,32 @@ func main() {
 		}
 
 	case "open":
-		// Optional `--repo PATH` to deep-link the filtered view, plus
-		// `--print` to write the URL to stdout instead of launching a
-		// browser (useful for shell pipelines and headless setups).
-		var repo string
+		// Optional --repo / --language / --bundle to deep-link a
+		// filtered view (mirrors the chip filters on the web Insights
+		// page; all three AND-compose). --print writes the URL to
+		// stdout instead of launching a browser, useful for shell
+		// pipelines and headless setups.
+		var filter OpenFilter
 		var printOnly bool
 		for i := 1; i < len(args); i++ {
 			switch args[i] {
 			case "--repo":
 				if i+1 < len(args) {
-					repo = args[i+1]
+					filter.Repo = args[i+1]
+				}
+			case "--language":
+				if i+1 < len(args) {
+					filter.Language = args[i+1]
+				}
+			case "--bundle":
+				if i+1 < len(args) {
+					filter.Bundle = args[i+1]
 				}
 			case "--print":
 				printOnly = true
 			}
 		}
-		if err := runOpen(cfg, repo, printOnly); err != nil {
+		if err := runOpen(cfg, filter, printOnly); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -330,7 +340,9 @@ Commands:
                   --minutes N      override the window (default 60)
                   --json           emit the three leaderboards as a JSON object (for piping into jq)
   open          Open the Beats web UI Insights page in the system browser
-                  --repo PATH      deep-link to a filtered view (?repo=…)
+                  --repo PATH      deep-link by editor workspace (?repo=…)
+                  --language ID    deep-link by VS Code language id (?language=…)
+                  --bundle ID      deep-link by macOS bundle id (?bundle=…)
                   --print          print the URL to stdout instead of launching
   stats         Print a one-line headline summary (count · avg · peak · best repo)
                   --minutes N      override the window (default 60)

@@ -16,8 +16,8 @@ import (
 // from `beatsd open` and from ⌘⇧P "Beats: Open Insights" should land
 // at the same URL given the same inputs.
 
-func TestBuildInsightsURL_BareWhenNoRepo(t *testing.T) {
-	got := buildInsightsURL("http://localhost:8080", "")
+func TestBuildInsightsURL_BareWhenNoFilter(t *testing.T) {
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{})
 	want := "http://localhost:8080/insights"
 	if got != want {
 		t.Errorf("expected %q, got %q", want, got)
@@ -25,7 +25,7 @@ func TestBuildInsightsURL_BareWhenNoRepo(t *testing.T) {
 }
 
 func TestBuildInsightsURL_AppendsRepoQueryParam(t *testing.T) {
-	got := buildInsightsURL("http://localhost:8080", "/Users/me/code/beats")
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{Repo: "/Users/me/code/beats"})
 	want := "http://localhost:8080/insights?repo=%2FUsers%2Fme%2Fcode%2Fbeats"
 	if got != want {
 		t.Errorf("expected %q, got %q", want, got)
@@ -36,7 +36,7 @@ func TestBuildInsightsURL_StripsTrailingSlashOnBase(t *testing.T) {
 	// Self-hosted users sometimes set base with a trailing slash.
 	// Without normalization we'd produce //insights — ugly, technically
 	// works in browsers but reads as a config bug in logs.
-	got := buildInsightsURL("https://beats.example.com/", "")
+	got := buildInsightsURL("https://beats.example.com/", OpenFilter{})
 	want := "https://beats.example.com/insights"
 	if got != want {
 		t.Errorf("expected %q, got %q", want, got)
@@ -47,7 +47,7 @@ func TestBuildInsightsURL_EncodesSpecialCharsInRepoPath(t *testing.T) {
 	// Spaces happen on macOS user folders; & and = are pathological
 	// but possible. The web's useUrlParam reads via URLSearchParams
 	// which decodes — verify the chain matches.
-	got := buildInsightsURL("http://localhost:8080", "/Users/me/My Code/x&y=z")
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{Repo: "/Users/me/My Code/x&y=z"})
 	parsed, err := url.Parse(got)
 	if err != nil {
 		t.Fatalf("buildInsightsURL produced unparseable output: %v", err)
@@ -57,6 +57,63 @@ func TestBuildInsightsURL_EncodesSpecialCharsInRepoPath(t *testing.T) {
 	}
 	if parsed.Query().Get("repo") != "/Users/me/My Code/x&y=z" {
 		t.Errorf("repo round-trip failed, got %q", parsed.Query().Get("repo"))
+	}
+}
+
+func TestBuildInsightsURL_LanguageOnly(t *testing.T) {
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{Language: "go"})
+	parsed, _ := url.Parse(got)
+	if parsed.Query().Get("language") != "go" {
+		t.Errorf("expected ?language=go, got %q", got)
+	}
+	if parsed.Query().Has("repo") || parsed.Query().Has("bundle") {
+		t.Errorf("expected only the language param, got %q", got)
+	}
+}
+
+func TestBuildInsightsURL_BundleOnly(t *testing.T) {
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{Bundle: "com.microsoft.VSCode"})
+	parsed, _ := url.Parse(got)
+	if parsed.Query().Get("bundle") != "com.microsoft.VSCode" {
+		t.Errorf("expected ?bundle=com.microsoft.VSCode, got %q", got)
+	}
+}
+
+func TestBuildInsightsURL_AllThreeAxesCompose(t *testing.T) {
+	// AND-compose: a user wants "today's Go work in the beats repo
+	// inside VS Code". All three should land in the URL.
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{
+		Repo:     "/Users/me/code/beats",
+		Language: "go",
+		Bundle:   "com.microsoft.VSCode",
+	})
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("unparseable: %v", err)
+	}
+	if parsed.Query().Get("repo") != "/Users/me/code/beats" {
+		t.Errorf("repo missing, got %q", got)
+	}
+	if parsed.Query().Get("language") != "go" {
+		t.Errorf("language missing, got %q", got)
+	}
+	if parsed.Query().Get("bundle") != "com.microsoft.VSCode" {
+		t.Errorf("bundle missing, got %q", got)
+	}
+}
+
+func TestBuildInsightsURL_OrderIsStable(t *testing.T) {
+	// url.Values.Encode sorts keys alphabetically — so two consecutive
+	// `beatsd open --repo X --language Y --print` runs produce
+	// byte-identical URLs (good for shell history grepping). Lock
+	// it in by checking the literal ordering: bundle < language <
+	// repo alphabetically.
+	got := buildInsightsURL("http://localhost:8080", OpenFilter{
+		Repo: "r", Language: "l", Bundle: "b",
+	})
+	want := "http://localhost:8080/insights?bundle=b&language=l&repo=r"
+	if got != want {
+		t.Errorf("expected stable ordering %q, got %q", want, got)
 	}
 }
 
@@ -87,7 +144,7 @@ func TestRunOpen_PrintPathWritesBareURL(t *testing.T) {
 	cfg.UI.BaseURL = "http://localhost:8080"
 
 	out := captureStdout(t, func() {
-		_ = runOpen(cfg, "/Users/me/code/beats", true)
+		_ = runOpen(cfg, OpenFilter{Repo: "/Users/me/code/beats"}, true)
 	})
 
 	want := "http://localhost:8080/insights?repo=%2FUsers%2Fme%2Fcode%2Fbeats\n"
@@ -110,7 +167,7 @@ func TestRunOpen_PrintPathPipeableWithNoRepo(t *testing.T) {
 	cfg.UI.BaseURL = "http://localhost:8080"
 
 	out := captureStdout(t, func() {
-		_ = runOpen(cfg, "", true)
+		_ = runOpen(cfg, OpenFilter{}, true)
 	})
 
 	if out != "http://localhost:8080/insights\n" {
