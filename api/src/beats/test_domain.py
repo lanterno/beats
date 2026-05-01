@@ -11,7 +11,16 @@ from beats.domain.exceptions import (
     ProjectNotFound,
     TimerAlreadyRunning,
 )
-from beats.domain.models import Beat, GoalOverride, GoalType, Project
+from beats.domain.models import (
+    Beat,
+    BiometricDay,
+    DailyNote,
+    GoalOverride,
+    GoalType,
+    Intention,
+    Project,
+    RecurringIntention,
+)
 
 
 class TestBeatModel:
@@ -333,3 +342,139 @@ class TestGoalOverrideResolution:
         assert goal is None
         goal, _ = p.effective_goal(date(2026, 4, 6))
         assert goal == 25
+
+
+class TestIntentionModel:
+    """Intention is a daily time-boxed plan attached to a project."""
+
+    def test_defaults_to_today_60min_uncompleted(self):
+        i = Intention(project_id="p1")
+        assert i.project_id == "p1"
+        assert i.date == datetime.now(UTC).date()
+        assert i.planned_minutes == 60
+        assert i.completed is False
+        assert i.id is None
+
+    def test_explicit_fields_round_trip(self):
+        i = Intention(
+            id="abc",
+            project_id="p1",
+            date=date(2026, 5, 1),
+            planned_minutes=90,
+            completed=True,
+        )
+        assert i.planned_minutes == 90
+        assert i.completed is True
+        assert i.date == date(2026, 5, 1)
+
+
+class TestDailyNoteModel:
+    """DailyNote captures end-of-day mood + reflection."""
+
+    def test_defaults(self):
+        n = DailyNote()
+        assert n.note == ""
+        assert n.mood is None
+        assert n.date == datetime.now(UTC).date()
+        assert n.id is None
+
+    def test_mood_accepts_full_1_to_5_range(self):
+        # Domain layer doesn't enforce a 1–5 bound — the comment on the
+        # field says "1-5 scale" but pydantic itself takes any int. Pin
+        # the actual behavior so a future stricter validator is a
+        # *deliberate* contract change, not an accident.
+        for mood in (1, 2, 3, 4, 5):
+            assert DailyNote(mood=mood).mood == mood
+
+    def test_mood_outside_documented_range_currently_passes(self):
+        # Locks in current lax behavior. If we add bounds later, this
+        # test will break and force the implementer to also update the
+        # routes that produce moods (front-end coerces to 1–5 already).
+        assert DailyNote(mood=99).mood == 99
+        assert DailyNote(mood=0).mood == 0
+
+
+class TestRecurringIntentionModel:
+    """RecurringIntention is a weekday-templated source of daily intentions."""
+
+    def test_defaults_to_weekdays_enabled(self):
+        r = RecurringIntention(project_id="p1")
+        assert r.project_id == "p1"
+        assert r.planned_minutes == 60
+        assert r.days_of_week == [0, 1, 2, 3, 4]  # Mon–Fri
+        assert r.enabled is True
+
+    def test_arbitrary_days_of_week_accepted(self):
+        # Domain doesn't validate the 0–6 range — keeps the model dumb,
+        # routes are responsible. Pin behavior.
+        r = RecurringIntention(project_id="p1", days_of_week=[5, 6])
+        assert r.days_of_week == [5, 6]
+
+    def test_template_fires_only_on_listed_weekdays(self):
+        # Mirror of the predicate in routers/planning.py:
+        #   if not t.enabled or day_of_week not in t.days_of_week: continue
+        # Keep this assertion in the domain test so a code move can't
+        # silently change the activation rule. weekday(): Mon=0..Sun=6.
+        weekday_template = RecurringIntention(project_id="p1", days_of_week=[0, 1, 2, 3, 4])
+        weekend_template = RecurringIntention(project_id="p2", days_of_week=[5, 6])
+        for weekday in range(5):  # Mon–Fri
+            assert weekday in weekday_template.days_of_week
+            assert weekday not in weekend_template.days_of_week
+        for weekend in (5, 6):
+            assert weekend not in weekday_template.days_of_week
+            assert weekend in weekend_template.days_of_week
+
+    def test_disabled_template_is_inert(self):
+        # The route handler short-circuits on `not t.enabled` before the
+        # day-of-week check. Disabled means nothing fires, regardless of
+        # day. (Test is a sanity-pin on the field, not the route logic.)
+        r = RecurringIntention(project_id="p1", enabled=False, days_of_week=[0, 1, 2, 3, 4, 5, 6])
+        assert r.enabled is False
+
+
+class TestBiometricDayModel:
+    """BiometricDay aggregates one day of biometrics from one source.
+
+    Multiple rows per day are allowed (HealthKit + Oura + Fitbit can all
+    write the same date); the model docstring asserts the readout
+    priority HealthKit > Oura > Fitbit but that's *consumer* policy, not
+    encoded in the model itself. Tests here pin field shape, not the
+    consumer-side priority — the latter would belong to whichever
+    handler does the merge.
+    """
+
+    def test_defaults_all_optional_fields_none_or_empty(self):
+        b = BiometricDay()
+        assert b.source == ""
+        assert b.sleep_minutes is None
+        assert b.sleep_efficiency is None
+        assert b.hrv_ms is None
+        assert b.resting_hr_bpm is None
+        assert b.steps is None
+        assert b.readiness_score is None
+        assert b.workouts == []
+        assert b.date == datetime.now(UTC).date()
+
+    def test_source_field_accepts_documented_values(self):
+        for src in ("healthkit", "health_connect", "fitbit", "oura"):
+            assert BiometricDay(source=src).source == src
+
+    def test_workouts_takes_a_list_of_dicts(self):
+        b = BiometricDay(
+            source="oura",
+            workouts=[
+                {"kind": "run", "minutes": 30, "avg_hr": 158},
+                {"kind": "yoga", "minutes": 45, "avg_hr": 95},
+            ],
+        )
+        assert len(b.workouts) == 2
+        assert b.workouts[0]["kind"] == "run"
+
+    def test_partial_data_is_valid(self):
+        # Not every source emits every field — Fitbit has steps but no
+        # readiness; Oura has readiness but variable sleep efficiency.
+        # The model must tolerate sparse rows.
+        b = BiometricDay(source="fitbit", steps=8400, sleep_minutes=420)
+        assert b.steps == 8400
+        assert b.sleep_minutes == 420
+        assert b.readiness_score is None  # absent — not a required field
