@@ -68,4 +68,35 @@ void main() {
       expect(await s.loadApiUrl(), 'https://second.example.com');
     });
   });
+
+  group('TokenStorage web URL', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('loadWebUrl defaults to http://localhost:8080 when nothing saved', () async {
+      // Matches the daemon's [ui] base_url default. Locked in so a
+      // refactor can't silently flip the local-dev port and break
+      // the FlowScreen deep links.
+      final s = TokenStorage();
+      expect(await s.loadWebUrl(), 'http://localhost:8080');
+    });
+
+    test('saveWebUrl persists the override', () async {
+      final s = TokenStorage();
+      await s.saveWebUrl('https://app.example.com');
+      expect(await s.loadWebUrl(), 'https://app.example.com');
+    });
+
+    test('web URL is independent from API URL — distinct prefs keys', () async {
+      // Self-hosted users typically have api.example.com and
+      // app.example.com on different hosts. Saving one must not
+      // affect the other.
+      final s = TokenStorage();
+      await s.saveApiUrl('https://api.example.com');
+      await s.saveWebUrl('https://app.example.com');
+      expect(await s.loadApiUrl(), 'https://api.example.com');
+      expect(await s.loadWebUrl(), 'https://app.example.com');
+    });
+  });
 }
