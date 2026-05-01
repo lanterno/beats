@@ -12,12 +12,15 @@ modules underneath.
 """
 
 import os
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from beats.coach.memory import MemoryStore
-from beats.coach.repos import COACH_MEMORY_COLLECTION, fmt_minutes
+from beats.coach.repos import COACH_MEMORY_COLLECTION, LLM_USAGE_COLLECTION, fmt_minutes
+from beats.coach.usage import BudgetExceeded, UsageTracker
+from beats.infrastructure.database import Database
 
 
 def _async_db():
@@ -195,3 +198,194 @@ class TestMemoryStore:
             assert history[0]["content"] == ""  # the "previous" before first write
         finally:
             client.close()
+
+
+class TestUsageTracker:
+    """UsageTracker is the per-user LLM budget gate. Each Anthropic call
+    records a row; enforce_budget sums the current month and raises
+    BudgetExceeded if the cap is hit. Miscounting or mis-thresholding
+    here means either silent overspend or unexpected 429s mid-session,
+    both bad — these tests pin the math and the threshold semantics.
+
+    UsageTracker uses Database.get_db() (the singleton). The class-
+    scoped fixture connects the singleton to the testcontainer Mongo
+    so the existing conftest pattern (sync pymongo) doesn't need to
+    know about it.
+    """
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        # Connect Database to the testcontainer's Mongo. The conftest
+        # sets DB_DSN/DB_NAME; Database.connect() reads those by
+        # default via beats.settings.
+        await Database.connect()
+        # Wipe any prior usage rows so each test starts deterministic.
+        await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    async def _record(
+        self,
+        tracker: UsageTracker,
+        cost: float,
+        *,
+        purpose: str = "chat",
+        ts_offset_days: int = 0,
+    ) -> None:
+        """Record a usage row with explicit cost; offset_days lets a
+        test seed history outside the current month."""
+        if ts_offset_days == 0:
+            await tracker.record(
+                model="claude-opus-4-7",
+                input_tokens=1000,
+                output_tokens=500,
+                cache_creation=0,
+                cache_read=0,
+                cost_usd=cost,
+                purpose=purpose,
+            )
+        else:
+            # Backdate via direct insert (record() always uses now()).
+            ts = datetime.now(UTC) + timedelta(days=ts_offset_days)
+            await Database.get_db()[LLM_USAGE_COLLECTION].insert_one(
+                {
+                    "user_id": tracker._user_id,
+                    "model": "claude-opus-4-7",
+                    "input_tokens": 1000,
+                    "output_tokens": 500,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "cost_usd": cost,
+                    "purpose": purpose,
+                    "ts": ts,
+                }
+            )
+
+    async def test_month_spend_zero_for_no_records(self):
+        tracker = UsageTracker("user-fresh")
+        assert await tracker.month_spend() == 0.0
+
+    async def test_record_then_month_spend_sums(self):
+        tracker = UsageTracker("user-1")
+        await self._record(tracker, 1.50)
+        await self._record(tracker, 2.75)
+        await self._record(tracker, 0.25)
+        # Float compare with tolerance — Mongo's $sum is exact for
+        # values this small but Python float arithmetic on the
+        # comparison side may differ in the last bit.
+        assert abs(await tracker.month_spend() - 4.50) < 1e-9
+
+    async def test_month_spend_only_includes_current_month(self):
+        """A row from last month must not count toward this month's
+        budget. Pin the $gte month_start filter — without it, the
+        budget would never reset on the 1st."""
+        tracker = UsageTracker("user-1")
+        # Last month
+        await self._record(tracker, 100.0, ts_offset_days=-45)
+        # This month
+        await self._record(tracker, 1.50)
+        spent = await tracker.month_spend()
+        assert abs(spent - 1.50) < 1e-9
+        assert spent < 100.0  # last-month row was NOT counted
+
+    async def test_month_spend_isolates_users(self):
+        """Per-user filter must work — UserA's spend doesn't bleed
+        into UserB's enforce_budget."""
+        a = UsageTracker("user-a")
+        b = UsageTracker("user-b")
+        await self._record(a, 5.00)
+        await self._record(b, 1.00)
+        assert abs(await a.month_spend() - 5.00) < 1e-9
+        assert abs(await b.month_spend() - 1.00) < 1e-9
+
+    async def test_enforce_budget_under_limit_does_not_raise(self, monkeypatch):
+        """Below the cap → no exception, no 429 to the user."""
+        from beats import settings as settings_module
+
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 10.0)
+        tracker = UsageTracker("user-1")
+        await self._record(tracker, 5.00)
+        # Should not raise.
+        await tracker.enforce_budget()
+
+    async def test_enforce_budget_at_or_over_limit_raises(self, monkeypatch):
+        """Threshold is `>=`, not strict `>`. A user who's spent
+        exactly the cap is over for budgeting purposes — locks the
+        boundary so a future refactor doesn't subtly let users go
+        $0.01 past the cap before getting blocked."""
+        from beats import settings as settings_module
+
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 10.0)
+        tracker = UsageTracker("user-1")
+        await self._record(tracker, 10.0)
+        with pytest.raises(BudgetExceeded) as exc_info:
+            await tracker.enforce_budget()
+        # Exception carries spent + limit so the API can surface them.
+        assert abs(exc_info.value.spent - 10.0) < 1e-9
+        assert exc_info.value.limit == 10.0
+
+    async def test_enforce_budget_disabled_when_limit_is_zero(self, monkeypatch):
+        """A zero/negative limit means budget enforcement is off — a
+        deliberate "no cap" deploy mode. Pin so the BudgetExceeded
+        path doesn't fire spuriously on a self-host that hasn't
+        configured the cap."""
+        from beats import settings as settings_module
+
+        monkeypatch.setattr(settings_module.settings, "coach_monthly_budget_usd", 0.0)
+        tracker = UsageTracker("user-1")
+        await self._record(tracker, 99999.0)  # absurd spend
+        # Must not raise.
+        await tracker.enforce_budget()
+
+    async def test_usage_summary_groups_by_day_and_sorts_ascending(self):
+        """The /api/coach/usage cost dashboard renders these rows.
+        Pin: one row per local-day, summed cost / tokens / calls,
+        sorted oldest → newest."""
+        tracker = UsageTracker("user-1")
+        # Today
+        await self._record(tracker, 1.00)
+        await self._record(tracker, 2.00)
+        # Yesterday
+        await self._record(tracker, 0.50, ts_offset_days=-1)
+
+        summary = await tracker.usage_summary(days=30)
+        assert len(summary) == 2
+
+        # Sorted ascending by date (the _id field).
+        assert summary[0]["_id"] < summary[1]["_id"]
+
+        # Today's totals (the second row by sort).
+        today_row = summary[1]
+        assert abs(today_row["cost_usd"] - 3.00) < 1e-9
+        assert today_row["calls"] == 2
+
+        # Yesterday's row sums correctly.
+        yesterday_row = summary[0]
+        assert abs(yesterday_row["cost_usd"] - 0.50) < 1e-9
+        assert yesterday_row["calls"] == 1
+
+    async def test_record_persists_all_fields(self):
+        """Locks the document shape — the cost dashboard's $sum
+        aggregations + the per-purpose filter rely on these field
+        names. A refactor that renames `cost_usd` → `cost` would
+        silently zero out the dashboard."""
+        tracker = UsageTracker("user-1")
+        await tracker.record(
+            model="claude-opus-4-7",
+            input_tokens=1234,
+            output_tokens=567,
+            cache_creation=100,
+            cache_read=50,
+            cost_usd=1.23,
+            purpose="brief",
+        )
+        doc = await Database.get_db()[LLM_USAGE_COLLECTION].find_one({"user_id": "user-1"})
+        assert doc is not None
+        assert doc["model"] == "claude-opus-4-7"
+        assert doc["input_tokens"] == 1234
+        assert doc["output_tokens"] == 567
+        assert doc["cache_creation_input_tokens"] == 100
+        assert doc["cache_read_input_tokens"] == 50
+        assert doc["cost_usd"] == 1.23
+        assert doc["purpose"] == "brief"
+        assert "ts" in doc
