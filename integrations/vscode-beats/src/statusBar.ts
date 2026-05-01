@@ -70,13 +70,19 @@ export function formatStatusBar(
 	// to spot.
 	const daemonLine =
 		`${health.editorCount} ${editorWord} sending heartbeats · uptime ${formatUptime(health.uptimeSec)}` +
-		(health.windowsEmitted > 0
-			? ` · ${health.windowsEmitted} emitted`
-			: "");
-	const tooltipLines = [
-		`Beats daemon connected (${v})`,
-		daemonLine,
-	];
+		(health.windowsEmitted > 0 ? ` · ${health.windowsEmitted} emitted` : "");
+	const tooltipLines = [`Beats daemon connected (${v})`, daemonLine];
+
+	// Diagnostic: a daemon that's been up for >90s with zero windows
+	// emitted is the canonical "Accessibility permission was revoked
+	// mid-session" pattern. Surface it as a tooltip hint so the user
+	// has something concrete to investigate — without it the status
+	// bar reads "connected" while silently producing no data.
+	if (isStaleNoEmissions(health)) {
+		tooltipLines.push(
+			"⚠ no flow windows emitted in this session — check Accessibility permission",
+		);
+	}
 	if (summary && summary.count > 0) {
 		const avg = Math.round(summary.avg * 100);
 		const peak = Math.round(summary.peak * 100);
@@ -97,6 +103,17 @@ export function formatStatusBar(
 	}
 	tooltipLines.push("\nClick to open Insights.");
 	return { text, tooltip: tooltipLines.join("\n") };
+}
+
+/**
+ * Whether the daemon's been up long enough that "0 emitted" looks
+ * like a real failure rather than a fresh start. 90 seconds is the
+ * threshold the daemon uses internally before retrying the
+ * Accessibility probe; matching it here keeps the surface signals
+ * aligned. Exported for the test suite.
+ */
+export function isStaleNoEmissions(health: HealthSummary): boolean {
+	return health.windowsEmitted === 0 && health.uptimeSec >= 90;
 }
 
 /**

@@ -3,7 +3,12 @@
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { formatStatusBar, formatUptime, shortRepoTail } from "./statusBar";
+import {
+	formatStatusBar,
+	formatUptime,
+	isStaleNoEmissions,
+	shortRepoTail,
+} from "./statusBar";
 
 describe("formatStatusBar", () => {
 	it("offline: shows the slash icon when health is null", () => {
@@ -213,5 +218,51 @@ describe("shortRepoTail", () => {
 
 	it("collapses repeated separators", () => {
 		assert.equal(shortRepoTail("//Users//me//code//beats"), "code/beats");
+	});
+});
+
+// isStaleNoEmissions surfaces the "Accessibility permission revoked
+// mid-session" diagnostic. The daemon's internal probe retries every
+// 90s; if uptime > 90s and zero windows have been emitted, that's
+// the canonical sign something's gone wrong server-side.
+describe("isStaleNoEmissions", () => {
+	function fakeHealth(uptimeSec: number, windowsEmitted: number) {
+		return {
+			ok: true,
+			version: "v1.0.0",
+			uptimeSec,
+			editorCount: 1,
+			windowsEmitted,
+		};
+	}
+
+	it("fires when uptime crosses the 90s threshold with zero emissions", () => {
+		assert.equal(isStaleNoEmissions(fakeHealth(120, 0)), true);
+		assert.equal(isStaleNoEmissions(fakeHealth(90, 0)), true);
+	});
+
+	it("does not fire on a freshly-started daemon", () => {
+		// 60s old, 0 emitted — the daemon hasn't had time to flush
+		// even one window yet (windows are 60s each). False alarm.
+		assert.equal(isStaleNoEmissions(fakeHealth(60, 0)), false);
+	});
+
+	it("does not fire when at least one window has been emitted", () => {
+		// Once any data has flowed, the pipeline is known-good. Even
+		// a long quiet stretch shouldn't re-trigger the diagnostic
+		// (the user just stopped working — that's not a system fault).
+		assert.equal(isStaleNoEmissions(fakeHealth(3600, 1)), false);
+	});
+
+	it("formatStatusBar appends the diagnostic hint to the tooltip", () => {
+		const { tooltip } = formatStatusBar(fakeHealth(120, 0));
+		assert.match(tooltip, /no flow windows emitted/i);
+		assert.match(tooltip, /Accessibility permission/);
+	});
+
+	it("formatStatusBar omits the hint on a healthy daemon", () => {
+		// Healthy daemon producing data — no diagnostic, no noise.
+		const { tooltip } = formatStatusBar(fakeHealth(3600, 60));
+		assert.doesNotMatch(tooltip, /no flow windows emitted/i);
 	});
 });

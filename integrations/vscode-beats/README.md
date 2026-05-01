@@ -60,6 +60,11 @@ current avg score:
 - `⊘ Beats` — daemon offline; heartbeats are being silently dropped.
   Tooltip suggests `beatsd run`.
 
+When the daemon's been up for >90s but `windowsEmitted` is still 0,
+the tooltip flags a likely Accessibility-permission revocation —
+the canonical "connected but silently producing nothing" pattern
+that's otherwise invisible from the status bar's connected state.
+
 Click either state to open the Insights page (same as the command).
 Disable via `beats.statusBar.enabled`.
 
