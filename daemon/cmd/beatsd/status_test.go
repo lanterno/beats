@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +139,86 @@ func TestFlowStatusLine_ShowsBare1hHintWhen24hAlsoEmpty(t *testing.T) {
 	if got != "no windows in the last hour" {
 		t.Errorf("expected bare 1h hint with no 24h suffix, got: %s", got)
 	}
+}
+
+func TestFormatUptimeShort_Magnitudes(t *testing.T) {
+	for _, c := range []struct {
+		seconds int64
+		want    string
+	}{
+		{0, "0s"},
+		{42, "42s"},
+		{60, "1m"},
+		{3599, "59m"},
+		{3600, "1h"},
+		{86399, "23h"},
+		{86400, "1d"},
+		{86400 * 7, "7d"},
+		{-12, "0s"}, // defensive: clock skew shouldn't render "-12s"
+	} {
+		if got := formatUptimeShort(c.seconds); got != c.want {
+			t.Errorf("formatUptimeShort(%d) = %q, want %q", c.seconds, got, c.want)
+		}
+	}
+}
+
+func TestDaemonStatusDetail_ReadsHealthAndRendersCounts(t *testing.T) {
+	// Stand up a fake /health endpoint on a free port and have
+	// daemonStatusDetail probe it. Catches a regression in the
+	// JSON parsing or the rendered string format.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":              true,
+			"version":         "test",
+			"uptime_sec":      3661, // 1h 1min 1sec → "1h"
+			"editor_count":    1,
+			"windows_emitted": 142,
+		})
+	}))
+	defer srv.Close()
+
+	// Extract the port the test server bound to.
+	port := portFromURL(t, srv.URL)
+	got := daemonStatusDetail(port)
+
+	// Lock in the prefix and the components — order matters for the
+	// status line readability.
+	for _, want := range []string{"running", "142 windows emitted", "uptime 1h"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected detail to contain %q, got: %s", want, got)
+		}
+	}
+}
+
+func TestDaemonStatusDetail_FallsBackToPlainRunningOnError(t *testing.T) {
+	// Probe a port nothing is bound to. daemonStatusDetail must NOT
+	// hang or surface the error — just degrade to "running" so the
+	// status command never wedges on an unreachable loopback.
+	got := daemonStatusDetail(1) // port 1, not bindable by users; refused
+	if got != "running" {
+		t.Errorf("expected fallback to 'running' on probe failure, got: %s", got)
+	}
+}
+
+// portFromURL extracts the port from an httptest.Server URL like
+// "http://127.0.0.1:54321". Cheap helper kept here rather than a
+// strconv chain at every callsite.
+func portFromURL(t *testing.T, raw string) int {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse %q: %v", raw, err)
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		t.Fatalf("port atoi %q: %v", parsed.Port(), err)
+	}
+	return port
 }
 
 func TestFlowStatusLine_ApiFailureReturnsSoftUnavailable(t *testing.T) {
