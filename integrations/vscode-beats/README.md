@@ -92,11 +92,19 @@ code --install-extension beats-vscode-0.1.0.vsix
 
 ## Daemon listener
 
-The extension is a no-op if the daemon isn't running — it's fire-and-forget
-with a 1-second timeout. The companion daemon listener that consumes these
-heartbeats lives in `daemon/internal/editor/listener.go` (planned, not yet
-implemented at the time of writing). Until then, you can run this extension
-safely; it'll just be silently dropped.
+The companion daemon listener that consumes these heartbeats is shipping
+in [`daemon/internal/editor/listener.go`](../../daemon/internal/editor/listener.go).
+It binds to `127.0.0.1:37499` only and rejects non-loopback peers. The
+collector merges the most recent fresh heartbeat (≤90s old) into each
+flow window's `editor_repo` / `editor_branch` / `editor_language`
+fields — so the daemon's per-repo / per-language leaderboards (`beatsd
+top`, the web Insights page) only carry editor context for windows
+where the extension was actually emitting.
+
+If the daemon isn't running or the listener port is held by something
+else, the extension is a no-op — POSTs are fire-and-forget with a
+1-second timeout, silent on error. You can run this extension safely
+in either state.
 
 ## Why fire-and-forget?
 
