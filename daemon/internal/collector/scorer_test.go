@@ -309,3 +309,95 @@ func TestComputeFlowWindow_CategoryFit(t *testing.T) {
 		t.Errorf("expected category fit 0.0 with no timer, got %f", w.CategoryFitScore)
 	}
 }
+
+// TestConfigureScoring_ShiftsFlowScore verifies that ConfigureScoring
+// actually changes the formula at runtime. Using identical samples,
+// the same input under different weights must produce different
+// scores — otherwise the wiring is broken (defaults still in use).
+//
+// Restores defaults at end so other tests in this package are
+// unaffected (package-level vars are global within the test process).
+func TestConfigureScoring_ShiftsFlowScore(t *testing.T) {
+	t.Cleanup(func() {
+		ConfigureScoring(ScoringParams{
+			CadenceWeight:    0.4,
+			CoherenceWeight:  0.4,
+			CategoryWeight:   0.2,
+			IdleThresholdSec: 30.0,
+		})
+	})
+
+	// All-coherence sample (single app, no event tap data so cadence
+	// defaults to 0.5).
+	now := time.Now().UTC()
+	samples := []Sample{
+		{CollectedAt: now, BundleID: "com.apple.Xcode", IdleSeconds: 0, EventCount: -1},
+		{CollectedAt: now, BundleID: "com.apple.Xcode", IdleSeconds: 0, EventCount: -1},
+	}
+
+	wDefault := ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+
+	// All-coherence config: tiny weight on cadence/category, full on
+	// coherence. Score should rise (default 0.4*0.5 + 0.4*1.0 + 0.2*0
+	// = 0.6; tuned ~1.0*1.0 = 1.0).
+	ConfigureScoring(ScoringParams{
+		CadenceWeight:    0.001, // Configure ignores zeros — tiny positive.
+		CoherenceWeight:  1.0,
+		CategoryWeight:   0.001,
+		IdleThresholdSec: 30.0,
+	})
+	wTuned := ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+
+	if wTuned.FlowScore <= wDefault.FlowScore {
+		t.Errorf(
+			"tuned weights should boost coherence-dominated score: default=%.3f tuned=%.3f",
+			wDefault.FlowScore, wTuned.FlowScore,
+		)
+	}
+	if wTuned.FlowScore < 0.95 {
+		t.Errorf(
+			"with coherence weight=1.0 on a single-app window, expected near-1.0 score; got %.3f",
+			wTuned.FlowScore,
+		)
+	}
+}
+
+// TestConfigureScoring_IgnoresZeros: Configure treats 0 as "keep
+// current default". This lets the daemon pass through a partially-
+// populated ScoringConfig (e.g. user only sets idle_threshold_sec
+// in the toml) without zeroing the rest.
+func TestConfigureScoring_IgnoresZeros(t *testing.T) {
+	t.Cleanup(func() {
+		ConfigureScoring(ScoringParams{
+			CadenceWeight:    0.4,
+			CoherenceWeight:  0.4,
+			CategoryWeight:   0.2,
+			IdleThresholdSec: 30.0,
+		})
+	})
+
+	// Set known non-default values first.
+	ConfigureScoring(ScoringParams{
+		CadenceWeight:    0.5,
+		CoherenceWeight:  0.3,
+		CategoryWeight:   0.2,
+		IdleThresholdSec: 45.0,
+	})
+
+	// Now apply a "partial" config — only idle threshold changes;
+	// the three weights are zero and should be left at 0.5/0.3/0.2.
+	ConfigureScoring(ScoringParams{IdleThresholdSec: 60.0})
+
+	if cadenceWeight != 0.5 {
+		t.Errorf("cadence weight clobbered by zero: got %f, want 0.5", cadenceWeight)
+	}
+	if coherenceWeight != 0.3 {
+		t.Errorf("coherence weight clobbered by zero: got %f, want 0.3", coherenceWeight)
+	}
+	if categoryWeight != 0.2 {
+		t.Errorf("category weight clobbered by zero: got %f, want 0.2", categoryWeight)
+	}
+	if idleThresholdSec != 60.0 {
+		t.Errorf("idle threshold not applied: got %f, want 60", idleThresholdSec)
+	}
+}

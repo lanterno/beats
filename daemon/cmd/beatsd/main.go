@@ -203,6 +203,16 @@ func main() {
 			}(ev)
 		})
 
+		// Apply scoring tunables from daemon.toml. Zero values are
+		// ignored, so a config file without a [scoring] section keeps
+		// the shipped defaults.
+		collector.ConfigureScoring(collector.ScoringParams{
+			CadenceWeight:    cfg.Scoring.CadenceWeight,
+			CoherenceWeight:  cfg.Scoring.CoherenceWeight,
+			CategoryWeight:   cfg.Scoring.CategoryWeight,
+			IdleThresholdSec: cfg.Scoring.IdleThresholdSec,
+		})
+
 		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
 			if hb := editorListener.Latest(); hb != nil {
 				w.EditorRepo = hb.Repo

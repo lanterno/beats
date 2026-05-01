@@ -13,6 +13,7 @@ type Config struct {
 	API       APIConfig       `toml:"api"`
 	UI        UIConfig        `toml:"ui"`
 	Collector CollectorConfig `toml:"collector"`
+	Scoring   ScoringConfig   `toml:"scoring"`
 }
 
 // APIConfig holds API connection settings.
@@ -35,6 +36,23 @@ type CollectorConfig struct {
 	FlushIntervalSec int `toml:"flush_interval_sec"` // How often to compute + send a FlowWindow (default 60s)
 }
 
+// ScoringConfig tunes the flow-score formula. All values default to the
+// shipped ones — a stock daemon.toml without a [scoring] section runs
+// identically to before this section was introduced. Lifted from
+// constants in collector/scorer.go because tuning these for individual
+// users (e.g. higher idle threshold for editors that pause typing
+// during long compiles) shouldn't require a recompile.
+//
+// The three weights MUST sum to ~1.0 — the formula clamps the final
+// score to [0,1] so weights summing higher just compress the scale.
+// Values are documented at their definition site (scorer.go).
+type ScoringConfig struct {
+	CadenceWeight    float64 `toml:"cadence_weight"`     // default 0.4
+	CoherenceWeight  float64 `toml:"coherence_weight"`   // default 0.4
+	CategoryWeight   float64 `toml:"category_weight"`    // default 0.2
+	IdleThresholdSec float64 `toml:"idle_threshold_sec"` // default 30
+}
+
 // DefaultConfig returns a Config with sensible defaults for local development.
 func DefaultConfig() *Config {
 	return &Config{
@@ -47,6 +65,12 @@ func DefaultConfig() *Config {
 		Collector: CollectorConfig{
 			PollIntervalSec:  5,
 			FlushIntervalSec: 60,
+		},
+		Scoring: ScoringConfig{
+			CadenceWeight:    0.4,
+			CoherenceWeight:  0.4,
+			CategoryWeight:   0.2,
+			IdleThresholdSec: 30,
 		},
 	}
 }

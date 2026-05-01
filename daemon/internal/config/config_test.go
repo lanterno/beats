@@ -149,6 +149,72 @@ device_token = "should-NEVER-load-from-disk"
 	}
 }
 
+func TestDefaultScoring(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Scoring.CadenceWeight != 0.4 {
+		t.Errorf("default cadence_weight should be 0.4, got %f", cfg.Scoring.CadenceWeight)
+	}
+	if cfg.Scoring.CoherenceWeight != 0.4 {
+		t.Errorf("default coherence_weight should be 0.4, got %f", cfg.Scoring.CoherenceWeight)
+	}
+	if cfg.Scoring.CategoryWeight != 0.2 {
+		t.Errorf("default category_weight should be 0.2, got %f", cfg.Scoring.CategoryWeight)
+	}
+	if cfg.Scoring.IdleThresholdSec != 30 {
+		t.Errorf("default idle_threshold_sec should be 30, got %f", cfg.Scoring.IdleThresholdSec)
+	}
+	// Weights sum to ~1.0 — the formula doesn't enforce this but the
+	// ship default does so the score has the natural [0,1] range.
+	sum := cfg.Scoring.CadenceWeight + cfg.Scoring.CoherenceWeight + cfg.Scoring.CategoryWeight
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("default scoring weights should sum to ~1.0, got %f", sum)
+	}
+}
+
+func TestLoadFromOverridesScoring(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "daemon.toml")
+	contents := `
+[scoring]
+cadence_weight = 0.5
+coherence_weight = 0.3
+category_weight = 0.2
+idle_threshold_sec = 60
+`
+	if err := os.WriteFile(path, []byte(contents), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if cfg.Scoring.CadenceWeight != 0.5 {
+		t.Errorf("cadence_weight not overridden: %f", cfg.Scoring.CadenceWeight)
+	}
+	if cfg.Scoring.IdleThresholdSec != 60 {
+		t.Errorf("idle_threshold_sec not overridden: %f", cfg.Scoring.IdleThresholdSec)
+	}
+}
+
+func TestLoadFromMissingScoringKeepsDefaults(t *testing.T) {
+	// A daemon.toml without a [scoring] section must keep the shipped
+	// defaults — otherwise users on an older config (no [scoring]
+	// section) would silently zero out their flow score after upgrade.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "daemon.toml")
+	if err := os.WriteFile(path, []byte("[collector]\npoll_interval_sec = 5\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	def := DefaultConfig()
+	if cfg.Scoring != def.Scoring {
+		t.Errorf("scoring section without [scoring] should match defaults, got %+v", cfg.Scoring)
+	}
+}
+
 func TestConfigPath_LooksLikeXdgConfig(t *testing.T) {
 	p := ConfigPath()
 	if p == "" {

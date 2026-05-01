@@ -5,15 +5,52 @@ import (
 	"time"
 )
 
-const (
-	// idleThresholdSec: a sample is considered "idle" if IdleSeconds exceeds this.
+// Default scoring parameters. ConfigureScoring overrides these at
+// daemon startup from the [scoring] section of daemon.toml — a stock
+// config file (or no [scoring] section) keeps these defaults.
+//
+// The three weights compose the flow score: weighted sum of cadence,
+// coherence, and category-fit, minus an idle penalty. They sum to 1.0
+// in defaults; the final score clamps to [0,1] so a misconfigured
+// weights table that exceeds 1.0 just flattens at the top, and one
+// that sums below 1.0 leaves headroom unused. idleThresholdSec is
+// the per-sample idle gate (sample with IdleSeconds > threshold
+// counts as idle).
+var (
+	cadenceWeight    = 0.4
+	coherenceWeight  = 0.4
+	categoryWeight   = 0.2
 	idleThresholdSec = 30.0
-
-	// Weights for the composite flow score.
-	cadenceWeight   = 0.4
-	coherenceWeight = 0.4
-	categoryWeight  = 0.2
 )
+
+// ScoringParams mirrors config.ScoringConfig but is package-local so
+// the collector doesn't depend on the config package (avoids an
+// import cycle if any test wants to drive the scorer with custom
+// weights — see scorer_test.go).
+type ScoringParams struct {
+	CadenceWeight    float64
+	CoherenceWeight  float64
+	CategoryWeight   float64
+	IdleThresholdSec float64
+}
+
+// ConfigureScoring overrides the scoring tunables. Zero values are
+// ignored (treated as "keep the current default"). Call once at
+// daemon startup before Run; calling mid-stream is a race.
+func ConfigureScoring(p ScoringParams) {
+	if p.CadenceWeight > 0 {
+		cadenceWeight = p.CadenceWeight
+	}
+	if p.CoherenceWeight > 0 {
+		coherenceWeight = p.CoherenceWeight
+	}
+	if p.CategoryWeight > 0 {
+		categoryWeight = p.CategoryWeight
+	}
+	if p.IdleThresholdSec > 0 {
+		idleThresholdSec = p.IdleThresholdSec
+	}
+}
 
 // ComputeFlowWindow computes a FlowWindow from a slice of samples.
 //
