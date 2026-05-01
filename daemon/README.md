@@ -75,6 +75,17 @@ base_url = "https://api.lifepete.com"
 [collector]
 poll_interval_sec = 5     # how often to sample
 flush_interval_sec = 60   # how often to compute + send a flow window
+
+[scoring]
+# Weights for the composite flow_score. Defaults sum to 1.0; the
+# final score clamps to [0,1] so weights summing higher just
+# compress the scale. All four fields are optional — omitting a
+# field (or leaving it at 0) keeps the shipped default for that
+# field, so partial overrides work.
+cadence_weight = 0.4
+coherence_weight = 0.4
+category_weight = 0.2
+idle_threshold_sec = 30   # samples with IdleSeconds > this count as idle
 ```
 
 Device token lives in the OS keychain (macOS: Keychain Access; Linux: libsecret),
