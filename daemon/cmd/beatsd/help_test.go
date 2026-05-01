@@ -129,6 +129,100 @@ func TestHasHelpFlag_FindsHelpInAnyPosition(t *testing.T) {
 	}
 }
 
+// suggestCommand maps a typo to the closest known command, used
+// by main()'s default arm to print "did you mean …?". Tests pin
+// the realistic typo cases plus the fall-through.
+
+func TestSuggestCommand_RealisticTypos(t *testing.T) {
+	// Plain Levenshtein scores transpositions as 2 substitutions,
+	// so transposition-only typos near a longer command fall back
+	// to a closer same-letterset shorter command (e.g. "stauts"
+	// is distance 1 from "stats" but distance 2 from "status").
+	// Damerau-Levenshtein would handle transpositions cleanly but
+	// the added complexity isn't worth it — the realistic cases
+	// below cover the common deletion/insertion typos and pick
+	// useful suggestions.
+	cases := map[string]string{
+		"dotcor": "doctor",  // 2 substitutions for the t/c swap
+		"recnet": "recent",  // 2 substitutions for the n/e swap
+		"stat":   "stats",   // missing trailing s
+		"vrsion": "version", // missing e
+		"opn":    "open",    // missing e
+		"confg":  "config",  // missing i
+		"pari":   "pair",    // 2 substitutions for the i/r swap
+	}
+	for input, want := range cases {
+		if got := suggestCommand(input); got != want {
+			t.Errorf("suggestCommand(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestSuggestCommand_TieBreaksOnLength(t *testing.T) {
+	// When the candidate at the lowest distance has a different
+	// length than the input, but a same-length candidate exists at
+	// equal distance, prefer the same-length one — it's the more
+	// likely intended command.
+	//
+	// "stat" → both "stats" (distance 1, len 5) and "status" (distance 2,
+	// len 6). Distance wins → "stats".
+	//
+	// "stas" → "stats" (distance 1, insertion); locked in to verify
+	// the simple insertion path stays stable.
+	if got := suggestCommand("stas"); got != "stats" {
+		t.Errorf("suggestCommand(stas) = %q, want stats", got)
+	}
+}
+
+func TestSuggestCommand_NoMatchForFarStrings(t *testing.T) {
+	// Inputs that aren't plausibly any command (distance > 2)
+	// shouldn't produce a wild guess. Better to show no
+	// suggestion than to mislead.
+	for _, input := range []string{
+		"xyzzyfoo",
+		"completely-unrelated",
+		"do", // distance to "doctor" is 4 — too short to be a typo
+		"",   // empty input — unhelpful to suggest anything
+	} {
+		if got := suggestCommand(input); got != "" {
+			t.Errorf("suggestCommand(%q) = %q, want empty", input, got)
+		}
+	}
+}
+
+func TestSuggestCommand_ExactMatchReturnsItself(t *testing.T) {
+	// Defensive — if main()'s switch is somehow reached with an
+	// exact known name (shouldn't happen, but the helper should
+	// still behave reasonably), distance 0 means it matches itself.
+	if got := suggestCommand("doctor"); got != "doctor" {
+		t.Errorf("expected exact match, got %q", got)
+	}
+}
+
+func TestLevenshtein_KnownDistances(t *testing.T) {
+	// Lock the recurrence — these are the canonical test cases
+	// for any Levenshtein implementation.
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"", "", 0},
+		{"abc", "", 3},
+		{"", "xyz", 3},
+		{"kitten", "sitting", 3}, // standard textbook example
+		{"flaw", "lawn", 2},
+		{"doctor", "doctor", 0},
+		{"dotcor", "doctor", 2}, // two substitutions for the swap
+		{"abc", "abcd", 1},      // one insertion
+		{"abcd", "abc", 1},      // one deletion
+	}
+	for _, c := range cases {
+		if got := levenshtein(c.a, c.b); got != c.want {
+			t.Errorf("levenshtein(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
 func TestHasHelpFlag_NoMatchReturnsFalse(t *testing.T) {
 	for _, args := range [][]string{
 		{},

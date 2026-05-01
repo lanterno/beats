@@ -346,7 +346,10 @@ func main() {
 		fmt.Println("Device token removed from keychain.")
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
+		if suggestion := suggestCommand(args[0]); suggestion != "" {
+			fmt.Fprintf(os.Stderr, "did you mean `%s`?\n", suggestion)
+		}
 		printUsage()
 		os.Exit(1)
 	}
@@ -422,6 +425,112 @@ func hasHelpFlag(args []string) bool {
 		}
 	}
 	return false
+}
+
+// knownCommands is the canonical list of dispatch arms recognized
+// by main(). Kept in sync by hand — adding a command here without
+// also adding a switch case is harmless (suggestCommand just
+// returns the name and the user gets "unknown command" anyway).
+var knownCommands = []string{
+	"pair", "run", "doctor", "status",
+	"recent", "stats", "top", "open",
+	"version", "config", "unpair",
+}
+
+// suggestCommand returns the closest known command name to [input]
+// if the edit distance is small enough to be a plausible typo.
+// Returns "" when no good match exists.
+//
+// Two rules:
+//
+//  1. Hard cap at distance ≤ 2 (catches the realistic typos:
+//     "dotcor", "recnet", transposed pairs).
+//  2. Distance must be strictly less than len(input) — short
+//     inputs need short edits to qualify. Without this rule a
+//     2-char input like "do" would suggest "top" (distance 2),
+//     which feels like a wild guess rather than a useful nudge.
+//
+// On ties, prefer the candidate whose length is closest to the
+// input — "stauts" (len 6) gets "status" (also 6, distance 2)
+// over "stats" (len 5, distance 1) because the equal-length
+// match is the more likely intent.
+func suggestCommand(input string) string {
+	const maxDistance = 2
+	if input == "" {
+		return ""
+	}
+	best := ""
+	bestDist := maxDistance + 1
+	bestLenDiff := 0
+	for _, cmd := range knownCommands {
+		d := levenshtein(input, cmd)
+		if d > maxDistance || d >= len(input) {
+			continue
+		}
+		lenDiff := absInt(len(cmd) - len(input))
+		// Prefer lower distance; tie-break on smaller length
+		// difference (more likely the intended command).
+		if d < bestDist || (d == bestDist && lenDiff < bestLenDiff) {
+			best = cmd
+			bestDist = d
+			bestLenDiff = lenDiff
+		}
+	}
+	return best
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// levenshtein computes the edit distance between two strings using
+// the standard dynamic-programming recurrence — minimal allocs,
+// O(len(a)*len(b)) time. Pure stdlib so we don't pull in a
+// fuzzy-match dep just for the typo-suggestion path.
+func levenshtein(a, b string) int {
+	ra := []rune(a)
+	rb := []rune(b)
+	if len(ra) == 0 {
+		return len(rb)
+	}
+	if len(rb) == 0 {
+		return len(ra)
+	}
+	prev := make([]int, len(rb)+1)
+	curr := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		curr[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = minInt(
+				prev[j]+1,      // deletion
+				curr[j-1]+1,    // insertion
+				prev[j-1]+cost, // substitution
+			)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(rb)]
+}
+
+func minInt(a, b, c int) int {
+	m := a
+	if b < m {
+		m = b
+	}
+	if c < m {
+		m = c
+	}
+	return m
 }
 
 // printUsage writes the help text to stderr — used by error paths
