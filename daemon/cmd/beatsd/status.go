@@ -71,6 +71,11 @@ func runStatus(cfg *config.Config) error {
 // round-trip; "is the flow pipeline producing?" should be cheap to
 // answer.
 //
+// When the last hour is empty, falls back to a 24h count so the user
+// can tell the difference between "daemon paired but never producing"
+// and "daemon producing earlier today, just quiet right now". Mirrors
+// the web FlowHeadline's today→yesterday fallback rule.
+//
 // On API failure we return a soft "unavailable" message rather than
 // surfacing the error to the caller — `beatsd status` succeeded for
 // pair/daemon/api/timer; one slow flow call shouldn't fail the
@@ -83,11 +88,20 @@ func flowStatusLine(ctx context.Context, c *client.Client) string {
 	if err != nil {
 		return "unavailable"
 	}
-	if s.Count == 0 {
+	if s.Count > 0 {
+		return fmt.Sprintf("%d windows · avg %d · peak %d (last hour)",
+			s.Count, int(s.Avg*100), int(s.Peak*100))
+	}
+	// 1h slice is empty — try 24h to disambiguate "broken pipeline"
+	// from "user just unsuspended their laptop". Soft-fall-through on
+	// any error here too: the 1h "no windows" message is still useful
+	// without the 24h context.
+	dayStart := end.Add(-24 * time.Hour)
+	d, err := c.GetFlowWindowsSummary(ctx, dayStart, end, client.FlowWindowsFilter{})
+	if err != nil || d.Count == 0 {
 		return "no windows in the last hour"
 	}
-	return fmt.Sprintf("%d windows · avg %d · peak %d (last hour)",
-		s.Count, int(s.Avg*100), int(s.Peak*100))
+	return fmt.Sprintf("no windows in the last hour · %d in last 24h", d.Count)
 }
 
 // portFree returns true if 127.0.0.1:port is currently bindable. Used as a
