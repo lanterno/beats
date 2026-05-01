@@ -9,8 +9,8 @@
  * - hide entirely when both today AND yesterday are empty
  * - hide while loading (no flash of placeholder)
  */
-import { cleanup, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlowWindowSummary } from "@/shared/api";
 import { FlowHeadline } from "./FlowHeadline";
@@ -128,6 +128,73 @@ describe("FlowHeadline", () => {
 		renderWithRouter(<FlowHeadline />);
 		expect(screen.getByText("67")).toBeInTheDocument();
 		expect(screen.queryByText(/best on/i)).not.toBeInTheDocument();
+	});
+
+	it("clicks 'best on <repo>' to deep-link Insights pre-filtered by repo", () => {
+		// Tests the URL navigation, not the rendered Insights page.
+		// LocationProbe captures the URL after the click.
+		let lastSearch = "";
+		const LocationProbe = () => {
+			lastSearch = useLocation().search;
+			return null;
+		};
+		render(
+			<MemoryRouter>
+				<FlowHeadline />
+				<LocationProbe />
+			</MemoryRouter>,
+		);
+
+		fireEvent.click(screen.getByText("code/beats"));
+
+		const params = new URLSearchParams(lastSearch);
+		expect(params.get("repo")).toBe("/Users/me/code/beats");
+	});
+
+	it("clicks 'in <language>' to deep-link Insights pre-filtered by language", () => {
+		let lastSearch = "";
+		const LocationProbe = () => {
+			lastSearch = useLocation().search;
+			return null;
+		};
+		render(
+			<MemoryRouter>
+				<FlowHeadline />
+				<LocationProbe />
+			</MemoryRouter>,
+		);
+
+		fireEvent.click(screen.getByText("go"));
+
+		const params = new URLSearchParams(lastSearch);
+		expect(params.get("language")).toBe("go");
+	});
+
+	it("clicking a deep-link pill does not also trigger the card's own /insights link", () => {
+		// The card wraps in a <Link to="/insights"> so clicking the
+		// pill must call stopPropagation. Otherwise we'd navigate to
+		// /insights (no filter) from the bubbled card click and then
+		// to /insights?repo=… from the pill click — exact race
+		// depends on the router internals, but neither outcome is
+		// what the user wants. Verify the pill wins cleanly: search
+		// string contains repo=, not empty.
+		let lastSearch = "";
+		const LocationProbe = () => {
+			lastSearch = useLocation().search;
+			return null;
+		};
+		render(
+			<MemoryRouter>
+				<FlowHeadline />
+				<LocationProbe />
+			</MemoryRouter>,
+		);
+
+		fireEvent.click(screen.getByText("code/beats"));
+		// If propagation leaked, we'd see lastSearch === "" from the
+		// card's bare /insights navigation. Asserting repo= is set
+		// proves the pill click won, not the card.
+		expect(lastSearch).toContain("repo=");
 	});
 
 	it("prefers today's slice over yesterday's when both have data", () => {

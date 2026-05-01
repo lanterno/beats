@@ -13,7 +13,7 @@
  * keys, so the yesterday call is cached across the home + future
  * Insights uses.
  */
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useFlowWindowsSummary } from "@/entities/session";
 
 interface YesterdayRange {
@@ -35,6 +35,7 @@ export function FlowHeadline() {
 	const { data: today, isLoading: todayLoading } = useFlowWindowsSummary();
 	const { start: yStart, end: yEnd } = yesterdayRange();
 	const { data: yesterday, isLoading: yesterdayLoading } = useFlowWindowsSummary(yStart, yEnd);
+	const navigate = useNavigate();
 
 	if (todayLoading || yesterdayLoading) return null;
 
@@ -78,17 +79,59 @@ export function FlowHeadline() {
 				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
 					{data.top_repo && (
 						<span>
-							best on <span className="text-foreground/80">{shortTail(data.top_repo.key)}</span>
+							best on{" "}
+							<DeepLinkSpan
+								label={shortTail(data.top_repo.key)}
+								title={`View Insights filtered to ${data.top_repo.key}`}
+								onClick={() => navigate(`/insights?repo=${encodeURIComponent(data.top_repo!.key)}`)}
+							/>
 						</span>
 					)}
 					{data.top_language && (
 						<span>
-							in <span className="text-foreground/80">{data.top_language.key}</span>
+							in{" "}
+							<DeepLinkSpan
+								label={data.top_language.key}
+								title={`View Insights filtered to ${data.top_language.key}`}
+								onClick={() =>
+									navigate(`/insights?language=${encodeURIComponent(data.top_language!.key)}`)
+								}
+							/>
 						</span>
 					)}
 				</div>
 			)}
 		</Link>
+	);
+}
+
+/** Pill that deep-links to a filtered Insights view from inside a
+ * larger Link (the FlowHeadline card itself). Uses a plain button
+ * with stopPropagation / preventDefault so we don't end up with
+ * nested anchors (invalid HTML) — and so clicking the pill doesn't
+ * also trigger the card's own navigation to unfiltered Insights. */
+function DeepLinkSpan({
+	label,
+	title,
+	onClick,
+}: {
+	label: string;
+	title: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			title={title}
+			onClick={(e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				onClick();
+			}}
+			className="text-foreground/80 hover:text-accent hover:underline transition-colors"
+		>
+			{label}
+		</button>
 	);
 }
 
