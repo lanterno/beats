@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { buildInsightsUrl } from "./insightsUrl";
+import { formatStatusBar, type HealthSummary } from "./statusBar";
 
 interface Heartbeat {
   editor: "vscode";
@@ -17,6 +18,8 @@ interface GitAPI {
 }
 
 let timer: NodeJS.Timeout | undefined;
+let healthTimer: NodeJS.Timeout | undefined;
+let statusBar: vscode.StatusBarItem | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   start();
@@ -42,6 +45,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("beats.openInsights", openInsights)
   );
 
+  // Status-bar item polling /health on a 60s interval. Click runs
+  // beats.openInsights — same destination as ⌘⇧P, just discoverable
+  // without invoking the command palette. Hidden when
+  // beats.statusBar.enabled is false (some users prefer a quiet bar).
+  startStatusBar(context);
+
   context.subscriptions.push({ dispose: stop });
 }
 
@@ -65,6 +74,61 @@ function stop(): void {
     clearInterval(timer);
     timer = undefined;
   }
+  if (healthTimer) {
+    clearInterval(healthTimer);
+    healthTimer = undefined;
+  }
+  if (statusBar) {
+    statusBar.dispose();
+    statusBar = undefined;
+  }
+}
+
+function startStatusBar(context: vscode.ExtensionContext): void {
+  const cfg = vscode.workspace.getConfiguration("beats");
+  if (!cfg.get<boolean>("statusBar.enabled", true)) return;
+
+  statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBar.command = "beats.openInsights";
+  statusBar.show();
+  context.subscriptions.push(statusBar);
+
+  void refreshHealth();
+  // 60s cadence — same as the daemon's heartbeat-of-heartbeats. The
+  // health endpoint is cheap (no API round-trip, just an in-memory
+  // snapshot) so we don't need to hold off when VS Code is unfocused.
+  healthTimer = setInterval(() => void refreshHealth(), 60_000);
+}
+
+async function refreshHealth(): Promise<void> {
+  if (!statusBar) return;
+  const cfg = vscode.workspace.getConfiguration("beats");
+  const port = cfg.get<number>("daemonPort", 37499);
+  let health: HealthSummary | null = null;
+  try {
+    const resp = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(1000),
+    });
+    if (resp.ok) {
+      const body = (await resp.json()) as {
+        ok: boolean;
+        version: string;
+        uptime_sec: number;
+        editor_count: number;
+      };
+      health = {
+        ok: body.ok,
+        version: body.version,
+        uptimeSec: body.uptime_sec,
+        editorCount: body.editor_count,
+      };
+    }
+  } catch {
+    // Daemon offline — fall through to formatStatusBar(null).
+  }
+  const { text, tooltip } = formatStatusBar(health);
+  statusBar.text = text;
+  statusBar.tooltip = tooltip;
 }
 
 async function sendHeartbeat(): Promise<void> {

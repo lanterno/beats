@@ -32,6 +32,7 @@ machine.
 | `beats.heartbeatIntervalSeconds` | `30` | Cadence in seconds (min 5). |
 | `beats.privacy.sendBranch` | `true` | Set to `false` to suppress branch names. |
 | `beats.webUrl` | `http://localhost:8080` | Base URL of your Beats web UI; the "Open Insights" command opens this. Set to your public URL for self-hosted deploys. |
+| `beats.statusBar.enabled` | `true` | Show a status-bar item indicating whether the daemon is connected. |
 
 ## Commands
 
@@ -40,6 +41,19 @@ page in the system browser, pre-filtered to the current workspace's
 repo path. Uses the same `?repo=` query string the page persists when
 you click a chip — so a deep link from the editor lands on the same
 filtered view a click would.
+
+## Status bar
+
+A status-bar item polls the daemon's `/health` endpoint every 60s and
+shows whether your heartbeats are landing:
+
+- `⚡ Beats` — daemon connected. Tooltip shows the daemon version,
+  number of editors sending heartbeats, and uptime.
+- `⊘ Beats` — daemon offline; heartbeats are being silently dropped.
+  Tooltip suggests `beatsd run`.
+
+Click either state to open the Insights page (same as the command).
+Disable via `beats.statusBar.enabled`.
 
 ## Install (development)
 

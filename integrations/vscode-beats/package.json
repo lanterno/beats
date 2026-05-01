@@ -2,7 +2,7 @@
   "name": "beats-vscode",
   "displayName": "Beats",
   "description": "Workspace heartbeats for the Beats time-tracking daemon — improves Flow Score accuracy by telling the daemon which git repo you're editing.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "lanterno",
   "license": "MIT",
   "engines": {
@@ -57,6 +57,11 @@
           "type": "string",
           "default": "http://localhost:8080",
           "description": "Base URL of your Beats web UI. Used by the 'Beats: Open Insights' command to deep-link to the analytics page. For self-hosted deploys, set this to your public URL."
+        },
+        "beats.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a status-bar item indicating whether the Beats daemon is connected. Click the item to open Insights."
         }
       }
     }
