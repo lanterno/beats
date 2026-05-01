@@ -45,6 +45,7 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
         estimation=request.estimation,
         color=request.color,
         weekly_goal=request.weekly_goal,
+        category=request.category,
     )
     created = await service.create_project(project)
     return created.model_dump()
@@ -63,6 +64,12 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         weekly_goal=request.weekly_goal,
         goal_type=request.goal_type,
         github_repo=request.github_repo,
+        # category and autostart_repos were silently dropped here —
+        # the schema accepted them but the route never forwarded them
+        # to the domain, so the daemon's flow-score category_fit
+        # never matched and auto-timer autostart rules never fired.
+        category=request.category,
+        autostart_repos=request.autostart_repos,
     )
     updated = await service.update_project(project)
     return updated.model_dump()

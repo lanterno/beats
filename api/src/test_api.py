@@ -1632,6 +1632,103 @@ class TestSignalsAPI:
         data = resp.json()
         return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}
 
+    def test_create_project_with_category_persists(self):
+        """Regression guard: the create handler used to ignore the
+        \`category\` field — the schema accepted it but the route never
+        forwarded it to the domain Project, so a freshly-created
+        project's category was always None until a separate PUT.
+        That broke the daemon's flow-score category_fit silently
+        for new projects.
+
+        The fix lives at api/src/beats/api/routers/projects.py
+        (create_project + update_project both forward category +
+        autostart_repos now). Test asserts the round-trip.
+        """
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Drift Test Coding", "category": "coding"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["category"] == "coding", body
+
+        # Read back via list + by-id to confirm persistence.
+        resp = client.get("/api/projects/", headers=auth_headers)
+        match = next(p for p in resp.json() if p["id"] == body["id"])
+        assert match["category"] == "coding"
+
+    def test_update_project_persists_autostart_repos(self):
+        """update_project also used to drop autostart_repos on the
+        floor — the schema accepted them but the domain Project was
+        built without them, so the daemon's auto-timer-by-repo rules
+        never matched. Locks in that the round-trip works.
+        """
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Autostart Test"},
+            headers=auth_headers,
+        )
+        project_id = resp.json()["id"]
+        resp = client.put(
+            "/api/projects/",
+            json={
+                "id": project_id,
+                "name": "Autostart Test",
+                "autostart_repos": ["/Users/me/code/example", "/Users/me/code/other"],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["autostart_repos"] == ["/Users/me/code/example", "/Users/me/code/other"]
+
+    def test_timer_context_no_active_timer(self):
+        """GET /api/signals/timer-context returns timer_running=false
+        with empty project fields when no timer is running. The daemon's
+        pollTimerContext goroutine reads this every 30s; the shield uses
+        the boolean to gate drift detection (no drift when no timer).
+        """
+        _, device_headers = self._pair_device()
+        resp = client.get("/api/signals/timer-context", headers=device_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["timer_running"] is False
+        # project_id / project_category are present-but-null when no timer.
+        # The daemon's TimerContextResponse struct decodes these as
+        # empty strings via Go's zero-value default for missing JSON.
+        assert "project_id" in body
+        assert "project_category" in body
+
+    def test_timer_context_with_active_timer_carries_category(self):
+        """When a timer IS running, the response includes the project's
+        category so the daemon's flow-score computation can compute
+        category_fit (whether the dominant app matches the project's
+        category, e.g. coding work in VS Code while a coding-tagged
+        project is active)."""
+        # Create a coding project + start a timer
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Daemon TC Test", "category": "coding"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        project_id = resp.json()["id"]
+        resp = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": datetime.now(UTC).isoformat()},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+
+        _, device_headers = self._pair_device()
+        resp = client.get("/api/signals/timer-context", headers=device_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["timer_running"] is True
+        assert body["project_id"] == project_id
+        assert body["project_category"] == "coding"
+
     def test_post_drift_event_records_flow_window_with_drift_category(self):
         """POST /api/signals/drift records a FlowWindow with category=drift.
 

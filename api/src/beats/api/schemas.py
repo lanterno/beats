@@ -24,6 +24,12 @@ class CreateProjectRequest(BaseModel):
     estimation: str | None = None
     color: str | None = None
     weekly_goal: float | None = None  # Weekly goal in hours
+    # category is settable on update — without exposing it here too,
+    # a freshly-created project's category stays None until the user
+    # makes a separate PUT, and the daemon's flow-score category_fit
+    # silently can't match work to the project. Brought to parity with
+    # UpdateProjectRequest.
+    category: str | None = None  # Activity category for flow score matching
 
 
 class UpdateProjectRequest(BaseModel):
