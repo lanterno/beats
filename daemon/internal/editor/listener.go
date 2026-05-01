@@ -61,6 +61,7 @@ type Listener struct {
 	version        string
 	summaryFetcher SummaryFetcher
 	windowsEmitted atomic.Int64 // updated by RecordWindowEmitted; surfaced on /health
+	windowsDropped atomic.Int64 // updated by RecordWindowDropped; surfaced on /health
 }
 
 // New constructs a listener. Call [Start] to bind the port; call [Latest]
@@ -92,6 +93,20 @@ func (l *Listener) SetSummaryFetcher(fn SummaryFetcher) {
 // handler can read it without holding the mutex.
 func (l *Listener) RecordWindowEmitted() {
 	l.windowsEmitted.Add(1)
+}
+
+// RecordWindowDropped increments the per-process counter of flow
+// windows that the collector tried to POST but couldn't (API
+// unreachable, 5xx, auth lapse). Surfaced on /health alongside
+// windows_emitted so a user can see at a glance whether their
+// pipeline is producing-but-not-landing — distinct from
+// "producing nothing", which the Accessibility-revoked diagnostic
+// already covers.
+//
+// Counter is monotonic per process (no decay) — the user clears
+// it by restarting `beatsd run`. Same convention as windowsEmitted.
+func (l *Listener) RecordWindowDropped() {
+	l.windowsDropped.Add(1)
 }
 
 // Start binds the listener to 127.0.0.1:port and begins accepting POST
@@ -196,6 +211,7 @@ type HealthResponse struct {
 	UptimeSec      int64  `json:"uptime_sec"`
 	EditorCount    int    `json:"editor_count"`
 	WindowsEmitted int64  `json:"windows_emitted"`
+	WindowsDropped int64  `json:"windows_dropped"`
 }
 
 // handleHealth serves a tiny status snapshot so editor extensions can
@@ -218,6 +234,7 @@ func (l *Listener) handleHealth(w http.ResponseWriter, r *http.Request) {
 		UptimeSec:      int64(time.Since(l.startedAt).Seconds()),
 		EditorCount:    len(l.All()),
 		WindowsEmitted: l.windowsEmitted.Load(),
+		WindowsDropped: l.windowsDropped.Load(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)

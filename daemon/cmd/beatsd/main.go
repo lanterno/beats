@@ -197,6 +197,13 @@ func main() {
 			}
 			if postErr := c.PostFlowWindow(ctx, req); postErr != nil {
 				fmt.Fprintf(os.Stderr, "post flow window: %v\n", postErr)
+				// Bump the dropped counter so /health surfaces the
+				// asymmetry. A user with windows_emitted=42 and
+				// windows_dropped=15 has a producing-but-not-landing
+				// pipeline (network, auth, 5xx) — distinct from the
+				// "0 emitted on long uptime" diagnostic, which catches
+				// the producing-nothing case (Accessibility revoked).
+				editorListener.RecordWindowDropped()
 			} else {
 				// Record the success so /health's windows_emitted
 				// counter reflects only actually-landed windows.

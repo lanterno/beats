@@ -259,6 +259,45 @@ func TestListener_HealthReportsRecordedWindowEmissions(t *testing.T) {
 	}
 }
 
+func TestListener_HealthReportsWindowsDropped(t *testing.T) {
+	// A producing-but-not-landing pipeline (API unreachable, 5xx,
+	// auth lapse) bumps windows_dropped instead of windows_emitted.
+	// Locks the symmetric counter in: a user looking at /health
+	// who sees emitted=42, dropped=15 knows their flow data is
+	// being computed but not fully reaching the API.
+	listener := New("test")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	for i := 0; i < 3; i++ {
+		listener.RecordWindowEmitted()
+	}
+	for i := 0; i < 5; i++ {
+		listener.RecordWindowDropped()
+	}
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+	var got HealthResponse
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got.WindowsEmitted != 3 {
+		t.Errorf("expected windows_emitted=3, got %d", got.WindowsEmitted)
+	}
+	if got.WindowsDropped != 5 {
+		t.Errorf("expected windows_dropped=5 after five RecordWindowDropped, got %d",
+			got.WindowsDropped)
+	}
+}
+
 func TestListener_SummaryReturnsFetcherBytesVerbatim(t *testing.T) {
 	listener := New("test")
 	listener.SetSummaryFetcher(func(_ context.Context) ([]byte, error) {
