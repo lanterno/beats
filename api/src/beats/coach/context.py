@@ -162,21 +162,41 @@ async def build_day_context(
         note_part = f' — "{note_text[:100]}"' if note_text else ""
         mood_line = f"Yesterday's mood: {mood}/5{note_part}"
 
-    # Calendar events (if connected)
+    # Calendar events (if connected). The whole block is best-effort —
+    # a missing/unconfigured calendar integration must NOT break the
+    # day briefing. The previous version had two latent bugs that the
+    # broad except hid: (1) `CalendarService(cal_doc)` passed the raw
+    # mongo doc as `settings`, but the constructor needs (Settings,
+    # CalendarIntegrationRepository); (2) the call was `.get_events`,
+    # which doesn't exist — the real method is `fetch_events`. Result:
+    # calendar events have never landed in the coach's day context.
     calendar_lines: list[str] = []
     try:
         db = Database.get_db()
         cal_doc = await db.calendar_integrations.find_one({"user_id": user_id, "enabled": True})
         if cal_doc:
             from beats.domain.calendar import CalendarService
+            from beats.infrastructure.repositories import MongoCalendarIntegrationRepository
+            from beats.settings import settings
 
-            cal_service = CalendarService(cal_doc)
-            events = await cal_service.get_events(
+            cal_repo = MongoCalendarIntegrationRepository(db.calendar_integrations, user_id=user_id)
+            cal_service = CalendarService(settings=settings, repo=cal_repo)
+            events = await cal_service.fetch_events(
                 datetime.combine(today, datetime.min.time()),
                 datetime.combine(today, datetime.max.time()),
             )
             for ev in events[:5]:
-                calendar_lines.append(f"  {ev['start'][:5]}–{ev['end'][:5]} {ev['summary']}")
+                # fetch_events returns RFC3339 datetime strings ("2026-05-
+                # 01T09:00:00-07:00") or ISO dates for all-day events
+                # ("2026-05-01"). Slice 11:16 to extract HH:MM from the
+                # dateTime form; for all-day rows it gives the empty
+                # string, so we render those as "all-day" instead.
+                start_t = ev["start"][11:16] if "T" in ev["start"] else "all-day"
+                end_t = ev["end"][11:16] if "T" in ev["end"] else ""
+                if start_t == "all-day":
+                    calendar_lines.append(f"  all-day {ev['summary']}")
+                else:
+                    calendar_lines.append(f"  {start_t}–{end_t} {ev['summary']}")
     except Exception:
         logger.debug("Calendar fetch failed for day context", exc_info=True)
 
