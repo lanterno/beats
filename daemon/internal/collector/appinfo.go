@@ -83,22 +83,38 @@ func parseXpropClass(output string) string {
 
 // parseSwaymsgTree does a best-effort extraction of the focused window from swaymsg output.
 // This is a simplified parser — a full implementation would use JSON decoding.
+//
+// Strategy: find the line carrying `"focused": true`, then scan UPWARD
+// (toward the parent JSON object) for the nearest `"app_id"` field.
+// In every swaymsg pretty-print I've seen, app_id sits above focused
+// inside the same node block — so the closest preceding occurrence is
+// always the right one. Scanning downward (an earlier version of this
+// code did) would let an unrelated sibling's app_id leak through when
+// multiple windows live in the tree.
 func parseSwaymsgTree(output string) (string, string) {
-	// Look for "focused": true and extract nearby "app_id" or "class"
 	lines := strings.Split(output, "\n")
 	for i, line := range lines {
 		if strings.Contains(line, `"focused": true`) {
-			// Search nearby lines for app_id
-			for j := max(0, i-10); j < min(len(lines), i+10); j++ {
-				if strings.Contains(lines[j], `"app_id"`) {
-					parts := strings.SplitN(lines[j], ":", 2)
-					if len(parts) == 2 {
-						appID := strings.Trim(strings.TrimSpace(parts[1]), `",`)
-						if appID != "null" && appID != "" {
-							return appID, appID
-						}
-					}
+			// Scan upward from the focused line, closest first. The
+			// 10-line cap covers typical sway tree indentation
+			// (siblings are 2-4 fields apart) without crossing into
+			// the next node block.
+			for j := i - 1; j >= max(0, i-10); j-- {
+				if !strings.Contains(lines[j], `"app_id"`) {
+					continue
 				}
+				parts := strings.SplitN(lines[j], ":", 2)
+				if len(parts) != 2 {
+					continue
+				}
+				appID := strings.Trim(strings.TrimSpace(parts[1]), `",`)
+				if appID != "null" && appID != "" {
+					return appID, appID
+				}
+				// app_id present but null — XWayland windows. Stop;
+				// the daemon's frontmostAppLinux will fall through
+				// to the X11 path.
+				return "", ""
 			}
 		}
 	}
