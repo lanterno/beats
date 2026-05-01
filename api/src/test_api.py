@@ -2177,6 +2177,100 @@ class TestCsvAndJsonExport:
         assert resp.status_code == 400
         assert "missing entries" in resp.text.lower()
 
+    def test_full_json_round_trip_with_all_four_entity_types(self):
+        """Existing round-trip seeds only projects. Pin that beats,
+        intentions, AND daily_notes round-trip too — those are
+        separate import branches (lines 280-292) and a regression
+        in any one would silently lose user data on cross-deploy
+        migrations."""
+        # Seed: project + beat + intention + daily note
+        project_id = self._create_project("Full Round Trip")
+        client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-01T09:00:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-01T09:30:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/intentions",
+            json={"project_id": project_id, "planned_minutes": 60},
+            headers=auth_headers,
+        )
+        client.put(
+            "/api/daily-notes",
+            json={"date": "2026-04-01", "note": "good day", "mood": 4},
+            headers=auth_headers,
+        )
+
+        export = client.get("/api/export/full", headers=auth_headers)
+        assert export.status_code == 200
+        body = export.json()
+        # All four entity types present in export
+        assert len(body["projects"]) >= 1
+        assert len(body["beats"]) >= 1
+        assert len(body["intentions"]) >= 1
+        assert len(body["daily_notes"]) >= 1
+
+        imported = client.post(
+            "/api/export/import",
+            files={"file": ("backup.json", export.content, "application/json")},
+            headers=auth_headers,
+        )
+        assert imported.status_code == 200
+        imp = imported.json()["imported"]
+        # All four counts non-zero — pin so a refactor that drops
+        # one of the four import branches surfaces immediately
+        assert imp["projects"] >= 1
+        assert imp["beats"] >= 1
+        assert imp["intentions"] >= 1
+        assert imp["daily_notes"] >= 1
+
+    def test_sqlite_round_trip_with_all_four_entity_types(self):
+        """Same as the JSON round-trip test, but for the signed
+        SQLite bundle. The SQLite import has its own four
+        branches (lines 236-253) — pin so a regression in the
+        sqlite3.execute(SELECT data FROM ...) loop on any one
+        table doesn't silently drop user data on import."""
+        project_id = self._create_project("SQLite Round Trip")
+        client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-02T09:00:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-04-02T09:15:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/intentions",
+            json={"project_id": project_id, "planned_minutes": 30},
+            headers=auth_headers,
+        )
+        client.put(
+            "/api/daily-notes",
+            json={"date": "2026-04-02", "note": "shipping", "mood": 5},
+            headers=auth_headers,
+        )
+
+        export = client.get("/api/export/sqlite", headers=auth_headers)
+        assert export.status_code == 200
+        imported = client.post(
+            "/api/export/sqlite/import",
+            files={"file": ("backup.zip", export.content, "application/zip")},
+            headers=auth_headers,
+        )
+        assert imported.status_code == 200
+        imp = imported.json()["imported"]
+        assert imp["projects"] >= 1
+        assert imp["beats"] >= 1
+        assert imp["intentions"] >= 1
+        assert imp["daily_notes"] >= 1
+
 
 class TestIntelligenceInbox:
     """Smoke tests for the aggregated Intelligence Inbox endpoint."""
