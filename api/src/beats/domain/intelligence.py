@@ -249,7 +249,11 @@ class IntelligenceService:
         for b in beats:
             day_minutes[b.start.date()] += b.duration.total_seconds() / 60
         if day_minutes:
-            longest_date = max(day_minutes, key=day_minutes.get)  # type: ignore[arg-type]
+            # `max(d, key=d.get)` is the idiomatic shape but ty can't
+            # follow the bound-method's signature past the dict's
+            # variance. Lambda has the same runtime cost and types
+            # cleanly.
+            longest_date = max(day_minutes, key=lambda d: day_minutes[d])
             longest_day = longest_date.strftime("%A")
             longest_day_hours = day_minutes[longest_date] / 60
         else:
@@ -354,7 +358,7 @@ class IntelligenceService:
 
         # 3. Day pattern
         if day_minutes:
-            longest_date = max(day_minutes, key=day_minutes.get)  # type: ignore[arg-type]
+            longest_date = max(day_minutes, key=lambda d: day_minutes[d])
             day_name = longest_date.strftime("%A")
             hrs = day_minutes[longest_date] / 60
             return f"Your most productive day was {day_name} with {hrs:.1f}h tracked."
@@ -441,7 +445,7 @@ class IntelligenceService:
         if med < 1:
             return []
 
-        peak_block = max(blocks, key=blocks.get)  # type: ignore[arg-type]
+        peak_block = max(blocks, key=lambda b: blocks[b])
         if blocks[peak_block] > med * 2:
             start_h = peak_block * 2
             end_h = start_h + 2
@@ -835,7 +839,7 @@ class IntelligenceService:
             blocks[block] += b.duration.total_seconds() / 60
         if not blocks:
             return 4  # default: 8-10 AM
-        return max(blocks, key=blocks.get)  # type: ignore[arg-type]
+        return max(blocks, key=lambda b: blocks[b])
 
     def _focus_score_for_beat(
         self, beat: Beat, day_beats: list[Beat], index: int, peak_block: int
