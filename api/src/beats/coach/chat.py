@@ -23,7 +23,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
-from anthropic.types import TextBlock
+from anthropic.types import TextBlock, ToolUseBlock
 
 from beats.coach.context import build_coach_messages
 from beats.coach.gateway import complete
@@ -120,7 +120,12 @@ async def handle_chat_turn(
             if isinstance(block, TextBlock):
                 text_parts.append(block.text)
                 yield {"type": "text", "text": block.text}
-            elif block.type == "tool_use":
+            elif isinstance(block, ToolUseBlock):
+                # isinstance narrows the union for the type checker —
+                # the previous `block.type == "tool_use"` discriminator
+                # was correct at runtime but ty couldn't see it, leaving
+                # `.name` / `.input` / `.id` flagged as unresolved on
+                # the broader content-block union.
                 tool_calls_made.append({"name": block.name, "input": block.input})
                 yield {
                     "type": "tool_use",
@@ -151,7 +156,7 @@ async def handle_chat_turn(
         for block in result.content:
             if isinstance(block, TextBlock):
                 assistant_content.append({"type": "text", "text": block.text})
-            elif block.type == "tool_use":
+            elif isinstance(block, ToolUseBlock):
                 assistant_content.append(
                     {
                         "type": "tool_use",
