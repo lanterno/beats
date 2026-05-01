@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../services/repo_path.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/staggered_entrance.dart';
@@ -254,7 +255,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       parts.addAll([
         Text('BEST REPO', style: labelStyle),
         const SizedBox(width: 8),
-        Text(_shortRepoTail(_topRepo!), style: valueStyle),
+        Text(shortRepoTail(_topRepo!), style: valueStyle),
       ]);
     }
     if (_topRepo != null && _topLanguage != null) {
@@ -271,15 +272,6 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       mainAxisAlignment: MainAxisAlignment.center,
       children: parts,
     );
-  }
-
-  /// Last two path segments — matches the table form `beatsd recent`
-  /// uses. Falls back to the original string when there are fewer
-  /// than three segments.
-  String _shortRepoTail(String repo) {
-    final parts = repo.split(RegExp(r'[\\/]')).where((p) => p.isNotEmpty).toList();
-    if (parts.length <= 2) return repo;
-    return parts.skip(parts.length - 2).join('/');
   }
 
   Widget _buildSelectedWindowDetail() {
