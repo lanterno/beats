@@ -17,8 +17,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from beats.coach import brief as brief_module
+from beats.coach.gateway import GatewayResponse
 from beats.coach.memory import MemoryStore
-from beats.coach.repos import COACH_MEMORY_COLLECTION, LLM_USAGE_COLLECTION, fmt_minutes
+from beats.coach.repos import (
+    COACH_MEMORY_COLLECTION,
+    DAILY_BRIEFS_COLLECTION,
+    LLM_USAGE_COLLECTION,
+    fmt_minutes,
+)
 from beats.coach.usage import BudgetExceeded, UsageTracker
 from beats.infrastructure.database import Database
 
@@ -389,3 +396,228 @@ class TestUsageTracker:
         assert doc["cost_usd"] == 1.23
         assert doc["purpose"] == "brief"
         assert "ts" in doc
+
+
+class _FakeTextBlock:
+    """Stand-in for anthropic.types.TextBlock — brief.py extracts
+    `.text` from each TextBlock instance via isinstance() so the
+    fake must subclass the real type."""
+
+    def __new__(cls, text: str):
+        from anthropic.types import TextBlock
+
+        # Use the real Pydantic constructor so isinstance(block, TextBlock)
+        # in brief.py returns True.
+        return TextBlock(type="text", text=text, citations=None)
+
+
+def _fake_gateway_response(text: str = "Good morning. Two intentions today.") -> GatewayResponse:
+    """Build a GatewayResponse the way `complete()` would — content is
+    a list of TextBlocks, model + token + cost fields populated."""
+    return GatewayResponse(
+        content=[_FakeTextBlock(text)],
+        model="claude-opus-4-7",
+        input_tokens=1234,
+        output_tokens=89,
+        cache_creation_input_tokens=400,
+        cache_read_input_tokens=800,
+        cost_usd=0.012,
+        stop_reason="end_turn",
+    )
+
+
+class TestGenerateBrief:
+    """generate_brief composes context + calls the gateway + persists.
+    Mocks build_coach_messages (the heavy upstream) and complete()
+    (the LLM call). Pins what gets stored in daily_briefs and what
+    the gateway is called with."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        await Database.get_db()[DAILY_BRIEFS_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    @pytest.fixture
+    def patched_gateway(self, monkeypatch):
+        """Replace build_coach_messages and complete with deterministic
+        fakes; capture the args the gateway was called with so tests
+        can assert on prompt shape."""
+        captured: dict = {}
+
+        async def fake_build(user_id, prompt, target_date=None):
+            captured["build_args"] = {
+                "user_id": user_id,
+                "prompt": prompt,
+                "target_date": target_date,
+            }
+            return ("system text", [{"role": "user", "content": prompt}], None)
+
+        async def fake_complete(**kwargs):
+            captured["complete_kwargs"] = kwargs
+            return _fake_gateway_response()
+
+        monkeypatch.setattr(brief_module, "build_coach_messages", fake_build)
+        monkeypatch.setattr(brief_module, "complete", fake_complete)
+        return captured
+
+    async def test_persists_brief_with_full_shape(self, patched_gateway):
+        from datetime import date as date_type
+
+        target = date_type(2026, 5, 1)
+        doc = await brief_module.generate_brief("user-1", target_date=target)
+
+        # Returned doc has all the fields the API exposes.
+        assert doc["user_id"] == "user-1"
+        assert doc["date"] == "2026-05-01"
+        assert doc["body"] == "Good morning. Two intentions today."
+        assert doc["model"] == "claude-opus-4-7"
+        assert doc["cost_usd"] == 0.012
+        assert doc["input_tokens"] == 1234
+        assert doc["output_tokens"] == 89
+        assert doc["cache_read"] == 800
+        assert "created_at" in doc
+
+        # Persisted to Mongo with the same shape.
+        stored = await Database.get_db()[DAILY_BRIEFS_COLLECTION].find_one(
+            {"user_id": "user-1", "date": "2026-05-01"}
+        )
+        assert stored is not None
+        assert stored["body"] == "Good morning. Two intentions today."
+
+    async def test_defaults_to_today_when_target_date_omitted(self, patched_gateway):
+        await brief_module.generate_brief("user-1")
+        today = datetime.now(UTC).date().isoformat()
+        # build_coach_messages received today via target_date.
+        assert patched_gateway["build_args"]["target_date"].isoformat() == today
+        # And the persisted row's date is today.
+        stored = await Database.get_db()[DAILY_BRIEFS_COLLECTION].find_one(
+            {"user_id": "user-1", "date": today}
+        )
+        assert stored is not None
+
+    async def test_passes_purpose_brief_to_gateway(self, patched_gateway):
+        """Locks the purpose tag so per-purpose usage breakdowns
+        keep separating brief from chat. Renaming this would skew
+        the cost dashboard."""
+        await brief_module.generate_brief("user-1")
+        assert patched_gateway["complete_kwargs"]["purpose"] == "brief"
+
+    async def test_passes_user_id_to_gateway(self, patched_gateway):
+        """Without this, UsageTracker would count the brief against
+        the wrong user."""
+        await brief_module.generate_brief("user-99")
+        assert patched_gateway["complete_kwargs"]["user_id"] == "user-99"
+
+    async def test_concatenates_multiple_text_blocks(self, monkeypatch):
+        """The LLM can return multiple TextBlocks (one per output
+        chunk). brief.py concatenates and strips. Pin so a refactor
+        that grabs only `content[0].text` doesn't truncate briefs."""
+
+        async def fake_build(user_id, prompt, target_date=None):
+            return ("sys", [], None)
+
+        async def fake_complete(**_kwargs):
+            return GatewayResponse(
+                content=[
+                    _FakeTextBlock("First sentence. "),
+                    _FakeTextBlock("Second sentence."),
+                ],
+                model="claude-opus-4-7",
+                input_tokens=10,
+                output_tokens=20,
+                cache_creation_input_tokens=0,
+                cache_read_input_tokens=0,
+                cost_usd=0.001,
+                stop_reason="end_turn",
+            )
+
+        monkeypatch.setattr(brief_module, "build_coach_messages", fake_build)
+        monkeypatch.setattr(brief_module, "complete", fake_complete)
+
+        doc = await brief_module.generate_brief("user-1")
+        assert doc["body"] == "First sentence. Second sentence."
+
+    async def test_upserts_on_user_and_date(self, patched_gateway):
+        """Generating a brief twice for the same date overwrites
+        rather than duplicating. Locks the upsert filter — without
+        it, get_brief() would non-deterministically return one of
+        many rows."""
+        from datetime import date as date_type
+
+        target = date_type(2026, 5, 1)
+        await brief_module.generate_brief("user-1", target_date=target)
+        await brief_module.generate_brief("user-1", target_date=target)
+
+        count = await Database.get_db()[DAILY_BRIEFS_COLLECTION].count_documents(
+            {"user_id": "user-1", "date": "2026-05-01"}
+        )
+        assert count == 1
+
+
+class TestGetAndListBriefs:
+    """The read paths used by /api/coach/brief/today and
+    /api/coach/brief/history. Pin: empty result for fresh users,
+    descending-by-date for list, _id projection so the API doesn't
+    leak ObjectIds."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        await Database.connect()
+        await Database.get_db()[DAILY_BRIEFS_COLLECTION].delete_many({})
+        yield
+        await Database.disconnect()
+
+    async def _seed_brief(self, user_id: str, date_str: str, body: str = "x") -> None:
+        await Database.get_db()[DAILY_BRIEFS_COLLECTION].insert_one(
+            {"user_id": user_id, "date": date_str, "body": body, "model": "x"}
+        )
+
+    async def test_get_brief_returns_none_when_missing(self):
+        from datetime import date as date_type
+
+        result = await brief_module.get_brief("user-1", target_date=date_type(2026, 5, 1))
+        assert result is None
+
+    async def test_get_brief_returns_doc_without_objectid(self):
+        from datetime import date as date_type
+
+        await self._seed_brief("user-1", "2026-05-01", "today's brief")
+        result = await brief_module.get_brief("user-1", target_date=date_type(2026, 5, 1))
+        assert result is not None
+        assert result["body"] == "today's brief"
+        # ObjectId stripped via the {"_id": 0} projection — important
+        # because API responses don't serialize ObjectIds.
+        assert "_id" not in result
+
+    async def test_list_briefs_empty_for_fresh_user(self):
+        result = await brief_module.list_briefs("user-1")
+        assert result == []
+
+    async def test_list_briefs_descending_by_date(self):
+        await self._seed_brief("user-1", "2026-04-29", "older")
+        await self._seed_brief("user-1", "2026-05-01", "newer")
+        await self._seed_brief("user-1", "2026-04-30", "middle")
+
+        result = await brief_module.list_briefs("user-1")
+        # Newest first — important because the UI's "history" list
+        # renders top-down.
+        assert [b["date"] for b in result] == ["2026-05-01", "2026-04-30", "2026-04-29"]
+
+    async def test_list_briefs_respects_limit(self):
+        for d in ["2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29"]:
+            await self._seed_brief("user-1", d)
+
+        result = await brief_module.list_briefs("user-1", limit=3)
+        assert len(result) == 3
+        # Most recent 3 (sort then truncate, not vice versa).
+        assert [b["date"] for b in result] == ["2026-04-29", "2026-04-28", "2026-04-27"]
+
+    async def test_list_briefs_isolates_users(self):
+        await self._seed_brief("user-a", "2026-05-01", "A's brief")
+        await self._seed_brief("user-b", "2026-05-01", "B's brief")
+
+        a_briefs = await brief_module.list_briefs("user-a")
+        assert len(a_briefs) == 1
+        assert a_briefs[0]["body"] == "A's brief"
