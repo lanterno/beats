@@ -1,8 +1,13 @@
 /**
  * Render-level tests for FlowHeadline. Locks in the home-page card's
- * three contracts: hide when there's nothing to say, render the avg
- * + peak + best repo when there is, and link to the deeper /insights
- * surface for users who want to drill in.
+ * contracts:
+ *
+ * - render today's slice when populated (avg + peak + count + best
+ *   repo / language) and link to /insights
+ * - fall back to yesterday's slice when today is empty (early-morning
+ *   case) with a clear "Flow yesterday" label
+ * - hide entirely when both today AND yesterday are empty
+ * - hide while loading (no flash of placeholder)
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -31,71 +36,111 @@ function makeSummary(overrides: Partial<FlowWindowSummary> = {}): FlowWindowSumm
 	};
 }
 
+const EMPTY: FlowWindowSummary = {
+	count: 0,
+	avg: 0,
+	peak: 0,
+	peak_at: null,
+	top_repo: null,
+	top_language: null,
+	top_bundle: null,
+};
+
 function renderWithRouter(ui: React.ReactElement) {
 	return render(<MemoryRouter>{ui}</MemoryRouter>);
 }
 
-beforeEach(() => {
-	vi.mocked(useFlowWindowsSummary).mockReturnValue({
-		data: makeSummary(),
-		isLoading: false,
+/** Wires the hook so the first call (today) and second call (yesterday)
+ * return distinct values. The component always calls today first, so
+ * order is stable. */
+function setSummaries(opts: {
+	today: FlowWindowSummary | undefined;
+	yesterday: FlowWindowSummary | undefined;
+	loading?: boolean;
+}) {
+	const mock = vi.mocked(useFlowWindowsSummary);
+	mock.mockReset();
+	let call = 0;
+	mock.mockImplementation(() => {
+		const data = call === 0 ? opts.today : opts.yesterday;
+		call++;
 		// biome-ignore lint/suspicious/noExplicitAny: useQuery's full return shape is irrelevant.
-	} as any);
+		return { data, isLoading: opts.loading ?? false } as any;
+	});
+}
+
+beforeEach(() => {
+	// Default: today populated, yesterday irrelevant. Each test
+	// override re-stubs as needed.
+	setSummaries({ today: makeSummary(), yesterday: EMPTY });
 });
 
 describe("FlowHeadline", () => {
-	it("renders the avg score in the headline number", () => {
+	it("renders today's avg score in the headline number when populated", () => {
 		renderWithRouter(<FlowHeadline />);
-		// avg 0.67 → 67 in the headline
+		expect(screen.getByText("Flow today")).toBeInTheDocument();
 		expect(screen.getByText("67")).toBeInTheDocument();
 	});
 
 	it("renders peak + count + best repo / language", () => {
 		renderWithRouter(<FlowHeadline />);
-		expect(screen.getByText("91")).toBeInTheDocument(); // peak
-		expect(screen.getByText("23")).toBeInTheDocument(); // count
-		expect(screen.getByText("code/beats")).toBeInTheDocument(); // shortened top_repo
-		expect(screen.getByText("go")).toBeInTheDocument(); // top_language
+		expect(screen.getByText("91")).toBeInTheDocument();
+		expect(screen.getByText("23")).toBeInTheDocument();
+		expect(screen.getByText("code/beats")).toBeInTheDocument();
+		expect(screen.getByText("go")).toBeInTheDocument();
 	});
 
 	it("links to /insights so the user can drill in", () => {
 		renderWithRouter(<FlowHeadline />);
-		const link = screen.getByRole("link");
-		expect(link).toHaveAttribute("href", "/insights");
+		expect(screen.getByRole("link")).toHaveAttribute("href", "/insights");
 	});
 
-	it("hides itself when there are zero windows today", () => {
-		// On the home page an "your flow: nothing" card reads as broken;
-		// the empty-state guidance lives on /insights.
-		vi.mocked(useFlowWindowsSummary).mockReturnValueOnce({
-			data: makeSummary({ count: 0, avg: 0, peak: 0, peak_at: null }),
-			isLoading: false,
-			// biome-ignore lint/suspicious/noExplicitAny: see beforeEach.
-		} as any);
+	it("falls back to yesterday's slice and labels it 'Flow yesterday' when today is empty", () => {
+		// Early-morning case: user opened the laptop, no windows yet
+		// today, but yesterday's pattern is still useful context.
+		setSummaries({
+			today: EMPTY,
+			yesterday: makeSummary({ avg: 0.5, count: 80 }),
+		});
+		renderWithRouter(<FlowHeadline />);
+		expect(screen.getByText("Flow yesterday")).toBeInTheDocument();
+		expect(screen.getByText("50")).toBeInTheDocument(); // avg 0.5 → 50
+		expect(screen.queryByText("Flow today")).not.toBeInTheDocument();
+	});
+
+	it("hides entirely when both today AND yesterday are empty", () => {
+		setSummaries({ today: EMPTY, yesterday: EMPTY });
 		const { container } = renderWithRouter(<FlowHeadline />);
 		expect(container.firstChild).toBeNull();
 	});
 
-	it("hides itself while loading rather than flashing a placeholder", () => {
-		vi.mocked(useFlowWindowsSummary).mockReturnValueOnce({
-			data: undefined,
-			isLoading: true,
-			// biome-ignore lint/suspicious/noExplicitAny: see beforeEach.
-		} as any);
+	it("hides while loading rather than flashing a placeholder", () => {
+		setSummaries({ today: undefined, yesterday: undefined, loading: true });
 		const { container } = renderWithRouter(<FlowHeadline />);
 		expect(container.firstChild).toBeNull();
 	});
 
 	it("omits the best-repo / best-language line when those axes are null", () => {
-		// Editor heartbeats may not have covered the slice — the headline
-		// should still render the score block but skip the bottom line.
-		vi.mocked(useFlowWindowsSummary).mockReturnValueOnce({
-			data: makeSummary({ top_repo: null, top_language: null, top_bundle: null }),
-			isLoading: false,
-			// biome-ignore lint/suspicious/noExplicitAny: see beforeEach.
-		} as any);
+		setSummaries({
+			today: makeSummary({ top_repo: null, top_language: null, top_bundle: null }),
+			yesterday: EMPTY,
+		});
 		renderWithRouter(<FlowHeadline />);
 		expect(screen.getByText("67")).toBeInTheDocument();
 		expect(screen.queryByText(/best on/i)).not.toBeInTheDocument();
+	});
+
+	it("prefers today's slice over yesterday's when both have data", () => {
+		// Avoid the bug class where the fallback wins even though
+		// today has fresh data. Distinct numbers ensure unambiguous
+		// assertion.
+		setSummaries({
+			today: makeSummary({ avg: 0.8, count: 5 }),
+			yesterday: makeSummary({ avg: 0.3, count: 100 }),
+		});
+		renderWithRouter(<FlowHeadline />);
+		expect(screen.getByText("Flow today")).toBeInTheDocument();
+		expect(screen.getByText("80")).toBeInTheDocument();
+		expect(screen.queryByText("30")).not.toBeInTheDocument();
 	});
 });

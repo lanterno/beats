@@ -1,25 +1,47 @@
 /**
- * FlowHeadline — single-line "today's flow" card for the home page.
+ * FlowHeadline — single-line flow card for the home page.
  *
- * Hits /api/signals/flow-windows/summary so it's a single round-trip
- * (no row pagination + client-side reduction). Different shape than
- * the Insights FlowToday card — this is glanceable and cheap, FlowToday
- * has the sparkline and inspector. Tapping the card jumps to /insights
- * for the deeper view.
+ * Prefers today's slice; when today is empty (early morning, just
+ * opening the laptop) it falls back to yesterday's slice so the user
+ * still has some flow context. Hides only when both are empty —
+ * matches the original "don't render an unhelpful empty card" rule
+ * but covers the wider window where the user opens the app before
+ * any new data has accrued.
  *
- * Hides itself with no message when there are zero windows today —
- * the home page already has plenty of cards and an empty "your flow:
- * nothing" reads as broken rather than informative. The Insights page
- * surfaces the empty-state guidance for users who actually navigate
- * to the flow surface.
+ * Hits /api/signals/flow-windows/summary in both cases so it's still
+ * a single round-trip per slice. TanStack Query dedupes identical
+ * keys, so the yesterday call is cached across the home + future
+ * Insights uses.
  */
 import { Link } from "react-router-dom";
 import { useFlowWindowsSummary } from "@/entities/session";
 
-export function FlowHeadline() {
-	const { data, isLoading } = useFlowWindowsSummary();
+interface YesterdayRange {
+	start: string;
+	end: string;
+}
 
-	if (isLoading) return null;
+function yesterdayRange(now: Date = new Date()): YesterdayRange {
+	const dayMs = 24 * 60 * 60 * 1000;
+	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	const yesterdayStart = new Date(todayStart.getTime() - dayMs);
+	return {
+		start: yesterdayStart.toISOString(),
+		end: todayStart.toISOString(),
+	};
+}
+
+export function FlowHeadline() {
+	const { data: today, isLoading: todayLoading } = useFlowWindowsSummary();
+	const { start: yStart, end: yEnd } = yesterdayRange();
+	const { data: yesterday, isLoading: yesterdayLoading } = useFlowWindowsSummary(yStart, yEnd);
+
+	if (todayLoading || yesterdayLoading) return null;
+
+	// Pick the source: today when populated, otherwise yesterday. Both
+	// empty → render nothing (matches the original behavior).
+	const isToday = !!today && today.count > 0;
+	const data = isToday ? today : yesterday;
 	if (!data || data.count === 0) return null;
 
 	const avg = Math.round(data.avg * 100);
@@ -32,7 +54,9 @@ export function FlowHeadline() {
 			className="block rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition-colors"
 		>
 			<div className="flex items-baseline justify-between mb-1.5">
-				<p className="font-heading text-sm text-foreground">Flow today</p>
+				<p className="font-heading text-sm text-foreground">
+					{isToday ? "Flow today" : "Flow yesterday"}
+				</p>
 				<p className="text-[11px] text-muted-foreground">view details &rarr;</p>
 			</div>
 
