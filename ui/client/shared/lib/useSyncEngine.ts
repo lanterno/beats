@@ -10,8 +10,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { replayMutation } from "@/shared/api";
-import { drainPending, listPending } from "./mutationQueue";
+import { ApiError, replayMutation } from "@/shared/api";
+import { drainPending, listPending, type PendingMutation } from "./mutationQueue";
 
 const IDLE_POLL_MS = 30_000;
 const ACTIVE_POLL_MS = 5_000;
@@ -67,7 +67,7 @@ class SyncController {
 		this.draining = true;
 		this.emit({ syncing: true });
 		try {
-			const result = await drainPending(replayMutation);
+			const result = await drainPending(replayPoisonAware);
 			await this.refreshPending();
 			this.emit({ syncing: false, lastError: result.error });
 		} finally {
@@ -123,6 +123,40 @@ class SyncController {
 }
 
 const controller = new SyncController();
+
+/**
+ * Replay a queued mutation with "poison-aware" handling: if the
+ * server returns a 4xx, the mutation is permanently dropped from
+ * the queue (resolves successfully so drainPending removes it).
+ * Network errors and 5xx still bubble up so the queue keeps the
+ * mutation for the next reconnect.
+ *
+ * Without this, a single poisoned mutation (validation against a
+ * since-changed schema, a 404 for a deleted project, an
+ * unprocessable body from an old client version) would block
+ * every subsequent drain forever — drainPending stops on the
+ * first error, attempts increment indefinitely, and mutations
+ * after the bad one never get tried.
+ *
+ * Exported for testing.
+ */
+export async function replayPoisonAware(mutation: PendingMutation): Promise<void> {
+	try {
+		await replayMutation(mutation);
+	} catch (err) {
+		if (err instanceof ApiError && err.statusCode >= 400 && err.statusCode < 500) {
+			// Server-confirmed permanent failure — log and drop. The
+			// alternative (keep retrying) would never succeed and
+			// would block the rest of the queue.
+			// biome-ignore lint/suspicious/noConsole: surfacing to dev console is the point
+			console.warn(
+				`[sync] dropping poisoned mutation ${mutation.method} ${mutation.path}: ${err.message}`,
+			);
+			return;
+		}
+		throw err;
+	}
+}
 
 /** Notify the engine that new work was enqueued — triggers an opportunistic drain. */
 export function notifySyncWork(): void {
