@@ -71,6 +71,47 @@ describe("formatStatusBar", () => {
 		});
 		assert.match(tooltip, /\(dev\)/);
 	});
+
+	it("connected with summary: shows the avg score in the status text", () => {
+		const { text, tooltip } = formatStatusBar(
+			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1 },
+			{ count: 23, avg: 0.67, peak: 0.91 },
+		);
+		// Bare "Beats 67" so it stays compact in the status bar.
+		assert.match(text, /\$\(zap\) Beats 67/);
+		// Tooltip carries the full triple — avg + peak + count.
+		assert.match(tooltip, /avg 67\/100/);
+		assert.match(tooltip, /peak 91\/100/);
+		assert.match(tooltip, /23 windows/);
+	});
+
+	it("connected with empty summary: omits the score and falls back to plain 'Beats'", () => {
+		// Early in the morning before any flow has accrued — count=0
+		// shouldn't render "Beats 0" (reads as "you're at zero",
+		// false signal). Plain "Beats" matches the no-summary case.
+		const { text, tooltip } = formatStatusBar(
+			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1 },
+			{ count: 0, avg: 0, peak: 0 },
+		);
+		assert.equal(text, "$(zap) Beats");
+		assert.doesNotMatch(tooltip, /Today/);
+	});
+
+	it("connected with no summary fetched: same as plain 'Beats'", () => {
+		// Distinct from "summary fetched but empty" — this is the path
+		// where the daemon returned 503 (no fetcher) or 502 (upstream
+		// failed). The status text and the no-summary case should be
+		// identical so a transient API blip doesn't reshape the bar.
+		const noFetch = formatStatusBar(
+			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1 },
+			null,
+		);
+		const empty = formatStatusBar(
+			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1 },
+			{ count: 0, avg: 0, peak: 0 },
+		);
+		assert.equal(noFetch.text, empty.text);
+	});
 });
 
 describe("formatUptime", () => {

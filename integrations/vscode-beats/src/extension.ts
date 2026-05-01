@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 import { buildInsightsUrl } from "./insightsUrl";
-import { formatStatusBar, type HealthSummary } from "./statusBar";
+import {
+  formatStatusBar,
+  type FlowSummary,
+  type HealthSummary,
+} from "./statusBar";
 
 interface Heartbeat {
   editor: "vscode";
@@ -105,6 +109,7 @@ async function refreshHealth(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("beats");
   const port = cfg.get<number>("daemonPort", 37499);
   let health: HealthSummary | null = null;
+  let summary: FlowSummary | null = null;
   try {
     const resp = await fetch(`http://127.0.0.1:${port}/health`, {
       signal: AbortSignal.timeout(1000),
@@ -126,7 +131,32 @@ async function refreshHealth(): Promise<void> {
   } catch {
     // Daemon offline — fall through to formatStatusBar(null).
   }
-  const { text, tooltip } = formatStatusBar(health);
+
+  // Only chase the summary when health is good. Saves a network call
+  // when the daemon is offline (where the second fetch would block on
+  // the same TCP RST) and keeps the offline-state code path tight.
+  if (health?.ok) {
+    try {
+      const resp = await fetch(`http://127.0.0.1:${port}/summary`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (resp.ok) {
+        const body = (await resp.json()) as {
+          count: number;
+          avg: number;
+          peak: number;
+        };
+        summary = { count: body.count, avg: body.avg, peak: body.peak };
+      }
+      // 503 (no fetcher) and 502 (upstream error) intentionally fall
+      // through with summary=null — the status bar still shows the
+      // connected indicator, just without the score.
+    } catch {
+      // Network glitch — same fallthrough.
+    }
+  }
+
+  const { text, tooltip } = formatStatusBar(health, summary);
   statusBar.text = text;
   statusBar.tooltip = tooltip;
 }

@@ -19,6 +19,16 @@ export interface HealthSummary {
 	editorCount: number;
 }
 
+/** Subset of the API's FlowWindowSummaryResponse the status bar uses.
+ * Fields not used here (top_repo, top_language, etc.) are documented
+ * separately on the daemon's GET /summary; this shape is intentionally
+ * narrow so a server change adding new fields doesn't ripple through. */
+export interface FlowSummary {
+	count: number;
+	avg: number;
+	peak: number;
+}
+
 export interface StatusBarText {
 	/** VS Code status-bar text — supports `$(icon)` codicon syntax. */
 	text: string;
@@ -26,7 +36,10 @@ export interface StatusBarText {
 	tooltip: string;
 }
 
-export function formatStatusBar(health: HealthSummary | null): StatusBarText {
+export function formatStatusBar(
+	health: HealthSummary | null,
+	summary: FlowSummary | null = null,
+): StatusBarText {
 	if (!health || !health.ok) {
 		return {
 			text: "$(circle-slash) Beats",
@@ -36,10 +49,26 @@ export function formatStatusBar(health: HealthSummary | null): StatusBarText {
 	}
 	const v = health.version || "dev";
 	const editorWord = health.editorCount === 1 ? "editor" : "editors";
-	return {
-		text: "$(zap) Beats",
-		tooltip: `Beats daemon connected (${v})\n${health.editorCount} ${editorWord} sending heartbeats · uptime ${formatUptime(health.uptimeSec)}\n\nClick to open Insights.`,
-	};
+
+	// When today's slice has at least one window, lead the status-bar
+	// text with the avg score so the user sees a live number rather
+	// than a binary connected/offline indicator. Falls back to plain
+	// "Beats" early in the morning before any flow data has accrued.
+	let text = "$(zap) Beats";
+	const tooltipLines = [
+		`Beats daemon connected (${v})`,
+		`${health.editorCount} ${editorWord} sending heartbeats · uptime ${formatUptime(health.uptimeSec)}`,
+	];
+	if (summary && summary.count > 0) {
+		const avg = Math.round(summary.avg * 100);
+		const peak = Math.round(summary.peak * 100);
+		text = `$(zap) Beats ${avg}`;
+		tooltipLines.push(
+			`Today: avg ${avg}/100 · peak ${peak}/100 · ${summary.count} windows`,
+		);
+	}
+	tooltipLines.push("\nClick to open Insights.");
+	return { text, tooltip: tooltipLines.join("\n") };
 }
 
 /**

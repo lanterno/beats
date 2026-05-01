@@ -44,11 +44,16 @@ filtered view a click would.
 
 ## Status bar
 
-A status-bar item polls the daemon's `/health` endpoint every 60s and
-shows whether your heartbeats are landing:
+A status-bar item polls the daemon every 60s and shows whether your
+heartbeats are landing — and once today's flow data has accrued, the
+current avg score:
 
-- `⚡ Beats` — daemon connected. Tooltip shows the daemon version,
-  number of editors sending heartbeats, and uptime.
+- `⚡ Beats 67` — daemon connected, today's avg flow score is 67/100.
+  Tooltip carries avg + peak + window count plus the daemon version
+  and uptime.
+- `⚡ Beats` — daemon connected but no flow data yet today (early
+  morning before any windows accrued, or summary endpoint
+  unavailable).
 - `⊘ Beats` — daemon offline; heartbeats are being silently dropped.
   Tooltip suggests `beatsd run`.
 
