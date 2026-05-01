@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ahmedElghable/beats/daemon/internal/bundle"
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
 	"github.com/ahmedElghable/beats/daemon/internal/pair"
@@ -86,11 +87,16 @@ func formatStatsLine(
 	}
 	parts = append(parts, formatPeakChunk(s))
 
-	// Mention the top repo if we have one — it's the most identifying of
-	// the three axes and easiest to read in a one-liner. (Language and
-	// bundle are reachable via `beatsd top` for the full picture.)
+	// Mention the top axes when present. Repo first because it's the
+	// most identifying; app second since the friendly label ("VS Code")
+	// is short. Language is omitted from the headline — it adds another
+	// chunk without much new info when repo is also shown, and `beatsd
+	// top` covers the full picture.
 	if s.TopRepo != nil && s.TopRepo.Key != "" {
 		parts = append(parts, "best repo: "+shortRepoTrail(s.TopRepo.Key))
+	}
+	if s.TopBundle != nil && s.TopBundle.Key != "" {
+		parts = append(parts, "best app: "+bundle.ShortLabel(s.TopBundle.Key))
 	}
 
 	if caption := filterCaption(filter); caption != "" {

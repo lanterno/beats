@@ -32,6 +32,51 @@ func TestFormatStatsLine_HappyPath(t *testing.T) {
 	}
 }
 
+func TestFormatStatsLine_RendersFriendlyAppNameWhenTopBundleSet(t *testing.T) {
+	// New parity step with the web FlowHeadline + companion FlowScreen:
+	// the stats one-liner now also surfaces "best app: <human label>"
+	// when /summary returned a top_bundle. Friendly label
+	// (com.microsoft.VSCode → "VS Code") matches the other surfaces.
+	peakAt := time.Now().UTC()
+	s := &client.FlowWindowSummary{
+		Count:     23,
+		Avg:       0.67,
+		Peak:      0.91,
+		PeakAt:    &peakAt,
+		TopRepo:   &client.FlowTopItem{Key: "/Users/me/code/beats", Count: 18},
+		TopBundle: &client.FlowTopItem{Key: "com.microsoft.VSCode", Count: 22},
+	}
+	out := formatStatsLine(s, 60, client.FlowWindowsFilter{})
+
+	if !strings.Contains(out, "best app: VS Code") {
+		t.Errorf("expected friendly app label, got: %s", out)
+	}
+	// Repo + app render in a stable order — repo before app — so the
+	// shell prompt reads consistently across daemons.
+	repoIdx := strings.Index(out, "best repo")
+	appIdx := strings.Index(out, "best app")
+	if repoIdx == -1 || appIdx == -1 || repoIdx >= appIdx {
+		t.Errorf("expected best repo to precede best app, got: %s", out)
+	}
+}
+
+func TestFormatStatsLine_OmitsAppChunkWhenTopBundleAbsent(t *testing.T) {
+	// No editor heartbeats covered the slice → top_bundle is null on
+	// the wire → the chunk should silently drop. We don't want a stray
+	// "best app:" with nothing after it.
+	peakAt := time.Now().UTC()
+	s := &client.FlowWindowSummary{
+		Count:  5,
+		Avg:    0.5,
+		Peak:   0.7,
+		PeakAt: &peakAt,
+	}
+	out := formatStatsLine(s, 60, client.FlowWindowsFilter{})
+	if strings.Contains(out, "best app") {
+		t.Errorf("expected app chunk to be omitted, got: %s", out)
+	}
+}
+
 func TestFormatStatsLine_FilterCaptionAppended(t *testing.T) {
 	// When a filter is active, the caption from filterCaption() should
 	// land at the end so the user can see what slice the headline
