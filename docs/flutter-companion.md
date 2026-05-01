@@ -116,6 +116,8 @@ The companion uses the same device token auth as the Go daemon. All endpoints ar
 - `POST /api/biometrics/daily` — push daily health data (device token) — endpoint and client method exist; nothing calls it yet (waiting on `health_service.dart`)
 - `GET /api/fitbit/auth-url` — initiate Fitbit OAuth (session token, desktop) — endpoint and client method exist; not yet invoked by a desktop OAuth UI
 - `POST /api/oura/connect` — store Oura PAT (session token, desktop)
+- `GET /api/signals/flow-windows` — list per-window flow data (device token) — used by `FlowScreen` for the timeline + inspector
+- `GET /api/signals/flow-windows/summary` — single round-trip aggregate (avg/peak/count + top bucket per axis) — used by `FlowScreen` to surface the "best repo / best language today" hint under the score gauge. Mirrors the API used by the daemon Go client and the web TS client.
 
 ## Privacy
 

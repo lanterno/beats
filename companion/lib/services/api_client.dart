@@ -229,6 +229,42 @@ class ApiClient {
     return list.cast<Map<String, dynamic>>();
   }
 
+  /// Single round-trip aggregate for a flow-window slice — mirrors
+  /// `GET /api/signals/flow-windows/summary` on the API and the
+  /// `GetFlowWindowsSummary` method on the daemon Go client.
+  ///
+  /// Returns null on any non-200 response so callers can render an
+  /// empty state without parsing errors. The same filter params as
+  /// `getFlowWindows` are accepted as optional named args; empty
+  /// strings are dropped from the URL so the request stays clean.
+  Future<Map<String, dynamic>?> getFlowWindowsSummary(
+    String start,
+    String end, {
+    String? editorRepo,
+    String? editorLanguage,
+    String? bundleId,
+    String? projectId,
+  }) async {
+    final params = <String, String>{'start': start, 'end': end};
+    if (editorRepo != null && editorRepo.isNotEmpty) {
+      params['editor_repo'] = editorRepo;
+    }
+    if (editorLanguage != null && editorLanguage.isNotEmpty) {
+      params['editor_language'] = editorLanguage;
+    }
+    if (bundleId != null && bundleId.isNotEmpty) {
+      params['bundle_id'] = bundleId;
+    }
+    if (projectId != null && projectId.isNotEmpty) {
+      params['project_id'] = projectId;
+    }
+    final uri = Uri.parse('$baseUrl/api/signals/flow-windows/summary')
+        .replace(queryParameters: params);
+    final resp = await http.get(uri, headers: _headers);
+    if (resp.statusCode != 200) return null;
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
   Future<List<Map<String, dynamic>>> getSignalSummaries(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/signals/summaries?start=$start&end=$end'),

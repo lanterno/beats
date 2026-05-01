@@ -32,6 +32,13 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   Map<String, int> _categoryTotals = {};
   int _totalSamples = 0;
   int? _selectedWindowIndex;
+  // Top buckets from /flow-windows/summary — surfaced as a small "best
+  // repo / best language today" line under the score gauge so the user
+  // sees the same dimensions the web Insights chips expose without
+  // having to open the browser. Null when the fetch failed or no
+  // editor heartbeats covered the day.
+  String? _topRepo;
+  String? _topLanguage;
 
   late AnimationController _glowController;
 
@@ -52,6 +59,11 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
           startOfDay.toIso8601String(), now.toIso8601String());
       final summaries = await widget.client.getSignalSummaries(
           startOfDay.toIso8601String(), now.toIso8601String());
+      // Single round-trip aggregate to surface the best-repo / best-
+      // language hint alongside the gauge. Failure is non-fatal — the
+      // gauge + timeline still render fine without it.
+      final flowSummary = await widget.client.getFlowWindowsSummary(
+          startOfDay.toIso8601String(), now.toIso8601String());
 
       final cats = <String, int>{};
       var total = 0;
@@ -65,6 +77,10 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       final latest = windows.isNotEmpty
           ? (windows.last['flow_score'] as num).toDouble() : 0.0;
 
+      final topRepo = (flowSummary?['top_repo'] as Map?)?['key'] as String?;
+      final topLanguage =
+          (flowSummary?['top_language'] as Map?)?['key'] as String?;
+
       if (mounted) {
         setState(() {
           _windows = windows;
@@ -72,6 +88,8 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
           _currentScore = latest;
           _categoryTotals = cats;
           _totalSamples = total;
+          _topRepo = topRepo;
+          _topLanguage = topLanguage;
           _loading = false;
           _selectedWindowIndex = null;
         });
@@ -216,6 +234,52 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
         ],
       ),
     );
+  }
+
+  /// "Best repo / best language today" line under the score gauge.
+  /// Sourced from /flow-windows/summary's top buckets. Repo path is
+  /// shortened to its last two segments (matches the daemon's
+  /// shortRepoTrail and the web's shortRepoPath); language id is
+  /// shown verbatim since there's no useful prettification (the web
+  /// has a label map but it's a small enhancement that would warrant
+  /// its own ship).
+  Widget _buildTopDimensionsLine() {
+    final labelStyle = BeatsType.label.copyWith(color: BeatsColors.textSecondary);
+    final valueStyle = BeatsType.label.copyWith(
+      color: BeatsColors.textPrimary,
+      letterSpacing: 0.5,
+    );
+    final parts = <Widget>[];
+    if (_topRepo != null) {
+      parts.addAll([
+        Text('BEST REPO', style: labelStyle),
+        const SizedBox(width: 8),
+        Text(_shortRepoTail(_topRepo!), style: valueStyle),
+      ]);
+    }
+    if (_topRepo != null && _topLanguage != null) {
+      parts.add(const SizedBox(width: 18));
+    }
+    if (_topLanguage != null) {
+      parts.addAll([
+        Text('LANG', style: labelStyle),
+        const SizedBox(width: 8),
+        Text(_topLanguage!, style: valueStyle),
+      ]);
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: parts,
+    );
+  }
+
+  /// Last two path segments — matches the table form `beatsd recent`
+  /// uses. Falls back to the original string when there are fewer
+  /// than three segments.
+  String _shortRepoTail(String repo) {
+    final parts = repo.split(RegExp(r'[\\/]')).where((p) => p.isNotEmpty).toList();
+    if (parts.length <= 2) return repo;
+    return parts.skip(parts.length - 2).join('/');
   }
 
   Widget _buildSelectedWindowDetail() {
@@ -421,6 +485,16 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                 // the brutalist label style. Hidden when there's only one
                 // window — it would duplicate the ring above.
                 if (_windows.length > 1) _buildStatsLine(),
+
+                // ── Top dimensions today (best repo / best language) ──
+                // Sourced from /api/signals/flow-windows/summary so it's a
+                // single round-trip aggregate, not derived client-side.
+                // Hidden when both axes are empty — windows without editor
+                // heartbeats wouldn't have anything to surface here.
+                if (_topRepo != null || _topLanguage != null) ...[
+                  const SizedBox(height: 12),
+                  _buildTopDimensionsLine(),
+                ],
 
                 const SizedBox(height: 24),
 
