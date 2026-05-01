@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -12,13 +13,54 @@ import (
 // wrong URL, the collector seems stuck on a stale interval — and the
 // user wants to confirm what got loaded from disk vs the defaults.
 //
-// Device token is intentionally NOT printed: it lives in the keychain,
-// not in this config struct, and even if it did the value is a
-// credential the user shouldn't paste into screenshots / Claude
-// pastes that this command's output is likely to land in.
-func runConfig(cfg *config.Config) error {
+// With `asJSON`, emits the same data as a JSON object — designed for
+// shell scripts that want to consume specific fields:
+//
+//	beatsd config --json | jq -r .ui.base_url
+//
+// Device token is intentionally NOT printed in either mode: it lives
+// in the keychain, not in this config struct, and even if it did the
+// value is a credential the user shouldn't paste into screenshots /
+// Claude pastes / pipelines that this command's output is likely to
+// land in.
+func runConfig(cfg *config.Config, asJSON bool) error {
+	if asJSON {
+		out, err := formatConfigJSON(cfg)
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+		return nil
+	}
 	fmt.Print(formatConfig(cfg))
 	return nil
+}
+
+// formatConfigJSON renders the loaded config as a snake_case JSON
+// object. Field names match the TOML keys so a script grepping for
+// `base_url` works against either output. Device token field is
+// excluded by virtue of not being included — we build a fresh
+// shape rather than serializing the runtime Config struct directly,
+// which would otherwise leak any future credential added to it.
+func formatConfigJSON(cfg *config.Config) (string, error) {
+	shape := map[string]any{
+		"config_path": config.ConfigPath(),
+		"api": map[string]any{
+			"base_url": cfg.API.BaseURL,
+		},
+		"ui": map[string]any{
+			"base_url": cfg.UI.BaseURL,
+		},
+		"collector": map[string]any{
+			"poll_interval_sec":  cfg.Collector.PollIntervalSec,
+			"flush_interval_sec": cfg.Collector.FlushIntervalSec,
+		},
+	}
+	b, err := json.MarshalIndent(shape, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode JSON: %w", err)
+	}
+	return string(b) + "\n", nil
 }
 
 // formatConfig is the testable inner of runConfig — separated so we

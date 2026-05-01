@@ -249,7 +249,13 @@ func main() {
 		}
 
 	case "config":
-		if err := runConfig(cfg); err != nil {
+		var asJSON bool
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--json" {
+				asJSON = true
+			}
+		}
+		if err := runConfig(cfg, asJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -359,6 +365,7 @@ Commands:
   unpair        Remove the device token from the keychain
   version       Print version info
   config        Print the loaded daemon config (API + UI URLs, collector intervals)
+                  --json           emit as a JSON object (for piping into jq)
 
 Flags:
   --dry-run     Print what would be sent without posting to the API`)
