@@ -1322,3 +1322,219 @@ class TestPatternDetectorsPeakHours:
         beats = [at(8, 30), at(10, 40), at(14, 30), at(16, 25)]
         svc = self._service()
         assert svc._detect_peak_hours(beats) == []
+
+
+class TestPatternDetectorsStaleProjects:
+    """_detect_stale_projects flags projects with weekly_goal but no
+    activity in the last 14 days. Threshold: archived → skip; no
+    weekly_goal → skip; last activity 14+ days ago (or never) → fire."""
+
+    def _service(self):
+        return _intel_service()
+
+    async def test_no_projects_returns_no_card(self):
+        svc = self._service()
+        today = datetime.now(UTC).date()
+        assert svc._detect_stale_projects([], [], today) == []
+
+    async def test_skips_projects_without_weekly_goal(self):
+        today = datetime.now(UTC).date()
+        projects = [_project("p1", "Casual", weekly_goal=None)]
+        svc = self._service()
+        assert svc._detect_stale_projects([], projects, today) == []
+
+    async def test_skips_archived_even_with_goal(self):
+        today = datetime.now(UTC).date()
+        projects = [_project("p1", "Old", weekly_goal=5.0, archived=True)]
+        svc = self._service()
+        assert svc._detect_stale_projects([], projects, today) == []
+
+    async def test_no_activity_ever_fires_card(self):
+        """ZERO recorded sessions → fires with days_since=999 (the
+        sentinel for "never"). Pin so a refactor changing the
+        never-tracked default doesn't mis-render in the UI."""
+        today = datetime.now(UTC).date()
+        projects = [_project("p1", "Untouched", weekly_goal=5.0)]
+        svc = self._service()
+        cards = svc._detect_stale_projects([], projects, today)
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.type == "stale_project"
+        assert "Untouched" in card.title
+        assert "needs attention" in card.title.lower()
+        assert card.priority == 4
+        assert card.data["days_since"] == 999
+        assert card.data["project_id"] == "p1"
+
+    async def test_recent_activity_skips_card(self):
+        today = datetime.now(UTC).date()
+        projects = [_project("p1", "Active", weekly_goal=5.0)]
+        five_days_ago = today - timedelta(days=5)
+        s = datetime.combine(five_days_ago, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=1))]
+        svc = self._service()
+        assert svc._detect_stale_projects(beats, projects, today) == []
+
+    async def test_threshold_is_14_days_inclusive(self):
+        """Threshold is `>= 14`. Pin the boundary so a refactor that
+        bumps to 13 (one extra day's grace) or 15 (one less) is a
+        deliberate change."""
+        today = datetime.now(UTC).date()
+        projects = [_project("p1", "Borderline", weekly_goal=5.0)]
+        svc = self._service()
+
+        # 13 days ago — fresh.
+        s13 = datetime.combine(today - timedelta(days=13), datetime.min.time(), tzinfo=UTC).replace(
+            hour=10
+        )
+        assert (
+            svc._detect_stale_projects(
+                [Beat(id="b1", project_id="p1", start=s13, end=s13 + timedelta(hours=1))],
+                projects,
+                today,
+            )
+            == []
+        )
+
+        # 14 days ago — stale.
+        s14 = datetime.combine(today - timedelta(days=14), datetime.min.time(), tzinfo=UTC).replace(
+            hour=10
+        )
+        cards = svc._detect_stale_projects(
+            [Beat(id="b2", project_id="p1", start=s14, end=s14 + timedelta(hours=1))],
+            projects,
+            today,
+        )
+        assert len(cards) == 1
+        assert cards[0].data["days_since"] == 14
+
+    async def test_one_card_per_stale_project(self):
+        today = datetime.now(UTC).date()
+        projects = [
+            _project("p1", "Alpha", weekly_goal=5.0),
+            _project("p2", "Beta", weekly_goal=3.0),
+            _project("p3", "Gamma", weekly_goal=None),  # no goal → skipped
+        ]
+        svc = self._service()
+        cards = svc._detect_stale_projects([], projects, today)
+        assert len(cards) == 2
+
+
+class TestPatternDetectorsSessionTrend:
+    """_detect_session_trend compares this week's avg session length
+    to the prior 4-week average. Surfaces a card if |relative
+    change| > 30%. Sample-size guards prevent noise.
+
+    Thresholds: ≥3 sessions this week, ≥5 in prior 4 weeks,
+    prior_avg > 5 min, |change| > 30%."""
+
+    def _service(self):
+        return _intel_service()
+
+    def _beats_in_range(
+        self,
+        start_date: date,
+        end_date: date,
+        per_day_minutes: int,
+        project_id: str = "p1",
+    ) -> list:
+        beats = []
+        d = start_date
+        i = 0
+        while d <= end_date:
+            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+            beats.append(
+                Beat(
+                    id=f"b-{i}",
+                    project_id=project_id,
+                    start=s,
+                    end=s + timedelta(minutes=per_day_minutes),
+                )
+            )
+            d += timedelta(days=1)
+            i += 1
+        return beats
+
+    async def test_too_few_this_week_returns_no_card(self):
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        s = datetime.combine(this_monday, datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beats = [Beat(id="b-this", project_id="p1", start=s, end=s + timedelta(hours=1))]
+        beats += self._beats_in_range(
+            this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
+        )
+        svc = self._service()
+        assert svc._detect_session_trend(beats, today) == []
+
+    async def test_too_few_prior_returns_no_card(self):
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        beats = self._beats_in_range(this_monday, this_monday + timedelta(days=4), 60)
+        beats += self._beats_in_range(
+            this_monday - timedelta(days=10), this_monday - timedelta(days=8), 60
+        )
+        svc = self._service()
+        assert svc._detect_session_trend(beats, today) == []
+
+    async def test_change_below_30_percent_returns_no_card(self):
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        beats = self._beats_in_range(this_monday, today, 60)
+        beats += self._beats_in_range(
+            this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 65
+        )
+        svc = self._service()
+        assert svc._detect_session_trend(beats, today) == []
+
+    async def test_significant_increase_fires_with_longer_direction(self):
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        beats = self._beats_in_range(this_monday, today, 90)
+        beats += self._beats_in_range(
+            this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
+        )
+        svc = self._service()
+        cards = svc._detect_session_trend(beats, today)
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.type == "session_trend"
+        assert "longer" in card.title
+        assert card.priority == 2
+        assert card.data["change_pct"] > 0
+
+    async def test_significant_decrease_fires_with_shorter_direction(self):
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        beats = self._beats_in_range(this_monday, today, 30)
+        beats += self._beats_in_range(
+            this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
+        )
+        svc = self._service()
+        cards = svc._detect_session_trend(beats, today)
+        assert len(cards) == 1
+        assert "shorter" in cards[0].title
+        assert cards[0].data["change_pct"] < 0
+
+    async def test_prior_avg_below_5_min_skips(self):
+        """Prior baseline < 5 min → data is junk; even a huge
+        relative change is noise."""
+        from beats.domain.intelligence import _monday_of
+
+        today = datetime.now(UTC).date()
+        this_monday = _monday_of(today)
+        beats = self._beats_in_range(this_monday, today, 60)
+        beats += self._beats_in_range(
+            this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 1
+        )
+        svc = self._service()
+        assert svc._detect_session_trend(beats, today) == []
