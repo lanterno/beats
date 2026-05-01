@@ -207,7 +207,13 @@ func main() {
 		}
 
 	case "status":
-		if err := runStatus(cfg); err != nil {
+		var asJSON bool
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--json" {
+				asJSON = true
+			}
+		}
+		if err := runStatus(cfg, asJSON); err != nil {
 			os.Exit(1)
 		}
 
@@ -398,6 +404,7 @@ Commands:
   doctor        Check pairing, API reachability, Accessibility permission, ports
                   --json           emit the report as a JSON object (for piping into jq)
   status        Print whether a daemon is running, timer state, and API reachability
+                  --json           emit the report as a JSON object (for piping into jq)
   recent        Print the last hour of flow windows in a small table
                   --minutes N      override the window (default 60)
                   --repo PATH      narrow to a specific editor workspace

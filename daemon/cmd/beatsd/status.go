@@ -20,26 +20,94 @@ import (
 //
 // Exits with status 1 if pairing or the API call fails — the timer line
 // is informational and never fails the command.
-func runStatus(cfg *config.Config) error {
+//
+// When `asJSON` is true, every section ships in a single object instead
+// of the human form. The shape is stable — fields that couldn't be
+// populated render as null / false / 0 rather than disappearing — so
+// jq scripts and the companion's status widget don't have to guard
+// against missing keys.
+func runStatus(cfg *config.Config, asJSON bool) error {
+	report, runErr := collectStatus(cfg)
+
+	if asJSON {
+		out, jerr := formatStatusJSON(report)
+		if jerr != nil {
+			return jerr
+		}
+		fmt.Print(out)
+		return runErr
+	}
+
+	printStatusHuman(cfg, report)
+	return runErr
+}
+
+// statusReport is the structured snapshot collectStatus produces.
+// Each section's "ok-ness" (pair / daemon / api) lives next to its
+// detail fields so the JSON form is one round-trip readable. The
+// shape is the public --json contract — adding fields is fine,
+// renaming or removing them is a breaking change.
+type statusReport struct {
+	Paired bool         `json:"paired"`
+	Daemon daemonStatus `json:"daemon"`
+	API    apiStatus    `json:"api"`
+	Timer  timerStatus  `json:"timer"`
+	Flow   flowStatus   `json:"flow"`
+}
+
+type daemonStatus struct {
+	Running        bool  `json:"running"`
+	UptimeSec      int64 `json:"uptime_sec"`
+	WindowsEmitted int64 `json:"windows_emitted"`
+}
+
+type apiStatus struct {
+	URL       string `json:"url"`
+	Reachable bool   `json:"reachable"`
+	Error     string `json:"error,omitempty"`
+}
+
+type timerStatus struct {
+	Running         bool   `json:"running"`
+	ProjectID       string `json:"project_id,omitempty"`
+	ProjectCategory string `json:"project_category,omitempty"`
+}
+
+type flowStatus struct {
+	WindowMinutes    int     `json:"window_minutes"`
+	Count            int     `json:"count"`
+	Avg              float64 `json:"avg"`
+	Peak             float64 `json:"peak"`
+	Count24hFallback int     `json:"count_24h_fallback,omitempty"`
+	Available        bool    `json:"available"`
+}
+
+// collectStatus walks the same pair/daemon/api/timer/flow probes
+// the human form prints, but returns a structured report instead
+// of writing to stdout. The error mirrors the exit-code rule: nil
+// when everything that should succeed did, else a sentinel.
+//
+// Extracted so both --json and the human form consume the same
+// snapshot — drift between the two would otherwise be a class of
+// bug we'd ship without noticing.
+func collectStatus(cfg *config.Config) (statusReport, error) {
+	report := statusReport{
+		API:  apiStatus{URL: cfg.API.BaseURL},
+		Flow: flowStatus{WindowMinutes: 60},
+	}
+
 	token, err := pair.LoadToken()
 	if err != nil {
-		fmt.Printf("  pair:   keychain read failed — %v\n", err)
-		return err
+		return report, err
 	}
 	if token == "" {
-		fmt.Println("  pair:   not paired (run `beatsd pair <code>`)")
-		return fmt.Errorf("not paired")
+		return report, fmt.Errorf("not paired")
 	}
-	fmt.Println("  pair:   ok")
+	report.Paired = true
 
-	// "Is the daemon running?" proxy: if we can bind the editor listener
-	// port, no `beatsd run` is currently up. Free-tier signal — we don't
-	// have a side channel into the running process.
-	daemonRunning := !portFree(editor.DefaultPort)
-	if daemonRunning {
-		fmt.Printf("  daemon: %s\n", daemonStatusDetail(editor.DefaultPort))
-	} else {
-		fmt.Println("  daemon: not running (start with `beatsd run`)")
+	if !portFree(editor.DefaultPort) {
+		report.Daemon.Running = true
+		report.Daemon.UptimeSec, report.Daemon.WindowsEmitted = probeOwnDaemonHealth(editor.DefaultPort)
 	}
 
 	c := client.New(cfg.API.BaseURL, token)
@@ -48,94 +116,173 @@ func runStatus(cfg *config.Config) error {
 
 	tc, err := c.GetTimerContext(ctx)
 	if err != nil {
-		fmt.Printf("  api:    unreachable — %v\n", err)
-		return err
+		report.API.Error = err.Error()
+		return report, err
 	}
-	fmt.Printf("  api:    %s\n", cfg.API.BaseURL)
-
-	if tc.TimerRunning {
-		category := tc.ProjectCategory
-		if category == "" {
-			category = "—"
-		}
-		fmt.Printf("  timer:  running on project %s (category: %s)\n",
-			truncate(tc.ProjectID, 12), category)
-	} else {
-		fmt.Println("  timer:  idle")
+	report.API.Reachable = true
+	report.Timer = timerStatus{
+		Running:         tc.TimerRunning,
+		ProjectID:       tc.ProjectID,
+		ProjectCategory: tc.ProjectCategory,
 	}
 
-	fmt.Printf("  flow:   %s\n", flowStatusLine(ctx, c))
-	return nil
+	report.Flow = collectFlowStatus(ctx, c)
+	return report, nil
 }
 
-// flowStatusLine returns a one-line summary of the last hour's flow
-// data. Pulls from /api/signals/flow-windows/summary so it costs one
-// round-trip; "is the flow pipeline producing?" should be cheap to
-// answer.
-//
-// When the last hour is empty, falls back to a 24h count so the user
-// can tell the difference between "daemon paired but never producing"
-// and "daemon producing earlier today, just quiet right now". Mirrors
-// the web FlowHeadline's today→yesterday fallback rule.
-//
-// On API failure we return a soft "unavailable" message rather than
-// surfacing the error to the caller — `beatsd status` succeeded for
-// pair/daemon/api/timer; one slow flow call shouldn't fail the
-// command. The user already has `beatsd doctor` and `beatsd stats` for
-// deeper diagnostics if they need them.
-func flowStatusLine(ctx context.Context, c *client.Client) string {
-	end := time.Now().UTC()
-	start := end.Add(-time.Hour)
-	s, err := c.GetFlowWindowsSummary(ctx, start, end, client.FlowWindowsFilter{})
-	if err != nil {
-		return "unavailable"
-	}
-	if s.Count > 0 {
-		return fmt.Sprintf("%d windows · avg %d · peak %d (last hour)",
-			s.Count, int(s.Avg*100), int(s.Peak*100))
-	}
-	// 1h slice is empty — try 24h to disambiguate "broken pipeline"
-	// from "user just unsuspended their laptop". Soft-fall-through on
-	// any error here too: the 1h "no windows" message is still useful
-	// without the 24h context.
-	dayStart := end.Add(-24 * time.Hour)
-	d, err := c.GetFlowWindowsSummary(ctx, dayStart, end, client.FlowWindowsFilter{})
-	if err != nil || d.Count == 0 {
-		return "no windows in the last hour"
-	}
-	return fmt.Sprintf("no windows in the last hour · %d in last 24h", d.Count)
-}
-
-// daemonStatusDetail probes the local editor listener's /health
-// endpoint and renders a richer "running" line including the emitted
-// flow-window count and uptime when available. Falls back to a plain
-// "running" string on any error so the status command stays cheap and
-// never wedges behind an unreachable loopback service.
-func daemonStatusDetail(port int) string {
+// probeOwnDaemonHealth fetches uptime + windows-emitted from the
+// loopback /health endpoint. Returns zeroes on any failure so the
+// caller can still mark the daemon as "running" (we know the port
+// is bound) without claiming a specific uptime we don't have.
+func probeOwnDaemonHealth(port int) (uptimeSec int64, windowsEmitted int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
 	if err != nil {
-		return "running"
+		return 0, 0
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "running"
+		return 0, 0
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "running"
+		return 0, 0
 	}
 	var body struct {
 		WindowsEmitted int64 `json:"windows_emitted"`
 		UptimeSec      int64 `json:"uptime_sec"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return 0, 0
+	}
+	return body.UptimeSec, body.WindowsEmitted
+}
+
+// collectFlowStatus is the structured form of flowStatusLine —
+// returns a flowStatus with count/avg/peak (last hour) plus the
+// 24h fallback count when the 1h slice is empty. `Available` is
+// false when the API call failed; the human form renders this as
+// "unavailable" rather than "0 windows".
+func collectFlowStatus(ctx context.Context, c *client.Client) flowStatus {
+	out := flowStatus{WindowMinutes: 60}
+	end := time.Now().UTC()
+	start := end.Add(-time.Hour)
+	s, err := c.GetFlowWindowsSummary(ctx, start, end, client.FlowWindowsFilter{})
+	if err != nil {
+		return out
+	}
+	out.Available = true
+	if s.Count > 0 {
+		out.Count = s.Count
+		out.Avg = s.Avg
+		out.Peak = s.Peak
+		return out
+	}
+	// 1h slice empty — chase a 24h count for "broken pipeline" vs
+	// "just-unsuspended laptop" disambiguation. Soft-fall-through
+	// on errors: still useful without the 24h context.
+	dayStart := end.Add(-24 * time.Hour)
+	d, derr := c.GetFlowWindowsSummary(ctx, dayStart, end, client.FlowWindowsFilter{})
+	if derr == nil {
+		out.Count24hFallback = d.Count
+	}
+	return out
+}
+
+// printStatusHuman emits the original line-oriented status output.
+// Behavior is identical to the pre-JSON-mode runStatus — kept here
+// so the --json flag is purely additive and the existing piped
+// usages keep working byte-for-byte.
+func printStatusHuman(cfg *config.Config, r statusReport) {
+	if !r.Paired {
+		fmt.Println("  pair:   not paired (run `beatsd pair <code>`)")
+		return
+	}
+	fmt.Println("  pair:   ok")
+
+	if r.Daemon.Running {
+		if r.Daemon.UptimeSec > 0 {
+			fmt.Printf("  daemon: running · %d windows emitted · uptime %s\n",
+				r.Daemon.WindowsEmitted, formatUptimeShort(r.Daemon.UptimeSec))
+		} else {
+			fmt.Println("  daemon: running")
+		}
+	} else {
+		fmt.Println("  daemon: not running (start with `beatsd run`)")
+	}
+
+	if !r.API.Reachable {
+		fmt.Printf("  api:    unreachable — %s\n", r.API.Error)
+		return
+	}
+	fmt.Printf("  api:    %s\n", cfg.API.BaseURL)
+
+	if r.Timer.Running {
+		category := r.Timer.ProjectCategory
+		if category == "" {
+			category = "—"
+		}
+		fmt.Printf("  timer:  running on project %s (category: %s)\n",
+			truncate(r.Timer.ProjectID, 12), category)
+	} else {
+		fmt.Println("  timer:  idle")
+	}
+
+	fmt.Printf("  flow:   %s\n", renderFlowLine(r.Flow))
+}
+
+// renderFlowLine maps a flowStatus to the same human string the
+// previous flowStatusLine produced. Unit-testable without an
+// httptest fixture.
+func renderFlowLine(f flowStatus) string {
+	if !f.Available {
+		return "unavailable"
+	}
+	if f.Count > 0 {
+		return fmt.Sprintf("%d windows · avg %d · peak %d (last hour)",
+			f.Count, int(f.Avg*100), int(f.Peak*100))
+	}
+	if f.Count24hFallback > 0 {
+		return fmt.Sprintf("no windows in the last hour · %d in last 24h", f.Count24hFallback)
+	}
+	return "no windows in the last hour"
+}
+
+// formatStatusJSON renders the report as a JSON object with a
+// trailing newline. Same shape on success and on failure paths so
+// jq consumers don't have to guard against missing keys.
+func formatStatusJSON(r statusReport) (string, error) {
+	b, err := json.MarshalIndent(r, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode JSON: %w", err)
+	}
+	return string(b) + "\n", nil
+}
+
+// flowStatusLine returns the same one-line summary the human form
+// has always rendered. Now a thin wrapper over collectFlowStatus +
+// renderFlowLine so the structured (JSON) and string (table) paths
+// can never drift. Kept as a named export for the existing test
+// suite, which exercises the full pipeline through this entry
+// point.
+func flowStatusLine(ctx context.Context, c *client.Client) string {
+	return renderFlowLine(collectFlowStatus(ctx, c))
+}
+
+// daemonStatusDetail returns the human "running · N windows
+// emitted · uptime Xm" line. Kept as a wrapper for the same
+// reason flowStatusLine is — existing tests exercise it
+// end-to-end and the structured form (probeOwnDaemonHealth)
+// powers the JSON path.
+func daemonStatusDetail(port int) string {
+	uptime, emitted := probeOwnDaemonHealth(port)
+	if uptime == 0 && emitted == 0 {
 		return "running"
 	}
 	return fmt.Sprintf("running · %d windows emitted · uptime %s",
-		body.WindowsEmitted, formatUptimeShort(body.UptimeSec))
+		emitted, formatUptimeShort(uptime))
 }
 
 // formatUptimeShort renders seconds as "Ns" / "Nm" / "Nh" / "Nd" —

@@ -233,3 +233,136 @@ func TestFlowStatusLine_ApiFailureReturnsSoftUnavailable(t *testing.T) {
 		t.Errorf("expected 'unavailable' on API failure, got: %s", got)
 	}
 }
+
+// --- formatStatusJSON / collectFlowStatus / renderFlowLine ---
+
+func TestRenderFlowLine_HappyPath(t *testing.T) {
+	got := renderFlowLine(flowStatus{
+		WindowMinutes: 60, Available: true,
+		Count: 23, Avg: 0.62, Peak: 0.91,
+	})
+	if got != "23 windows · avg 62 · peak 91 (last hour)" {
+		t.Errorf("unexpected render: %q", got)
+	}
+}
+
+func TestRenderFlowLine_UnavailableWhenNotAvailable(t *testing.T) {
+	if got := renderFlowLine(flowStatus{}); got != "unavailable" {
+		t.Errorf("expected 'unavailable' when Available is false, got %q", got)
+	}
+}
+
+func TestRenderFlowLine_FallsBackTo24hCountWhenLastHourEmpty(t *testing.T) {
+	got := renderFlowLine(flowStatus{
+		WindowMinutes:    60,
+		Available:        true,
+		Count:            0,
+		Count24hFallback: 47,
+	})
+	if got != "no windows in the last hour · 47 in last 24h" {
+		t.Errorf("unexpected fallback render: %q", got)
+	}
+}
+
+func TestRenderFlowLine_NoFallbackEitherShowsBareEmptyState(t *testing.T) {
+	got := renderFlowLine(flowStatus{WindowMinutes: 60, Available: true})
+	if got != "no windows in the last hour" {
+		t.Errorf("unexpected empty-state render: %q", got)
+	}
+}
+
+func TestFormatStatusJSON_RoundTrips(t *testing.T) {
+	r := statusReport{
+		Paired: true,
+		Daemon: daemonStatus{Running: true, UptimeSec: 3600, WindowsEmitted: 60},
+		API:    apiStatus{URL: "http://localhost:7999", Reachable: true},
+		Timer:  timerStatus{Running: true, ProjectID: "p1", ProjectCategory: "coding"},
+		Flow: flowStatus{
+			WindowMinutes: 60, Available: true, Count: 23, Avg: 0.62, Peak: 0.91,
+		},
+	}
+	out, err := formatStatusJSON(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("expected trailing newline, got %q", out)
+	}
+	var decoded statusReport
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("output should round-trip: %v", err)
+	}
+	if !decoded.Paired || !decoded.Daemon.Running || decoded.API.URL != "http://localhost:7999" {
+		t.Errorf("decode wrong: %+v", decoded)
+	}
+	if decoded.Timer.ProjectID != "p1" || decoded.Timer.ProjectCategory != "coding" {
+		t.Errorf("timer decode wrong: %+v", decoded.Timer)
+	}
+}
+
+func TestFormatStatusJSON_ShapeIsStableOnFailurePath(t *testing.T) {
+	// The whole point of the JSON form is that consumers can rely
+	// on field presence regardless of which check failed. Pin the
+	// "everything failed" shape — paired=false, daemon=zero,
+	// api={url, reachable:false, error}, timer/flow at zero.
+	r := statusReport{
+		API:  apiStatus{URL: "http://localhost:7999", Error: "connection refused"},
+		Flow: flowStatus{WindowMinutes: 60},
+	}
+	out, err := formatStatusJSON(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{
+		`"paired": false`,
+		`"running": false`,
+		`"reachable": false`,
+		`"error": "connection refused"`,
+		`"available": false`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in JSON, got: %s", want, out)
+		}
+	}
+}
+
+func TestFormatStatusJSON_OmitsErrorKeyOnSuccess(t *testing.T) {
+	// Symmetric with doctor --json: the api.error key is
+	// omitempty so jq's `select(.api.error)` finds failures
+	// cleanly without having to filter empty strings.
+	r := statusReport{
+		Paired: true,
+		API:    apiStatus{URL: "http://localhost:7999", Reachable: true},
+		Flow:   flowStatus{WindowMinutes: 60, Available: true},
+	}
+	out, _ := formatStatusJSON(r)
+	if strings.Contains(out, `"error"`) {
+		t.Errorf("expected api.error to be omitted on success, got: %s", out)
+	}
+}
+
+func TestCollectFlowStatus_HappyPath(t *testing.T) {
+	c := statusFlowFixture(t, map[string]any{
+		"count": 23, "avg": 0.62, "peak": 0.91, "peak_at": nil,
+		"top_repo": nil, "top_language": nil, "top_bundle": nil,
+	}, http.StatusOK)
+
+	got := collectFlowStatus(context.Background(), c)
+	if !got.Available || got.Count != 23 {
+		t.Errorf("unexpected: %+v", got)
+	}
+	if got.Avg != 0.62 || got.Peak != 0.91 {
+		t.Errorf("avg/peak wrong: %+v", got)
+	}
+}
+
+func TestCollectFlowStatus_ApiFailureMarksUnavailable(t *testing.T) {
+	c := statusFlowFixture(t, map[string]any{"detail": "boom"}, http.StatusInternalServerError)
+	got := collectFlowStatus(context.Background(), c)
+	if got.Available {
+		t.Errorf("expected Available=false on API failure, got %+v", got)
+	}
+	if got.Count != 0 {
+		t.Errorf("expected zero count on API failure, got %+v", got)
+	}
+}
