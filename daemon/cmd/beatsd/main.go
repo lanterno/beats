@@ -144,15 +144,23 @@ func main() {
 		// Wire a SummaryFetcher so editor extensions can probe today's
 		// flow stats via the loopback listener without standing up
 		// their own auth. Returns the API response bytes verbatim.
-		editorListener.SetSummaryFetcher(func(fctx context.Context) ([]byte, error) {
-			now := time.Now().UTC()
-			start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-			s, err := c.GetFlowWindowsSummary(fctx, start, now, client.FlowWindowsFilter{})
-			if err != nil {
-				return nil, err
-			}
-			return json.Marshal(s)
-		})
+		//
+		// Skipped in --dry-run: the client has no token in that mode,
+		// so every /summary fetch would 401. With no fetcher set,
+		// handleSummary returns 503 — which the VS Code extension
+		// already handles by falling through to the offline tooltip
+		// state. Cleaner than 401-spam in the daemon's stderr.
+		if !dryRun {
+			editorListener.SetSummaryFetcher(func(fctx context.Context) ([]byte, error) {
+				now := time.Now().UTC()
+				start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+				s, err := c.GetFlowWindowsSummary(fctx, start, now, client.FlowWindowsFilter{})
+				if err != nil {
+					return nil, err
+				}
+				return json.Marshal(s)
+			})
+		}
 		if err := editorListener.Start(ctx, editor.DefaultPort); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: editor listener: %v\n", err)
 		}
