@@ -26,35 +26,36 @@ This modular structure makes it easier to:
 
 ## GitHub Connection Setup (One-Time)
 
-Cloud Build triggers require your GitHub repositories to be connected to Google Cloud Build. This is a one-time setup for each repository:
+The Cloud Build trigger requires the GitHub repository to be connected to
+Google Cloud Build. This is a one-time setup per repository.
 
-### Connect API Repository (`lanterno/beats`)
+The repo name is parameterized as `${var.github_owner}/${var.github_repo}`
+(see [`variables.tf`](variables.tf)) — defaults to `lanterno/beats`. The
+single trigger this stack defines (`${var.api_service_name}-build` in
+[`cloudbuild.tf`](cloudbuild.tf)) builds the API Docker image, pushes it
+to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run.
 
-1. **Go to Cloud Build Triggers in GCP Console:**
-   - Navigate to [Cloud Build Triggers](https://console.cloud.google.com/cloud-build/triggers?project=beats-476914)
-   
-2. **Connect Repository:**
+The UI is **not** built by Cloud Build — it ships from a separate
+`pnpm build` + `./deploy.sh` flow that uploads the static bundle to GCS
+(see "UI Deployment" below). So there's only one repo to connect.
+
+1. **Go to Cloud Build Triggers in the GCP Console:**
+   - [Cloud Build Triggers](https://console.cloud.google.com/cloud-build/triggers?project=beats-476914)
+
+2. **Connect the repository:**
    - Click "Connect Repository" or "Create Trigger"
    - Select "GitHub (Cloud Build GitHub App)"
    - Authenticate with GitHub
-   - Select your repository: `lanterno/beats`
+   - Select `lanterno/beats` (or whatever `github_owner/github_repo`
+     you've set in `terraform.tfvars`)
    - Click "Connect"
 
-### Connect UI Repository (`lanterno/heart2`)
+3. **Verify:**
+   - The trigger defined in Terraform now wires up automatically.
+   - The connection persists — you only do this once per repo.
 
-3. **Connect the UI Repository:**
-   - Click "Connect Repository" again
-   - Select "GitHub (Cloud Build GitHub App)"
-   - Select your repository: `lanterno/heart2`
-   - Click "Connect"
-
-### Verify Connections
-
-4. **Verify Connections:**
-   - After connecting both repositories, the triggers defined in Terraform should automatically work
-   - The connections persist - you only need to do this once per repository
-
-**Note:** After connecting GitHub repositories, you may need to run `terraform apply` again to ensure the triggers reference the connected repositories correctly.
+**Note:** After the GitHub connection, run `terraform apply` again so the
+trigger's `repo_name` reference resolves cleanly.
 
 ## Rerunning Builds
 
