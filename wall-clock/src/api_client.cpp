@@ -44,6 +44,12 @@ bool ApiClient::httpPost(const String& path, const String& body) {
 // shipped — earlier firmware was reading the never-existed
 // "project_color" string key and getting "#888888" defaults
 // for everything.
+//
+// `arr[i] | r0` is ArduinoJson's null-coalescing operator (same
+// shape as `doc["key"] | default` below): if arr[i] is a valid
+// integer it returns that integer (including 0), otherwise it
+// falls back to r0. This is NOT a bitwise OR — a legitimate
+// black `[0,0,0]` correctly yields CRGB(0,0,0), not the default.
 static CRGB rgbFromArray(JsonVariant arr, uint8_t r0, uint8_t g0, uint8_t b0) {
     if (!arr.is<JsonArray>() || arr.size() < 3) {
         return CRGB(r0, g0, b0);
