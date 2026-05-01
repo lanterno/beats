@@ -41,14 +41,24 @@ type Heartbeat struct {
 // missed beats of slack before we treat the editor as gone.
 const MaxStaleness = 90 * time.Second
 
+// SummaryFetcher fetches today's flow-window summary on behalf of an
+// editor extension. Injected via [Listener.SetSummaryFetcher] so the
+// editor package stays free of API-client imports — the daemon's main
+// wires the real implementation; tests can pass a fake.
+//
+// The fetcher receives a context with a short deadline; implementations
+// should respect it (loopback callers won't wait long).
+type SummaryFetcher func(ctx context.Context) ([]byte, error)
+
 // Listener accepts editor heartbeats on a loopback HTTP server and exposes
 // the most recent beat per editor. Safe for concurrent use.
 type Listener struct {
-	mu         sync.Mutex
-	heartbeats map[string]Heartbeat // keyed by editor name
-	server     *http.Server
-	startedAt  time.Time
-	version    string
+	mu             sync.Mutex
+	heartbeats     map[string]Heartbeat // keyed by editor name
+	server         *http.Server
+	startedAt      time.Time
+	version        string
+	summaryFetcher SummaryFetcher
 }
 
 // New constructs a listener. Call [Start] to bind the port; call [Latest]
@@ -62,6 +72,16 @@ func New(version string) *Listener {
 		startedAt:  time.Now(),
 		version:    version,
 	}
+}
+
+// SetSummaryFetcher wires up the fetcher used by GET /summary. Call
+// before [Start] so the route is ready before the listener accepts
+// connections. Without a fetcher /summary returns 503 Service
+// Unavailable so editor extensions can fall back to the offline UI.
+func (l *Listener) SetSummaryFetcher(fn SummaryFetcher) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.summaryFetcher = fn
 }
 
 // Start binds the listener to 127.0.0.1:port and begins accepting POST
@@ -82,6 +102,7 @@ func (l *Listener) Start(ctx context.Context, port int) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/heartbeat", l.handleHeartbeat)
 	mux.HandleFunc("/health", l.handleHealth)
+	mux.HandleFunc("/summary", l.handleSummary)
 
 	l.server = &http.Server{
 		Handler:           mux,
@@ -185,6 +206,48 @@ func (l *Listener) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// handleSummary proxies GET /api/signals/flow-windows/summary on
+// behalf of editor extensions. The daemon already authenticates with
+// the API via the keychain device token, so editors don't need their
+// own auth — they just hit this loopback URL.
+//
+// Returns the API response body verbatim (the schema is stable; we
+// don't massage it). On no-fetcher-configured we 503 so the editor
+// can keep its UI in the offline state. On fetcher error we propagate
+// 502 — the daemon is up but the upstream call failed.
+func (l *Listener) handleSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !isLoopback(host) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	l.mu.Lock()
+	fetch := l.summaryFetcher
+	l.mu.Unlock()
+	if fetch == nil {
+		http.Error(w, "summary fetcher not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Cap the upstream call at 3s — editors poll on a tight cadence
+	// and a stuck request shouldn't wedge the status bar.
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	body, err := fetch(ctx)
+	if err != nil {
+		http.Error(w, "upstream summary fetch failed", http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(body)
 }
 
 func (l *Listener) handleHeartbeat(w http.ResponseWriter, r *http.Request) {

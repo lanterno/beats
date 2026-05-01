@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"testing"
@@ -218,6 +220,117 @@ func TestListener_HealthEndpointReportsStatus(t *testing.T) {
 	}
 	if got.EditorCount != 1 {
 		t.Errorf("expected editor_count=1 after one heartbeat, got %d", got.EditorCount)
+	}
+}
+
+func TestListener_SummaryReturnsFetcherBytesVerbatim(t *testing.T) {
+	listener := New("test")
+	listener.SetSummaryFetcher(func(_ context.Context) ([]byte, error) {
+		// Fixture body — keep it identifiable so we can assert
+		// pass-through without parsing.
+		return []byte(`{"count":42,"avg":0.67}`), nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/summary", port))
+	if err != nil {
+		t.Fatalf("GET /summary: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected application/json, got %q", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != `{"count":42,"avg":0.67}` {
+		t.Errorf("expected fetcher bytes verbatim, got %s", body)
+	}
+}
+
+func TestListener_SummaryReturns503WhenNoFetcherWired(t *testing.T) {
+	// The fetcher is wired by main.go — but a daemon binary that
+	// fails to authenticate (or runs in dry-mode) might not call
+	// SetSummaryFetcher. The endpoint should 503 cleanly so the
+	// editor can keep its UI in the offline state rather than 500'ing.
+	listener := New("test")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/summary", port))
+	if err != nil {
+		t.Fatalf("GET /summary: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", resp.StatusCode)
+	}
+}
+
+func TestListener_SummaryReturns502OnFetcherError(t *testing.T) {
+	// API outage / token revoked / network blip — the fetcher errors,
+	// the daemon proxy translates to 502 (upstream gateway problem)
+	// instead of 500. The editor's status bar should treat that as
+	// "connected but no data" rather than "daemon dead".
+	listener := New("test")
+	listener.SetSummaryFetcher(func(_ context.Context) ([]byte, error) {
+		return nil, errors.New("upstream is on fire")
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/summary", port))
+	if err != nil {
+		t.Fatalf("GET /summary: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d", resp.StatusCode)
+	}
+}
+
+func TestListener_SummaryRejectsNonGet(t *testing.T) {
+	listener := New("test")
+	listener.SetSummaryFetcher(func(_ context.Context) ([]byte, error) {
+		return []byte(`{}`), nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	port := freePort(t)
+	if err := listener.Start(ctx, port); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = listener.Stop() }()
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://127.0.0.1:%d/summary", port),
+		"application/json",
+		bytes.NewReader([]byte("{}")),
+	)
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", resp.StatusCode)
 	}
 }
 

@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -105,6 +106,18 @@ func main() {
 		// collector via Latest(). Failure to bind (e.g. port already in use)
 		// is non-fatal: the collector keeps working without editor context.
 		editorListener := editor.New(version)
+		// Wire a SummaryFetcher so editor extensions can probe today's
+		// flow stats via the loopback listener without standing up
+		// their own auth. Returns the API response bytes verbatim.
+		editorListener.SetSummaryFetcher(func(fctx context.Context) ([]byte, error) {
+			now := time.Now().UTC()
+			start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+			s, err := c.GetFlowWindowsSummary(fctx, start, now, client.FlowWindowsFilter{})
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(s)
+		})
 		if err := editorListener.Start(ctx, editor.DefaultPort); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: editor listener: %v\n", err)
 		}

@@ -104,6 +104,8 @@ The collector loop calls `getLatest()` on each flush to populate `ActiveProjectI
 
 The same listener also serves `GET /health` (loopback-only) returning `{ok, version, uptime_sec, editor_count}`. Editor extensions can probe it on a setInterval to drive a connected/disconnected status indicator without firing heartbeats that get silently dropped.
 
+A second loopback-only endpoint `GET /summary` proxies the API's `/api/signals/flow-windows/summary` for today's slice using the daemon's authenticated client — so editor extensions can render today's flow score (avg / peak / count + best repo) without standing up their own auth. Returns `503` when no SummaryFetcher is wired, `502` on upstream API errors, `200` with the JSON body otherwise.
+
 ## Implementation Steps
 
 1. **Scaffold extension** — `npx @vscode/create-extension beats-vscode`. Minimal activation: `onStartupFinished`.
