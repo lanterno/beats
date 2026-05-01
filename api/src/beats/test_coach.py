@@ -13,7 +13,7 @@ modules underneath.
 
 import json
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -22,6 +22,7 @@ from beats.coach import brief as brief_module
 from beats.coach import chat as chat_module
 from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import review as review_module
+from beats.coach import tools as tools_module
 from beats.coach.gateway import (
     SONNET_CACHE_READ_PER_MTOK,
     SONNET_CACHE_WRITE_PER_MTOK,
@@ -1619,3 +1620,389 @@ class TestRewriteCoachMemory:
             assert await store_b.read() is None
         finally:
             client.close()
+
+
+# Tool dispatch test scaffolding
+# ---------------------------------------------------------------------
+
+
+class _FakeIntentionRepo:
+    def __init__(self, by_date: dict | None = None):
+        self._by_date = by_date or {}
+
+    async def list_by_date(self, d):
+        return list(self._by_date.get(d, []))
+
+
+class _FakeNoteRepo:
+    async def get_by_date(self, _d):
+        return None
+
+
+class _FakeProjectRepoForTools:
+    """Returns a fixed list of project objects."""
+
+    def __init__(self, projects):
+        self._projects = projects
+
+    async def list(self, archived: bool = False):
+        if archived:
+            return list(self._projects)
+        return [p for p in self._projects if not p.archived]
+
+
+class _FakeBeatRepoForTools:
+    """Returns a fixed list of beats — both list_all_completed and the
+    other methods AnalyticsService might invoke (we don't expect those
+    here since IntelligenceService is stubbed)."""
+
+    def __init__(self, beats):
+        self._beats = beats
+
+    async def list_all_completed(self):
+        return [b for b in self._beats if b.end is not None]
+
+
+class _FakeCoachRepos:
+    """Mirrors the CoachRepos dataclass shape for tests."""
+
+    def __init__(self, *, projects=None, beats=None, intentions_by_date=None):
+        self.project = _FakeProjectRepoForTools(projects or [])
+        self.beat = _FakeBeatRepoForTools(beats or [])
+        self.intention = _FakeIntentionRepo(intentions_by_date or {})
+        self.note = _FakeNoteRepo()
+        self.digest = None  # not used by tools.py
+
+
+def _project(id_: str, name: str, *, weekly_goal=None, goal_type="target", archived=False):
+    """Quick project factory."""
+    from beats.domain.models import GoalType, Project
+
+    return Project(
+        id=id_,
+        name=name,
+        weekly_goal=weekly_goal,
+        goal_type=GoalType(goal_type) if goal_type else GoalType.TARGET,
+        archived=archived,
+    )
+
+
+def _completed_beat(start_iso: str, minutes: int, project_id: str, *, note=None, tags=None):
+    from beats.domain.models import Beat
+
+    s = datetime.fromisoformat(start_iso).replace(tzinfo=UTC)
+    return Beat(
+        id="b-" + start_iso,
+        project_id=project_id,
+        start=s,
+        end=s + timedelta(minutes=minutes),
+        note=note,
+        tags=list(tags or []),
+    )
+
+
+class TestToolsDispatch:
+    """Each coach tool is an async function over the repos. The chat
+    loop calls execute_tool(name, input). Wrong dispatch = the LLM
+    gets useless text + the user perceives a confused coach.
+
+    Tests cover every tool's happy path + the most consequential
+    edge cases (filters, dates, empty data)."""
+
+    async def test_unknown_tool_name_returns_error_string(self):
+        """The LLM occasionally hallucinates tool names. The dispatcher
+        must NOT raise — the chat loop's exception handler would turn
+        a raise into an "Error: ..." tool_result, but a string
+        return is more graceful (the LLM can recover)."""
+        repos = _FakeCoachRepos()
+        result = await tools_module.execute_tool(
+            "user-1",
+            "non_existent_tool",
+            {},
+            repos=repos,
+            projects=[],
+        )
+        assert "Unknown tool" in result
+        assert "non_existent_tool" in result
+
+    # -- get_projects --
+
+    async def test_get_projects_lists_active_with_goal_lines(self):
+        projects = [
+            _project("p1", "Alpha", weekly_goal=10, goal_type="target"),
+            _project("p2", "Beta"),
+        ]
+        repos = _FakeCoachRepos(projects=projects)
+        result = await tools_module.execute_tool(
+            "user-1", "get_projects", {}, repos=repos, projects=projects
+        )
+        assert "Alpha" in result
+        assert "Beta" in result
+        # weekly_goal renders as a float; the LLM-facing format is
+        # "(goal: 10.0h/wk target)".
+        assert "10.0h/wk target" in result
+        # No archived suffix on either.
+        assert "archived" not in result
+
+    async def test_get_projects_excludes_archived_by_default(self):
+        projects = [
+            _project("p1", "Active"),
+            _project("p2", "Stale", archived=True),
+        ]
+        repos = _FakeCoachRepos(projects=projects)
+        result = await tools_module.execute_tool(
+            "user-1", "get_projects", {}, repos=repos, projects=projects
+        )
+        assert "Active" in result
+        assert "Stale" not in result
+
+    async def test_get_projects_includes_archived_when_requested(self):
+        projects = [
+            _project("p1", "Active"),
+            _project("p2", "Stale", archived=True),
+        ]
+        repos = _FakeCoachRepos(projects=projects)
+        result = await tools_module.execute_tool(
+            "user-1",
+            "get_projects",
+            {"include_archived": True},
+            repos=repos,
+            projects=projects,
+        )
+        assert "Active" in result
+        assert "Stale" in result
+        assert "archived" in result
+
+    async def test_get_projects_empty_returns_friendly_text(self):
+        repos = _FakeCoachRepos(projects=[])
+        result = await tools_module.execute_tool(
+            "user-1", "get_projects", {}, repos=repos, projects=[]
+        )
+        assert "No projects found" in result
+
+    # -- get_beats --
+
+    async def test_get_beats_default_window_summarizes_total(self):
+        """Default window is the last 7 days. The summary line counts
+        sessions and sums hours — pin the format the LLM relies on."""
+        today = datetime.now(UTC).date()
+        recent_iso = (datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)).isoformat()
+
+        projects = [_project("p1", "Alpha")]
+        beats = [_completed_beat(recent_iso[:-6], 60, "p1", note="planning")]
+        repos = _FakeCoachRepos(projects=projects, beats=beats)
+
+        result = await tools_module.execute_tool(
+            "user-1", "get_beats", {}, repos=repos, projects=projects
+        )
+        # The session line + the summary footer.
+        assert "Alpha" in result
+        assert "1h 0m" in result or "60m" in result
+        assert "1 sessions, 1.0h total" in result or "1 sessions, 1.0" in result
+
+    async def test_get_beats_filters_by_project_name_case_insensitive(self):
+        projects = [
+            _project("p1", "Alpha"),
+            _project("p2", "Beta"),
+        ]
+        today_str = datetime.now(UTC).date().isoformat()
+        beats = [
+            _completed_beat(f"{today_str}T09:00:00", 30, "p1"),
+            _completed_beat(f"{today_str}T10:00:00", 45, "p2"),
+        ]
+        repos = _FakeCoachRepos(projects=projects, beats=beats)
+
+        result = await tools_module.execute_tool(
+            "user-1",
+            "get_beats",
+            {"project_name": "alpha"},  # lowercase — pin case-insensitivity
+            repos=repos,
+            projects=projects,
+        )
+        assert "Alpha" in result
+        assert "Beta" not in result
+        assert "1 sessions" in result
+
+    async def test_get_beats_empty_returns_friendly_text(self):
+        repos = _FakeCoachRepos(projects=[], beats=[])
+        result = await tools_module.execute_tool(
+            "user-1", "get_beats", {}, repos=repos, projects=[]
+        )
+        assert "No sessions found" in result
+
+    # -- get_intentions --
+
+    async def test_get_intentions_lists_status(self):
+        from beats.domain.models import Intention
+
+        today = datetime.now(UTC).date()
+        intentions_by_date = {
+            today: [
+                Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
+                Intention(project_id="p2", date=today, planned_minutes=30, completed=False),
+            ]
+        }
+        projects = [_project("p1", "Alpha"), _project("p2", "Beta")]
+        repos = _FakeCoachRepos(projects=projects, intentions_by_date=intentions_by_date)
+
+        result = await tools_module.execute_tool(
+            "user-1", "get_intentions", {}, repos=repos, projects=projects
+        )
+        assert "Alpha: 60min [done]" in result
+        assert "Beta: 30min [pending]" in result
+
+    async def test_get_intentions_explicit_date_uses_that_day(self):
+        from beats.domain.models import Intention
+
+        target = date(2026, 5, 1)
+        intentions_by_date = {target: [Intention(project_id="p1", date=target, planned_minutes=45)]}
+        projects = [_project("p1", "Alpha")]
+        repos = _FakeCoachRepos(projects=projects, intentions_by_date=intentions_by_date)
+
+        result = await tools_module.execute_tool(
+            "user-1",
+            "get_intentions",
+            {"date": "2026-05-01"},
+            repos=repos,
+            projects=projects,
+        )
+        assert "Alpha: 45min" in result
+
+    async def test_get_intentions_empty_day_returns_friendly_text(self):
+        projects = [_project("p1", "Alpha")]
+        repos = _FakeCoachRepos(projects=projects, intentions_by_date={})
+        result = await tools_module.execute_tool(
+            "user-1", "get_intentions", {}, repos=repos, projects=projects
+        )
+        assert "No intentions set" in result
+
+    # -- get_productivity_score --
+
+    async def test_get_productivity_score_formats_components(self, monkeypatch):
+        async def fake_score(_self):
+            return {
+                "score": 67,
+                "components": {
+                    "consistency": 80,
+                    "intentions": 50,
+                    "goals": 70,
+                    "quality": 65,
+                },
+            }
+
+        from beats.domain.intelligence import IntelligenceService
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
+
+        projects = [_project("p1", "Alpha")]
+        repos = _FakeCoachRepos(projects=projects)
+        result = await tools_module.execute_tool(
+            "user-1", "get_productivity_score", {}, repos=repos, projects=projects
+        )
+        assert "Score: 67/100" in result
+        assert "Consistency: 80" in result
+        assert "Intentions: 50" in result
+
+    async def test_get_productivity_score_swallows_exception(self, monkeypatch):
+        """If IntelligenceService raises (e.g. divide-by-zero on fresh
+        account), the tool returns an error message instead of
+        crashing the chat stream. The LLM can describe the outcome
+        to the user instead of seeing a 500."""
+        from beats.domain.intelligence import IntelligenceService
+
+        async def boom(_self):
+            raise ValueError("score broke")
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", boom)
+
+        projects = [_project("p1", "Alpha")]
+        repos = _FakeCoachRepos(projects=projects)
+        result = await tools_module.execute_tool(
+            "user-1", "get_productivity_score", {}, repos=repos, projects=projects
+        )
+        assert "Could not compute score" in result
+        assert "score broke" in result
+
+    # -- get_patterns --
+
+    async def test_get_patterns_lists_first_ten(self, monkeypatch):
+        from beats.domain.intelligence import IntelligenceService
+        from beats.domain.models import InsightCard
+
+        async def fake_detect(_self):
+            return [
+                InsightCard(
+                    id="i1", type="day_pattern", title="Tuesdays peak", body="b1", priority=1
+                ),
+                InsightCard(id="i2", type="time_pattern", title="9am peak", body="b2", priority=2),
+            ]
+
+        monkeypatch.setattr(IntelligenceService, "detect_patterns", fake_detect)
+        repos = _FakeCoachRepos(projects=[])
+        result = await tools_module.execute_tool(
+            "user-1", "get_patterns", {}, repos=repos, projects=[]
+        )
+        assert "Tuesdays peak" in result
+        assert "9am peak" in result
+        assert "(day_pattern)" in result
+
+    async def test_get_patterns_empty_returns_friendly_text(self, monkeypatch):
+        from beats.domain.intelligence import IntelligenceService
+
+        async def fake_detect(_self):
+            return []
+
+        monkeypatch.setattr(IntelligenceService, "detect_patterns", fake_detect)
+        repos = _FakeCoachRepos(projects=[])
+        result = await tools_module.execute_tool(
+            "user-1", "get_patterns", {}, repos=repos, projects=[]
+        )
+        assert "No patterns" in result
+
+    # -- search_beats --
+
+    async def test_search_beats_matches_note_text(self):
+        projects = [_project("p1", "Alpha")]
+        beats = [
+            _completed_beat("2026-05-01T09:00:00", 30, "p1", note="auth refactor planning"),
+            _completed_beat("2026-05-02T09:00:00", 45, "p1", note="meeting prep"),
+        ]
+        repos = _FakeCoachRepos(projects=projects, beats=beats)
+
+        result = await tools_module.execute_tool(
+            "user-1", "search_beats", {"query": "REFACTOR"}, repos=repos, projects=projects
+        )
+        # Case-insensitive match on the note text.
+        assert "auth refactor planning" in result
+        assert "meeting prep" not in result
+
+    async def test_search_beats_matches_tags(self):
+        projects = [_project("p1", "Alpha")]
+        beats = [
+            _completed_beat("2026-05-01T09:00:00", 30, "p1", tags=["focus", "deep-work"]),
+            _completed_beat("2026-05-02T09:00:00", 45, "p1", tags=["meeting"]),
+        ]
+        repos = _FakeCoachRepos(projects=projects, beats=beats)
+
+        result = await tools_module.execute_tool(
+            "user-1", "search_beats", {"query": "deep"}, repos=repos, projects=projects
+        )
+        assert "2026-05-01" in result
+        assert "2026-05-02" not in result
+
+    async def test_search_beats_empty_query_short_circuits(self):
+        repos = _FakeCoachRepos(projects=[], beats=[])
+        result = await tools_module.execute_tool(
+            "user-1", "search_beats", {"query": ""}, repos=repos, projects=[]
+        )
+        assert "No search query" in result
+
+    async def test_search_beats_no_matches_returns_query_in_message(self):
+        projects = [_project("p1", "Alpha")]
+        beats = [_completed_beat("2026-05-01T09:00:00", 30, "p1", note="something")]
+        repos = _FakeCoachRepos(projects=projects, beats=beats)
+        result = await tools_module.execute_tool(
+            "user-1", "search_beats", {"query": "nonsense"}, repos=repos, projects=projects
+        )
+        assert "nonsense" in result
+        assert "No sessions matching" in result
