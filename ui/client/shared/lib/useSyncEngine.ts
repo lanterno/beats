@@ -148,7 +148,6 @@ export async function replayPoisonAware(mutation: PendingMutation): Promise<void
 			// Server-confirmed permanent failure — log and drop. The
 			// alternative (keep retrying) would never succeed and
 			// would block the rest of the queue.
-			// biome-ignore lint/suspicious/noConsole: surfacing to dev console is the point
 			console.warn(
 				`[sync] dropping poisoned mutation ${mutation.method} ${mutation.path}: ${err.message}`,
 			);
