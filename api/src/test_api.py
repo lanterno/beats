@@ -792,6 +792,21 @@ class TestErrorEnvelope:
             # documents both branches even if only one fires today.
             assert body["detail"] == f"Validation failed for {len(body['fields'])} fields"
 
+    def test_router_can_override_default_code_with_dict_detail(self):
+        # The errors.py handler honors `detail={"code": ..., "message": ...}`
+        # so routers can issue more-specific machine codes than the status-
+        # default. Coach uses this for INVALID_DATE on bad date input
+        # (default would be the generic BAD_REQUEST).
+        resp = client.post(
+            "/api/coach/brief/generate",
+            json={"date": "not-a-date"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400, resp.text
+        body = resp.json()
+        assert body["code"] == "INVALID_DATE", body
+        assert "not-a-date" in body["detail"]
+
     def test_domain_exception_uses_envelope(self):
         # NoActiveTimer is the canonical 400 DomainException — raised
         # when stopping a timer that isn't running. Locks in that the

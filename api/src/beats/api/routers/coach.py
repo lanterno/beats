@@ -134,12 +134,20 @@ async def trigger_brief_generation(
         try:
             target = date.fromisoformat(request.date)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid date: {request.date}") from exc
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_DATE", "message": f"Invalid date: {request.date}"},
+            ) from exc
 
     try:
         doc = await generate_brief(user_id, target_date=target)
     except BudgetExceeded as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+        # Distinct from the generic RATE_LIMITED — clients should surface
+        # "monthly LLM budget reached", not "slow down your requests".
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "BUDGET_EXCEEDED", "message": str(exc)},
+        ) from exc
     except Exception as exc:
         logger.exception("Brief generation failed for user=%s", user_id)
         raise HTTPException(
@@ -255,7 +263,10 @@ async def start_review(user_id: CurrentUserId):
     try:
         await generate_review_questions(user_id)
     except BudgetExceeded as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "BUDGET_EXCEEDED", "message": str(exc)},
+        ) from exc
     except Exception as exc:
         logger.exception("Review generation failed for user=%s", user_id)
         raise HTTPException(
@@ -279,7 +290,10 @@ async def answer_review(user_id: CurrentUserId, request: ReviewAnswerRequest):
     try:
         target = date.fromisoformat(request.date)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_DATE", "message": str(exc)},
+        ) from exc
 
     await save_answer(user_id, target, request.question_index, request.answer)
     return {"status": "ok"}
