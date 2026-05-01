@@ -4759,3 +4759,518 @@ class TestGitHubDisconnect:
 
         svc_empty = GitHubService(_github_settings(monkeypatch), _FakeGitHubIntegrationRepo(None))
         assert await svc_empty.disconnect() is False
+
+
+# =============================================================================
+# Calendar Service — Google Calendar OAuth + event fetch
+# =============================================================================
+
+
+class _FakeCalendarIntegrationRepo:
+    def __init__(self, integration=None):
+        self._integration = integration
+
+    async def get(self):
+        return self._integration
+
+    async def upsert(self, integration):
+        self._integration = integration
+        return integration
+
+    async def delete(self) -> bool:
+        had = self._integration is not None
+        self._integration = None
+        return had
+
+
+def _calendar_settings(monkeypatch):
+    """Build a Settings instance with deterministic Google OAuth
+    creds. Same env-var pattern as _fitbit_settings/_github_settings."""
+    from beats.settings import Settings
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid-g")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "csec-g")
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "https://beats.test/oauth/google")
+    return Settings()
+
+
+class TestCalendarAuthUrl:
+    """get_auth_url builds the Google OAuth consent URL. Two
+    parameters here are the load-bearing pieces: access_type=offline
+    + prompt=consent. Without them, Google does NOT return a
+    refresh_token, and the integration breaks the moment the access
+    token expires (typically 1 hour later)."""
+
+    def test_includes_offline_access_and_consent_prompt(self, monkeypatch):
+        from beats.domain.calendar import CalendarService
+
+        svc = CalendarService(_calendar_settings(monkeypatch), _FakeCalendarIntegrationRepo())
+        url = svc.get_auth_url()
+        assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+        assert "client_id=cid-g" in url
+        assert "redirect_uri=https%3A%2F%2Fbeats.test%2Foauth%2Fgoogle" in url
+        assert "response_type=code" in url
+        # The two pieces that ensure a refresh_token comes back:
+        assert "access_type=offline" in url
+        assert "prompt=consent" in url
+        # Calendar read-only scope
+        assert "calendar.events.readonly" in url
+
+
+class TestCalendarExchangeCode:
+    """exchange_code POSTs the auth code → persists access_token,
+    refresh_token, token_expiry."""
+
+    async def test_persists_tokens_with_expiry(self, monkeypatch):
+        from beats.domain.calendar import CalendarService
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "oauth2.googleapis.com/token": _FakeHTTPResponse(
+                    200,
+                    {
+                        "access_token": "ya29-fresh",
+                        "refresh_token": "1//rt-google",
+                        "expires_in": 3600,
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        repo = _FakeCalendarIntegrationRepo()
+        svc = CalendarService(_calendar_settings(monkeypatch), repo)
+        before = datetime.now(UTC)
+        integration = await svc.exchange_code("auth-code")
+        after = datetime.now(UTC)
+
+        assert integration.access_token == "ya29-fresh"
+        assert integration.refresh_token == "1//rt-google"
+        # token_expiry ≈ now + 3600 sec
+        assert integration.token_expiry is not None
+        expiry = integration.token_expiry
+        assert before + timedelta(seconds=3599) <= expiry
+        assert expiry <= after + timedelta(seconds=3601)
+        assert (await repo.get()).access_token == "ya29-fresh"
+
+
+class TestCalendarEnsureFreshToken:
+    """_ensure_fresh_token has THREE branches:
+      1. Token still valid → return as-is, no HTTP
+      2. Expired but no refresh_token → return as-is (don't 401
+         on a refresh attempt that's guaranteed to fail)
+      3. Expired with refresh_token → POST refresh grant, persist
+
+    Branch 2 is calendar-specific — Fitbit doesn't have it. Pin
+    so a regression doesn't fire a refresh request that would burn
+    a request slot for no purpose."""
+
+    async def test_returns_same_when_not_expired(self, monkeypatch):
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(monkeypatch, {"": RuntimeError("should not refresh")})
+
+        future = datetime.now(UTC) + timedelta(hours=1)
+        existing = CalendarIntegration(
+            access_token="ya29",
+            refresh_token="1//rt",
+            token_expiry=future,
+        )
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(integration=existing),
+        )
+        result = await svc._ensure_fresh_token(existing)
+        assert result.access_token == "ya29"
+
+    async def test_returns_same_when_expired_but_no_refresh_token(self, monkeypatch):
+        """No refresh_token → return integration unchanged, NO HTTP
+        call. Pin so a regression doesn't fire `grant_type=
+        refresh_token` with an empty refresh_token (Google would
+        400; user has to re-auth anyway)."""
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {"": RuntimeError("must not refresh without a refresh_token")},
+        )
+
+        past = datetime.now(UTC) - timedelta(hours=2)
+        no_refresh = CalendarIntegration(
+            access_token="ya29-OLD",
+            refresh_token="",
+            token_expiry=past,
+        )
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(integration=no_refresh),
+        )
+        result = await svc._ensure_fresh_token(no_refresh)
+        assert result.access_token == "ya29-OLD"
+
+    async def test_refreshes_when_expired_with_refresh_token(self, monkeypatch):
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "oauth2.googleapis.com/token": _FakeHTTPResponse(
+                    200,
+                    {"access_token": "ya29-NEW", "expires_in": 3600},
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        past = datetime.now(UTC) - timedelta(hours=2)
+        stale = CalendarIntegration(
+            access_token="ya29-OLD",
+            refresh_token="1//rt-keep",
+            token_expiry=past,
+        )
+        repo = _FakeCalendarIntegrationRepo(integration=stale)
+        svc = CalendarService(_calendar_settings(monkeypatch), repo)
+        refreshed = await svc._ensure_fresh_token(stale)
+        assert refreshed.access_token == "ya29-NEW"
+        assert (await repo.get()).access_token == "ya29-NEW"
+
+
+class TestCalendarFetchEvents:
+    """fetch_events iterates calendar_ids (a user can have multiple
+    calendars connected) and aggregates their events. Two distinct
+    risks vs Fitbit/GitHub:
+      1. all-day events use {"date": "YYYY-MM-DD"} not {"dateTime"} —
+         pin the all_day boolean derivation
+      2. one calendar's failure must not drop the others"""
+
+    async def test_no_integration_returns_empty(self, monkeypatch):
+        from beats.domain.calendar import CalendarService
+
+        _patch_httpx(
+            monkeypatch,
+            {"": RuntimeError("must not fetch without integration")},
+        )
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(None),
+        )
+        result = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        assert result == []
+
+    async def test_disabled_integration_returns_empty(self, monkeypatch):
+        """integration.enabled=False → don't fetch. Pin so the
+        Settings → "pause" toggle takes effect immediately rather
+        than requiring a full disconnect."""
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {"": RuntimeError("must not fetch when disabled")},
+        )
+        future = datetime.now(UTC) + timedelta(hours=1)
+        disabled = CalendarIntegration(
+            access_token="ya29",
+            refresh_token="rt",
+            token_expiry=future,
+            enabled=False,
+        )
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(integration=disabled),
+        )
+        result = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        assert result == []
+
+    async def test_returns_timed_event_with_all_day_false(self, monkeypatch):
+        """Event with `dateTime` → all_day=False, start/end use the
+        dateTime value verbatim."""
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "/events": _FakeHTTPResponse(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "summary": "Standup",
+                                "start": {"dateTime": "2026-04-01T09:00:00Z"},
+                                "end": {"dateTime": "2026-04-01T09:30:00Z"},
+                            }
+                        ]
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        future = datetime.now(UTC) + timedelta(hours=1)
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(
+                integration=CalendarIntegration(
+                    access_token="ya29",
+                    refresh_token="rt",
+                    token_expiry=future,
+                )
+            ),
+        )
+        events = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        assert len(events) == 1
+        e = events[0]
+        assert e["summary"] == "Standup"
+        assert e["start"] == "2026-04-01T09:00:00Z"
+        assert e["end"] == "2026-04-01T09:30:00Z"
+        assert e["all_day"] is False
+
+    async def test_returns_all_day_event_correctly(self, monkeypatch):
+        """Event with `date` (not `dateTime`) → all_day=True. Pin
+        so the calendar view doesn't render an all-day event as
+        "12:00 AM" (the timezone-zero artifact of treating
+        "2026-04-01" as a datetime)."""
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "/events": _FakeHTTPResponse(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "summary": "Holiday",
+                                "start": {"date": "2026-04-01"},
+                                "end": {"date": "2026-04-02"},
+                            }
+                        ]
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        future = datetime.now(UTC) + timedelta(hours=1)
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(
+                integration=CalendarIntegration(
+                    access_token="ya29",
+                    refresh_token="rt",
+                    token_expiry=future,
+                )
+            ),
+        )
+        events = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        assert events == [
+            {
+                "summary": "Holiday",
+                "start": "2026-04-01",
+                "end": "2026-04-02",
+                "all_day": True,
+            }
+        ]
+
+    async def test_event_without_summary_falls_back_to_no_title(self, monkeypatch):
+        """Calendar events sometimes have no title (busy blocks,
+        declined invites). Pin the "(No title)" fallback so the
+        UI doesn't render a literal empty string."""
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        _patch_httpx(
+            monkeypatch,
+            {
+                "/events": _FakeHTTPResponse(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "start": {"dateTime": "2026-04-01T10:00:00Z"},
+                                "end": {"dateTime": "2026-04-01T11:00:00Z"},
+                            }
+                        ]
+                    },
+                )
+            },
+        )
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        future = datetime.now(UTC) + timedelta(hours=1)
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(
+                integration=CalendarIntegration(
+                    access_token="ya29",
+                    refresh_token="rt",
+                    token_expiry=future,
+                )
+            ),
+        )
+        events = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        assert events[0]["summary"] == "(No title)"
+
+    async def test_iterates_multiple_calendars(self, monkeypatch):
+        """User has primary + a second calendar — both are queried
+        and their events appended. Pin so a regression doesn't only
+        fetch the first calendar in the list."""
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        call_log: list[str] = []
+
+        def handler(method, url, params):
+            call_log.append(url)
+            if "primary" in url:
+                return _FakeHTTPResponse(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "summary": "From primary",
+                                "start": {"dateTime": "2026-04-01T09:00:00Z"},
+                                "end": {"dateTime": "2026-04-01T10:00:00Z"},
+                            }
+                        ]
+                    },
+                )
+            if "work" in url:
+                return _FakeHTTPResponse(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "summary": "From work",
+                                "start": {"dateTime": "2026-04-01T11:00:00Z"},
+                                "end": {"dateTime": "2026-04-01T12:00:00Z"},
+                            }
+                        ]
+                    },
+                )
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        future = datetime.now(UTC) + timedelta(hours=1)
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(
+                integration=CalendarIntegration(
+                    access_token="ya29",
+                    refresh_token="rt",
+                    token_expiry=future,
+                    calendar_ids=["primary", "work@example.com"],
+                )
+            ),
+        )
+        events = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        summaries = [e["summary"] for e in events]
+        assert "From primary" in summaries
+        assert "From work" in summaries
+        assert len(call_log) == 2
+
+    async def test_one_calendar_failure_does_not_drop_others(self, monkeypatch):
+        """Calendar A errors, B succeeds → result has B's events.
+        Pin per-calendar resilience so a single revoked calendar
+        permission doesn't kill the whole event panel."""
+        import httpx
+
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        def handler(method, url, params):
+            if "primary" in url:
+                return httpx.ConnectError("permission revoked")
+            if "work" in url:
+                return _FakeHTTPResponse(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "summary": "Survivor",
+                                "start": {"dateTime": "2026-04-01T09:00:00Z"},
+                                "end": {"dateTime": "2026-04-01T10:00:00Z"},
+                            }
+                        ]
+                    },
+                )
+            return _FakeHTTPResponse(404, {})
+
+        _patch_httpx_callable(monkeypatch, handler)
+        monkeypatch.setattr(
+            _FakeHTTPResponse, "raise_for_status", _no_op_raise_for_status, raising=False
+        )
+
+        future = datetime.now(UTC) + timedelta(hours=1)
+        svc = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(
+                integration=CalendarIntegration(
+                    access_token="ya29",
+                    refresh_token="rt",
+                    token_expiry=future,
+                    calendar_ids=["primary", "work@example.com"],
+                )
+            ),
+        )
+        events = await svc.fetch_events(
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 2, tzinfo=UTC),
+        )
+        assert [e["summary"] for e in events] == ["Survivor"]
+
+
+class TestCalendarDisconnect:
+    async def test_disconnect_returns_bool(self, monkeypatch):
+        from beats.domain.calendar import CalendarService
+        from beats.domain.models import CalendarIntegration
+
+        svc_full = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(integration=CalendarIntegration(access_token="ya29")),
+        )
+        assert await svc_full.disconnect() is True
+
+        svc_empty = CalendarService(
+            _calendar_settings(monkeypatch),
+            _FakeCalendarIntegrationRepo(None),
+        )
+        assert await svc_empty.disconnect() is False
