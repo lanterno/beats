@@ -1483,6 +1483,225 @@ class TestHandleChatTurn:
         assert calls[0]["tools"] is not None  # tools registered every call
 
 
+class TestRecentDataSummary:
+    """_recent_data_summary builds the human-readable context block
+    that's prepended to the memory-rewrite LLM prompt. It walks
+    7 days of beats / intentions / mood / reviews and renders
+    Markdown.
+
+    Why test directly: the existing TestRewriteCoachMemory stubs
+    this whole helper out, so a regression in the rendering would
+    silently degrade the LLM's input quality without any test
+    failure. Pin each of the four sections (sessions, intentions,
+    mood, reviews) plus the empty-state fallback."""
+
+    @pytest.fixture
+    def stub_reviews_empty(self, monkeypatch):
+        """list_reviews defaults to empty unless a test opts in."""
+
+        async def fake_list_reviews(_user_id, limit=7):
+            return []
+
+        monkeypatch.setattr(memory_rewrite_module, "list_reviews", fake_list_reviews)
+
+    @pytest.fixture
+    def patch_repos(self, monkeypatch):
+        """Returns a setter that monkeypatches build_repos to return
+        the supplied _FakeCoachRepos instance."""
+
+        def setter(repos):
+            async def fake_build_repos(_user_id):
+                return repos
+
+            monkeypatch.setattr(memory_rewrite_module, "build_repos", fake_build_repos)
+
+        return setter
+
+    async def test_empty_data_renders_no_sessions_line(self, patch_repos, stub_reviews_empty):
+        """No beats / intentions / notes / reviews → output still
+        renders the section headers with the documented empty-state
+        line. Pin so the LLM gets a stable structure even on a
+        first-week user."""
+        patch_repos(_FakeCoachRepos())
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        assert "## Last 7 days of sessions" in out
+        assert "(No sessions in the last 7 days)" in out
+        assert "## Recent intentions" in out
+        assert "## Mood" in out
+        # Reviews section is OMITTED when empty (only renders if
+        # at least one review has answers)
+        assert "## Review answers" not in out
+
+    async def test_recent_beats_render_with_project_name_and_duration(
+        self, patch_repos, stub_reviews_empty
+    ):
+        """A beat in the last 7 days renders as
+        `**YYYY-MM-DD** (Xh): ProjectName (45m)`. Pin the
+        project name resolution + the fmt_minutes formatting."""
+        recent_iso = (
+            (datetime.now(UTC) - timedelta(days=2))
+            .replace(hour=10, minute=0, second=0, microsecond=0)
+            .isoformat()
+        )
+        recent_iso = recent_iso[:19]  # strip tz suffix for the helper
+        beats = [_completed_beat(recent_iso, 45, project_id="p1")]
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            beats=beats,
+        )
+        patch_repos(repos)
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        # Project name must resolve (not "?") and the duration
+        # uses fmt_minutes (45m, not "0:45:00")
+        assert "Alpha (45m)" in out
+        # The empty-state line must NOT appear
+        assert "(No sessions in the last 7 days)" not in out
+
+    async def test_old_beats_excluded_from_session_summary(self, patch_repos, stub_reviews_empty):
+        """A beat from 10 days ago must not appear in the
+        last-7-days section. Pin so the rewrite prompt isn't
+        polluted with stale activity."""
+        old_iso = (
+            (datetime.now(UTC) - timedelta(days=10))
+            .replace(hour=10, minute=0, second=0, microsecond=0)
+            .isoformat()[:19]
+        )
+        beats = [_completed_beat(old_iso, 60, project_id="p1")]
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            beats=beats,
+        )
+        patch_repos(repos)
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        # The beat IS in beats but should be filtered out by the >= week_ago check
+        assert "(No sessions in the last 7 days)" in out
+        assert "Alpha" not in out.split("## Recent intentions")[0]
+
+    async def test_intentions_render_with_done_and_missed_status(
+        self, patch_repos, stub_reviews_empty
+    ):
+        """Each intention renders as `ProjectName Nm [done|missed]`.
+        Pin both status branches so a regression doesn't silently
+        flip the meaning."""
+        from beats.domain.models import Intention
+
+        today = datetime.now(UTC).date()
+        yesterday = today - timedelta(days=1)
+        intentions_by_date = {
+            today: [
+                Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
+            ],
+            yesterday: [
+                Intention(
+                    project_id="p1",
+                    date=yesterday,
+                    planned_minutes=30,
+                    completed=False,
+                ),
+            ],
+        }
+        repos = _FakeCoachRepos(
+            projects=[_project("p1", "Alpha")],
+            intentions_by_date=intentions_by_date,
+        )
+        patch_repos(repos)
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        # Done intention from today
+        assert "Alpha 60m [done]" in out
+        # Missed intention from yesterday
+        assert "Alpha 30m [missed]" in out
+
+    async def test_mood_section_renders_when_notes_have_mood(self, patch_repos, stub_reviews_empty):
+        """Daily notes with mood render as
+        `**YYYY-MM-DD**: M/5 — "<text>"`. Pin so a refactor of
+        DailyNote can't drop the mood line."""
+        from beats.domain.models import DailyNote
+
+        target_dates = {
+            datetime.now(UTC).date() - timedelta(days=1): DailyNote(
+                date=datetime.now(UTC).date() - timedelta(days=1),
+                mood=4,
+                note="Felt focused in the morning",
+            ),
+        }
+
+        class _MoodFakeNoteRepo:
+            async def get_by_date(self, d):
+                return target_dates.get(d)
+
+        repos = _FakeCoachRepos()
+        repos.note = _MoodFakeNoteRepo()
+        patch_repos(repos)
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        assert "4/5" in out
+        assert "Felt focused in the morning" in out
+
+    async def test_mood_section_skips_notes_without_mood(self, patch_repos, stub_reviews_empty):
+        """A note that exists but has mood=None → no line under
+        the Mood header. Pin so empty mood doesn't render as
+        "None/5"."""
+        from beats.domain.models import DailyNote
+
+        d = datetime.now(UTC).date() - timedelta(days=1)
+
+        class _NoMoodNoteRepo:
+            async def get_by_date(self, dd):
+                if dd == d:
+                    return DailyNote(date=d, mood=None, note="just a journal entry")
+                return None
+
+        repos = _FakeCoachRepos()
+        repos.note = _NoMoodNoteRepo()
+        patch_repos(repos)
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        assert "/5" not in out
+        assert "just a journal entry" not in out
+
+    async def test_reviews_section_renders_when_answers_present(self, patch_repos, monkeypatch):
+        """A review with at least one answered question renders
+        under "## Review answers". Pin so the rewrite prompt
+        carries the user's most recent reflections."""
+
+        async def fake_list_reviews(_user_id, limit=7):
+            return [
+                {
+                    "date": "2026-04-30",
+                    "answers": [
+                        {"text": "I shipped the auth roadmap"},
+                        {"text": ""},
+                    ],
+                }
+            ]
+
+        monkeypatch.setattr(memory_rewrite_module, "list_reviews", fake_list_reviews)
+        patch_repos(_FakeCoachRepos())
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        assert "## Review answers" in out
+        assert "2026-04-30" in out
+        assert "I shipped the auth roadmap" in out
+
+    async def test_unknown_project_id_renders_as_question_mark(
+        self, patch_repos, stub_reviews_empty
+    ):
+        """Beat references a project_id not in the project map
+        (project deleted between session creation and rewrite)
+        → renders as "? (45m)" rather than crashing on KeyError.
+        Pin so a deleted project doesn't kill the weekly rewrite."""
+        recent_iso = (
+            (datetime.now(UTC) - timedelta(days=1))
+            .replace(hour=10, minute=0, second=0, microsecond=0)
+            .isoformat()[:19]
+        )
+        beats = [_completed_beat(recent_iso, 45, project_id="ghost")]
+        repos = _FakeCoachRepos(
+            projects=[],  # project map is empty
+            beats=beats,
+        )
+        patch_repos(repos)
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+        assert "? (45m)" in out
+
+
 class TestRewriteCoachMemory:
     """Nightly memory compaction. Reads the last 7 days, asks the LLM
     for a Markdown summary, persists via MemoryStore (which keeps the
