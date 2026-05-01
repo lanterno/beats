@@ -1438,6 +1438,239 @@ class TestAccountAPI:
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
 
+class TestIntelligenceAPI:
+    """/api/intelligence — productivity score, weekly digests, pattern
+    insights, daily suggestions, inbox. Tests focus on the contracts
+    only this layer owns: the dismiss state machine for patterns,
+    the digest 404, the inbox severity sort. Heavy IntelligenceService
+    computations (score, suggestions, focus-scores) are smoke-tested
+    via the empty-data path — full-data scenarios belong to
+    test_domain.py once IntelligenceService gets unit tests of its
+    own."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_intelligence_state(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+        db.insights.delete_many({})
+        db.weekly_digests.delete_many({})
+        sync.close()
+        yield
+
+    def _seed_insights(self, auth_info, insights: list[dict], dismissed: list[str] | None = None):
+        """Insert a UserInsights row directly. Faster than driving
+        compute_patterns end-to-end and lets us build deterministic
+        dismiss-state scenarios."""
+        import os
+        from datetime import UTC, datetime
+
+        from bson import ObjectId
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+        db.insights.insert_one(
+            {
+                "_id": ObjectId(),
+                "user_id": auth_info["user_id"],
+                "generated_at": datetime.now(UTC),
+                "insights": insights,
+                "dismissed_ids": dismissed or [],
+            }
+        )
+        sync.close()
+
+    # ── Score (smoke) ────────────────────────────────────────────────
+
+    def test_score_returns_envelope_with_no_data(self):
+        """Empty data: the route still returns a valid response shape
+        — locks in that the IntelligenceService doesn't divide-by-zero
+        on a fresh account. Concrete value expectations belong to
+        IntelligenceService unit tests once those land."""
+        resp = client.get("/api/intelligence/score", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "score" in body
+        assert "components" in body
+        assert isinstance(body["score"], int)
+
+    def test_score_history_validates_weeks_range(self):
+        # weeks must be 1..52 per the route's Query(ge=1, le=52).
+        resp = client.get("/api/intelligence/score/history?weeks=0", headers=auth_headers)
+        assert resp.status_code == 422
+        resp = client.get("/api/intelligence/score/history?weeks=53", headers=auth_headers)
+        assert resp.status_code == 422
+        # Valid value works.
+        resp = client.get("/api/intelligence/score/history?weeks=4", headers=auth_headers)
+        assert resp.status_code == 200
+
+    # ── Digests ──────────────────────────────────────────────────────
+
+    def test_digests_list_empty_initially(self):
+        resp = client.get("/api/intelligence/digests", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_get_digest_404_when_missing(self):
+        resp = client.get("/api/intelligence/digests/2026-01-05", headers=auth_headers)
+        assert resp.status_code == 404
+        body = resp.json()
+        assert body["code"] == "NOT_FOUND"
+        assert "Digest not found" in body["detail"]
+
+    # ── Patterns + dismiss state machine ──────────────────────────────
+
+    def test_patterns_returns_empty_when_no_user_insights_yet(self):
+        resp = client.get("/api/intelligence/patterns", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["insights"] == []
+        assert body["generated_at"]
+
+    def test_patterns_filters_dismissed(self, auth_info):
+        """The cached UserInsights document holds both `insights` and
+        `dismissed_ids`. /patterns returns insights minus the
+        dismissed — locks in this filter, which is the whole reason
+        dismiss exists."""
+        self._seed_insights(
+            auth_info,
+            insights=[
+                {"id": "i1", "type": "day_pattern", "title": "A", "body": "a", "priority": 3},
+                {"id": "i2", "type": "time_pattern", "title": "B", "body": "b", "priority": 3},
+                {"id": "i3", "type": "stale_project", "title": "C", "body": "c", "priority": 3},
+            ],
+            dismissed=["i2"],
+        )
+
+        resp = client.get("/api/intelligence/patterns", headers=auth_headers)
+        assert resp.status_code == 200
+        ids = [i["id"] for i in resp.json()["insights"]]
+        assert ids == ["i1", "i3"]
+
+    def test_dismiss_pattern_persists_across_requests(self, auth_info):
+        """POST /patterns/{id}/dismiss adds to dismissed_ids. The
+        insight no longer appears on subsequent /patterns reads.
+        Locks in the contract end-to-end (route → repo → next read)."""
+        self._seed_insights(
+            auth_info,
+            insights=[
+                {"id": "i-keep", "type": "x", "title": "K", "body": "k", "priority": 3},
+                {"id": "i-doom", "type": "x", "title": "D", "body": "d", "priority": 3},
+            ],
+        )
+
+        resp = client.post("/api/intelligence/patterns/i-doom/dismiss", headers=auth_headers)
+        assert resp.status_code == 204
+
+        ids = [
+            i["id"]
+            for i in client.get("/api/intelligence/patterns", headers=auth_headers).json()[
+                "insights"
+            ]
+        ]
+        assert ids == ["i-keep"]
+
+    def test_refresh_preserves_dismissed_ids(self, auth_info):
+        """When refresh recomputes patterns, the previously-dismissed
+        ids must carry through — otherwise dismissing was pointless
+        (the same pattern would re-surface every refresh). Note the
+        recomputed insights have new uuids, so dismissed-ids only
+        survive if they happen to match a new insight id; what we're
+        really pinning is that the dismissed_ids list is preserved
+        during the upsert (not zeroed out by the new UserInsights
+        construction)."""
+        # Seed one dismissed id that happens to match no new insight.
+        self._seed_insights(
+            auth_info,
+            insights=[{"id": "old-id", "type": "x", "title": "Old", "body": "o", "priority": 3}],
+            dismissed=["old-id"],
+        )
+
+        resp = client.post("/api/intelligence/patterns/refresh", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+
+        # Read the raw doc — dismissed_ids must still contain "old-id".
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        doc = sync[db_name].insights.find_one({"user_id": auth_info["user_id"]})
+        sync.close()
+        assert doc is not None
+        assert "old-id" in doc["dismissed_ids"]
+
+    # ── Inbox (the aggregator) ───────────────────────────────────────
+
+    def test_inbox_sorts_by_severity_high_first(self, auth_info):
+        """Inbox aggregates patterns + suggestions + project-health and
+        sorts high → medium → low. Pattern severity is mapped from
+        priority via _pattern_severity (priority<=1 → high, ==2 →
+        medium, else low). Pin the ordering — clients render the
+        feed top-to-bottom."""
+        self._seed_insights(
+            auth_info,
+            insights=[
+                # priority 3 → low
+                {"id": "low-pri", "type": "x", "title": "Low", "body": "l", "priority": 3},
+                # priority 1 → high
+                {"id": "high-pri", "type": "x", "title": "High", "body": "h", "priority": 1},
+                # priority 2 → medium
+                {"id": "med-pri", "type": "x", "title": "Med", "body": "m", "priority": 2},
+            ],
+        )
+
+        resp = client.get("/api/intelligence/inbox", headers=auth_headers)
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        # Filter to pattern items (suggestions / health may interleave;
+        # they have known kinds we can identify).
+        pattern_items = [it for it in items if it["kind"] == "pattern"]
+        assert [it["title"] for it in pattern_items] == ["High", "Med", "Low"]
+        assert [it["severity"] for it in pattern_items] == ["high", "medium", "low"]
+
+    def test_inbox_honors_dismissed_patterns(self, auth_info):
+        self._seed_insights(
+            auth_info,
+            insights=[
+                {"id": "shown", "type": "x", "title": "Shown", "body": "s", "priority": 1},
+                {"id": "hidden", "type": "x", "title": "Hidden", "body": "h", "priority": 1},
+            ],
+            dismissed=["hidden"],
+        )
+
+        items = client.get("/api/intelligence/inbox", headers=auth_headers).json()["items"]
+        pattern_titles = [it["title"] for it in items if it["kind"] == "pattern"]
+        assert pattern_titles == ["Shown"]
+
+    # ── Auth ──────────────────────────────────────────────────────────
+
+    def test_endpoints_require_auth(self):
+        for method, path in [
+            ("GET", "/api/intelligence/score"),
+            ("GET", "/api/intelligence/score/history"),
+            ("GET", "/api/intelligence/digests"),
+            ("GET", "/api/intelligence/digests/2026-01-05"),
+            ("POST", "/api/intelligence/digests/generate"),
+            ("GET", "/api/intelligence/patterns"),
+            ("POST", "/api/intelligence/patterns/refresh"),
+            ("POST", "/api/intelligence/patterns/x/dismiss"),
+            ("GET", "/api/intelligence/inbox"),
+        ]:
+            resp = client.request(method, path)
+            assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
 class TestAutoStartAPI:
     """/api/auto-start — webhook-triggered auto-start rules. Pinned
     behavior: the trigger endpoint matches the webhook payload's
