@@ -1438,6 +1438,187 @@ class TestAccountAPI:
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
 
+class TestAutoStartAPI:
+    """/api/auto-start — webhook-triggered auto-start rules. Pinned
+    behavior: the trigger endpoint matches the webhook payload's
+    repository against rule.config['repo'] and starts the timer for
+    the first match. Pins both happy paths and the no-match
+    'started: false' branch (clients rely on this shape to display
+    'no rule matched, ignored' in the GitHub webhook config UI)."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_autostart_state(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "beats_test")
+        sync = MongoClient(dsn)
+        db = sync[db_name]
+        db.auto_start_rules.delete_many({})
+        # Stop any timers from prior tests so trigger doesn't see a
+        # leftover active beat.
+        db.timeLogs.delete_many({})
+        sync.close()
+        yield
+
+    def _create_project(self, name: str = "AutoStart Test") -> str:
+        resp = client.post("/api/projects/", json={"name": name}, headers=auth_headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_list_rules_empty_initially(self):
+        resp = client.get("/api/auto-start/", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_create_then_list_rule(self):
+        pid = self._create_project()
+        resp = client.post(
+            "/api/auto-start/",
+            json={
+                "type": "webhook_trigger",
+                "project_id": pid,
+                "config": {"repo": "ahmedElghable/beats"},
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        created = resp.json()
+        assert created["type"] == "webhook_trigger"
+        assert created["project_id"] == pid
+        assert created["config"]["repo"] == "ahmedElghable/beats"
+        assert created["enabled"] is True
+
+        listing = client.get("/api/auto-start/", headers=auth_headers).json()
+        assert len(listing) == 1
+        assert listing[0]["id"] == created["id"]
+
+    def test_delete_rule(self):
+        pid = self._create_project()
+        created = client.post(
+            "/api/auto-start/",
+            json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "x/y"}},
+            headers=auth_headers,
+        ).json()
+
+        resp = client.delete(f"/api/auto-start/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] is True
+
+        assert client.get("/api/auto-start/", headers=auth_headers).json() == []
+
+    def test_trigger_starts_timer_for_matching_repo(self):
+        pid = self._create_project("Webhook Match")
+        client.post(
+            "/api/auto-start/",
+            json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "me/mine"}},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/auto-start/trigger",
+            json={"repository": "me/mine"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["started"] is True
+        assert body["project_id"] == pid
+        assert body["beat_id"]
+
+    def test_trigger_no_match_returns_started_false(self):
+        pid = self._create_project()
+        client.post(
+            "/api/auto-start/",
+            json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "me/mine"}},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/auto-start/trigger",
+            json={"repository": "different/repo"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["started"] is False
+        assert "No matching rule" in body["reason"]
+
+    def test_trigger_with_no_rules_returns_started_false(self):
+        resp = client.post(
+            "/api/auto-start/trigger",
+            json={"repository": "me/mine"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["started"] is False
+
+    def test_trigger_only_matches_webhook_type_rules(self):
+        """A 'schedule'-type rule whose config happens to contain a
+        repo key must NOT fire from a webhook trigger — schedule
+        rules are owned by the daemon's cron path, not this endpoint.
+        Locks in the list_by_type('webhook_trigger') filter."""
+        pid = self._create_project()
+        client.post(
+            "/api/auto-start/",
+            json={
+                "type": "schedule",
+                "project_id": pid,
+                "config": {"repo": "me/mine", "cron": "0 9 * * 1-5"},
+            },
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/auto-start/trigger",
+            json={"repository": "me/mine"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["started"] is False
+
+    def test_trigger_swallows_already_running_into_started_false(self):
+        """If the timer is already running, TimerService raises
+        TimerAlreadyRunning. The route catches all exceptions and
+        returns started=false with the reason — a webhook firing
+        twice (e.g. GitHub retry) shouldn't 500 the handler."""
+        pid = self._create_project("Already Running Project")
+        client.post(
+            "/api/auto-start/",
+            json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "me/mine"}},
+            headers=auth_headers,
+        )
+
+        first = client.post(
+            "/api/auto-start/trigger",
+            json={"repository": "me/mine"},
+            headers=auth_headers,
+        ).json()
+        assert first["started"] is True
+
+        resp = client.post(
+            "/api/auto-start/trigger",
+            json={"repository": "me/mine"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["started"] is False
+        assert body["reason"]
+
+    def test_endpoints_require_auth(self):
+        for method, path in [
+            ("GET", "/api/auto-start/"),
+            ("POST", "/api/auto-start/"),
+            ("DELETE", "/api/auto-start/anything"),
+            ("POST", "/api/auto-start/trigger"),
+        ]:
+            resp = client.request(method, path)
+            assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
 class TestDailyNotesAPI:
     """/api/daily-notes — end-of-day reflections (note + mood). Consumed
     by the EndOfDayReview modal in the UI and the coach's day context.
