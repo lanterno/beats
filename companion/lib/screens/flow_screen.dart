@@ -41,12 +41,13 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   // editor heartbeats covered the day.
   String? _topRepo;
   String? _topLanguage;
-  // Yesterday's headline (avg + count) — only fetched + shown when
-  // today's slice is empty, so the "No flow data today" empty state
-  // can show useful context ("yesterday: avg 67 across 4h") rather
-  // than a static "start the daemon" prompt.
-  int? _yesterdayAvg;
-  int? _yesterdayCount;
+  // Yesterday's headline — only fetched + shown when today's slice
+  // is empty, so the "No flow data today" empty state can show useful
+  // context ("yesterday: avg 67 across 4h, mostly in code/beats /
+  // go") rather than a static "start the daemon" prompt. Stored as
+  // a FlowHeadline so the top_repo / top_language fields can render
+  // alongside the avg + count.
+  FlowHeadline? _yesterday;
 
   late AnimationController _glowController;
 
@@ -94,21 +95,13 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       // summary endpoint — no per-window pagination, no extra UI
       // restructuring (today's sparkline / categories stay empty;
       // only the empty-state copy gets enriched).
-      int? yAvg;
-      int? yCount;
+      FlowHeadline? yesterday;
       if (windows.isEmpty) {
         final yEnd = startOfDay;
         final yStart = yEnd.subtract(const Duration(days: 1));
         final ySummary = await widget.client.getFlowWindowsSummary(
             yStart.toIso8601String(), yEnd.toIso8601String());
-        if (ySummary != null) {
-          final c = (ySummary['count'] as num?)?.toInt() ?? 0;
-          if (c > 0) {
-            yCount = c;
-            final a = (ySummary['avg'] as num?)?.toDouble() ?? 0.0;
-            yAvg = (a * 100).round();
-          }
-        }
+        yesterday = parseFlowSummary(ySummary);
       }
 
       if (mounted) {
@@ -120,8 +113,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
           _totalSamples = total;
           _topRepo = topRepo;
           _topLanguage = topLanguage;
-          _yesterdayAvg = yAvg;
-          _yesterdayCount = yCount;
+          _yesterday = yesterday;
           _loading = false;
           _selectedWindowIndex = null;
         });
@@ -646,12 +638,7 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
                             // "start the daemon" line — gives the
                             // user something to chew on while they
                             // wait for today's windows to accrue.
-                            if (_yesterdayAvg != null && _yesterdayCount != null)
-                              Text(
-                                  'Yesterday: avg $_yesterdayAvg/100 across $_yesterdayCount windows',
-                                  style: BeatsType.bodySmall.copyWith(
-                                      color: BeatsColors.textTertiary
-                                          .withValues(alpha: 0.5)))
+                            if (_yesterday != null) ..._yesterdayLines()
                             else
                               Text('Start the daemon to begin collecting',
                                   style: BeatsType.bodySmall.copyWith(
@@ -668,6 +655,28 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
         ),
       ),
     );
+  }
+
+  /// Empty-state subtitle lines for the "no data today" case. Two
+  /// rows when yesterday has top_repo / top_language data, one row
+  /// otherwise. Returned as a `List<Widget>` so the caller can splat
+  /// them into the column.
+  List<Widget> _yesterdayLines() {
+    final y = _yesterday!;
+    final subtle = BeatsType.bodySmall.copyWith(
+        color: BeatsColors.textTertiary.withValues(alpha: 0.5));
+    final lines = <Widget>[
+      Text('Yesterday: avg ${y.avg}/100 across ${y.count} windows',
+          style: subtle),
+    ];
+    if (y.topRepo != null || y.topLanguage != null) {
+      final parts = <String>[];
+      if (y.topRepo != null) parts.add(shortRepoTail(y.topRepo!));
+      if (y.topLanguage != null) parts.add(y.topLanguage!);
+      lines.add(const SizedBox(height: 2));
+      lines.add(Text(parts.join(' · '), style: subtle));
+    }
+    return lines;
   }
 
   List<MapEntry<String, int>> _sortedCats() {
