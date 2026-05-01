@@ -22,7 +22,13 @@ import (
 //
 // Output format is intentionally line-oriented (no curses, no progress
 // bars) so it pipes well into journals, screenshots, and Claude pastes.
-func runDoctor(cfg *config.Config) error {
+//
+// When `asJSON` is true, the report is rendered as a single JSON
+// object instead — same exit code rule as the human form (1 on any
+// failure) so `beatsd doctor --json | jq -e '.all_passed'` works as
+// a startup-script guard. Designed for monitoring scripts and the
+// nascent watchdog in the companion's Settings tab.
+func runDoctor(cfg *config.Config, asJSON bool) error {
 	checks := []doctorCheck{
 		{name: "Device token in keychain", fn: checkToken},
 		{name: "API reachable", fn: func() (string, error) { return checkAPI(cfg) }},
@@ -31,20 +37,46 @@ func runDoctor(cfg *config.Config) error {
 		{name: "Flow data flowing", fn: func() (string, error) { return checkFlowData(cfg) }},
 	}
 
+	results := make([]doctorResult, 0, len(checks))
 	allPassed := true
 	for _, c := range checks {
 		detail, err := c.fn()
-		mark := "✓"
+		errStr := ""
 		if err != nil {
-			mark = "✗"
+			errStr = err.Error()
 			allPassed = false
 		}
-		fmt.Printf("  %s  %s", mark, c.name)
-		if detail != "" {
-			fmt.Printf(" — %s", detail)
+		results = append(results, doctorResult{
+			Name:   c.name,
+			OK:     err == nil,
+			Detail: detail,
+			Error:  errStr,
+		})
+	}
+
+	if asJSON {
+		out, jerr := formatDoctorJSON(allPassed, results)
+		if jerr != nil {
+			return jerr
 		}
-		if err != nil {
-			fmt.Printf("\n      %s", err.Error())
+		fmt.Print(out)
+		if !allPassed {
+			return fmt.Errorf("one or more checks failed")
+		}
+		return nil
+	}
+
+	for _, r := range results {
+		mark := "✓"
+		if !r.OK {
+			mark = "✗"
+		}
+		fmt.Printf("  %s  %s", mark, r.Name)
+		if r.Detail != "" {
+			fmt.Printf(" — %s", r.Detail)
+		}
+		if r.Error != "" {
+			fmt.Printf("\n      %s", r.Error)
 		}
 		fmt.Println()
 	}
@@ -55,6 +87,42 @@ func runDoctor(cfg *config.Config) error {
 		return nil
 	}
 	return fmt.Errorf("one or more checks failed")
+}
+
+// doctorResult is the JSON-tagged shape of a single check, exposed
+// on `beatsd doctor --json`. JSON tag names match the
+// human form's vocabulary (ok / detail / error) so a reader who
+// knows one knows the other.
+type doctorResult struct {
+	Name   string `json:"name"`
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail"`
+	Error  string `json:"error,omitempty"`
+}
+
+// doctorJSONOutput is the top-level shape `beatsd doctor --json`
+// emits. `all_passed` mirrors the exit code (true ↔ exit 0) so
+// shell guards can branch on either signal without a second call.
+type doctorJSONOutput struct {
+	AllPassed bool           `json:"all_passed"`
+	Checks    []doctorResult `json:"checks"`
+}
+
+// formatDoctorJSON renders the doctor report as a JSON object.
+// Extracted so it's testable without spinning up an httptest server
+// for the API check or touching the keychain for the token check.
+func formatDoctorJSON(allPassed bool, results []doctorResult) (string, error) {
+	if results == nil {
+		results = []doctorResult{}
+	}
+	b, err := json.MarshalIndent(doctorJSONOutput{
+		AllPassed: allPassed,
+		Checks:    results,
+	}, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode JSON: %w", err)
+	}
+	return string(b) + "\n", nil
 }
 
 type doctorCheck struct {

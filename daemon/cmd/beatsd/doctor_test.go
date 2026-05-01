@@ -204,3 +204,91 @@ func portString(p int) string {
 	}
 	return string(digits)
 }
+
+// --- formatDoctorJSON ---
+
+// JSON output is what monitoring scripts and the companion's
+// nascent watchdog will consume. The shape stays stable across
+// daemon versions so a `jq -e '.all_passed'` guard doesn't break
+// when a check is added.
+
+func TestFormatDoctorJSON_RoundTrips(t *testing.T) {
+	results := []doctorResult{
+		{Name: "Device token in keychain", OK: true, Detail: "tok123…"},
+		{Name: "API reachable", OK: false, Detail: "http://localhost:7999",
+			Error: "connection refused"},
+	}
+	out, err := formatDoctorJSON(false, results)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("expected trailing newline so shell prompt lands cleanly, got %q", out)
+	}
+
+	var decoded doctorJSONOutput
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("output should round-trip: %v\noutput: %s", err, out)
+	}
+	if decoded.AllPassed {
+		t.Errorf("expected all_passed=false, got true")
+	}
+	if len(decoded.Checks) != 2 {
+		t.Fatalf("expected 2 checks, got %d", len(decoded.Checks))
+	}
+	if !decoded.Checks[0].OK || decoded.Checks[1].OK {
+		t.Errorf("expected first OK / second failed, got %+v", decoded.Checks)
+	}
+	if decoded.Checks[1].Error != "connection refused" {
+		t.Errorf("expected error to round-trip, got %q", decoded.Checks[1].Error)
+	}
+}
+
+func TestFormatDoctorJSON_OmitsErrorWhenEmpty(t *testing.T) {
+	// Successful checks have no error; the JSON should omit the
+	// `error` key rather than emit an empty string. jq scripts
+	// can then use `select(.error)` to find failures cleanly.
+	results := []doctorResult{
+		{Name: "Device token in keychain", OK: true, Detail: "tok123…"},
+	}
+	out, err := formatDoctorJSON(true, results)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, `"error"`) {
+		t.Errorf("expected error key to be omitted on success, got: %s", out)
+	}
+}
+
+func TestFormatDoctorJSON_NoChecksStillProducesValidObject(t *testing.T) {
+	// Defensive — if a future refactor passes nil/empty results
+	// (e.g. all platform-gated out), jq users shouldn't have to
+	// special-case missing or null `checks`.
+	out, err := formatDoctorJSON(true, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var decoded doctorJSONOutput
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("empty output should still parse: %v", err)
+	}
+	if decoded.Checks == nil {
+		t.Errorf("expected empty array, not nil — jq scripts shouldn't have to handle null")
+	}
+	if len(decoded.Checks) != 0 {
+		t.Errorf("expected empty checks array, got %d entries", len(decoded.Checks))
+	}
+}
+
+func TestFormatDoctorJSON_AllPassedMirrorsExitCode(t *testing.T) {
+	// `beatsd doctor --json | jq -e '.all_passed'` is the canonical
+	// guard pattern. Locked in so the all_passed flag stays in
+	// agreement with the exit code.
+	out, err := formatDoctorJSON(true, []doctorResult{{Name: "x", OK: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"all_passed": true`) {
+		t.Errorf("expected all_passed: true, got: %s", out)
+	}
+}
