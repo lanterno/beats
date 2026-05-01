@@ -65,6 +65,11 @@ the tooltip flags a likely Accessibility-permission revocation —
 the canonical "connected but silently producing nothing" pattern
 that's otherwise invisible from the status bar's connected state.
 
+When `windowsDropped > 0` (any non-zero value), the tooltip flags
+that flow windows are being computed but failing to POST — the
+network/API leg, not the local Accessibility leg. Distinct from
+the diagnostic above so the user knows which side to investigate.
+
 Click either state to open the Insights page (same as the command).
 Disable via `beats.statusBar.enabled`.
 

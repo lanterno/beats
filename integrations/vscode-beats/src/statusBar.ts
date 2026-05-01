@@ -22,6 +22,11 @@ export interface HealthSummary {
 	 * useful "is the collector actually producing?" signal — usually
 	 * means Accessibility permission was revoked mid-session. */
 	windowsEmitted: number;
+	/** How many flow windows the daemon TRIED to POST but couldn't
+	 * (network unreachable, 5xx, auth lapse). Non-zero values flag
+	 * a producing-but-not-landing pipeline — distinct from the
+	 * windowsEmitted=0 case which catches producing-nothing. */
+	windowsDropped: number;
 }
 
 /** Subset of the API's FlowWindowSummaryResponse the status bar uses.
@@ -81,6 +86,16 @@ export function formatStatusBar(
 	if (isStaleNoEmissions(health)) {
 		tooltipLines.push(
 			"⚠ no flow windows emitted in this session — check Accessibility permission",
+		);
+	}
+	// Surface a dropped count only when non-zero. Distinct from the
+	// stale-no-emissions diagnostic above: dropped windows mean the
+	// collector IS producing, but the API leg of the pipeline isn't
+	// landing them — flag the API/network side rather than
+	// Accessibility.
+	if (health.windowsDropped > 0) {
+		tooltipLines.push(
+			`⚠ ${health.windowsDropped} windows dropped (POST failed — check API reachability)`,
 		);
 	}
 	if (summary && summary.count > 0) {

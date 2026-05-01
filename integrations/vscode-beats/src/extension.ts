@@ -121,6 +121,7 @@ async function refreshHealth(): Promise<void> {
         uptime_sec: number;
         editor_count: number;
         windows_emitted?: number;
+        windows_dropped?: number;
       };
       health = {
         ok: body.ok,
@@ -131,6 +132,10 @@ async function refreshHealth(): Promise<void> {
         // don't send the field. Treat that as 0 so the tooltip just
         // omits the chunk rather than rendering "undefined emitted".
         windowsEmitted: body.windows_emitted ?? 0,
+        // Same defensive default for windows_dropped (added even later
+        // than windows_emitted) — older daemons that don't send it
+        // get a healthy "0 dropped" → tooltip stays quiet.
+        windowsDropped: body.windows_dropped ?? 0,
       };
     }
   } catch {

@@ -59,6 +59,7 @@ type daemonStatus struct {
 	Running        bool  `json:"running"`
 	UptimeSec      int64 `json:"uptime_sec"`
 	WindowsEmitted int64 `json:"windows_emitted"`
+	WindowsDropped int64 `json:"windows_dropped"`
 }
 
 type apiStatus struct {
@@ -107,7 +108,7 @@ func collectStatus(cfg *config.Config) (statusReport, error) {
 
 	if !portFree(editor.DefaultPort) {
 		report.Daemon.Running = true
-		report.Daemon.UptimeSec, report.Daemon.WindowsEmitted = probeOwnDaemonHealth(editor.DefaultPort)
+		report.Daemon.UptimeSec, report.Daemon.WindowsEmitted, report.Daemon.WindowsDropped = probeOwnDaemonHealth(editor.DefaultPort)
 	}
 
 	c := client.New(cfg.API.BaseURL, token)
@@ -130,34 +131,36 @@ func collectStatus(cfg *config.Config) (statusReport, error) {
 	return report, nil
 }
 
-// probeOwnDaemonHealth fetches uptime + windows-emitted from the
-// loopback /health endpoint. Returns zeroes on any failure so the
-// caller can still mark the daemon as "running" (we know the port
-// is bound) without claiming a specific uptime we don't have.
-func probeOwnDaemonHealth(port int) (uptimeSec int64, windowsEmitted int64) {
+// probeOwnDaemonHealth fetches uptime + windows-emitted +
+// windows-dropped from the loopback /health endpoint. Returns
+// zeroes on any failure so the caller can still mark the daemon
+// as "running" (we know the port is bound) without claiming
+// specific counter values we don't have.
+func probeOwnDaemonHealth(port int) (uptimeSec int64, windowsEmitted int64, windowsDropped int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0
+		return 0, 0, 0
 	}
 	var body struct {
 		WindowsEmitted int64 `json:"windows_emitted"`
+		WindowsDropped int64 `json:"windows_dropped"`
 		UptimeSec      int64 `json:"uptime_sec"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
-	return body.UptimeSec, body.WindowsEmitted
+	return body.UptimeSec, body.WindowsEmitted, body.WindowsDropped
 }
 
 // collectFlowStatus is the structured form of flowStatusLine —
@@ -209,6 +212,14 @@ func printStatusHuman(cfg *config.Config, r statusReport) {
 				r.Daemon.WindowsEmitted, formatUptimeShort(r.Daemon.UptimeSec))
 		} else {
 			fmt.Println("  daemon: running")
+		}
+		// Surface a dropped count only when non-zero — silence is
+		// the healthy state and adding "0 dropped" to every status
+		// invocation would be noise. When non-zero it's actionable
+		// (network / API / auth issue between daemon and API).
+		if r.Daemon.WindowsDropped > 0 {
+			fmt.Printf("          ⚠ %d windows dropped (POST failed — check API reachability)\n",
+				r.Daemon.WindowsDropped)
 		}
 		if isStaleNoEmissions(r.Daemon) {
 			fmt.Println("          ⚠ no flow windows emitted in this session — check Accessibility permission")
@@ -295,7 +306,7 @@ func flowStatusLine(ctx context.Context, c *client.Client) string {
 // end-to-end and the structured form (probeOwnDaemonHealth)
 // powers the JSON path.
 func daemonStatusDetail(port int) string {
-	uptime, emitted := probeOwnDaemonHealth(port)
+	uptime, emitted, _ := probeOwnDaemonHealth(port)
 	if uptime == 0 && emitted == 0 {
 		return "running"
 	}
