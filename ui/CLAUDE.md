@@ -8,13 +8,21 @@ Feature-Sliced Design (FSD):
 
 ```
 client/
-├── app/           Providers, routing (App.tsx)
-├── pages/         Route-level components (dashboard, insights, settings, plan, project-details)
-├── features/      User interactions (timer)
-├── entities/      Business objects (project, session, planning, calendar, github, intelligence)
-├── shared/        No business logic (api client, utils, UI primitives)
+├── app/           App.tsx (router + providers) + Layout.tsx (authenticated shell)
+├── pages/         Route-level components — homepage, index, insights, coach,
+│                  plan, project-details, settings, not-found
+├── widgets/       Cross-page composite UI — sidebar (desktop) + mobile header
+├── features/      User interactions — timer, auth
+├── entities/      Business objects — project, session, planning, coach,
+│                  intelligence, calendar, github
+├── shared/        No business logic — api client, lib helpers, ui primitives,
+│                  config
 └── main.tsx       Entry point
 ```
+
+Layer rules: `app/` can import from anything; `pages/` from widgets/features/
+entities/shared; `widgets/` from features/entities/shared; `features/` from
+entities/shared; `entities/` from shared only; `shared/` from nothing.
 
 ## Running
 
@@ -37,8 +45,17 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 
 ## Testing
 
-- Unit tests: `client/**/*.test.ts` (Vitest, utility functions)
-- E2E tests: `e2e/` (Playwright, Chromium only, auto-starts dev server)
+- Unit tests: `client/**/*.test.{ts,tsx}` (Vitest, jsdom). `.ts` files cover
+  pure helpers in `shared/lib/`; `.tsx` files cover React components and
+  hooks via `@testing-library/react`. Both globs are wired in
+  `vitest.config.ts`.
+- E2E tests: `e2e/` (Playwright, Chromium only, auto-starts dev server).
+- Mocking pattern: see `client/features/auth/components/AuthModal.test.tsx`
+  for the canonical setup — vi.mock the API module, the auth store, and
+  `useNavigate`; render under `MemoryRouter`; assert on visible DOM via
+  `screen.findByRole` / `findByText`. Layout.test.tsx and
+  TimerManager.test.tsx mirror this shape for hook-heavy and child-component-
+  heavy components respectively.
 
 ## Linting
 
