@@ -753,3 +753,208 @@ class TestJwtSecretValidator:
         monkeypatch.setenv("JWT_SECRET", multibyte)
         s = Settings()
         assert s.jwt_secret == multibyte
+
+
+# =============================================================================
+# MongoCredentialStorage — real-Mongo CRUD coverage
+# =============================================================================
+
+
+class TestMongoCredentialStorage:
+    """Direct CRUD tests for the Mongo-backed credential store. The
+    earlier WebAuthn tests use _FakeCredentialStorage; this class
+    pins the actual MongoCredentialStorage implementation against
+    a real test Mongo (via testcontainers in conftest).
+
+    Why bother when the in-memory fake has the same surface: the
+    real implementation handles dict→StoredCredential conversion,
+    Mongo's $set update semantics, and the count_documents query
+    shape. A regression in any of those three would silently break
+    auth across the deploy without any test failure (the
+    in-memory fake has different code paths)."""
+
+    @pytest.fixture(autouse=True)
+    async def _setup(self):
+        from beats.infrastructure.database import Database
+
+        await Database.connect()
+        db = Database.get_db()
+        await db.credentials.delete_many({})
+        yield
+        await Database.disconnect()
+
+    def _store(self):
+        from beats.auth.storage import MongoCredentialStorage
+        from beats.infrastructure.database import Database
+
+        return MongoCredentialStorage(Database.get_db().credentials)
+
+    async def test_save_and_get_round_trip(self):
+        """save_credential persists; get_credentials returns it
+        with the matching shape. Pin the dict→StoredCredential
+        conversion."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A",
+            credential_id="cred-1",
+            public_key="pk-1",
+            sign_count=0,
+            device_name="iPhone",
+        )
+        creds = await store.get_credentials(user_id="user-A")
+        assert len(creds) == 1
+        assert creds[0].credential_id == "cred-1"
+        assert creds[0].public_key == "pk-1"
+        assert creds[0].sign_count == 0
+        assert creds[0].device_name == "iPhone"
+        assert creds[0].created_at  # non-empty ISO timestamp
+
+    async def test_is_registered_scoped_to_user(self):
+        """is_registered with a user_id only sees that user's
+        credentials. Pin so a regression doesn't accidentally
+        do a global count and report cross-user state."""
+        store = self._store()
+        # User A has a credential, User B does not
+        await store.save_credential(
+            user_id="user-A",
+            credential_id="cred-A",
+            public_key="pk",
+            sign_count=0,
+        )
+        assert await store.is_registered("user-A") is True
+        assert await store.is_registered("user-B") is False
+        # Global is_registered (no user) sees A's credential
+        assert await store.is_registered() is True
+
+    async def test_get_credentials_filters_by_user(self):
+        """A and B have credentials; get_credentials(user_id="A")
+        returns only A's. Pin the user-scoping — the Settings →
+        Passkeys panel binds to this."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A", credential_id="a1", public_key="pk", sign_count=0
+        )
+        await store.save_credential(
+            user_id="user-B", credential_id="b1", public_key="pk", sign_count=0
+        )
+        a_creds = await store.get_credentials(user_id="user-A")
+        b_creds = await store.get_credentials(user_id="user-B")
+        assert {c.credential_id for c in a_creds} == {"a1"}
+        assert {c.credential_id for c in b_creds} == {"b1"}
+
+    async def test_get_credential_by_id_user_agnostic(self):
+        """get_credential_by_id is the login path — by design it
+        does NOT filter by user (the user is unknown until the
+        credential matches). Pin so a regression doesn't add a
+        spurious user_id filter that would break login."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A", credential_id="lookup-me", public_key="pk", sign_count=5
+        )
+        cred = await store.get_credential_by_id("lookup-me")
+        assert cred is not None
+        assert cred.credential_id == "lookup-me"
+        assert cred.sign_count == 5
+
+    async def test_get_credential_by_id_returns_none_for_missing(self):
+        """Unknown credential_id → None (not raise). Pin so the
+        login service's "Credential not found" ValueError fires
+        instead of an unhandled exception."""
+        store = self._store()
+        result = await store.get_credential_by_id("ghost")
+        assert result is None
+
+    async def test_get_user_id_for_credential_round_trip(self):
+        """get_user_id_for_credential returns the owning user_id
+        — used during login to resolve credential → user. Pin
+        the user_id is correct."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-42", credential_id="cred-42", public_key="pk", sign_count=0
+        )
+        owner = await store.get_user_id_for_credential("cred-42")
+        assert owner == "user-42"
+        # Unknown id → None
+        assert await store.get_user_id_for_credential("ghost") is None
+
+    async def test_update_sign_count_persists(self):
+        """update_sign_count overwrites the sign_count field —
+        the WebAuthn replay-attack prevention mechanism. Pin
+        that the new value is read back AND that the function
+        returns True on success."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A", credential_id="cred-A", public_key="pk", sign_count=10
+        )
+        result = await store.update_sign_count("cred-A", 42)
+        assert result is True
+        # Confirm persisted
+        cred = await store.get_credential_by_id("cred-A")
+        assert cred is not None
+        assert cred.sign_count == 42
+
+    async def test_update_sign_count_returns_false_for_unknown_credential(self):
+        """update_sign_count for a missing credential_id → False
+        (not raise, not silently succeed). Pin so a stale
+        credential reference doesn't quietly succeed and let
+        an attacker-controlled sign_count slip through."""
+        store = self._store()
+        result = await store.update_sign_count("nonexistent", 99)
+        assert result is False
+
+    async def test_delete_credential_scoped_to_user(self):
+        """delete_credential requires BOTH credential_id AND
+        user_id to match. Pin so User A can't delete User B's
+        credential (mirrors the WebAuthnManager test, but here
+        verifies the actual Mongo query rather than the
+        in-memory fake)."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A", credential_id="a1", public_key="pk", sign_count=0
+        )
+        await store.save_credential(
+            user_id="user-B", credential_id="b1", public_key="pk", sign_count=0
+        )
+        # User A tries to delete User B's credential → False
+        result = await store.delete_credential("b1", "user-A")
+        assert result is False
+        # B's credential is intact
+        assert await store.get_credential_by_id("b1") is not None
+        # A deleting their own credential succeeds
+        result = await store.delete_credential("a1", "user-A")
+        assert result is True
+        assert await store.get_credential_by_id("a1") is None
+
+    async def test_count_credentials_per_user(self):
+        """count_credentials returns the count for one user only.
+        Pin the user-scoping — the WebAuthnManager.delete-
+        credential guard ("can't delete your only passkey") relies
+        on this returning the per-user count, not the global one."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A", credential_id="a1", public_key="pk", sign_count=0
+        )
+        await store.save_credential(
+            user_id="user-A", credential_id="a2", public_key="pk", sign_count=0
+        )
+        await store.save_credential(
+            user_id="user-B", credential_id="b1", public_key="pk", sign_count=0
+        )
+        assert await store.count_credentials("user-A") == 2
+        assert await store.count_credentials("user-B") == 1
+        assert await store.count_credentials("user-C") == 0
+
+    async def test_get_credential_ids_returns_id_list(self):
+        """get_credential_ids is a thin wrapper over get_credentials
+        that flattens to a list of strings. Used by
+        get_registration_options to build excludeCredentials. Pin
+        so the dict→[str] mapping doesn't drift."""
+        store = self._store()
+        await store.save_credential(
+            user_id="user-A", credential_id="a1", public_key="pk", sign_count=0
+        )
+        await store.save_credential(
+            user_id="user-A", credential_id="a2", public_key="pk", sign_count=0
+        )
+        ids = await store.get_credential_ids(user_id="user-A")
+        assert set(ids) == {"a1", "a2"}
