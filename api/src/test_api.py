@@ -1489,6 +1489,76 @@ class TestIntentionsAPI:
         )
         assert resp.status_code == 404
 
+    def test_list_intentions_returns_today_by_default(self):
+        """GET /api/intentions without ?target_date= scopes to today.
+        Pin so the dashboard's "today's intentions" widget binds to
+        a stable default."""
+        project_id = self._create_project()
+        # Create one for today, one for yesterday
+        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+        client.post(
+            "/api/intentions",
+            json={"project_id": project_id, "planned_minutes": 60},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/intentions",
+            json={"project_id": project_id, "date": yesterday, "planned_minutes": 30},
+            headers=auth_headers,
+        )
+        resp = client.get("/api/intentions", headers=auth_headers)
+        assert resp.status_code == 200
+        items = resp.json()
+        # Today's intention is in the result; yesterday's is not
+        today_iso = datetime.now(UTC).date().isoformat()
+        dates = {i["date"] for i in items}
+        assert today_iso in dates
+        assert yesterday not in dates
+
+    def test_patch_planned_minutes_persists(self):
+        """PATCH with `planned_minutes` only (no `completed`) updates
+        the time-box. Pin the second branch of the patch handler —
+        the existing test_patch_finds_intention_by_id only exercises
+        the `completed` branch."""
+        project_id = self._create_project()
+        resp = client.post(
+            "/api/intentions",
+            json={"project_id": project_id, "planned_minutes": 60},
+            headers=auth_headers,
+        )
+        intention_id = resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/intentions/{intention_id}",
+            json={"planned_minutes": 90},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["planned_minutes"] == 90
+        # Existing completed state should be preserved
+        assert body["completed"] is False
+
+    def test_delete_intention_returns_204(self):
+        """DELETE /api/intentions/{id} → 204 No Content. Pin the
+        status code (companion app uses it to confirm deletion)."""
+        project_id = self._create_project()
+        resp = client.post(
+            "/api/intentions",
+            json={"project_id": project_id, "planned_minutes": 30},
+            headers=auth_headers,
+        )
+        intention_id = resp.json()["id"]
+        resp = client.delete(f"/api/intentions/{intention_id}", headers=auth_headers)
+        assert resp.status_code == 204
+        # Confirm it's actually gone — PATCH on the deleted id 404s
+        resp = client.patch(
+            f"/api/intentions/{intention_id}",
+            json={"completed": True},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 404
+
 
 class TestDailyNotes:
     """Daily-notes endpoints: upsert (PUT + POST alias), single-day get,
@@ -5184,7 +5254,74 @@ class TestOAuthIntegrationRouters:
         url = resp.json()["url"]
         assert url.startswith("https://www.fitbit.com/oauth2/authorize?")
 
+    def test_fitbit_status_connected_reports_user_id(self, auth_info):
+        """GET /api/fitbit/status with a connected integration →
+        connected:True, fitbit_user_id from the doc. Pin the
+        snake_case key (NOT camelCase) so the iOS companion's
+        JSONDecodable model doesn't drift."""
+        from datetime import UTC, datetime, timedelta
+
+        sync_client, db = self._db()
+        db.fitbit_integrations.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "access_token": "at",
+                "refresh_token": "rt",
+                "token_expiry": datetime.now(UTC) + timedelta(hours=1),
+                "fitbit_user_id": "fb-user-99",
+                "enabled": True,
+            }
+        )
+        sync_client.close()
+        resp = client.get("/api/fitbit/status", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        assert body["fitbit_user_id"] == "fb-user-99"
+
+    def test_fitbit_disconnect_returns_true_when_connected(self, auth_info):
+        """DELETE /api/fitbit/disconnect with an existing integration
+        → disconnected:True (and the row is gone). Pin so the
+        Settings → Integrations panel's "Disconnect" button reflects
+        the actual state change."""
+        from datetime import UTC, datetime, timedelta
+
+        sync_client, db = self._db()
+        db.fitbit_integrations.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "access_token": "at",
+                "refresh_token": "rt",
+                "token_expiry": datetime.now(UTC) + timedelta(hours=1),
+                "fitbit_user_id": "fb",
+                "enabled": True,
+            }
+        )
+        sync_client.close()
+        resp = client.delete("/api/fitbit/disconnect", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["disconnected"] is True
+
     # -------- /api/oura --------
+
+    def test_oura_status_connected_reports_user_id(self, auth_info):
+        """GET /api/oura/status with a connected integration →
+        connected:True, oura_user_id. Same shape pattern as Fitbit."""
+        sync_client, db = self._db()
+        db.oura_integrations.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "access_token": "pat",
+                "oura_user_id": "oura-user-7",
+                "enabled": True,
+            }
+        )
+        sync_client.close()
+        resp = client.get("/api/oura/status", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        assert body["oura_user_id"] == "oura-user-7"
 
     def test_oura_disconnect_returns_false_when_not_connected(self, auth_info):
         """DELETE /api/oura/disconnect without an integration →
