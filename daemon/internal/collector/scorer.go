@@ -37,7 +37,7 @@ func ComputeFlowWindow(
 		return w
 	}
 
-	w.CadenceScore = computeCadence(samples)
+	w.CadenceScore = computeCadence(samples, end.Sub(start))
 	w.CoherenceScore = computeCoherence(samples)
 	w.DominantBundleID, w.DominantCategory = computeDominant(samples)
 	w.CategoryFitScore = computeCategoryFit(w.DominantCategory, activeProjectID, projectCategory)
@@ -56,9 +56,19 @@ func ComputeFlowWindow(
 	return w
 }
 
-// computeCadence returns the cadence score.
+// computeCadence returns the cadence score from input-event counts.
 // If event tap data is unavailable (all EventCount == -1), returns 0.5.
-func computeCadence(samples []Sample) float64 {
+//
+// `windowDuration` is the wall-clock span of the flow window
+// (typically the FlushIntervalSec config value). Used to normalize
+// raw event counts into events-per-minute. Previously this code
+// computed duration as `len(samples) * 5.0` seconds — a hardcoded
+// 5s sample cadence that lied about reality whenever
+// PollIntervalSec was reconfigured. A user setting
+// PollIntervalSec=10 was getting cadence scores doubled
+// (denominator was half what it should have been); 1s polling
+// was getting cadence scores ⅕ of correct.
+func computeCadence(samples []Sample, windowDuration time.Duration) float64 {
 	var totalEvents int64
 	var validSamples int
 	for _, s := range samples {
@@ -73,7 +83,7 @@ func computeCadence(samples []Sample) float64 {
 
 	// Normalize: assume ~200 events/min is "fully active" (reasonable for coding).
 	// This is a rough heuristic; a personal median would be better.
-	durationMin := float64(len(samples)) * 5.0 / 60.0 // assume 5s samples
+	durationMin := windowDuration.Minutes()
 	if durationMin <= 0 {
 		return 0.5
 	}

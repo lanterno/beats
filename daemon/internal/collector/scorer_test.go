@@ -138,19 +138,52 @@ func TestComputeCadence_LowAndHighRates(t *testing.T) {
 	}
 
 	// 0 events → cadence = 0
-	if got := computeCadence(build(0)); got != 0.0 {
+	if got := computeCadence(build(0), time.Minute); got != 0.0 {
 		t.Errorf("zero events should give cadence 0.0, got %f", got)
 	}
 	// Roughly half-full: 100 events/min spread over 12 samples ≈ 8.3
 	// per sample → 8 events × 12 samples = 96 events / 1 min ≈ 0.48
-	if got := computeCadence(build(8)); math.Abs(got-0.48) > 0.05 {
+	if got := computeCadence(build(8), time.Minute); math.Abs(got-0.48) > 0.05 {
 		t.Errorf("8 events/sample should give cadence ~0.48, got %f", got)
 	}
 	// Beyond full: 50 events/sample × 12 samples = 600/min — clamps to 1.0
-	if got := computeCadence(build(50)); got != 1.0 {
+	if got := computeCadence(build(50), time.Minute); got != 1.0 {
 		t.Errorf("beyond-full rate should clamp to 1.0, got %f", got)
 	}
 	_ = epmFull // silence unused-const warning if the heuristic ever changes
+}
+
+func TestComputeCadence_NormalizesToActualWindowDuration(t *testing.T) {
+	// Regression guard: the previous implementation hardcoded
+	// "5s samples" so the events-per-minute denominator was
+	// `len(samples) * 5 / 60` minutes. A user with
+	// PollIntervalSec=10 (samples every 10s) would get a
+	// denominator of half real, doubling the cadence score.
+	// Now the duration comes from the window's actual span,
+	// so the same per-minute event rate produces the same
+	// cadence regardless of poll cadence.
+	now := time.Now().UTC()
+	build := func(numSamples int, eventsPerSample int64) []Sample {
+		s := make([]Sample, numSamples)
+		for i := range s {
+			s[i] = Sample{
+				CollectedAt: now.Add(time.Duration(i) * time.Second),
+				BundleID:    "com.apple.dt.Xcode",
+				EventCount:  eventsPerSample,
+			}
+		}
+		return s
+	}
+	// Same total event count (96) over a 1-minute window, sampled
+	// at two different cadences — cadence score should be identical
+	// since the window duration is the same. Old code computed
+	// duration as len(samples)*5/60, so 12-sample and 6-sample
+	// runs would have produced different denominators.
+	medium := computeCadence(build(12, 8), time.Minute) // 12 × 8 = 96
+	sparse := computeCadence(build(6, 16), time.Minute) // 6 × 16 = 96
+	if math.Abs(medium-sparse) > 0.001 {
+		t.Errorf("same total events / same window = same cadence; got %f vs %f", medium, sparse)
+	}
 }
 
 func TestComputeCadence_MixedAvailability_OnlyEventTapSamplesCount(t *testing.T) {
@@ -171,7 +204,7 @@ func TestComputeCadence_MixedAvailability_OnlyEventTapSamplesCount(t *testing.T)
 			EventCount:  ec,
 		}
 	}
-	c := computeCadence(samples)
+	c := computeCadence(samples, time.Minute)
 	// We don't pin an exact value here (the function divides total by
 	// duration computed from len(samples), which includes the missing
 	// ones — that's a known quirk worth pinning if changed) but it
