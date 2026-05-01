@@ -293,6 +293,15 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
       color: BeatsColors.textPrimary,
       letterSpacing: 0.5,
     );
+    // Subtle ↗ glyph signals "tappable, opens an external page" so
+    // the user discovers the deep-link affordance without it being
+    // garish. Standard convention; matches the web FlowHeadline's
+    // hover underline (which Flutter doesn't have a direct
+    // equivalent for — InkWell ripple + this glyph is the closest).
+    final iconStyle = BeatsType.label.copyWith(
+      color: BeatsColors.textTertiary,
+      fontSize: 9,
+    );
     Widget axis(String label, String value, InsightsFilter filter) {
       return InkWell(
         onTap: () => _launchInsights(filter),
@@ -305,6 +314,8 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
               Text(label, style: labelStyle),
               const SizedBox(width: 8),
               Text(value, style: valueStyle),
+              const SizedBox(width: 4),
+              Text('↗', style: iconStyle),
             ],
           ),
         ),
@@ -702,16 +713,26 @@ class _FlowScreenState extends State<FlowScreen> with SingleTickerProviderStateM
   }
 
   /// Opens the configured Beats web UI's Insights page filtered to
-  /// the given axis. Failure is silent — url_launcher returns false
-  /// when no handler is available, and we don't want to spam an
-  /// error UI for a feature the user can mostly accomplish via the
-  /// pairing-screen-configured web URL anyway.
+  /// the given axis. On launch failure (no URL handler, malformed
+  /// URL) shows a SnackBar with the failed URL so the user can spot
+  /// a misconfigured `beats_web_url` pref — silent failure was the
+  /// previous behavior and made the feature feel broken when the
+  /// web URL wasn't reachable.
   Future<void> _launchInsights(InsightsFilter filter) async {
     final url = buildInsightsUrl(_webUrl, filter);
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    final canLaunch = await canLaunchUrl(uri);
+    if (canLaunch) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
     }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not open $url'),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   /// Empty-state subtitle lines for the "no data today" case. Two
