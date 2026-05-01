@@ -43,10 +43,21 @@ cd integrations/vscode-beats && npm test    # tsc + node --test
 
 ## Git Hooks (Lefthook)
 
-Pre-commit: `ruff check`, `ty check`, `biome check`
-Pre-push: `pytest`, `tsc`, `vitest`
+Pre-commit (parallel, fast — runs only on staged files for the relevant surface):
+- `ruff check` + `ruff format --check` (Python)
+- `ty check src/` (Python type check)
+- `biome check client/` (TypeScript lint + format)
+- `gofmt -l` (Go formatting)
+- `flutter analyze` (Dart)
 
-Install: `lefthook install` (from repo root)
+Pre-push (sequential, full test suites):
+- `pytest src/` (API, with testcontainers Mongo)
+- `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
+- `go test ./...` + `go vet ./...` (daemon)
+- `flutter test` (companion)
+- `npm test` (VS Code extension)
+
+Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`](lefthook.yml).
 
 ## Key Commands
 
