@@ -302,6 +302,40 @@ class TestProjectAPI:
         # This might be 400 or 200 depending on state, just check it doesn't crash
         assert response.status_code in [200, 400]
 
+    def test_daily_average_returns_envelope_for_empty_project(self):
+        """GET /api/projects/{id}/daily-average returns the
+        documented {avg_minutes, days_tracked} envelope. Pin the
+        keys — the project-detail page binds to these directly,
+        and a fresh project returns zeros (NOT 404 / NOT crash)."""
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Daily Avg Probe"},
+            headers=auth_headers,
+        )
+        project_id = resp.json()["id"]
+        resp = client.get(f"/api/projects/{project_id}/daily-average", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"avg_minutes": 0, "days_tracked": 0}
+
+    def test_git_activity_returns_empty_when_no_repo(self):
+        """GET /api/projects/{id}/git-activity returns [] when
+        the project has no github_repo wired. Pin so a project
+        without a GitHub link doesn't 500 the dashboard's
+        commits-vs-time chart."""
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "No GitHub Repo"},
+            headers=auth_headers,
+        )
+        project_id = resp.json()["id"]
+        resp = client.get(
+            f"/api/projects/{project_id}/git-activity",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
 
 class TestGoalOverridesAPI:
     """Test suite for goal override endpoints."""
