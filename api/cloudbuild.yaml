@@ -37,7 +37,7 @@ steps:
     id: 'fetch-tfvars'
 
   # Terraform init + apply
-  - name: 'hashicorp/terraform:1.12'
+  - name: 'hashicorp/terraform:1.15'
     dir: 'terraform'
     entrypoint: sh
     args:
