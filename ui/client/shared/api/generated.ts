@@ -902,6 +902,10 @@ export interface paths {
         /**
          * Exchange Pair Code
          * @description Exchange a pairing code for a long-lived device token (public endpoint).
+         *
+         *     Rate-limited because the endpoint is unauthenticated and the pairing
+         *     code is only ~30 bits of entropy (6 base32 chars). Without a limit,
+         *     a peer on the same NAT could grind through the keyspace.
          */
         post: operations["exchange_pair_code_api_device_pair_exchange_post"];
         delete?: never;
@@ -962,6 +966,26 @@ export interface paths {
          * @description Get timer state optimized for ESP32 wall clock firmware.
          */
         get: operations["get_device_status_api_device_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Device Weekly
+         * @description Last 7 days of total tracked minutes, oldest first.
+         */
+        get: operations["get_device_weekly_api_device_weekly_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1572,6 +1596,13 @@ export interface paths {
         /**
          * Update Intention
          * @description Update an intention (toggle completion or change planned minutes).
+         *
+         *     Looks up by id directly. The previous implementation listed
+         *     today's intentions and filtered, which silently 404'd any
+         *     update on yesterday-or-earlier intentions — even though the
+         *     list endpoint accepted target_date for any day. Asymmetric
+         *     surface: users could VIEW historical intentions but couldn't
+         *     toggle them off.
          */
         patch: operations["update_intention_api_intentions__intention_id__patch"];
         trace?: never;
@@ -2048,6 +2079,12 @@ export interface paths {
         /**
          * Post Drift Event
          * @description Record a distraction drift event from the daemon.
+         *
+         *     Stores the drift as a FlowWindow with category="drift", flow
+         *     score 0, and an end timestamp computed from the request's
+         *     duration_seconds — previous versions set window_end to
+         *     started_at, dropping the duration field on the floor and
+         *     making "total distraction time" uncomputable from the data.
          */
         post: operations["post_drift_event_api_signals_drift_post"];
         delete?: never;
@@ -2143,6 +2180,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/signals/pending-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Pending Suggestions
+         * @description Return auto-timer suggestions emitted in the last `since` window.
+         *
+         *     See [post] /suggest-timer for the write side. This endpoint is the
+         *     companion-side read surface — same shape and semantics as
+         *     `/recent-drift`. Newest-first, capped at 100.
+         */
+        get: operations["get_pending_suggestions_api_signals_pending_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signals/recent-drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Recent Drift
+         * @description Return drift events recorded since `since` (defaults to last 30 min).
+         *
+         *     Drift events are stored as flow windows with `dominant_category="drift"`
+         *     by the daemon's `shield` package. This endpoint is the companion-side
+         *     read surface — the daemon already fires a native macOS notification
+         *     on the desktop, so the companion poller adds the same prompt for users
+         *     on iOS / Android / desktops without the daemon installed.
+         */
+        get: operations["get_recent_drift_api_signals_recent_drift_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/signals/suggest-timer": {
         parameters: {
             query?: never;
@@ -2157,7 +2244,25 @@ export interface paths {
          * @description Check if a timer should be auto-started based on flow state.
          *
          *     Called by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.
-         *     Matches the dominant app category against projects with autostart_repos.
+         *
+         *     Matching priority:
+         *     1. editor_repo against project.autostart_repos — if the user's
+         *        editor heartbeat carries a workspace path that one project
+         *        claims as its autostart_repo, that's the most-specific match.
+         *        Disambiguates two coding projects with the same category.
+         *     2. dominant_category against project.category — fallback when
+         *        the editor_repo is empty (no editor active) or no project
+         *        claims it.
+         *
+         *     On a positive match the suggestion is also persisted via
+         *     `pending_repo.create` so the companion's notification poller can
+         *     pick it up via `GET /api/signals/pending-suggestions` and fire
+         *     `notifyAutoTimerSuggestion` for users whose desktop daemon isn't
+         *     the OS notifier (mobile, headless servers, etc.).
+         *
+         *     Previously only matched by category, so two same-category
+         *     projects couldn't be disambiguated and the docstring's mention
+         *     of autostart_repos didn't reflect the implementation.
          */
         post: operations["suggest_timer_api_signals_suggest_timer_post"];
         delete?: never;
@@ -2502,6 +2607,8 @@ export interface components {
          * @description Request body for creating a project.
          */
         CreateProjectRequest: {
+            /** Category */
+            category?: string | null;
             /** Color */
             color?: string | null;
             /** Description */
@@ -2651,6 +2758,41 @@ export interface components {
              *     ]
              */
             theme_accent_rgb: number[];
+        };
+        /** DeviceWeeklyDay */
+        DeviceWeeklyDay: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Minutes */
+            minutes: number;
+        };
+        /**
+         * DeviceWeeklyResponse
+         * @description Last seven days of tracked minutes — purpose-built for the
+         *     wall-clock's weekly bar display. Tiny payload (~7 × ~30 bytes)
+         *     so the ESP32 doesn't have to parse the full /api/analytics/heatmap
+         *     just to render seven bars.
+         */
+        DeviceWeeklyResponse: {
+            /** Days */
+            days: components["schemas"]["DeviceWeeklyDay"][];
+        };
+        /** DriftEvent */
+        DriftEvent: {
+            /** Bundle Id */
+            bundle_id: string;
+            /** Duration Seconds */
+            duration_seconds: number;
+            /** Id */
+            id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
         };
         /**
          * DurationResponse
@@ -2986,6 +3128,34 @@ export interface components {
             /** Insights */
             insights: components["schemas"]["InsightCardResponse"][];
         };
+        /** PendingSuggestionResponse */
+        PendingSuggestionResponse: {
+            /** Editor Repo */
+            editor_repo?: string | null;
+            /** Id */
+            id: string;
+            /** Project Id */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /**
+             * Suggested At
+             * Format: date-time
+             */
+            suggested_at: string;
+        };
+        /**
+         * PendingSuggestionsResponse
+         * @description Auto-timer suggestions the API has surfaced but the user hasn't yet
+         *     acted on. The companion's notification poller queries this every 5 min
+         *     and fires `notifyAutoTimerSuggestion` for any id it hasn't seen,
+         *     deduping via SharedPreferences. `since` defaults to the last 30 minutes
+         *     so a couple of missed poll ticks (5 min apart) don't drop a prompt.
+         */
+        PendingSuggestionsResponse: {
+            /** Suggestions */
+            suggestions: components["schemas"]["PendingSuggestionResponse"][];
+        };
         /** PostDriftEventRequest */
         PostDriftEventRequest: {
             /** Bundle Id */
@@ -3095,6 +3265,19 @@ export interface components {
             project_name: string;
             /** Weekly Goal Trend */
             weekly_goal_trend?: number[];
+        };
+        /**
+         * RecentDriftResponse
+         * @description Drift events recent enough to be worth notifying the user about.
+         *
+         *     The companion's notification poller queries this endpoint on a 5-minute
+         *     foreground tick, fires `notifyDriftAlert` for any event id it hasn't
+         *     seen, and dedupes via SharedPreferences. `since` defaults to 30 minutes
+         *     ago so a brief network blip doesn't cause the poller to miss a window.
+         */
+        RecentDriftResponse: {
+            /** Events */
+            events: components["schemas"]["DriftEvent"][];
         };
         /**
          * RecordTimeRequest
@@ -3302,11 +3485,8 @@ export interface components {
             estimation?: string | null;
             /** Github Repo */
             github_repo?: string | null;
-            /**
-             * Goal Type
-             * @default target
-             */
-            goal_type: string;
+            /** @default target */
+            goal_type: components["schemas"]["GoalType"];
             /** Id */
             id: string;
             /** Name */
@@ -5041,6 +5221,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_device_weekly_api_device_weekly_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceWeeklyResponse"];
                 };
             };
         };
@@ -6927,6 +7127,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FlowWindowSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pending_suggestions_api_signals_pending_suggestions_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingSuggestionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_recent_drift_api_signals_recent_drift_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecentDriftResponse"];
                 };
             };
             /** @description Validation Error */

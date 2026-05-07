@@ -478,6 +478,17 @@
       "CreateProjectRequest": {
         "description": "Request body for creating a project.",
         "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
           "color": {
             "anyOf": [
               {
@@ -874,6 +885,71 @@
           "clocked_in"
         ],
         "title": "DeviceStatusResponse",
+        "type": "object"
+      },
+      "DeviceWeeklyDay": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "minutes"
+        ],
+        "title": "DeviceWeeklyDay",
+        "type": "object"
+      },
+      "DeviceWeeklyResponse": {
+        "description": "Last seven days of tracked minutes \u2014 purpose-built for the\nwall-clock's weekly bar display. Tiny payload (~7 \u00d7 ~30 bytes)\nso the ESP32 doesn't have to parse the full /api/analytics/heatmap\njust to render seven bars.",
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceWeeklyDay"
+            },
+            "title": "Days",
+            "type": "array"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "DeviceWeeklyResponse",
+        "type": "object"
+      },
+      "DriftEvent": {
+        "properties": {
+          "bundle_id": {
+            "title": "Bundle Id",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "duration_seconds",
+          "bundle_id"
+        ],
+        "title": "DriftEvent",
         "type": "object"
       },
       "DurationResponse": {
@@ -1670,6 +1746,63 @@
         "title": "PatternsResponse",
         "type": "object"
       },
+      "PendingSuggestionResponse": {
+        "properties": {
+          "editor_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editor Repo"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "suggested_at": {
+            "format": "date-time",
+            "title": "Suggested At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "project_name",
+          "suggested_at"
+        ],
+        "title": "PendingSuggestionResponse",
+        "type": "object"
+      },
+      "PendingSuggestionsResponse": {
+        "description": "Auto-timer suggestions the API has surfaced but the user hasn't yet\nacted on. The companion's notification poller queries this every 5 min\nand fires `notifyAutoTimerSuggestion` for any id it hasn't seen,\ndeduping via SharedPreferences. `since` defaults to the last 30 minutes\nso a couple of missed poll ticks (5 min apart) don't drop a prompt.",
+        "properties": {
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/PendingSuggestionResponse"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suggestions"
+        ],
+        "title": "PendingSuggestionsResponse",
+        "type": "object"
+      },
       "PostDriftEventRequest": {
         "properties": {
           "bundle_id": {
@@ -1914,6 +2047,23 @@
           "project_name"
         ],
         "title": "ProjectHealthResponse",
+        "type": "object"
+      },
+      "RecentDriftResponse": {
+        "description": "Drift events recent enough to be worth notifying the user about.\n\nThe companion's notification poller queries this endpoint on a 5-minute\nforeground tick, fires `notifyDriftAlert` for any event id it hasn't\nseen, and dedupes via SharedPreferences. `since` defaults to 30 minutes\nago so a brief network blip doesn't cause the poller to miss a window.",
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/DriftEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "RecentDriftResponse",
         "type": "object"
       },
       "RecordTimeRequest": {
@@ -2430,9 +2580,8 @@
             "title": "Github Repo"
           },
           "goal_type": {
-            "default": "target",
-            "title": "Goal Type",
-            "type": "string"
+            "$ref": "#/components/schemas/GoalType",
+            "default": "target"
           },
           "id": {
             "title": "Id",
@@ -4791,7 +4940,7 @@
     },
     "/api/device/pair/exchange": {
       "post": {
-        "description": "Exchange a pairing code for a long-lived device token (public endpoint).",
+        "description": "Exchange a pairing code for a long-lived device token (public endpoint).\n\nRate-limited because the endpoint is unauthenticated and the pairing\ncode is only ~30 bits of entropy (6 base32 chars). Without a limit,\na peer on the same NAT could grind through the keyspace.",
         "operationId": "exchange_pair_code_api_device_pair_exchange_post",
         "requestBody": {
           "content": {
@@ -4932,6 +5081,28 @@
           }
         },
         "summary": "Get Device Status",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/api/device/weekly": {
+      "get": {
+        "description": "Last 7 days of total tracked minutes, oldest first.",
+        "operationId": "get_device_weekly_api_device_weekly_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceWeeklyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Device Weekly",
         "tags": [
           "device"
         ]
@@ -5985,7 +6156,7 @@
         ]
       },
       "patch": {
-        "description": "Update an intention (toggle completion or change planned minutes).",
+        "description": "Update an intention (toggle completion or change planned minutes).\n\nLooks up by id directly. The previous implementation listed\ntoday's intentions and filtered, which silently 404'd any\nupdate on yesterday-or-earlier intentions \u2014 even though the\nlist endpoint accepted target_date for any day. Asymmetric\nsurface: users could VIEW historical intentions but couldn't\ntoggle them off.",
         "operationId": "update_intention_api_intentions__intention_id__patch",
         "parameters": [
           {
@@ -7129,7 +7300,7 @@
     },
     "/api/signals/drift": {
       "post": {
-        "description": "Record a distraction drift event from the daemon.",
+        "description": "Record a distraction drift event from the daemon.\n\nStores the drift as a FlowWindow with category=\"drift\", flow\nscore 0, and an end timestamp computed from the request's\nduration_seconds \u2014 previous versions set window_end to\nstarted_at, dropping the duration field on the floor and\nmaking \"total distraction time\" uncomputable from the data.",
         "operationId": "post_drift_event_api_signals_drift_post",
         "requestBody": {
           "content": {
@@ -7573,9 +7744,135 @@
         ]
       }
     },
+    "/api/signals/pending-suggestions": {
+      "get": {
+        "description": "Return auto-timer suggestions emitted in the last `since` window.\n\nSee [post] /suggest-timer for the write side. This endpoint is the\ncompanion-side read surface \u2014 same shape and semantics as\n`/recent-drift`. Newest-first, capped at 100.",
+        "operationId": "get_pending_suggestions_api_signals_pending_suggestions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingSuggestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Pending Suggestions",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/signals/recent-drift": {
+      "get": {
+        "description": "Return drift events recorded since `since` (defaults to last 30 min).\n\nDrift events are stored as flow windows with `dominant_category=\"drift\"`\nby the daemon's `shield` package. This endpoint is the companion-side\nread surface \u2014 the daemon already fires a native macOS notification\non the desktop, so the companion poller adds the same prompt for users\non iOS / Android / desktops without the daemon installed.",
+        "operationId": "get_recent_drift_api_signals_recent_drift_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentDriftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Recent Drift",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
     "/api/signals/suggest-timer": {
       "post": {
-        "description": "Check if a timer should be auto-started based on flow state.\n\nCalled by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.\nMatches the dominant app category against projects with autostart_repos.",
+        "description": "Check if a timer should be auto-started based on flow state.\n\nCalled by the daemon when Flow Score >= 0.7 for 8+ consecutive minutes.\n\nMatching priority:\n1. editor_repo against project.autostart_repos \u2014 if the user's\n   editor heartbeat carries a workspace path that one project\n   claims as its autostart_repo, that's the most-specific match.\n   Disambiguates two coding projects with the same category.\n2. dominant_category against project.category \u2014 fallback when\n   the editor_repo is empty (no editor active) or no project\n   claims it.\n\nOn a positive match the suggestion is also persisted via\n`pending_repo.create` so the companion's notification poller can\npick it up via `GET /api/signals/pending-suggestions` and fire\n`notifyAutoTimerSuggestion` for users whose desktop daemon isn't\nthe OS notifier (mobile, headless servers, etc.).\n\nPreviously only matched by category, so two same-category\nprojects couldn't be disambiguated and the docstring's mention\nof autostart_repos didn't reflect the implementation.",
         "operationId": "suggest_timer_api_signals_suggest_timer_post",
         "requestBody": {
           "content": {
