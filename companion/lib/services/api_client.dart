@@ -279,6 +279,55 @@ class ApiClient {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
+  /// Pending auto-timer suggestions for the notification poller. Each map
+  /// carries `id` (dedupe key), `project_id`, `project_name`, `suggested_at`,
+  /// and optionally `editor_repo`. Sorted newest-first by the API. Same
+  /// transient-error behavior as [getRecentDrift] — returns `[]` rather
+  /// than throwing.
+  Future<List<Map<String, dynamic>>> getPendingSuggestions({
+    DateTime? since,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (since != null) {
+      params['since'] = since.toUtc().toIso8601String();
+    }
+    final uri = Uri.parse('$baseUrl/api/signals/pending-suggestions')
+        .replace(queryParameters: params);
+    try {
+      final resp = await http.get(uri, headers: _headers);
+      if (resp.statusCode != 200) return const [];
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final suggestions = (body['suggestions'] as List?) ?? const [];
+      return suggestions.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Recent drift events for the notification poller. Each map carries
+  /// `id` (dedupe key), `started_at` (ISO-8601 string), `duration_seconds`,
+  /// and `bundle_id`. Sorted newest-first by the API. Returns an empty
+  /// list (rather than throwing) on transient errors so a network blip
+  /// doesn't break the poller's tick.
+  Future<List<Map<String, dynamic>>> getRecentDrift({DateTime? since, int limit = 20}) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (since != null) {
+      params['since'] = since.toUtc().toIso8601String();
+    }
+    final uri = Uri.parse('$baseUrl/api/signals/recent-drift')
+        .replace(queryParameters: params);
+    try {
+      final resp = await http.get(uri, headers: _headers);
+      if (resp.statusCode != 200) return const [];
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final events = (body['events'] as List?) ?? const [];
+      return events.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Throws [ApiException] on non-200. See [getTags] for the rationale.
   Future<List<Map<String, dynamic>>> getSignalSummaries(String start, String end) async {
     final resp = await http.get(

@@ -50,7 +50,7 @@ class _AppShellState extends State<AppShell> {
   ApiClient? _client;
   TrayService? _tray;
   NotificationPoller? _poller;
-  StreamSubscription<String?>? _notificationTaps;
+  StreamSubscription<NotificationTap>? _notificationTaps;
   int _currentTab = 0;
 
   @override
@@ -90,10 +90,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   /// Initialize the notification stack and start the foreground poller.
-  /// Tap routing: every Beats notification carries a payload describing
-  /// which tab the user wants to land on (`brief`, `review`, `eod-mood`,
-  /// `auto-timer:*`). All four route to the Coach tab today; auto-timer
-  /// could route to Timer once that flow lands.
+  ///
+  /// Tap routing:
+  /// - The `Start` action button on an auto-timer notification fires the
+  ///   `kStartAutoTimerActionId` actionId. We POST `/api/timer/start`
+  ///   with the project id encoded in the payload — no screen ever
+  ///   opens. A confirmation snackbar lands on whatever screen the user
+  ///   is already on.
+  /// - Body taps on any other Beats notification (`brief`, `review`,
+  ///   `eod-mood`, plain `auto-timer:*`) route to the Coach tab.
   Future<void> _initNotifications() async {
     final svc = NotificationsService.instance;
     await svc.init();
@@ -102,11 +107,15 @@ class _AppShellState extends State<AppShell> {
     // dialog instead of silently failing.
     unawaited(svc.requestPermissions());
 
-    _notificationTaps = svc.taps.listen((payload) {
+    _notificationTaps = svc.taps.listen((tap) {
       if (!mounted) return;
+      if (tap.actionId == kStartAutoTimerActionId) {
+        _handleStartAutoTimerAction(tap.payload);
+        return;
+      }
       // Route every coach-flavored payload to the Coach tab. Auto-timer
-      // suggestions also live there for now since we don't yet have a
-      // dedicated start-from-suggestion flow.
+      // body taps also land here so the user sees the suggestion in
+      // context if they ignore the Start button.
       const coachTab = 3;
       setState(() => _currentTab = coachTab);
     });
@@ -117,6 +126,33 @@ class _AppShellState extends State<AppShell> {
     );
     _poller = poller;
     poller.start();
+  }
+
+  /// Honor the auto-timer "Start" action button without bringing the
+  /// app to the foreground. POSTs `/api/timer/start` with the project id
+  /// carried in the payload, then drops a confirmation toast on whatever
+  /// screen happens to be visible (the action button can fire while the
+  /// app is in the background — when the user opens it later the toast
+  /// has already been queued).
+  Future<void> _handleStartAutoTimerAction(String? payload) async {
+    final parsed = parseAutoTimerPayload(payload);
+    final client = _client;
+    if (parsed == null || client == null) return;
+    try {
+      await client.startTimer(parsed.projectId);
+      if (!mounted) return;
+      final label = parsed.projectName.isEmpty ? 'project' : parsed.projectName;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Started tracking $label'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Couldn\'t start timer: $e'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 
   void _onPaired() async {
