@@ -9,6 +9,12 @@
          is allowed for ourselves without a user-visible permission flow. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- mobile_scanner: camera access for QR pairing on the PairingScreen.
+         Optional feature — phones without a camera (rare on Android, but
+         supported on tablets without rear cameras) just don't see the
+         "Scan QR code" affordance. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <application
         android:label="beats_companion"

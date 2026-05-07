@@ -2,10 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../services/qr_pairing.dart';
 import '../services/token_storage.dart';
 import '../theme/beats_theme.dart';
 import '../theme/embers.dart';
 import '../theme/staggered_entrance.dart';
+import 'qr_pairing_screen.dart';
 
 class PairingScreen extends StatefulWidget {
   final VoidCallback onPaired;
@@ -38,6 +40,30 @@ class _PairingScreenState extends State<PairingScreen> {
     final web = await _storage.loadWebUrl();
     _apiUrlController.text = api;
     _webUrlController.text = web;
+  }
+
+  /// True on the platforms where `mobile_scanner` actually works
+  /// (iOS / Android). Desktops show the code-entry path only — they
+  /// don't have a built-in front-facing camera flow that the package
+  /// wraps.
+  bool get _qrSupported => Platform.isIOS || Platform.isAndroid;
+
+  /// Push the QR scanner; on success, autofill the code (and the API
+  /// URL when the QR carried one) and immediately attempt to pair.
+  /// Cancellation is a no-op — the user just lands back on the form.
+  Future<void> _scanQr() async {
+    final result = await Navigator.of(context).push<QrPairingPayload?>(
+      MaterialPageRoute(builder: (_) => const QrPairingScreen()),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _codeController.text = result.code;
+      if (result.apiUrl != null) {
+        _apiUrlController.text = result.apiUrl!;
+      }
+      _error = null;
+    });
+    await _pair();
   }
 
   Future<void> _pair() async {
@@ -202,6 +228,26 @@ class _PairingScreenState extends State<PairingScreen> {
                         focusNode: _codeFocus,
                         onSubmitted: _pair,
                       ),
+                      if (_qrSupported) ...[
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: _loading ? null : _scanQr,
+                            icon: const Icon(Icons.qr_code_scanner,
+                                size: 18, color: BeatsColors.amber),
+                            label: Text('Scan QR code',
+                                style: BeatsType.bodySmall
+                                    .copyWith(color: BeatsColors.amber)),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
