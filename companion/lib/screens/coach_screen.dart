@@ -7,6 +7,7 @@ import '../services/launch_insights.dart';
 import '../services/token_storage.dart';
 import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
+import '../theme/grain_overlay.dart';
 import '../theme/staggered_entrance.dart';
 
 class CoachScreen extends StatefulWidget {
@@ -274,42 +275,9 @@ class _CoachScreenState extends State<CoachScreen> {
 
               // ── Brief ──
               StaggeredEntrance(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(width: 3, height: 14, decoration: BoxDecoration(
-                          color: BeatsColors.amber, borderRadius: BorderRadius.circular(2))),
-                        const SizedBox(width: 10),
-                        Text('MORNING BRIEF', style: BeatsType.label.copyWith(
-                          color: BeatsColors.amber, letterSpacing: 2)),
-                        const Spacer(),
-                        if (_briefTimestamp() != null)
-                          Text(_briefTimestamp()!,
-                            style: BeatsType.label.copyWith(
-                              fontSize: 9,
-                              color: BeatsColors.textTertiary,
-                              letterSpacing: 1.5,
-                            )),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    if (_brief != null)
-                      Text(
-                        _brief!['body'] ?? '',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 15, height: 1.8,
-                          color: BeatsColors.textPrimary.withValues(alpha: 0.85),
-                          fontWeight: FontWeight.w400,
-                        ),
-                      )
-                    else
-                      Text(
-                        'No brief today. The coach generates one each morning.',
-                        style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary),
-                      ),
-                  ],
+                child: _BriefCard(
+                  timestamp: _briefTimestamp(),
+                  body: _brief?['body'] as String?,
                 ),
               ),
 
@@ -694,5 +662,112 @@ class _CoachScreenState extends State<CoachScreen> {
         ),
       );
     }).toList();
+  }
+}
+
+/// Morning brief surface treatment — a softly-warm card with a sunrise
+/// gradient bleeding from the top edge and a subtle grain overlay so the
+/// surface reads as something hand-made rather than a flat data panel.
+///
+/// The brief itself is the centerpiece of the Coach tab; the card is what
+/// makes the eye land on it before drifting down to the review and mood
+/// sections. Stays out of the layered widget tree above so the build()
+/// method reads as a flat list of sections.
+class _BriefCard extends StatelessWidget {
+  final String? timestamp;
+  final String? body;
+
+  const _BriefCard({this.timestamp, this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: BeatsColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BeatsColors.borderAccent.withValues(alpha: 0.6)),
+      ),
+      // Hard-clip so the sunrise gradient and the grain don't overpaint
+      // the rounded corners.
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          // Grain — drawn first so the gradient and content sit on top.
+          const Positioned.fill(child: GrainOverlay(opacity: 0.04)),
+
+          // Sunrise gradient — amber → transparent across the top 56px.
+          // Subtle enough to read as warmth-of-the-page rather than
+          // decoration; it's the only surface in the app that gets this
+          // treatment so the brief feels like the morning's first thing.
+          Positioned(
+            top: 0, left: 0, right: 0, height: 56,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      BeatsColors.amber.withValues(alpha: 0.18),
+                      BeatsColors.amber.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 3, height: 14,
+                      decoration: BoxDecoration(
+                        color: BeatsColors.amber,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('MORNING BRIEF',
+                      style: BeatsType.label.copyWith(
+                        color: BeatsColors.amber,
+                        letterSpacing: 2,
+                      )),
+                    const Spacer(),
+                    if (timestamp != null)
+                      Text(timestamp!,
+                        style: BeatsType.label.copyWith(
+                          fontSize: 9,
+                          color: BeatsColors.textTertiary,
+                          letterSpacing: 1.5,
+                        )),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (body != null && body!.isNotEmpty)
+                  Text(
+                    body!,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 15, height: 1.8,
+                      color: BeatsColors.textPrimary.withValues(alpha: 0.88),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  )
+                else
+                  Text(
+                    'No brief today. The coach generates one each morning.',
+                    style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
