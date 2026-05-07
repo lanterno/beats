@@ -99,10 +99,10 @@ The Flutter app and VS Code extension are shipped in this repo:
 
 | Document | What it covers |
 |----------|---------------|
-| [Homebrew Tap](docs/homebrew-tap.md) | `brew install` distribution with cross-compiled binaries and `brew services` LaunchAgent |
-| [CGEventTap Cadence](docs/cgeventtap-cadence.md) | Replaces the cadence stub with real input event counting via macOS Accessibility API |
-| [Flutter Companion](docs/flutter-companion.md) | Original design doc — most of this is now implemented |
-| [VS Code Extension](docs/vscode-extension.md) | Original design doc — heartbeat shape and status-bar contract |
+| [Companion Roadmap](docs/companion-roadmap.md) | What the companion ships today and what's left — native widgets, Apple Watch, server push |
+| [Companion UI Design Roadmap](docs/companion-ui-design-roadmap.md) | Brutalist-Luxury design system, per-screen polish (mostly shipped, three small open items) |
+| [Flutter Companion](docs/flutter-companion.md) | File-by-file companion architecture, API contract, and the remaining HealthKit / Health Connect / background-sync work |
+| [Homebrew Tap](docs/homebrew-tap.md) | One-time tap-repo bootstrap to publish `brew install <user>/beats/beatsd` (formula + release workflow already live) |
 
 ## Testing
 

@@ -1,154 +1,137 @@
 # Companion App Roadmap — From Pairing Hub to Primary Timer
 
-> The companion app becomes the daily driver. Users control timers, see flow state, and receive coaching nudges here. The web UI remains the analytics and configuration surface.
-
-## Philosophy
+> The companion app is the daily driver. Users control timers, see flow
+> state, and receive coaching nudges here. The web UI remains the
+> analytics and configuration surface.
 
 **Companion = action.** Start/stop timers, see what's running, get nudged.
 **Web = reflection.** Heatmaps, weekly reviews, goal tuning, integrations setup.
 
-## Current State
+## Shipped
 
-- Pairing via 6-char code
-- Connection status (heartbeat)
-- Fitbit/Oura integration management
-- Timer control: start/stop, project picker, custom start/stop times
-- Flow score gauge, today's timeline, activity-category breakdown
-- Coach screen: morning brief, evening review questions, daily mood picker
-- Intentions screen: today's plan with progress bar, add/toggle/complete
-- Health screen: 7-day biometric dashboard (sleep, HRV, resting HR, steps, readiness)
-- 6-tab frosted-glass bottom nav (Timer / Flow / Plan / Coach / Health / Settings)
-- Dark theme, all 6 platforms
+### Core experience
+- Pairing via 6-char code (and QR scan on iOS / Android — see `flutter-companion.md`)
+- Connection heartbeat, Fitbit / Oura integration management, desktop
+  Fitbit OAuth via `url_launcher`
+- Timer control: start/stop, project picker with **RECENT** section,
+  custom start/stop times, post-stop "How did it go?" note + tags +
+  skip sheet, today/week/streak stats row, week-over-week delta arrow,
+  accidental-stop shake guard
+- Flow score gauge with breathing glow ≥ 0.7, sweep-gradient ring,
+  tap-to-inspect timeline (time / score / category / editor repo +
+  branch), animated category bars
+- Coach: morning brief in a sunrise-gradient card with grain overlay
+  and HH:MM timestamp, evening review with editable text answers
+  (`POST /api/coach/review`) + "X OF N ANSWERED" progress, daily mood
+  picker with 1.0 → 1.2 → 1.0 bounce, "What went well?" debounce-saving
+  note, 7-day mood sparkline
+- Intentions: top progress bar, color-bar accent, live add-preview,
+  quick-add row of recent combos, 6-particle confetti burst on
+  completion
+- Health: 7-day biometric dashboard (sleep / HRV / resting HR / steps /
+  readiness) with sparkline metric cards, sourced from API today —
+  native ingestion is separate (see `flutter-companion.md`)
+- 6-tab frosted-glass bottom nav with stagger-in transitions, dark
+  theme, all 6 platforms
 
----
+### Notifications
+Free-tier path (no APNs / FCM, no Apple Developer / Google Play
+projects required), all delivered via `flutter_local_notifications`:
 
-## Phase 3 — Coach Notifications
+| Prompt | Source | Delivery |
+|---|---|---|
+| Morning brief | Foreground poll, 5 min cadence | `notifyBriefAvailable` on a new `id` from `/api/coach/brief/today`, dedupe per-day |
+| Evening review | Foreground poll, 5 min cadence | `notifyReviewAvailable` on a new review `date`, dedupe per-day |
+| EOD mood prompt | OS-scheduled | `zonedSchedule` daily at user-configured time — fires even when the app isn't running |
+| Auto-timer suggestion | Foreground poll | `notifyAutoTimerSuggestion` for any new `PendingSuggestion` from `GET /api/signals/pending-suggestions`, dedupe by id |
+| Drift alert | Foreground poll | `notifyDriftAlert` for any new drift event from `GET /api/signals/recent-drift`, dedupe by id; bundle id resolves to a friendly label via `driftAppLabel` |
 
-The coach speaks through the companion. Coach content is already rendered in-app — this phase makes it reach the user without opening the app.
+**Auto-timer "Start" action button** — Android `AndroidNotificationAction`
++ iOS `DarwinNotificationCategory` with foreground option. Tapping fires
+a `NotificationTap` with `actionId == kStartAutoTimerActionId`; the main
+app's tap router parses `auto-timer:<id>|<name>` via
+`parseAutoTimerPayload` and POSTs `/api/timer/start` directly — no
+screen opens, just a confirmation snackbar.
 
-### Shipped — local notifications, free-tier path
+**Daemon-side parallel notifications** (desktop): the daemon's
+`autotimer` and `shield` modules also fire native notifications via
+`osascript` (macOS), `notify-send`/libnotify-bin (Linux), and PowerShell
+`ToastNotification` (Windows). Companion + daemon fire in parallel —
+different channels, same prompt — so users always get the prompt
+regardless of which surface is active.
 
-`NotificationsService` + `NotificationPoller` (in `companion/lib/services/`)
-deliver coach prompts using only OS-level local notifications. No APNs,
-no FCM, no Apple Developer / Google Play projects required.
-
-| Prompt | Delivery |
-|---|---|
-| **Morning brief** | Foreground polling every 5 min — fires `notifyBriefAvailable` when `/api/coach/brief/today` returns a new id. Deduped per-day in `SharedPreferences`. |
-| **Evening review** | Same poller — `notifyReviewAvailable` on a new review's `date` key. |
-| **EOD mood prompt** | OS-scheduled (`zonedSchedule`, `matchDateTimeComponents: time`). Fires daily at the user-configured time (default 21:00) **even when the app isn't running**. Configured from Settings → NOTIFICATIONS. |
-
-Tapping any of these payloads switches the app to the Coach tab.
-
-### Trade-off the free-tier path makes
-
-Brief and review prompts only fire while the app is alive (foreground or
-recently-backgrounded). If the user closes the app and the coach generates
-a brief at 7 AM, they'll see the notification on next open instead. The
-EOD mood prompt is the one piece that reaches them while the app is
-closed, because it's pre-scheduled at the OS level rather than triggered
-by a server check.
-
-### Also shipped — daemon-side notifications (macOS)
-
-The daemon's `autotimer` and `shield` modules both fire native macOS
-notifications via `osascript` while running:
-
-- **Auto-timer suggestion**: 8 consecutive 1-minute flow windows ≥ 0.7
-  with a category match against an `autostart_repos` project triggers
-  "Start tracking?". Wired through `daemon/internal/autotimer/suggest.go`.
-- **Drift alert**: 30s+ continuous time on a known-distraction bundle
-  (Twitter, Spotify, Discord, etc.) while a timer is running fires
-  "Drift detected". Wired through `daemon/internal/shield/shield.go`,
-  with the timer-running state cached from `/api/signals/timer-context`
-  on a 30s poller.
-
-Linux/Windows fall through to a log line — extending those to native
-notifications (libnotify / Win toast) is a small follow-up.
-
-### Still pending
-
-- **"Start suggested project" action button** on the brief notification
-- **Companion-side auto-timer + drift notifications** — daemon notifies
-  on the desktop today, but mobile users only see prompts when the
-  companion poller runs. This needs either a daemon→companion bridge
-  or server-side push.
-- **True server-pushed delivery** via APNs/FCM — would solve the
-  "app must be alive" limitation but needs an Apple Developer account
-  and an FCM project. Out of scope for the free-tier path.
+### Tray (macOS / Windows / Linux)
+- Live elapsed time + project label in the menu bar
+- Quick-start submenu of recent projects, Stop, Open, Quit
+- Tray icon renders a colored dot matching the running project (gray
+  when idle), cached on disk by hex via `TrayIconRenderer`
 
 ---
 
-## Phase 4 — Quick Entry Polish
+## Remaining
 
-The post-stop "How did it go?" prompt is shipped (note + freeform tags + skip; updates the just-stopped beat in place via `PUT /api/beats/`).
+Each item is tagged with what blocks it from autonomous code work.
 
-The **EOD mood prompt** is also shipped — see Phase 3. A daily local notification at the user-configured time opens the Coach tab where the existing mood picker + "What went well?" note land in the day's `daily-note`.
+### `[needs-device]` Native widgets and Apple Watch
 
----
+Glanceable-info surfaces that live outside the Flutter app proper.
 
-## Phase 5 — Widgets & Watch
+- **iOS Widgets (WidgetKit)** — separate Xcode target. Small variant:
+  current project + elapsed time, or "No timer" + last session.
+  Medium: + today total + flow score gauge. Tap opens app to Timer.
+- **Android Widgets (Glance / AppWidget)** — separate Kotlin source
+  set. Same content as iOS.
+- **Apple Watch (WatchOS Companion)** — separate WatchOS target.
+  Complication shows elapsed / daily total; watch app exposes
+  start/stop + favorites picker. Uses `WatchConnectivity` to share
+  the device token from the phone.
 
-Native platform integration for glanceable info.
+Each requires a real device to validate rendering, lifecycle, and
+storage-sync behavior — can't be done in headless CI.
 
-### iOS Widgets (WidgetKit)
+### `[needs-paid-credentials]` Server-pushed delivery
 
-- **Small**: current project name + elapsed time, or "No timer" with last session
-- **Medium**: timer + today's total + flow score gauge
-- Tap opens the app to Timer tab
-
-### Android Widgets (Glance/AppWidget)
-
-- Same as iOS: timer status + daily total
-
-### Apple Watch (WatchOS Companion)
-
-- Complication: elapsed time or daily total
-- Watch app: start/stop timer, project picker (favorites only)
-- Uses WatchConnectivity to share device token with the phone app
-
-### macOS Menu Bar Polish
-
-The tray (`tray_service.dart`) shows live elapsed time + project, a Start Timer submenu of recent projects, Stop Timer, Open Beats, and Quit. The icon now renders a colored dot matching the running project (gray when idle), via PNGs cached under the OS temp dir by `TrayIconRenderer`. No further menu-bar polish pending.
+- **APNs / FCM real-time push** — would solve the "app must be alive"
+  limitation (today: brief and review notifications only fire while
+  the app is alive or recently backgrounded). Requires an Apple
+  Developer account + an FCM project, plus a server-side notification
+  service in the API. Out of scope for the free-tier path.
 
 ---
 
-## Technical Architecture
+## Architecture notes (for when the above gets picked up)
 
-### State Management
+### Push notification delivery options
 
-- Use `provider` or `riverpod` for reactive state
-- `TimerState`: `{running, projectId, projectName, projectColor, startTime, elapsed}`
-- `FlowState`: `{currentScore, todayWindows[], todaySummary}`
-- `CoachState`: `{brief, reviewQuestions[], unreadCount}`
+- **Option A — local notifications** (current): foreground poll +
+  OS-scheduled prompts. No server infra, no platform credentials.
+  Limitation: 5-min minimum poll latency, app-must-be-alive for poll
+  prompts. Shipped.
+- **Option B — server push**: FCM/APNs notification service on the API
+  that pushes when brief is generated, review is due, drift detected,
+  auto-timer suggestion fires. Lower latency, app-state-independent.
+  See `[needs-paid-credentials]` above.
 
-### Offline Support
+### State management
+
+- `provider` or `riverpod` for reactive state when complexity warrants
+- `TimerState`, `FlowState`, `CoachState` as the obvious split
+- Today the screens use plain `setState` + service callbacks; works
+  fine at current screen count
+
+### Offline support (not yet built)
 
 - SQLite local cache for projects, recent beats, intentions
-- Mutation queue (same concept as web's IndexedDB queue): start/stop/intention changes queued when offline, replayed on reconnect
-- Timer runs locally even when offline — syncs the beat on reconnect
+- Mutation queue (mirrors the web's IndexedDB queue): start/stop /
+  intention changes queued when offline, replayed on reconnect
+- Timer runs locally when offline — syncs the beat on reconnect
 
-### Auth Model
+### Auth model
 
-- Device token (from pairing) stored in SharedPreferences
-- All API calls use `Authorization: Bearer <device_token>`
-- `DEVICE_ALLOWED_PREFIXES` already covers timer, projects, coach, intentions, daily-notes, signals, biometrics. Expand as new endpoints are needed.
-- Consider: session token for read-heavy endpoints (analytics) to avoid expanding device scope too far. Alternative: add a `/api/companion/*` proxy that validates device tokens but provides read access.
-
-### Push Notifications
-
-- **Option A (simple)**: local notifications triggered by background polling. No server infrastructure needed. Limitation: 15-min minimum interval on iOS.
-- **Option B (real-time)**: FCM/APNs with a notification service on the API. The API pushes when: brief is generated, review is due, drift is detected, auto-timer suggestion fires. More complex but lower latency.
-- Recommend: start with Option A, upgrade to B when notification timing matters.
-
----
-
-## Priority & Sequencing
-
-| Phase | What | Value | Effort |
-|-------|------|-------|--------|
-| **3** | Coach notifications (free-tier path ✅) | The coach reaches users proactively | 0.5 week (server-push extras) |
-| **4** | EOD mood prompt + post-stop note ✅ | — | 0 |
-| **5** | Widgets + watch (menu bar polish ✅) | Ambient presence on home screen / wrist | ~1.5 weeks |
-
-**Total: ~2 weeks for the remaining vision** — and the bulk is widgets / watch / server-push, all of which need real devices or paid platform credentials.
+- Device token from pairing now sits in OS secure storage (Keychain /
+  EncryptedSharedPreferences / libsecret / DPAPI) via
+  `flutter_secure_storage` — see `flutter-companion.md` for the
+  migration story and the `SecureStore` interface
+- All API calls send `Authorization: Bearer <device_token>`
+- `DEVICE_ALLOWED_PREFIXES` covers timer, projects, coach, intentions,
+  daily-notes, signals, biometrics — append as new endpoints land

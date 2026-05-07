@@ -142,14 +142,13 @@ or
    event tap not available — grant via System Settings → Privacy & Security → Accessibility
 ```
 
-See [docs/cgeventtap-cadence.md](../docs/cgeventtap-cadence.md) for the
-implementation rationale.
+The implementation lives in `internal/collector/cadence_darwin.go`
+(real `CGEventTapCreate`) with a non-darwin fallback in `cadence.go`.
 
 ## Editor heartbeats
 
 The daemon binds `127.0.0.1:37499` for editor heartbeats — see the
-[VS Code extension](../integrations/vscode-beats/) and
-[docs/vscode-extension.md](../docs/vscode-extension.md). Heartbeats are
+[VS Code extension](../integrations/vscode-beats/). Heartbeats are
 loopback-only (the listener rejects non-127.0.0.1 peers) and carry only
 workspace path + branch + active language; never file content.
 
