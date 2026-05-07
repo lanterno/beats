@@ -9,6 +9,7 @@ import '../theme/beats_refresh.dart';
 import '../theme/beats_theme.dart';
 import '../theme/press_scale.dart';
 import '../theme/staggered_entrance.dart';
+import 'monastic_screen.dart';
 
 List<int> _hexToRgb(String? hex) {
   if (hex == null || hex.isEmpty) return [150, 150, 150];
@@ -29,7 +30,8 @@ class TimerScreen extends StatefulWidget {
   State<TimerScreen> createState() => _TimerScreenState();
 }
 
-class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStateMixin {
+class _TimerScreenState extends State<TimerScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   bool _running = false;
   String? _selectedProjectId;
@@ -66,7 +68,8 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      vsync: this, duration: const Duration(seconds: 2),
+      vsync: this,
+      duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
     _refresh();
     _refreshStats();
@@ -99,8 +102,12 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             _selectedProjectName = project?['name'] ?? _selectedProjectId;
             _startTime = DateTime.parse(status['since']);
             _elapsed = DateTime.now().toUtc().difference(_startTime!);
-            final proj = projects.where((p) => p['id'] == _selectedProjectId).firstOrNull;
-            if (proj != null) _selectedProjectColor = _hexToRgb(proj['color'] as String?);
+            final proj = projects
+                .where((p) => p['id'] == _selectedProjectId)
+                .firstOrNull;
+            if (proj != null) {
+              _selectedProjectColor = _hexToRgb(proj['color'] as String?);
+            }
             _startTicker();
           } else {
             _running = false;
@@ -112,7 +119,12 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
         });
       }
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -120,12 +132,17 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     _stopTicker();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_startTime != null && mounted) {
-        setState(() => _elapsed = DateTime.now().toUtc().difference(_startTime!));
+        setState(
+          () => _elapsed = DateTime.now().toUtc().difference(_startTime!),
+        );
       }
     });
   }
 
-  void _stopTicker() { _ticker?.cancel(); _ticker = null; }
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
 
   Future<void> _refreshStats() async {
     try {
@@ -134,15 +151,19 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       // The heatmap is keyed by 'YYYY-MM-DD' strings — index it for O(1) lookup.
       final byDate = <String, int>{
         for (final e in entries)
-          if (e['date'] is String) e['date'] as String: (e['total_minutes'] as num?)?.toInt() ?? 0,
+          if (e['date'] is String)
+            e['date'] as String: (e['total_minutes'] as num?)?.toInt() ?? 0,
       };
 
       final todayKey = _dateKey(today);
       final todayMins = byDate[todayKey] ?? 0;
 
       // Week = Monday→Sunday containing today (DateTime.weekday: Mon=1, Sun=7).
-      final weekStart = DateTime(today.year, today.month, today.day)
-          .subtract(Duration(days: today.weekday - 1));
+      final weekStart = DateTime(
+        today.year,
+        today.month,
+        today.day,
+      ).subtract(Duration(days: today.weekday - 1));
       var weekMins = 0;
       var lastWeekMins = 0;
       for (var i = 0; i < 7; i++) {
@@ -198,7 +219,8 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   Future<void> _handleStart() async {
     if (_selectedProjectId == null) return;
     final startTime = _showStartTimeInput && _customStartTime != null
-        ? _customStartTime!.toUtc().toIso8601String() : null;
+        ? _customStartTime!.toUtc().toIso8601String()
+        : null;
     setState(() {
       _running = true;
       _startTime = _customStartTime?.toUtc() ?? DateTime.now().toUtc();
@@ -258,28 +280,53 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     final minutes = _elapsed.inMinutes;
     final was = _running;
     final stopTime = _showStopTimeInput && _customStopTime != null
-        ? _customStopTime!.toUtc().toIso8601String() : null;
+        ? _customStopTime!.toUtc().toIso8601String()
+        : null;
     setState(() {
-      _running = false; _error = null;
-      _showStopTimeInput = false; _customStopTime = null; _customStartTime = null;
+      _running = false;
+      _error = null;
+      _showStopTimeInput = false;
+      _customStopTime = null;
+      _customStartTime = null;
     });
     try {
       final beat = await widget.client.stopTimer(stopTime: stopTime);
-      setState(() { _startTime = null; _elapsed = Duration.zero; });
+      setState(() {
+        _startTime = null;
+        _elapsed = Duration.zero;
+      });
       if (mounted && projectName.isNotEmpty) {
-        final dur = minutes >= 60 ? '${minutes ~/ 60}h ${minutes % 60}m' : '${minutes}m';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Row(children: [
-            Container(width: 10, height: 10, decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color.fromARGB(255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]),
-            )),
-            const SizedBox(width: 10),
-            Text('$dur logged to $projectName', style: BeatsType.bodyMedium),
-          ]),
-          backgroundColor: BeatsColors.surfaceAlt,
-          behavior: SnackBarBehavior.floating,
-        ));
+        final dur = minutes >= 60
+            ? '${minutes ~/ 60}h ${minutes % 60}m'
+            : '${minutes}m';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color.fromARGB(
+                      255,
+                      _selectedProjectColor[0],
+                      _selectedProjectColor[1],
+                      _selectedProjectColor[2],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '$dur logged to $projectName',
+                  style: BeatsType.bodyMedium,
+                ),
+              ],
+            ),
+            backgroundColor: BeatsColors.surfaceAlt,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
       await _refresh();
       await _refreshStats();
@@ -303,12 +350,14 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(SnackBar(
-      content: Text('$prefix: $e', style: BeatsType.bodyMedium),
-      backgroundColor: BeatsColors.red,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 6),
-    ));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$prefix: $e', style: BeatsType.bodyMedium),
+        backgroundColor: BeatsColors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+      ),
+    );
   }
 
   Future<void> _promptPostStopNote(Map<String, dynamic> beat) async {
@@ -334,10 +383,14 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
       // Best-effort: the session is already saved; surface a snackbar but
       // don't roll back the UI.
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Couldn\'t save your note — try editing the session later'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Couldn\'t save your note — try editing the session later',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -367,7 +420,9 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
 
   @override
   void dispose() {
-    _stopTicker(); _syncTimer?.cancel(); _pulseController.dispose();
+    _stopTicker();
+    _syncTimer?.cancel();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -376,12 +431,18 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     if (_loading) {
       return const Scaffold(
         backgroundColor: BeatsColors.background,
-        body: Center(child: CircularProgressIndicator(color: BeatsColors.amber)),
+        body: Center(
+          child: CircularProgressIndicator(color: BeatsColors.amber),
+        ),
       );
     }
 
     final projColor = Color.fromARGB(
-        255, _selectedProjectColor[0], _selectedProjectColor[1], _selectedProjectColor[2]);
+      255,
+      _selectedProjectColor[0],
+      _selectedProjectColor[1],
+      _selectedProjectColor[2],
+    );
 
     return Scaffold(
       backgroundColor: BeatsColors.background,
@@ -399,117 +460,232 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
               )
             : null,
         child: SafeArea(
-          child: BeatsRefresh(
-            onRefresh: _refresh,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
-              children: [
-                // ── Status chip ──
-                StaggeredEntrance(
-                  child: Center(
-                    child: _running
-                        ? _buildRunningChip(projColor)
-                        : Text(_greeting(),
-                            style: GoogleFonts.dmSerifDisplay(
-                              fontSize: 22, color: BeatsColors.textSecondary,
-                            )),
-                  ),
-                ),
-                SizedBox(height: _running ? 40 : 48),
-
-                // ── The Time ──
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 60),
-                  child: _buildTimeDisplay(),
-                ),
-
-                // ── Project name (running) ──
-                if (_running) ...[
-                  const SizedBox(height: 12),
-                  StaggeredEntrance(
-                    delay: const Duration(milliseconds: 100),
-                    child: Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(width: 8, height: 8,
-                            decoration: BoxDecoration(shape: BoxShape.circle, color: projColor)),
-                          const SizedBox(width: 10),
-                          Text(_selectedProjectName ?? '',
-                            style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textSecondary)),
-                        ],
+          child: Stack(
+            children: [
+              BeatsRefresh(
+                onRefresh: _refresh,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                  children: [
+                    // ── Status chip ──
+                    StaggeredEntrance(
+                      child: Center(
+                        child: _running
+                            ? _buildRunningChip(projColor)
+                            : Text(
+                                _greeting(),
+                                style: GoogleFonts.dmSerifDisplay(
+                                  fontSize: 22,
+                                  color: BeatsColors.textSecondary,
+                                ),
+                              ),
                       ),
                     ),
-                  ),
-                  if (_startTime != null) ...[
-                    const SizedBox(height: 4),
-                    Center(
-                      child: Text(
-                        'since ${DateFormat.jm().format(_startTime!.toLocal())}',
-                        style: BeatsType.bodySmall.copyWith(
-                          color: BeatsColors.textTertiary, fontSize: 11),
-                      ),
+                    SizedBox(height: _running ? 28 : 32),
+
+                    // Soft hairline that bridges the chip and the digits.
+                    StaggeredEntrance(
+                      delay: const Duration(milliseconds: 40),
+                      child: _buildChipDivider(projColor),
                     ),
+                    SizedBox(height: _running ? 28 : 32),
+
+                    // ── The Time ──
+                    StaggeredEntrance(
+                      delay: const Duration(milliseconds: 60),
+                      child: _buildTimeDisplay(),
+                    ),
+
+                    // ── Project name (running) ──
+                    if (_running) ...[
+                      const SizedBox(height: 12),
+                      StaggeredEntrance(
+                        delay: const Duration(milliseconds: 100),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: projColor,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                _selectedProjectName ?? '',
+                                style: BeatsType.bodyMedium.copyWith(
+                                  color: BeatsColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_startTime != null) ...[
+                        const SizedBox(height: 4),
+                        Center(
+                          child: Text(
+                            'since ${DateFormat.jm().format(_startTime!.toLocal())}',
+                            style: BeatsType.bodySmall.copyWith(
+                              color: BeatsColors.textTertiary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+
+                    SizedBox(height: _running ? 56 : 44),
+
+                    // ── Action area ──
+                    StaggeredEntrance(
+                      delay: const Duration(milliseconds: 120),
+                      child: _running
+                          ? _buildStopSection()
+                          : _buildStartSection(),
+                    ),
+
+                    // ── Stats row (today / week / streak) ──
+                    if (_statsLoaded) ...[
+                      const SizedBox(height: 40),
+                      StaggeredEntrance(
+                        delay: const Duration(milliseconds: 180),
+                        child: _buildStatsRow(),
+                      ),
+                    ],
+
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: BeatsColors.red,
+                            fontSize: 11,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                   ],
-                ],
-
-                SizedBox(height: _running ? 48 : 32),
-
-                // ── Action area ──
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 120),
-                  child: _running ? _buildStopSection() : _buildStartSection(),
                 ),
-
-                // ── Stats row (today / week / streak) ──
-                if (_statsLoaded) ...[
-                  const SizedBox(height: 40),
-                  StaggeredEntrance(
-                    delay: const Duration(milliseconds: 180),
-                    child: _buildStatsRow(),
+              ),
+              // ── Monastic-mode entry point ──
+              // Sits over the top-right corner so it never crowds the
+              // timer block. Tapping it pushes the full-bleed clock face.
+              Positioned(
+                top: 8,
+                right: 8,
+                child: PressScale(
+                  onTap: _enterMonastic,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: BeatsColors.surface.withValues(alpha: 0.6),
+                      border: Border.all(
+                        color: BeatsColors.border.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.fullscreen,
+                      size: 14,
+                      color: BeatsColors.textTertiary,
+                    ),
                   ),
-                ],
-
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text(_error!, style: const TextStyle(
-                      color: BeatsColors.red, fontSize: 11), textAlign: TextAlign.center),
-                  ),
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildRunningChip(Color projColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: projColor.withValues(alpha: 0.1),
-        border: Border.all(color: projColor.withValues(alpha: 0.2)),
+  void _enterMonastic() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (_, _, _) => MonasticScreen(
+          startTime: _running ? _startTime : null,
+          projectName: _running ? _selectedProjectName : null,
+          projectColor: _running ? _selectedProjectColor : null,
+        ),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (_, _) => Container(
-              width: 6, height: 6,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: projColor.withValues(alpha: 0.3 + _pulseController.value * 0.7),
+    );
+  }
+
+  Widget _buildRunningChip(Color projColor) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (_, _) {
+        final pulse = _pulseController.value;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: projColor.withValues(alpha: 0.1),
+            border: Border.all(color: projColor.withValues(alpha: 0.2)),
+            // Card shadow inherits the dot's breathing rhythm — same controller,
+            // so the chip glow + dot brightness rise and fall together.
+            boxShadow: [
+              BoxShadow(
+                color: projColor.withValues(alpha: 0.10 + pulse * 0.20),
+                blurRadius: 12 + pulse * 10,
+                spreadRadius: pulse * 1.5,
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text('RECORDING', style: BeatsType.label.copyWith(
-            color: projColor, letterSpacing: 2)),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: projColor.withValues(alpha: 0.3 + pulse * 0.7),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'RECORDING',
+                style: BeatsType.label.copyWith(
+                  color: projColor,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Thin gradient hairline that bridges the status chip and the time digits.
+  /// Fades in from transparent edges to a warm middle so the eye gets a soft
+  /// vertical anchor without seeing a hard rule.
+  Widget _buildChipDivider(Color projColor) {
+    final tint = _running ? projColor : BeatsColors.amber;
+    return Center(
+      child: Container(
+        width: 80,
+        height: 1,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              tint.withValues(alpha: 0),
+              tint.withValues(alpha: 0.25),
+              tint.withValues(alpha: 0),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -517,14 +693,19 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   Widget _buildStatsRow() {
     final streakLabel = _streakDays > 0
         ? (_streakDays >= 7
-            ? '🔥 $_streakDays'
-            : '$_streakDays${_streakDays == 1 ? ' DAY' : ' DAYS'}')
+              ? '🔥 $_streakDays'
+              : '$_streakDays${_streakDays == 1 ? ' DAY' : ' DAYS'}')
         : '—';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          Expanded(child: _statCell(label: 'TODAY', value: _formatMinutes(_todayMinutes))),
+          Expanded(
+            child: _statCell(
+              label: 'TODAY',
+              value: _formatMinutes(_todayMinutes),
+            ),
+          ),
           _statDivider(),
           Expanded(
             child: _statCell(
@@ -551,7 +732,8 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   /// null on the first week of activity (avoids "↑∞%" or "↑200%" noise).
   Widget? _weekDeltaBadge() {
     if (_lastWeekMinutes < 30) return null; // not enough signal
-    final deltaPct = ((_weekMinutes - _lastWeekMinutes) / _lastWeekMinutes * 100).round();
+    final deltaPct =
+        ((_weekMinutes - _lastWeekMinutes) / _lastWeekMinutes * 100).round();
     if (deltaPct == 0) return null;
     final up = deltaPct > 0;
     final color = up ? BeatsColors.green : BeatsColors.red;
@@ -624,24 +806,47 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
         textBaseline: TextBaseline.alphabetic,
         children: [
           // Hours
-          _TimeUnit(value: h.toString().padLeft(2, '0'), label: 'HR', color: color),
+          _TimeUnit(
+            value: h.toString().padLeft(2, '0'),
+            label: 'HR',
+            color: color,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(':', style: GoogleFonts.jetBrainsMono(
-              fontSize: 56, fontWeight: FontWeight.w100, color: colonColor)),
+            child: Text(
+              ':',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 56,
+                fontWeight: FontWeight.w100,
+                color: colonColor,
+              ),
+            ),
           ),
           // Minutes
-          _TimeUnit(value: m.toString().padLeft(2, '0'), label: 'MIN', color: color),
+          _TimeUnit(
+            value: m.toString().padLeft(2, '0'),
+            label: 'MIN',
+            color: color,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(':', style: GoogleFonts.jetBrainsMono(
-              fontSize: 56, fontWeight: FontWeight.w100, color: colonColor)),
+            child: Text(
+              ':',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 56,
+                fontWeight: FontWeight.w100,
+                color: colonColor,
+              ),
+            ),
           ),
           // Seconds
-          _TimeUnit(value: s.toString().padLeft(2, '0'), label: 'SEC',
+          _TimeUnit(
+            value: s.toString().padLeft(2, '0'),
+            label: 'SEC',
             color: _running
                 ? BeatsColors.textPrimary.withValues(alpha: 0.4)
-                : BeatsColors.textTertiary.withValues(alpha: 0.4)),
+                : BeatsColors.textTertiary.withValues(alpha: 0.4),
+          ),
         ],
       ),
     );
@@ -672,21 +877,43 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             child: Row(
               children: [
                 if (_selectedProjectId != null) ...[
-                  Container(width: 10, height: 10, decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color.fromARGB(255, _selectedProjectColor[0],
-                        _selectedProjectColor[1], _selectedProjectColor[2]),
-                  )),
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color.fromARGB(
+                        255,
+                        _selectedProjectColor[0],
+                        _selectedProjectColor[1],
+                        _selectedProjectColor[2],
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(_selectedProjectName ?? '',
-                    style: BeatsType.bodyMedium)),
+                  Expanded(
+                    child: Text(
+                      _selectedProjectName ?? '',
+                      style: BeatsType.bodyMedium,
+                    ),
+                  ),
                 ] else ...[
                   Icon(Icons.search, size: 18, color: BeatsColors.textTertiary),
                   const SizedBox(width: 12),
-                  Expanded(child: Text('Select a project...',
-                    style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary))),
+                  Expanded(
+                    child: Text(
+                      'Select a project...',
+                      style: BeatsType.bodyMedium.copyWith(
+                        color: BeatsColors.textTertiary,
+                      ),
+                    ),
+                  ),
                 ],
-                Icon(Icons.unfold_more, size: 18, color: BeatsColors.textTertiary),
+                Icon(
+                  Icons.unfold_more,
+                  size: 18,
+                  color: BeatsColors.textTertiary,
+                ),
               ],
             ),
           ),
@@ -706,13 +933,15 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Text('Start',
+              child: Text(
+                'Start',
                 style: BeatsType.button.copyWith(
                   fontSize: 16,
                   color: _selectedProjectId != null
                       ? const Color(0xFF1A1408)
                       : BeatsColors.textTertiary,
-                )),
+                ),
+              ),
             ),
           ),
         ),
@@ -724,20 +953,26 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
             onTap: () => setState(() {
               _showStartTimeInput = !_showStartTimeInput;
               if (_showStartTimeInput && _customStartTime == null) {
-                _customStartTime = DateTime.now().subtract(const Duration(hours: 1));
+                _customStartTime = DateTime.now().subtract(
+                  const Duration(hours: 1),
+                );
               }
             }),
             child: Text(
               _showStartTimeInput ? 'Hide start time' : 'Set start time',
               style: BeatsType.bodySmall.copyWith(
-                color: _showStartTimeInput ? BeatsColors.amber : BeatsColors.textTertiary,
+                color: _showStartTimeInput
+                    ? BeatsColors.amber
+                    : BeatsColors.textTertiary,
               ),
             ),
           ),
           if (_showStartTimeInput) ...[
             const SizedBox(height: 12),
             _DateTimePicker(
-              value: _customStartTime ?? DateTime.now().subtract(const Duration(hours: 1)),
+              value:
+                  _customStartTime ??
+                  DateTime.now().subtract(const Duration(hours: 1)),
               onChanged: (dt) => setState(() => _customStartTime = dt),
             ),
           ],
@@ -757,10 +992,8 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
           tween: Tween(begin: 0.0, end: _stopShake),
           duration: const Duration(milliseconds: 320),
           curve: Curves.elasticIn,
-          builder: (_, t, child) => Transform.translate(
-            offset: Offset(t, 0),
-            child: child,
-          ),
+          builder: (_, t, child) =>
+              Transform.translate(offset: Offset(t, 0), child: child),
           child: PressScale(
             onTap: _handleStopOrShake,
             child: Container(
@@ -773,12 +1006,22 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(width: 14, height: 14,
+                  Container(
+                    width: 14,
+                    height: 14,
                     decoration: BoxDecoration(
-                      color: Colors.white, borderRadius: BorderRadius.circular(2))),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Text('Stop', style: BeatsType.button.copyWith(
-                    fontSize: 16, color: Colors.white)),
+                  Text(
+                    'Stop',
+                    style: BeatsType.button.copyWith(
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -797,7 +1040,10 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
           child: Text(
             _showStopTimeInput ? 'Hide stop time' : 'Set stop time',
             style: BeatsType.bodySmall.copyWith(
-              color: _showStopTimeInput ? BeatsColors.amber : BeatsColors.textTertiary),
+              color: _showStopTimeInput
+                  ? BeatsColors.amber
+                  : BeatsColors.textTertiary,
+            ),
           ),
         ),
         if (_showStopTimeInput) ...[
@@ -825,12 +1071,19 @@ class _TimeUnit extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
-  const _TimeUnit({required this.value, required this.label, required this.color});
+  const _TimeUnit({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     final textStyle = GoogleFonts.jetBrainsMono(
-      fontSize: 64, fontWeight: FontWeight.w200, color: color, height: 1,
+      fontSize: 64,
+      fontWeight: FontWeight.w200,
+      color: color,
+      height: 1,
       fontFeatures: [const FontFeature.tabularFigures()],
     );
 
@@ -853,8 +1106,14 @@ class _TimeUnit extends StatelessWidget {
           child: Text(value, key: ValueKey(value), style: textStyle),
         ),
         const SizedBox(height: 4),
-        Text(label, style: BeatsType.label.copyWith(
-          fontSize: 9, color: color.withValues(alpha: 0.4), letterSpacing: 3)),
+        Text(
+          label,
+          style: BeatsType.label.copyWith(
+            fontSize: 9,
+            color: color.withValues(alpha: 0.4),
+            letterSpacing: 3,
+          ),
+        ),
       ],
     );
   }
@@ -872,16 +1131,20 @@ class _DateTimePicker extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         final date = await showDatePicker(
-          context: context, initialDate: value,
+          context: context,
+          initialDate: value,
           firstDate: DateTime.now().subtract(const Duration(days: 7)),
           lastDate: DateTime.now().add(const Duration(days: 1)),
         );
         if (date == null || !context.mounted) return;
         final time = await showTimePicker(
-          context: context, initialTime: TimeOfDay.fromDateTime(value),
+          context: context,
+          initialTime: TimeOfDay.fromDateTime(value),
         );
         if (time == null) return;
-        onChanged(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+        onChanged(
+          DateTime(date.year, date.month, date.day, time.hour, time.minute),
+        );
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -894,8 +1157,10 @@ class _DateTimePicker extends StatelessWidget {
           children: [
             Icon(Icons.schedule, size: 16, color: BeatsColors.textTertiary),
             const SizedBox(width: 10),
-            Text(DateFormat('MMM d, h:mm a').format(value),
-              style: BeatsType.bodyMedium),
+            Text(
+              DateFormat('MMM d, h:mm a').format(value),
+              style: BeatsType.bodyMedium,
+            ),
           ],
         ),
       ),
@@ -926,17 +1191,22 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
 
   /// Map of id → project, for O(1) lookup when resolving recents.
   Map<String, Map<String, dynamic>> _projectsById() => {
-        for (final p in widget.projects)
-          if (p['id'] is String) p['id'] as String: p,
-      };
+    for (final p in widget.projects)
+      if (p['id'] is String) p['id'] as String: p,
+  };
 
   @override
   Widget build(BuildContext context) {
     final all = widget.projects;
     final filtered = _query.isEmpty
         ? all
-        : all.where((p) =>
-            (p['name'] as String? ?? '').toLowerCase().contains(_query.toLowerCase())).toList();
+        : all
+              .where(
+                (p) => (p['name'] as String? ?? '').toLowerCase().contains(
+                  _query.toLowerCase(),
+                ),
+              )
+              .toList();
 
     // Resolve recents to actual project records (only show recents that still
     // exist + aren't already filtered out by the search query).
@@ -944,20 +1214,27 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
     final recents = _query.isNotEmpty
         ? const <Map<String, dynamic>>[]
         : widget.recentIds
-            .map((id) => byId[id])
-            .whereType<Map<String, dynamic>>()
-            .toList(growable: false);
+              .map((id) => byId[id])
+              .whereType<Map<String, dynamic>>()
+              .toList(growable: false);
     final recentIdSet = {for (final r in recents) r['id'] as String?};
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 12),
-          Container(width: 40, height: 4, decoration: BoxDecoration(
-            color: BeatsColors.textTertiary.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: BeatsColors.textTertiary.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(height: 20),
 
           Padding(
@@ -968,20 +1245,34 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
               style: BeatsType.bodyMedium,
               decoration: InputDecoration(
                 hintText: 'Search projects...',
-                hintStyle: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary),
-                prefixIcon: Icon(Icons.search, size: 20, color: BeatsColors.textTertiary),
+                hintStyle: BeatsType.bodyMedium.copyWith(
+                  color: BeatsColors.textTertiary,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 20,
+                  color: BeatsColors.textTertiary,
+                ),
                 filled: true,
                 fillColor: BeatsColors.background,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: BeatsColors.border)),
+                  borderSide: BorderSide(color: BeatsColors.border),
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: BeatsColors.border)),
+                  borderSide: BorderSide(color: BeatsColors.border),
+                ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.4))),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  borderSide: BorderSide(
+                    color: BeatsColors.amber.withValues(alpha: 0.4),
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
               ),
             ),
           ),
@@ -1009,8 +1300,12 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
               child: filtered.isEmpty
                   ? Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text('No projects found',
-                        style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary)),
+                      child: Text(
+                        'No projects found',
+                        style: BeatsType.bodySmall.copyWith(
+                          color: BeatsColors.textTertiary,
+                        ),
+                      ),
                     )
                   : ListView(
                       shrinkWrap: true,
@@ -1063,15 +1358,21 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? BeatsColors.amber.withValues(alpha: 0.08) : Colors.transparent,
+          color: selected
+              ? BeatsColors.amber.withValues(alpha: 0.08)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
             Container(
-              width: 4, height: 24,
+              width: 4,
+              height: 24,
               decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(2))),
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
@@ -1081,8 +1382,7 @@ class _ProjectPickerSheetState extends State<_ProjectPickerSheet> {
                 ),
               ),
             ),
-            if (selected)
-              Icon(Icons.check, size: 18, color: BeatsColors.amber),
+            if (selected) Icon(Icons.check, size: 18, color: BeatsColors.amber),
           ],
         ),
       ),
@@ -1158,33 +1458,41 @@ class _PostStopSheetState extends State<_PostStopSheet> {
     final merged = mergeTags(chips: _selectedChips, typed: typed);
     Navigator.pop(
       context,
-      _PostStopResult(
-        note: _noteController.text.trim(),
-        tags: merged,
-      ),
+      _PostStopResult(note: _noteController.text.trim(), tags: merged),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
-              color: BeatsColors.textTertiary.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(2)))),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: BeatsColors.textTertiary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
             Text(
               widget.projectName.isEmpty
                   ? 'How did it go?'
                   : 'How did it go on ${widget.projectName}?',
               style: GoogleFonts.dmSerifDisplay(
-                fontSize: 22, color: BeatsColors.textPrimary),
+                fontSize: 22,
+                color: BeatsColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 16),
             Text('NOTE', style: BeatsType.label),
@@ -1205,9 +1513,7 @@ class _PostStopSheetState extends State<_PostStopSheet> {
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: [
-                  for (final tag in _allTags.take(12)) _tagChip(tag),
-                ],
+                children: [for (final tag in _allTags.take(12)) _tagChip(tag)],
               ),
               const SizedBox(height: 8),
             ],
@@ -1215,9 +1521,9 @@ class _PostStopSheetState extends State<_PostStopSheet> {
               controller: _tagsController,
               style: BeatsType.bodyMedium,
               cursorColor: BeatsColors.amber,
-              decoration: _decoration(_allTags.isEmpty
-                  ? 'comma, separated, words'
-                  : 'add new tag…'),
+              decoration: _decoration(
+                _allTags.isEmpty ? 'comma, separated, words' : 'add new tag…',
+              ),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _save(),
             ),
@@ -1234,8 +1540,12 @@ class _PostStopSheetState extends State<_PostStopSheet> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: BeatsColors.border),
                       ),
-                      child: Text('Skip', style: BeatsType.button.copyWith(
-                        color: BeatsColors.textTertiary)),
+                      child: Text(
+                        'Skip',
+                        style: BeatsType.button.copyWith(
+                          color: BeatsColors.textTertiary,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1250,8 +1560,12 @@ class _PostStopSheetState extends State<_PostStopSheet> {
                         color: BeatsColors.amber,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text('Save', style: BeatsType.button.copyWith(
-                        color: const Color(0xFF1A1408))),
+                      child: Text(
+                        'Save',
+                        style: BeatsType.button.copyWith(
+                          color: const Color(0xFF1A1408),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1294,14 +1608,17 @@ class _PostStopSheetState extends State<_PostStopSheet> {
   InputDecoration _decoration(String hint) => InputDecoration(
     hintText: hint,
     hintStyle: BeatsType.bodyMedium.copyWith(
-      color: BeatsColors.textTertiary.withValues(alpha: 0.5)),
+      color: BeatsColors.textTertiary.withValues(alpha: 0.5),
+    ),
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: BeatsColors.border)),
+      borderSide: BorderSide(color: BeatsColors.border),
+    ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.6))),
+      borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.6)),
+    ),
   );
 }

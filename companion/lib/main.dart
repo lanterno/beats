@@ -19,16 +19,16 @@ import 'theme/beats_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
-  runApp(const BeatsCompanionApp());
+  runApp(const PeteApp());
 }
 
-class BeatsCompanionApp extends StatelessWidget {
-  const BeatsCompanionApp({super.key});
+class PeteApp extends StatelessWidget {
+  const PeteApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Beats Companion',
+      title: 'Pete',
       debugShowCheckedModeBanner: false,
       theme: buildBeatsTheme(),
       home: const AppShell(),
@@ -67,24 +67,32 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _checkPairing() async {
-    final token = await _storage.loadToken();
-    if (token != null) {
-      final apiUrl = await _storage.loadApiUrl();
-      _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+    String? token;
+    try {
+      token = await _storage.loadToken();
+      if (token != null) {
+        final apiUrl = await _storage.loadApiUrl();
+        _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+        _tray = TrayService(
+          client: _client!,
+          onShowWindow: () async {
+            await windowManager.show();
+            await windowManager.focus();
+          },
+        );
+        _tray!.init();
+        await _initNotifications();
+      }
+    } catch (_) {
+      // Anything from keychain read failures to tray init crashes lands here.
+      // We surface the pairing screen rather than wedging on a spinner — the
+      // user can re-pair to recover.
+      token = null;
+      _client = null;
     }
-    if (token != null && _client != null) {
-      _tray = TrayService(
-        client: _client!,
-        onShowWindow: () async {
-          await windowManager.show();
-          await windowManager.focus();
-        },
-      );
-      _tray!.init();
-      await _initNotifications();
-    }
+    if (!mounted) return;
     setState(() {
-      _paired = token != null;
+      _paired = token != null && _client != null;
       _loading = false;
     });
   }

@@ -29,6 +29,31 @@ class TrayIconRenderer {
 
   Future<String> idleIcon() => iconForHex(_idleHex);
 
+  /// Renders a tiny flow-score sparkline behind a colored dot, baked into
+  /// a PNG that the tray plugins will load.
+  ///
+  /// The sparkline gives a glanceable read on the last ~90 min of flow:
+  /// peaks read green, dips read red, and the dot in the bottom-right
+  /// corner anchors the icon to the running project's color so the icon
+  /// still tells you "you're in project X" at a glance.
+  ///
+  /// [scores] is an ordered list of values in [0, 1] — most recent last.
+  /// Empty or all-null inputs fall back to a plain dot for the project.
+  Future<String> iconForSparkline(List<double> scores, List<int>? rgb) async {
+    final hex = _hexFromRgb(rgb) ?? _idleHex;
+    if (scores.isEmpty) return iconForHex(hex);
+
+    // One sparkline file per project hex — overwritten on every refresh.
+    // The data shifts every poll anyway; a per-fingerprint cache would
+    // fill the temp dir over a long session without saving meaningful
+    // work (each render is sub-millisecond).
+    final dir = await _ensureDir();
+    final file = File('${dir.path}/tray_spark_$hex.png');
+    final bytes = await _renderSparkline(scores, hex);
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
+  }
+
   Future<String> iconForHex(String hex) async {
     final key = hex.toUpperCase();
     final cached = _cache[key];
@@ -66,6 +91,54 @@ class TrayIconRenderer {
       ..color = color
       ..isAntiAlias = true;
     canvas.drawCircle(center, radius, paint);
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(_renderSize, _renderSize);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    picture.dispose();
+    image.dispose();
+    return byteData!.buffer.asUint8List();
+  }
+
+  Future<Uint8List> _renderSparkline(List<double> scores, String hex) async {
+    final dotColor = _parseHex(hex);
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+
+    // Sparkline lives in the top-left ~24×24 of the icon. The project dot
+    // anchors in the bottom-right corner so the icon still reads as "your
+    // project" at a glance, even when the line is busy.
+    final clamped = scores.map((s) => s.clamp(0.0, 1.0).toDouble()).toList();
+    final n = clamped.length;
+    final stroke = ui.Paint()
+      ..color = const ui.Color(0xFFD4952A)
+      ..isAntiAlias = true
+      ..style = ui.PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = ui.StrokeCap.round
+      ..strokeJoin = ui.StrokeJoin.round;
+
+    final path = ui.Path();
+    const left = 2.0;
+    const top = 4.0;
+    const right = 28.0;
+    const bottom = 28.0;
+    for (var i = 0; i < n; i++) {
+      final x = left + (right - left) * (n == 1 ? 0.5 : i / (n - 1));
+      final y = bottom - (bottom - top) * clamped[i];
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(path, stroke);
+
+    // Project dot anchored bottom-right.
+    final dotPaint = ui.Paint()
+      ..color = dotColor
+      ..isAntiAlias = true;
+    canvas.drawCircle(const ui.Offset(28, 28), 6, dotPaint);
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(_renderSize, _renderSize);

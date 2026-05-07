@@ -17,9 +17,8 @@ flow plus Fitbit / Oura OAuth without needing the web UI.
 ## Shipped
 
 The scaffold lives under `companion/` and CI builds for all 6 platforms
-(`.github/workflows/companion.yml`). For the design polish that landed
-in parallel, see `companion-ui-design-roadmap.md`; for the notification
-work, see `companion-roadmap.md`.
+(`.github/workflows/companion.yml`). For the notification work and what's
+left to ship, see `companion-roadmap.md`.
 
 ### File layout
 

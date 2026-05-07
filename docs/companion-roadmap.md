@@ -7,67 +7,6 @@
 **Companion = action.** Start/stop timers, see what's running, get nudged.
 **Web = reflection.** Heatmaps, weekly reviews, goal tuning, integrations setup.
 
-## Shipped
-
-### Core experience
-- Pairing via 6-char code (and QR scan on iOS / Android — see `flutter-companion.md`)
-- Connection heartbeat, Fitbit / Oura integration management, desktop
-  Fitbit OAuth via `url_launcher`
-- Timer control: start/stop, project picker with **RECENT** section,
-  custom start/stop times, post-stop "How did it go?" note + tags +
-  skip sheet, today/week/streak stats row, week-over-week delta arrow,
-  accidental-stop shake guard
-- Flow score gauge with breathing glow ≥ 0.7, sweep-gradient ring,
-  tap-to-inspect timeline (time / score / category / editor repo +
-  branch), animated category bars
-- Coach: morning brief in a sunrise-gradient card with grain overlay
-  and HH:MM timestamp, evening review with editable text answers
-  (`POST /api/coach/review`) + "X OF N ANSWERED" progress, daily mood
-  picker with 1.0 → 1.2 → 1.0 bounce, "What went well?" debounce-saving
-  note, 7-day mood sparkline
-- Intentions: top progress bar, color-bar accent, live add-preview,
-  quick-add row of recent combos, 6-particle confetti burst on
-  completion
-- Health: 7-day biometric dashboard (sleep / HRV / resting HR / steps /
-  readiness) with sparkline metric cards, sourced from API today —
-  native ingestion is separate (see `flutter-companion.md`)
-- 6-tab frosted-glass bottom nav with stagger-in transitions, dark
-  theme, all 6 platforms
-
-### Notifications
-Free-tier path (no APNs / FCM, no Apple Developer / Google Play
-projects required), all delivered via `flutter_local_notifications`:
-
-| Prompt | Source | Delivery |
-|---|---|---|
-| Morning brief | Foreground poll, 5 min cadence | `notifyBriefAvailable` on a new `id` from `/api/coach/brief/today`, dedupe per-day |
-| Evening review | Foreground poll, 5 min cadence | `notifyReviewAvailable` on a new review `date`, dedupe per-day |
-| EOD mood prompt | OS-scheduled | `zonedSchedule` daily at user-configured time — fires even when the app isn't running |
-| Auto-timer suggestion | Foreground poll | `notifyAutoTimerSuggestion` for any new `PendingSuggestion` from `GET /api/signals/pending-suggestions`, dedupe by id |
-| Drift alert | Foreground poll | `notifyDriftAlert` for any new drift event from `GET /api/signals/recent-drift`, dedupe by id; bundle id resolves to a friendly label via `driftAppLabel` |
-
-**Auto-timer "Start" action button** — Android `AndroidNotificationAction`
-+ iOS `DarwinNotificationCategory` with foreground option. Tapping fires
-a `NotificationTap` with `actionId == kStartAutoTimerActionId`; the main
-app's tap router parses `auto-timer:<id>|<name>` via
-`parseAutoTimerPayload` and POSTs `/api/timer/start` directly — no
-screen opens, just a confirmation snackbar.
-
-**Daemon-side parallel notifications** (desktop): the daemon's
-`autotimer` and `shield` modules also fire native notifications via
-`osascript` (macOS), `notify-send`/libnotify-bin (Linux), and PowerShell
-`ToastNotification` (Windows). Companion + daemon fire in parallel —
-different channels, same prompt — so users always get the prompt
-regardless of which surface is active.
-
-### Tray (macOS / Windows / Linux)
-- Live elapsed time + project label in the menu bar
-- Quick-start submenu of recent projects, Stop, Open, Quit
-- Tray icon renders a colored dot matching the running project (gray
-  when idle), cached on disk by hex via `TrayIconRenderer`
-
----
-
 ## Remaining
 
 Each item is tagged with what blocks it from autonomous code work.

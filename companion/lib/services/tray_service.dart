@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:system_tray/system_tray.dart';
 import 'api_client.dart';
+import 'mac_ambient.dart';
 import 'tray_icon.dart';
 
 /// Decodes a project's hex color string (with or without `#`) into
@@ -44,14 +45,22 @@ class TrayService {
   final TrayIconRenderer _iconRenderer = TrayIconRenderer();
   Timer? _pollTimer;
   Timer? _tickTimer;
+  Timer? _flowTimer;
+  // Last 90 min of flow scores (one per ~5-min window the API emits).
+  // Drives the menu-bar sparkline. Empty when we haven't fetched yet or
+  // when the API call failed — the renderer falls back to a plain dot.
+  List<double> _flowScores = const [];
 
   // State
   bool _running = false;
   String? _projectName;
   String? _projectColorHex;
-  String? _currentIconHex;
   DateTime? _startTime;
   List<Map<String, dynamic>> _projects = [];
+  // Tracks the last value pushed to the dock badge so we can skip the
+  // method-channel hop on every tick (the minute counter only changes
+  // every 60 ticks). `null` means "no badge displayed".
+  int? _lastBadgeMinutes;
 
   TrayService({required this.client, required this.onShowWindow});
 
@@ -62,9 +71,8 @@ class TrayService {
     await _tray.initSystemTray(
       title: '',
       iconPath: idlePath,
-      toolTip: 'Beats Companion',
+      toolTip: 'Pete',
     );
-    _currentIconHex = '7A7A7A';
 
     _tray.registerSystemTrayEventHandler((eventName) {
       if (eventName == kSystemTrayEventClick) {
@@ -82,12 +90,42 @@ class TrayService {
 
     // Tick every second to update elapsed time in menu bar
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+
+    // Refresh the menu-bar sparkline every 5 min. Flow windows are emitted
+    // by the daemon at roughly that cadence — polling faster just churns
+    // the cache without giving the user new information.
+    unawaited(_refreshFlow());
+    _flowTimer = Timer.periodic(const Duration(minutes: 5), (_) => _refreshFlow());
+  }
+
+  /// Pulls the last 90 min of flow windows and rebuilds the tray icon.
+  /// Silent on failure — the existing dot icon stays put.
+  Future<void> _refreshFlow() async {
+    try {
+      final now = DateTime.now().toUtc();
+      final start = now.subtract(const Duration(minutes: 90));
+      final windows = await client.getFlowWindows(
+        start.toIso8601String(),
+        now.toIso8601String(),
+      );
+      final scores = <double>[];
+      for (final w in windows) {
+        final s = w['score'];
+        if (s is num) scores.add(s.toDouble());
+      }
+      _flowScores = scores;
+      await _updateIcon();
+    } catch (_) {}
   }
 
   Future<void> _poll() async {
     try {
-      final status = await client.getTimerStatus();
-      final projects = await client.getProjects();
+      final results = await Future.wait([
+        client.getTimerStatus(),
+        client.getProjects(),
+      ]);
+      final status = results[0] as Map<String, dynamic>;
+      final projects = results[1] as List<Map<String, dynamic>>;
 
       final isBeating = status['isBeating'] == true;
       final project = status['project'] as Map<String, dynamic>?;
@@ -116,16 +154,16 @@ class TrayService {
   }
 
   Future<void> _updateIcon() async {
-    final targetHex = _running && _projectColorHex != null
-        ? _projectColorHex!.replaceFirst('#', '').toUpperCase()
-        : '7A7A7A';
-    if (targetHex == _currentIconHex) return;
     final rgb = _running && _projectColorHex != null
         ? trayHexToRgb(_projectColorHex)
         : null;
-    final path = await _iconRenderer.iconForProject(rgb);
+    // Sparkline takes precedence whenever we have flow data — even idle,
+    // a flat-but-recent flow line tells the user something. Fall back to
+    // a plain dot when there's no data (fresh launch, API down).
+    final path = _flowScores.isNotEmpty
+        ? await _iconRenderer.iconForSparkline(_flowScores, rgb)
+        : await _iconRenderer.iconForProject(rgb);
     await _tray.setImage(path);
-    _currentIconHex = targetHex;
   }
 
   void _tick() {
@@ -133,8 +171,21 @@ class TrayService {
       final elapsed = DateTime.now().toUtc().difference(_startTime!);
       final display = formatTrayElapsed(elapsed);
       _tray.setTitle('$display  $_projectName');
+
+      // Mirror the running state into the macOS dock badge. Whole minutes
+      // only — pixel-counting seconds in the dock would just create noise.
+      // Skip the channel hop when the value hasn't changed.
+      final mins = elapsed.inMinutes;
+      if (mins != _lastBadgeMinutes) {
+        MacAmbient.setDockBadge('$mins');
+        _lastBadgeMinutes = mins;
+      }
     } else {
       _tray.setTitle('');
+      if (_lastBadgeMinutes != null) {
+        MacAmbient.setDockBadge(null);
+        _lastBadgeMinutes = null;
+      }
     }
   }
 
@@ -216,6 +267,7 @@ class TrayService {
   void dispose() {
     _pollTimer?.cancel();
     _tickTimer?.cancel();
+    _flowTimer?.cancel();
     _tray.destroy();
   }
 }

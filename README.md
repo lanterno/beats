@@ -99,8 +99,8 @@ The Flutter app and VS Code extension are shipped in this repo:
 
 | Document | What it covers |
 |----------|---------------|
-| [Companion Roadmap](docs/companion-roadmap.md) | What the companion ships today and what's left — native widgets, Apple Watch, server push |
-| [Companion UI Design Roadmap](docs/companion-ui-design-roadmap.md) | Brutalist-Luxury design system, per-screen polish (mostly shipped, three small open items) |
+| [Companion Roadmap](docs/companion-roadmap.md) | What's left for the companion — native widgets, Apple Watch, server push |
+| [Pete macOS Roadmap](docs/pete-macos-roadmap.md) | The Mac-only ambition — floating now-bar, Focus auto-engage, Spotlight + Shortcuts, Live Activities, Apple Intelligence |
 | [Flutter Companion](docs/flutter-companion.md) | File-by-file companion architecture, API contract, and the remaining HealthKit / Health Connect / background-sync work |
 | [Homebrew Tap](docs/homebrew-tap.md) | One-time tap-repo bootstrap to publish `brew install <user>/beats/beatsd` (formula + release workflow already live) |
 

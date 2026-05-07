@@ -23,15 +23,28 @@ class TokenStorage {
   /// secure store and clear the prefs key — so the plaintext can't be
   /// recovered later (e.g. via a device backup).
   Future<String?> loadToken() async {
-    final fromSecure = await _secure.read(_tokenKey);
+    String? fromSecure;
+    try {
+      fromSecure = await _secure.read(_tokenKey);
+    } catch (_) {
+      // Keychain unreachable (sandbox/entitlement edge cases on macOS, locked
+      // device on iOS before first unlock). Fall through to the legacy path
+      // — better to authenticate with a plaintext token than to wedge the
+      // app on a spinner.
+      fromSecure = null;
+    }
     if (fromSecure != null) return fromSecure;
 
     final prefs = await SharedPreferences.getInstance();
     final legacy = prefs.getString(_tokenKey);
     if (legacy == null) return null;
 
-    await _secure.write(_tokenKey, legacy);
-    await prefs.remove(_tokenKey);
+    // Best-effort migration: if the keychain write fails, the user is still
+    // authenticated for this session — we'll try again on next launch.
+    try {
+      await _secure.write(_tokenKey, legacy);
+      await prefs.remove(_tokenKey);
+    } catch (_) {}
     return legacy;
   }
 

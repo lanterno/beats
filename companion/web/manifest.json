@@ -1,6 +1,6 @@
 {
-    "name": "beats_companion",
-    "short_name": "beats_companion",
+    "name": "Pete",
+    "short_name": "Pete",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
