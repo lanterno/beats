@@ -451,6 +451,53 @@ class TestGoalOverridesAPI:
         assert resp.status_code == 200
         assert resp.json()["effective_goal"] is None
 
+    def test_week_breakdown_flags_override_in_effect(self):
+        """`effective_goal_overridden` is true when an override resolves for the week."""
+        project = self._create_project(weekly_goal=20)
+        # No override yet: flag should be false, goal = project default.
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
+        body = resp.json()
+        assert body["effective_goal"] == 20
+        assert body["effective_goal_overridden"] is False
+
+        # Permanent null override starting in the past: this week has "no goal"
+        # but the flag must reveal it's intentional, not "no project default".
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
+            headers=auth_headers,
+        )
+        body = client.get(
+            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
+        ).json()
+        assert body["effective_goal"] is None
+        assert body["effective_goal_overridden"] is True
+
+    def test_update_project_preserves_goal_overrides(self):
+        """Editing the project (e.g. color change) must not wipe overrides."""
+        project = self._create_project(weekly_goal=20)
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
+            headers=auth_headers,
+        )
+        # Round-trip a full project update with no overrides field — it must
+        # retain the existing overrides rather than silently dropping them.
+        client.put(
+            "/api/projects/",
+            json={
+                "id": project["id"],
+                "name": project["name"],
+                "color": "#abcdef",
+                "weekly_goal": 20,
+            },
+            headers=auth_headers,
+        )
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        found = [p for p in listed if p["id"] == project["id"]][0]
+        assert len(found["goal_overrides"]) == 1
+        assert found["goal_overrides"][0]["weekly_goal"] is None
+
     def test_null_override_does_not_affect_earlier_weeks(self):
         """A permanent null override starting on a future Monday leaves earlier
         weeks with the project default goal."""
@@ -4708,6 +4755,166 @@ class TestSignalsAPI:
         assert body["should_suggest"] is True
         assert body["project_id"] == proj_id
 
+    def test_suggest_timer_persists_pending_suggestion_for_companion_poll(self):
+        """A positive `/suggest-timer` response also writes a
+        PendingSuggestion so the companion's notification poller can
+        pick it up later via `GET /api/signals/pending-suggestions`.
+        Without this the daemon's macOS osascript prompt was the only
+        surface that fired on auto-timer matches.
+        """
+        # Project that will match by editor_repo.
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Persisted Suggest", "category": "coding"},
+            headers=auth_headers,
+        )
+        proj_id = resp.json()["id"]
+        client.put(
+            "/api/projects/",
+            json={
+                "id": proj_id,
+                "name": "Persisted Suggest",
+                "category": "coding",
+                "autostart_repos": ["/Users/me/code/pending-test"],
+            },
+            headers=auth_headers,
+        )
+
+        _, device_headers = self._pair_device()
+        before = client.get("/api/signals/pending-suggestions", headers=device_headers).json()[
+            "suggestions"
+        ]
+        before_ids = {s["id"] for s in before}
+
+        resp = client.post(
+            "/api/signals/suggest-timer",
+            json={
+                "window_start": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                "window_end": datetime.now(UTC).isoformat(),
+                "flow_score": 0.85,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.microsoft.VSCode",
+                "dominant_category": "coding",
+                "editor_repo": "/Users/me/code/pending-test",
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["should_suggest"] is True
+
+        # Pending suggestion should now be readable via the GET endpoint.
+        resp = client.get("/api/signals/pending-suggestions", headers=device_headers)
+        assert resp.status_code == 200, resp.text
+        ours = [
+            s
+            for s in resp.json()["suggestions"]
+            if s["id"] not in before_ids and s["project_id"] == proj_id
+        ]
+        assert len(ours) == 1, ours
+        s = ours[0]
+        assert s["project_name"] == "Persisted Suggest"
+        # editor_repo round-trips so a future "yes" tap can confirm the match.
+        assert s["editor_repo"] == "/Users/me/code/pending-test"
+        assert s["id"]
+        # suggested_at parses as a UTC ISO timestamp within the last minute.
+        ts = datetime.fromisoformat(s["suggested_at"])
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        assert (datetime.now(UTC) - ts) < timedelta(minutes=1)
+
+    def test_suggest_timer_does_not_persist_when_no_match(self):
+        """`should_suggest=False` responses must NOT leave a pending
+        suggestion behind. Otherwise the companion poller would fire a
+        notification for a project the API explicitly didn't suggest.
+        """
+        _, device_headers = self._pair_device()
+        before = client.get("/api/signals/pending-suggestions", headers=device_headers).json()[
+            "suggestions"
+        ]
+        before_ids = {s["id"] for s in before}
+
+        resp = client.post(
+            "/api/signals/suggest-timer",
+            json={
+                "window_start": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                "window_end": datetime.now(UTC).isoformat(),
+                "flow_score": 0.85,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.unknown.app",
+                "dominant_category": "no-such-category-anywhere",
+            },
+            headers=device_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["should_suggest"] is False
+
+        # No new suggestions appeared.
+        resp = client.get("/api/signals/pending-suggestions", headers=device_headers)
+        new_ids = {s["id"] for s in resp.json()["suggestions"]} - before_ids
+        assert new_ids == set(), new_ids
+
+    def test_pending_suggestions_explicit_since_window(self):
+        """Explicit `since` filters out suggestions older than the cutoff.
+        The default `since` (last 30 min) follows the same parameter, so
+        this covers both code paths that matter for the companion poller's
+        contract."""
+        # Project that matches by category so a /suggest-timer POST
+        # produces a pending suggestion under our user.
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Since Window Test", "category": "explicit-since-cat"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+
+        _, device_headers = self._pair_device()
+        client.post(
+            "/api/signals/suggest-timer",
+            json={
+                "window_start": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                "window_end": datetime.now(UTC).isoformat(),
+                "flow_score": 0.85,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.test.app",
+                "dominant_category": "explicit-since-cat",
+            },
+            headers=device_headers,
+        )
+
+        # Wide window includes our just-posted suggestion.
+        resp = client.get(
+            "/api/signals/pending-suggestions",
+            params={"since": (datetime.now(UTC) - timedelta(minutes=5)).isoformat()},
+            headers=device_headers,
+        )
+        names_wide = {s["project_name"] for s in resp.json()["suggestions"]}
+        assert "Since Window Test" in names_wide
+
+        # Narrow window in the future excludes it — no suggestions in that
+        # slice. (Asserts our suggestion specifically; other tests' rows
+        # could exist but none would be after `now`.)
+        resp = client.get(
+            "/api/signals/pending-suggestions",
+            params={"since": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()},
+            headers=device_headers,
+        )
+        names_future = {s["project_name"] for s in resp.json()["suggestions"]}
+        assert "Since Window Test" not in names_future
+
+    def test_pending_suggestions_requires_auth(self):
+        """No token → 401, same as every other read endpoint."""
+        resp = client.get("/api/signals/pending-suggestions")
+        assert resp.status_code == 401
+
     def test_create_project_with_category_persists(self):
         """Regression guard: the create handler used to ignore the
         \`category\` field — the schema accepted it but the route never
@@ -4931,6 +5138,153 @@ class TestSignalsAPI:
         # fields[] array — locked in so the UI/daemon can render them.
         paths = {f["path"] for f in body["fields"]}
         assert {"started_at", "duration_seconds", "bundle_id"}.issubset(paths), paths
+
+    def test_recent_drift_returns_drift_events_only(self):
+        """GET /api/signals/recent-drift returns just the drift category
+        windows (not arbitrary flow windows), each carrying the round-
+        tripped started_at / duration_seconds / bundle_id the daemon
+        originally posted. The companion poller relies on this shape to
+        fire the local notification + dedupe by id."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        # Two drift events with bundle ids unique to this test (the
+        # surrounding TestSignalsAPI class creates other drifts in
+        # earlier tests; assert by content rather than total count) plus
+        # a normal flow window that should NOT leak into the response.
+        spotify_at = now - timedelta(seconds=120)
+        chess_at = now - timedelta(seconds=60)
+        client.post(
+            "/api/signals/drift",
+            json={
+                "started_at": spotify_at.isoformat(),
+                "duration_seconds": 30.0,
+                "bundle_id": "com.recentdrift.spotify",
+            },
+            headers=device_headers,
+        )
+        client.post(
+            "/api/signals/drift",
+            json={
+                "started_at": chess_at.isoformat(),
+                "duration_seconds": 45.0,
+                "bundle_id": "com.recentdrift.chess",
+            },
+            headers=device_headers,
+        )
+        client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": (now - timedelta(minutes=2)).isoformat(),
+                "window_end": (now - timedelta(minutes=1)).isoformat(),
+                "flow_score": 0.8,
+                "cadence_score": 0.5,
+                "coherence_score": 1.0,
+                "category_fit_score": 0.0,
+                "idle_fraction": 0.1,
+                "dominant_bundle_id": "com.recentdrift.xcode",
+                "dominant_category": "coding",
+                "context_switches": 2,
+            },
+            headers=device_headers,
+        )
+
+        resp = client.get(
+            "/api/signals/recent-drift",
+            params={"since": (now - timedelta(minutes=10)).isoformat()},
+            headers=device_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        events = resp.json()["events"]
+        # Pick out the two we just posted; ignore drifts from other tests.
+        ours = [e for e in events if e["bundle_id"].startswith("com.recentdrift.")]
+        assert len(ours) == 2, ours
+        # The coding window must NOT leak into the drift feed even though
+        # its bundle id matches the test prefix.
+        assert all(e["bundle_id"] != "com.recentdrift.xcode" for e in ours)
+        # Newest first — chess at 60s ago beats spotify at 120s ago.
+        ours_by_time = sorted(ours, key=lambda e: e["started_at"], reverse=True)
+        assert ours_by_time[0]["bundle_id"] == "com.recentdrift.chess"
+        assert ours_by_time[0]["duration_seconds"] == 45.0
+        assert ours_by_time[1]["bundle_id"] == "com.recentdrift.spotify"
+        assert ours_by_time[1]["duration_seconds"] == 30.0
+        # Endpoint orders newest-first; same order ours pulled out.
+        first_idx = next(i for i, e in enumerate(events) if e in ours)
+        second_idx = next(i for i, e in enumerate(events) if e in ours and i > first_idx)
+        assert events[first_idx]["bundle_id"] == "com.recentdrift.chess"
+        assert events[second_idx]["bundle_id"] == "com.recentdrift.spotify"
+        # Each event carries the id the companion poller dedupes on.
+        for e in ours:
+            assert e["id"]
+
+    def test_recent_drift_default_since_is_30_minutes(self):
+        """When the companion calls without `since`, the endpoint defaults
+        to the last 30 minutes — long enough that a couple of missed poll
+        ticks (5 min apart) don't drop a notification, short enough that
+        the response stays small for an active drifter."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        # One recent (15 min ago) — should appear; one old (45 min ago)
+        # — should NOT appear under the default window. Bundle ids are
+        # unique to this test so other TestSignalsAPI tests' drifts don't
+        # interfere with the assertions.
+        client.post(
+            "/api/signals/drift",
+            json={
+                "started_at": (now - timedelta(minutes=15)).isoformat(),
+                "duration_seconds": 60.0,
+                "bundle_id": "com.defaultsince.recent",
+            },
+            headers=device_headers,
+        )
+        client.post(
+            "/api/signals/drift",
+            json={
+                "started_at": (now - timedelta(minutes=45)).isoformat(),
+                "duration_seconds": 60.0,
+                "bundle_id": "com.defaultsince.old",
+            },
+            headers=device_headers,
+        )
+
+        resp = client.get("/api/signals/recent-drift", headers=device_headers)
+        assert resp.status_code == 200
+        ours = {
+            e["bundle_id"]
+            for e in resp.json()["events"]
+            if e["bundle_id"].startswith("com.defaultsince.")
+        }
+        assert ours == {"com.defaultsince.recent"}
+
+    def test_recent_drift_respects_limit(self):
+        """Limit caps the response so a runaway day of distractions
+        doesn't return a multi-MB payload to a polling phone."""
+        _, device_headers = self._pair_device()
+        now = datetime.now(UTC)
+        # Pin `since` to 5 seconds ago so prior tests' drifts stay out
+        # of the slice; the loop posts 5 events within that window.
+        slice_start = now - timedelta(seconds=5)
+        for i in range(5):
+            client.post(
+                "/api/signals/drift",
+                json={
+                    "started_at": (now - timedelta(seconds=4 - i * 0.5)).isoformat(),
+                    "duration_seconds": 5.0,
+                    "bundle_id": f"com.limittest.{i}",
+                },
+                headers=device_headers,
+            )
+        resp = client.get(
+            "/api/signals/recent-drift",
+            params={"limit": 2, "since": slice_start.isoformat()},
+            headers=device_headers,
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["events"]) == 2
+
+    def test_recent_drift_requires_auth(self):
+        """No token → 401, same as every other read endpoint."""
+        resp = client.get("/api/signals/recent-drift")
+        assert resp.status_code == 401
 
     def test_post_flow_window_with_device_token(self):
         """Device token can POST a flow window."""

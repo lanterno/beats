@@ -137,7 +137,11 @@ export function ProjectPulseList() {
 							0;
 						const todayHours = todayMinutes / 60;
 						const isInactive = project.weeklyMinutes === 0;
-						const dashGoal = project.effectiveGoal ?? project.weeklyGoal;
+						// Honor "no goal" overrides: when overridden=true and goal is null,
+						// don't fall back to project.weeklyGoal — the user explicitly opted out.
+						const dashGoal = project.effectiveGoalOverridden
+							? (project.effectiveGoal ?? null)
+							: (project.effectiveGoal ?? project.weeklyGoal ?? null);
 						const dashGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
 						const goalPct = dashGoal
 							? Math.min((project.weeklyMinutes / 60 / dashGoal) * 100, 100)

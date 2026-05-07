@@ -78,6 +78,7 @@ export const WeekBreakdownSchema = z.object({
 	total_hours: z.number().default(0),
 	effective_goal: z.number().nullable().optional(),
 	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
+	effective_goal_overridden: z.boolean().optional().default(false),
 });
 
 export type WeekBreakdown = z.infer<typeof WeekBreakdownSchema>;

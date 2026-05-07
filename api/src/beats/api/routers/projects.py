@@ -54,6 +54,10 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
 @router.put("/")
 async def update_project(request: UpdateProjectRequest, service: ProjectServiceDep):
     """Update an existing project."""
+    # Preserve goal_overrides: UpdateProjectRequest doesn't carry them, so
+    # building Project() from the request alone would wipe any overrides on
+    # every unrelated edit (e.g. color change). Read existing first.
+    existing = await service.project_repo.get_by_id(request.id)
     project = Project(
         id=request.id,
         name=request.name,
@@ -63,6 +67,7 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         archived=request.archived,
         weekly_goal=request.weekly_goal,
         goal_type=request.goal_type,
+        goal_overrides=existing.goal_overrides,
         github_repo=request.github_repo,
         # category and autostart_repos were silently dropped here —
         # the schema accepted them but the route never forwarded them

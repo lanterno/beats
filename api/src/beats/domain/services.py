@@ -15,6 +15,17 @@ from beats.domain.utils import normalize_tz
 from beats.infrastructure.repositories import BeatRepository, ProjectRepository
 
 
+def _has_override_for_week(project: Project, week_monday: date) -> bool:
+    """Return True iff a goal override resolves for the given week."""
+    for o in project.goal_overrides:
+        if o.week_of == week_monday:
+            return True
+    for o in project.goal_overrides:
+        if o.effective_from is not None and o.effective_from <= week_monday:
+            return True
+    return False
+
+
 class TimerService:
     """Service for managing timer operations.
 
@@ -253,6 +264,11 @@ class ProjectService:
             eff_goal, eff_type = project.effective_goal(start_of_week)
             result["effective_goal"] = eff_goal
             result["effective_goal_type"] = eff_type.value if eff_type else None
+            # True iff a matching override is in effect for this week — lets the
+            # UI distinguish "override says no goal" (null + overridden=true,
+            # render as "No goal") from "no override and no project default"
+            # (null + overridden=false, render as "—").
+            result["effective_goal_overridden"] = _has_override_for_week(project, start_of_week)
 
         return result
 

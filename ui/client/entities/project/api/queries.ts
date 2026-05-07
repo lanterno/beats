@@ -50,6 +50,7 @@ export function useProjects() {
 							dailyDurations: {},
 							effectiveGoal: undefined,
 							effectiveGoalType: undefined,
+							effectiveGoalOverridden: false,
 						})),
 					]);
 
@@ -60,6 +61,7 @@ export function useProjects() {
 						weeklyMinutes,
 						effectiveGoal: weeklyData.effectiveGoal,
 						effectiveGoalType: weeklyData.effectiveGoalType,
+						effectiveGoalOverridden: weeklyData.effectiveGoalOverridden,
 					};
 				}),
 			);
@@ -101,6 +103,7 @@ export function useProject(projectId: string | undefined) {
 					dailyDurations: {},
 					effectiveGoal: undefined,
 					effectiveGoalType: undefined,
+					effectiveGoalOverridden: false,
 				})),
 			]);
 
@@ -111,6 +114,7 @@ export function useProject(projectId: string | undefined) {
 				weeklyMinutes,
 				effectiveGoal: weeklyData.effectiveGoal,
 				effectiveGoalType: weeklyData.effectiveGoalType,
+				effectiveGoalOverridden: weeklyData.effectiveGoalOverridden,
 			};
 		},
 		enabled: !!projectId,
@@ -129,9 +133,21 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 			const weeks = Array.from({ length: weekCount }, (_, i) => i);
 			const results = await Promise.allSettled(
 				weeks.map(async (weeksAgo) => {
-					const { totalHours, dailyDurations, effectiveGoal, effectiveGoalType } =
-						await fetchProjectWeek(projectId, weeksAgo);
-					return { weeksAgo, hours: totalHours, dailyDurations, effectiveGoal, effectiveGoalType };
+					const {
+						totalHours,
+						dailyDurations,
+						effectiveGoal,
+						effectiveGoalType,
+						effectiveGoalOverridden,
+					} = await fetchProjectWeek(projectId, weeksAgo);
+					return {
+						weeksAgo,
+						hours: totalHours,
+						dailyDurations,
+						effectiveGoal,
+						effectiveGoalType,
+						effectiveGoalOverridden,
+					};
 				}),
 			);
 

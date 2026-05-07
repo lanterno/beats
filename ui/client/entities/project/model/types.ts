@@ -35,8 +35,11 @@ export interface Project {
 export interface ProjectWithDuration extends Project {
 	totalMinutes: number;
 	weeklyMinutes: number;
-	effectiveGoal?: number; // Resolved goal for current week
+	/** number = goal applies; null = override says "no goal"; undefined = unknown */
+	effectiveGoal?: number | null;
 	effectiveGoalType?: "target" | "cap";
+	/** True iff a goal override resolves for the current week */
+	effectiveGoalOverridden?: boolean;
 }
 
 /**
@@ -57,6 +60,9 @@ export interface WeekHours {
 	weeksAgo: number;
 	hours: number;
 	dailyDurations: Record<string, string>;
-	effectiveGoal?: number;
+	/** number = goal applies; null = override says "no goal"; undefined = unknown */
+	effectiveGoal?: number | null;
 	effectiveGoalType?: "target" | "cap";
+	/** True iff a goal override resolves for this week */
+	effectiveGoalOverridden?: boolean;
 }

@@ -118,7 +118,11 @@ export default function ProjectDetails() {
 	const totalMinutes = project.totalMinutes || 0;
 	const totalHours = totalMinutes > 0 ? (totalMinutes / 60).toFixed(1) : "0";
 	const weeklyHours = project.weeklyMinutes ? project.weeklyMinutes / 60 : 0;
-	const headerGoal = project.effectiveGoal ?? project.weeklyGoal;
+	// effectiveGoal === null means an override explicitly set "no goal" for
+	// this week — don't fall back to project.weeklyGoal in that case.
+	const headerGoal = project.effectiveGoalOverridden
+		? (project.effectiveGoal ?? null)
+		: (project.effectiveGoal ?? project.weeklyGoal ?? null);
 	const headerGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
 	const goalPct = headerGoal ? Math.min((weeklyHours / headerGoal) * 100, 100) : null;
 
@@ -157,7 +161,11 @@ export default function ProjectDetails() {
 
 	// Get week-0 effective goal from the weeks data
 	const week0Data = weekList.find((w) => w.weeksAgo === 0);
-	const currentEffectiveGoal = week0Data?.effectiveGoal ?? headerGoal;
+	const currentEffectiveGoal = week0Data
+		? week0Data.effectiveGoalOverridden
+			? (week0Data.effectiveGoal ?? null)
+			: (week0Data.effectiveGoal ?? headerGoal)
+		: headerGoal;
 
 	const currentWeekRow = {
 		label: "This wk",
@@ -170,6 +178,7 @@ export default function ProjectDetails() {
 		total: dailySummary.reduce((sum, d) => sum + d.totalMinutes, 0),
 		effectiveGoal: currentEffectiveGoal,
 		effectiveGoalType: (week0Data?.effectiveGoalType ?? headerGoalType) as "target" | "cap",
+		effectiveGoalOverridden: week0Data?.effectiveGoalOverridden ?? false,
 	};
 
 	const pastWeekRows = weekList
@@ -182,10 +191,15 @@ export default function ProjectDetails() {
 				parseTimedeltaToMinutes(week.dailyDurations[dayName] || "0:00:00"),
 			),
 			total: week.hours * 60,
-			effectiveGoal: week.effectiveGoal ?? project.weeklyGoal,
+			// When an override is in effect, week.effectiveGoal === null means
+			// "no goal" and must not fall back to project.weeklyGoal.
+			effectiveGoal: week.effectiveGoalOverridden
+				? (week.effectiveGoal ?? null)
+				: (week.effectiveGoal ?? project.weeklyGoal ?? null),
 			effectiveGoalType: (week.effectiveGoalType ?? project.goalType ?? "target") as
 				| "target"
 				| "cap",
+			effectiveGoalOverridden: week.effectiveGoalOverridden ?? false,
 		}));
 
 	const allWeekRows = [currentWeekRow, ...pastWeekRows];
@@ -369,7 +383,11 @@ export default function ProjectDetails() {
 							const directOverride = findDirectOverride(row.mondayIso);
 							const hasDirectOverride = directOverride !== undefined;
 							const directOverrideIsNull = hasDirectOverride && directOverride?.weeklyGoal == null;
-							const isOverridden = rowGoal !== (project.weeklyGoal ?? null);
+							// Prefer the server-resolved flag (covers permanent overrides
+							// that apply to weeks past their effective_from). Fall back to
+							// the value-difference heuristic only when the flag is missing.
+							const isOverridden =
+								row.effectiveGoalOverridden || rowGoal !== (project.weeklyGoal ?? null);
 
 							return (
 								<div
