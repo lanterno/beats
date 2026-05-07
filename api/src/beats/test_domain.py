@@ -5677,3 +5677,40 @@ class TestDetectBiometricCorrelations:
         ]
         # Only 3 pairs < 7 → no card
         assert detect_biometric_correlations(bio, notes) == []
+
+
+# =============================================================================
+# Datetime utilities — normalize_tz
+# =============================================================================
+
+
+class TestNormalizeTz:
+    """normalize_tz attaches UTC tzinfo to naive datetimes (Mongo
+    returns naive timestamps) and passes through aware datetimes
+    unchanged. Pin both branches — a regression that flipped the
+    convention would silently propagate naive datetimes through
+    the domain layer and break every timezone-aware comparison."""
+
+    def test_naive_datetime_gets_utc_attached(self):
+        from beats.domain.utils import normalize_tz
+
+        naive = datetime(2026, 4, 1, 9, 0)
+        out = normalize_tz(naive)
+        assert out.tzinfo is UTC
+        # Wall-clock time preserved
+        assert out.hour == 9
+        assert out.year == 2026
+
+    def test_aware_datetime_passes_through_unchanged(self):
+        """A datetime that already has tzinfo is returned as-is.
+        Pin so a non-UTC tz isn't silently coerced to UTC (would
+        shift wall-clock time and break user-facing displays)."""
+        from datetime import timezone
+
+        from beats.domain.utils import normalize_tz
+
+        pacific = timezone(timedelta(hours=-8))
+        aware = datetime(2026, 4, 1, 9, 0, tzinfo=pacific)
+        out = normalize_tz(aware)
+        assert out.tzinfo is pacific
+        assert out.hour == 9
