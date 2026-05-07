@@ -11,11 +11,12 @@ from pydantic import BaseModel, Field
 from beats.api.dependencies import (
     CurrentUserId,
     FlowWindowRepoDep,
+    PendingSuggestionRepoDep,
     ProjectServiceDep,
     SignalSummaryRepoDep,
     TimerServiceDep,
 )
-from beats.domain.models import FlowWindow, SignalSummary
+from beats.domain.models import FlowWindow, PendingSuggestion, SignalSummary
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
 
@@ -446,6 +447,7 @@ async def suggest_timer(
     user_id: CurrentUserId,
     timer_service: TimerServiceDep,
     project_service: ProjectServiceDep,
+    pending_repo: PendingSuggestionRepoDep,
 ) -> AutoTimerSuggestion:
     """Check if a timer should be auto-started based on flow state.
 
@@ -460,6 +462,12 @@ async def suggest_timer(
        the editor_repo is empty (no editor active) or no project
        claims it.
 
+    On a positive match the suggestion is also persisted via
+    `pending_repo.create` so the companion's notification poller can
+    pick it up via `GET /api/signals/pending-suggestions` and fire
+    `notifyAutoTimerSuggestion` for users whose desktop daemon isn't
+    the OS notifier (mobile, headless servers, etc.).
+
     Previously only matched by category, so two same-category
     projects couldn't be disambiguated and the docstring's mention
     of autostart_repos didn't reflect the implementation.
@@ -471,26 +479,84 @@ async def suggest_timer(
 
     projects = await project_service.project_repo.list(archived=False)
 
+    async def _persist_and_return(p: object, editor_repo: str | None) -> AutoTimerSuggestion:
+        # `p` is a Project here; typed loosely so the `_persist_and_return`
+        # signature stays the same for both match paths below without
+        # importing Project just for an annotation.
+        await pending_repo.create(
+            PendingSuggestion(
+                project_id=p.id,  # type: ignore[attr-defined]
+                project_name=p.name,  # type: ignore[attr-defined]
+                dominant_category=body.dominant_category,
+                editor_repo=editor_repo,
+            )
+        )
+        return AutoTimerSuggestion(
+            should_suggest=True,
+            project_id=p.id,  # type: ignore[attr-defined]
+            project_name=p.name,  # type: ignore[attr-defined]
+        )
+
     # 1. Try the most-specific match: editor_repo in autostart_repos.
     if body.editor_repo:
         for p in projects:
             if body.editor_repo in p.autostart_repos:
-                return AutoTimerSuggestion(
-                    should_suggest=True,
-                    project_id=p.id,
-                    project_name=p.name,
-                )
+                return await _persist_and_return(p, body.editor_repo)
 
     # 2. Fallback: match by category.
     for p in projects:
         if p.category and p.category == body.dominant_category:
-            return AutoTimerSuggestion(
-                should_suggest=True,
-                project_id=p.id,
-                project_name=p.name,
-            )
+            return await _persist_and_return(p, None)
 
     return AutoTimerSuggestion(should_suggest=False)
+
+
+class PendingSuggestionResponse(BaseModel):
+    id: str
+    project_id: str
+    project_name: str
+    suggested_at: datetime
+    editor_repo: str | None = None
+
+
+class PendingSuggestionsResponse(BaseModel):
+    """Auto-timer suggestions the API has surfaced but the user hasn't yet
+    acted on. The companion's notification poller queries this every 5 min
+    and fires `notifyAutoTimerSuggestion` for any id it hasn't seen,
+    deduping via SharedPreferences. `since` defaults to the last 30 minutes
+    so a couple of missed poll ticks (5 min apart) don't drop a prompt."""
+
+    suggestions: list[PendingSuggestionResponse]
+
+
+@router.get("/pending-suggestions", response_model=PendingSuggestionsResponse)
+async def get_pending_suggestions(
+    user_id: CurrentUserId,
+    pending_repo: PendingSuggestionRepoDep,
+    since: datetime | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> PendingSuggestionsResponse:
+    """Return auto-timer suggestions emitted in the last `since` window.
+
+    See [post] /suggest-timer for the write side. This endpoint is the
+    companion-side read surface — same shape and semantics as
+    `/recent-drift`. Newest-first, capped at 100.
+    """
+    if since is None:
+        since = datetime.now(UTC) - timedelta(minutes=30)
+    suggestions = await pending_repo.list_recent(since, limit=limit)
+    return PendingSuggestionsResponse(
+        suggestions=[
+            PendingSuggestionResponse(
+                id=s.id or "",
+                project_id=s.project_id,
+                project_name=s.project_name,
+                suggested_at=s.suggested_at,
+                editor_repo=s.editor_repo,
+            )
+            for s in suggestions
+        ]
+    )
 
 
 class PostDriftEventRequest(BaseModel):
@@ -526,6 +592,60 @@ async def post_drift_event(
     )
     created = await repo.create(window)
     return {"id": created.id or ""}
+
+
+class DriftEvent(BaseModel):
+    id: str
+    started_at: datetime
+    duration_seconds: float
+    bundle_id: str
+
+
+class RecentDriftResponse(BaseModel):
+    """Drift events recent enough to be worth notifying the user about.
+
+    The companion's notification poller queries this endpoint on a 5-minute
+    foreground tick, fires `notifyDriftAlert` for any event id it hasn't
+    seen, and dedupes via SharedPreferences. `since` defaults to 30 minutes
+    ago so a brief network blip doesn't cause the poller to miss a window.
+    """
+
+    events: list[DriftEvent]
+
+
+@router.get("/recent-drift", response_model=RecentDriftResponse)
+async def get_recent_drift(
+    user_id: CurrentUserId,
+    repo: FlowWindowRepoDep,
+    since: datetime | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> RecentDriftResponse:
+    """Return drift events recorded since `since` (defaults to last 30 min).
+
+    Drift events are stored as flow windows with `dominant_category="drift"`
+    by the daemon's `shield` package. This endpoint is the companion-side
+    read surface — the daemon already fires a native macOS notification
+    on the desktop, so the companion poller adds the same prompt for users
+    on iOS / Android / desktops without the daemon installed.
+    """
+    if since is None:
+        since = datetime.now(UTC) - timedelta(minutes=30)
+    end = datetime.now(UTC)
+    windows = await repo.list_by_range(since, end, dominant_category="drift")
+    # Newest first; cap at limit so a runaway day of distractions doesn't
+    # produce a multi-MB response.
+    windows.sort(key=lambda w: w.window_start, reverse=True)
+    return RecentDriftResponse(
+        events=[
+            DriftEvent(
+                id=w.id or "",
+                started_at=w.window_start,
+                duration_seconds=(w.window_end - w.window_start).total_seconds(),
+                bundle_id=w.dominant_bundle_id,
+            )
+            for w in windows[:limit]
+        ]
+    )
 
 
 @router.delete("/all", response_model=DeleteSignalsResponse)

@@ -21,6 +21,7 @@ from beats.domain.models import (
     Intention,
     OuraIntegration,
     PairingCode,
+    PendingSuggestion,
     Project,
     RecurringIntention,
     SignalSummary,
@@ -1008,6 +1009,7 @@ class FlowWindowRepository(ABC):
         editor_repo: str | None = None,
         editor_language: str | None = None,
         bundle_id: str | None = None,
+        dominant_category: str | None = None,
     ) -> list[FlowWindow]: ...
 
 
@@ -1028,12 +1030,15 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
         editor_repo: str | None = None,
         editor_language: str | None = None,
         bundle_id: str | None = None,
+        dominant_category: str | None = None,
     ) -> list[FlowWindow]:
         # Filters are AND-composed. project_id matches windows captured
         # while a timer was running on that project; editor_repo matches
         # windows where the VS Code heartbeat covered them; editor_language
         # matches the language id reported by the heartbeat; bundle_id
-        # matches windows whose dominant frontmost app was that bundle.
+        # matches windows whose dominant frontmost app was that bundle;
+        # dominant_category matches the rolled-up category (e.g. "drift"
+        # for the distraction events the daemon's shield posts).
         # All optional so the existing call sites keep working.
         query: dict = {"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
         if project_id is not None:
@@ -1044,9 +1049,43 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
             query["editor_language"] = editor_language
         if bundle_id is not None:
             query["dominant_bundle_id"] = bundle_id
+        if dominant_category is not None:
+            query["dominant_category"] = dominant_category
         cursor = self.collection.find(self._q(query)).sort("window_start", 1)
         docs = await cursor.to_list(length=None)
         return [FlowWindow(**serialize_from_document(doc)) for doc in docs]
+
+
+# Pending Suggestion Repository
+
+
+class PendingSuggestionRepository(ABC):
+    """Abstract interface for PendingSuggestion persistence."""
+
+    @abstractmethod
+    async def create(self, suggestion: PendingSuggestion) -> PendingSuggestion: ...
+
+    @abstractmethod
+    async def list_recent(self, since: datetime, limit: int = 20) -> list[PendingSuggestion]: ...
+
+
+class MongoPendingSuggestionRepository(MongoUserScoped, PendingSuggestionRepository):
+    """MongoDB implementation of PendingSuggestionRepository."""
+
+    async def create(self, suggestion: PendingSuggestion) -> PendingSuggestion:
+        data = serialize_to_document(suggestion.model_dump(mode="json", exclude_none=True))
+        data["user_id"] = self.user_id
+        result = await self.collection.insert_one(data)
+        return PendingSuggestion(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def list_recent(self, since: datetime, limit: int = 20) -> list[PendingSuggestion]:
+        cursor = (
+            self.collection.find(self._q({"suggested_at": {"$gte": since.isoformat()}}))
+            .sort("suggested_at", -1)
+            .limit(limit)
+        )
+        docs = await cursor.to_list(length=None)
+        return [PendingSuggestion(**serialize_from_document(doc)) for doc in docs]
 
 
 # Signal Summary Repository

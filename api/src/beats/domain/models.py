@@ -388,6 +388,34 @@ class BiometricDay(TzNormalizedModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class PendingSuggestion(TzNormalizedModel):
+    """An auto-timer suggestion the API has surfaced but the user hasn't
+    yet acted on.
+
+    Created on the API side whenever the daemon's POST to
+    `/api/signals/suggest-timer` returns `should_suggest=True`. The
+    companion's notification poller pulls these via
+    `GET /api/signals/pending-suggestions`, fires
+    `notifyAutoTimerSuggestion`, and dedupes by id. There's no separate
+    "ack" — staleness is handled by the read endpoint's `since` window.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    project_id: str
+    project_name: str
+    suggested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # The categorical signal that triggered the suggestion. Stored for
+    # debugging / future analytics — the companion notification body
+    # doesn't reference it today.
+    dominant_category: str = ""
+    # When the match came from an editor-repo → autostart_repos hit
+    # (rather than the looser category fallback), we keep the repo path
+    # so a future "yes" tap can confirm "start tracking on this repo".
+    editor_repo: str | None = None
+
+
 class FlowWindow(TzNormalizedModel):
     """A computed flow-state window from the daemon's signal collector.
 

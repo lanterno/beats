@@ -38,6 +38,7 @@ from beats.infrastructure.repositories import (
     MongoIntentionRepository,
     MongoOuraIntegrationRepository,
     MongoPairingCodeRepository,
+    MongoPendingSuggestionRepository,
     MongoProjectRepository,
     MongoRecurringIntentionRepository,
     MongoSignalSummaryRepository,
@@ -47,6 +48,7 @@ from beats.infrastructure.repositories import (
     MongoWeeklyReviewRepository,
     OuraIntegrationRepository,
     PairingCodeRepository,
+    PendingSuggestionRepository,
     ProjectRepository,
     RecurringIntentionRepository,
     SignalSummaryRepository,
@@ -278,6 +280,19 @@ def get_signal_summary_repository(user_id: CurrentUserId) -> SignalSummaryReposi
 
 FlowWindowRepoDep = Annotated[FlowWindowRepository, Depends(get_flow_window_repository)]
 SignalSummaryRepoDep = Annotated[SignalSummaryRepository, Depends(get_signal_summary_repository)]
+
+
+def get_pending_suggestion_repository(
+    user_id: CurrentUserId,
+) -> PendingSuggestionRepository:
+    """Get the pending-suggestion repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoPendingSuggestionRepository(db.pending_suggestions, user_id=user_id)
+
+
+PendingSuggestionRepoDep = Annotated[
+    PendingSuggestionRepository, Depends(get_pending_suggestion_repository)
+]
 
 
 def get_biometric_repository(user_id: CurrentUserId) -> BiometricDayRepository:
