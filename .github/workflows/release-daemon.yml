@@ -40,7 +40,7 @@ jobs:
       CGO_ENABLED: "0" # statically link; the cadence cgo tap is darwin-only
                        # and we override CGO_ENABLED=1 for that target below.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v5
         with:
