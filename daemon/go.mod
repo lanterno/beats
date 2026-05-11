@@ -3,7 +3,7 @@ module github.com/ahmedElghable/beats/daemon
 go 1.23
 
 require (
-	github.com/BurntSushi/toml v1.4.0
+	github.com/BurntSushi/toml v1.6.0
 	github.com/zalando/go-keyring v0.2.6
 )
 
