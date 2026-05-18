@@ -14,7 +14,7 @@ jobs:
         working-directory: daemon
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
       # gofmt is enforced locally via lefthook, but a contributor
@@ -55,7 +55,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
       - run: go build -o beatsd-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/beatsd/
