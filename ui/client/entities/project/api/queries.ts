@@ -136,6 +136,7 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 					const {
 						totalHours,
 						dailyDurations,
+						weekStart,
 						effectiveGoal,
 						effectiveGoalType,
 						effectiveGoalOverridden,
@@ -144,6 +145,7 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 						weeksAgo,
 						hours: totalHours,
 						dailyDurations,
+						weekStart,
 						effectiveGoal,
 						effectiveGoalType,
 						effectiveGoalOverridden,

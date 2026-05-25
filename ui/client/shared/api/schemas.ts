@@ -76,6 +76,7 @@ export const WeekBreakdownSchema = z.object({
 	Saturday: z.string().optional().default("0:00:00"),
 	Sunday: z.string().optional().default("0:00:00"),
 	total_hours: z.number().default(0),
+	week_start: z.string().optional(),
 	effective_goal: z.number().nullable().optional(),
 	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
 	effective_goal_overridden: z.boolean().optional().default(false),

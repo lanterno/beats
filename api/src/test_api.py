@@ -473,6 +473,29 @@ class TestGoalOverridesAPI:
         assert body["effective_goal"] is None
         assert body["effective_goal_overridden"] is True
 
+    def test_week_breakdown_returns_canonical_week_start(self):
+        """The breakdown returns the server's Monday, and an override keyed to
+        that exact date resolves for the same week. This is the contract the UI
+        relies on to avoid client/server week-boundary drift on overrides."""
+        from datetime import date as _date
+
+        project = self._create_project(weekly_goal=20)
+        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
+        week_start = resp.json()["week_start"]
+        assert _date.fromisoformat(week_start).weekday() == 0  # is a Monday
+
+        # An override keyed to the returned Monday must resolve for this week.
+        client.put(
+            f"/api/projects/{project['id']}/goal-overrides",
+            json=[{"week_of": week_start, "weekly_goal": 7}],
+            headers=auth_headers,
+        )
+        body = client.get(
+            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
+        ).json()
+        assert body["effective_goal"] == 7
+        assert body["effective_goal_overridden"] is True
+
     def test_update_project_preserves_goal_overrides(self):
         """Editing the project (e.g. color change) must not wipe overrides."""
         project = self._create_project(weekly_goal=20)

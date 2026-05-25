@@ -257,6 +257,12 @@ class ProjectService:
             )
 
         result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
+        # Canonical Monday for this week, resolved server-side. The UI keys goal
+        # overrides off this value so the saved week_of always matches the week
+        # the server resolves against — recomputing the Monday client-side drifts
+        # across the week boundary whenever the client and server timezones land
+        # on different calendar days.
+        result["week_start"] = start_of_week.isoformat()
 
         # Resolve effective goal for this week
         project = await self.project_repo.get_by_id(project_id)

@@ -139,8 +139,10 @@ class WeekBreakdownResponse(BaseModel):
     Saturday: str | list | None = None
     Sunday: str | list | None = None
     total_hours: float
+    week_start: str | None = None
     effective_goal: float | None = None
     effective_goal_type: str | None = None
+    effective_goal_overridden: bool = False
 
 
 class MonthlyTotalsResponse(BaseModel):

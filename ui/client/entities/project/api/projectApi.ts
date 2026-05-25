@@ -28,6 +28,8 @@ export async function fetchProjects(): Promise<ApiProject[]> {
 export interface WeekBreakdownResult {
 	totalHours: number;
 	dailyDurations: Record<string, string>;
+	/** Canonical Monday (ISO date) for this week, resolved server-side. */
+	weekStart: string | undefined;
 	/** number = goal applies; null = override says "no goal"; undefined = unknown */
 	effectiveGoal: number | null | undefined;
 	effectiveGoalType?: "target" | "cap";
@@ -58,6 +60,7 @@ export async function fetchProjectWeek(
 	return {
 		totalHours: parsed.total_hours,
 		dailyDurations,
+		weekStart: parsed.week_start,
 		// Preserve null vs undefined: null = override sets "no goal" for this
 		// week; undefined = field absent (older API). Without this, a "no goal"
 		// override would silently fall back to project.weeklyGoal in the UI.

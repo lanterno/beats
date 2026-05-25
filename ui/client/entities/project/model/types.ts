@@ -60,6 +60,8 @@ export interface WeekHours {
 	weeksAgo: number;
 	hours: number;
 	dailyDurations: Record<string, string>;
+	/** Canonical Monday (ISO date) for this week, resolved server-side. */
+	weekStart?: string;
 	/** number = goal applies; null = override says "no goal"; undefined = unknown */
 	effectiveGoal?: number | null;
 	effectiveGoalType?: "target" | "cap";

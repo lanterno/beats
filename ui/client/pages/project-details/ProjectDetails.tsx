@@ -35,7 +35,6 @@ import {
 } from "@/shared/lib";
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
-import { SessionTimeline } from "./SessionTimeline";
 
 const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = [
@@ -159,24 +158,21 @@ export default function ProjectDetails() {
 		return `${yyyy}-${mm}-${dd}`;
 	};
 
-	// Get week-0 effective goal from the weeks data
+	// Week-0 data drives the current-week goal. The server already resolves the
+	// project default into effective_goal, so a null value always means "no
+	// goal" — no client-side fallback needed.
 	const week0Data = weekList.find((w) => w.weeksAgo === 0);
-	const currentEffectiveGoal = week0Data
-		? week0Data.effectiveGoalOverridden
-			? (week0Data.effectiveGoal ?? null)
-			: (week0Data.effectiveGoal ?? headerGoal)
-		: headerGoal;
 
 	const currentWeekRow = {
 		label: "This wk",
 		weeksAgo: 0,
-		mondayIso: getMondayIso(0),
+		mondayIso: week0Data?.weekStart ?? getMondayIso(0),
 		days: WEEKDAYS.map((dayName) => {
 			const day = dailySummary.find((d) => d.dayName === dayName);
 			return day?.totalMinutes ?? 0;
 		}),
 		total: dailySummary.reduce((sum, d) => sum + d.totalMinutes, 0),
-		effectiveGoal: currentEffectiveGoal,
+		effectiveGoal: week0Data ? (week0Data.effectiveGoal ?? null) : headerGoal,
 		effectiveGoalType: (week0Data?.effectiveGoalType ?? headerGoalType) as "target" | "cap",
 		effectiveGoalOverridden: week0Data?.effectiveGoalOverridden ?? false,
 	};
@@ -186,16 +182,16 @@ export default function ProjectDetails() {
 		.map((week) => ({
 			label: getWeekNumberLabel(week.weeksAgo),
 			weeksAgo: week.weeksAgo,
-			mondayIso: getMondayIso(week.weeksAgo),
+			// Key off the server's canonical Monday so the override we save lines
+			// up with the week the server resolves it against.
+			mondayIso: week.weekStart ?? getMondayIso(week.weeksAgo),
 			days: WEEKDAYS.map((dayName) =>
 				parseTimedeltaToMinutes(week.dailyDurations[dayName] || "0:00:00"),
 			),
 			total: week.hours * 60,
-			// When an override is in effect, week.effectiveGoal === null means
-			// "no goal" and must not fall back to project.weeklyGoal.
-			effectiveGoal: week.effectiveGoalOverridden
-				? (week.effectiveGoal ?? null)
-				: (week.effectiveGoal ?? project.weeklyGoal ?? null),
+			// effective_goal is fully resolved server-side (override → permanent →
+			// project default), so null always means "no goal".
+			effectiveGoal: week.effectiveGoal ?? null,
 			effectiveGoalType: (week.effectiveGoalType ?? project.goalType ?? "target") as
 				| "target"
 				| "cap",
@@ -340,11 +336,6 @@ export default function ProjectDetails() {
 				{/* Session Stats */}
 				{sessionList.length > 0 && <SessionStatsBar sessions={sessionList} />}
 
-				{/* Session Timeline */}
-				{sessionList.length > 0 && (
-					<SessionTimeline sessions={sessionList} projectColor={project.color || "#d4952a"} />
-				)}
-
 				{/* Week History Table */}
 				<section className="mt-6" aria-label="Week history">
 					<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
@@ -383,11 +374,9 @@ export default function ProjectDetails() {
 							const directOverride = findDirectOverride(row.mondayIso);
 							const hasDirectOverride = directOverride !== undefined;
 							const directOverrideIsNull = hasDirectOverride && directOverride?.weeklyGoal == null;
-							// Prefer the server-resolved flag (covers permanent overrides
-							// that apply to weeks past their effective_from). Fall back to
-							// the value-difference heuristic only when the flag is missing.
-							const isOverridden =
-								row.effectiveGoalOverridden || rowGoal !== (project.weeklyGoal ?? null);
+							// Trust the server-resolved flag. It covers both one-off and
+							// permanent overrides (including weeks past an effective_from).
+							const isOverridden = row.effectiveGoalOverridden;
 
 							return (
 								<div
