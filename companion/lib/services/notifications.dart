@@ -75,8 +75,8 @@ class NotificationsService {
     // Initialize the timezone database so zonedSchedule has names.
     tz_db.initializeTimeZones();
     try {
-      final localName = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(localName));
+      final localTz = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(localTz.identifier));
     } catch (_) {
       // Fall back to UTC if the platform can't tell us the local TZ —
       // worst case the EOD prompt fires at the wrong hour for one day
@@ -114,7 +114,7 @@ class NotificationsService {
     );
 
     await _plugin.initialize(
-      settings,
+      settings: settings,
       onDidReceiveNotificationResponse: (response) {
         _taps.add(NotificationTap(
           payload: response.payload,
@@ -188,7 +188,7 @@ class NotificationsService {
     required int minute,
   }) async {
     if (!_ready) await init();
-    await _plugin.cancel(_idEod);
+    await _plugin.cancel(id: _idEod);
 
     final now = tz.TZDateTime.now(tz.local);
     var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
@@ -197,11 +197,11 @@ class NotificationsService {
     }
 
     await _plugin.zonedSchedule(
-      _idEod,
-      'How was today?',
-      'A minute of reflection — log your mood and what went well.',
-      when,
-      _details(subtitle: 'Beats'),
+      id: _idEod,
+      title: 'How was today?',
+      body: 'A minute of reflection — log your mood and what went well.',
+      scheduledDate: when,
+      notificationDetails: _details(subtitle: 'Beats'),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time, // repeat daily at HH:MM
       payload: 'eod-mood',
@@ -210,7 +210,7 @@ class NotificationsService {
 
   Future<void> cancelEodMoodPrompt() async {
     if (!_ready) await init();
-    await _plugin.cancel(_idEod);
+    await _plugin.cancel(id: _idEod);
   }
 
   /// One-shot "your morning brief is ready" prompt. Caller is responsible
@@ -218,10 +218,10 @@ class NotificationsService {
   Future<void> notifyBriefAvailable({String? preview}) async {
     if (!_ready) await init();
     await _plugin.show(
-      _idBrief,
-      'Your morning brief is ready',
-      preview ?? 'Tap to read what the coach has for you today.',
-      _details(subtitle: 'Beats coach'),
+      id: _idBrief,
+      title: 'Your morning brief is ready',
+      body: preview ?? 'Tap to read what the coach has for you today.',
+      notificationDetails: _details(subtitle: 'Beats coach'),
       payload: 'brief',
     );
   }
@@ -229,10 +229,10 @@ class NotificationsService {
   Future<void> notifyReviewAvailable() async {
     if (!_ready) await init();
     await _plugin.show(
-      _idReview,
-      'Time to review the day',
-      'A few questions to help close the loop.',
-      _details(subtitle: 'Beats coach'),
+      id: _idReview,
+      title: 'Time to review the day',
+      body: 'A few questions to help close the loop.',
+      notificationDetails: _details(subtitle: 'Beats coach'),
       payload: 'review',
     );
   }
@@ -254,10 +254,10 @@ class NotificationsService {
   }) async {
     if (!_ready) await init();
     await _plugin.show(
-      _idAutoTimer,
-      'Start tracking?',
-      'You\'ve been deep in $projectName for a while.',
-      _details(
+      id: _idAutoTimer,
+      title: 'Start tracking?',
+      body: 'You\'ve been deep in $projectName for a while.',
+      notificationDetails: _details(
         subtitle: 'Beats',
         androidActions: const [
           AndroidNotificationAction(
@@ -288,10 +288,10 @@ class NotificationsService {
         ? 'You\'ve been on $appLabel for ${mins}m while a timer is running.'
         : 'You\'ve drifted to $appLabel while a timer is running.';
     await _plugin.show(
-      _idDrift,
-      'Drift detected',
-      body,
-      _details(subtitle: 'Beats'),
+      id: _idDrift,
+      title: 'Drift detected',
+      body: body,
+      notificationDetails: _details(subtitle: 'Beats'),
       payload: 'drift:$appLabel',
     );
   }

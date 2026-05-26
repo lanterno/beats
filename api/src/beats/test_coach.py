@@ -1923,10 +1923,13 @@ class _FakeCoachRepos:
     """Mirrors the CoachRepos dataclass shape for tests."""
 
     def __init__(self, *, projects=None, beats=None, intentions_by_date=None):
+        # `note` is typed loosely so individual tests can swap in their own
+        # duck-typed note-repo fakes (each implementing get_by_date) without
+        # tripping ty's attribute-type inference.
+        self.note: object = _FakeNoteRepo()
         self.project = _FakeProjectRepoForTools(projects or [])
         self.beat = _FakeBeatRepoForTools(beats or [])
         self.intention = _FakeIntentionRepo(intentions_by_date or {})
-        self.note = _FakeNoteRepo()
         self.digest = None  # not used by tools.py
 
 

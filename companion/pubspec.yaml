@@ -32,17 +32,17 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   shared_preferences: ^2.3.0
-  flutter_secure_storage: ^9.2.2
-  mobile_scanner: ^5.2.3
+  flutter_secure_storage: ^10.3.0
+  mobile_scanner: ^7.2.0
   cupertino_icons: ^1.0.8
   intl: ^0.20.2
   google_fonts: ^8.0.2
   system_tray: ^2.0.3
   window_manager: ^0.5.1
   path_provider: ^2.1.4
-  flutter_local_notifications: ^19.4.2
-  timezone: ^0.10.1
-  flutter_timezone: ^4.1.1
+  flutter_local_notifications: ^21.0.0
+  timezone: ^0.11.0
+  flutter_timezone: ^5.0.2
   url_launcher: ^6.3.0
 
 dev_dependencies:

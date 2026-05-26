@@ -74,10 +74,10 @@
     "test": "tsc -p ./ && node --test 'out/**/*.test.js'"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^25.9.1",
     "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.0.0",
-    "typescript": "^5.4.0"
+    "@vscode/vsce": "^3.9.1",
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",
