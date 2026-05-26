@@ -1045,14 +1045,19 @@ class TestProductivityScore:
     async def test_goal_progress_caps_at_25_when_target_hit(self):
         """A project that hit (or exceeded) its weekly goal contributes
         max progress (1.0) to the average. Single-project case → 25."""
+        from datetime import time
+
         today = datetime.now(UTC).date()
         week_start = today - timedelta(days=today.weekday())
-        # 10h of sessions this week toward a 5h goal.
+        # 10h of sessions this week toward a 5h goal. compute_productivity_score
+        # only loads the last 7 days up to today, so the sessions must land in
+        # the elapsed part of this week (week_start..today) — spreading them
+        # across the full Mon-Sun would drop the still-future days and undercount.
+        days_elapsed = today.weekday() + 1  # Monday..today, inclusive
         beats = []
         for i in range(10):
-            s = datetime.combine(week_start, datetime.min.time(), tzinfo=UTC).replace(
-                hour=9
-            ) + timedelta(days=i % 7, hours=i % 3)
+            day = week_start + timedelta(days=i % days_elapsed)
+            s = datetime.combine(day, time(hour=9 + i // days_elapsed), tzinfo=UTC)
             beats.append(
                 Beat(
                     id=f"b-{i}",
@@ -1649,6 +1654,32 @@ class TestPatternDetectorsSessionTrend:
             i += 1
         return beats
 
+    def _beats_on_day(
+        self,
+        day: date,
+        count: int,
+        per_session_minutes: int,
+        project_id: str = "p1",
+    ) -> list:
+        """`count` non-overlapping sessions on a single day. Lets a test put a
+        fixed number of this-week sessions on Monday regardless of which weekday
+        the suite runs on — week_start..today can be a single day on a Monday,
+        which is too few for the trend detector's 3-session minimum."""
+        from datetime import time
+
+        beats = []
+        for j in range(count):
+            s = datetime.combine(day, time(hour=9 + j * 2), tzinfo=UTC)
+            beats.append(
+                Beat(
+                    id=f"d-{j}",
+                    project_id=project_id,
+                    start=s,
+                    end=s + timedelta(minutes=per_session_minutes),
+                )
+            )
+        return beats
+
     async def test_too_few_this_week_returns_no_card(self):
         from beats.domain.intelligence import _monday_of
 
@@ -1691,7 +1722,7 @@ class TestPatternDetectorsSessionTrend:
 
         today = datetime.now(UTC).date()
         this_monday = _monday_of(today)
-        beats = self._beats_in_range(this_monday, today, 90)
+        beats = self._beats_on_day(this_monday, 3, 90)
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
         )
@@ -1709,7 +1740,7 @@ class TestPatternDetectorsSessionTrend:
 
         today = datetime.now(UTC).date()
         this_monday = _monday_of(today)
-        beats = self._beats_in_range(this_monday, today, 30)
+        beats = self._beats_on_day(this_monday, 3, 30)
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
         )
