@@ -654,10 +654,15 @@ class TestAnalyticsDailyRhythm:
         the divisor is 10 (today inclusive). The 9-10 AM slots
         each get 30 min total, divided by 10 → 3.0 min per slot."""
         from datetime import UTC as _UTC
-        from datetime import datetime, timedelta
+        from datetime import date, datetime, time, timedelta
 
-        nine_days_ago = (datetime.now(_UTC) - timedelta(days=9)).replace(
-            hour=9, minute=0, second=0, microsecond=0
+        # Anchor to date.today() (the frame get_daily_rhythm uses for its
+        # divisor), not datetime.now(UTC). Building from now(UTC) makes the
+        # beat's UTC .date() drift a day ahead of the local today whenever the
+        # suite runs late-evening in a UTC+ timezone, turning the 10-day span
+        # into 11 and breaking the average.
+        nine_days_ago = datetime.combine(
+            date.today() - timedelta(days=9), time(hour=9), tzinfo=_UTC
         )
         beats = [
             Beat(
