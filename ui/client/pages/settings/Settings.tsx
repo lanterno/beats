@@ -13,7 +13,7 @@ import {
 	FileJson,
 	FileSpreadsheet,
 	Fingerprint,
-	Github,
+	GitBranch,
 	Heart,
 	Moon,
 	Palette,
@@ -665,7 +665,7 @@ function GitHubSection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Github className="w-4 h-4 text-accent" />
+				<GitBranch className="w-4 h-4 text-accent" />
 				GitHub
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">

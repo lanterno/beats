@@ -1,6 +1,7 @@
-"""Database connection management using Motor async MongoDB driver."""
+"""Database connection management using the PyMongo async MongoDB driver."""
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.settings import settings
 
@@ -8,12 +9,12 @@ from beats.settings import settings
 class Database:
     """Async MongoDB connection manager.
 
-    Manages the lifecycle of the Motor async client connection.
+    Manages the lifecycle of the PyMongo async client connection.
     Should be connected during app startup and disconnected on shutdown.
     """
 
-    client: AsyncIOMotorClient | None = None
-    db: AsyncIOMotorDatabase | None = None
+    client: AsyncMongoClient | None = None
+    db: AsyncDatabase | None = None
 
     @classmethod
     async def connect(cls, dsn: str | None = None, db_name: str | None = None) -> None:
@@ -25,7 +26,7 @@ class Database:
         """
         dsn = dsn or settings.db_dsn
         db_name = db_name or settings.db_name
-        cls.client = AsyncIOMotorClient(dsn)
+        cls.client = AsyncMongoClient(dsn)
         cls.db = cls.client[db_name]
         await cls._ensure_indexes()
 
@@ -33,7 +34,7 @@ class Database:
     async def disconnect(cls) -> None:
         """Close the MongoDB connection."""
         if cls.client:
-            cls.client.close()
+            await cls.client.close()
             cls.client = None
             cls.db = None
 
@@ -63,7 +64,7 @@ class Database:
         await cls.db.oura_integrations.create_index("user_id", unique=True)
 
     @classmethod
-    def get_db(cls) -> AsyncIOMotorDatabase:
+    def get_db(cls) -> AsyncDatabase:
         """Get the database instance.
 
         Raises:

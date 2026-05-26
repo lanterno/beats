@@ -4,8 +4,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel
+from pymongo.asynchronous.collection import AsyncCollection
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class StoredCredential(BaseModel):
 class MongoCredentialStorage:
     """MongoDB-backed storage for WebAuthn credentials (multi-user)."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncCollection):
         self.collection = collection
 
     async def is_registered(self, user_id: str | None = None) -> bool:

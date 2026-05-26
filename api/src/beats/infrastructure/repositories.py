@@ -1,11 +1,11 @@
-"""Repository implementations for MongoDB using Motor async driver."""
+"""Repository implementations for MongoDB using the PyMongo async driver."""
 
 from abc import ABC, abstractmethod
 from datetime import UTC, date, datetime
 from typing import Any
 
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.asynchronous.collection import AsyncCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
 from beats.domain.models import (
@@ -67,7 +67,7 @@ def serialize_to_document(data: dict[str, Any]) -> dict[str, Any]:
 class MongoUserScoped:
     """Mixin: user-scoped query builder shared by all Mongo repositories."""
 
-    def __init__(self, collection: AsyncIOMotorCollection, user_id: str):
+    def __init__(self, collection: AsyncCollection, user_id: str):
         self.collection = collection
         self.user_id = user_id
 
@@ -333,7 +333,7 @@ class MongoProjectRepository(MongoUserScoped, ProjectRepository):
 class MongoUserRepository(UserRepository):
     """MongoDB implementation of UserRepository."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncCollection):
         self.collection = collection
 
     async def get_by_id(self, user_id: str) -> User | None:
@@ -906,7 +906,7 @@ class MongoPairingCodeRepository(PairingCodeRepository):
     Not user-scoped: the exchange endpoint is public and looks up by code_hash.
     """
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncCollection):
         self.collection = collection
 
     async def create(self, code: PairingCode) -> PairingCode:
@@ -958,7 +958,7 @@ class MongoDeviceRegistrationRepository(DeviceRegistrationRepository):
     Not user-scoped: device token validation looks up by device_id across all users.
     """
 
-    def __init__(self, collection: AsyncIOMotorCollection):
+    def __init__(self, collection: AsyncCollection):
         self.collection = collection
 
     async def create(self, reg: DeviceRegistration) -> DeviceRegistration:

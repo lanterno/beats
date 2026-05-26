@@ -16,7 +16,7 @@ import os
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from beats.coach import brief as brief_module
 from beats.coach import chat as chat_module
@@ -48,12 +48,12 @@ from beats.infrastructure.database import Database
 
 
 def _async_db():
-    """Build a Motor handle for the test database. The conftest's
+    """Build an async PyMongo handle for the test database. The conftest's
     testcontainer sets DB_DSN/DB_NAME; we connect directly so the
     coach modules can be exercised with their real (async) signature."""
     dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "beats_test")
-    client = AsyncIOMotorClient(dsn)
+    client = AsyncMongoClient(dsn)
     return client, client[db_name]
 
 
@@ -125,7 +125,7 @@ class TestMemoryStore:
             await db[COACH_MEMORY_COLLECTION].delete_many({})
             yield
         finally:
-            client.close()
+            await client.close()
 
     async def test_read_returns_none_for_fresh_user(self):
         client, db = _async_db()
@@ -133,7 +133,7 @@ class TestMemoryStore:
             store = MemoryStore(db, "user-fresh")
             assert await store.read() is None
         finally:
-            client.close()
+            await client.close()
 
     async def test_write_then_read_round_trips(self):
         client, db = _async_db()
@@ -143,7 +143,7 @@ class TestMemoryStore:
             got = await store.read()
             assert got == "# Coach memory\n\nUser ships at night."
         finally:
-            client.close()
+            await client.close()
 
     async def test_write_is_idempotent_on_user_id(self):
         """Two writes for the same user must not produce two rows —
@@ -158,7 +158,7 @@ class TestMemoryStore:
             assert count == 1
             assert await store.read() == "second"
         finally:
-            client.close()
+            await client.close()
 
     async def test_write_pushes_previous_content_into_history(self):
         """The store keeps a versioned history so the coach's prior
@@ -183,7 +183,7 @@ class TestMemoryStore:
             # And the current content is v3.
             assert doc["content"] == "v3"
         finally:
-            client.close()
+            await client.close()
 
     async def test_users_are_isolated(self):
         """A write for user A must not affect user B's read. Verifies
@@ -201,7 +201,7 @@ class TestMemoryStore:
             assert await store_a.read() == "only A's notes"
             assert await store_b.read() == "only B's notes"
         finally:
-            client.close()
+            await client.close()
 
     async def test_first_write_initializes_metadata(self):
         """First write should set created_at, updated_at, and the
@@ -221,7 +221,7 @@ class TestMemoryStore:
             assert len(history) == 1
             assert history[0]["content"] == ""  # the "previous" before first write
         finally:
-            client.close()
+            await client.close()
 
 
 class TestUsageTracker:
@@ -1775,7 +1775,7 @@ class TestRewriteCoachMemory:
             store = MemoryStore(db, "user-1")
             assert await store.read() == "# Coach memory\n\nNew personality."
         finally:
-            client.close()
+            await client.close()
 
     async def test_strips_whitespace_around_llm_output(self, patch_complete):
         """LLM may emit leading/trailing newlines (Anthropic models
@@ -1859,7 +1859,7 @@ class TestRewriteCoachMemory:
             assert len(history) == 2
             assert [h["content"] for h in history] == ["", "# v1 memory"]
         finally:
-            client.close()
+            await client.close()
 
     async def test_isolates_users(self, patch_complete):
         """A rewrite for user A doesn't touch user B's memory."""
@@ -1875,7 +1875,7 @@ class TestRewriteCoachMemory:
             assert await store_a.read() == "# A's memory"
             assert await store_b.read() is None
         finally:
-            client.close()
+            await client.close()
 
 
 # Tool dispatch test scaffolding
@@ -1923,10 +1923,13 @@ class _FakeCoachRepos:
     """Mirrors the CoachRepos dataclass shape for tests."""
 
     def __init__(self, *, projects=None, beats=None, intentions_by_date=None):
+        # `note` is typed loosely so individual tests can swap in their own
+        # duck-typed note-repo fakes (each implementing get_by_date) without
+        # tripping ty's attribute-type inference.
+        self.note: object = _FakeNoteRepo()
         self.project = _FakeProjectRepoForTools(projects or [])
         self.beat = _FakeBeatRepoForTools(beats or [])
         self.intention = _FakeIntentionRepo(intentions_by_date or {})
-        self.note = _FakeNoteRepo()
         self.digest = None  # not used by tools.py
 
 
@@ -2518,7 +2521,7 @@ class TestBuildUserContext:
             store = MemoryStore(db, "user-1")
             await store.write("# Memory\n\nUser ships at night.")
         finally:
-            client.close()
+            await client.close()
 
         repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
         result = await context_module.build_user_context("user-1", repos)

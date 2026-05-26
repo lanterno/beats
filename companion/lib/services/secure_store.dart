@@ -13,19 +13,18 @@ abstract class SecureStore {
 
 /// Production [SecureStore] backed by `flutter_secure_storage`.
 ///
-/// Android uses EncryptedSharedPreferences (rather than the plain
-/// SharedPreferences blob the package falls back to on older Androids) so
-/// the key material lands behind the Android Keystore. iOS uses
-/// `first_unlock` Keychain accessibility — the token is readable after the
-/// device is unlocked once post-boot, which is the right level for a
-/// background-syncing companion that needs to push biometrics overnight
-/// without the user re-unlocking the phone.
+/// On Android the package now encrypts key material with custom ciphers
+/// backed by the Android Keystore (the old EncryptedSharedPreferences flag
+/// is deprecated in v10 and ignored — existing data is migrated on first
+/// access). iOS uses `first_unlock` Keychain accessibility — the token is
+/// readable after the device is unlocked once post-boot, which is the right
+/// level for a background-syncing companion that needs to push biometrics
+/// overnight without the user re-unlocking the phone.
 class FlutterSecureStore implements SecureStore {
   final FlutterSecureStorage _backing;
 
   FlutterSecureStore()
       : _backing = const FlutterSecureStorage(
-          aOptions: AndroidOptions(encryptedSharedPreferences: true),
           iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
         );
 
