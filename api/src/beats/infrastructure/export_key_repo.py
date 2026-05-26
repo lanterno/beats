@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from bson.binary import Binary
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.export_signing import generate_keypair
 
@@ -18,7 +18,7 @@ COLLECTION = "export_keys"
 
 
 class ExportKeyRepository:
-    def __init__(self, db: AsyncIOMotorDatabase, user_id: str) -> None:
+    def __init__(self, db: AsyncDatabase, user_id: str) -> None:
         self._col = db[COLLECTION]
         self._user_id = user_id
 

@@ -61,7 +61,8 @@ class UsageTracker:
             {"$match": {"user_id": self._user_id, "ts": {"$gte": month_start}}},
             {"$group": {"_id": None, "total": {"$sum": "$cost_usd"}}},
         ]
-        result = await self._col.aggregate(pipeline).to_list(1)
+        cursor = await self._col.aggregate(pipeline)
+        result = await cursor.to_list(1)
         if result:
             return float(result[0]["total"])
         return 0.0
@@ -98,4 +99,5 @@ class UsageTracker:
             },
             {"$sort": {"_id": 1}},
         ]
-        return await self._col.aggregate(pipeline).to_list(100)
+        cursor = await self._col.aggregate(pipeline)
+        return await cursor.to_list(100)

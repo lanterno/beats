@@ -9,13 +9,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.coach.repos import COACH_MEMORY_COLLECTION
 
 
 class MemoryStore:
-    def __init__(self, db: AsyncIOMotorDatabase, user_id: str) -> None:
+    def __init__(self, db: AsyncDatabase, user_id: str) -> None:
         self._col = db[COACH_MEMORY_COLLECTION]
         self._user_id = user_id
 
