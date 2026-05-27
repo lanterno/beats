@@ -60,7 +60,7 @@ line-ending = "lf"
 docstring-code-format = true
 
 [tool.ty.rules]
-# Suppress false positives from Motor/Pydantic dynamic types until ty matures
+# Suppress false positives from PyMongo/Pydantic dynamic types until ty matures
 unresolved-attribute = "warn"
 invalid-argument-type = "warn"
 invalid-type-form = "warn"

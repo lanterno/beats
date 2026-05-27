@@ -5,7 +5,7 @@ Personal time-tracking system: Python API + React SPA + Go daemon + Flutter comp
 ## Repository Layout
 
 ```
-api/                          Python (FastAPI + Motor/MongoDB)
+api/                          Python (FastAPI + PyMongo/MongoDB)
 ui/                           React 19 SPA (Vite + TypeScript)
 daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
 companion/                    Flutter desktop companion (timer, coach, integrations)
