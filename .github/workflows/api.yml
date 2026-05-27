@@ -13,7 +13,7 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --group dev
       - run: uv run ruff check src/
@@ -40,7 +40,7 @@ jobs:
       DB_NAME: beats_test
       BEATS_TEST_ENV: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --group dev
       - run: uv run pytest src/ -v --cov=beats --cov-report=xml

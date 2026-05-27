@@ -13,8 +13,8 @@ jobs:
       run:
         working-directory: daemon
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
       # gofmt is enforced locally via lefthook, but a contributor
@@ -35,27 +35,37 @@ jobs:
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: quality
-    runs-on: ubuntu-latest
+    # darwin builds run on macOS so the cgo cadence event tap
+    # (cadence_darwin.go) compiles; cross-compiling darwin from Linux
+    # with CGO_ENABLED=0 drops that file and breaks the build.
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
           - goos: darwin
             goarch: arm64
+            runner: macos-latest
           - goos: darwin
             goarch: amd64
+            runner: macos-latest
           - goos: linux
             goarch: arm64
+            runner: ubuntu-latest
           - goos: linux
             goarch: amd64
+            runner: ubuntu-latest
     defaults:
       run:
         working-directory: daemon
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
+      # cgo on for darwin (native macOS clang); off for the pure-Go
+      # linux stub so it stays statically linked.
+      CGO_ENABLED: ${{ matrix.goos == 'darwin' && '1' || '0' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
       - run: go build -o beatsd-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/beatsd/
