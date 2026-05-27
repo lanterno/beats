@@ -21,7 +21,13 @@ import (
 // here without writing to the keychain.
 
 func TestAuthedClient_ReturnsNotPairedErrorWhenNoToken(t *testing.T) {
-	tok, _ := pair.LoadToken()
+	tok, err := pair.LoadToken()
+	if err != nil {
+		// No usable keychain backend (e.g. headless CI with no
+		// org.freedesktop.secrets service). The "not paired" contract
+		// can't be exercised without one, so skip rather than fail.
+		t.Skipf("skipping: no usable keychain backend in this environment: %v", err)
+	}
 	if tok != "" {
 		t.Skip("skipping: a token is already stored in the keychain; refusing to clobber developer state")
 	}
