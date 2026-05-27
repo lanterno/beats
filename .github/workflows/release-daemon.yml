@@ -19,26 +19,33 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: ubuntu-latest
+    # darwin builds run on macOS so the cgo cadence event tap
+    # (cadence_darwin.go) links against the native CGEventTap; it cannot
+    # be cross-compiled from Linux. linux stays on ubuntu, statically linked.
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
           - goos: darwin
             goarch: arm64
+            runner: macos-latest
           - goos: darwin
             goarch: amd64
+            runner: macos-latest
           - goos: linux
             goarch: arm64
+            runner: ubuntu-latest
           - goos: linux
             goarch: amd64
+            runner: ubuntu-latest
     defaults:
       run:
         working-directory: daemon
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
-      CGO_ENABLED: "0" # statically link; the cadence cgo tap is darwin-only
-                       # and we override CGO_ENABLED=1 for that target below.
+      # cgo on for the darwin cadence tap; off elsewhere to stay static.
+      CGO_ENABLED: ${{ matrix.goos == 'darwin' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -48,12 +55,6 @@ jobs:
 
       - name: Build
         run: |
-          # CGEventTap requires cgo, and we only ship it on darwin. Toggle
-          # CGO_ENABLED back on when targeting darwin so the cadence path
-          # links; everywhere else stays statically linked.
-          if [ "${{ matrix.goos }}" = "darwin" ]; then
-            export CGO_ENABLED=1
-          fi
           go build -trimpath \
             -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
             -o beatsd ./cmd/beatsd/
