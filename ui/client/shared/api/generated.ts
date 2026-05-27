@@ -2514,18 +2514,12 @@ export interface components {
         };
         /** Body_import_full_json_api_export_import_post */
         Body_import_full_json_api_export_import_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
         };
         /** Body_import_sqlite_api_export_sqlite_import_post */
         Body_import_sqlite_api_export_sqlite_import_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
         };
         /** BriefResponse */
@@ -3577,6 +3571,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
