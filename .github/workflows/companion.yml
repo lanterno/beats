@@ -57,6 +57,17 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
+      # Release builds now require a real signing key (no debug fallback).
+      # Generate a throwaway keystore so CI exercises the release-signing
+      # path; the real upload keystore lives only on the maintainer's machine
+      # and is never committed.
+      - name: Generate throwaway upload keystore (CI signing validation)
+        working-directory: companion/android
+        run: |
+          keytool -genkeypair -v -keystore app/ci-upload.jks \
+            -storepass cipass -keypass cipass -alias ci \
+            -keyalg RSA -keysize 2048 -validity 36500 -dname "CN=Beats CI"
+          printf 'storePassword=cipass\nkeyPassword=cipass\nkeyAlias=ci\nstoreFile=ci-upload.jks\n' > key.properties
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
