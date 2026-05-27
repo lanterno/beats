@@ -1,6 +1,6 @@
 # Beats API
 
-FastAPI + Motor (async MongoDB) — Python 3.14, managed by uv.
+FastAPI + PyMongo (async MongoDB) — Python 3.14, managed by uv.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ src/beats/
 ├── coach/        AI coach — streaming chat, brief generation, EOD reviews
 │   ├── chat.py, gateway.py, context.py, tools.py, review.py, memory.py, …
 ├── infrastructure/
-│   ├── database.py      Motor singleton (Database.connect/disconnect)
+│   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
 │   ├── repositories.py  Abstract + MongoDB repo implementations
 │   └── export_key_repo.py  Per-user export-bundle signing keys
 ├── settings.py   pydantic-settings (reads .env / env vars)
@@ -77,5 +77,5 @@ Harness:
 ```bash
 uv run --group dev ruff check       # Lint
 uv run --group dev ruff format      # Format
-uv run --group dev ty check         # Type check (ty has suppressed warnings for Motor/Pydantic)
+uv run --group dev ty check         # Type check (ty has suppressed warnings for PyMongo/Pydantic)
 ```

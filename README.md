@@ -23,7 +23,7 @@ A full-stack system across six surfaces — Python API, React SPA, Go daemon, Fl
 
 | Component | Stack |
 |-----------|-------|
-| **API** | Python 3.14, FastAPI, Motor (async MongoDB), Pydantic v2 |
+| **API** | Python 3.14, FastAPI, PyMongo (async MongoDB), Pydantic v2 |
 | **UI** | React 19, TypeScript, Vite, TanStack Query, Tailwind CSS v4 |
 | **Daemon** | Go 1.23, macOS/Linux signal collection, Flow Score engine |
 | **Companion** | Flutter (macOS/iOS/Android/Linux/Windows), HealthKit + Health Connect bridges |
@@ -50,7 +50,7 @@ A [devcontainer](.devcontainer/devcontainer.json) is provided for VS Code / GitH
 ## Repository Layout
 
 ```
-api/                          Python API (FastAPI + Motor/MongoDB)
+api/                          Python API (FastAPI + PyMongo/MongoDB)
 ui/                           React SPA (Vite + TypeScript)
 daemon/                       Go daemon — ambient signal collection + Flow Score
 companion/                    Flutter desktop companion (timer, coach, integrations)

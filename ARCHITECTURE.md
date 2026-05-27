@@ -7,7 +7,7 @@ Beats is a personal time tracking system with four components: a **Python API**,
 ## System Overview
 
 ```
-┌─────────────┐     HTTP/REST     ┌─────────────┐     Motor      ┌──────────┐
+┌─────────────┐     HTTP/REST     ┌─────────────┐    PyMongo     ┌──────────┐
 │   React UI  │ ◄──────────────► │  FastAPI     │ ◄────────────► │ MongoDB  │
 │  (Vite/TS)  │   localhost:8080  │  (Python)    │                │ (Cloud)  │
 └─────────────┘                   └──────┬───────┘                └──────────┘
@@ -26,7 +26,7 @@ The API is the single source of truth. The UI and wall clock are both clients th
 
 ## API (`/api`)
 
-**Stack:** Python 3.14, FastAPI, Motor (async MongoDB), Pydantic v2, uvicorn
+**Stack:** Python 3.14, FastAPI, PyMongo (async MongoDB), Pydantic v2, uvicorn
 
 ### Layered Architecture
 
@@ -43,7 +43,7 @@ api/src/
     │   ├── analytics.py         # AnalyticsService (heatmap, rhythm)
     │   └── utils.py             # Timezone normalization
     ├── infrastructure/
-    │   ├── database.py          # Motor client singleton (connect/disconnect)
+    │   ├── database.py          # PyMongo async client singleton (connect/disconnect)
     │   └── repositories.py      # Abstract repos + Mongo implementations
     ├── auth/
     │   ├── session.py           # JWT session management
@@ -78,7 +78,7 @@ Services orchestrate domain logic: `TimerService` enforces single-active-timer, 
 
 ### Infrastructure Layer
 
-- **Database** — Singleton async MongoDB connection via Motor. Connected during FastAPI lifespan startup, disconnected on shutdown. Accepts `dsn` and `db_name` parameters for test override.
+- **Database** — Singleton async MongoDB connection via PyMongo's async client. Connected during FastAPI lifespan startup, disconnected on shutdown. Accepts `dsn` and `db_name` parameters for test override.
 - **Repositories** — Abstract base classes (`BeatRepository`, `ProjectRepository`, etc.) with MongoDB implementations. All async. Handles ObjectId serialization.
 
 ### Dependency Injection
@@ -188,8 +188,8 @@ Integration tests use [Testcontainers](https://testcontainers.com/) to spin up a
 1. `conftest.py::pytest_configure` starts a `MongoDbContainer("mongo:8")` on a random port
 2. Sets `DB_DSN` and `DB_NAME` environment variables before any test module is imported
 3. Pydantic Settings picks up the container's connection string (env vars override `.env.test`)
-4. A session-scoped `test_client` fixture creates `TestClient(app)` inside a `with` block, triggering the FastAPI lifespan which connects Motor to the container
-5. A class-scoped `clean_db` autouse fixture drops all collections between test classes (using sync pymongo to avoid event loop conflicts with Motor)
+4. A session-scoped `test_client` fixture creates `TestClient(app)` inside a `with` block, triggering the FastAPI lifespan which connects PyMongo's async client to the container
+5. A class-scoped `clean_db` autouse fixture drops all collections between test classes (using sync pymongo to avoid event loop conflicts with the async client)
 6. After all tests, the container is automatically stopped and removed
 
 **Two test modes:**

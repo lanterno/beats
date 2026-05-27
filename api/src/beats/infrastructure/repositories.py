@@ -198,7 +198,7 @@ class ProjectRepository(ABC):
 
 
 class MongoBeatRepository(MongoUserScoped, BeatRepository):
-    """MongoDB implementation of BeatRepository using Motor."""
+    """MongoDB implementation of BeatRepository using PyMongo's async driver."""
 
     async def get_by_id(self, beat_id: str) -> Beat:
         doc = await self.collection.find_one(self._q({"_id": ObjectId(beat_id)}))
@@ -283,7 +283,7 @@ class MongoBeatRepository(MongoUserScoped, BeatRepository):
 
 
 class MongoProjectRepository(MongoUserScoped, ProjectRepository):
-    """MongoDB implementation of ProjectRepository using Motor."""
+    """MongoDB implementation of ProjectRepository using PyMongo's async driver."""
 
     async def get_by_id(self, project_id: str) -> Project:
         doc = await self.collection.find_one(self._q({"_id": ObjectId(project_id)}))
