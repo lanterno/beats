@@ -2,8 +2,12 @@
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
+from beats.domain.utils import local_date, local_dt
 from beats.infrastructure.repositories import BeatRepository
+
+UTC_TZ = ZoneInfo("UTC")
 
 
 class AnalyticsService:
@@ -13,12 +17,17 @@ class AnalyticsService:
         self.beat_repo = beat_repo
 
     async def get_heatmap(
-        self, year: int, project_id: str | None = None, tag: str | None = None
+        self,
+        year: int,
+        project_id: str | None = None,
+        tag: str | None = None,
+        tz: ZoneInfo = UTC_TZ,
     ) -> list[dict]:
         """Get daily activity heatmap for a given year.
 
         Returns a list of dicts with date, total_minutes, session_count, project_count
-        for each day that has at least one session.
+        for each day that has at least one session. Days are bucketed by the
+        session's local calendar date in ``tz``.
         """
         beats = await self.beat_repo.list_all_completed()
 
@@ -31,7 +40,7 @@ class AnalyticsService:
                 continue
             if tag and tag not in beat.tags:
                 continue
-            beat_date = beat.start.date()
+            beat_date = local_date(beat.start, tz)
             if beat_date.year != year:
                 continue
             entry = day_data[beat_date]
@@ -50,7 +59,11 @@ class AnalyticsService:
         ]
 
     async def get_daily_rhythm(
-        self, period: str = "all", project_id: str | None = None, tag: str | None = None
+        self,
+        period: str = "all",
+        project_id: str | None = None,
+        tag: str | None = None,
+        tz: ZoneInfo = UTC_TZ,
     ) -> list[dict]:
         """Get average activity by time of day in half-hour slots.
 
@@ -58,6 +71,7 @@ class AnalyticsService:
             period: "week" (current week), "month" (current month), or "all"
             project_id: Optional project filter.
             tag: Optional tag filter.
+            tz: Timezone for day-bucketing and slot math (defaults to UTC).
 
         Returns list of 48 slots with average minutes per slot.
         """
@@ -67,43 +81,53 @@ class AnalyticsService:
         if tag:
             beats = [b for b in beats if tag in b.tags]
 
-        today = date.today()
+        today = datetime.now(tz).date()
         if period == "week":
             start_of_week = today - timedelta(days=today.weekday())
-            filtered = [b for b in beats if b.start.date() >= start_of_week]
+            filtered = [b for b in beats if local_date(b.start, tz) >= start_of_week]
             num_days = (today - start_of_week).days + 1
         elif period == "month":
             start_of_month = today.replace(day=1)
-            filtered = [b for b in beats if b.start.date() >= start_of_month]
+            filtered = [b for b in beats if local_date(b.start, tz) >= start_of_month]
             num_days = (today - start_of_month).days + 1
         else:
             filtered = beats
             if filtered:
-                earliest = min(b.start.date() for b in filtered)
+                earliest = min(local_date(b.start, tz) for b in filtered)
                 num_days = (today - earliest).days + 1
             else:
                 num_days = 1
 
-        # Distribute each session's minutes into half-hour slots
+        # Distribute each session's minutes into half-hour slots, using the
+        # local wall clock so slot indices and cross-midnight splits are correct.
         slots = [0.0] * 48
         for beat in filtered:
-            start = beat.start.replace(tzinfo=None) if beat.start.tzinfo else beat.start
-            end = beat.end.replace(tzinfo=None) if beat.end and beat.end.tzinfo else beat.end
-            if not end:
+            if not beat.end:
                 continue
+            start = local_dt(beat.start, tz).replace(tzinfo=None)
+            end = local_dt(beat.end, tz).replace(tzinfo=None)
             self._distribute_to_slots(slots, start, end)
 
         # Average by number of days in the period
         num_days = max(num_days, 1)
         return [{"slot": i, "minutes": round(slots[i] / num_days, 1)} for i in range(48)]
 
-    async def get_untracked_gaps(self, target_date: date, min_gap_minutes: int = 15) -> list[dict]:
-        """Find gaps between sessions on a given date.
+    async def get_untracked_gaps(
+        self, target_date: date, min_gap_minutes: int = 15, tz: ZoneInfo = UTC_TZ
+    ) -> list[dict]:
+        """Find gaps between sessions on a given local date.
 
         Returns list of dicts with start, end, duration_minutes for gaps
-        longer than min_gap_minutes.
+        longer than min_gap_minutes. Sessions are scoped to ``target_date``
+        in the caller's local timezone.
         """
-        beats = await self.beat_repo.list_completed_in_range(target_date, target_date)
+        # Widen the repo query by a day on each side so sessions whose UTC
+        # date differs from their local date are still considered, then filter
+        # precisely by local date below.
+        beats = await self.beat_repo.list_completed_in_range(
+            target_date - timedelta(days=1), target_date + timedelta(days=1)
+        )
+        beats = [b for b in beats if local_date(b.start, tz) == target_date]
         if not beats:
             return []
 
@@ -127,14 +151,15 @@ class AnalyticsService:
 
     @staticmethod
     def _distribute_to_slots(slots: list[float], start: datetime, end: datetime) -> None:
-        """Distribute a session's minutes into half-hour slots (0-47)."""
-        # Clamp end to midnight of the start day (ignore cross-midnight portion)
-        midnight = start.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        end = min(end, midnight)
+        """Distribute a session's minutes into half-hour slots (0-47).
 
+        Slots are indexed by time-of-day, so a session that crosses midnight
+        has its after-midnight minutes attributed to the next day's slots
+        (which wrap back to slot 0). The minutes are never dropped.
+        """
         cursor = start
         while cursor < end:
-            slot_index = cursor.hour * 2 + (1 if cursor.minute >= 30 else 0)
+            slot_index = (cursor.hour * 2 + (1 if cursor.minute >= 30 else 0)) % 48
             # Next half-hour boundary
             next_min = 30 if cursor.minute < 30 else 0
             next_half = cursor.replace(minute=next_min, second=0, microsecond=0)
@@ -143,6 +168,5 @@ class AnalyticsService:
 
             chunk_end = min(end, next_half)
             minutes = (chunk_end - cursor).total_seconds() / 60
-            if 0 <= slot_index < 48:
-                slots[slot_index] += minutes
+            slots[slot_index] += minutes
             cursor = chunk_end

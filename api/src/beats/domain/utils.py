@@ -7,9 +7,45 @@ and never need to call ``normalize_tz()`` manually — it's applied
 automatically by the model validator.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, model_validator
+
+
+def local_dt(dt: datetime, tz: ZoneInfo) -> datetime:
+    """Convert an aware-or-naive-UTC datetime to a localized datetime in ``tz``.
+
+    Naive datetimes are treated as UTC (the DB stores UTC; Mongo may return
+    naive datetimes). Use this for ``.hour`` slot math and cross-midnight
+    splitting that must run in the user's local wall clock.
+
+    Args:
+        dt: A datetime, either UTC-aware or naive (interpreted as UTC).
+        tz: The target timezone.
+
+    Returns:
+        The same instant expressed in ``tz``.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(tz)
+
+
+def local_date(dt: datetime, tz: ZoneInfo) -> date:
+    """Convert an aware-or-naive-UTC datetime to the local calendar date in ``tz``.
+
+    Naive datetimes are treated as UTC. Use this for day-bucketing so a
+    late-evening session lands on the correct local calendar day.
+
+    Args:
+        dt: A datetime, either UTC-aware or naive (interpreted as UTC).
+        tz: The target timezone.
+
+    Returns:
+        The local calendar date in ``tz``.
+    """
+    return local_dt(dt, tz).date()
 
 
 def normalize_tz(dt: datetime) -> datetime:

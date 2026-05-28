@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from beats.api.dependencies import (
     InsightsRepoDep,
     IntelligenceServiceDep,
+    TimezoneDep,
     WeeklyDigestRepoDep,
 )
 from beats.api.schemas import (
@@ -32,19 +33,21 @@ router = APIRouter(prefix="/api/intelligence", tags=["intelligence"])
 @router.get("/score", response_model=ProductivityScoreResponse)
 async def get_productivity_score(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
 ) -> ProductivityScoreResponse:
     """Get current productivity score (0-100) with component breakdown."""
-    result = await service.compute_productivity_score()
+    result = await service.compute_productivity_score(tz=tz)
     return ProductivityScoreResponse(**result)
 
 
 @router.get("/score/history", response_model=list[ScoreHistoryItem])
 async def get_score_history(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
     weeks: int = Query(default=8, ge=1, le=52),
 ) -> list[ScoreHistoryItem]:
     """Get weekly productivity score history for sparkline."""
-    history = await service.compute_productivity_score_history(weeks=weeks)
+    history = await service.compute_productivity_score_history(weeks=weeks, tz=tz)
     return [ScoreHistoryItem(**item) for item in history]
 
 
@@ -74,15 +77,16 @@ async def get_digest(
 async def generate_digest(
     service: IntelligenceServiceDep,
     digest_repo: WeeklyDigestRepoDep,
+    tz: TimezoneDep,
     week_of: Annotated[date | None, Query()] = None,
 ) -> WeeklyDigestResponse:
     """Generate (or regenerate) a weekly digest. Defaults to last completed week."""
     if week_of is None:
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         # Last completed week's Monday
         week_of = today - timedelta(days=today.weekday() + 7)
 
-    digest = await service.generate_weekly_digest(week_of)
+    digest = await service.generate_weekly_digest(week_of, tz=tz)
     await digest_repo.upsert(digest)
     return WeeklyDigestResponse.model_validate(digest, from_attributes=True)
 
@@ -109,9 +113,10 @@ async def get_patterns(
 async def refresh_patterns(
     service: IntelligenceServiceDep,
     insights_repo: InsightsRepoDep,
+    tz: TimezoneDep,
 ) -> PatternsResponse:
     """Refresh pattern detection — recomputes all insights."""
-    insights = await service.detect_patterns()
+    insights = await service.detect_patterns(tz=tz)
     user_insights = await insights_repo.get()
     dismissed = user_insights.dismissed_ids if user_insights else []
 
@@ -137,49 +142,54 @@ async def dismiss_pattern(
 @router.get("/suggestions", response_model=list[SuggestionResponse])
 async def get_suggestions(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
     target_date: Annotated[date | None, Query(alias="date")] = None,
 ) -> list[SuggestionResponse]:
     """Get smart daily plan suggestions for a date (defaults to today)."""
-    d = target_date or datetime.now(UTC).date()
-    results = await service.suggest_daily_plan(d)
+    d = target_date or datetime.now(tz).date()
+    results = await service.suggest_daily_plan(d, tz=tz)
     return [SuggestionResponse(**r) for r in results]
 
 
 @router.get("/focus-scores", response_model=list[FocusScoreResponse])
 async def get_focus_scores(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
     target_date: Annotated[date | None, Query(alias="date")] = None,
 ) -> list[FocusScoreResponse]:
     """Get focus quality scores for all sessions on a date (defaults to today)."""
-    d = target_date or datetime.now(UTC).date()
-    results = await service.compute_focus_scores(d)
+    d = target_date or datetime.now(tz).date()
+    results = await service.compute_focus_scores(d, tz=tz)
     return [FocusScoreResponse(**r) for r in results]
 
 
 @router.get("/mood", response_model=MoodCorrelationResponse)
 async def get_mood_correlation(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
 ) -> MoodCorrelationResponse:
     """Get mood-productivity correlation analysis."""
-    result = await service.get_mood_correlation()
+    result = await service.get_mood_correlation(tz=tz)
     return MoodCorrelationResponse(**result)
 
 
 @router.get("/estimation", response_model=list[EstimationAccuracyResponse])
 async def get_estimation_accuracy(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
 ) -> list[EstimationAccuracyResponse]:
     """Get per-project estimation accuracy (planned vs actual)."""
-    results = await service.get_estimation_accuracy()
+    results = await service.get_estimation_accuracy(tz=tz)
     return [EstimationAccuracyResponse(**r) for r in results]
 
 
 @router.get("/project-health", response_model=list[ProjectHealthResponse])
 async def get_project_health(
     service: IntelligenceServiceDep,
+    tz: TimezoneDep,
 ) -> list[ProjectHealthResponse]:
     """Get health metrics for each active project."""
-    results = await service.get_project_health()
+    results = await service.get_project_health(tz=tz)
     return [ProjectHealthResponse(**r) for r in results]
 
 
@@ -195,6 +205,7 @@ def _pattern_severity(priority: int) -> str:
 async def get_inbox(
     service: IntelligenceServiceDep,
     insights_repo: InsightsRepoDep,
+    tz: TimezoneDep,
     limit_suggestions: int = Query(default=3, ge=0, le=10),
 ) -> InboxResponse:
     """Aggregated Inbox: patterns, top suggestions for today, and project-health alerts.
@@ -224,8 +235,8 @@ async def get_inbox(
             )
 
     # Daily suggestions (top N by suggested_minutes)
-    today = datetime.now(UTC).date()
-    suggestions = await service.suggest_daily_plan(today)
+    today = datetime.now(tz).date()
+    suggestions = await service.suggest_daily_plan(today, tz=tz)
     suggestions_sorted = sorted(
         suggestions, key=lambda s: s.get("suggested_minutes", 0), reverse=True
     )
@@ -247,7 +258,7 @@ async def get_inbox(
         )
 
     # Project health alerts
-    health = await service.get_project_health()
+    health = await service.get_project_health(tz=tz)
     for entry in health:
         alert = entry.get("alert")
         if not alert:

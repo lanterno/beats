@@ -1637,6 +1637,69 @@ class TestAnalyticsRouterEndpoints:
         assert tags == ["focus", "morning"]
 
 
+class TestAnalyticsTimezone:
+    """End-to-end tz-correctness for /api/analytics/heatmap. The API
+    stores UTC; a late-evening session must bucket to the correct LOCAL
+    calendar day for the requesting timezone, and an unknown IANA name
+    is rejected with the unified 400 envelope. The UTC default keeps the
+    historical (no-tz) behavior."""
+
+    def _seed_late_evening_beat(self) -> None:
+        """Create one completed 30-min beat at 2026-01-01T23:30Z."""
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "TZ Probe"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        project_id = resp.json()["id"]
+        client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-01-01T23:30:00Z"},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/projects/stop",
+            json={"time": "2026-01-02T00:00:00Z"},
+            headers=auth_headers,
+        )
+
+    def _heatmap_dates(self, params: str = "") -> set[str]:
+        url = "/api/analytics/heatmap?year=2026"
+        if params:
+            url += f"&{params}"
+        resp = client.get(url, headers=auth_headers)
+        assert resp.status_code == 200
+        return {d["date"] for d in resp.json()}
+
+    def test_no_tz_buckets_to_utc_day(self):
+        self._seed_late_evening_beat()
+        # 23:30Z stays on 2026-01-01 with the UTC default.
+        assert "2026-01-01" in self._heatmap_dates()
+
+    def test_negative_offset_keeps_same_local_day(self):
+        self._seed_late_evening_beat()
+        # 23:30Z = 18:30 EST → still 2026-01-01 in New York.
+        assert "2026-01-01" in self._heatmap_dates("tz=America/New_York")
+
+    def test_positive_offset_rolls_to_next_local_day(self):
+        self._seed_late_evening_beat()
+        # 23:30Z = 08:30 JST next day → 2026-01-02 in Tokyo.
+        dates = self._heatmap_dates("tz=Asia/Tokyo")
+        assert "2026-01-02" in dates
+        assert "2026-01-01" not in dates
+
+    def test_invalid_timezone_returns_400_envelope(self):
+        resp = client.get(
+            "/api/analytics/heatmap?year=2026&tz=Not/AZone",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["code"] == "INVALID_TIMEZONE"
+        assert isinstance(body["detail"], str)
+
+
 class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:
     {detail: str, code: str, fields?: list}."""

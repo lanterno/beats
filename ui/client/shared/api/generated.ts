@@ -3799,6 +3799,8 @@ export interface operations {
         parameters: {
             query?: {
                 target_date?: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -3832,6 +3834,8 @@ export interface operations {
                 year?: number;
                 project_id?: string | null;
                 tag?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -3865,6 +3869,8 @@ export interface operations {
                 period?: string;
                 project_id?: string | null;
                 tag?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -5605,6 +5611,8 @@ export interface operations {
         parameters: {
             query?: {
                 week_of?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -5665,7 +5673,10 @@ export interface operations {
     };
     get_estimation_accuracy_api_intelligence_estimation_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5681,12 +5692,23 @@ export interface operations {
                     "application/json": components["schemas"]["EstimationAccuracyResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_focus_scores_api_intelligence_focus_scores_get: {
         parameters: {
             query?: {
                 date?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -5718,6 +5740,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit_suggestions?: number;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -5747,7 +5771,10 @@ export interface operations {
     };
     get_mood_correlation_api_intelligence_mood_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5761,6 +5788,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MoodCorrelationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5787,7 +5823,10 @@ export interface operations {
     };
     refresh_patterns_api_intelligence_patterns_refresh_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5801,6 +5840,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PatternsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5836,7 +5884,10 @@ export interface operations {
     };
     get_project_health_api_intelligence_project_health_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5852,11 +5903,23 @@ export interface operations {
                     "application/json": components["schemas"]["ProjectHealthResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_productivity_score_api_intelligence_score_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5872,12 +5935,23 @@ export interface operations {
                     "application/json": components["schemas"]["ProductivityScoreResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_score_history_api_intelligence_score_history_get: {
         parameters: {
             query?: {
                 weeks?: number;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -5909,6 +5983,8 @@ export interface operations {
         parameters: {
             query?: {
                 date?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
