@@ -5,7 +5,12 @@
 
 import { Save, X } from "lucide-react";
 import { useState } from "react";
-import { calculateDurationMinutes, formatDuration, toLocalDatetimeLocalString } from "@/shared/lib";
+import {
+	calculateDurationMinutes,
+	formatDuration,
+	isValidTimeRange,
+	toLocalDatetimeLocalString,
+} from "@/shared/lib";
 import type { ProjectOption, Session } from "../model";
 
 interface SessionEditFormProps {
@@ -20,7 +25,10 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 	const [editEndTime, setEditEndTime] = useState(session.endTime);
 	const [editProjectId, setEditProjectId] = useState(session.projectId);
 
+	const validRange = isValidTimeRange(editStartTime, editEndTime);
+
 	const handleSave = () => {
+		if (!validRange) return;
 		onSave(session.id, editStartTime, editEndTime, editProjectId);
 	};
 
@@ -72,10 +80,16 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 					</span>
 				</p>
 			</div>
+			{!validRange && (
+				<p className="text-sm text-red-400" role="alert">
+					End time must be after the start time.
+				</p>
+			)}
 			<div className="flex gap-2 pt-1">
 				<button
 					onClick={handleSave}
-					className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-base font-medium bg-accent text-accent-foreground hover:bg-accent/90 transition-colors duration-150"
+					disabled={!validRange}
+					className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-base font-medium bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-40 transition-colors duration-150"
 				>
 					<Save className="w-4 h-4" />
 					Save

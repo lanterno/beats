@@ -65,12 +65,15 @@ export default function ProjectDetails() {
 	const updateGoalOverridesMutation = useUpdateGoalOverrides();
 	const [overridePopoverWeek, setOverridePopoverWeek] = useState<number | null>(null);
 
-	// Reset visible count when project changes
+	// Reset per-project view state when the route project changes. projectId is
+	// the intentional trigger here (the body only calls stable setters), so it
+	// belongs in the deps even though Biome can't infer that it's read.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: projectId is the reset trigger, not a body dependency
 	useEffect(() => {
 		setVisibleCount(SESSIONS_PER_PAGE);
 		setWeekCount(5);
 		hasSetInitialExpand.current = false;
-	}, []);
+	}, [projectId]);
 
 	const handleSaveEdit = async (
 		sessionId: string,

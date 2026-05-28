@@ -27,6 +27,17 @@ export function calculateDurationMinutes(startTime: string, endTime: string): nu
 }
 
 /**
+ * Whether a session time range is valid: both parse to real dates and end is
+ * strictly after start (no zero-length or negative-duration sessions).
+ */
+export function isValidTimeRange(startTime: string, endTime: string): boolean {
+	const start = parseUtcIso(startTime).getTime();
+	const end = parseUtcIso(endTime).getTime();
+	if (Number.isNaN(start) || Number.isNaN(end)) return false;
+	return end > start;
+}
+
+/**
  * Parse a Python timedelta string to minutes.
  * Handles "H:MM:SS", "M:SS", "N day(s), H:MM:SS".
  */
