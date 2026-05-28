@@ -1464,10 +1464,13 @@ class TestCoachBriefAndReviewErrorPaths:
         envelope. Pin so the dashboard can render the brief
         without a separate "no brief yet" empty state when one
         exists."""
-        from datetime import UTC, date, datetime
+        from datetime import UTC, datetime
 
         sync, db = self._db()
-        today_iso = date.today().isoformat()
+        # The endpoint queries today's brief by UTC date; seed on the same
+        # frame so the test is deterministic on non-UTC machines (local
+        # date.today() can differ from UTC today near midnight).
+        today_iso = datetime.now(UTC).date().isoformat()
         db.daily_briefs.insert_one(
             {
                 "user_id": auth_info["user_id"],
