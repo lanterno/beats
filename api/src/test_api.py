@@ -2954,6 +2954,10 @@ class TestIntelligenceAPI:
         db = sync[db_name]
         db.insights.delete_many({})
         db.weekly_digests.delete_many({})
+        # The inbox dismiss tests seed projects + backdated beats; clear them
+        # too so a stray project/suggestion can't bleed into sibling tests.
+        db.projects.delete_many({})
+        db.timeLogs.delete_many({})
         sync.close()
         yield
 
@@ -3147,6 +3151,121 @@ class TestIntelligenceAPI:
         pattern_titles = [it["title"] for it in items if it["kind"] == "pattern"]
         assert pattern_titles == ["Shown"]
 
+    def _inbox_items(self):
+        resp = client.get("/api/intelligence/inbox", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()["items"]
+
+    def test_inbox_honors_dismissed_suggestions(self, auth_info):
+        """A dismissed suggestion stays gone across reloads. Regression for
+        the bug where the inbox only honored dismissals for patterns, so
+        suggestions reappeared on every load. Also exercises the upsert path:
+        no UserInsights doc exists yet for this user."""
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Dismiss Sugg", "weekly_goal": 5.0},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        suggestions = [it for it in self._inbox_items() if it["kind"] == "suggestion"]
+        assert suggestions, "expected a suggestion item to dismiss"
+        item_id = suggestions[0]["id"]
+
+        d = client.post(f"/api/intelligence/inbox/{item_id}/dismiss", headers=auth_headers)
+        assert d.status_code == 204, d.text
+
+        after = self._inbox_items()
+        assert all(it["id"] != item_id for it in after), "dismissed suggestion reappeared"
+
+    def test_inbox_honors_dismissed_project_health(self, auth_info):
+        """A dismissed project-health alert stays gone across reloads."""
+        from datetime import UTC, datetime, timedelta
+
+        from pymongo import MongoClient
+
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "Dismiss Health", "weekly_goal": 5.0},
+            headers=auth_headers,
+        )
+        project_id = resp.json()["id"]
+
+        import os
+
+        sync = MongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+        db = sync[os.environ.get("DB_NAME", "beats_test")]
+        old_start = datetime.now(UTC) - timedelta(days=20)
+        db.timeLogs.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "project_id": project_id,
+                "start": old_start,
+                "end": old_start + timedelta(hours=1),
+                "tags": [],
+            }
+        )
+        sync.close()
+
+        health = [it for it in self._inbox_items() if it["kind"] == "project_health"]
+        assert health, "expected a project_health item to dismiss"
+        item_id = next(it["id"] for it in health if it["id"] == f"project_health:{project_id}")
+
+        d = client.post(f"/api/intelligence/inbox/{item_id}/dismiss", headers=auth_headers)
+        assert d.status_code == 204, d.text
+
+        after = self._inbox_items()
+        assert all(it["id"] != item_id for it in after), "dismissed health alert reappeared"
+
+    def test_inbox_dismiss_one_kind_does_not_hide_another(self, auth_info):
+        """Dismissing a suggestion must not hide a pattern (cross-kind
+        isolation — they share one dismissed_ids set)."""
+        self._seed_insights(
+            auth_info,
+            insights=[{"id": "keep-me", "type": "x", "title": "Keep", "body": "k", "priority": 1}],
+        )
+        client.post(
+            "/api/projects/",
+            json={"name": "Isolation Probe", "weekly_goal": 5.0},
+            headers=auth_headers,
+        )
+
+        items = self._inbox_items()
+        sugg = next(it["id"] for it in items if it["kind"] == "suggestion")
+        assert any(it["title"] == "Keep" for it in items)
+
+        client.post(f"/api/intelligence/inbox/{sugg}/dismiss", headers=auth_headers)
+
+        after = self._inbox_items()
+        assert all(it["id"] != sugg for it in after), "suggestion not dismissed"
+        assert any(it["title"] == "Keep" for it in after), "pattern wrongly hidden"
+
+    def test_inbox_dismiss_persists_and_creates_doc_when_absent(self, auth_info):
+        """Dismissing creates the UserInsights doc when none exists (upsert)
+        and the dismissal survives across two consecutive reads."""
+        import os
+
+        from pymongo import MongoClient
+
+        client.post(
+            "/api/projects/",
+            json={"name": "Upsert Probe", "weekly_goal": 5.0},
+            headers=auth_headers,
+        )
+        sugg = next(it["id"] for it in self._inbox_items() if it["kind"] == "suggestion")
+        client.post(f"/api/intelligence/inbox/{sugg}/dismiss", headers=auth_headers)
+
+        sync = MongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+        db = sync[os.environ.get("DB_NAME", "beats_test")]
+        doc = db.insights.find_one({"user_id": auth_info["user_id"]})
+        sync.close()
+        assert doc is not None, "dismiss did not create the insights doc"
+        assert sugg in doc["dismissed_ids"]
+
+        # Two consecutive reads both omit it — proves it's not a per-request fluke.
+        assert all(it["id"] != sugg for it in self._inbox_items())
+        assert all(it["id"] != sugg for it in self._inbox_items())
+
     # ── Auth ──────────────────────────────────────────────────────────
 
     def test_endpoints_require_auth(self):
@@ -3160,6 +3279,7 @@ class TestIntelligenceAPI:
             ("POST", "/api/intelligence/patterns/refresh"),
             ("POST", "/api/intelligence/patterns/x/dismiss"),
             ("GET", "/api/intelligence/inbox"),
+            ("POST", "/api/intelligence/inbox/suggestion:x:2026-01-01/dismiss"),
         ]:
             resp = client.request(method, path)
             assert resp.status_code == 401, f"{method} {path} should require auth"

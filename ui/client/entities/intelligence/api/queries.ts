@@ -3,7 +3,9 @@
  * Data fetching with caching for intelligence features.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InboxResponse } from "./intelligenceApi";
 import {
+	dismissInboxItem,
 	dismissPattern,
 	fetchDigests,
 	fetchEstimationAccuracy,
@@ -120,6 +122,38 @@ export function useDismissPattern() {
 		mutationFn: dismissPattern,
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: intelligenceKeys.patterns() });
+		},
+	});
+}
+
+/**
+ * Dismiss any inbox item (pattern / suggestion / project_health) server-side.
+ * Optimistically removes it from the cached inbox so it disappears instantly,
+ * rolls back on error, and reconciles with the server on settle.
+ */
+export function useDismissInboxItem() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: dismissInboxItem,
+		onMutate: async (itemId: string) => {
+			await queryClient.cancelQueries({ queryKey: intelligenceKeys.inbox() });
+			const prev = queryClient.getQueryData<InboxResponse>(intelligenceKeys.inbox());
+			if (prev) {
+				queryClient.setQueryData<InboxResponse>(intelligenceKeys.inbox(), {
+					...prev,
+					items: prev.items.filter((it) => it.id !== itemId),
+				});
+			}
+			return { prev };
+		},
+		onError: (_err, _itemId, ctx) => {
+			if (ctx?.prev) {
+				queryClient.setQueryData(intelligenceKeys.inbox(), ctx.prev);
+			}
+		},
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: intelligenceKeys.inbox() });
 		},
 	});
 }

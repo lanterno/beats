@@ -1392,6 +1392,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/intelligence/inbox/{item_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Inbox Item
+         * @description Dismiss any inbox item by its full inbox id (e.g.
+         *     ``suggestion:<project>:<date>`` or ``project_health:<project>``).
+         *
+         *     Persists the id so the item stays gone across reloads and devices —
+         *     replacing the UI's per-day localStorage workaround. Pattern items can
+         *     also be dismissed here by their ``pattern:<id>`` form; the legacy
+         *     /patterns/{id}/dismiss route (bare id) keeps working too.
+         */
+        post: operations["dismiss_inbox_item_api_intelligence_inbox__item_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/intelligence/mood": {
         parameters: {
             query?: never;
@@ -5796,6 +5822,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InboxResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_inbox_item_api_intelligence_inbox__item_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
