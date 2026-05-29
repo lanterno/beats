@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useUpsertWeeklyPlan, useWeeklyPlan } from "@/entities/planning";
 import { useProjects } from "@/entities/project";
 import { formatDuration, getMondayOfWeeksAgo } from "@/shared/lib";
+import { RecurringIntentions } from "./RecurringIntentions";
 
 function getMonday(weeksAgo: number): string {
 	return getMondayOfWeeksAgo(weeksAgo).toISOString().slice(0, 10);
@@ -126,6 +127,8 @@ export default function PlanPage() {
 					</div>
 				</div>
 			</div>
+
+			<RecurringIntentions />
 		</div>
 	);
 }
