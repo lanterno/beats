@@ -114,6 +114,93 @@ func New(baseURL, deviceToken string) *Client {
 	}
 }
 
+// Project is the minimal projection of GET /api/projects needed to
+// resolve a name hint to a project for timer control.
+type Project struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Archived bool   `json:"archived"`
+}
+
+// GetProjects lists the user's projects (active and archived). Used by
+// `beatsd start <hint>` to resolve the hint to a project id.
+func (c *Client) GetProjects(ctx context.Context) ([]Project, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/projects/", nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.deviceToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("list projects failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
+		return nil, fmt.Errorf("list projects failed (HTTP %d)", resp.StatusCode)
+	}
+	var result []Project
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// StartTimer starts a timer for the given project. The start time is
+// omitted so the server stamps it "now" (RecordTimeRequest defaults to
+// now when `time` is absent).
+func (c *Client) StartTimer(ctx context.Context, projectID string) error {
+	return c.postJSON(ctx, "/api/projects/"+url.PathEscape(projectID)+"/start", map[string]any{})
+}
+
+// StoppedBeat is the subset of the stop response we render (the API
+// returns the full beat; we only need the project + span).
+type StoppedBeat struct {
+	ProjectID string    `json:"project_id"`
+	Start     time.Time `json:"start"`
+	End       time.Time `json:"end"`
+}
+
+// StopTimer stops the currently running timer and returns the completed
+// beat so the caller can report the logged duration.
+func (c *Client) StopTimer(ctx context.Context) (*StoppedBeat, error) {
+	data, err := json.Marshal(map[string]any{})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/api/projects/stop", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.deviceToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("stop timer failed (HTTP %d): %s", resp.StatusCode, detail)
+		}
+		return nil, fmt.Errorf("stop timer failed (HTTP %d)", resp.StatusCode)
+	}
+	var result StoppedBeat
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ExchangePairCode exchanges a pairing code for a device token.
 // This endpoint is public and does not require authentication.
 func (c *Client) ExchangePairCode(ctx context.Context, code, deviceName string) (*PairExchangeResponse, error) {
