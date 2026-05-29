@@ -12,6 +12,7 @@ export {
 export {
 	intelligenceKeys,
 	useDigests,
+	useDismissInboxItem,
 	useDismissPattern,
 	useEstimationAccuracy,
 	useFocusScores,

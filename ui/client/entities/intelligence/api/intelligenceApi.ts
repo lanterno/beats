@@ -88,6 +88,12 @@ export async function dismissPattern(insightId: string): Promise<void> {
 	await post<void>(`/api/intelligence/patterns/${insightId}/dismiss`, {});
 }
 
+// Dismiss any inbox item (pattern / suggestion / project_health) by its full
+// inbox id; persists server-side so it stays gone across reloads and devices.
+export async function dismissInboxItem(itemId: string): Promise<void> {
+	await post<void>(`/api/intelligence/inbox/${itemId}/dismiss`, {});
+}
+
 export async function fetchSuggestions(date?: string): Promise<Suggestion[]> {
 	const tz = encodeURIComponent(browserTimeZone());
 	const url = date

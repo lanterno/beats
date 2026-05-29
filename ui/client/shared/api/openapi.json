@@ -6025,6 +6025,42 @@
         ]
       }
     },
+    "/api/intelligence/inbox/{item_id}/dismiss": {
+      "post": {
+        "description": "Dismiss any inbox item by its full inbox id (e.g.\n``suggestion:<project>:<date>`` or ``project_health:<project>``).\n\nPersists the id so the item stays gone across reloads and devices \u2014\nreplacing the UI's per-day localStorage workaround. Pattern items can\nalso be dismissed here by their ``pattern:<id>`` form; the legacy\n/patterns/{id}/dismiss route (bare id) keeps working too.",
+        "operationId": "dismiss_inbox_item_api_intelligence_inbox__item_id__dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Inbox Item",
+        "tags": [
+          "intelligence"
+        ]
+      }
+    },
     "/api/intelligence/mood": {
       "get": {
         "description": "Get mood-productivity correlation analysis.",

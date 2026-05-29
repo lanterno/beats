@@ -644,9 +644,14 @@ class MongoInsightsRepository(MongoUserScoped, InsightsRepository):
         return UserInsights(**serialize_from_document(result))
 
     async def dismiss_insight(self, insight_id: str) -> None:
+        # Upsert: a user who has never had patterns generated has no
+        # UserInsights doc, but can still dismiss a suggestion / health item.
+        # Without upsert the $addToSet would silently no-op for them. The
+        # filter (user_id) seeds the created doc; dismissed_ids becomes [id].
         await self.collection.update_one(
             self._q(),
             {"$addToSet": {"dismissed_ids": insight_id}},
+            upsert=True,
         )
 
 

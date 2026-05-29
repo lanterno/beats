@@ -139,6 +139,23 @@ async def dismiss_pattern(
     return Response(status_code=204)
 
 
+@router.post("/inbox/{item_id:path}/dismiss", status_code=204)
+async def dismiss_inbox_item(
+    insights_repo: InsightsRepoDep,
+    item_id: str,
+) -> Response:
+    """Dismiss any inbox item by its full inbox id (e.g.
+    ``suggestion:<project>:<date>`` or ``project_health:<project>``).
+
+    Persists the id so the item stays gone across reloads and devices —
+    replacing the UI's per-day localStorage workaround. Pattern items can
+    also be dismissed here by their ``pattern:<id>`` form; the legacy
+    /patterns/{id}/dismiss route (bare id) keeps working too.
+    """
+    await insights_repo.dismiss_insight(item_id)
+    return Response(status_code=204)
+
+
 @router.get("/suggestions", response_model=list[SuggestionResponse])
 async def get_suggestions(
     service: IntelligenceServiceDep,
@@ -217,11 +234,18 @@ async def get_inbox(
 
     items: list[InboxItemResponse] = []
 
-    # Patterns (honor dismissed)
+    # Dismissals are a single flat set shared across all inbox kinds. Patterns
+    # are additionally skipped by their bare insight.id below (the legacy
+    # /patterns/{id}/dismiss stores bare ids); the post-filter before the sort
+    # then drops any item whose full prefixed inbox id was dismissed — which is
+    # how suggestion and project_health dismissals take effect.
     user_insights = await insights_repo.get()
+    dismissed = set(user_insights.dismissed_ids) if user_insights else set()
+
+    # Patterns (honor dismissed)
     if user_insights:
         for insight in user_insights.insights:
-            if insight.id in user_insights.dismissed_ids:
+            if insight.id in dismissed:
                 continue
             items.append(
                 InboxItemResponse(
@@ -279,6 +303,11 @@ async def get_inbox(
                 },
             )
         )
+
+    # Drop any item whose full inbox id was dismissed. Patterns are already
+    # filtered by bare id above; this catches suggestion / project_health
+    # dismissals (and patterns dismissed by their prefixed id).
+    items = [it for it in items if it.id not in dismissed]
 
     # Order: high → medium → low, preserving within-group order
     severity_rank = {"high": 0, "medium": 1, "low": 2}
