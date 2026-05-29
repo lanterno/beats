@@ -29,6 +29,18 @@ import (
 
 var version = "dev"
 
+const (
+	// flowRetryBufferCap caps how many failed flow windows we hold in
+	// memory for retry. At one window per flush (default 60s) this is
+	// ~30 min of backlog — enough to ride out a transient outage without
+	// risking unbounded growth on a long one.
+	flowRetryBufferCap = 32
+
+	// flowShutdownPostTimeout bounds the final POST attempt(s) made after
+	// the run ctx is cancelled, so a hung API can't block process exit.
+	flowShutdownPostTimeout = 10 * time.Second
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -213,6 +225,35 @@ func main() {
 			IdleThresholdSec: cfg.Scoring.IdleThresholdSec,
 		})
 
+		// Bounded retry buffer: a transient POST failure (network blip,
+		// brief 5xx) shouldn't permanently lose a flow window — the
+		// daemon's core metric. Failed windows are re-tried on the next
+		// flush; the cap keeps memory bounded (oldest evicted when full).
+		retryBuf := collector.NewRetryBuffer(flowRetryBufferCap)
+
+		// poster maps a FlowWindow to the API request and sends it. It
+		// takes an explicit context so the shutdown path can hand it a
+		// fresh, non-cancelled one (see the onWindow callback below).
+		poster := func(postCtx context.Context, w collector.FlowWindow) error {
+			req := client.FlowWindowRequest{
+				WindowStart:      w.WindowStart,
+				WindowEnd:        w.WindowEnd,
+				FlowScore:        w.FlowScore,
+				CadenceScore:     w.CadenceScore,
+				CoherenceScore:   w.CoherenceScore,
+				CategoryFitScore: w.CategoryFitScore,
+				IdleFraction:     w.IdleFraction,
+				DominantBundleID: w.DominantBundleID,
+				DominantCategory: w.DominantCategory,
+				ContextSwitches:  w.ContextSwitches,
+				ActiveProjectID:  w.ActiveProjectID,
+				EditorRepo:       w.EditorRepo,
+				EditorBranch:     w.EditorBranch,
+				EditorLanguage:   w.EditorLanguage,
+			}
+			return c.PostFlowWindow(postCtx, req)
+		}
+
 		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
 			if hb := editorListener.Latest(); hb != nil {
 				w.EditorRepo = hb.Repo
@@ -234,24 +275,22 @@ func main() {
 				return // Don't send anything in dry-run mode
 			}
 
-			req := client.FlowWindowRequest{
-				WindowStart:      w.WindowStart,
-				WindowEnd:        w.WindowEnd,
-				FlowScore:        w.FlowScore,
-				CadenceScore:     w.CadenceScore,
-				CoherenceScore:   w.CoherenceScore,
-				CategoryFitScore: w.CategoryFitScore,
-				IdleFraction:     w.IdleFraction,
-				DominantBundleID: w.DominantBundleID,
-				DominantCategory: w.DominantCategory,
-				ContextSwitches:  w.ContextSwitches,
-				ActiveProjectID:  w.ActiveProjectID,
-				EditorRepo:       w.EditorRepo,
-				EditorBranch:     w.EditorBranch,
-				EditorLanguage:   w.EditorLanguage,
+			// The collector computes a FINAL window on shutdown and
+			// invokes this callback while ctx is already cancelled
+			// (Run returns ctx.Err()). Posting through that cancelled
+			// ctx fails instantly with context.Canceled and silently
+			// loses the window. Detect the cancelled case and post the
+			// shutdown window through a fresh, short-lived context so it
+			// still lands.
+			postCtx := ctx
+			if ctx.Err() != nil {
+				var cancel context.CancelFunc
+				postCtx, cancel = context.WithTimeout(context.Background(), flowShutdownPostTimeout)
+				defer cancel()
 			}
-			if postErr := c.PostFlowWindow(ctx, req); postErr != nil {
-				fmt.Fprintf(os.Stderr, "post flow window: %v\n", postErr)
+
+			if postErr := retryBuf.Send(postCtx, poster, w); postErr != nil {
+				fmt.Fprintf(os.Stderr, "post flow window: %v (buffered=%d)\n", postErr, retryBuf.Len())
 				// Bump the dropped counter so /health surfaces the
 				// asymmetry. A user with windows_emitted=42 and
 				// windows_dropped=15 has a producing-but-not-landing
@@ -265,7 +304,7 @@ func main() {
 				editorListener.RecordWindowEmitted()
 			}
 
-			tracker.OnFlowWindow(ctx, w)
+			tracker.OnFlowWindow(postCtx, w)
 		}, func(s collector.Sample) {
 			shieldTracker.OnSample(s, timerRunning.Load())
 		})
