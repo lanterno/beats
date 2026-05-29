@@ -25,6 +25,7 @@ import {
 	fetchFlowWindowsSummary,
 	fetchGaps,
 	fetchHeatmap,
+	fetchRecentDrift,
 	updateBeat,
 } from "./sessionApi";
 
@@ -659,6 +660,19 @@ export function useAllTags() {
 	return useQuery({
 		queryKey: [...sessionKeys.all, "tags"],
 		queryFn: fetchAllTags,
+		staleTime: 60_000,
+	});
+}
+
+/**
+ * Hook to fetch recent drift (distraction) events. Pass a day-start ISO as
+ * `since` to scope to "today". Returns [] when the daemon's shield isn't
+ * recording drift, so callers should hide the UI on an empty result.
+ */
+export function useRecentDrift(since?: string, limit = 100) {
+	return useQuery({
+		queryKey: [...sessionKeys.all, "recent-drift", since ?? "default", limit],
+		queryFn: () => fetchRecentDrift(since, limit),
 		staleTime: 60_000,
 	});
 }
