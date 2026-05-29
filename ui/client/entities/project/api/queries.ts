@@ -7,6 +7,7 @@ import type { ApiGoalOverride } from "@/shared/api";
 import type { ProjectWithDuration, WeekHours } from "../model";
 import { toProject } from "../model";
 import {
+	createProject,
 	fetchProjects,
 	fetchProjectTotal,
 	fetchProjectWeek,
@@ -164,6 +165,21 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 		},
 		enabled: !!projectId,
 		staleTime: 60_000, // Weekly data doesn't change often
+	});
+}
+
+/**
+ * Hook to create a new project. Refetches the list first (so the new project
+ * appears immediately) then invalidates the rest of the project tree.
+ */
+export function useCreateProject() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: createProject,
+		onSuccess: async () => {
+			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+		},
 	});
 }
 

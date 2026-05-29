@@ -3,7 +3,7 @@
  * Compact header, week history table, and paginated session list.
  */
 
-import { Clock, Edit2, List } from "lucide-react";
+import { Clock, Edit2, List, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import type { Session } from "@/entities/session";
 import {
 	calculateDailySummary,
 	SessionEditForm,
+	useDeleteSession,
 	useSessions,
 	useUpdateSession,
 } from "@/entities/session";
@@ -51,6 +52,7 @@ const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 	const [visibleCount, setVisibleCount] = useState(SESSIONS_PER_PAGE);
 	const [weekCount, setWeekCount] = useState(5);
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
@@ -61,6 +63,7 @@ export default function ProjectDetails() {
 	const { data: sessions, refetch: refetchSessions } = useSessions(projectId);
 	const { data: hoursPerWeek } = useProjectWeeks(projectId, weekCount);
 	const updateSessionMutation = useUpdateSession();
+	const deleteSessionMutation = useDeleteSession();
 	const updateProjectMutation = useUpdateProject();
 	const updateGoalOverridesMutation = useUpdateGoalOverrides();
 	const [overridePopoverWeek, setOverridePopoverWeek] = useState<number | null>(null);
@@ -96,6 +99,17 @@ export default function ProjectDetails() {
 			refetchSessions();
 		} catch {
 			toast.error("Failed to update session");
+		}
+	};
+
+	const handleDeleteSession = async (sessionId: string) => {
+		try {
+			await deleteSessionMutation.mutateAsync(sessionId);
+			setConfirmDeleteId(null);
+			toast.success("Session deleted");
+			refetchSessions();
+		} catch (err) {
+			toast.error(describeError(err, "Failed to delete session"));
 		}
 	};
 
@@ -577,13 +591,40 @@ export default function ProjectDetails() {
 																>
 																	{session.duration > 0 ? formatDuration(session.duration) : "—"}
 																</span>
-																<button
-																	onClick={() => setEditingSessionId(session.id)}
-																	className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent transition-all"
-																	aria-label="Edit session"
-																>
-																	<Edit2 className="w-3.5 h-3.5" />
-																</button>
+																{confirmDeleteId === session.id ? (
+																	<div className="flex items-center gap-1">
+																		<button
+																			onClick={() => handleDeleteSession(session.id)}
+																			disabled={deleteSessionMutation.isPending}
+																			className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-destructive/90 text-destructive-foreground hover:bg-destructive disabled:opacity-50 transition-colors"
+																		>
+																			Delete
+																		</button>
+																		<button
+																			onClick={() => setConfirmDeleteId(null)}
+																			className="px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+																		>
+																			Cancel
+																		</button>
+																	</div>
+																) : (
+																	<>
+																		<button
+																			onClick={() => setEditingSessionId(session.id)}
+																			className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent transition-all"
+																			aria-label="Edit session"
+																		>
+																			<Edit2 className="w-3.5 h-3.5" />
+																		</button>
+																		<button
+																			onClick={() => setConfirmDeleteId(session.id)}
+																			className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
+																			aria-label="Delete session"
+																		>
+																			<Trash2 className="w-3.5 h-3.5" />
+																		</button>
+																	</>
+																)}
 															</div>
 															{(session.note || session.tags.length > 0) && (
 																<div className="flex items-center gap-1.5 mt-0.5">

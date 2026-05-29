@@ -10,10 +10,12 @@
 
 // API layer
 export {
+	createProject,
 	fetchProjects,
 	fetchProjectTotal,
 	fetchProjectWeek,
 	projectKeys,
+	useCreateProject,
 	useInvalidateProjects,
 	useProject,
 	useProjects,
@@ -32,4 +34,4 @@ export type {
 export { assignColor, toProject } from "./model";
 
 // UI layer
-export { LoadingSpinner } from "./ui";
+export { LoadingSpinner, NewProjectDialog } from "./ui";

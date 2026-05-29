@@ -2,8 +2,10 @@
  * Sidebar Project List Component
  * Compact project navigation with weekly hours for each project.
  */
+import { Plus } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { ProjectWithDuration } from "@/entities/project";
+import { NewProjectDialog, type ProjectWithDuration } from "@/entities/project";
 import { formatDuration } from "@/shared/lib";
 
 interface SidebarProjectListProps {
@@ -13,6 +15,7 @@ interface SidebarProjectListProps {
 export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 	const navigate = useNavigate();
 	const { projectId: activeProjectId } = useParams<{ projectId: string }>();
+	const [dialogOpen, setDialogOpen] = useState(false);
 
 	// Active projects first (by weekly hours desc), then inactive alphabetically
 	const active = projects
@@ -25,9 +28,18 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 
 	return (
 		<div>
-			<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-2 px-2">
-				Projects
-			</p>
+			<div className="flex items-center justify-between mb-2 px-2">
+				<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Projects</p>
+				<button
+					type="button"
+					onClick={() => setDialogOpen(true)}
+					aria-label="New project"
+					title="New project"
+					className="p-0.5 rounded text-sidebar-foreground/50 hover:text-sidebar-primary hover:bg-sidebar-accent/50 transition-colors"
+				>
+					<Plus className="w-3.5 h-3.5" />
+				</button>
+			</div>
 			<nav className="space-y-0.5">
 				{sorted.map((project) => {
 					const isActive = project.id === activeProjectId;
@@ -58,7 +70,23 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 						</button>
 					);
 				})}
+				{sorted.length === 0 && (
+					<button
+						type="button"
+						onClick={() => setDialogOpen(true)}
+						className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors text-left"
+					>
+						<Plus className="w-3.5 h-3.5 shrink-0" />
+						<span>New project</span>
+					</button>
+				)}
 			</nav>
+
+			<NewProjectDialog
+				open={dialogOpen}
+				onClose={() => setDialogOpen(false)}
+				onCreated={(project) => navigate(`/project/${project.id}`)}
+			/>
 		</div>
 	);
 }

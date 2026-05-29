@@ -11,6 +11,7 @@
 // API layer
 export {
 	calculateDailySummary,
+	deleteBeat,
 	fetchBeats,
 	sessionKeys,
 	updateBeat,
@@ -18,6 +19,7 @@ export {
 	useAllCurrentWeekSessions,
 	useAllTags,
 	useDailyRhythm,
+	useDeleteSession,
 	useFlowWindows,
 	useFlowWindowsLastDays,
 	useFlowWindowsSummary,

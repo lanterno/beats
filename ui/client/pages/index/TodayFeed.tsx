@@ -3,14 +3,20 @@
  * Today's sessions listed compactly, with collapsible yesterday/earlier sections.
  */
 
-import { ChevronDown, Clock } from "lucide-react";
+import { ChevronDown, Clock, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useFocusScores } from "@/entities/intelligence";
 import { useProjects } from "@/entities/project";
 import type { Session } from "@/entities/session";
-import { useGaps, useThisWeekSessions, useTodaySessions } from "@/entities/session";
-import type { FocusScore, Gap } from "@/shared/api";
+import {
+	useDeleteSession,
+	useGaps,
+	useThisWeekSessions,
+	useTodaySessions,
+} from "@/entities/session";
+import { describeError, type FocusScore, type Gap } from "@/shared/api";
 import { cn, formatDuration, formatTime, parseUtcIso, startOfDay } from "@/shared/lib";
 import { EmptyState } from "@/shared/ui";
 
@@ -26,39 +32,72 @@ function SessionRow({
 	projectColor,
 	projectId,
 	focusScore,
+	onDelete,
+	deleting,
 }: {
 	session: Session;
 	projectName: string;
 	projectColor: string;
 	projectId: string;
 	focusScore?: FocusScore;
+	onDelete?: (sessionId: string) => void;
+	deleting?: boolean;
 }) {
 	const navigate = useNavigate();
+	const [confirming, setConfirming] = useState(false);
 
 	return (
-		<button
-			onClick={() => navigate(`/project/${projectId}`)}
-			className="w-full flex flex-col px-3 py-1.5 hover:bg-secondary/30 rounded-md transition-colors text-left"
-		>
+		<div className="group w-full flex flex-col px-3 py-1.5 hover:bg-secondary/30 rounded-md transition-colors">
 			<div className="flex items-center gap-2">
-				<div
-					className="w-1.5 h-1.5 rounded-full shrink-0"
-					style={{ backgroundColor: projectColor }}
-				/>
-				<span className="text-sm text-foreground truncate flex-1 min-w-0">{projectName}</span>
-				<span className="text-xs text-muted-foreground tabular-nums shrink-0">
-					{formatTime(session.startTime)} → {formatTime(session.endTime)}
-				</span>
-				{focusScore && (
+				<button
+					onClick={() => navigate(`/project/${projectId}`)}
+					className="flex items-center gap-2 flex-1 min-w-0 text-left"
+				>
 					<div
 						className="w-1.5 h-1.5 rounded-full shrink-0"
-						style={{ backgroundColor: focusColor(focusScore.score) }}
-						title={`Focus: ${focusScore.score}`}
+						style={{ backgroundColor: projectColor }}
 					/>
-				)}
-				<span className="text-sm font-medium tabular-nums text-foreground w-14 text-right shrink-0">
-					{session.duration > 0 ? formatDuration(session.duration) : "—"}
-				</span>
+					<span className="text-sm text-foreground truncate flex-1 min-w-0">{projectName}</span>
+					<span className="text-xs text-muted-foreground tabular-nums shrink-0">
+						{formatTime(session.startTime)} → {formatTime(session.endTime)}
+					</span>
+					{focusScore && (
+						<div
+							className="w-1.5 h-1.5 rounded-full shrink-0"
+							style={{ backgroundColor: focusColor(focusScore.score) }}
+							title={`Focus: ${focusScore.score}`}
+						/>
+					)}
+					<span className="text-sm font-medium tabular-nums text-foreground w-14 text-right shrink-0">
+						{session.duration > 0 ? formatDuration(session.duration) : "—"}
+					</span>
+				</button>
+				{onDelete &&
+					(confirming ? (
+						<div className="flex items-center gap-1 shrink-0">
+							<button
+								onClick={() => onDelete(session.id)}
+								disabled={deleting}
+								className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-destructive/90 text-destructive-foreground hover:bg-destructive disabled:opacity-50 transition-colors"
+							>
+								Delete
+							</button>
+							<button
+								onClick={() => setConfirming(false)}
+								className="px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+							>
+								Cancel
+							</button>
+						</div>
+					) : (
+						<button
+							onClick={() => setConfirming(true)}
+							aria-label="Delete session"
+							className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all shrink-0"
+						>
+							<Trash2 className="w-3.5 h-3.5" />
+						</button>
+					))}
 			</div>
 			{(session.note || session.tags.length > 0) && (
 				<div className="flex items-center gap-1.5 ml-4 mt-0.5">
@@ -75,7 +114,7 @@ function SessionRow({
 					))}
 				</div>
 			)}
-		</button>
+		</div>
 	);
 }
 
@@ -119,6 +158,8 @@ function SessionGroup({
 	projectMap,
 	defaultOpen,
 	focusScoreMap,
+	onDelete,
+	deleting,
 }: {
 	label: string;
 	sessions: Session[];
@@ -126,6 +167,8 @@ function SessionGroup({
 	projectMap: Map<string, { name: string; color: string }>;
 	defaultOpen: boolean;
 	focusScoreMap?: Map<string, FocusScore>;
+	onDelete?: (sessionId: string) => void;
+	deleting?: boolean;
 }) {
 	const [open, setOpen] = useState(defaultOpen);
 
@@ -165,6 +208,8 @@ function SessionGroup({
 								projectColor={info?.color || "#888"}
 								projectId={session.projectId}
 								focusScore={focusScoreMap?.get(session.id)}
+								onDelete={onDelete}
+								deleting={deleting}
 							/>
 						);
 					})}
@@ -180,6 +225,14 @@ export function TodayFeed() {
 	const { data: projects } = useProjects();
 	const { data: focusScores } = useFocusScores();
 	const { data: gaps } = useGaps();
+	const deleteSession = useDeleteSession();
+
+	const handleDelete = (sessionId: string) => {
+		deleteSession.mutate(sessionId, {
+			onSuccess: () => toast.success("Session deleted"),
+			onError: (err) => toast.error(describeError(err, "Failed to delete session")),
+		});
+	};
 
 	const projectMap = new Map((projects || []).map((p) => [p.id, { name: p.name, color: p.color }]));
 	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
@@ -253,6 +306,8 @@ export function TodayFeed() {
 									projectColor={info?.color || "#888"}
 									projectId={session.projectId}
 									focusScore={focusScoreMap.get(session.id)}
+									onDelete={handleDelete}
+									deleting={deleteSession.isPending}
 								/>
 							);
 						})
@@ -275,6 +330,8 @@ export function TodayFeed() {
 							totalMinutes={yesterdayTotal}
 							projectMap={projectMap}
 							defaultOpen={false}
+							onDelete={handleDelete}
+							deleting={deleteSession.isPending}
 						/>
 						<SessionGroup
 							label="Earlier this week"
@@ -282,6 +339,8 @@ export function TodayFeed() {
 							totalMinutes={earlierTotal}
 							projectMap={projectMap}
 							defaultOpen={false}
+							onDelete={handleDelete}
+							deleting={deleteSession.isPending}
 						/>
 					</div>
 				)}
