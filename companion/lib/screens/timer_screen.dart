@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/api_client.dart';
+import '../services/date_keys.dart';
 import '../services/recent_projects.dart';
 import '../services/tag_parsing.dart';
 import '../theme/beats_refresh.dart';
@@ -155,57 +156,20 @@ class _TimerScreenState extends State<TimerScreen>
             e['date'] as String: (e['total_minutes'] as num?)?.toInt() ?? 0,
       };
 
-      final todayKey = _dateKey(today);
-      final todayMins = byDate[todayKey] ?? 0;
-
-      // Week = Monday→Sunday containing today (DateTime.weekday: Mon=1, Sun=7).
-      final weekStart = DateTime(
-        today.year,
-        today.month,
-        today.day,
-      ).subtract(Duration(days: today.weekday - 1));
-      var weekMins = 0;
-      var lastWeekMins = 0;
-      for (var i = 0; i < 7; i++) {
-        weekMins += byDate[_dateKey(weekStart.add(Duration(days: i)))] ?? 0;
-        lastWeekMins +=
-            byDate[_dateKey(weekStart.subtract(Duration(days: 7 - i)))] ?? 0;
-      }
-
-      // Streak: walk back day-by-day, counting consecutive days with minutes > 0.
-      // Today is forgiven if it has zero minutes (so the streak doesn't drop until
-      // the user has actually missed a day).
-      var streak = 0;
-      var cursor = DateTime(today.year, today.month, today.day);
-      var first = true;
-      while (true) {
-        final mins = byDate[_dateKey(cursor)] ?? 0;
-        if (mins > 0) {
-          streak++;
-        } else if (!first) {
-          break;
-        }
-        first = false;
-        cursor = cursor.subtract(const Duration(days: 1));
-        // Bound the walk to a year to avoid runaway loops on garbage data.
-        if (today.difference(cursor).inDays > 365) break;
-      }
+      final stats = computeTimerStats(byDate, today);
 
       if (!mounted) return;
       setState(() {
-        _todayMinutes = todayMins;
-        _weekMinutes = weekMins;
-        _lastWeekMinutes = lastWeekMins;
-        _streakDays = streak;
+        _todayMinutes = stats.todayMinutes;
+        _weekMinutes = stats.weekMinutes;
+        _lastWeekMinutes = stats.lastWeekMinutes;
+        _streakDays = stats.streakDays;
         _statsLoaded = true;
       });
     } catch (_) {
       // Stats are non-critical — leave them stale on transient failures.
     }
   }
-
-  String _dateKey(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String _formatMinutes(int minutes) {
     if (minutes <= 0) return '0m';
