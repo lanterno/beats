@@ -424,6 +424,18 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "start":
+		if err := runStart(cfg, args); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "stop":
+		if err := runStop(cfg, args); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "config":
 		var asJSON bool
 		for i := 1; i < len(args); i++ {
@@ -579,6 +591,7 @@ func hasHelpFlag(args []string) bool {
 var knownCommands = []string{
 	"pair", "run", "doctor", "status",
 	"recent", "stats", "top", "open",
+	"start", "stop",
 	"version", "config", "unpair",
 }
 
@@ -723,6 +736,10 @@ Commands:
                   --language ID    narrow to a VS Code language id
                   --bundle ID      narrow to a macOS bundle id
                   --json           emit the FlowWindowSummary object as JSON
+  start <name>  Start a timer for the project matching <name> (exact/prefix/substring)
+                  --json           emit {action, project_id, project_name} as JSON
+  stop          Stop the running timer and print the logged duration
+                  --json           emit {action, duration_minutes} as JSON
   unpair        Remove the device token from the keychain
   version       Print version info
                   --json           emit version + build info as a JSON object (for piping into jq)
