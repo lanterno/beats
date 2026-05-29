@@ -1,6 +1,7 @@
 """Tests for domain models and services."""
 
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -22,6 +23,48 @@ from beats.domain.models import (
     Project,
     RecurringIntention,
 )
+from beats.domain.utils import local_date, local_dt
+
+
+class TestLocalDateHelpers:
+    """Pin local_date / local_dt — the heart of the timezone-correctness
+    fix. A late-evening UTC instant must land on the correct LOCAL day for
+    the requesting timezone, and naive datetimes (Mongo may return them)
+    are treated as UTC."""
+
+    def test_utc_default_is_identity_for_date(self):
+        utc = ZoneInfo("UTC")
+        dt = datetime(2026, 1, 1, 23, 30, tzinfo=UTC)
+        assert local_date(dt, utc) == date(2026, 1, 1)
+
+    def test_negative_offset_keeps_same_or_earlier_day(self):
+        # 2026-01-01T23:30Z in New York (UTC-5) is 18:30 the SAME day.
+        ny = ZoneInfo("America/New_York")
+        dt = datetime(2026, 1, 1, 23, 30, tzinfo=UTC)
+        assert local_date(dt, ny) == date(2026, 1, 1)
+        assert local_dt(dt, ny).hour == 18
+
+    def test_positive_offset_rolls_to_next_day(self):
+        # 2026-01-01T23:30Z in Tokyo (UTC+9) is 08:30 the NEXT day.
+        tokyo = ZoneInfo("Asia/Tokyo")
+        dt = datetime(2026, 1, 1, 23, 30, tzinfo=UTC)
+        assert local_date(dt, tokyo) == date(2026, 1, 2)
+        assert local_dt(dt, tokyo).hour == 8
+
+    def test_naive_datetime_treated_as_utc(self):
+        # A naive datetime (as Mongo returns) is interpreted as UTC, then
+        # converted — must match the aware-UTC result exactly.
+        tokyo = ZoneInfo("Asia/Tokyo")
+        naive = datetime(2026, 1, 1, 23, 30)
+        aware = datetime(2026, 1, 1, 23, 30, tzinfo=UTC)
+        assert local_date(naive, tokyo) == local_date(aware, tokyo)
+        assert local_dt(naive, tokyo) == local_dt(aware, tokyo)
+
+    def test_early_morning_utc_rolls_back_for_negative_offset(self):
+        # 2026-01-02T02:00Z in Los Angeles (UTC-8) is 18:00 the prior day.
+        la = ZoneInfo("America/Los_Angeles")
+        dt = datetime(2026, 1, 2, 2, 0, tzinfo=UTC)
+        assert local_date(dt, la) == date(2026, 1, 1)
 
 
 class TestBeatModel:
@@ -545,13 +588,14 @@ class TestAnalyticsDistributeToSlots:
             assert slots[i] == 30
         assert sum(slots) == 120
 
-    def test_cross_midnight_clamps_to_end_of_day(self):
-        # 23:30 (start day) to 00:30 (next day) — only the 30min
-        # before midnight count; the post-midnight portion is dropped
-        # because the helper clamps to start-day midnight.
+    def test_cross_midnight_splits_into_next_day_slots(self):
+        # 23:30 (start day) to 00:30 (next day) — the 30min before
+        # midnight land in slot 47 (23:30–24:00) and the 30min after
+        # midnight wrap into slot 0 (00:00–00:30). No minutes dropped.
         slots = self._slots("2026-05-01T23:30:00", "2026-05-02T00:30:00")
         assert slots[47] == 30  # 23:30–24:00 is slot 47
-        assert sum(slots) == 30  # the 0:00–0:30 chunk is clamped away
+        assert slots[0] == 30  # 00:00–00:30 wraps to slot 0
+        assert sum(slots) == 60
 
     def test_aligned_30_minute_boundary(self):
         # 10:00–10:30 → all 30min in slot 20 only
@@ -623,6 +667,31 @@ class TestAnalyticsHeatmap:
         assert len(out) == 1
         assert out[0]["total_minutes"] == 30
 
+    @pytest.mark.asyncio
+    async def test_default_utc_buckets_by_utc_day(self):
+        # No tz → UTC. A 23:30Z session stays on its UTC calendar day.
+        beats = [_beat("2026-01-01T23:30:00", 30)]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026)
+        assert [d["date"] for d in out] == ["2026-01-01"]
+
+    @pytest.mark.asyncio
+    async def test_negative_offset_keeps_late_session_on_local_day(self):
+        # 2026-01-01T23:30Z in New York is 18:30 the SAME local day.
+        beats = [_beat("2026-01-01T23:30:00", 30)]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026, tz=ZoneInfo("America/New_York"))
+        assert [d["date"] for d in out] == ["2026-01-01"]
+
+    @pytest.mark.asyncio
+    async def test_positive_offset_rolls_late_session_to_next_local_day(self):
+        # 2026-01-01T23:30Z in Tokyo (UTC+9) is 08:30 the NEXT local day,
+        # so the heatmap must bucket it to 2026-01-02.
+        beats = [_beat("2026-01-01T23:30:00", 30)]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_heatmap(year=2026, tz=ZoneInfo("Asia/Tokyo"))
+        assert [d["date"] for d in out] == ["2026-01-02"]
+
 
 class TestAnalyticsDailyRhythm:
     """get_daily_rhythm aggregates beats into 48 half-hour slots
@@ -654,16 +723,14 @@ class TestAnalyticsDailyRhythm:
         the divisor is 10 (today inclusive). The 9-10 AM slots
         each get 30 min total, divided by 10 → 3.0 min per slot."""
         from datetime import UTC as _UTC
-        from datetime import date, datetime, time, timedelta
+        from datetime import datetime, time, timedelta
 
-        # Anchor to date.today() (the frame get_daily_rhythm uses for its
-        # divisor), not datetime.now(UTC). Building from now(UTC) makes the
-        # beat's UTC .date() drift a day ahead of the local today whenever the
-        # suite runs late-evening in a UTC+ timezone, turning the 10-day span
-        # into 11 and breaking the average.
-        nine_days_ago = datetime.combine(
-            date.today() - timedelta(days=9), time(hour=9), tzinfo=_UTC
-        )
+        # Anchor to datetime.now(UTC).date() — the frame get_daily_rhythm
+        # uses for its divisor under the default (UTC) tz. Both the divisor
+        # "today" and the beat's local_date are then in the same UTC frame,
+        # so the 10-day span is stable regardless of the host's local offset.
+        utc_today = datetime.now(_UTC).date()
+        nine_days_ago = datetime.combine(utc_today - timedelta(days=9), time(hour=9), tzinfo=_UTC)
         beats = [
             Beat(
                 id="b1",
@@ -816,6 +883,38 @@ class TestAnalyticsDailyRhythm:
         out = await svc.get_daily_rhythm(period="all")
         # No completed beats → all slots zero
         assert all(s["minutes"] == 0 for s in out)
+
+    @pytest.mark.asyncio
+    async def test_rhythm_slots_use_local_wall_clock(self):
+        """A 22:00Z one-hour session lands in the 22:00 UTC slots by
+        default, but in the 17:00–18:00 LOCAL slots for New York. Pins
+        that slot indexing follows the requesting timezone."""
+        beats = [_beat("2026-05-01T22:00:00", 60)]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+
+        utc_out = await svc.get_daily_rhythm(period="all")
+        # 22:00–23:00 UTC → slots 44, 45 (22*2, 22*2+1)
+        assert utc_out[44]["minutes"] > 0
+        assert utc_out[45]["minutes"] > 0
+
+        ny_out = await svc.get_daily_rhythm(period="all", tz=ZoneInfo("America/New_York"))
+        # 22:00Z = 18:00 EDT → slots 36, 37
+        assert ny_out[36]["minutes"] > 0
+        assert ny_out[37]["minutes"] > 0
+        assert ny_out[44]["minutes"] == 0
+
+    @pytest.mark.asyncio
+    async def test_rhythm_cross_local_midnight_splits_minutes(self):
+        """A session that spans LOCAL midnight has its after-midnight
+        minutes attributed to early-morning slots (wrapping to slot 0+),
+        not dropped. In Tokyo (UTC+9) a 14:30Z–15:30Z session is
+        23:30–00:30 local, so 30 min land in slot 47 and 30 in slot 0."""
+        beats = [_beat("2026-05-01T14:30:00", 60)]
+        svc = AnalyticsService(_FakeBeatRepo(beats))  # type: ignore[arg-type]
+        out = await svc.get_daily_rhythm(period="all", tz=ZoneInfo("Asia/Tokyo"))
+        # Single-day span → divisor handling aside, both halves present.
+        assert out[47]["minutes"] > 0  # 23:30–24:00 local
+        assert out[0]["minutes"] > 0  # 00:00–00:30 local (wrapped)
 
 
 class TestAnalyticsUntrackedGaps:

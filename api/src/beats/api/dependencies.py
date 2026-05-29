@@ -2,8 +2,9 @@
 
 from functools import lru_cache
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 
 from beats.domain.analytics import AnalyticsService
 from beats.domain.calendar import CalendarService
@@ -78,6 +79,33 @@ async def get_current_user_id(request: Request) -> str:
 
 
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
+
+
+def get_timezone(
+    tz: Annotated[
+        str | None,
+        Query(description="IANA timezone name (e.g. America/New_York). Defaults to UTC."),
+    ] = None,
+) -> ZoneInfo:
+    """Resolve the request's ``tz`` query param to a ``ZoneInfo``.
+
+    Day/hour bucketing in analytics and intelligence is computed in the
+    caller's local timezone. Absent or empty ``tz`` defaults to UTC, keeping
+    behavior unchanged for clients that don't send one. An unrecognized IANA
+    name returns HTTP 400 via the unified error envelope.
+    """
+    if not tz:
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(tz)
+    except ZoneInfoNotFoundError, ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_TIMEZONE", "message": f"Unknown timezone: {tz}"},
+        ) from None
+
+
+TimezoneDep = Annotated[ZoneInfo, Depends(get_timezone)]
 
 
 def get_beat_repository(user_id: CurrentUserId) -> BeatRepository:

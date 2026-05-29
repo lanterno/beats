@@ -40,6 +40,13 @@ export async function updateBeat(beat: ApiBeat): Promise<void> {
 }
 
 /**
+ * The browser's IANA timezone (e.g. "America/New_York"). Sent to tz-aware
+ * analytics/intelligence endpoints so day/hour bucketing happens on the
+ * user's local calendar rather than UTC.
+ */
+const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/**
  * Fetch heatmap data for a given year, optionally filtered by project and/or tag
  */
 export async function fetchHeatmap(
@@ -47,7 +54,7 @@ export async function fetchHeatmap(
 	projectId?: string,
 	tag?: string,
 ): Promise<HeatmapDay[]> {
-	let url = `/api/analytics/heatmap?year=${year}`;
+	let url = `/api/analytics/heatmap?year=${year}&tz=${encodeURIComponent(browserTimeZone())}`;
 	if (projectId) url += `&project_id=${projectId}`;
 	if (tag) url += `&tag=${encodeURIComponent(tag)}`;
 	const data = await get<unknown>(url);
@@ -62,7 +69,7 @@ export async function fetchDailyRhythm(
 	projectId?: string,
 	tag?: string,
 ): Promise<RhythmSlot[]> {
-	let url = `/api/analytics/rhythm?period=${period}`;
+	let url = `/api/analytics/rhythm?period=${period}&tz=${encodeURIComponent(browserTimeZone())}`;
 	if (projectId) url += `&project_id=${projectId}`;
 	if (tag) url += `&tag=${encodeURIComponent(tag)}`;
 	const data = await get<unknown>(url);
@@ -80,7 +87,8 @@ export async function fetchAllTags(): Promise<string[]> {
  * Fetch untracked time gaps for a given date
  */
 export async function fetchGaps(targetDate: string): Promise<Gap[]> {
-	const data = await get<unknown>(`/api/analytics/gaps?target_date=${targetDate}`);
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/analytics/gaps?target_date=${targetDate}&tz=${tz}`);
 	return parseApiResponse(GapListSchema, data);
 }
 

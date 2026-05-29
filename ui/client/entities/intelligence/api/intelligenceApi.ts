@@ -35,13 +35,22 @@ import {
 	WeeklyDigestSchema,
 } from "@/shared/api";
 
+/**
+ * The browser's IANA timezone (e.g. "America/New_York"). Sent to tz-aware
+ * intelligence endpoints so productivity/today/week bucketing follows the
+ * user's local calendar rather than UTC.
+ */
+const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 export async function fetchProductivityScore(): Promise<ProductivityScore> {
-	const data = await get<unknown>("/api/intelligence/score");
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/intelligence/score?tz=${tz}`);
 	return parseApiResponse(ProductivityScoreSchema, data);
 }
 
 export async function fetchScoreHistory(weeks = 8): Promise<ScoreHistoryItem[]> {
-	const data = await get<unknown>(`/api/intelligence/score/history?weeks=${weeks}`);
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/intelligence/score/history?weeks=${weeks}&tz=${tz}`);
 	return parseApiResponse(ScoreHistorySchema, data);
 }
 
@@ -56,9 +65,10 @@ export async function fetchDigest(weekOf: string): Promise<WeeklyDigest> {
 }
 
 export async function generateDigest(weekOf?: string): Promise<WeeklyDigest> {
+	const tz = encodeURIComponent(browserTimeZone());
 	const url = weekOf
-		? `/api/intelligence/digests/generate?week_of=${weekOf}`
-		: "/api/intelligence/digests/generate";
+		? `/api/intelligence/digests/generate?week_of=${weekOf}&tz=${tz}`
+		: `/api/intelligence/digests/generate?tz=${tz}`;
 	const data = await post<unknown>(url, {});
 	return parseApiResponse(WeeklyDigestSchema, data);
 }
@@ -69,7 +79,8 @@ export async function fetchPatterns(): Promise<PatternsResponse> {
 }
 
 export async function refreshPatterns(): Promise<PatternsResponse> {
-	const data = await post<unknown>("/api/intelligence/patterns/refresh", {});
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await post<unknown>(`/api/intelligence/patterns/refresh?tz=${tz}`, {});
 	return parseApiResponse(PatternsResponseSchema, data);
 }
 
@@ -78,31 +89,38 @@ export async function dismissPattern(insightId: string): Promise<void> {
 }
 
 export async function fetchSuggestions(date?: string): Promise<Suggestion[]> {
-	const url = date ? `/api/intelligence/suggestions?date=${date}` : "/api/intelligence/suggestions";
+	const tz = encodeURIComponent(browserTimeZone());
+	const url = date
+		? `/api/intelligence/suggestions?date=${date}&tz=${tz}`
+		: `/api/intelligence/suggestions?tz=${tz}`;
 	const data = await get<unknown>(url);
 	return parseApiResponse(SuggestionListSchema, data);
 }
 
 export async function fetchFocusScores(date?: string): Promise<FocusScore[]> {
+	const tz = encodeURIComponent(browserTimeZone());
 	const url = date
-		? `/api/intelligence/focus-scores?date=${date}`
-		: "/api/intelligence/focus-scores";
+		? `/api/intelligence/focus-scores?date=${date}&tz=${tz}`
+		: `/api/intelligence/focus-scores?tz=${tz}`;
 	const data = await get<unknown>(url);
 	return parseApiResponse(FocusScoreListSchema, data);
 }
 
 export async function fetchMoodCorrelation(): Promise<MoodCorrelation> {
-	const data = await get<unknown>("/api/intelligence/mood");
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/intelligence/mood?tz=${tz}`);
 	return parseApiResponse(MoodCorrelationSchema, data);
 }
 
 export async function fetchEstimationAccuracy(): Promise<EstimationAccuracy[]> {
-	const data = await get<unknown>("/api/intelligence/estimation");
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/intelligence/estimation?tz=${tz}`);
 	return parseApiResponse(EstimationAccuracyListSchema, data);
 }
 
 export async function fetchProjectHealth(): Promise<ProjectHealth[]> {
-	const data = await get<unknown>("/api/intelligence/project-health");
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/intelligence/project-health?tz=${tz}`);
 	return parseApiResponse(ProjectHealthListSchema, data);
 }
 
@@ -111,5 +129,6 @@ export async function fetchProjectHealth(): Promise<ProjectHealth[]> {
  * Uses the generated OpenAPI type directly — the server owns the shape contract.
  */
 export async function fetchInbox(): Promise<InboxResponse> {
-	return get<InboxResponse>("/api/intelligence/inbox");
+	const tz = encodeURIComponent(browserTimeZone());
+	return get<InboxResponse>(`/api/intelligence/inbox?tz=${tz}`);
 }

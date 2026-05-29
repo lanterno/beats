@@ -3,16 +3,20 @@
 import math
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from statistics import median
+from zoneinfo import ZoneInfo
 
 from beats.domain.models import Beat, BiometricDay, FlowWindow, InsightCard, WeeklyDigest
+from beats.domain.utils import local_date, local_dt
 from beats.infrastructure.repositories import (
     BeatRepository,
     DailyNoteRepository,
     IntentionRepository,
     ProjectRepository,
 )
+
+UTC_TZ = ZoneInfo("UTC")
 
 
 def _monday_of(d: date) -> date:
@@ -46,19 +50,22 @@ class IntelligenceService:
     # Productivity Score
     # =========================================================================
 
-    async def compute_productivity_score(self) -> dict:
+    async def compute_productivity_score(self, tz: ZoneInfo = UTC_TZ) -> dict:
         """Compute current productivity score (0-100) with component breakdown."""
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         week_start = _monday_of(today)
 
-        # Load data for the last 7 days
+        # Load data for the last 7 days (widen by a day so local-date
+        # bucketing near the UTC boundary still finds edge sessions).
         range_start = today - timedelta(days=6)
-        beats = await self.beat_repo.list_completed_in_range(range_start, today)
+        beats = await self.beat_repo.list_completed_in_range(
+            range_start - timedelta(days=1), today + timedelta(days=1)
+        )
         intentions = await self.intention_repo.list_by_date_range(range_start, today)
         projects = await self.project_repo.list(archived=False)
 
         # 1. Consistency (0-25): weekdays tracked in last 5 weekdays
-        tracked_dates = {b.start.date() for b in beats}
+        tracked_dates = {local_date(b.start, tz) for b in beats}
         weekdays = []
         for i in range(7):
             d = today - timedelta(days=i)
@@ -80,7 +87,7 @@ class IntelligenceService:
         goal_projects = [p for p in projects if p.weekly_goal]
         if goal_projects:
             # Sum hours per project this week
-            week_beats = [b for b in beats if b.start.date() >= week_start]
+            week_beats = [b for b in beats if local_date(b.start, tz) >= week_start]
             project_hours: dict[str, float] = defaultdict(float)
             for b in week_beats:
                 project_hours[b.project_id] += b.duration.total_seconds() / 3600
@@ -113,7 +120,7 @@ class IntelligenceService:
             # Fragmentation penalty: check for gaps < 5 min between same-day sessions
             day_beats: dict[date, list[Beat]] = defaultdict(list)
             for b in beats:
-                day_beats[b.start.date()].append(b)
+                day_beats[local_date(b.start, tz)].append(b)
             frag_penalty = 0
             for day_b in day_beats.values():
                 sorted_b = sorted(day_b, key=lambda x: x.start)
@@ -139,9 +146,11 @@ class IntelligenceService:
             },
         }
 
-    async def compute_productivity_score_history(self, weeks: int = 8) -> list[dict]:
+    async def compute_productivity_score_history(
+        self, weeks: int = 8, tz: ZoneInfo = UTC_TZ
+    ) -> list[dict]:
         """Compute weekly productivity scores for the last N weeks."""
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         current_monday = _monday_of(today)
         history = []
 
@@ -156,11 +165,11 @@ class IntelligenceService:
             monday = current_monday - timedelta(weeks=w)
             sunday = monday + timedelta(days=6)
 
-            week_beats = [b for b in all_beats if monday <= b.start.date() <= sunday]
+            week_beats = [b for b in all_beats if monday <= local_date(b.start, tz) <= sunday]
             week_intentions = [i for i in all_intentions if monday <= i.date <= sunday]
 
             # Simplified score for history
-            tracked_dates = {b.start.date() for b in week_beats}
+            tracked_dates = {local_date(b.start, tz) for b in week_beats}
             weekdays = [monday + timedelta(days=d) for d in range(5)]
             consistency = round(sum(1 for d in weekdays if d in tracked_dates) / 5 * 25)
 
@@ -208,14 +217,26 @@ class IntelligenceService:
     # Weekly Digest
     # =========================================================================
 
-    async def generate_weekly_digest(self, week_monday: date) -> WeeklyDigest:
+    async def generate_weekly_digest(
+        self, week_monday: date, tz: ZoneInfo = UTC_TZ
+    ) -> WeeklyDigest:
         """Generate a weekly summary digest for the given week."""
         sunday = week_monday + timedelta(days=6)
         prev_monday = week_monday - timedelta(days=7)
         prev_sunday = prev_monday + timedelta(days=6)
 
-        beats = await self.beat_repo.list_completed_in_range(week_monday, sunday)
-        prev_beats = await self.beat_repo.list_completed_in_range(prev_monday, prev_sunday)
+        # Widen repo queries by a day so local-date bucketing keeps sessions
+        # whose UTC date sits just outside the week boundary.
+        beats = await self.beat_repo.list_completed_in_range(
+            week_monday - timedelta(days=1), sunday + timedelta(days=1)
+        )
+        beats = [b for b in beats if week_monday <= local_date(b.start, tz) <= sunday]
+        prev_beats = await self.beat_repo.list_completed_in_range(
+            prev_monday - timedelta(days=1), prev_sunday + timedelta(days=1)
+        )
+        prev_beats = [
+            b for b in prev_beats if prev_monday <= local_date(b.start, tz) <= prev_sunday
+        ]
         projects = await self.project_repo.list(archived=False)
         project_map = {p.id: p for p in projects}
 
@@ -223,7 +244,7 @@ class IntelligenceService:
         total_minutes = sum(b.duration.total_seconds() / 60 for b in beats)
         total_hours = total_minutes / 60
         session_count = len(beats)
-        active_dates = {b.start.date() for b in beats}
+        active_dates = {local_date(b.start, tz) for b in beats}
         active_days = len(active_dates)
 
         # Project breakdown
@@ -247,7 +268,7 @@ class IntelligenceService:
         # Longest day
         day_minutes: dict[date, float] = defaultdict(float)
         for b in beats:
-            day_minutes[b.start.date()] += b.duration.total_seconds() / 60
+            day_minutes[local_date(b.start, tz)] += b.duration.total_seconds() / 60
         if day_minutes:
             # `max(d, key=d.get)` is the idiomatic shape but ty can't
             # follow the bound-method's signature past the dict's
@@ -370,31 +391,35 @@ class IntelligenceService:
     # Pattern Detection
     # =========================================================================
 
-    async def detect_patterns(self) -> list[InsightCard]:
+    async def detect_patterns(self, tz: ZoneInfo = UTC_TZ) -> list[InsightCard]:
         """Detect non-obvious patterns in the user's data."""
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         insights: list[InsightCard] = []
 
-        # Load data
+        # Load data (widen by a day for local-date bucketing at the edges)
         range_start = today - timedelta(days=60)
-        beats = await self.beat_repo.list_completed_in_range(range_start, today)
+        beats = await self.beat_repo.list_completed_in_range(
+            range_start - timedelta(days=1), today + timedelta(days=1)
+        )
         projects = await self.project_repo.list(archived=False)
         project_map = {p.id: p for p in projects}
         notes = await self.daily_note_repo.list_by_date_range(range_start, today)
         intentions = await self.intention_repo.list_by_date_range(range_start, today)
 
-        insights.extend(self._detect_day_pattern(beats, today))
-        insights.extend(self._detect_peak_hours(beats))
-        insights.extend(self._detect_stale_projects(beats, projects, today))
-        insights.extend(self._detect_mood_correlation(beats, notes))
-        insights.extend(self._detect_session_trend(beats, today))
-        insights.extend(self._detect_estimation_bias(beats, intentions, project_map))
-        insights.extend(self._detect_goal_pacing(beats, projects, today))
+        insights.extend(self._detect_day_pattern(beats, today, tz))
+        insights.extend(self._detect_peak_hours(beats, tz))
+        insights.extend(self._detect_stale_projects(beats, projects, today, tz))
+        insights.extend(self._detect_mood_correlation(beats, notes, tz))
+        insights.extend(self._detect_session_trend(beats, today, tz))
+        insights.extend(self._detect_estimation_bias(beats, intentions, project_map, tz))
+        insights.extend(self._detect_goal_pacing(beats, projects, today, tz))
 
         insights.sort(key=lambda x: -x.priority)
         return insights
 
-    def _detect_day_pattern(self, beats: list[Beat], today: date) -> list[InsightCard]:
+    def _detect_day_pattern(
+        self, beats: list[Beat], today: date, tz: ZoneInfo = UTC_TZ
+    ) -> list[InsightCard]:
         """Check if any day of week is significantly more productive."""
         # Aggregate hours per weekday over the last 8 weeks
         day_hours: dict[int, list[float]] = defaultdict(list)
@@ -402,7 +427,9 @@ class IntelligenceService:
             monday = _monday_of(today) - timedelta(weeks=w)
             for dow in range(7):
                 d = monday + timedelta(days=dow)
-                mins = sum(b.duration.total_seconds() / 60 for b in beats if b.start.date() == d)
+                mins = sum(
+                    b.duration.total_seconds() / 60 for b in beats if local_date(b.start, tz) == d
+                )
                 day_hours[dow].append(mins)
 
         day_avgs = {dow: sum(hrs) / len(hrs) for dow, hrs in day_hours.items() if hrs}
@@ -430,11 +457,11 @@ class IntelligenceService:
                 ]
         return []
 
-    def _detect_peak_hours(self, beats: list[Beat]) -> list[InsightCard]:
+    def _detect_peak_hours(self, beats: list[Beat], tz: ZoneInfo = UTC_TZ) -> list[InsightCard]:
         """Find peak productivity time blocks."""
         blocks: dict[int, float] = defaultdict(float)  # 2-hour blocks: 0=0-2, 1=2-4, etc.
         for b in beats:
-            block = b.start.hour // 2
+            block = local_dt(b.start, tz).hour // 2
             blocks[block] += b.duration.total_seconds() / 60
 
         if len(blocks) < 3:
@@ -463,13 +490,13 @@ class IntelligenceService:
         return []
 
     def _detect_stale_projects(
-        self, beats: list[Beat], projects: list, today: date
+        self, beats: list[Beat], projects: list, today: date, tz: ZoneInfo = UTC_TZ
     ) -> list[InsightCard]:
         """Alert on projects with goals but no recent activity."""
         last_beat: dict[str, date] = {}
         for b in beats:
             pid = b.project_id
-            d = b.start.date()
+            d = local_date(b.start, tz)
             if pid not in last_beat or d > last_beat[pid]:
                 last_beat[pid] = d
 
@@ -493,7 +520,9 @@ class IntelligenceService:
                 )
         return results
 
-    def _detect_mood_correlation(self, beats: list[Beat], notes: list) -> list[InsightCard]:
+    def _detect_mood_correlation(
+        self, beats: list[Beat], notes: list, tz: ZoneInfo = UTC_TZ
+    ) -> list[InsightCard]:
         """Correlate mood scores with daily tracked hours."""
         mood_data = [n for n in notes if n.mood is not None]
         if len(mood_data) < 10:
@@ -501,7 +530,7 @@ class IntelligenceService:
 
         date_hours: dict[date, float] = defaultdict(float)
         for b in beats:
-            date_hours[b.start.date()] += b.duration.total_seconds() / 3600
+            date_hours[local_date(b.start, tz)] += b.duration.total_seconds() / 3600
 
         pairs = []
         for n in mood_data:
@@ -558,13 +587,15 @@ class IntelligenceService:
             )
         ]
 
-    def _detect_session_trend(self, beats: list[Beat], today: date) -> list[InsightCard]:
+    def _detect_session_trend(
+        self, beats: list[Beat], today: date, tz: ZoneInfo = UTC_TZ
+    ) -> list[InsightCard]:
         """Compare this week's avg session length to 4-week average."""
         this_monday = _monday_of(today)
         four_weeks_ago = this_monday - timedelta(weeks=4)
 
-        this_week = [b for b in beats if b.start.date() >= this_monday]
-        prev_weeks = [b for b in beats if four_weeks_ago <= b.start.date() < this_monday]
+        this_week = [b for b in beats if local_date(b.start, tz) >= this_monday]
+        prev_weeks = [b for b in beats if four_weeks_ago <= local_date(b.start, tz) < this_monday]
 
         if len(this_week) < 3 or len(prev_weeks) < 5:
             return []
@@ -593,7 +624,7 @@ class IntelligenceService:
         ]
 
     def _detect_estimation_bias(
-        self, beats: list[Beat], intentions: list, project_map: dict
+        self, beats: list[Beat], intentions: list, project_map: dict, tz: ZoneInfo = UTC_TZ
     ) -> list[InsightCard]:
         """Check if planned vs actual shows consistent bias."""
         # Group intentions and beats by (project, date)
@@ -604,7 +635,7 @@ class IntelligenceService:
 
         actual: dict[tuple[str, date], float] = defaultdict(float)
         for b in beats:
-            key = (b.project_id, b.start.date())
+            key = (b.project_id, local_date(b.start, tz))
             if key in planned:
                 actual[key] += b.duration.total_seconds() / 60
 
@@ -651,7 +682,7 @@ class IntelligenceService:
         return results
 
     def _detect_goal_pacing(
-        self, beats: list[Beat], projects: list, today: date
+        self, beats: list[Beat], projects: list, today: date, tz: ZoneInfo = UTC_TZ
     ) -> list[InsightCard]:
         """Warn about weekly goals that need attention."""
         monday = _monday_of(today)
@@ -659,7 +690,7 @@ class IntelligenceService:
         if days_left <= 0:
             return []
 
-        week_beats = [b for b in beats if b.start.date() >= monday]
+        week_beats = [b for b in beats if local_date(b.start, tz) >= monday]
         project_hours: dict[str, float] = defaultdict(float)
         for b in week_beats:
             project_hours[b.project_id] += b.duration.total_seconds() / 3600
@@ -698,14 +729,16 @@ class IntelligenceService:
     # Smart Daily Plan Suggestions
     # =========================================================================
 
-    async def suggest_daily_plan(self, target_date: date) -> list[dict]:
+    async def suggest_daily_plan(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Suggest up to 3 projects and durations for today's intentions."""
         dow = target_date.weekday()
         monday = _monday_of(target_date)
 
-        # Load 8 weeks of history for this day of week
+        # Load 8 weeks of history for this day of week (widen for local-date edges)
         range_start = target_date - timedelta(weeks=8)
-        beats = await self.beat_repo.list_completed_in_range(range_start, target_date)
+        beats = await self.beat_repo.list_completed_in_range(
+            range_start - timedelta(days=1), target_date + timedelta(days=1)
+        )
         projects = await self.project_repo.list(archived=False)
         project_map = {p.id: p for p in projects}
 
@@ -717,7 +750,7 @@ class IntelligenceService:
                 continue
             project_day_mins: dict[str, float] = defaultdict(float)
             for b in beats:
-                if b.start.date() == d:
+                if local_date(b.start, tz) == d:
                     project_day_mins[b.project_id] += b.duration.total_seconds() / 60
             for pid in project_map:
                 dow_minutes[pid].append(project_day_mins.get(pid, 0))
@@ -729,14 +762,14 @@ class IntelligenceService:
         }
 
         # Weekly goal remaining
-        week_beats = [b for b in beats if b.start.date() >= monday]
+        week_beats = [b for b in beats if local_date(b.start, tz) >= monday]
         week_hours: dict[str, float] = defaultdict(float)
         for b in week_beats:
             week_hours[b.project_id] += b.duration.total_seconds() / 3600
 
         # Recency (worked yesterday?)
         yesterday = target_date - timedelta(days=1)
-        yesterday_projects = {b.project_id for b in beats if b.start.date() == yesterday}
+        yesterday_projects = {b.project_id for b in beats if local_date(b.start, tz) == yesterday}
 
         # Score each project
         scores: list[tuple[str, float, int, str]] = []
@@ -807,21 +840,26 @@ class IntelligenceService:
     # Focus Quality Score
     # =========================================================================
 
-    async def compute_focus_scores(self, target_date: date) -> list[dict]:
-        """Compute focus quality scores for all sessions on a given date."""
-        beats = await self.beat_repo.list_completed_in_range(target_date, target_date)
+    async def compute_focus_scores(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
+        """Compute focus quality scores for all sessions on a given local date."""
+        # Widen the query by a day so sessions whose UTC date differs from
+        # their local date are included, then scope precisely by local date.
+        beats = await self.beat_repo.list_completed_in_range(
+            target_date - timedelta(days=1), target_date + timedelta(days=1)
+        )
+        beats = [b for b in beats if local_date(b.start, tz) == target_date]
         if not beats:
             return []
 
         # Compute user's peak hours from recent data
         recent_start = target_date - timedelta(days=30)
         recent_beats = await self.beat_repo.list_completed_in_range(recent_start, target_date)
-        peak_block = self._find_peak_block(recent_beats)
+        peak_block = self._find_peak_block(recent_beats, tz)
 
         sorted_beats = sorted(beats, key=lambda b: b.start)
         results = []
         for i, b in enumerate(sorted_beats):
-            score = self._focus_score_for_beat(b, sorted_beats, i, peak_block)
+            score = self._focus_score_for_beat(b, sorted_beats, i, peak_block, tz)
             results.append(
                 {
                     "beat_id": b.id,
@@ -831,18 +869,18 @@ class IntelligenceService:
             )
         return results
 
-    def _find_peak_block(self, beats: list[Beat]) -> int:
+    def _find_peak_block(self, beats: list[Beat], tz: ZoneInfo = UTC_TZ) -> int:
         """Find the 2-hour block with the most total minutes."""
         blocks: dict[int, float] = defaultdict(float)
         for b in beats:
-            block = b.start.hour // 2
+            block = local_dt(b.start, tz).hour // 2
             blocks[block] += b.duration.total_seconds() / 60
         if not blocks:
             return 4  # default: 8-10 AM
         return max(blocks, key=lambda b: blocks[b])
 
     def _focus_score_for_beat(
-        self, beat: Beat, day_beats: list[Beat], index: int, peak_block: int
+        self, beat: Beat, day_beats: list[Beat], index: int, peak_block: int, tz: ZoneInfo = UTC_TZ
     ) -> dict:
         """Compute focus score for a single beat."""
         dur_min = beat.duration.total_seconds() / 60
@@ -860,7 +898,7 @@ class IntelligenceService:
             length = 40
 
         # Peak hours component (0-30)
-        beat_block = beat.start.hour // 2
+        beat_block = local_dt(beat.start, tz).hour // 2
         if beat_block == peak_block:
             peak = 30
         elif abs(beat_block - peak_block) == 1:
@@ -893,9 +931,9 @@ class IntelligenceService:
     # Mood-Productivity Correlation
     # =========================================================================
 
-    async def get_mood_correlation(self) -> dict:
+    async def get_mood_correlation(self, tz: ZoneInfo = UTC_TZ) -> dict:
         """Compute mood trend and correlation with daily hours."""
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         range_start = today - timedelta(days=90)
         notes = await self.daily_note_repo.list_by_date_range(range_start, today)
         beats = await self.beat_repo.list_completed_in_range(range_start, today)
@@ -905,7 +943,7 @@ class IntelligenceService:
         date_hours: dict[date, float] = defaultdict(float)
         date_sessions: dict[date, int] = defaultdict(int)
         for b in beats:
-            d = b.start.date()
+            d = local_date(b.start, tz)
             date_hours[d] += b.duration.total_seconds() / 3600
             date_sessions[d] += 1
 
@@ -960,9 +998,9 @@ class IntelligenceService:
     # Estimation Accuracy
     # =========================================================================
 
-    async def get_estimation_accuracy(self) -> list[dict]:
+    async def get_estimation_accuracy(self, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Compute per-project estimation accuracy from intentions vs actual time."""
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         range_start = today - timedelta(days=90)
         intentions = await self.intention_repo.list_by_date_range(range_start, today)
         beats = await self.beat_repo.list_completed_in_range(range_start, today)
@@ -977,7 +1015,7 @@ class IntelligenceService:
         # Actual per (project, date)
         actual: dict[tuple[str, date], float] = defaultdict(float)
         for b in beats:
-            key = (b.project_id, b.start.date())
+            key = (b.project_id, local_date(b.start, tz))
             if key in planned:
                 actual[key] += b.duration.total_seconds() / 60
 
@@ -1021,9 +1059,9 @@ class IntelligenceService:
     # Project Health
     # =========================================================================
 
-    async def get_project_health(self) -> list[dict]:
+    async def get_project_health(self, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Compute health metrics for each active project."""
-        today = datetime.now(UTC).date()
+        today = datetime.now(tz).date()
         range_start = today - timedelta(weeks=4)
         beats = await self.beat_repo.list_completed_in_range(range_start, today)
         projects = await self.project_repo.list(archived=False)
@@ -1032,7 +1070,7 @@ class IntelligenceService:
         last_beat: dict[str, date] = {}
         for b in beats:
             pid = b.project_id
-            d = b.start.date()
+            d = local_date(b.start, tz)
             if pid not in last_beat or d > last_beat[pid]:
                 last_beat[pid] = d
 
@@ -1048,7 +1086,7 @@ class IntelligenceService:
             for w in range(4, 0, -1):
                 monday = _monday_of(today) - timedelta(weeks=w)
                 sunday = monday + timedelta(days=6)
-                week_b = [b for b in proj_beats if monday <= b.start.date() <= sunday]
+                week_b = [b for b in proj_beats if monday <= local_date(b.start, tz) <= sunday]
                 total = sum(b.duration.total_seconds() / 3600 for b in week_b)
                 weekly_hours.append(round(total, 2))
                 if week_b:
