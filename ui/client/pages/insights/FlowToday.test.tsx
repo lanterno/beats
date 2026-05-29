@@ -154,4 +154,31 @@ describe("FlowToday", () => {
 		// window. shortRepoPath collapses the path to "code/beats".
 		expect(screen.getByText("code/beats")).toBeInTheDocument();
 	});
+
+	it("shows the score breakdown for the selected window", () => {
+		const windows = [
+			makeWindow({ flow_score: 0.4, window_start: "2026-04-30T09:00:00" }),
+			makeWindow({
+				flow_score: 0.91,
+				window_start: "2026-04-30T14:32:00",
+				cadence_score: 0.72,
+				coherence_score: 0.63,
+				category_fit_score: 0.81,
+				idle_fraction: 0.1,
+				context_switches: 4,
+			}),
+		];
+		setData(windows);
+		render(<FlowToday />);
+
+		fireEvent.click(screen.getByRole("button", { name: /14:32/ }));
+
+		// Each sub-score carries a unique title (label: value), so the
+		// breakdown is unambiguous even though the values repeat elsewhere.
+		expect(screen.getByTitle("Cadence: 72")).toBeInTheDocument();
+		expect(screen.getByTitle("Coherence: 63")).toBeInTheDocument();
+		expect(screen.getByTitle("Fit: 81")).toBeInTheDocument();
+		expect(screen.getByTitle("Idle: 10%")).toBeInTheDocument();
+		expect(screen.getByTitle("Switches: 4")).toBeInTheDocument();
+	});
 });

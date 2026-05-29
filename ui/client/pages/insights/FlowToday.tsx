@@ -99,33 +99,56 @@ export function FlowToday({
 			)}
 
 			{selected && (
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2">
-					<span className="tabular-nums">{formatTime(selected.window_start)}</span>
-					<span>
-						<span className="text-foreground tabular-nums">
-							{Math.round(selected.flow_score * 100)}
+				<div className="border-t border-border/40 pt-2 space-y-1.5">
+					<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+						<span className="tabular-nums">{formatTime(selected.window_start)}</span>
+						<span>
+							<span className="text-foreground tabular-nums">
+								{Math.round(selected.flow_score * 100)}
+							</span>
+							<span className="text-muted-foreground"> / 100</span>
 						</span>
-						<span className="text-muted-foreground"> / 100</span>
-					</span>
-					{selected.dominant_category && (
-						<span className="uppercase tracking-wider text-[9px]">
-							{selected.dominant_category}
-						</span>
-					)}
-					{selected.editor_repo && (
-						<span
-							className="text-foreground/70 truncate max-w-[280px]"
-							title={selected.editor_repo}
-						>
-							{shortRepoPath(selected.editor_repo)}
-							{selected.editor_branch ? (
-								<span className="text-muted-foreground"> · {selected.editor_branch}</span>
-							) : null}
-						</span>
-					)}
+						{selected.dominant_category && (
+							<span className="uppercase tracking-wider text-[9px]">
+								{selected.dominant_category}
+							</span>
+						)}
+						{selected.editor_repo && (
+							<span
+								className="text-foreground/70 truncate max-w-[280px]"
+								title={selected.editor_repo}
+							>
+								{shortRepoPath(selected.editor_repo)}
+								{selected.editor_branch ? (
+									<span className="text-muted-foreground"> · {selected.editor_branch}</span>
+								) : null}
+							</span>
+						)}
+					</div>
+					{/* Why this window scored what it did: flow_score blends cadence,
+					    coherence, and category fit; idle + context-switches flag
+					    fragmentation. These were decoded but never shown. */}
+					<div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+						<ScoreStat label="Cadence" value={Math.round(selected.cadence_score * 100)} />
+						<ScoreStat label="Coherence" value={Math.round(selected.coherence_score * 100)} />
+						<ScoreStat label="Fit" value={Math.round(selected.category_fit_score * 100)} />
+						<ScoreStat label="Idle" value={`${Math.round(selected.idle_fraction * 100)}%`} />
+						<ScoreStat label="Switches" value={selected.context_switches} />
+					</div>
 				</div>
 			)}
 		</div>
+	);
+}
+
+/**
+ * One labeled component of a flow window's score breakdown (e.g. "Cadence 72").
+ */
+function ScoreStat({ label, value }: { label: string; value: number | string }) {
+	return (
+		<span title={`${label}: ${value}`}>
+			{label} <span className="text-foreground tabular-nums">{value}</span>
+		</span>
 	);
 }
 
