@@ -1,5 +1,6 @@
 export type {
 	BriefResponse,
+	ChatHistoryMessage,
 	MemoryResponse,
 	ReviewResponse,
 	UsageSummaryResponse,
@@ -12,6 +13,8 @@ export {
 	useCoachMemory,
 	useCoachReview,
 	useCoachUsage,
+	useDeleteCoachData,
+	useDeleteMemory,
 	useGenerateBrief,
 	useRewriteMemory,
 	useStartReview,

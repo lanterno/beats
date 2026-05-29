@@ -5,6 +5,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	deleteCoachData,
+	deleteMemory,
 	fetchBriefHistory,
 	fetchMemory,
 	fetchTodayBrief,
@@ -104,5 +106,25 @@ export function useRewriteMemory() {
 	return useMutation({
 		mutationFn: () => rewriteMemory(),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.memory() }),
+	});
+}
+
+export function useDeleteMemory() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: () => deleteMemory(),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.memory() }),
+	});
+}
+
+/**
+ * Wipe all coach data. Invalidates the entire coach query tree so memory,
+ * briefs, reviews, and usage all refetch as empty.
+ */
+export function useDeleteCoachData() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: () => deleteCoachData(),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.all }),
 	});
 }
