@@ -11,6 +11,7 @@ import { formatDuration } from "@/shared/lib";
 import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
+import { DistractionsToday } from "./DistractionsToday";
 import { EstimationAccuracy } from "./EstimationAccuracy";
 import { FlowByApp } from "./FlowByApp";
 import { FlowByLanguage } from "./FlowByLanguage";
@@ -182,6 +183,12 @@ export default function Insights() {
 						editorLanguage={selectedLanguage}
 						bundleId={selectedBundleId}
 					/>
+					{/* Drift events aren't scoped by project/repo/language/app, so only
+					    show this when no flow-dimension filter is active — otherwise it
+					    would read as filtered when it isn't. */}
+					{!selectedProjectId && !selectedRepo && !selectedLanguage && !selectedBundleId && (
+						<DistractionsToday />
+					)}
 					<BestMoment
 						projectId={selectedProjectId}
 						editorRepo={selectedRepo}

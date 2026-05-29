@@ -135,6 +135,31 @@ export async function fetchFlowWindows(
 }
 
 /**
+ * A distraction "drift" event recorded by the daemon's shield package
+ * (stored as a flow window with dominant_category="drift"). Served by
+ * /api/signals/recent-drift.
+ */
+export interface DriftEvent {
+	id: string;
+	started_at: string;
+	duration_seconds: number;
+	bundle_id: string;
+}
+
+/**
+ * Fetch recent drift (distraction) events. `since` defaults server-side to
+ * the last 30 minutes; pass a day's start ISO to get "today's" distractions.
+ */
+export async function fetchRecentDrift(since?: string, limit = 100): Promise<DriftEvent[]> {
+	const params = new URLSearchParams({ limit: String(limit) });
+	if (since) params.set("since", since);
+	const data = await get<{ events: DriftEvent[] }>(
+		`/api/signals/recent-drift?${params.toString()}`,
+	);
+	return data.events ?? [];
+}
+
+/**
  * Fetch single round-trip aggregate stats for a flow-window slice.
  * Hits /api/signals/flow-windows/summary which returns count/avg/peak
  * plus the top bucket on each grouping axis — designed for headline

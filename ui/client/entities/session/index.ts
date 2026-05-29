@@ -9,10 +9,12 @@
  */
 
 // API layer
+export type { DriftEvent } from "./api";
 export {
 	calculateDailySummary,
 	deleteBeat,
 	fetchBeats,
+	fetchRecentDrift,
 	sessionKeys,
 	updateBeat,
 	useAllBeats,
@@ -27,6 +29,7 @@ export {
 	useHeatmap,
 	useLastWeekTotal,
 	useProjectBreakdown,
+	useRecentDrift,
 	useRecentSessions,
 	useSessions,
 	useStreaks,

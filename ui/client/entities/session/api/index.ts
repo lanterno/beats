@@ -18,6 +18,7 @@ export {
 	useHeatmap,
 	useLastWeekTotal,
 	useProjectBreakdown,
+	useRecentDrift,
 	useRecentSessions,
 	useSessions,
 	useStreaks,
@@ -28,4 +29,10 @@ export {
 	useWeeklySessionsByProject,
 } from "./queries";
 // Low-level API functions
-export { deleteBeat, fetchBeats, updateBeat } from "./sessionApi";
+export {
+	type DriftEvent,
+	deleteBeat,
+	fetchBeats,
+	fetchRecentDrift,
+	updateBeat,
+} from "./sessionApi";
