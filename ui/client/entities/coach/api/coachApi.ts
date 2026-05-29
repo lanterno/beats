@@ -3,7 +3,7 @@
  */
 
 import type { Schemas } from "@/shared/api";
-import { get, post } from "@/shared/api";
+import { del, get, post } from "@/shared/api";
 
 export type BriefResponse = Schemas["BriefResponse"];
 export type UsageSummaryResponse = Schemas["UsageSummaryResponse"];
@@ -32,10 +32,18 @@ export async function fetchUsage(days = 30): Promise<UsageSummaryResponse> {
 	return get<UsageSummaryResponse>(`/api/coach/usage?days=${days}`);
 }
 
+export interface ChatHistoryMessage {
+	role: string;
+	content: string;
+	created_at: string;
+	conversation_id?: string;
+	tool_calls?: unknown[];
+}
+
 export async function fetchChatHistory(
 	conversationId?: string,
 	limit = 50,
-): Promise<Array<{ role: string; content: string; created_at: string; tool_calls?: unknown[] }>> {
+): Promise<ChatHistoryMessage[]> {
 	const params = new URLSearchParams({ limit: String(limit) });
 	if (conversationId) params.set("conversation_id", conversationId);
 	return get(`/api/coach/chat/history?${params}`);
@@ -80,6 +88,18 @@ export async function fetchMemory(): Promise<MemoryResponse> {
 
 export async function rewriteMemory(): Promise<MemoryResponse> {
 	return post<MemoryResponse>("/api/coach/memory/rewrite", {});
+}
+
+export async function deleteMemory(): Promise<void> {
+	await del<{ status: string }>("/api/coach/memory");
+}
+
+/**
+ * Wipe ALL coach data (memory, briefs, reviews, conversations, usage).
+ * Irreversible — the UI must confirm before calling this.
+ */
+export async function deleteCoachData(): Promise<void> {
+	await del<{ status: string }>("/api/coach/data");
 }
 
 // ── Chat SSE ────────────────────────────────────────────────────────

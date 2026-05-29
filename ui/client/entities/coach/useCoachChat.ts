@@ -5,9 +5,9 @@
  * Returns sendMessage + live state (messages, streaming flag, tool activity).
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionToken } from "@/features/auth/stores/authStore";
-import type { ChatSSEEvent } from "./api/coachApi";
+import { type ChatHistoryMessage, type ChatSSEEvent, fetchChatHistory } from "./api/coachApi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:7999";
 
@@ -16,6 +16,31 @@ export interface ChatMessage {
 	role: "user" | "assistant";
 	content: string;
 	toolCalls?: Array<{ name: string; input: Record<string, unknown>; result?: string }>;
+}
+
+/**
+ * Turn raw chat-history rows into renderable messages, resuming only the most
+ * recent conversation (the history endpoint can interleave threads when no
+ * conversation_id is given). Tool calls aren't reconstructed for restored
+ * history — past messages render as plain text bubbles.
+ */
+function restoreConversation(history: ChatHistoryMessage[]): {
+	messages: ChatMessage[];
+	conversationId: string | null;
+} {
+	if (history.length === 0) return { messages: [], conversationId: null };
+	const lastConversationId = history[history.length - 1].conversation_id ?? null;
+	const rows = lastConversationId
+		? history.filter((m) => m.conversation_id === lastConversationId)
+		: history;
+	const messages: ChatMessage[] = rows
+		.filter((m) => m.role === "user" || m.role === "assistant")
+		.map((m, i) => ({
+			id: `hist-${i}-${m.created_at}`,
+			role: m.role as "user" | "assistant",
+			content: m.content,
+		}));
+	return { messages, conversationId: lastConversationId };
 }
 
 interface CoachChatState {
@@ -32,7 +57,38 @@ export function useCoachChat() {
 		conversationId: null,
 		currentTool: null,
 	});
+	const [loadingHistory, setLoadingHistory] = useState(true);
 	const abortRef = useRef<AbortController | null>(null);
+	const historyLoadedRef = useRef(false);
+
+	// Restore the most recent conversation once on mount so the thread survives
+	// a reload/navigation instead of starting empty every time.
+	useEffect(() => {
+		if (historyLoadedRef.current) return;
+		historyLoadedRef.current = true;
+		let cancelled = false;
+		(async () => {
+			try {
+				const history = await fetchChatHistory();
+				if (cancelled) return;
+				const { messages, conversationId } = restoreConversation(history);
+				if (messages.length > 0) {
+					setState((prev) =>
+						// Don't clobber a conversation the user already started before
+						// history arrived.
+						prev.messages.length > 0 ? prev : { ...prev, messages, conversationId },
+					);
+				}
+			} catch {
+				// Start fresh if history can't be loaded.
+			} finally {
+				if (!cancelled) setLoadingHistory(false);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const sendMessage = useCallback(
 		async (text: string) => {
@@ -214,6 +270,7 @@ export function useCoachChat() {
 		streaming: state.streaming,
 		conversationId: state.conversationId,
 		currentTool: state.currentTool,
+		loadingHistory,
 		sendMessage,
 		stop,
 		reset,

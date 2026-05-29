@@ -2,16 +2,19 @@
  * Coach page — AI chat with streaming + tool-use visualization.
  */
 
-import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
+import { Brain, Loader2, MessageCircle, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ChatMessage, useCoachChat } from "@/entities/coach";
 import { cn } from "@/shared/lib";
+import { CoachMemoryDialog } from "./CoachMemoryDialog";
 import { ReviewFlow } from "./ReviewFlow";
 
 export default function Coach() {
-	const { messages, streaming, currentTool, sendMessage, stop, reset } = useCoachChat();
+	const { messages, streaming, currentTool, loadingHistory, sendMessage, stop, reset } =
+		useCoachChat();
 	const [input, setInput] = useState("");
 	const [reviewOpen, setReviewOpen] = useState(false);
+	const [memoryOpen, setMemoryOpen] = useState(false);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -54,6 +57,14 @@ export default function Coach() {
 				<div className="ml-auto flex items-center gap-1">
 					<button
 						type="button"
+						onClick={() => setMemoryOpen(true)}
+						className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
+						title="Coach memory"
+					>
+						<Brain className="w-4 h-4" />
+					</button>
+					<button
+						type="button"
 						onClick={() => setReviewOpen(true)}
 						className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
 						title="End-of-day review"
@@ -75,7 +86,13 @@ export default function Coach() {
 
 			{/* Messages */}
 			<div className="flex-1 overflow-y-auto space-y-4 pb-4">
-				{messages.length === 0 && !streaming && (
+				{loadingHistory && messages.length === 0 && (
+					<div className="flex justify-center mt-20 text-muted-foreground/50">
+						<Loader2 className="w-5 h-5 animate-spin" />
+					</div>
+				)}
+
+				{!loadingHistory && messages.length === 0 && !streaming && (
 					<div className="text-center text-muted-foreground/60 mt-20 space-y-2">
 						<Sparkles className="w-8 h-8 mx-auto opacity-40" />
 						<p className="text-sm">Ask the coach anything about your work.</p>
@@ -138,6 +155,7 @@ export default function Coach() {
 				</div>
 			</div>
 			<ReviewFlow open={reviewOpen} onClose={() => setReviewOpen(false)} />
+			<CoachMemoryDialog open={memoryOpen} onClose={() => setMemoryOpen(false)} />
 		</div>
 	);
 }
