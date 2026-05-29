@@ -23,6 +23,7 @@ export {
 	calculateDurationMinutes,
 	formatDuration,
 	formatSecondsToTime,
+	isValidTimeRange,
 	parseTimedeltaToMinutes,
 } from "./format";
 // Fuzzy matching (command palette)

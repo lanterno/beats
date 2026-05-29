@@ -5,12 +5,12 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { sessionKeys, useAllTags } from "@/entities/session";
 import { post } from "@/shared/api";
-import { toLocalDatetimeLocalString } from "@/shared/lib";
+import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
 import { TagInput } from "@/shared/ui";
 
 export function QuickLog() {
@@ -28,10 +28,20 @@ export function QuickLog() {
 	const [tags, setTags] = useState<string[]>([]);
 	const [saving, setSaving] = useState(false);
 
+	// Refresh start/end defaults each time the form opens so reopening it later
+	// doesn't show stale times captured at mount.
+	useEffect(() => {
+		if (open) {
+			setStartTime(toLocalDatetimeLocalString(new Date(Date.now() - 60 * 60 * 1000)));
+			setEndTime(toLocalDatetimeLocalString(new Date()));
+		}
+	}, [open]);
+
 	const activeProjects = (projects ?? []).filter((p) => !p.archived);
+	const validRange = isValidTimeRange(startTime, endTime);
 
 	const handleSave = async () => {
-		if (!projectId) return;
+		if (!projectId || !validRange) return;
 		setSaving(true);
 		try {
 			await post("/api/beats/", {
@@ -130,9 +140,15 @@ export function QuickLog() {
 				placeholder="Tags (optional)"
 			/>
 
+			{!validRange && (
+				<p className="text-[11px] text-red-400" role="alert">
+					End time must be after the start time.
+				</p>
+			)}
+
 			<button
 				onClick={handleSave}
-				disabled={!projectId || saving}
+				disabled={!projectId || !validRange || saving}
 				className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-accent text-accent-foreground disabled:opacity-40 hover:bg-accent/85 transition-colors"
 			>
 				<Check className="w-3 h-3" />

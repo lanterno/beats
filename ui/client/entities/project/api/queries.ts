@@ -174,7 +174,11 @@ export function useUpdateProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: updateProject,
-		onSuccess: () => {
+		onSuccess: async () => {
+			// Refetch the list first: useProject derives the detail from the cached
+			// list, so the list must be fresh before the detail refetches — otherwise
+			// the detail re-resolves to the pre-save value.
+			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},
 	});
@@ -188,7 +192,11 @@ export function useUpdateGoalOverrides() {
 	return useMutation({
 		mutationFn: ({ projectId, overrides }: { projectId: string; overrides: ApiGoalOverride[] }) =>
 			updateGoalOverrides(projectId, overrides),
-		onSuccess: () => {
+		onSuccess: async () => {
+			// Refetch the list first: useProject derives the detail from the cached
+			// list, so the list must be fresh before the detail refetches — otherwise
+			// the detail re-resolves to the pre-save value.
+			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},
 	});

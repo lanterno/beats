@@ -3,6 +3,7 @@ import {
 	calculateDurationMinutes,
 	formatDuration,
 	formatSecondsToTime,
+	isValidTimeRange,
 	parseTimedeltaToMinutes,
 } from "./format";
 
@@ -46,6 +47,30 @@ describe("calculateDurationMinutes", () => {
 	it("handles strings without Z suffix", () => {
 		const result = calculateDurationMinutes("2026-04-07T10:00:00", "2026-04-07T10:30:00");
 		expect(result).toBe(30);
+	});
+});
+
+describe("isValidTimeRange", () => {
+	it("is true when end is strictly after start", () => {
+		expect(isValidTimeRange("2026-04-07T10:00:00Z", "2026-04-07T11:00:00Z")).toBe(true);
+	});
+
+	it("is false when end equals start (zero-length)", () => {
+		expect(isValidTimeRange("2026-04-07T10:00:00Z", "2026-04-07T10:00:00Z")).toBe(false);
+	});
+
+	it("is false when end is before start (negative duration)", () => {
+		expect(isValidTimeRange("2026-04-07T12:00:00Z", "2026-04-07T10:00:00Z")).toBe(false);
+	});
+
+	it("works on datetime-local strings without a timezone", () => {
+		expect(isValidTimeRange("2026-04-07T09:00", "2026-04-07T10:00")).toBe(true);
+		expect(isValidTimeRange("2026-04-07T10:00", "2026-04-07T09:00")).toBe(false);
+	});
+
+	it("is false when either value is unparseable", () => {
+		expect(isValidTimeRange("", "2026-04-07T10:00:00Z")).toBe(false);
+		expect(isValidTimeRange("2026-04-07T10:00:00Z", "not-a-date")).toBe(false);
 	});
 });
 
