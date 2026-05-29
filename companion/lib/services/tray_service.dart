@@ -36,6 +36,33 @@ String formatTrayElapsed(Duration d) {
   return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
 
+/// Extracts the flow-score series for the menu-bar sparkline from the raw
+/// `/api/signals/flow-windows` response. Reads each window's `flow_score`
+/// field — the key the API actually emits (see FlowScreen + signals.py),
+/// NOT `score` — coerces num→double, skips windows with a missing or
+/// non-numeric score, and clamps to [0,1] so one malformed window can't
+/// blow out the sparkline's y-range. Extracted from [TrayService._refreshFlow]
+/// so the parsing (and the field name) is unit-tested.
+List<double> flowScoresFromWindows(List<Map<String, dynamic>> windows) {
+  final scores = <double>[];
+  for (final w in windows) {
+    final s = w['flow_score'];
+    if (s is num) scores.add(s.clamp(0.0, 1.0).toDouble());
+  }
+  return scores;
+}
+
+/// The macOS dock-badge label for the current timer state: whole elapsed
+/// minutes while running, or `null` when idle (which clears the badge).
+/// Negative elapsed (client/server clock skew) clamps to "0" so the badge
+/// never renders "-1". Extracted from [TrayService._tick] so the badge
+/// transitions are unit-testable without a desktop binding.
+String? dockBadgeForElapsed(Duration? elapsed, {required bool running}) {
+  if (!running || elapsed == null) return null;
+  final mins = elapsed.isNegative ? 0 : elapsed.inMinutes;
+  return '$mins';
+}
+
 /// macOS menu bar integration — live timer, quick-start, today's stats.
 class TrayService {
   final ApiClient client;
@@ -57,10 +84,10 @@ class TrayService {
   String? _projectColorHex;
   DateTime? _startTime;
   List<Map<String, dynamic>> _projects = [];
-  // Tracks the last value pushed to the dock badge so we can skip the
+  // Tracks the last label pushed to the dock badge so we can skip the
   // method-channel hop on every tick (the minute counter only changes
   // every 60 ticks). `null` means "no badge displayed".
-  int? _lastBadgeMinutes;
+  String? _lastBadge;
 
   TrayService({required this.client, required this.onShowWindow});
 
@@ -108,12 +135,7 @@ class TrayService {
         start.toIso8601String(),
         now.toIso8601String(),
       );
-      final scores = <double>[];
-      for (final w in windows) {
-        final s = w['score'];
-        if (s is num) scores.add(s.toDouble());
-      }
-      _flowScores = scores;
+      _flowScores = flowScoresFromWindows(windows);
       await _updateIcon();
     } catch (_) {}
   }
@@ -167,25 +189,18 @@ class TrayService {
   }
 
   void _tick() {
-    if (_running && _startTime != null) {
-      final elapsed = DateTime.now().toUtc().difference(_startTime!);
-      final display = formatTrayElapsed(elapsed);
-      _tray.setTitle('$display  $_projectName');
+    final running = _running && _startTime != null;
+    final elapsed = running ? DateTime.now().toUtc().difference(_startTime!) : null;
 
-      // Mirror the running state into the macOS dock badge. Whole minutes
-      // only — pixel-counting seconds in the dock would just create noise.
-      // Skip the channel hop when the value hasn't changed.
-      final mins = elapsed.inMinutes;
-      if (mins != _lastBadgeMinutes) {
-        MacAmbient.setDockBadge('$mins');
-        _lastBadgeMinutes = mins;
-      }
-    } else {
-      _tray.setTitle('');
-      if (_lastBadgeMinutes != null) {
-        MacAmbient.setDockBadge(null);
-        _lastBadgeMinutes = null;
-      }
+    _tray.setTitle(running ? '${formatTrayElapsed(elapsed!)}  $_projectName' : '');
+
+    // Mirror the running state into the macOS dock badge (whole minutes —
+    // pixel-counting seconds in the dock would just be noise). Dedupe so we
+    // skip the method-channel hop on the ~59 ticks/min where it's unchanged.
+    final badge = dockBadgeForElapsed(elapsed, running: running);
+    if (badge != _lastBadge) {
+      MacAmbient.setDockBadge(badge);
+      _lastBadge = badge;
     }
   }
 
