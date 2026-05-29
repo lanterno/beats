@@ -537,7 +537,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger Brief Generation
-         * @description Generate (or regenerate) a daily brief. Defaults to today.
+         * @description Generate (or regenerate) a daily brief. Defaults to today (in tz).
          */
         post: operations["trigger_brief_generation_api_coach_brief_generate_post"];
         delete?: never;
@@ -4563,7 +4563,10 @@ export interface operations {
     };
     trigger_brief_generation_api_coach_brief_generate_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4627,7 +4630,10 @@ export interface operations {
     };
     get_today_brief_api_coach_brief_today_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4641,6 +4647,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BriefResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4825,7 +4840,10 @@ export interface operations {
     };
     start_review_api_coach_review_start_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4841,11 +4859,23 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_today_review_api_coach_review_today_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4859,6 +4889,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

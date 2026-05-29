@@ -45,8 +45,11 @@ export function useGenerateBrief() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (date?: string) => generateBrief(date),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: coachKeys.brief() });
+		onSuccess: (data) => {
+			// Seed today's brief from the returned doc (whose date is the exact
+			// storage key) rather than refetching /brief/today — a refetch could
+			// key to the next local day if the clock crosses midnight in between.
+			queryClient.setQueryData(coachKeys.brief(), data);
 			queryClient.invalidateQueries({ queryKey: coachKeys.briefHistory(14) });
 		},
 	});
@@ -72,7 +75,10 @@ export function useStartReview() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: () => startReview(),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.review() }),
+		// Seed the review cache from the returned doc instead of refetching
+		// /review/today, which could key to a different local day if midnight
+		// passes between the POST and the GET, hiding the just-generated review.
+		onSuccess: (data) => queryClient.setQueryData(coachKeys.review(), data),
 	});
 }
 

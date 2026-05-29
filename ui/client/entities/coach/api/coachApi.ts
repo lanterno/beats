@@ -8,8 +8,15 @@ import { get, post } from "@/shared/api";
 export type BriefResponse = Schemas["BriefResponse"];
 export type UsageSummaryResponse = Schemas["UsageSummaryResponse"];
 
+// The coach's "today" (brief/review) is bucketed by the user's local
+// calendar day server-side; send the browser timezone so a brief/review
+// generated and fetched near midnight resolve to the same local day.
+const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 export async function fetchTodayBrief(): Promise<BriefResponse | null> {
-	return get<BriefResponse | null>("/api/coach/brief/today");
+	return get<BriefResponse | null>(
+		`/api/coach/brief/today?tz=${encodeURIComponent(browserTimeZone())}`,
+	);
 }
 
 export async function fetchBriefHistory(limit = 14): Promise<BriefResponse[]> {
@@ -17,7 +24,8 @@ export async function fetchBriefHistory(limit = 14): Promise<BriefResponse[]> {
 }
 
 export async function generateBrief(date?: string): Promise<BriefResponse> {
-	return post<BriefResponse>("/api/coach/brief/generate", date ? { date } : {});
+	const tz = encodeURIComponent(browserTimeZone());
+	return post<BriefResponse>(`/api/coach/brief/generate?tz=${tz}`, date ? { date } : {});
 }
 
 export async function fetchUsage(days = 30): Promise<UsageSummaryResponse> {
@@ -38,11 +46,16 @@ export async function fetchChatHistory(
 export type ReviewResponse = Schemas["ReviewResponse"];
 
 export async function startReview(): Promise<ReviewResponse> {
-	return post<ReviewResponse>("/api/coach/review/start", {});
+	return post<ReviewResponse>(
+		`/api/coach/review/start?tz=${encodeURIComponent(browserTimeZone())}`,
+		{},
+	);
 }
 
 export async function fetchTodayReview(): Promise<ReviewResponse | null> {
-	return get<ReviewResponse | null>("/api/coach/review/today");
+	return get<ReviewResponse | null>(
+		`/api/coach/review/today?tz=${encodeURIComponent(browserTimeZone())}`,
+	);
 }
 
 export async function submitReviewAnswer(

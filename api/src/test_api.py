@@ -1017,7 +1017,7 @@ class TestCoachRouterGapFill:
 
         # Stub the heavy generate_review_questions to write a doc and
         # return — exactly what the real one does after the LLM call.
-        async def fake_generate(user_id, target_date=None):
+        async def fake_generate(user_id, target_date=None, tz=None):
             import os
 
             from bson import ObjectId
@@ -1064,7 +1064,7 @@ class TestCoachRouterGapFill:
         from beats.api.routers import coach as coach_router
         from beats.coach.usage import BudgetExceeded
 
-        async def fake_generate(_user_id, _target_date=None):
+        async def fake_generate(_user_id, target_date=None, tz=None):
             raise BudgetExceeded(spent=15.0, limit=10.0)
 
         monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
@@ -1081,7 +1081,7 @@ class TestCoachRouterGapFill:
         over" from "the LLM API is down"."""
         from beats.api.routers import coach as coach_router
 
-        async def fake_generate(_user_id, _target_date=None):
+        async def fake_generate(_user_id, target_date=None, tz=None):
             raise RuntimeError("anthropic 500")
 
         monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
@@ -1455,6 +1455,7 @@ class TestCoachBriefAndReviewErrorPaths:
     def _reset_briefs(self, auth_info):
         sync, db = self._db()
         db.daily_briefs.delete_many({})
+        db.review_answers.delete_many({})
         db.coach_memory.delete_many({})
         sync.close()
         yield
@@ -1489,6 +1490,64 @@ class TestCoachBriefAndReviewErrorPaths:
         # ISO string we seeded.
         assert body["date"] == today_iso
         assert body["body"] == "You logged 2 hours on Alpha already."
+
+    def test_brief_today_honors_tz_query_param(self, auth_info):
+        """/brief/today resolves 'today' in the requested timezone. Seeding
+        the brief under the Tokyo-local date and fetching with tz=Asia/Tokyo
+        returns it — proving the generate and fetch sides agree on the
+        local-day storage key (the whole point of threading tz through)."""
+        from datetime import UTC, datetime
+        from zoneinfo import ZoneInfo
+
+        sync, db = self._db()
+        tokyo_today = datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat()
+        db.daily_briefs.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "date": tokyo_today,
+                "body": "Tokyo brief.",
+                "created_at": datetime.now(UTC),
+            }
+        )
+        sync.close()
+
+        resp = client.get("/api/coach/brief/today?tz=Asia/Tokyo", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["date"] == tokyo_today
+        assert body["body"] == "Tokyo brief."
+
+    def test_brief_today_rejects_invalid_tz(self, auth_info):
+        """An unknown IANA timezone name is rejected with the unified 400
+        envelope (code INVALID_TIMEZONE), same as the analytics endpoints."""
+        resp = client.get("/api/coach/brief/today?tz=Not/AZone", headers=auth_info["headers"])
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["code"] == "INVALID_TIMEZONE"
+        assert isinstance(body["detail"], str)
+
+    def test_review_today_honors_tz_query_param(self, auth_info):
+        """/review/today resolves 'today' in the requested timezone — the
+        same local-day key-agreement property as brief/today."""
+        from datetime import UTC, datetime
+        from zoneinfo import ZoneInfo
+
+        sync, db = self._db()
+        tokyo_today = datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat()
+        db.review_answers.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "date": tokyo_today,
+                "questions": [],
+                "answers": [],
+                "created_at": datetime.now(UTC),
+            }
+        )
+        sync.close()
+
+        resp = client.get("/api/coach/review/today?tz=Asia/Tokyo", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["date"] == tokyo_today
 
     def test_brief_generate_budget_exceeded_returns_429_envelope(self, monkeypatch, auth_info):
         """POST /brief/generate when BudgetExceeded fires inside

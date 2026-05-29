@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from beats.api.dependencies import CurrentUserId
+from beats.api.dependencies import CurrentUserId, TimezoneDep
 from beats.coach.brief import generate_brief, get_brief, list_briefs
 from beats.coach.chat import handle_chat_turn
 from beats.coach.memory import MemoryStore
@@ -105,9 +105,9 @@ class MemoryResponse(BaseModel):
 
 
 @router.get("/brief/today", response_model=BriefResponse | None)
-async def get_today_brief(user_id: CurrentUserId):
+async def get_today_brief(user_id: CurrentUserId, tz: TimezoneDep):
     """Get today's brief if it exists."""
-    doc = await get_brief(user_id)
+    doc = await get_brief(user_id, tz=tz)
     if not doc:
         return None
     return BriefResponse(**doc)
@@ -126,9 +126,10 @@ async def get_brief_history(
 @router.post("/brief/generate", response_model=BriefResponse)
 async def trigger_brief_generation(
     user_id: CurrentUserId,
+    tz: TimezoneDep,
     request: GenerateBriefRequest | None = None,
 ):
-    """Generate (or regenerate) a daily brief. Defaults to today."""
+    """Generate (or regenerate) a daily brief. Defaults to today (in tz)."""
     target = None
     if request and request.date:
         try:
@@ -140,7 +141,7 @@ async def trigger_brief_generation(
             ) from exc
 
     try:
-        doc = await generate_brief(user_id, target_date=target)
+        doc = await generate_brief(user_id, target_date=target, tz=tz)
     except BudgetExceeded as exc:
         # Distinct from the generic RATE_LIMITED — clients should surface
         # "monthly LLM budget reached", not "slow down your requests".
@@ -258,10 +259,14 @@ async def get_usage(
 
 
 @router.post("/review/start", response_model=ReviewResponse)
-async def start_review(user_id: CurrentUserId):
+async def start_review(user_id: CurrentUserId, tz: TimezoneDep):
     """Generate 3 end-of-day review questions from today's data."""
+    # Resolve the local day once so the generate and the immediate read-back
+    # below key on the same date even if the clock crosses local midnight
+    # between the two calls.
+    today = datetime.now(tz).date()
     try:
-        await generate_review_questions(user_id)
+        await generate_review_questions(user_id, target_date=today, tz=tz)
     except BudgetExceeded as exc:
         raise HTTPException(
             status_code=429,
@@ -274,7 +279,7 @@ async def start_review(user_id: CurrentUserId):
             detail="Review generation failed — the coach is resting.",
         ) from exc
 
-    doc = await get_review(user_id)
+    doc = await get_review(user_id, target_date=today, tz=tz)
     if not doc:
         raise HTTPException(status_code=500, detail="Review not found after generation")
     return ReviewResponse(
@@ -300,9 +305,9 @@ async def answer_review(user_id: CurrentUserId, request: ReviewAnswerRequest):
 
 
 @router.get("/review/today", response_model=ReviewResponse | None)
-async def get_today_review(user_id: CurrentUserId):
+async def get_today_review(user_id: CurrentUserId, tz: TimezoneDep):
     """Get today's review if it exists."""
-    doc = await get_review(user_id)
+    doc = await get_review(user_id, tz=tz)
     if not doc:
         return None
     return ReviewResponse(
