@@ -87,4 +87,67 @@ void main() {
       expect(formatTrayElapsed(const Duration(seconds: -90)), '00:00');
     });
   });
+
+  group('flowScoresFromWindows', () {
+    test('reads the API flow_score field and coerces num to double', () {
+      final scores = flowScoresFromWindows([
+        {'flow_score': 0.25},
+        {'flow_score': 1}, // int coerced to double
+      ]);
+      expect(scores, [0.25, 1.0]);
+    });
+
+    test('regression: a window keyed only as "score" yields nothing', () {
+      // The tray previously read w['score'], but the API emits
+      // w['flow_score'] — so the sparkline buffer was always empty and the
+      // menu-bar sparkline never rendered. Pin the correct key.
+      expect(flowScoresFromWindows([
+        {'score': 0.8},
+      ]), isEmpty);
+    });
+
+    test('clamps out-of-range scores into [0,1]', () {
+      expect(flowScoresFromWindows([
+        {'flow_score': 1.5},
+        {'flow_score': -0.3},
+      ]), [1.0, 0.0]);
+    });
+
+    test('skips missing / null / non-numeric scores, keeps the rest', () {
+      final scores = flowScoresFromWindows([
+        {'flow_score': 0.5},
+        {'other': 1},
+        {'flow_score': null},
+        {'flow_score': 'x'},
+        {'flow_score': 0.9},
+      ]);
+      expect(scores, [0.5, 0.9]);
+    });
+
+    test('empty input returns empty', () {
+      expect(flowScoresFromWindows([]), isEmpty);
+    });
+  });
+
+  group('dockBadgeForElapsed', () {
+    test('running shows whole elapsed minutes', () {
+      expect(dockBadgeForElapsed(const Duration(minutes: 5, seconds: 40), running: true), '5');
+      expect(dockBadgeForElapsed(Duration.zero, running: true), '0');
+      expect(dockBadgeForElapsed(const Duration(minutes: 90), running: true), '90');
+    });
+
+    test('idle (not running) clears the badge', () {
+      expect(dockBadgeForElapsed(null, running: false), isNull);
+      // Even a stray elapsed must not show a badge when not running.
+      expect(dockBadgeForElapsed(const Duration(minutes: 5), running: false), isNull);
+    });
+
+    test('running with null elapsed clears the badge', () {
+      expect(dockBadgeForElapsed(null, running: true), isNull);
+    });
+
+    test('negative elapsed (clock skew) clamps to "0"', () {
+      expect(dockBadgeForElapsed(const Duration(seconds: -30), running: true), '0');
+    });
+  });
 }
