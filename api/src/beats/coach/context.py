@@ -13,17 +13,21 @@ from __future__ import annotations
 import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
 from beats.coach.repos import CoachRepos, build_repos, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
+from beats.domain.utils import local_date, local_dt
 from beats.infrastructure.database import Database
 
 if TYPE_CHECKING:
     from beats.coach.gateway import CacheSpec
 
 logger = logging.getLogger(__name__)
+
+UTC_TZ = ZoneInfo("UTC")
 
 
 def build_system_block() -> str:
@@ -118,18 +122,21 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
 
 
 async def build_day_context(
-    user_id: str, repos: CoachRepos, target_date: date | None = None
+    user_id: str, repos: CoachRepos, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
 ) -> str:
     """Today's raw signals. Small and NOT cached."""
     project_map = {p.id: p.name for p in await repos.project.list()}
 
-    today = target_date or datetime.now(UTC).date()
+    today = target_date or datetime.now(tz).date()
     yesterday = today - timedelta(days=1)
 
-    # Today's beats
+    # Bucket sessions by the user's LOCAL calendar day. Beat.day is the UTC
+    # date of b.start, so a late-evening (or early-morning) session would
+    # otherwise be attributed to the wrong day; local_date matches the
+    # timezone-aware analytics layer.
     all_beats = await repos.beat.list_all_completed()
-    today_beats = [b for b in all_beats if b.day == today]
-    yesterday_beats = [b for b in all_beats if b.day == yesterday]
+    today_beats = [b for b in all_beats if local_date(b.start, tz) == today]
+    yesterday_beats = [b for b in all_beats if local_date(b.start, tz) == yesterday]
 
     def beats_summary(beats_list, label: str) -> list[str]:
         if not beats_list:
@@ -138,7 +145,7 @@ async def build_day_context(
         for b in sorted(beats_list, key=lambda b: b.start):
             name = project_map.get(b.project_id, "?")
             dur = fmt_minutes(b.duration.total_seconds() / 60)
-            time_str = b.start.strftime("%H:%M")
+            time_str = local_dt(b.start, tz).strftime("%H:%M")
             note_suffix = f" [note: {b.note}]" if b.note else ""
             lines.append(f"  {time_str} — {name} ({dur}){note_suffix}")
         total = sum(b.duration.total_seconds() / 3600 for b in beats_list)
@@ -259,11 +266,14 @@ async def build_coach_messages(
     *,
     history: list[dict] | None = None,
     target_date: date | None = None,
+    tz: ZoneInfo = UTC_TZ,
 ) -> tuple[str, list[dict], CacheSpec]:
     """Build the full (system, messages, cache_spec) tuple for a coach call.
 
     Used by both brief.py and chat.py to avoid duplicating the context assembly.
-    Returns (system, messages, cache_spec).
+    Returns (system, messages, cache_spec). ``tz`` controls the local-day
+    bucketing of the (uncached) day context; the cached user-context block is
+    timezone-independent so the prompt cache isn't fragmented per timezone.
     """
     from beats.coach.gateway import CacheSpec
 
@@ -271,7 +281,7 @@ async def build_coach_messages(
 
     system = build_system_block()
     user_ctx = await build_user_context(user_id, repos)
-    day_ctx = await build_day_context(user_id, repos, target_date)
+    day_ctx = await build_day_context(user_id, repos, target_date, tz)
 
     preamble = [
         {"role": "user", "content": user_ctx},

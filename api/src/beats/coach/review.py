@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from anthropic.types import TextBlock
 
@@ -21,14 +22,21 @@ from beats.infrastructure.database import Database
 
 logger = logging.getLogger(__name__)
 
+UTC_TZ = ZoneInfo("UTC")
 
-async def generate_review_questions(user_id: str, target_date: date | None = None) -> list[dict]:
+
+async def generate_review_questions(
+    user_id: str, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
+) -> list[dict]:
     """Generate 3 review questions from the day's data. Returns list of
     {question, derived_from: {kind, data}}.
+
+    ``today`` (the review's storage key and prompt anchor) resolves in ``tz``;
+    get_review must use the same tz or the just-generated review won't be found.
     """
-    today = target_date or datetime.now(UTC).date()
+    today = target_date or datetime.now(tz).date()
     prompt = REVIEW_PROMPT.format(today=today.isoformat())
-    system, messages, spec = await build_coach_messages(user_id, prompt, target_date=today)
+    system, messages, spec = await build_coach_messages(user_id, prompt, target_date=today, tz=tz)
 
     result = await complete(
         user_id=user_id,
@@ -114,8 +122,10 @@ async def save_answer(
     )
 
 
-async def get_review(user_id: str, target_date: date | None = None) -> dict | None:
-    today = target_date or datetime.now(UTC).date()
+async def get_review(
+    user_id: str, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
+) -> dict | None:
+    today = target_date or datetime.now(tz).date()
     db = Database.get_db()
     return await db[REVIEW_ANSWERS_COLLECTION].find_one(
         {"user_id": user_id, "date": today.isoformat()},

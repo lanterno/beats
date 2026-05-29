@@ -8,6 +8,7 @@ surface, and the one users will see every morning.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from anthropic.types import TextBlock
 
@@ -17,12 +18,21 @@ from beats.coach.prompts import BRIEF_PROMPT
 from beats.coach.repos import DAILY_BRIEFS_COLLECTION
 from beats.infrastructure.database import Database
 
+UTC_TZ = ZoneInfo("UTC")
 
-async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
-    """Generate and persist a daily brief. Returns the stored document."""
-    today = target_date or datetime.now(UTC).date()
+
+async def generate_brief(
+    user_id: str, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
+) -> dict:
+    """Generate and persist a daily brief. Returns the stored document.
+
+    ``today`` (the brief's storage key and prompt anchor) resolves in ``tz``
+    so it matches the user's local calendar day; get_brief must use the same
+    tz or the freshly generated brief won't be found.
+    """
+    today = target_date or datetime.now(tz).date()
     prompt = BRIEF_PROMPT.format(today=today.isoformat())
-    system, messages, spec = await build_coach_messages(user_id, prompt, target_date=today)
+    system, messages, spec = await build_coach_messages(user_id, prompt, target_date=today, tz=tz)
 
     result = await complete(
         user_id=user_id,
@@ -61,8 +71,10 @@ async def generate_brief(user_id: str, target_date: date | None = None) -> dict:
     return doc
 
 
-async def get_brief(user_id: str, target_date: date | None = None) -> dict | None:
-    today = target_date or datetime.now(UTC).date()
+async def get_brief(
+    user_id: str, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
+) -> dict | None:
+    today = target_date or datetime.now(tz).date()
     db = Database.get_db()
     return await db[DAILY_BRIEFS_COLLECTION].find_one(
         {"user_id": user_id, "date": today.isoformat()},

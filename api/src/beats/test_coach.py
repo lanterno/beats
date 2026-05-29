@@ -463,7 +463,7 @@ class TestGenerateBrief:
         can assert on prompt shape."""
         captured: dict = {}
 
-        async def fake_build(user_id, prompt, target_date=None):
+        async def fake_build(user_id, prompt, target_date=None, tz=None):
             captured["build_args"] = {
                 "user_id": user_id,
                 "prompt": prompt,
@@ -532,7 +532,7 @@ class TestGenerateBrief:
         chunk). brief.py concatenates and strips. Pin so a refactor
         that grabs only `content[0].text` doesn't truncate briefs."""
 
-        async def fake_build(user_id, prompt, target_date=None):
+        async def fake_build(user_id, prompt, target_date=None, tz=None):
             return ("sys", [], None)
 
         async def fake_complete(**_kwargs):
@@ -674,7 +674,7 @@ class TestGenerateReviewQuestions:
     def patched_gateway(self, monkeypatch):
         captured: dict = {}
 
-        async def fake_build(user_id, prompt, target_date=None):
+        async def fake_build(user_id, prompt, target_date=None, tz=None):
             captured["build_args"] = {
                 "user_id": user_id,
                 "prompt": prompt,
@@ -2300,7 +2300,7 @@ class TestBuildCoachMessages:
         async def fake_user_ctx(_user_id, _repos):
             return "USER_CTX_BLOCK"
 
-        async def fake_day_ctx(_user_id, _repos, _target_date):
+        async def fake_day_ctx(_user_id, _repos, _target_date, _tz=None):
             return "DAY_CTX_BLOCK"
 
         monkeypatch.setattr(context_module, "build_repos", fake_build_repos)
@@ -2387,7 +2387,7 @@ class TestBuildCoachMessages:
         async def fake_user_ctx(_user_id, _repos):
             return "USER"
 
-        async def fake_day_ctx(_user_id, _repos, target_date):
+        async def fake_day_ctx(_user_id, _repos, target_date, _tz=None):
             captured["target_date"] = target_date
             return "DAY"
 
@@ -2991,6 +2991,32 @@ class TestBuildDayContext:
         assert "09:00 — Alpha (45m)" in out
         # Totals line: 45/60 = 0.75h, rounded to 0.8h via :.1f
         assert "Total: 0.8h across 1 sessions" in out
+
+    async def test_buckets_beats_by_local_timezone_not_utc(self):
+        """A session whose UTC date differs from the user's local date is
+        bucketed by the LOCAL calendar day (tz-aware), matching analytics.
+        2026-01-01T23:30Z is 2026-01-02 08:30 in Tokyo, so for a Tokyo user
+        whose 'today' is 2026-01-02 it's a TODAY session and renders at its
+        LOCAL time; under UTC the same session is not today."""
+        from datetime import date as date_type
+        from zoneinfo import ZoneInfo
+
+        from beats.domain.models import Beat
+
+        s = datetime(2026, 1, 1, 23, 30, tzinfo=UTC)
+        beat = Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=30))
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")], beats=[beat])
+
+        tokyo = await context_module.build_day_context(
+            "user-1", repos, target_date=date_type(2026, 1, 2), tz=ZoneInfo("Asia/Tokyo")
+        )
+        today_section = tokyo.split("### Today's sessions so far")[1]
+        assert "08:30 — Alpha" in today_section  # local Tokyo wall-clock, under today
+
+        utc = await context_module.build_day_context(
+            "user-1", repos, target_date=date_type(2026, 1, 2), tz=ZoneInfo("UTC")
+        )
+        assert "No sessions today." in utc.split("### Today's sessions so far")[1]
 
     async def test_yesterday_beats_render_separately_from_today(self):
         """Yesterday's beats land under "### Yesterday's sessions"
