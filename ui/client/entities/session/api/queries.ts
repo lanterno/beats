@@ -17,6 +17,7 @@ import {
 import type { DayProjectBreakdown, DaySummary, Session } from "../model";
 import { toApiBeat, toSession } from "../model";
 import {
+	deleteBeat,
 	fetchAllTags,
 	fetchBeats,
 	fetchDailyRhythm,
@@ -100,6 +101,22 @@ export function useUpdateSession() {
 			queryClient.invalidateQueries({
 				queryKey: sessionKeys.list(variables.projectId),
 			});
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+		},
+	});
+}
+
+/**
+ * Hook to delete a session (beat). Invalidates session and project caches so
+ * the row disappears and project totals refresh.
+ */
+export function useDeleteSession() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (beatId: string) => deleteBeat(beatId),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},
 	});

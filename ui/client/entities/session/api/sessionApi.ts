@@ -13,6 +13,7 @@ import type {
 } from "@/shared/api";
 import {
 	ApiBeatListSchema,
+	del,
 	FlowWindowListSchema,
 	FlowWindowSummarySchema,
 	GapListSchema,
@@ -37,6 +38,13 @@ export async function fetchBeats(projectId?: string): Promise<ApiBeat[]> {
  */
 export async function updateBeat(beat: ApiBeat): Promise<void> {
 	await put<void>("/api/beats/", beat);
+}
+
+/**
+ * Delete a beat (work session) by id.
+ */
+export async function deleteBeat(beatId: string): Promise<void> {
+	await del<{ deleted: boolean }>(`/api/beats/${beatId}`);
 }
 
 /**

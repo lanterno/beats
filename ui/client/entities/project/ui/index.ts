@@ -3,3 +3,4 @@
  */
 
 export { LoadingSpinner } from "./LoadingSpinner";
+export { NewProjectDialog } from "./NewProjectDialog";

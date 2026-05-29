@@ -4,6 +4,7 @@
 
 // Low-level API functions
 export {
+	createProject,
 	fetchProjects,
 	fetchProjectTotal,
 	fetchProjectWeek,
@@ -12,6 +13,7 @@ export {
 // TanStack Query hooks
 export {
 	projectKeys,
+	useCreateProject,
 	useInvalidateProjects,
 	useProject,
 	useProjects,

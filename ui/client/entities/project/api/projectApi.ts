@@ -10,6 +10,7 @@ import {
 	get,
 	ProjectTotalSchema,
 	parseApiResponse,
+	post,
 	put,
 	WeekBreakdownSchema,
 } from "@/shared/api";
@@ -20,6 +21,22 @@ import {
 export async function fetchProjects(): Promise<ApiProject[]> {
 	const data = await get<unknown>("/api/projects/");
 	return parseApiResponse(ApiProjectListSchema, data);
+}
+
+/**
+ * Create a new project. Color is optional — when omitted the UI assigns a
+ * stable color from the id (see toProject), so a created project always
+ * renders with a color even if the user didn't pick one.
+ */
+export async function createProject(input: {
+	name: string;
+	description?: string | null;
+	color?: string | null;
+	weekly_goal?: number | null;
+	category?: string | null;
+}): Promise<ApiProject> {
+	const data = await post<unknown>("/api/projects/", input);
+	return parseApiResponse(ApiProjectSchema, data);
 }
 
 /**

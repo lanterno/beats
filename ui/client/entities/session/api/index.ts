@@ -10,6 +10,7 @@ export {
 	useAllCurrentWeekSessions,
 	useAllTags,
 	useDailyRhythm,
+	useDeleteSession,
 	useFlowWindows,
 	useFlowWindowsLastDays,
 	useFlowWindowsSummary,
@@ -27,4 +28,4 @@ export {
 	useWeeklySessionsByProject,
 } from "./queries";
 // Low-level API functions
-export { fetchBeats, updateBeat } from "./sessionApi";
+export { deleteBeat, fetchBeats, updateBeat } from "./sessionApi";

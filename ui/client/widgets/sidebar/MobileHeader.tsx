@@ -3,12 +3,23 @@
  * Sticky top bar for mobile with hamburger menu and mini timer indicator.
  */
 
-import { BarChart3, Menu, Settings, Sparkles, X } from "lucide-react";
+import {
+	BarChart3,
+	CalendarDays,
+	Download,
+	LogOut,
+	Menu,
+	Settings,
+	Sparkles,
+	X,
+} from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
-import { cn, formatSecondsToTime, parseUtcIso } from "@/shared/lib";
+import { clearSessionToken, logout, useAuth } from "@/features/auth";
+import { cn, formatSecondsToTime, parseUtcIso, useInstallPrompt } from "@/shared/lib";
 import { AnimatedDigits, SyncStatus } from "@/shared/ui";
+import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
@@ -19,6 +30,9 @@ interface MobileHeaderProps extends TimerProps {
 
 export function MobileHeader(props: MobileHeaderProps) {
 	const [drawerOpen, setDrawerOpen] = useState(false);
+	const navigate = useNavigate();
+	const { user } = useAuth();
+	const { canShow: canInstall, install, dismiss: dismissInstall } = useInstallPrompt();
 
 	const { isRunning, elapsedSeconds, customStartTime, selectedProjectId, projects } = props;
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -29,6 +43,15 @@ export function MobileHeader(props: MobileHeaderProps) {
 		const now = new Date();
 		totalSeconds = Math.floor((now.getTime() - startDate.getTime()) / 1000);
 	}
+
+	const closeDrawer = () => setDrawerOpen(false);
+
+	const handleLogout = async () => {
+		closeDrawer();
+		await logout().catch(() => {});
+		clearSessionToken();
+		navigate("/");
+	};
 
 	return (
 		<>
@@ -64,10 +87,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 			{/* Drawer overlay */}
 			{drawerOpen && (
 				<div className="lg:hidden fixed inset-0 z-[60]">
-					<div
-						className="absolute inset-0 bg-black/50 backdrop-blur-xs"
-						onClick={() => setDrawerOpen(false)}
-					/>
+					<div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={closeDrawer} />
 					<aside
 						className={cn(
 							"absolute top-0 left-0 bottom-0 w-72 bg-sidebar border-r border-sidebar-border",
@@ -78,15 +98,23 @@ export function MobileHeader(props: MobileHeaderProps) {
 						<div className="flex items-center justify-between p-4 border-b border-sidebar-border">
 							<Link
 								to="/app"
-								onClick={() => setDrawerOpen(false)}
+								onClick={closeDrawer}
 								className="font-heading text-lg font-bold text-sidebar-foreground"
 							>
 								Beats
 							</Link>
 							<div className="flex items-center gap-1">
 								<Link
+									to="/plan"
+									onClick={closeDrawer}
+									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+									title="Weekly Plan"
+								>
+									<CalendarDays className="w-4 h-4" />
+								</Link>
+								<Link
 									to="/coach"
-									onClick={() => setDrawerOpen(false)}
+									onClick={closeDrawer}
 									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
 									title="Coach"
 								>
@@ -94,7 +122,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 								</Link>
 								<Link
 									to="/insights"
-									onClick={() => setDrawerOpen(false)}
+									onClick={closeDrawer}
 									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
 									title="Insights"
 								>
@@ -102,14 +130,14 @@ export function MobileHeader(props: MobileHeaderProps) {
 								</Link>
 								<Link
 									to="/settings"
-									onClick={() => setDrawerOpen(false)}
+									onClick={closeDrawer}
 									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
 									title="Settings"
 								>
 									<Settings className="w-4 h-4" />
 								</Link>
 								<button
-									onClick={() => setDrawerOpen(false)}
+									onClick={closeDrawer}
 									className="p-1 text-muted-foreground hover:text-foreground transition-colors"
 								>
 									<X className="w-5 h-5" />
@@ -121,6 +149,48 @@ export function MobileHeader(props: MobileHeaderProps) {
 							<SidebarTimer {...props} />
 							<SidebarStats />
 							<SidebarProjectList projects={projects} />
+							<DeviceStatus />
+						</div>
+
+						{/* Install prompt */}
+						{canInstall && (
+							<div className="px-4 py-3 border-t border-sidebar-border">
+								<div className="flex items-center gap-2">
+									<button
+										onClick={install}
+										className="flex-1 flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-primary transition-colors"
+									>
+										<Download className="w-3.5 h-3.5" />
+										Install Beats
+									</button>
+									<button
+										onClick={dismissInstall}
+										className="p-0.5 text-sidebar-foreground/30 hover:text-sidebar-foreground/60 transition-colors"
+									>
+										<X className="w-3 h-3" />
+									</button>
+								</div>
+							</div>
+						)}
+
+						{/* User + Logout */}
+						<div className="px-4 py-3 border-t border-sidebar-border">
+							<div className="flex items-center justify-between">
+								<span
+									className="text-xs text-sidebar-foreground/60 truncate max-w-[200px]"
+									title={user?.email}
+								>
+									{user?.email}
+								</span>
+								<button
+									onClick={handleLogout}
+									className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+									title="Sign out"
+									aria-label="Sign out"
+								>
+									<LogOut className="w-3.5 h-3.5" />
+								</button>
+							</div>
 						</div>
 					</aside>
 				</div>

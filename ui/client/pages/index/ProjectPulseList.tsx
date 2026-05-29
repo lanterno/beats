@@ -4,10 +4,10 @@
  * Designed to show data NOT already in the sidebar (which shows name + weekly hours).
  */
 
-import { Layers } from "lucide-react";
-import { useMemo } from "react";
+import { Layers, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useProjects } from "@/entities/project";
+import { NewProjectDialog, useProjects } from "@/entities/project";
 import { useAllBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
 import { cn, getCurrentWeekRange, getDayName, parseUtcIso, startOfDay } from "@/shared/lib";
@@ -92,6 +92,7 @@ export function ProjectPulseList() {
 	const navigate = useNavigate();
 	const { data: projects } = useProjects();
 	const { data: allBeats } = useAllBeats();
+	const [dialogOpen, setDialogOpen] = useState(false);
 
 	const summaries = useMemo(() => (allBeats ? buildSummaries(allBeats) : undefined), [allBeats]);
 
@@ -114,9 +115,22 @@ export function ProjectPulseList() {
 					<Layers className="w-3.5 h-3.5 text-accent/75" />
 					Projects
 				</h2>
-				<div className="rounded-lg border border-dashed border-border">
+				<div className="rounded-lg border border-dashed border-border flex flex-col items-center">
 					<EmptyState variant="seedling" message="No projects yet. Create one to start tracking." />
+					<button
+						type="button"
+						onClick={() => setDialogOpen(true)}
+						className="mb-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/90 transition-colors"
+					>
+						<Plus className="w-3.5 h-3.5" />
+						New project
+					</button>
 				</div>
+				<NewProjectDialog
+					open={dialogOpen}
+					onClose={() => setDialogOpen(false)}
+					onCreated={(project) => navigate(`/project/${project.id}`)}
+				/>
 			</div>
 		);
 	}
