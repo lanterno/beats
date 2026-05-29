@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../services/date_keys.dart';
 import '../services/flow_summary.dart';
 import '../services/launch_insights.dart';
 import '../services/token_storage.dart';
@@ -518,10 +519,8 @@ class _CoachScreenState extends State<CoachScreen> {
   Widget _buildMoodSparkline() {
     final today = DateTime.now();
     final days = List.generate(7, (i) {
-      final d = today.subtract(Duration(days: 6 - i));
-      final key =
-          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      return _moodHistory[key];
+      final d = addDays(today, i - 6);
+      return _moodHistory[dayKey(d)];
     });
 
     Color colorFor(int? mood) {
