@@ -251,7 +251,6 @@ export function ProjectPicker({
 								const isHighlighted = i === highlight;
 								const isSelected = p.id === value;
 								return (
-									// biome-ignore lint/a11y/useKeyWithClickEvents: keyboard nav handled at the combobox level (aria-activedescendant pattern)
 									<li
 										key={p.id}
 										id={optionId(p.id)}

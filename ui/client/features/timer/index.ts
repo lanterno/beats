@@ -15,4 +15,4 @@ export type { TimerState, TimerStatus } from "./model";
 export { useTimer } from "./model";
 
 // UI layer
-export { ProjectSelector, TimerDisplay, TimerManager } from "./ui";
+export { TimerDisplay, TimerManager } from "./ui";
