@@ -2936,6 +2936,21 @@ export interface components {
             weekly_goal?: number | null;
         };
         /**
+         * GoalOverrideResponse
+         * @description Response schema for a goal override (mirrors the request shape).
+         */
+        GoalOverrideResponse: {
+            /** Effective From */
+            effective_from?: string | null;
+            goal_type?: components["schemas"]["GoalType"] | null;
+            /** Note */
+            note?: string | null;
+            /** Week Of */
+            week_of?: string | null;
+            /** Weekly Goal */
+            weekly_goal?: number | null;
+        };
+        /**
          * GoalType
          * @description Type of weekly goal: target to reach or cap to stay under.
          * @enum {string}
@@ -3285,6 +3300,43 @@ export interface components {
             project_name: string;
             /** Weekly Goal Trend */
             weekly_goal_trend?: number[];
+        };
+        /**
+         * ProjectResponse
+         * @description Canonical response shape for a project — mirrors every field of the
+         *     domain Project. Previously declared only 6 of 11 fields; list/update
+         *     routes returned `model_dump()` with no response_model declared, so the
+         *     OpenAPI contract was silently widened. Now precise so generated clients
+         *     see the full shape.
+         */
+        ProjectResponse: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Autostart Repos */
+            autostart_repos?: string[];
+            /** Category */
+            category?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Estimation */
+            estimation?: string | null;
+            /** Github Repo */
+            github_repo?: string | null;
+            /** Goal Overrides */
+            goal_overrides?: components["schemas"]["GoalOverrideResponse"][];
+            /** @default target */
+            goal_type: components["schemas"]["GoalType"];
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Weekly Goal */
+            weekly_goal?: number | null;
         };
         /**
          * RecentDriftResponse
@@ -6613,7 +6665,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectResponse"][];
                 };
             };
             /** @description Not found */
@@ -6653,7 +6705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectResponse"];
                 };
             };
             /** @description Not found */
@@ -6693,7 +6745,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectResponse"];
                 };
             };
             /** @description Not found */

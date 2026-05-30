@@ -101,15 +101,36 @@ class BeatResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class GoalOverrideResponse(BaseModel):
+    """Response schema for a goal override (mirrors the request shape)."""
+
+    week_of: date_type | None = None
+    effective_from: date_type | None = None
+    weekly_goal: float | None = None
+    goal_type: GoalType | None = None
+    note: str | None = None
+
+
 class ProjectResponse(BaseModel):
-    """Response schema for a project."""
+    """Canonical response shape for a project — mirrors every field of the
+    domain Project. Previously declared only 6 of 11 fields; list/update
+    routes returned `model_dump()` with no response_model declared, so the
+    OpenAPI contract was silently widened. Now precise so generated clients
+    see the full shape.
+    """
 
     id: str
     name: str
     description: str | None = None
     estimation: str | None = None
+    color: str | None = None
     archived: bool = False
-    weekly_goal: float | None = None  # Weekly goal in hours
+    weekly_goal: float | None = None
+    goal_type: GoalType = GoalType.TARGET
+    goal_overrides: list[GoalOverrideResponse] = Field(default_factory=list)
+    github_repo: str | None = None
+    category: str | None = None
+    autostart_repos: list[str] = Field(default_factory=list)
 
 
 class TimerStatusResponse(BaseModel):
