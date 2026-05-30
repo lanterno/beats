@@ -46,6 +46,7 @@ export {
 	readPickerRecents,
 	recordPickerRecent,
 	type SearchField,
+	sortProjectsForList,
 	toProject,
 	visibleProjects,
 } from "./model";

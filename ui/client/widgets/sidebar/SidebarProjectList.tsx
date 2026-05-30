@@ -14,23 +14,12 @@ import {
 	NewProjectDialog,
 	type ProjectWithDuration,
 	partitionByArchived,
+	sortProjectsForList,
 } from "@/entities/project";
 import { cn, formatDuration } from "@/shared/lib";
 
 interface SidebarProjectListProps {
 	projects: ProjectWithDuration[];
-}
-
-function sortForList(list: ProjectWithDuration[]): ProjectWithDuration[] {
-	// Active by weekly hours desc, then inactive alphabetical — preserves the
-	// pre-P0.3 ordering rule so this milestone is purely additive.
-	const active = list
-		.filter((p) => p.weeklyMinutes > 0)
-		.sort((a, b) => b.weeklyMinutes - a.weeklyMinutes);
-	const inactive = list
-		.filter((p) => p.weeklyMinutes === 0)
-		.sort((a, b) => a.name.localeCompare(b.name));
-	return [...active, ...inactive];
 }
 
 export function SidebarProjectList({ projects }: SidebarProjectListProps) {
@@ -40,8 +29,8 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 	const [showArchived, setShowArchived] = useState(false);
 
 	const { visible, archived } = partitionByArchived(projects);
-	const sortedVisible = sortForList(visible);
-	const sortedArchived = sortForList(archived);
+	const sortedVisible = sortProjectsForList(visible);
+	const sortedArchived = sortProjectsForList(archived);
 
 	const isActiveProject = (id: string) => id === activeProjectId;
 

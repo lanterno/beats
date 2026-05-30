@@ -3,6 +3,7 @@ import {
 	filterAndRankProjects,
 	isVisibleProject,
 	partitionByArchived,
+	sortProjectsForList,
 	visibleProjects,
 } from "./selectors";
 
@@ -45,6 +46,27 @@ describe("partitionByArchived", () => {
 
 	it("returns empty buckets for undefined input", () => {
 		expect(partitionByArchived(undefined)).toEqual({ visible: [], archived: [] });
+	});
+});
+
+describe("sortProjectsForList", () => {
+	it("places active (weeklyMinutes > 0) projects first, sorted by weekly minutes desc", () => {
+		const list = [
+			{ name: "Cold", weeklyMinutes: 0 },
+			{ name: "Hot", weeklyMinutes: 300 },
+			{ name: "Warm", weeklyMinutes: 100 },
+			{ name: "Frozen", weeklyMinutes: 0 },
+		];
+		expect(sortProjectsForList(list).map((p) => p.name)).toEqual([
+			"Hot",
+			"Warm",
+			"Cold", // inactive — alphabetical
+			"Frozen",
+		]);
+	});
+
+	it("handles an empty list without crashing", () => {
+		expect(sortProjectsForList([])).toEqual([]);
 	});
 });
 
