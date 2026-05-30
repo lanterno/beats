@@ -37,9 +37,15 @@ export type {
 } from "./model";
 export {
 	assignColor,
+	clearPickerRecents,
 	extractCategories,
+	type FilterAndRankOptions,
+	filterAndRankProjects,
 	isVisibleProject,
 	partitionByArchived,
+	readPickerRecents,
+	recordPickerRecent,
+	type SearchField,
 	toProject,
 	visibleProjects,
 } from "./model";
@@ -55,4 +61,6 @@ export {
 	ProjectForm,
 	type ProjectFormProps,
 	type ProjectFormValues,
+	ProjectPicker,
+	type ProjectPickerProps,
 } from "./ui";

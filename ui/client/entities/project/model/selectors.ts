@@ -64,3 +64,60 @@ export function extractCategories<T extends Pick<Project, "category">>(
 	}
 	return [...seen].sort((a, b) => a.localeCompare(b));
 }
+
+export type SearchField = "name" | "description";
+
+export interface FilterAndRankOptions {
+	/** Include archived projects (default false — calls through isVisibleProject). */
+	showArchived?: boolean;
+	/** Which fields to substring-match against. Default: name + description. */
+	searchFields?: SearchField[];
+	/** Project ids in recency order (most-recent first). With no query, recents
+	 *  surface at the top of the list. Items beyond the visible projects are
+	 *  silently dropped. */
+	recents?: string[];
+}
+
+type PickerProject = Pick<Project, "id" | "name" | "description" | "archived">;
+
+/**
+ * Filter + rank projects for the picker.
+ *
+ * - Always honors the archive filter (overridable via showArchived).
+ * - With an empty query, recents surface first (in order), then the remaining
+ *   projects in their input order.
+ * - With a query, returns a substring-filtered subset; recency is ignored
+ *   because the user is now driving the order with their typing.
+ */
+export function filterAndRankProjects<T extends PickerProject>(
+	projects: T[] | undefined,
+	query: string,
+	options: FilterAndRankOptions = {},
+): T[] {
+	const { showArchived = false, searchFields = ["name", "description"], recents = [] } = options;
+	const list = projects ?? [];
+	const eligible = showArchived ? list : list.filter(isVisibleProject);
+	const q = query.trim().toLowerCase();
+
+	if (q === "") {
+		const eligibleById = new Map(eligible.map((p) => [p.id, p]));
+		const recentMatches: T[] = [];
+		const seen = new Set<string>();
+		for (const id of recents) {
+			const match = eligibleById.get(id);
+			if (match && !seen.has(id)) {
+				recentMatches.push(match);
+				seen.add(id);
+			}
+		}
+		const rest = eligible.filter((p) => !seen.has(p.id));
+		return [...recentMatches, ...rest];
+	}
+
+	return eligible.filter((p) =>
+		searchFields.some((f) => {
+			const v = p[f];
+			return typeof v === "string" && v.toLowerCase().includes(q);
+		}),
+	);
+}
