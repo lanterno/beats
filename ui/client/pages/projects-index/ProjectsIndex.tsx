@@ -13,9 +13,10 @@
  */
 import { ArchiveRestore, GitBranch, Layers, Loader2, Plus, Search, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
+	extractCategories,
 	filterAndRankProjects,
 	NewProjectDialog,
 	type Project,
@@ -88,6 +89,8 @@ interface FilteredListProps {
 	/** Pass-through to filterAndRankProjects — the archived tab needs this on
 	 *  or its rows get stripped by the default visible-only filter. */
 	showArchived?: boolean;
+	/** Multi-select category filter from the URL chips. Empty = no filter. */
+	selectedCategories?: Set<string>;
 }
 
 function deriveDisplayList({
@@ -95,17 +98,23 @@ function deriveDisplayList({
 	query,
 	sort,
 	showArchived,
+	selectedCategories,
 }: FilteredListProps): ProjectWithDuration[] {
 	const filtered = filterAndRankProjects(projects, query, {
 		showArchived,
 	}) as ProjectWithDuration[];
-	return applySort(filtered, sort);
+	const byCategory =
+		selectedCategories && selectedCategories.size > 0
+			? filtered.filter((p) => p.category && selectedCategories.has(p.category))
+			: filtered;
+	return applySort(byCategory, sort);
 }
 
 type Tab = "active" | "archived";
 
 export default function ProjectsIndex() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [tab, setTab] = useState<Tab>("active");
 	const [query, setQuery] = useState("");
 	const [sort, setSort] = useState<SortState>({ key: "weekly", direction: "desc" });
@@ -127,6 +136,39 @@ export default function ProjectsIndex() {
 	const visibleActive = useMemo(() => visibleProjects(activeProjects), [activeProjects]);
 	const visibleArchived = useMemo(() => archivedProjects ?? [], [archivedProjects]);
 
+	// Category chips draw from BOTH tabs so they look the same regardless of
+	// which tab the user is viewing — a category that exists only on archived
+	// projects still shows up.
+	const allCategories = useMemo(
+		() => extractCategories([...visibleActive, ...visibleArchived]),
+		[visibleActive, visibleArchived],
+	);
+
+	const selectedCategories = useMemo(() => {
+		const raw = searchParams.get("category") ?? "";
+		const parts = raw
+			.split(",")
+			.map((c) => c.trim())
+			.filter(Boolean);
+		return new Set(parts);
+	}, [searchParams]);
+
+	const toggleCategory = (category: string) => {
+		const next = new Set(selectedCategories);
+		if (next.has(category)) next.delete(category);
+		else next.add(category);
+		const newParams = new URLSearchParams(searchParams);
+		if (next.size === 0) newParams.delete("category");
+		else newParams.set("category", [...next].join(","));
+		setSearchParams(newParams, { replace: true });
+	};
+
+	const clearCategories = () => {
+		const newParams = new URLSearchParams(searchParams);
+		newParams.delete("category");
+		setSearchParams(newParams, { replace: true });
+	};
+
 	const sourceList = tab === "active" ? visibleActive : visibleArchived;
 	const sourceLoading = tab === "active" ? activeLoading : archivedLoading;
 
@@ -137,8 +179,9 @@ export default function ProjectsIndex() {
 				query,
 				sort,
 				showArchived: tab === "archived",
+				selectedCategories,
 			}),
-		[sourceList, query, sort, tab],
+		[sourceList, query, sort, tab, selectedCategories],
 	);
 
 	const handleSort = (key: SortKey) => {
@@ -187,6 +230,15 @@ export default function ProjectsIndex() {
 				/>
 			</div>
 
+			{allCategories.length > 0 && (
+				<CategoryChips
+					categories={allCategories}
+					selected={selectedCategories}
+					onToggle={toggleCategory}
+					onClear={clearCategories}
+				/>
+			)}
+
 			{sourceLoading ? (
 				<p className="text-sm text-muted-foreground">Loading projects…</p>
 			) : list.length === 0 ? (
@@ -220,6 +272,55 @@ export default function ProjectsIndex() {
 				onClose={() => setDialogOpen(false)}
 				onCreated={(project) => navigate(`/project/${project.id}`)}
 			/>
+		</div>
+	);
+}
+
+function CategoryChips({
+	categories,
+	selected,
+	onToggle,
+	onClear,
+}: {
+	categories: string[];
+	selected: Set<string>;
+	onToggle: (category: string) => void;
+	onClear: () => void;
+}) {
+	return (
+		<div
+			className="flex flex-wrap items-center gap-1.5"
+			role="group"
+			aria-label="Filter by category"
+		>
+			{categories.map((category) => {
+				const isSelected = selected.has(category);
+				return (
+					<button
+						key={category}
+						type="button"
+						onClick={() => onToggle(category)}
+						aria-pressed={isSelected}
+						className={cn(
+							"inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+							isSelected
+								? "border-accent/60 bg-accent/15 text-accent"
+								: "border-border text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+						)}
+					>
+						{category}
+					</button>
+				);
+			})}
+			{selected.size > 0 && (
+				<button
+					type="button"
+					onClick={onClear}
+					className="text-[11px] text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1"
+				>
+					Clear
+				</button>
+			)}
 		</div>
 	);
 }
