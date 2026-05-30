@@ -8,7 +8,7 @@
  *
  * Mocks the useTimer hook and the timer API module so we can drive
  * the component into specific states without setting up the
- * underlying state machine. ProjectSelector renders as-is — keeps
+ * underlying state machine. ProjectPicker renders as-is — keeps
  * the test honest about what the user actually sees.
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

@@ -6,11 +6,11 @@
 import { Calendar, Play, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { ProjectWithDuration } from "@/entities/project";
+import { ProjectPicker, type ProjectWithDuration, readPickerRecents } from "@/entities/project";
+import { useAuth } from "@/features/auth";
 import { cn, parseUtcIso, toLocalDatetimeLocalString } from "@/shared/lib";
 import { fetchDailyAverage } from "../api";
 import { useTimer } from "../model";
-import { ProjectSelector } from "./ProjectSelector";
 import { TimerDisplay } from "./TimerDisplay";
 
 interface TimerManagerProps {
@@ -34,13 +34,22 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 	const [showStartTimeInput, setShowStartTimeInput] = useState(false);
 	const [showStopTimeInput, setShowStopTimeInput] = useState(false);
 	const [customStopTime, setCustomStopTime] = useState<string | null>(null);
+	const { user } = useAuth();
 
-	// Pre-select project when arriving from project page
+	// Pre-select project: explicit initialProjectId takes precedence, else
+	// fall back to the user's most-recently-selected project from
+	// pickerRecents (P2.2 closes the "no default selection on timer mount"
+	// gap with one line of glue).
 	useEffect(() => {
+		if (selectedProjectId) return;
 		if (initialProjectId && projects.some((p) => p.id === initialProjectId)) {
 			selectProject(initialProjectId);
+			return;
 		}
-	}, [initialProjectId, projects, selectProject]);
+		const recents = readPickerRecents(user?.email ?? null);
+		const lastUsed = recents.find((id) => projects.some((p) => p.id === id && !p.archived));
+		if (lastUsed) selectProject(lastUsed);
+	}, [initialProjectId, projects, selectProject, selectedProjectId, user?.email]);
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -107,11 +116,14 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 			)}
 		>
 			<div className="relative mb-4">
-				<ProjectSelector
+				<p className="text-muted-foreground text-xs uppercase tracking-[0.12em] mb-2">Project</p>
+				<ProjectPicker
 					projects={projects}
-					selectedProjectId={selectedProjectId}
-					onSelect={selectProject}
+					value={selectedProjectId}
+					onChange={selectProject}
 					disabled={isRunning}
+					showContext
+					ariaLabel="Project"
 				/>
 			</div>
 
