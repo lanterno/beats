@@ -1292,6 +1292,69 @@
         "title": "GoalOverrideRequest",
         "type": "object"
       },
+      "GoalOverrideResponse": {
+        "description": "Response schema for a goal override (mirrors the request shape).",
+        "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "goal_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "week_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Of"
+          },
+          "weekly_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal"
+          }
+        },
+        "title": "GoalOverrideResponse",
+        "type": "object"
+      },
       "GoalType": {
         "description": "Type of weekly goal: target to reach or cap to stay under.",
         "enum": [
@@ -2047,6 +2110,114 @@
           "project_name"
         ],
         "title": "ProjectHealthResponse",
+        "type": "object"
+      },
+      "ProjectResponse": {
+        "description": "Canonical response shape for a project \u2014 mirrors every field of the\ndomain Project. Previously declared only 6 of 11 fields; list/update\nroutes returned `model_dump()` with no response_model declared, so the\nOpenAPI contract was silently widened. Now precise so generated clients\nsee the full shape.",
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "autostart_repos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Autostart Repos",
+            "type": "array"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "estimation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimation"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "goal_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/GoalOverrideResponse"
+            },
+            "title": "Goal Overrides",
+            "type": "array"
+          },
+          "goal_type": {
+            "$ref": "#/components/schemas/GoalType",
+            "default": "target"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "weekly_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ProjectResponse",
         "type": "object"
       },
       "RecentDriftResponse": {
@@ -7109,7 +7280,13 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  },
+                  "title": "Response List Projects Api Projects  Get",
+                  "type": "array"
+                }
               }
             },
             "description": "Successful Response"
@@ -7150,7 +7327,9 @@
           "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7191,7 +7370,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
               }
             },
             "description": "Successful Response"

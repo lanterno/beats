@@ -17,6 +17,7 @@ from beats.api.schemas import (
     DurationResponse,
     GoalOverrideRequest,
     MonthlyTotalsResponse,
+    ProjectResponse,
     RecordTimeRequest,
     UpdateProjectRequest,
 )
@@ -29,14 +30,14 @@ router = APIRouter(
 )
 
 
-@router.get("/")
+@router.get("/", response_model=list[ProjectResponse])
 async def list_projects(service: ProjectServiceDep, archived: bool = False):
     """List all projects, optionally filtering by archived status."""
     projects = await service.list_projects(archived=archived)
     return [p.model_dump() for p in projects]
 
 
-@router.post("/", status_code=http.HTTPStatus.CREATED)
+@router.post("/", status_code=http.HTTPStatus.CREATED, response_model=ProjectResponse)
 async def create_project(request: CreateProjectRequest, service: ProjectServiceDep):
     """Create a new project."""
     project = Project(
@@ -51,7 +52,7 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
     return created.model_dump()
 
 
-@router.put("/")
+@router.put("/", response_model=ProjectResponse)
 async def update_project(request: UpdateProjectRequest, service: ProjectServiceDep):
     """Update an existing project."""
     # Preserve goal_overrides: UpdateProjectRequest doesn't carry them, so

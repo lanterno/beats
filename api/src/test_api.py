@@ -87,6 +87,74 @@ class TestProjectAPI:
         )
         assert response.status_code == 401
 
+    def test_project_response_carries_every_domain_field(self):
+        """Regression guard: ProjectResponse used to declare 6 of 11
+        fields and the list/create/update routes had no response_model,
+        so the OpenAPI contract was silently widened. The route now
+        declares response_model=ProjectResponse over the full 11-field
+        shape; every Project field must round-trip across create →
+        list → update.
+
+        If this test breaks because a NEW field is added to the domain
+        Project, add it to ProjectResponse too — that's the whole point
+        of the canonical response schema.
+        """
+        # Create with every settable field populated.
+        create_resp = client.post(
+            "/api/projects/",
+            json={
+                "name": f"contract-{time.time()}",
+                "description": "exhaustive",
+                "color": "#FBBF24",
+                "weekly_goal": 12.5,
+                "category": "coding",
+            },
+            headers=auth_headers,
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        created = create_resp.json()
+        # Every field of the canonical shape is present.
+        expected_keys = {
+            "id",
+            "name",
+            "description",
+            "estimation",
+            "color",
+            "archived",
+            "weekly_goal",
+            "goal_type",
+            "goal_overrides",
+            "github_repo",
+            "category",
+            "autostart_repos",
+        }
+        assert expected_keys.issubset(created.keys()), expected_keys - created.keys()
+
+        # Update with the previously invisible fields to confirm they
+        # survive a round-trip via response_model=ProjectResponse.
+        upd_resp = client.put(
+            "/api/projects/",
+            json={
+                **created,
+                "github_repo": "lanterno/beats",
+                "autostart_repos": ["/Users/me/code/beats"],
+            },
+            headers=auth_headers,
+        )
+        assert upd_resp.status_code == 200, upd_resp.text
+        updated = upd_resp.json()
+        assert updated["github_repo"] == "lanterno/beats"
+        assert updated["autostart_repos"] == ["/Users/me/code/beats"]
+        assert updated["category"] == "coding"
+        assert updated["color"] == "#FBBF24"
+
+        # And the list endpoint exposes the same shape — generated
+        # clients downstream depend on this consistency.
+        listing = client.get("/api/projects/", headers=auth_headers).json()
+        match = next(p for p in listing if p["id"] == created["id"])
+        assert expected_keys.issubset(match.keys())
+        assert match["github_repo"] == "lanterno/beats"
+
     def test_projects_update_api(self):
         """Test PUT /api/projects/ - Update existing project"""
         # Create a project first
