@@ -47,3 +47,20 @@ export function partitionByArchived<T extends Pick<Project, "archived">>(
  * doesn't depend on weekly/total minutes, so callers don't need to widen.
  */
 export type AnyProject = Project | ProjectWithDuration;
+
+/**
+ * Sorted unique list of category strings across all projects. Seeds the
+ * `<datalist>` of the ProjectForm category combobox so users can pick an
+ * existing value with one click but still type a new one — keeps category
+ * free-form (per the roadmap open question) while reducing typo drift.
+ */
+export function extractCategories<T extends Pick<Project, "category">>(
+	projects: T[] | undefined,
+): string[] {
+	const seen = new Set<string>();
+	for (const p of projects ?? []) {
+		const c = p.category?.trim();
+		if (c) seen.add(c);
+	}
+	return [...seen].sort((a, b) => a.localeCompare(b));
+}
