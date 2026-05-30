@@ -7840,6 +7840,50 @@
         ]
       }
     },
+    "/api/projects/{project_id}/unarchive": {
+      "post": {
+        "description": "Restore an archived project (symmetric to /archive). Distinct from\nPUT /api/projects/ \u2014 using a dedicated endpoint keeps callers from\nsilently dropping fields they don't yet manage via a generic update.",
+        "operationId": "unarchive_project_api_projects__project_id__unarchive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unarchive Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
     "/api/projects/{project_id}/week/": {
       "get": {
         "description": "Get time breakdown for a week.",

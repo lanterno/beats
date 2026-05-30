@@ -199,6 +199,71 @@ class TestProjectAPI:
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
+    def test_archive_unarchive_round_trip_preserves_every_field(self):
+        """Regression guard for the dedicated /unarchive endpoint added in
+        P0.2 of the project-management revamp. Generic-update-based
+        unarchive (PUT with archived=false) would silently wipe fields
+        the request body omits — specifically github_repo, category, and
+        autostart_repos, which the UI Project type doesn't carry until
+        P1.1 lands. Test creates with the full field set, archives,
+        unarchives, and asserts nothing was lost."""
+        # Create a project with the previously-invisible fields set.
+        create_resp = client.post(
+            "/api/projects/",
+            json={
+                "name": f"archive-roundtrip-{time.time()}",
+                "description": "round-trip",
+                "color": "#FBBF24",
+                "weekly_goal": 10.0,
+                "category": "coding",
+            },
+            headers=auth_headers,
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        project = create_resp.json()
+        project_id = project["id"]
+
+        # Populate github_repo + autostart_repos via update so the round-trip
+        # exercises every settable field.
+        upd = client.put(
+            "/api/projects/",
+            json={
+                **project,
+                "github_repo": "lanterno/beats",
+                "autostart_repos": ["/Users/me/code/beats"],
+            },
+            headers=auth_headers,
+        )
+        assert upd.status_code == 200, upd.text
+        pre_archive = upd.json()
+
+        # Archive.
+        arch = client.post(f"/api/projects/{project_id}/archive", headers=auth_headers)
+        assert arch.status_code == 200
+
+        # Unarchive via the dedicated endpoint.
+        unarch = client.post(f"/api/projects/{project_id}/unarchive", headers=auth_headers)
+        assert unarch.status_code == 200
+        assert unarch.json()["status"] == "success"
+
+        # Confirm the project is back to archived=False with every other
+        # field intact. The unarchive endpoint must NOT touch unrelated
+        # fields — same correctness bar as the regression guard above.
+        listing = client.get("/api/projects/", headers=auth_headers).json()
+        match = next(p for p in listing if p["id"] == project_id)
+        assert match["archived"] is False
+        # Every field that was set survives.
+        for key in (
+            "name",
+            "description",
+            "color",
+            "weekly_goal",
+            "category",
+            "github_repo",
+            "autostart_repos",
+        ):
+            assert match[key] == pre_archive[key], (key, match[key], pre_archive[key])
+
     def test_project_today_time(self):
         """Test GET /api/projects/{project_id}/today/ - Get today's time for project"""
         # Create project and beat for today

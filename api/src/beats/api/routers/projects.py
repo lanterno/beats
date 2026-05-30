@@ -131,6 +131,15 @@ async def archive_project(project_id: str, service: ProjectServiceDep):
     return {"status": "success"}
 
 
+@router.post("/{project_id}/unarchive")
+async def unarchive_project(project_id: str, service: ProjectServiceDep):
+    """Restore an archived project (symmetric to /archive). Distinct from
+    PUT /api/projects/ — using a dedicated endpoint keeps callers from
+    silently dropping fields they don't yet manage via a generic update."""
+    await service.unarchive_project(project_id)
+    return {"status": "success"}
+
+
 @router.get("/{project_id}/today/")
 async def today_time_for_project(project_id: str, service: ProjectServiceDep) -> DurationResponse:
     """Get total time spent on project today."""

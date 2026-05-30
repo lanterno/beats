@@ -40,6 +40,23 @@ export async function createProject(input: {
 }
 
 /**
+ * Archive a project. Uses the dedicated POST /api/projects/{id}/archive
+ * endpoint (not a generic update) so the call can't silently wipe fields
+ * the UI Project type doesn't yet manage.
+ */
+export async function archiveProject(projectId: string): Promise<void> {
+	await post<{ status: string }>(`/api/projects/${projectId}/archive`, {});
+}
+
+/**
+ * Restore an archived project. Symmetric to archiveProject — uses the
+ * dedicated /unarchive endpoint for the same reason.
+ */
+export async function unarchiveProject(projectId: string): Promise<void> {
+	await post<{ status: string }>(`/api/projects/${projectId}/unarchive`, {});
+}
+
+/**
  * Fetch project week breakdown
  */
 export interface WeekBreakdownResult {

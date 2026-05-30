@@ -190,6 +190,19 @@ class ProjectService:
         project.archived = True
         return await self.project_repo.update(project)
 
+    async def unarchive_project(self, project_id: str) -> Project:
+        """Restore an archived project — symmetric to archive_project.
+
+        Using a dedicated endpoint (rather than PUT with archived=false)
+        means callers can't silently wipe fields they don't yet know
+        about: the UI Project type doesn't carry github_repo, category,
+        or autostart_repos yet, so a generic update-based unarchive
+        would drop them.
+        """
+        project = await self.project_repo.get_by_id(project_id)
+        project.archived = False
+        return await self.project_repo.update(project)
+
     async def list_projects(self, archived: bool = False) -> list[Project]:
         """List projects with optional archived filter."""
         return await self.project_repo.list(archived=archived)
