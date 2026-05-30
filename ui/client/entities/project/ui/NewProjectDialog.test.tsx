@@ -24,6 +24,7 @@ const CREATED: ApiProject = {
 	weekly_goal: null,
 	goal_type: "target",
 	goal_overrides: [],
+	autostart_repos: [],
 };
 
 describe("NewProjectDialog", () => {

@@ -34,6 +34,11 @@ export const ApiProjectSchema = z.object({
 	weekly_goal: z.number().nullable().optional(),
 	goal_type: z.enum(["target", "cap"]).optional().default("target"),
 	goal_overrides: z.array(GoalOverrideSchema).optional().default([]),
+	// P1.1: previously stripped by parseApiResponse — the wire now carries
+	// these (P0.1 expanded ProjectResponse), so accept them on the way in.
+	github_repo: z.string().nullable().optional(),
+	category: z.string().nullable().optional(),
+	autostart_repos: z.array(z.string()).optional().default([]),
 });
 
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
