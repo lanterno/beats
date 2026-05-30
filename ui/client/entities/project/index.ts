@@ -35,7 +35,13 @@ export type {
 	ProjectWithDuration,
 	WeekHours,
 } from "./model";
-export { assignColor, toProject } from "./model";
+export {
+	assignColor,
+	isVisibleProject,
+	partitionByArchived,
+	toProject,
+	visibleProjects,
+} from "./model";
 
 // UI layer
 export { LoadingSpinner, NewProjectDialog } from "./ui";

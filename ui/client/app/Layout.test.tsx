@@ -33,6 +33,10 @@ vi.mock("@/entities/planning", () => ({
 const mockUseProjects = vi.fn();
 vi.mock("@/entities/project", () => ({
 	useProjects: () => mockUseProjects(),
+	// Match the real export so consumers that filter archived (e.g. Layout's
+	// activeProjects, after P0.3) work without re-mocking per test.
+	visibleProjects: <T extends { archived: boolean }>(list: T[] | undefined) =>
+		(list ?? []).filter((p) => !p.archived),
 }));
 
 const mockUseTodaySessions = vi.fn();

@@ -13,7 +13,7 @@ import {
 	useIntentions,
 	useUpsertDailyNote,
 } from "@/entities/planning";
-import { useProjects } from "@/entities/project";
+import { useProjects, visibleProjects } from "@/entities/project";
 import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
 import { useTimer } from "@/features/timer";
 import {
@@ -65,7 +65,7 @@ export function Layout() {
 	}, []);
 
 	const projectsList = projects || [];
-	const activeProjects = projectsList.filter((p) => !p.archived);
+	const activeProjects = visibleProjects(projectsList);
 	const selectedProject = projectsList.find((p) => p.id === timer.selectedProjectId);
 
 	// Today's summary for end-of-day review

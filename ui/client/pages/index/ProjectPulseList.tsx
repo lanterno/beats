@@ -7,7 +7,7 @@
 import { Layers, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { NewProjectDialog, useProjects } from "@/entities/project";
+import { NewProjectDialog, useProjects, visibleProjects } from "@/entities/project";
 import { useAllBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
 import { cn, getCurrentWeekRange, getDayName, parseUtcIso, startOfDay } from "@/shared/lib";
@@ -96,7 +96,7 @@ export function ProjectPulseList() {
 
 	const summaries = useMemo(() => (allBeats ? buildSummaries(allBeats) : undefined), [allBeats]);
 
-	const projectsList = projects || [];
+	const projectsList = visibleProjects(projects);
 
 	const active = projectsList
 		.filter((p) => p.weeklyMinutes > 0)

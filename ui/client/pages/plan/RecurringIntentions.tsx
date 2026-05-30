@@ -14,7 +14,7 @@ import {
 	useDeleteRecurringIntention,
 	useRecurringIntentions,
 } from "@/entities/planning";
-import { useProjects } from "@/entities/project";
+import { useProjects, visibleProjects } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Button } from "@/shared/ui";
@@ -35,7 +35,7 @@ export function RecurringIntentions() {
 	const deleteTemplate = useDeleteRecurringIntention();
 	const applyToday = useApplyRecurring();
 
-	const activeProjects = (projects ?? []).filter((p) => !p.archived);
+	const activeProjects = visibleProjects(projects);
 	const projectName = (id: string) => projects?.find((p) => p.id === id)?.name ?? "Unknown";
 	const projectColor = (id: string) => projects?.find((p) => p.id === id)?.color ?? "#888";
 

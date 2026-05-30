@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useProjects } from "@/entities/project";
+import { useProjects, visibleProjects } from "@/entities/project";
 import { sessionKeys, useAllTags } from "@/entities/session";
 import { post } from "@/shared/api";
 import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
@@ -37,7 +37,7 @@ export function QuickLog() {
 		}
 	}, [open]);
 
-	const activeProjects = (projects ?? []).filter((p) => !p.archived);
+	const activeProjects = visibleProjects(projects);
 	const validRange = isValidTimeRange(startTime, endTime);
 
 	const handleSave = async () => {
