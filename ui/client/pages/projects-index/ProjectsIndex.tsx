@@ -11,17 +11,21 @@
  * - Mobile breakpoint switches to a card list with the same data.
  * - Zero-state with the New Project CTA when there are no visible projects.
  */
-import { GitBranch, Layers, Plus, Search, Zap } from "lucide-react";
+import { ArchiveRestore, GitBranch, Layers, Loader2, Plus, Search, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
 	filterAndRankProjects,
 	NewProjectDialog,
 	type Project,
 	type ProjectWithDuration,
+	useArchivedProjects,
 	useProjects,
+	useUnarchiveProject,
 	visibleProjects,
 } from "@/entities/project";
+import { describeError } from "@/shared/api";
 import { cn, formatDuration } from "@/shared/lib";
 import { Button } from "@/shared/ui";
 
@@ -81,25 +85,61 @@ interface FilteredListProps {
 	projects: ProjectWithDuration[];
 	query: string;
 	sort: SortState;
+	/** Pass-through to filterAndRankProjects — the archived tab needs this on
+	 *  or its rows get stripped by the default visible-only filter. */
+	showArchived?: boolean;
 }
 
-function deriveDisplayList({ projects, query, sort }: FilteredListProps): ProjectWithDuration[] {
-	const filtered = filterAndRankProjects(projects, query) as ProjectWithDuration[];
+function deriveDisplayList({
+	projects,
+	query,
+	sort,
+	showArchived,
+}: FilteredListProps): ProjectWithDuration[] {
+	const filtered = filterAndRankProjects(projects, query, {
+		showArchived,
+	}) as ProjectWithDuration[];
 	return applySort(filtered, sort);
 }
 
+type Tab = "active" | "archived";
+
 export default function ProjectsIndex() {
 	const navigate = useNavigate();
-	const { data: projects, isLoading } = useProjects();
+	const [tab, setTab] = useState<Tab>("active");
 	const [query, setQuery] = useState("");
 	const [sort, setSort] = useState<SortState>({ key: "weekly", direction: "desc" });
 	const [dialogOpen, setDialogOpen] = useState(false);
 
+	const { data: activeProjects, isLoading: activeLoading } = useProjects();
+	// Only fetch archived once the user actually opens the tab — avoids the
+	// cost on first paint for users who never use it.
+	const { data: archivedProjects, isLoading: archivedLoading } = useArchivedProjects();
+
+	const unarchive = useUnarchiveProject();
+	const handleRestore = (projectId: string, projectName: string) => {
+		unarchive.mutate(projectId, {
+			onSuccess: () => toast.success(`Restored ${projectName}`),
+			onError: (err) => toast.error(describeError(err, "Failed to restore project")),
+		});
+	};
+
+	const visibleActive = useMemo(() => visibleProjects(activeProjects), [activeProjects]);
+	const visibleArchived = useMemo(() => archivedProjects ?? [], [archivedProjects]);
+
+	const sourceList = tab === "active" ? visibleActive : visibleArchived;
+	const sourceLoading = tab === "active" ? activeLoading : archivedLoading;
+
 	const list = useMemo(
-		() => deriveDisplayList({ projects: visibleProjects(projects), query, sort }),
-		[projects, query, sort],
+		() =>
+			deriveDisplayList({
+				projects: sourceList,
+				query,
+				sort,
+				showArchived: tab === "archived",
+			}),
+		[sourceList, query, sort, tab],
 	);
-	const visibleCount = useMemo(() => visibleProjects(projects).length, [projects]);
 
 	const handleSort = (key: SortKey) => {
 		setSort((current) =>
@@ -114,12 +154,26 @@ export default function ProjectsIndex() {
 			<header className="flex items-center gap-3">
 				<Layers className="w-5 h-5 text-accent" />
 				<h1 className="font-heading text-xl text-foreground">Projects</h1>
-				<span className="text-xs text-muted-foreground">{visibleCount} active</span>
 				<Button type="button" size="sm" className="ml-auto" onClick={() => setDialogOpen(true)}>
 					<Plus className="w-3.5 h-3.5" />
 					New project
 				</Button>
 			</header>
+
+			<div className="flex items-center gap-1" role="tablist" aria-label="Project status">
+				<TabButton
+					label="Active"
+					count={visibleActive.length}
+					selected={tab === "active"}
+					onSelect={() => setTab("active")}
+				/>
+				<TabButton
+					label="Archived"
+					count={visibleArchived.length}
+					selected={tab === "archived"}
+					onSelect={() => setTab("archived")}
+				/>
+			</div>
 
 			<div className="relative max-w-md">
 				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60 pointer-events-none" />
@@ -133,10 +187,14 @@ export default function ProjectsIndex() {
 				/>
 			</div>
 
-			{isLoading ? (
+			{sourceLoading ? (
 				<p className="text-sm text-muted-foreground">Loading projects…</p>
 			) : list.length === 0 ? (
-				<EmptyState hasAnyVisibleProjects={visibleCount > 0} onCreate={() => setDialogOpen(true)} />
+				<EmptyState
+					tab={tab}
+					hasAnyVisibleProjects={sourceList.length > 0}
+					onCreate={() => setDialogOpen(true)}
+				/>
 			) : (
 				<>
 					<ProjectsTable
@@ -144,8 +202,16 @@ export default function ProjectsIndex() {
 						sort={sort}
 						onSort={handleSort}
 						onNavigate={(id) => navigate(`/project/${id}`)}
+						archivedView={tab === "archived"}
+						onRestore={handleRestore}
+						restoringId={unarchive.isPending ? unarchive.variables : undefined}
 					/>
-					<ProjectsCardList list={list} />
+					<ProjectsCardList
+						list={list}
+						archivedView={tab === "archived"}
+						onRestore={handleRestore}
+						restoringId={unarchive.isPending ? unarchive.variables : undefined}
+					/>
 				</>
 			)}
 
@@ -158,10 +224,42 @@ export default function ProjectsIndex() {
 	);
 }
 
+function TabButton({
+	label,
+	count,
+	selected,
+	onSelect,
+}: {
+	label: string;
+	count: number;
+	selected: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			role="tab"
+			aria-selected={selected}
+			onClick={onSelect}
+			className={cn(
+				"inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs uppercase tracking-[0.12em] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+				selected
+					? "bg-accent/15 text-accent"
+					: "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+			)}
+		>
+			{label}
+			<span className="tabular-nums text-[10px] opacity-70">{count}</span>
+		</button>
+	);
+}
+
 function EmptyState({
+	tab,
 	hasAnyVisibleProjects,
 	onCreate,
 }: {
+	tab: Tab;
 	hasAnyVisibleProjects: boolean;
 	onCreate: () => void;
 }) {
@@ -170,6 +268,13 @@ function EmptyState({
 			<Layers className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
 			{hasAnyVisibleProjects ? (
 				<p className="text-sm text-muted-foreground">No projects match your search.</p>
+			) : tab === "archived" ? (
+				<>
+					<p className="text-sm text-foreground mb-1">No archived projects</p>
+					<p className="text-xs text-muted-foreground">
+						Archive a project from its Danger Zone to send it here. Sessions are preserved.
+					</p>
+				</>
 			) : (
 				<>
 					<p className="text-sm text-foreground mb-1">No projects yet</p>
@@ -191,9 +296,20 @@ interface ProjectsTableProps {
 	sort: SortState;
 	onSort: (key: SortKey) => void;
 	onNavigate: (projectId: string) => void;
+	archivedView?: boolean;
+	onRestore?: (projectId: string, projectName: string) => void;
+	restoringId?: string;
 }
 
-function ProjectsTable({ list, sort, onSort, onNavigate }: ProjectsTableProps) {
+function ProjectsTable({
+	list,
+	sort,
+	onSort,
+	onNavigate,
+	archivedView,
+	onRestore,
+	restoringId,
+}: ProjectsTableProps) {
 	return (
 		<div className="hidden md:block overflow-x-auto rounded-lg border border-border/80 bg-card shadow-soft">
 			<table className="w-full text-sm">
@@ -216,6 +332,7 @@ function ProjectsTable({ list, sort, onSort, onNavigate }: ProjectsTableProps) {
 							onSort={onSort}
 							align="right"
 						/>
+						{archivedView && <th className="text-right px-3 py-2">Restore</th>}
 					</tr>
 				</thead>
 				<tbody>
@@ -258,11 +375,56 @@ function ProjectsTable({ list, sort, onSort, onNavigate }: ProjectsTableProps) {
 							<td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
 								{formatRelativeDays(project.lastTrackedAt)}
 							</td>
+							{archivedView && (
+								<td className="px-3 py-2 text-right">
+									<RestoreButton
+										project={project}
+										onRestore={onRestore}
+										restoringId={restoringId}
+									/>
+								</td>
+							)}
 						</tr>
 					))}
 				</tbody>
 			</table>
 		</div>
+	);
+}
+
+function RestoreButton({
+	project,
+	onRestore,
+	restoringId,
+}: {
+	project: ProjectWithDuration;
+	onRestore?: (projectId: string, projectName: string) => void;
+	restoringId?: string;
+}) {
+	if (!onRestore) return null;
+	const isRestoring = restoringId === project.id;
+	return (
+		<button
+			type="button"
+			onClick={(e) => {
+				// Both — stopPropagation keeps the surrounding tr/card link from
+				// firing; preventDefault keeps the browser's default anchor
+				// navigation from triggering when the button is inside <Link>.
+				e.stopPropagation();
+				e.preventDefault();
+				onRestore(project.id, project.name);
+			}}
+			disabled={isRestoring}
+			aria-label={`Restore ${project.name}`}
+			className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+		>
+			{isRestoring ? (
+				<Loader2 className="w-3.5 h-3.5 animate-spin" />
+			) : (
+				<ArchiveRestore className="w-3.5 h-3.5" />
+			)}
+			Restore
+		</button>
 	);
 }
 
@@ -301,7 +463,17 @@ function SortHeader({
 	);
 }
 
-function ProjectsCardList({ list }: { list: ProjectWithDuration[] }) {
+function ProjectsCardList({
+	list,
+	archivedView,
+	onRestore,
+	restoringId,
+}: {
+	list: ProjectWithDuration[];
+	archivedView?: boolean;
+	onRestore?: (projectId: string, projectName: string) => void;
+	restoringId?: string;
+}) {
 	return (
 		<div className="md:hidden space-y-2">
 			{list.map((project) => (
@@ -330,6 +502,11 @@ function ProjectsCardList({ list }: { list: ProjectWithDuration[] }) {
 						<WeeklyProgress project={project} />
 						<span className="tabular-nums">{formatRelativeDays(project.lastTrackedAt)}</span>
 					</div>
+					{archivedView && (
+						<div className="mt-2 pt-2 border-t border-border/40">
+							<RestoreButton project={project} onRestore={onRestore} restoringId={restoringId} />
+						</div>
+					)}
 				</Link>
 			))}
 		</div>

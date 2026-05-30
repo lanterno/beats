@@ -17,6 +17,7 @@ export {
 	fetchProjectWeek,
 	projectKeys,
 	unarchiveProject,
+	useArchivedProjects,
 	useArchiveProject,
 	useCreateProject,
 	useInvalidateProjects,

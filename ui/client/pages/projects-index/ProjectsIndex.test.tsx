@@ -6,15 +6,26 @@ import type { ProjectWithDuration } from "@/entities/project";
 import ProjectsIndex from "./ProjectsIndex";
 
 const useProjectsMock = vi.fn();
+// `data` keeps its widened ProjectWithDuration[] type so tests can override it.
+const useArchivedProjectsMock = vi.fn<() => { data: ProjectWithDuration[]; isLoading: boolean }>();
+const unarchiveMutate = vi.fn();
 
 vi.mock("@/entities/project", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/project")>("@/entities/project");
 	return {
 		...actual,
 		useProjects: () => useProjectsMock(),
+		useArchivedProjects: () => useArchivedProjectsMock(),
+		useUnarchiveProject: () => ({
+			mutate: unarchiveMutate,
+			isPending: false,
+			variables: undefined,
+		}),
 		NewProjectDialog: () => null,
 	};
 });
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function project(overrides: Partial<ProjectWithDuration>): ProjectWithDuration {
 	return {
@@ -64,6 +75,8 @@ function renderPage() {
 describe("ProjectsIndex", () => {
 	beforeEach(() => {
 		useProjectsMock.mockReturnValue({ data: PROJECTS, isLoading: false });
+		useArchivedProjectsMock.mockReturnValue({ data: [], isLoading: false });
+		unarchiveMutate.mockReset();
 	});
 	afterEach(cleanup);
 
@@ -114,5 +127,28 @@ describe("ProjectsIndex", () => {
 		renderPage();
 		await userEvent.type(screen.getByLabelText("Search projects"), "zzz-no-such-project");
 		expect(screen.getByText(/No projects match your search/)).toBeInTheDocument();
+	});
+
+	it("switches to the Archived tab and renders the archived list with Restore buttons", async () => {
+		useArchivedProjectsMock.mockReturnValue({
+			data: [project({ id: "old", name: "OldProject", archived: true, weeklyMinutes: 0 })],
+			isLoading: false,
+		});
+		renderPage();
+		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
+
+		const row = screen.getByRole("row", { name: /OldProject/ });
+		expect(row).toBeInTheDocument();
+		const restore = within(row).getByRole("button", { name: "Restore OldProject" });
+		expect(restore).toBeInTheDocument();
+
+		await userEvent.click(restore);
+		expect(unarchiveMutate).toHaveBeenCalledWith("old", expect.anything());
+	});
+
+	it("shows the archived zero-state when there are no archived projects", async () => {
+		renderPage();
+		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
+		expect(screen.getByText("No archived projects")).toBeInTheDocument();
 	});
 });

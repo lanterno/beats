@@ -15,6 +15,7 @@ export {
 // TanStack Query hooks
 export {
 	projectKeys,
+	useArchivedProjects,
 	useArchiveProject,
 	useCreateProject,
 	useInvalidateProjects,
