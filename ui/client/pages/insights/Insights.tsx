@@ -3,9 +3,10 @@
  * Analytics dashboard with summary stats, contribution heatmap,
  * daily rhythm chart, and top projects breakdown.
  */
+import { X } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useProjects, visibleProjects } from "@/entities/project";
+import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
 import { BestMoment } from "./BestMoment";
@@ -118,18 +119,29 @@ export default function Insights() {
 							))}
 						</select>
 					)}
-					<select
-						value={selectedProjectId ?? ""}
-						onChange={(e) => setSelectedProjectId(e.target.value || undefined)}
-						className="text-xs bg-secondary/50 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-					>
-						<option value="">All Projects</option>
-						{activeProjects.map((p) => (
-							<option key={p.id} value={p.id}>
-								{p.name}
-							</option>
-						))}
-					</select>
+					<div className="flex items-center gap-1.5">
+						<div className="w-48">
+							<ProjectPicker
+								projects={activeProjects}
+								value={selectedProjectId ?? null}
+								onChange={(id) => setSelectedProjectId(id ?? undefined)}
+								compact
+								triggerPlaceholder="All projects"
+								ariaLabel="Filter by project"
+							/>
+						</div>
+						{selectedProjectId && (
+							<button
+								type="button"
+								onClick={() => setSelectedProjectId(undefined)}
+								aria-label="Clear project filter"
+								title="Show all projects"
+								className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+							>
+								<X className="w-3.5 h-3.5" />
+							</button>
+						)}
+					</div>
 				</div>
 			</div>
 

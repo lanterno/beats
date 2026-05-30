@@ -13,7 +13,7 @@ import {
 	useIntentions,
 	useUpdateIntention,
 } from "@/entities/planning";
-import { useProjects, visibleProjects } from "@/entities/project";
+import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import type { Intention } from "@/shared/api";
 import { cn, formatDuration } from "@/shared/lib";
 import { GoalRing } from "@/shared/ui";
@@ -228,18 +228,15 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 					{/* Add form */}
 					{adding && (
 						<div className="border-t border-border/40 px-3 py-2 flex items-center gap-2">
-							<select
-								value={newProjectId}
-								onChange={(e) => setNewProjectId(e.target.value)}
-								className="flex-1 text-xs bg-secondary/50 border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-							>
-								<option value="">Select project...</option>
-								{activeProjects.map((p) => (
-									<option key={p.id} value={p.id}>
-										{p.name}
-									</option>
-								))}
-							</select>
+							<div className="flex-1 min-w-0">
+								<ProjectPicker
+									projects={activeProjects}
+									value={newProjectId || null}
+									onChange={(id) => setNewProjectId(id ?? "")}
+									compact
+									ariaLabel="Intention project"
+								/>
+							</div>
 							<input
 								type="number"
 								value={newMinutes}

@@ -24,6 +24,33 @@ vi.mock("@/entities/project", () => ({
 	}),
 	visibleProjects: <T extends { archived: boolean }>(list: T[] | undefined) =>
 		(list ?? []).filter((p) => !p.archived),
+	// ProjectPicker (P2.1) is mocked as a plain <select> here so this test
+	// keeps focusing on RecurringIntentions logic. The real picker has a
+	// dedicated test file for its keyboard contract.
+	ProjectPicker: ({
+		value,
+		onChange,
+		projects,
+		ariaLabel,
+	}: {
+		value: string | null;
+		onChange: (id: string | null) => void;
+		projects: Array<{ id: string; name: string }>;
+		ariaLabel?: string;
+	}) => (
+		<select
+			aria-label={ariaLabel}
+			value={value ?? ""}
+			onChange={(e) => onChange(e.target.value || null)}
+		>
+			<option value="">Select…</option>
+			{projects.map((p) => (
+				<option key={p.id} value={p.id}>
+					{p.name}
+				</option>
+			))}
+		</select>
+	),
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
