@@ -26,6 +26,7 @@ import {
 } from "@/entities/session";
 import { describeError } from "@/shared/api";
 import {
+	cn,
 	formatDate,
 	formatDuration,
 	formatTime,
@@ -38,6 +39,7 @@ import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
+import { ProjectStats } from "./ProjectStats";
 
 const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = [
@@ -60,6 +62,9 @@ export default function ProjectDetails() {
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [settingsFocus, setSettingsFocus] = useState<"name" | "description" | "weeklyGoal">("name");
+	// P4.0: click a week label in the history table to scope the sessions
+	// list below to that week's Mon..Sun range. null = no scope.
+	const [scopedWeeksAgo, setScopedWeeksAgo] = useState<number | null>(null);
 	const hasSetInitialExpand = useRef(false);
 
 	const openSettings = (field: "name" | "description" | "weeklyGoal") => {
@@ -155,8 +160,26 @@ export default function ProjectDetails() {
 		(a, b) => parseUtcIso(b.startTime).getTime() - parseUtcIso(a.startTime).getTime(),
 	);
 
-	const visibleSessions = sortedSessions.slice(0, visibleCount);
-	const hasMore = visibleCount < sortedSessions.length;
+	// P4.0: when a week label is clicked, scope the displayed sessions to
+	// that Mon..Sun window. Resets visibleCount so the user lands on the
+	// start of the scoped window rather than mid-pagination.
+	const scopedSessions =
+		scopedWeeksAgo === null
+			? sortedSessions
+			: (() => {
+					const monday = new Date();
+					monday.setHours(0, 0, 0, 0);
+					monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) - scopedWeeksAgo * 7);
+					const nextMonday = new Date(monday);
+					nextMonday.setDate(nextMonday.getDate() + 7);
+					return sortedSessions.filter((s) => {
+						const t = parseUtcIso(s.startTime);
+						return t >= monday && t < nextMonday;
+					});
+				})();
+
+	const visibleSessions = scopedSessions.slice(0, visibleCount);
+	const hasMore = visibleCount < scopedSessions.length;
 
 	// Group visible sessions by date
 	const sessionsByDate = visibleSessions.reduce(
@@ -422,8 +445,9 @@ export default function ProjectDetails() {
 			</header>
 
 			<main className="max-w-5xl mx-auto px-6 pb-24">
-				{/* Session Stats */}
-				{sessionList.length > 0 && <SessionStatsBar sessions={sessionList} />}
+				{/* Stats above the fold (P4.0) — lead the page with project shape,
+				    not the session list. */}
+				<ProjectStats sessions={sessionList} lastTrackedAt={project.lastTrackedAt} />
 
 				{/* Week History Table */}
 				<section className="mt-6" aria-label="Week history">
@@ -474,7 +498,28 @@ export default function ProjectDetails() {
 										rowIdx === 0 ? "bg-secondary/10" : "hover:bg-secondary/10"
 									}`}
 								>
-									<div className="text-xs text-muted-foreground truncate pr-1">{row.label}</div>
+									<button
+										type="button"
+										onClick={() =>
+											setScopedWeeksAgo((current) =>
+												current === row.weeksAgo ? null : row.weeksAgo,
+											)
+										}
+										aria-pressed={scopedWeeksAgo === row.weeksAgo}
+										title={
+											scopedWeeksAgo === row.weeksAgo
+												? "Click to clear the sessions scope"
+												: "Click to scope the sessions list to this week"
+										}
+										className={cn(
+											"text-xs truncate pr-1 text-left rounded transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+											scopedWeeksAgo === row.weeksAgo
+												? "text-accent font-medium"
+												: "text-muted-foreground hover:text-foreground",
+										)}
+									>
+										{row.label}
+									</button>
 									{row.days.map((mins, i) => (
 										<div
 											key={i}
@@ -587,18 +632,31 @@ export default function ProjectDetails() {
 
 				{/* Sessions */}
 				<section className="mt-6" aria-labelledby="sessions-heading">
-					<h2
-						id="sessions-heading"
-						className="flex items-center gap-2 text-foreground font-medium text-sm mb-3"
-					>
-						<List className="w-3.5 h-3.5 text-accent/75" />
-						Sessions
-						{sessionList.length > 0 && (
-							<span className="text-xs text-muted-foreground font-normal">
-								({sessionList.length})
-							</span>
+					<div className="flex flex-wrap items-center gap-2 mb-3">
+						<h2
+							id="sessions-heading"
+							className="flex items-center gap-2 text-foreground font-medium text-sm"
+						>
+							<List className="w-3.5 h-3.5 text-accent/75" />
+							Sessions
+							{sessionList.length > 0 && (
+								<span className="text-xs text-muted-foreground font-normal">
+									({scopedSessions.length}
+									{scopedWeeksAgo !== null && ` of ${sessionList.length}`})
+								</span>
+							)}
+						</h2>
+						{scopedWeeksAgo !== null && (
+							<button
+								type="button"
+								onClick={() => setScopedWeeksAgo(null)}
+								className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-accent hover:bg-accent/20 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+							>
+								Scoped to {allWeekRows.find((r) => r.weeksAgo === scopedWeeksAgo)?.label ?? "week"}
+								<span aria-hidden="true">×</span>
+							</button>
 						)}
-					</h2>
+					</div>
 
 					{Object.entries(sessionsByDate).length === 0 ? (
 						<div className="rounded-lg border border-dashed border-border">
@@ -683,14 +741,14 @@ export default function ProjectDetails() {
 																	<>
 																		<button
 																			onClick={() => setEditingSessionId(session.id)}
-																			className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent transition-all"
+																			className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-accent hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 																			aria-label="Edit session"
 																		>
 																			<Edit2 className="w-3.5 h-3.5" />
 																		</button>
 																		<button
 																			onClick={() => setConfirmDeleteId(session.id)}
-																			className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
+																			className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 																			aria-label="Delete session"
 																		>
 																			<Trash2 className="w-3.5 h-3.5" />
@@ -753,42 +811,6 @@ export default function ProjectDetails() {
 				onClose={() => setSettingsOpen(false)}
 				autoFocusField={settingsFocus}
 			/>
-		</div>
-	);
-}
-
-function SessionStatsBar({ sessions }: { sessions: Session[] }) {
-	const completed = sessions.filter((s) => s.duration > 0);
-	if (completed.length === 0) return null;
-
-	const totalDuration = completed.reduce((sum, s) => sum + s.duration, 0);
-	const avgMinutes = totalDuration / completed.length;
-	const longestMinutes = Math.max(...completed.map((s) => s.duration));
-
-	const now = new Date();
-	const thisMonthCount = completed.filter((s) => {
-		const d = parseUtcIso(s.startTime);
-		return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-	}).length;
-
-	return (
-		<div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
-			<StatCard label="Avg session" value={formatDuration(avgMinutes)} />
-			<StatCard label="Longest" value={formatDuration(longestMinutes)} />
-			<StatCard label="This month" value={`${thisMonthCount}`} sub="sessions" />
-			<StatCard label="Total" value={`${completed.length}`} sub="sessions" />
-		</div>
-	);
-}
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-	return (
-		<div className="rounded-md border border-border/60 bg-secondary/20 px-3 py-2 text-center">
-			<p className="text-muted-foreground text-[10px] uppercase tracking-[0.12em] mb-0.5">
-				{label}
-			</p>
-			<p className="text-sm font-medium tabular-nums text-foreground">{value}</p>
-			{sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
 		</div>
 	);
 }
