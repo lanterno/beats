@@ -21,6 +21,7 @@ import {
 } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { Dialog } from "@/shared/ui";
+import { OverrideManagementPanel } from "./OverrideManagementPanel";
 
 interface ProjectSettingsDrawerProps {
 	project: Project;
@@ -92,6 +93,10 @@ export function ProjectSettingsDrawer({
 				categorySuggestions={extractCategories(projects)}
 				githubConnected={githubStatus?.connected}
 			/>
+
+			<div className="mt-5">
+				<OverrideManagementPanel project={project} />
+			</div>
 		</Dialog>
 	);
 }
