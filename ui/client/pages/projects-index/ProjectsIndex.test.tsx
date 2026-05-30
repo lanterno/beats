@@ -151,4 +151,68 @@ describe("ProjectsIndex", () => {
 		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
 		expect(screen.getByText("No archived projects")).toBeInTheDocument();
 	});
+
+	describe("category chips", () => {
+		const CAT_PROJECTS: ProjectWithDuration[] = [
+			project({ id: "a", name: "Alpha", category: "coding", weeklyMinutes: 60 }),
+			project({ id: "b", name: "Beta", category: "writing", weeklyMinutes: 30 }),
+			project({ id: "c", name: "Gamma", category: "coding", weeklyMinutes: 10 }),
+			project({ id: "d", name: "Delta", weeklyMinutes: 5 }),
+		];
+
+		beforeEach(() => {
+			useProjectsMock.mockReturnValue({ data: CAT_PROJECTS, isLoading: false });
+		});
+
+		it("renders one chip per distinct category", () => {
+			renderPage();
+			const chips = screen.getByRole("group", { name: "Filter by category" });
+			expect(within(chips).getByRole("button", { name: "coding" })).toBeInTheDocument();
+			expect(within(chips).getByRole("button", { name: "writing" })).toBeInTheDocument();
+		});
+
+		it("toggles a chip and filters the list (multi-select)", async () => {
+			renderPage();
+			await userEvent.click(screen.getByRole("button", { name: "coding" }));
+			let rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+			// Only the two coding rows remain.
+			expect(rows.map((r) => r.textContent)).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining("Alpha"),
+					expect.stringContaining("Gamma"),
+				]),
+			);
+			expect(rows).toHaveLength(2);
+
+			// Adding writing widens the set.
+			await userEvent.click(screen.getByRole("button", { name: "writing" }));
+			rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+			expect(rows).toHaveLength(3); // Alpha, Beta, Gamma
+		});
+
+		it("hydrates from the URL ?category= search param", () => {
+			render(
+				<MemoryRouter initialEntries={["/projects?category=writing"]}>
+					<ProjectsIndex />
+				</MemoryRouter>,
+			);
+			const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toHaveTextContent("Beta");
+			// Chip reflects pressed state for SR.
+			expect(screen.getByRole("button", { name: "writing" })).toHaveAttribute(
+				"aria-pressed",
+				"true",
+			);
+		});
+
+		it("Clear control removes the category filter", async () => {
+			renderPage();
+			await userEvent.click(screen.getByRole("button", { name: "coding" }));
+			expect(within(screen.getByRole("table")).getAllByRole("row").slice(1)).toHaveLength(2);
+
+			await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+			expect(within(screen.getByRole("table")).getAllByRole("row").slice(1)).toHaveLength(4);
+		});
+	});
 });
