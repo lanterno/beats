@@ -3,9 +3,9 @@
  * Compact header, week history table, and paginated session list.
  */
 
-import { Clock, Edit2, List, Trash2 } from "lucide-react";
+import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import type { GoalOverride } from "@/entities/project";
 import {
@@ -37,6 +37,7 @@ import {
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
+import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 
 const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = [
@@ -57,7 +58,14 @@ export default function ProjectDetails() {
 	const [visibleCount, setVisibleCount] = useState(SESSIONS_PER_PAGE);
 	const [weekCount, setWeekCount] = useState(5);
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [settingsFocus, setSettingsFocus] = useState<"name" | "description" | "weeklyGoal">("name");
 	const hasSetInitialExpand = useRef(false);
+
+	const openSettings = (field: "name" | "description" | "weeklyGoal") => {
+		setSettingsFocus(field);
+		setSettingsOpen(true);
+	};
 
 	const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
 	const { data: allProjects } = useProjects();
@@ -293,6 +301,16 @@ export default function ProjectDetails() {
 
 	return (
 		<div>
+			{/* Mobile back-link breadcrumb (P0 a11y principle). Hidden on >= lg
+			    because the sidebar is the nav surface there. */}
+			<Link
+				to="/app"
+				className="lg:hidden inline-flex items-center gap-1 text-xs text-muted-foreground px-6 pt-3 hover:text-foreground transition-colors"
+			>
+				<ChevronLeft className="w-3.5 h-3.5" />
+				Back
+			</Link>
+
 			{/* Compact header */}
 			<header className="border-b border-border/50">
 				<div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
@@ -323,7 +341,17 @@ export default function ProjectDetails() {
 							/>
 						)}
 					</div>
-					<h1 className="font-heading text-xl text-foreground truncate">{project.name}</h1>
+					{/* Inline-clickable title: opens the settings drawer focused on
+					    name. Replaces the read-only h1 — the color dot was the only
+					    edit affordance pre-P1.2a. */}
+					<button
+						type="button"
+						onClick={() => openSettings("name")}
+						className="font-heading text-xl text-foreground truncate text-left hover:text-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+						title="Edit project"
+					>
+						{project.name}
+					</button>
 					{project.archived && (
 						<span
 							className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-muted-foreground/40 text-muted-foreground shrink-0"
@@ -332,10 +360,23 @@ export default function ProjectDetails() {
 							Archived
 						</span>
 					)}
-					{project.description && (
-						<span className="text-muted-foreground text-sm hidden md:inline truncate max-w-[200px]">
+					{project.description ? (
+						<button
+							type="button"
+							onClick={() => openSettings("description")}
+							className="text-muted-foreground text-sm hidden md:inline truncate max-w-[200px] text-left hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+							title="Edit description"
+						>
 							— {project.description}
-						</span>
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={() => openSettings("description")}
+							className="text-muted-foreground/50 text-sm hidden md:inline hover:text-muted-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+						>
+							+ Add description
+						</button>
 					)}
 					<div className="ml-auto shrink-0 flex items-center gap-4">
 						{goalPct !== null && (
@@ -354,6 +395,15 @@ export default function ProjectDetails() {
 						<span className="font-heading text-lg font-semibold tabular-nums text-accent">
 							{totalHours}h
 						</span>
+						<button
+							type="button"
+							onClick={() => openSettings("name")}
+							aria-label="Project settings"
+							title="Project settings"
+							className="p-2 -m-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+						>
+							<Settings className="w-4 h-4" />
+						</button>
 					</div>
 				</div>
 			</header>
@@ -683,6 +733,13 @@ export default function ProjectDetails() {
 					archived={project.archived}
 				/>
 			</main>
+
+			<ProjectSettingsDrawer
+				project={project}
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				autoFocusField={settingsFocus}
+			/>
 		</div>
 	);
 }

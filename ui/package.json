@@ -19,6 +19,7 @@
     "gen:types:check": "pnpm gen:types && git diff --exit-code client/shared/api/openapi.json client/shared/api/generated.ts"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
     "@simplewebauthn/browser": "^13.3.0",
     "zod": "^4.4.3"
   },
