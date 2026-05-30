@@ -379,8 +379,13 @@ export default function ProjectDetails() {
 						</button>
 					)}
 					<div className="ml-auto shrink-0 flex items-center gap-4">
-						{goalPct !== null && (
-							<div className="hidden sm:flex items-center gap-2">
+						{goalPct !== null ? (
+							<button
+								type="button"
+								onClick={() => openSettings("weeklyGoal")}
+								title="Edit weekly goal"
+								className="hidden sm:flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+							>
 								<GoalRing
 									percent={goalPct}
 									size={28}
@@ -390,7 +395,15 @@ export default function ProjectDetails() {
 								<span className="text-xs tabular-nums text-muted-foreground">
 									{weeklyHours.toFixed(1)}/{headerGoal}h
 								</span>
-							</div>
+							</button>
+						) : (
+							<button
+								type="button"
+								onClick={() => openSettings("weeklyGoal")}
+								className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+							>
+								+ Set weekly goal
+							</button>
 						)}
 						<span className="font-heading text-lg font-semibold tabular-nums text-accent">
 							{totalHours}h
