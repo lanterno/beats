@@ -28,11 +28,16 @@ export type ProjectInclude = "totals" | "this_week" | "last_tracked";
  * `effective_goal*`, and `last_tracked_at` come back as `null`.
  */
 export async function fetchProjects(
-	options: { include?: ProjectInclude[] } = {},
+	options: { include?: ProjectInclude[]; archived?: boolean } = {},
 ): Promise<ApiProjectListItem[]> {
 	const params = new URLSearchParams();
 	if (options.include && options.include.length > 0) {
 		params.set("include", options.include.join(","));
+	}
+	if (options.archived) {
+		// Backend treats absent as false; only send the flag when needed so
+		// the no-options call matches the historical wire (active-only).
+		params.set("archived", "true");
 	}
 	const qs = params.toString();
 	const data = await get<unknown>(qs ? `/api/projects/?${qs}` : "/api/projects/");

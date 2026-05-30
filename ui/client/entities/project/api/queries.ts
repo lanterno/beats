@@ -22,6 +22,7 @@ import {
 export const projectKeys = {
 	all: ["projects"] as const,
 	list: () => [...projectKeys.all, "list"] as const,
+	archivedList: () => [...projectKeys.all, "list", "archived"] as const,
 	detail: (id: string) => [...projectKeys.all, "detail", id] as const,
 	total: (id: string) => [...projectKeys.all, "total", id] as const,
 	week: (id: string, weeksAgo: number) => [...projectKeys.all, "week", id, weeksAgo] as const,
@@ -61,6 +62,38 @@ export function useProjects() {
 			});
 		},
 		staleTime: 30_000, // Consider fresh for 30 seconds
+	});
+}
+
+/**
+ * Hook to fetch archived projects with their aggregations.
+ *
+ * Separate cache key from useProjects so the /projects index page can
+ * keep the Active tab cached while it loads the Archived tab. P3.2 of
+ * the project-management revamp.
+ */
+export function useArchivedProjects() {
+	return useQuery({
+		queryKey: projectKeys.archivedList(),
+		queryFn: async (): Promise<ProjectWithDuration[]> => {
+			const items = await fetchProjects({
+				archived: true,
+				include: ["totals", "this_week", "last_tracked"],
+			});
+			return items.map((item) => {
+				const project = toProject(item);
+				return {
+					...project,
+					totalMinutes: item.total_minutes ?? 0,
+					weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
+					effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
+					effectiveGoalType: item.effective_goal_type ?? undefined,
+					effectiveGoalOverridden: item.effective_goal_overridden ?? false,
+					lastTrackedAt: item.last_tracked_at ?? undefined,
+				};
+			});
+		},
+		staleTime: 30_000,
 	});
 }
 
