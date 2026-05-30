@@ -7,6 +7,7 @@ import {
 	BarChart3,
 	CalendarDays,
 	Download,
+	Layers,
 	LogOut,
 	Menu,
 	Settings,
@@ -104,6 +105,14 @@ export function MobileHeader(props: MobileHeaderProps) {
 								Beats
 							</Link>
 							<div className="flex items-center gap-1">
+								<Link
+									to="/projects"
+									onClick={closeDrawer}
+									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+									title="Projects"
+								>
+									<Layers className="w-4 h-4" />
+								</Link>
 								<Link
 									to="/plan"
 									onClick={closeDrawer}

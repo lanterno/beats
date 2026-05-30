@@ -17,6 +17,7 @@ import YearInReview from "@/pages/insights/YearInReview";
 import NotFound from "@/pages/not-found";
 import PlanPage from "@/pages/plan";
 import ProjectDetails from "@/pages/project-details";
+import ProjectsIndex from "@/pages/projects-index";
 import Settings from "@/pages/settings";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { Layout } from "./Layout";
@@ -98,6 +99,7 @@ export function App() {
 								<Route path="/insights/digests" element={<Digests />} />
 								<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
 								<Route path="/insights/year/:year" element={<YearInReview />} />
+								<Route path="/projects" element={<ProjectsIndex />} />
 								<Route path="/project/:projectId" element={<ProjectDetails />} />
 								<Route path="/plan" element={<PlanPage />} />
 								<Route path="/coach" element={<Coach />} />
