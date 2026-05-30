@@ -8,6 +8,8 @@ export { assignColor } from "./colors";
 export { toProject } from "./mappers";
 // Picker recents (user-scoped localStorage)
 export { clearPickerRecents, readPickerRecents, recordPickerRecent } from "./pickerRecents";
+// Project pins (user-scoped localStorage + custom-event sync)
+export { clearPins, isPinned, readPins, togglePin, usePinnedProjects } from "./pins";
 // Selectors
 export {
 	extractCategories,

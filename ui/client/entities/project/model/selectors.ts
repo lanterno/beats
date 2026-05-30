@@ -8,23 +8,45 @@
 
 import type { Project, ProjectWithDuration } from "./types";
 
+export interface SortForListOptions {
+	/** Project ids the user has pinned. Pins surface first (themselves
+	 *  sorted by the same active/inactive rule), with the rest after. */
+	pinnedIds?: Set<string>;
+}
+
 /**
  * The canonical "list" ordering used by SidebarProjectList and the
  * dashboard ProjectPulseList: active projects (this-week minutes > 0)
  * first, sorted by weekly minutes desc; inactive projects after, sorted
- * alphabetically by name. Lives in selectors so the two surfaces can't
- * drift — and so P2.5's pin-to-top has one place to plug into.
+ * alphabetically by name. Pinned projects (P2.5) float to the top while
+ * keeping the same secondary ordering — so a user with two pinned
+ * projects sees the more-active pin first.
  */
-export function sortProjectsForList<T extends Pick<ProjectWithDuration, "name" | "weeklyMinutes">>(
-	projects: T[],
-): T[] {
-	const active = projects
-		.filter((p) => p.weeklyMinutes > 0)
-		.sort((a, b) => b.weeklyMinutes - a.weeklyMinutes);
-	const inactive = projects
-		.filter((p) => p.weeklyMinutes === 0)
-		.sort((a, b) => a.name.localeCompare(b.name));
-	return [...active, ...inactive];
+export function sortProjectsForList<
+	T extends Pick<ProjectWithDuration, "id" | "name" | "weeklyMinutes">,
+>(projects: T[], options: SortForListOptions = {}): T[] {
+	const { pinnedIds } = options;
+
+	const sortPair = (list: T[]): T[] => {
+		const active = list
+			.filter((p) => p.weeklyMinutes > 0)
+			.sort((a, b) => b.weeklyMinutes - a.weeklyMinutes);
+		const inactive = list
+			.filter((p) => p.weeklyMinutes === 0)
+			.sort((a, b) => a.name.localeCompare(b.name));
+		return [...active, ...inactive];
+	};
+
+	if (!pinnedIds || pinnedIds.size === 0) {
+		return sortPair(projects);
+	}
+
+	const pinned: T[] = [];
+	const rest: T[] = [];
+	for (const p of projects) {
+		(pinnedIds.has(p.id) ? pinned : rest).push(p);
+	}
+	return [...sortPair(pinned), ...sortPair(rest)];
 }
 
 /**

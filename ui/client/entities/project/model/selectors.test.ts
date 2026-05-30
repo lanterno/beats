@@ -52,10 +52,10 @@ describe("partitionByArchived", () => {
 describe("sortProjectsForList", () => {
 	it("places active (weeklyMinutes > 0) projects first, sorted by weekly minutes desc", () => {
 		const list = [
-			{ name: "Cold", weeklyMinutes: 0 },
-			{ name: "Hot", weeklyMinutes: 300 },
-			{ name: "Warm", weeklyMinutes: 100 },
-			{ name: "Frozen", weeklyMinutes: 0 },
+			{ id: "1", name: "Cold", weeklyMinutes: 0 },
+			{ id: "2", name: "Hot", weeklyMinutes: 300 },
+			{ id: "3", name: "Warm", weeklyMinutes: 100 },
+			{ id: "4", name: "Frozen", weeklyMinutes: 0 },
 		];
 		expect(sortProjectsForList(list).map((p) => p.name)).toEqual([
 			"Hot",
@@ -67,6 +67,30 @@ describe("sortProjectsForList", () => {
 
 	it("handles an empty list without crashing", () => {
 		expect(sortProjectsForList([])).toEqual([]);
+	});
+
+	it("surfaces pinned ids first; pins follow the same active/inactive rule", () => {
+		const list = [
+			{ id: "hot", name: "Hot", weeklyMinutes: 300 },
+			{ id: "pinned-quiet", name: "PinnedQuiet", weeklyMinutes: 0 },
+			{ id: "pinned-busy", name: "PinnedBusy", weeklyMinutes: 50 },
+			{ id: "warm", name: "Warm", weeklyMinutes: 100 },
+		];
+		expect(
+			sortProjectsForList(list, {
+				pinnedIds: new Set(["pinned-quiet", "pinned-busy"]),
+			}).map((p) => p.name),
+		).toEqual([
+			"PinnedBusy", // pinned + active
+			"PinnedQuiet", // pinned + inactive
+			"Hot", // non-pinned active
+			"Warm", // non-pinned active
+		]);
+	});
+
+	it("falls back to the non-pinned ordering when no ids are passed", () => {
+		const list = [{ id: "a", name: "Alpha", weeklyMinutes: 0 }];
+		expect(sortProjectsForList(list, { pinnedIds: new Set() })).toEqual(list);
 	});
 });
 
