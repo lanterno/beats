@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useProjects, visibleProjects } from "@/entities/project";
+import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { sessionKeys, useAllTags } from "@/entities/session";
 import { post } from "@/shared/api";
 import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
@@ -91,18 +91,13 @@ export function QuickLog() {
 				</button>
 			</div>
 
-			<select
-				value={projectId}
-				onChange={(e) => setProjectId(e.target.value)}
-				className="w-full text-xs bg-secondary/50 border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-			>
-				<option value="">Select project...</option>
-				{activeProjects.map((p) => (
-					<option key={p.id} value={p.id}>
-						{p.name}
-					</option>
-				))}
-			</select>
+			<ProjectPicker
+				projects={activeProjects}
+				value={projectId || null}
+				onChange={(id) => setProjectId(id ?? "")}
+				compact
+				ariaLabel="Project"
+			/>
 
 			<div className="grid grid-cols-2 gap-2">
 				<div>

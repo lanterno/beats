@@ -14,7 +14,7 @@ import {
 	useDeleteRecurringIntention,
 	useRecurringIntentions,
 } from "@/entities/planning";
-import { useProjects, visibleProjects } from "@/entities/project";
+import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Button } from "@/shared/ui";
@@ -164,19 +164,15 @@ export function RecurringIntentions() {
 
 				<div className="pt-3 border-t border-border/40 space-y-2.5">
 					<div className="flex items-center gap-2">
-						<select
-							value={projectId}
-							onChange={(e) => setProjectId(e.target.value)}
-							aria-label="Project"
-							className="flex-1 min-w-0 text-sm bg-secondary/50 border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-						>
-							<option value="">Select project…</option>
-							{activeProjects.map((p) => (
-								<option key={p.id} value={p.id}>
-									{p.name}
-								</option>
-							))}
-						</select>
+						<div className="flex-1 min-w-0">
+							<ProjectPicker
+								projects={activeProjects}
+								value={projectId || null}
+								onChange={(id) => setProjectId(id ?? "")}
+								compact
+								ariaLabel="Project"
+							/>
+						</div>
 						<input
 							type="number"
 							min={0.5}
