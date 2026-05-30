@@ -11,3 +11,4 @@ export {
 export { LoadingSpinner } from "./LoadingSpinner";
 export { NewProjectDialog } from "./NewProjectDialog";
 export { ProjectForm, type ProjectFormProps, type ProjectFormValues } from "./ProjectForm";
+export { ProjectPicker, type ProjectPickerProps } from "./ProjectPicker";
