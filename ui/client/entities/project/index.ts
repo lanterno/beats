@@ -37,6 +37,7 @@ export type {
 } from "./model";
 export {
 	assignColor,
+	extractCategories,
 	isVisibleProject,
 	partitionByArchived,
 	toProject,
@@ -45,6 +46,10 @@ export {
 
 // UI layer
 export {
+	AdvancedFields,
+	type AdvancedFieldsProps,
+	type AdvancedFieldsValues,
+	isValidGithubRepo,
 	LoadingSpinner,
 	NewProjectDialog,
 	ProjectForm,

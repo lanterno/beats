@@ -37,6 +37,9 @@ describe("ProjectForm", () => {
 			color: "#FBBF24",
 			weeklyGoal: "12.5",
 			goalType: "cap",
+			category: "",
+			githubRepo: "",
+			autostartRepos: [],
 		});
 	});
 
@@ -73,5 +76,40 @@ describe("ProjectForm", () => {
 		render(<ProjectForm onSubmit={vi.fn()} autoFocusField="description" />);
 		// Description input is the active element after mount.
 		expect(document.activeElement).toBe(screen.getByLabelText(/Description/));
+	});
+
+	it("opens the Advanced disclosure automatically when initial values include category/github_repo/autostart", () => {
+		render(<ProjectForm onSubmit={vi.fn()} initialValues={{ category: "coding" }} />);
+		// Advanced section is open by default since the editing flow's
+		// initial values already include category — the category input is
+		// rendered.
+		expect(screen.getByLabelText("Category")).toBeInTheDocument();
+	});
+
+	it("includes the advanced field values in onSubmit when the disclosure is opened", async () => {
+		const onSubmit = vi.fn();
+		render(
+			<ProjectForm
+				onSubmit={onSubmit}
+				initialValues={{ name: "Alpha", color: "#FBBF24" }}
+				categorySuggestions={["coding"]}
+			/>,
+		);
+
+		// Disclosure starts closed because no advanced initial values were set.
+		expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+
+		await userEvent.type(screen.getByLabelText("Category"), "coding");
+		await userEvent.type(screen.getByLabelText("GitHub repo"), "lanterno/beats");
+
+		await userEvent.click(screen.getByRole("button", { name: "Save" }));
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				category: "coding",
+				githubRepo: "lanterno/beats",
+				autostartRepos: [],
+			}),
+		);
 	});
 });

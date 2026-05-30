@@ -11,10 +11,11 @@
  * from a button that names the currently-selected color.
  */
 
-import { Target, TrendingDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Target, TrendingDown } from "lucide-react";
 import { useState } from "react";
 import { Button, ColorPicker } from "@/shared/ui";
 import { assignColor } from "../model";
+import { AdvancedFields, isValidGithubRepo } from "./AdvancedFields";
 
 /**
  * Field set captured by the form. Aligns with the domain Project shape so
@@ -27,6 +28,9 @@ export interface ProjectFormValues {
 	color: string;
 	weeklyGoal: string; // empty string = "no goal"; parsed to number on submit
 	goalType: "target" | "cap";
+	category: string;
+	githubRepo: string;
+	autostartRepos: string[];
 }
 
 export interface ProjectFormProps {
@@ -37,6 +41,13 @@ export interface ProjectFormProps {
 	onCancel?: () => void;
 	/** Which field gets autofocused on mount — used by inline-clickable headers. */
 	autoFocusField?: "name" | "description" | "weeklyGoal";
+	/** Existing category strings shown as datalist suggestions in Advanced. */
+	categorySuggestions?: string[];
+	/** Whether the user has GitHub OAuth connected — surfaces a hint in Advanced. */
+	githubConnected?: boolean;
+	/** Whether to open the Advanced section by default (e.g. when editing a
+	 * project that already has advanced values set). */
+	advancedOpenDefault?: boolean;
 }
 
 function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues {
@@ -46,6 +57,9 @@ function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues 
 		color: initial?.color ?? assignColor("new"),
 		weeklyGoal: initial?.weeklyGoal ?? "",
 		goalType: initial?.goalType ?? "target",
+		category: initial?.category ?? "",
+		githubRepo: initial?.githubRepo ?? "",
+		autostartRepos: initial?.autostartRepos ?? [],
 	};
 }
 
@@ -56,10 +70,20 @@ export function ProjectForm({
 	onSubmit,
 	onCancel,
 	autoFocusField = "name",
+	categorySuggestions,
+	githubConnected,
+	advancedOpenDefault,
 }: ProjectFormProps) {
 	const [values, setValues] = useState<ProjectFormValues>(() => defaultValues(initialValues));
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const hasAdvancedValues =
+		(initialValues?.category && initialValues.category.trim() !== "") ||
+		(initialValues?.githubRepo && initialValues.githubRepo.trim() !== "") ||
+		(initialValues?.autostartRepos && initialValues.autostartRepos.length > 0);
+	const [advancedOpen, setAdvancedOpen] = useState(
+		advancedOpenDefault ?? Boolean(hasAdvancedValues),
+	);
 
 	const trimmedName = values.name.trim();
 
@@ -78,8 +102,21 @@ export function ProjectForm({
 				return;
 			}
 		}
+		if (!isValidGithubRepo(values.githubRepo)) {
+			setError("GitHub repo must look like owner/repo");
+			setAdvancedOpen(true);
+			return;
+		}
 
-		onSubmit({ ...values, name: trimmedName, description: values.description.trim() });
+		// Trim string fields and drop blank autostart paths before submit.
+		onSubmit({
+			...values,
+			name: trimmedName,
+			description: values.description.trim(),
+			category: values.category.trim(),
+			githubRepo: values.githubRepo.trim(),
+			autostartRepos: values.autostartRepos.map((r) => r.trim()).filter((r) => r !== ""),
+		});
 	};
 
 	const set = <K extends keyof ProjectFormValues>(k: K, v: ProjectFormValues[K]) =>
@@ -213,6 +250,47 @@ export function ProjectForm({
 					})}
 				</div>
 			</fieldset>
+
+			{/* Advanced disclosure — category, GitHub repo, autostart paths.
+			    Opens by default when editing a project that already has
+			    advanced values, so the user sees what they already set. */}
+			<div className="pt-1 border-t border-border/40">
+				<button
+					type="button"
+					onClick={() => setAdvancedOpen((o) => !o)}
+					aria-expanded={advancedOpen}
+					aria-controls="project-form-advanced"
+					className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded mt-2"
+				>
+					{advancedOpen ? (
+						<ChevronDown className="w-3.5 h-3.5" />
+					) : (
+						<ChevronRight className="w-3.5 h-3.5" />
+					)}
+					Advanced
+				</button>
+				{advancedOpen && (
+					<div id="project-form-advanced" className="mt-3">
+						<AdvancedFields
+							values={{
+								category: values.category,
+								githubRepo: values.githubRepo,
+								autostartRepos: values.autostartRepos,
+							}}
+							onChange={(next) =>
+								setValues((s) => ({
+									...s,
+									category: next.category,
+									githubRepo: next.githubRepo,
+									autostartRepos: next.autostartRepos,
+								}))
+							}
+							categorySuggestions={categorySuggestions}
+							githubConnected={githubConnected}
+						/>
+					</div>
+				)}
+			</div>
 
 			{error && (
 				<p className="text-sm text-destructive" role="alert">
