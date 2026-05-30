@@ -31,6 +31,7 @@ function SessionRow({
 	projectName,
 	projectColor,
 	projectId,
+	projectArchived,
 	focusScore,
 	onDelete,
 	deleting,
@@ -39,6 +40,7 @@ function SessionRow({
 	projectName: string;
 	projectColor: string;
 	projectId: string;
+	projectArchived?: boolean;
 	focusScore?: FocusScore;
 	onDelete?: (sessionId: string) => void;
 	deleting?: boolean;
@@ -58,6 +60,14 @@ function SessionRow({
 						style={{ backgroundColor: projectColor }}
 					/>
 					<span className="text-sm text-foreground truncate flex-1 min-w-0">{projectName}</span>
+					{projectArchived && (
+						<span
+							className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground shrink-0"
+							title="This project is archived"
+						>
+							Archived
+						</span>
+					)}
 					<span className="text-xs text-muted-foreground tabular-nums shrink-0">
 						{formatTime(session.startTime)} → {formatTime(session.endTime)}
 					</span>
@@ -164,7 +174,7 @@ function SessionGroup({
 	label: string;
 	sessions: Session[];
 	totalMinutes: number;
-	projectMap: Map<string, { name: string; color: string }>;
+	projectMap: Map<string, { name: string; color: string; archived: boolean }>;
 	defaultOpen: boolean;
 	focusScoreMap?: Map<string, FocusScore>;
 	onDelete?: (sessionId: string) => void;
@@ -207,6 +217,7 @@ function SessionGroup({
 								projectName={info?.name || "Unknown"}
 								projectColor={info?.color || "#888"}
 								projectId={session.projectId}
+								projectArchived={info?.archived}
 								focusScore={focusScoreMap?.get(session.id)}
 								onDelete={onDelete}
 								deleting={deleting}
@@ -234,7 +245,12 @@ export function TodayFeed() {
 		});
 	};
 
-	const projectMap = new Map((projects || []).map((p) => [p.id, { name: p.name, color: p.color }]));
+	// Map includes archived projects so a session whose project got archived
+	// keeps rendering its name (with an "Archived" chip via SessionRow) instead
+	// of falling through to "Unknown".
+	const projectMap = new Map(
+		(projects || []).map((p) => [p.id, { name: p.name, color: p.color, archived: p.archived }]),
+	);
 	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
 
 	const today = startOfDay();
@@ -305,6 +321,7 @@ export function TodayFeed() {
 									projectName={info?.name || "Unknown"}
 									projectColor={info?.color || "#888"}
 									projectId={session.projectId}
+									projectArchived={info?.archived}
 									focusScore={focusScoreMap.get(session.id)}
 									onDelete={handleDelete}
 									deleting={deleteSession.isPending}

@@ -6,7 +6,7 @@
 import { Calendar, Play, Square } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { ProjectWithDuration } from "@/entities/project";
+import { type ProjectWithDuration, visibleProjects } from "@/entities/project";
 import {
 	cn,
 	formatDuration,
@@ -134,7 +134,11 @@ export function SidebarTimer({
 						className="w-full rounded-md border border-border bg-background py-2 px-3 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-accent/30 focus:border-accent/40"
 					>
 						<option value="">Select project...</option>
-						{projects.map((p) => (
+						{/* Archived projects are hidden from the timer picker — they
+						    can't be selected for new sessions. The currently-running
+						    timer keeps showing its project even if it got archived
+						    mid-session (selectedProject lookup above is unfiltered). */}
+						{visibleProjects(projects).map((p) => (
 							<option key={p.id} value={p.id}>
 								{p.name}
 							</option>

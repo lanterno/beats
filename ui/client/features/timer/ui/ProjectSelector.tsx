@@ -5,7 +5,7 @@
 
 import { Search, X } from "lucide-react";
 import { useState } from "react";
-import type { ProjectWithDuration } from "@/entities/project";
+import { type ProjectWithDuration, visibleProjects } from "@/entities/project";
 import { cn } from "@/shared/lib";
 
 interface ProjectSelectorProps {
@@ -24,9 +24,11 @@ export function ProjectSelector({
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+	// Lookup is unfiltered so the running timer can keep showing an
+	// already-archived project; the picker list below is filtered.
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
-	const filteredProjects = projects.filter(
+	const filteredProjects = visibleProjects(projects).filter(
 		(project) =>
 			project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			project.description?.toLowerCase().includes(searchQuery.toLowerCase()),

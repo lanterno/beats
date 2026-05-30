@@ -1,30 +1,49 @@
 /**
  * Sidebar Project List Component
  * Compact project navigation with weekly hours for each project.
+ *
+ * P0.3: archived projects are hidden by default. A "Show archived" toggle
+ * brings them back as a dimmed group with an explicit "Archived" chip —
+ * the escape hatch a user needs to find an archived project to restore it
+ * (the full /projects index is deferred to P3.1).
  */
-import { Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { NewProjectDialog, type ProjectWithDuration } from "@/entities/project";
-import { formatDuration } from "@/shared/lib";
+import {
+	NewProjectDialog,
+	type ProjectWithDuration,
+	partitionByArchived,
+} from "@/entities/project";
+import { cn, formatDuration } from "@/shared/lib";
 
 interface SidebarProjectListProps {
 	projects: ProjectWithDuration[];
+}
+
+function sortForList(list: ProjectWithDuration[]): ProjectWithDuration[] {
+	// Active by weekly hours desc, then inactive alphabetical — preserves the
+	// pre-P0.3 ordering rule so this milestone is purely additive.
+	const active = list
+		.filter((p) => p.weeklyMinutes > 0)
+		.sort((a, b) => b.weeklyMinutes - a.weeklyMinutes);
+	const inactive = list
+		.filter((p) => p.weeklyMinutes === 0)
+		.sort((a, b) => a.name.localeCompare(b.name));
+	return [...active, ...inactive];
 }
 
 export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 	const navigate = useNavigate();
 	const { projectId: activeProjectId } = useParams<{ projectId: string }>();
 	const [dialogOpen, setDialogOpen] = useState(false);
+	const [showArchived, setShowArchived] = useState(false);
 
-	// Active projects first (by weekly hours desc), then inactive alphabetically
-	const active = projects
-		.filter((p) => p.weeklyMinutes > 0)
-		.sort((a, b) => b.weeklyMinutes - a.weeklyMinutes);
-	const inactive = projects
-		.filter((p) => p.weeklyMinutes === 0)
-		.sort((a, b) => a.name.localeCompare(b.name));
-	const sorted = [...active, ...inactive];
+	const { visible, archived } = partitionByArchived(projects);
+	const sortedVisible = sortForList(visible);
+	const sortedArchived = sortForList(archived);
+
+	const isActiveProject = (id: string) => id === activeProjectId;
 
 	return (
 		<div>
@@ -41,19 +60,21 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 				</button>
 			</div>
 			<nav className="space-y-0.5">
-				{sorted.map((project) => {
-					const isActive = project.id === activeProjectId;
+				{sortedVisible.map((project) => {
+					const isActive = isActiveProject(project.id);
 					const isInactive = project.weeklyMinutes === 0;
 
 					return (
 						<button
 							key={project.id}
 							onClick={() => navigate(`/project/${project.id}`)}
-							className={`
-                w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left
-                ${isActive ? "bg-sidebar-accent text-sidebar-foreground" : "hover:bg-sidebar-accent/50 text-sidebar-foreground"}
-                ${isInactive && !isActive ? "opacity-45" : ""}
-              `}
+							className={cn(
+								"w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left",
+								isActive
+									? "bg-sidebar-accent text-sidebar-foreground"
+									: "hover:bg-sidebar-accent/50 text-sidebar-foreground",
+								isInactive && !isActive && "opacity-45",
+							)}
 						>
 							<div
 								className="w-2 h-2 rounded-full shrink-0"
@@ -61,16 +82,17 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 							/>
 							<span className="truncate flex-1 min-w-0">{project.name}</span>
 							<span
-								className={`text-xs tabular-nums shrink-0 ${
-									project.weeklyMinutes > 0 ? "text-muted-foreground" : "text-muted-foreground/40"
-								}`}
+								className={cn(
+									"text-xs tabular-nums shrink-0",
+									project.weeklyMinutes > 0 ? "text-muted-foreground" : "text-muted-foreground/40",
+								)}
 							>
 								{project.weeklyMinutes > 0 ? formatDuration(project.weeklyMinutes) : "—"}
 							</span>
 						</button>
 					);
 				})}
-				{sorted.length === 0 && (
+				{sortedVisible.length === 0 && (
 					<button
 						type="button"
 						onClick={() => setDialogOpen(true)}
@@ -81,6 +103,52 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 					</button>
 				)}
 			</nav>
+
+			{sortedArchived.length > 0 && (
+				<div className="mt-3 pt-2 border-t border-sidebar-border/60">
+					<button
+						type="button"
+						onClick={() => setShowArchived((v) => !v)}
+						aria-expanded={showArchived}
+						className="w-full flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+					>
+						{showArchived ? (
+							<ChevronDown className="w-3 h-3" />
+						) : (
+							<ChevronRight className="w-3 h-3" />
+						)}
+						Archived ({sortedArchived.length})
+					</button>
+					{showArchived && (
+						<nav className="mt-1 space-y-0.5">
+							{sortedArchived.map((project) => {
+								const isActive = isActiveProject(project.id);
+								return (
+									<button
+										key={project.id}
+										onClick={() => navigate(`/project/${project.id}`)}
+										className={cn(
+											"w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left opacity-70",
+											isActive
+												? "bg-sidebar-accent text-sidebar-foreground"
+												: "hover:bg-sidebar-accent/50 text-sidebar-foreground",
+										)}
+									>
+										<div
+											className="w-2 h-2 rounded-full shrink-0"
+											style={{ backgroundColor: project.color }}
+										/>
+										<span className="truncate flex-1 min-w-0">{project.name}</span>
+										<span className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground shrink-0">
+											Arch
+										</span>
+									</button>
+								);
+							})}
+						</nav>
+					)}
+				</div>
+			)}
 
 			<NewProjectDialog
 				open={dialogOpen}

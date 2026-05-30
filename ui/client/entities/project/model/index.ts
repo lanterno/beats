@@ -6,6 +6,8 @@
 export { assignColor } from "./colors";
 // Mappers
 export { toProject } from "./mappers";
+// Selectors
+export { isVisibleProject, partitionByArchived, visibleProjects } from "./selectors";
 // Types
 export type {
 	DailySummary,

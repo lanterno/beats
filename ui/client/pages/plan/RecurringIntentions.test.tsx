@@ -22,6 +22,8 @@ vi.mock("@/entities/project", () => ({
 			{ id: "p2", name: "Beta", color: "#0f0", archived: false },
 		],
 	}),
+	visibleProjects: <T extends { archived: boolean }>(list: T[] | undefined) =>
+		(list ?? []).filter((p) => !p.archived),
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));

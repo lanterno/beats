@@ -13,7 +13,7 @@ import {
 	useIntentions,
 	useUpdateIntention,
 } from "@/entities/planning";
-import { useProjects } from "@/entities/project";
+import { useProjects, visibleProjects } from "@/entities/project";
 import type { Intention } from "@/shared/api";
 import { cn, formatDuration } from "@/shared/lib";
 import { GoalRing } from "@/shared/ui";
@@ -34,7 +34,7 @@ export function TodaysPlan({ trackedMinutesByProject }: TodaysPlanProps) {
 	const [newProjectId, setNewProjectId] = useState("");
 	const [newMinutes, setNewMinutes] = useState(60);
 
-	const activeProjects = (projects ?? []).filter((p) => !p.archived);
+	const activeProjects = visibleProjects(projects);
 	const projectMap = new Map(activeProjects.map((p) => [p.id, p]));
 	const items = intentions ?? [];
 	const { data: suggestions } = useSuggestions();

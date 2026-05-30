@@ -5,7 +5,7 @@
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useProjects } from "@/entities/project";
+import { useProjects, visibleProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
 import { BestMoment } from "./BestMoment";
@@ -56,7 +56,7 @@ export default function Insights() {
 	const currentYear = new Date().getFullYear();
 	const { data: heatmapData } = useHeatmap(currentYear, selectedProjectId, selectedTag);
 
-	const activeProjects = (projects ?? []).filter((p) => !p.archived);
+	const activeProjects = visibleProjects(projects);
 
 	// Compute current month summary from heatmap data
 	const monthSummary = useMemo(() => {
