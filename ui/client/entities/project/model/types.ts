@@ -27,6 +27,12 @@ export interface Project {
 	weeklyGoal?: number; // Weekly goal in hours
 	goalType?: "target" | "cap";
 	goalOverrides: GoalOverride[];
+	/** GitHub repo in "owner/repo" format for commit correlation. */
+	githubRepo?: string;
+	/** Activity category — fuels the daemon's flow_score category_fit matcher. */
+	category?: string;
+	/** Absolute local repo paths the daemon auto-starts a timer for. */
+	autostartRepos: string[];
 }
 
 /**

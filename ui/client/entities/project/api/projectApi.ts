@@ -34,6 +34,8 @@ export async function createProject(input: {
 	color?: string | null;
 	weekly_goal?: number | null;
 	category?: string | null;
+	github_repo?: string | null;
+	autostart_repos?: string[];
 }): Promise<ApiProject> {
 	const data = await post<unknown>("/api/projects/", input);
 	return parseApiResponse(ApiProjectSchema, data);
@@ -118,6 +120,9 @@ export async function updateProject(project: {
 	archived?: boolean;
 	weekly_goal?: number | null;
 	goal_type?: string;
+	github_repo?: string | null;
+	category?: string | null;
+	autostart_repos?: string[];
 }): Promise<ApiProject> {
 	const data = await put<unknown>("/api/projects/", project);
 	return parseApiResponse(ApiProjectSchema, data);

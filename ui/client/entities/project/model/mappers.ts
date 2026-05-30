@@ -21,6 +21,9 @@ export function toProject(apiProject: ApiProject): Project {
 		weeklyGoal: apiProject.weekly_goal ?? undefined,
 		goalType: apiProject.goal_type ?? "target",
 		goalOverrides: (apiProject.goal_overrides ?? []).map(toGoalOverride),
+		githubRepo: apiProject.github_repo ?? undefined,
+		category: apiProject.category ?? undefined,
+		autostartRepos: apiProject.autostart_repos ?? [],
 	};
 }
 
@@ -38,6 +41,9 @@ export function toApiProject(project: Project): ApiProject {
 		weekly_goal: project.weeklyGoal ?? null,
 		goal_type: project.goalType ?? "target",
 		goal_overrides: (project.goalOverrides ?? []).map(toApiGoalOverride),
+		github_repo: project.githubRepo ?? null,
+		category: project.category ?? null,
+		autostart_repos: project.autostartRepos ?? [],
 	};
 }
 
