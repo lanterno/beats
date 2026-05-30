@@ -38,16 +38,21 @@ export type {
 export {
 	assignColor,
 	clearPickerRecents,
+	clearPins,
 	extractCategories,
 	type FilterAndRankOptions,
 	filterAndRankProjects,
+	isPinned,
 	isVisibleProject,
 	partitionByArchived,
 	readPickerRecents,
+	readPins,
 	recordPickerRecent,
 	type SearchField,
 	sortProjectsForList,
+	togglePin,
 	toProject,
+	usePinnedProjects,
 	visibleProjects,
 } from "./model";
 

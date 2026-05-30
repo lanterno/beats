@@ -7,7 +7,7 @@
  * the escape hatch a user needs to find an archived project to restore it
  * (the full /projects index is deferred to P3.1).
  */
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Star } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -15,6 +15,7 @@ import {
 	type ProjectWithDuration,
 	partitionByArchived,
 	sortProjectsForList,
+	usePinnedProjects,
 } from "@/entities/project";
 import { cn, formatDuration } from "@/shared/lib";
 
@@ -27,9 +28,10 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 	const { projectId: activeProjectId } = useParams<{ projectId: string }>();
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [showArchived, setShowArchived] = useState(false);
+	const { pins, toggle: togglePinId, isPinned } = usePinnedProjects();
 
 	const { visible, archived } = partitionByArchived(projects);
-	const sortedVisible = sortProjectsForList(visible);
+	const sortedVisible = sortProjectsForList(visible, { pinnedIds: pins });
 	const sortedArchived = sortProjectsForList(archived);
 
 	const isActiveProject = (id: string) => id === activeProjectId;
@@ -52,33 +54,60 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 				{sortedVisible.map((project) => {
 					const isActive = isActiveProject(project.id);
 					const isInactive = project.weeklyMinutes === 0;
+					const pinned = isPinned(project.id);
 
 					return (
-						<button
+						<div
 							key={project.id}
-							onClick={() => navigate(`/project/${project.id}`)}
 							className={cn(
-								"w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left",
+								"group w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors",
 								isActive
 									? "bg-sidebar-accent text-sidebar-foreground"
 									: "hover:bg-sidebar-accent/50 text-sidebar-foreground",
 								isInactive && !isActive && "opacity-45",
 							)}
 						>
-							<div
-								className="w-2 h-2 rounded-full shrink-0"
-								style={{ backgroundColor: project.color }}
-							/>
-							<span className="truncate flex-1 min-w-0">{project.name}</span>
-							<span
+							<button
+								type="button"
+								onClick={() => navigate(`/project/${project.id}`)}
+								className="flex items-center gap-2 flex-1 min-w-0 text-left text-sm"
+							>
+								<div
+									className="w-2 h-2 rounded-full shrink-0"
+									style={{ backgroundColor: project.color }}
+								/>
+								<span className="truncate flex-1 min-w-0">{project.name}</span>
+								<span
+									className={cn(
+										"text-xs tabular-nums shrink-0",
+										project.weeklyMinutes > 0
+											? "text-muted-foreground"
+											: "text-muted-foreground/40",
+									)}
+								>
+									{project.weeklyMinutes > 0 ? formatDuration(project.weeklyMinutes) : "—"}
+								</span>
+							</button>
+							<button
+								type="button"
+								onClick={() => togglePinId(project.id)}
+								aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+								aria-pressed={pinned}
+								title={pinned ? "Unpin from top" : "Pin to top"}
 								className={cn(
-									"text-xs tabular-nums shrink-0",
-									project.weeklyMinutes > 0 ? "text-muted-foreground" : "text-muted-foreground/40",
+									"p-1 rounded transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+									pinned
+										? "text-accent"
+										: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent",
 								)}
 							>
-								{project.weeklyMinutes > 0 ? formatDuration(project.weeklyMinutes) : "—"}
-							</span>
-						</button>
+								<Star
+									className="w-3 h-3"
+									fill={pinned ? "currentColor" : "none"}
+									aria-hidden="true"
+								/>
+							</button>
+						</div>
 					);
 				})}
 				{sortedVisible.length === 0 && (

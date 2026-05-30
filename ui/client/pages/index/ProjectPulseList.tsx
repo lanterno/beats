@@ -4,12 +4,13 @@
  * Designed to show data NOT already in the sidebar (which shows name + weekly hours).
  */
 
-import { Layers, Plus } from "lucide-react";
+import { Layers, Plus, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	NewProjectDialog,
 	sortProjectsForList,
+	usePinnedProjects,
 	useProjects,
 	visibleProjects,
 } from "@/entities/project";
@@ -101,7 +102,8 @@ export function ProjectPulseList() {
 
 	const summaries = useMemo(() => (allBeats ? buildSummaries(allBeats) : undefined), [allBeats]);
 
-	const sorted = sortProjectsForList(visibleProjects(projects));
+	const { pins, toggle: togglePinId, isPinned } = usePinnedProjects();
+	const sorted = sortProjectsForList(visibleProjects(projects), { pinnedIds: pins });
 
 	const today = startOfDay();
 
@@ -158,43 +160,68 @@ export function ProjectPulseList() {
 							? Math.min((project.weeklyMinutes / 60 / dashGoal) * 100, 100)
 							: null;
 
+						const pinned = isPinned(project.id);
 						return (
-							<button
+							<div
 								key={project.id}
-								onClick={() => navigate(`/project/${project.id}`)}
 								className={cn(
-									"w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/40 transition-colors text-left",
+									"group w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/40 transition-colors",
 									isInactive && "opacity-45",
 								)}
 							>
-								<div
-									className="w-2 h-2 rounded-full shrink-0"
-									style={{ backgroundColor: project.color }}
-								/>
-								<span className="text-sm font-medium text-foreground truncate min-w-0 flex-1">
-									{project.name}
-								</span>
+								<button
+									type="button"
+									onClick={() => navigate(`/project/${project.id}`)}
+									className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+								>
+									<div
+										className="w-2 h-2 rounded-full shrink-0"
+										style={{ backgroundColor: project.color }}
+									/>
+									<span className="text-sm font-medium text-foreground truncate min-w-0 flex-1">
+										{project.name}
+									</span>
 
-								{summary && <MiniSparkline data={summary} />}
+									{summary && <MiniSparkline data={summary} />}
 
-								<span
+									<span
+										className={cn(
+											"text-xs tabular-nums shrink-0 w-10 text-right",
+											todayHours > 0 ? "text-foreground" : "text-muted-foreground/40",
+										)}
+									>
+										{todayHours > 0 ? `${todayHours.toFixed(1)}h` : "—"}
+									</span>
+
+									{goalPct !== null && (
+										<GoalRing
+											percent={goalPct}
+											size={22}
+											strokeWidth={2.5}
+											isCap={dashGoalType === "cap"}
+										/>
+									)}
+								</button>
+								<button
+									type="button"
+									onClick={() => togglePinId(project.id)}
+									aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+									aria-pressed={pinned}
+									title={pinned ? "Unpin from top" : "Pin to top"}
 									className={cn(
-										"text-xs tabular-nums shrink-0 w-10 text-right",
-										todayHours > 0 ? "text-foreground" : "text-muted-foreground/40",
+										"p-1 rounded transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+										pinned
+											? "text-accent"
+											: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent",
 									)}
 								>
-									{todayHours > 0 ? `${todayHours.toFixed(1)}h` : "—"}
-								</span>
-
-								{goalPct !== null && (
-									<GoalRing
-										percent={goalPct}
-										size={22}
-										strokeWidth={2.5}
-										isCap={dashGoalType === "cap"}
+									<Star
+										className="w-3 h-3"
+										fill={pinned ? "currentColor" : "none"}
+										aria-hidden="true"
 									/>
-								)}
-							</button>
+								</button>
+							</div>
 						);
 					})}
 				</div>
