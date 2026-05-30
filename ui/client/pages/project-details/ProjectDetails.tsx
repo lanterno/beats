@@ -7,6 +7,7 @@ import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useProjectPlannedByWeek } from "@/entities/planning";
 import type { GoalOverride } from "@/entities/project";
 import {
 	LoadingSpinner,
@@ -53,6 +54,23 @@ const WEEKDAYS = [
 ] as const;
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
+/** Local Monday (ISO YYYY-MM-DD) `weeksAgo` weeks back, noon-anchored to
+ *  dodge DST/UTC edge cases on the day boundary. Pure date math so it's
+ *  safe to call above the hook. */
+function getMondayIsoFor(weeksAgo: number): string {
+	const d = new Date();
+	d.setHours(12, 0, 0, 0);
+	d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - weeksAgo * 7);
+	const yyyy = d.getFullYear();
+	const mm = String(d.getMonth() + 1).padStart(2, "0");
+	const dd = String(d.getDate()).padStart(2, "0");
+	return `${yyyy}-${mm}-${dd}`;
+}
+
+function computeMondayIsoList(weekCount: number): string[] {
+	return Array.from({ length: weekCount }, (_, i) => getMondayIsoFor(i));
+}
+
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -81,6 +99,13 @@ export default function ProjectDetails() {
 	const updateProjectMutation = useUpdateProject();
 	const updateGoalOverridesMutation = useUpdateGoalOverrides();
 	const [overridePopoverWeek, setOverridePopoverWeek] = useState<number | null>(null);
+
+	// P4.1: planned hours per week for this project. Hook must sit above the
+	// loading/not-found early return; Monday list is derived from weekCount
+	// rather than from project so the call stays unconditional. Undefined
+	// for a row = "no plan entry that week" (em-dash); 0 = explicit zero.
+	const mondayIsoList = computeMondayIsoList(weekCount);
+	const { byMondayIso: plannedByMonday } = useProjectPlannedByWeek(projectId, mondayIsoList);
 
 	// Reset per-project view state when the route project changes. projectId is
 	// the intentional trigger here (the body only calls stable setters), so it
@@ -454,7 +479,7 @@ export default function ProjectDetails() {
 					<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 						{/* Header */}
 						<div
-							className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px]"} px-3 py-2 border-b border-border/60`}
+							className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_64px]"} px-3 py-2 border-b border-border/60`}
 						>
 							<div />
 							{WEEKDAY_SHORT.map((d, i) => (
@@ -467,6 +492,12 @@ export default function ProjectDetails() {
 									{d}
 								</div>
 							))}
+							<div
+								className="text-right text-[10px] uppercase tracking-widest text-muted-foreground"
+								title="Planned hours for this project this week"
+							>
+								Planned
+							</div>
 							<div className="text-right text-[10px] uppercase tracking-widest text-muted-foreground">
 								Total
 							</div>
@@ -494,7 +525,7 @@ export default function ProjectDetails() {
 							return (
 								<div
 									key={row.label}
-									className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px]"} px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
+									className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_64px]"} px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
 										rowIdx === 0 ? "bg-secondary/10" : "hover:bg-secondary/10"
 									}`}
 								>
@@ -534,6 +565,7 @@ export default function ProjectDetails() {
 											{mins > 0 ? `${(mins / 60).toFixed(1)}` : "—"}
 										</div>
 									))}
+									<PlannedCell hours={plannedByMonday.get(row.mondayIso)} />
 									{hasAnyGoal ? (
 										<>
 											<div className="relative flex flex-col items-end gap-0.5">
@@ -811,6 +843,30 @@ export default function ProjectDetails() {
 				onClose={() => setSettingsOpen(false)}
 				autoFocusField={settingsFocus}
 			/>
+		</div>
+	);
+}
+
+/**
+ * One cell in the week-history table's "Planned" column.
+ * - undefined  → em-dash (no plan entry for this project that week)
+ * - 0          → "0h"     (plan explicitly set this project to zero)
+ * - n          → "n.nh"
+ */
+function PlannedCell({ hours }: { hours: number | undefined }) {
+	if (hours === undefined) {
+		return (
+			<div
+				className="text-right text-xs tabular-nums text-muted-foreground/30"
+				title="No plan entry for this week"
+			>
+				—
+			</div>
+		);
+	}
+	return (
+		<div className="text-right text-xs tabular-nums text-muted-foreground" title="Planned hours">
+			{hours.toFixed(1)}h
 		</div>
 	);
 }

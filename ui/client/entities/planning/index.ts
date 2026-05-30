@@ -13,6 +13,7 @@ export {
 	useDeleteRecurringIntention,
 	useIntentionStreaks,
 	useIntentions,
+	useProjectPlannedByWeek,
 	useRecurringIntentions,
 	useUpdateIntention,
 	useUpsertDailyNote,
