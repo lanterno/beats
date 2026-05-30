@@ -9,6 +9,25 @@
 import type { Project, ProjectWithDuration } from "./types";
 
 /**
+ * The canonical "list" ordering used by SidebarProjectList and the
+ * dashboard ProjectPulseList: active projects (this-week minutes > 0)
+ * first, sorted by weekly minutes desc; inactive projects after, sorted
+ * alphabetically by name. Lives in selectors so the two surfaces can't
+ * drift — and so P2.5's pin-to-top has one place to plug into.
+ */
+export function sortProjectsForList<T extends Pick<ProjectWithDuration, "name" | "weeklyMinutes">>(
+	projects: T[],
+): T[] {
+	const active = projects
+		.filter((p) => p.weeklyMinutes > 0)
+		.sort((a, b) => b.weeklyMinutes - a.weeklyMinutes);
+	const inactive = projects
+		.filter((p) => p.weeklyMinutes === 0)
+		.sort((a, b) => a.name.localeCompare(b.name));
+	return [...active, ...inactive];
+}
+
+/**
  * True iff the project should appear in active pickers/lists. Currently just
  * "not archived", but kept as a named predicate so future rules (hidden by
  * the user, soft-deleted, etc.) plug in without touching every consumer.

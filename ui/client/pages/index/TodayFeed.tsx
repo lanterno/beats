@@ -3,12 +3,12 @@
  * Today's sessions listed compactly, with collapsible yesterday/earlier sections.
  */
 
-import { ChevronDown, Clock, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Clock, Trash2, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useFocusScores } from "@/entities/intelligence";
-import { useProjects } from "@/entities/project";
+import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import type { Session } from "@/entities/session";
 import {
 	useDeleteSession,
@@ -253,23 +253,36 @@ export function TodayFeed() {
 	);
 	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
 
+	// Per-project scope toggle (P2.4) — useful when a user wants to see only
+	// one project's day at a glance. Default null = all projects.
+	const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
+	const pickerProjects = useMemo(() => visibleProjects(projects), [projects]);
+
+	const scopeToFilter = <T extends { projectId: string }>(list: T[]): T[] =>
+		filterProjectId ? list.filter((s) => s.projectId === filterProjectId) : list;
+
 	const today = startOfDay();
 
 	const yesterday = new Date(today);
 	yesterday.setDate(yesterday.getDate() - 1);
 
 	// Split week sessions into yesterday and earlier (excluding today)
-	const yesterdaySessions = (weekSessions || []).filter((s) => {
-		const d = parseUtcIso(s.startTime);
-		return d >= yesterday && d < today;
-	});
+	const yesterdaySessions = scopeToFilter(
+		(weekSessions || []).filter((s) => {
+			const d = parseUtcIso(s.startTime);
+			return d >= yesterday && d < today;
+		}),
+	);
 
-	const earlierSessions = (weekSessions || []).filter((s) => {
-		const d = parseUtcIso(s.startTime);
-		return d < yesterday;
-	});
+	const earlierSessions = scopeToFilter(
+		(weekSessions || []).filter((s) => {
+			const d = parseUtcIso(s.startTime);
+			return d < yesterday;
+		}),
+	);
 
-	const todayTotal = (todaySessions || []).reduce((sum, s) => sum + s.duration, 0);
+	const filteredTodaySessions = scopeToFilter(todaySessions || []);
+	const todayTotal = filteredTodaySessions.reduce((sum, s) => sum + s.duration, 0);
 	const avgFocus =
 		focusScores && focusScores.length > 0
 			? Math.round(focusScores.reduce((sum, f) => sum + f.score, 0) / focusScores.length)
@@ -277,14 +290,37 @@ export function TodayFeed() {
 	const yesterdayTotal = yesterdaySessions.reduce((sum, s) => sum + s.duration, 0);
 	const earlierTotal = earlierSessions.reduce((sum, s) => sum + s.duration, 0);
 
-	const todayList = todaySessions || [];
+	const todayList = filteredTodaySessions;
 
 	return (
 		<div>
-			<h2 className="flex items-center gap-2 text-foreground font-medium text-sm mb-3">
-				<Clock className="w-3.5 h-3.5 text-accent/75" />
-				Activity
-			</h2>
+			<div className="flex items-center gap-2 mb-3">
+				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm">
+					<Clock className="w-3.5 h-3.5 text-accent/75" />
+					Activity
+				</h2>
+				<div className="ml-auto flex items-center gap-1 w-44">
+					<ProjectPicker
+						projects={pickerProjects}
+						value={filterProjectId}
+						onChange={setFilterProjectId}
+						compact
+						triggerPlaceholder="All projects"
+						ariaLabel="Filter activity by project"
+					/>
+					{filterProjectId && (
+						<button
+							type="button"
+							onClick={() => setFilterProjectId(null)}
+							aria-label="Clear project filter"
+							title="Show all projects"
+							className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+						>
+							<X className="w-3.5 h-3.5" />
+						</button>
+					)}
+				</div>
+			</div>
 
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 				{/* Today section — always open */}

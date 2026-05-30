@@ -16,6 +16,7 @@ export {
 	isVisibleProject,
 	partitionByArchived,
 	type SearchField,
+	sortProjectsForList,
 	visibleProjects,
 } from "./selectors";
 // Types
