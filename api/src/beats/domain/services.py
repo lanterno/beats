@@ -214,6 +214,18 @@ class ProjectService:
         today_beats = [b for b in beats if b.start.date() == today]
         return sum((b.duration for b in today_beats), timedelta())
 
+    async def get_last_tracked_at(self, project_id: str) -> datetime | None:
+        """The timestamp of the project's most recent activity.
+
+        Used by the /projects index page's "last tracked" column (P3.0).
+        Falls back to a beat's `start` when `end` is null (running beat) so
+        an in-progress timer counts as "just now".
+        """
+        beats = await self.beat_repo.list_by_project(project_id)
+        if not beats:
+            return None
+        return max(b.end or b.start for b in beats)
+
     async def get_week_breakdown(
         self,
         project_id: str,

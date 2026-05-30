@@ -46,6 +46,9 @@ export interface ProjectWithDuration extends Project {
 	effectiveGoalType?: "target" | "cap";
 	/** True iff a goal override resolves for the current week */
 	effectiveGoalOverridden?: boolean;
+	/** ISO timestamp of the project's most recent beat — drives the
+	 *  /projects index page's "last tracked" column (P3.0). */
+	lastTrackedAt?: string;
 }
 
 /**

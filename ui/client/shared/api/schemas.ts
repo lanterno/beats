@@ -44,6 +44,23 @@ export const ApiProjectSchema = z.object({
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
 
 /**
+ * The list-endpoint item — same fields as ApiProject plus optional
+ * aggregation slots populated when GET /api/projects/?include=... is sent.
+ * P3.0 of the project-management revamp: collapses the previous N+1 fan-out
+ * (one fetchProjectTotal + fetchProjectWeek per project) into one round-trip.
+ */
+export const ApiProjectListItemSchema = ApiProjectSchema.extend({
+	total_minutes: z.number().nullable().optional(),
+	weekly_minutes: z.number().nullable().optional(),
+	effective_goal: z.number().nullable().optional(),
+	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
+	effective_goal_overridden: z.boolean().nullable().optional(),
+	last_tracked_at: z.string().nullable().optional(),
+});
+
+export type ApiProjectListItem = z.infer<typeof ApiProjectListItemSchema>;
+
+/**
  * Beat (work session) as returned by the API
  */
 export const ApiBeatSchema = z.object({
@@ -390,7 +407,7 @@ export const GapListSchema = z.array(GapSchema);
 // Array schemas for list endpoints
 // ============================================================================
 
-export const ApiProjectListSchema = z.array(ApiProjectSchema);
+export const ApiProjectListSchema = z.array(ApiProjectListItemSchema);
 export const ApiBeatListSchema = z.array(ApiBeatSchema);
 
 // ============================================================================

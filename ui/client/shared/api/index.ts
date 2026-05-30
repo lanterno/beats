@@ -24,6 +24,7 @@ export type {
 	ApiBeat,
 	ApiGoalOverride,
 	ApiProject,
+	ApiProjectListItem,
 	CalendarEvent,
 	CalendarStatus,
 	DailyNote,
@@ -53,6 +54,7 @@ export type {
 export {
 	ApiBeatListSchema,
 	ApiBeatSchema,
+	ApiProjectListItemSchema,
 	ApiProjectListSchema,
 	ApiProjectSchema,
 	CalendarEventListSchema,
