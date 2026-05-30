@@ -4,7 +4,16 @@
  * Pinned left on desktop, hidden on mobile (MobileHeader handles mobile).
  */
 
-import { BarChart3, CalendarDays, Download, LogOut, Settings, Sparkles, X } from "lucide-react";
+import {
+	BarChart3,
+	CalendarDays,
+	Download,
+	Layers,
+	LogOut,
+	Settings,
+	Sparkles,
+	X,
+} from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ProjectWithDuration } from "@/entities/project";
 import { clearSessionToken, logout, useAuth } from "@/features/auth";
@@ -46,6 +55,18 @@ export function Sidebar(props: SidebarProps) {
 					<SyncStatus />
 				</div>
 				<div className="flex items-center gap-1">
+					<Link
+						to="/projects"
+						className={cn(
+							"p-1.5 rounded-md transition-colors",
+							location.pathname.startsWith("/projects")
+								? "bg-sidebar-accent text-sidebar-primary"
+								: "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
+						)}
+						title="Projects"
+					>
+						<Layers className="w-4 h-4" />
+					</Link>
 					<Link
 						to="/plan"
 						className={cn(

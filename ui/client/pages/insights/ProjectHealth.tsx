@@ -4,6 +4,7 @@
  */
 
 import { Activity, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useProjectHealth } from "@/entities/intelligence";
 import { cn } from "@/shared/lib";
 
@@ -21,10 +22,11 @@ export function ProjectHealth() {
 
 			<div className="space-y-2">
 				{projects.map((p) => (
-					<div
+					<Link
 						key={p.project_id}
+						to={`/project/${p.project_id}`}
 						className={cn(
-							"flex items-center gap-2.5 px-2 py-1.5 rounded-md text-xs",
+							"flex items-center gap-2.5 px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-secondary/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
 							p.alert && "bg-destructive/5 border border-destructive/20",
 						)}
 					>
@@ -48,7 +50,7 @@ export function ProjectHealth() {
 							</div>
 						)}
 						{p.alert && <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />}
-					</div>
+					</Link>
 				))}
 			</div>
 		</div>
