@@ -4,3 +4,4 @@
 
 export { LoadingSpinner } from "./LoadingSpinner";
 export { NewProjectDialog } from "./NewProjectDialog";
+export { ProjectForm, type ProjectFormProps, type ProjectFormValues } from "./ProjectForm";

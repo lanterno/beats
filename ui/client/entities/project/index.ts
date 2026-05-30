@@ -44,4 +44,10 @@ export {
 } from "./model";
 
 // UI layer
-export { LoadingSpinner, NewProjectDialog } from "./ui";
+export {
+	LoadingSpinner,
+	NewProjectDialog,
+	ProjectForm,
+	type ProjectFormProps,
+	type ProjectFormValues,
+} from "./ui";
