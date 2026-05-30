@@ -36,6 +36,7 @@ import {
 } from "@/shared/lib";
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
+import { ProjectDangerZone } from "./ProjectDangerZone";
 
 const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = [
@@ -323,6 +324,14 @@ export default function ProjectDetails() {
 						)}
 					</div>
 					<h1 className="font-heading text-xl text-foreground truncate">{project.name}</h1>
+					{project.archived && (
+						<span
+							className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-muted-foreground/40 text-muted-foreground shrink-0"
+							title="This project is archived. Hidden from active pickers and lists."
+						>
+							Archived
+						</span>
+					)}
 					{project.description && (
 						<span className="text-muted-foreground text-sm hidden md:inline truncate max-w-[200px]">
 							— {project.description}
@@ -667,6 +676,12 @@ export default function ProjectDetails() {
 						</div>
 					)}
 				</section>
+
+				<ProjectDangerZone
+					projectId={project.id}
+					projectName={project.name}
+					archived={project.archived}
+				/>
 			</main>
 		</div>
 	);

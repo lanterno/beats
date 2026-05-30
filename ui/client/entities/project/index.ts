@@ -10,16 +10,20 @@
 
 // API layer
 export {
+	archiveProject,
 	createProject,
 	fetchProjects,
 	fetchProjectTotal,
 	fetchProjectWeek,
 	projectKeys,
+	unarchiveProject,
+	useArchiveProject,
 	useCreateProject,
 	useInvalidateProjects,
 	useProject,
 	useProjects,
 	useProjectWeeks,
+	useUnarchiveProject,
 	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "./api";

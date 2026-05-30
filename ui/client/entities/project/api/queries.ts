@@ -7,10 +7,12 @@ import type { ApiGoalOverride } from "@/shared/api";
 import type { ProjectWithDuration, WeekHours } from "../model";
 import { toProject } from "../model";
 import {
+	archiveProject,
 	createProject,
 	fetchProjects,
 	fetchProjectTotal,
 	fetchProjectWeek,
+	unarchiveProject,
 	updateGoalOverrides,
 	updateProject,
 } from "./projectApi";
@@ -176,6 +178,36 @@ export function useCreateProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: createProject,
+		onSuccess: async () => {
+			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+		},
+	});
+}
+
+/**
+ * Hook to archive a project. Refetches the active list (so the row
+ * disappears immediately) then invalidates the rest of the project tree
+ * so any place that filters by archived state reconciles.
+ */
+export function useArchiveProject() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: archiveProject,
+		onSuccess: async () => {
+			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+		},
+	});
+}
+
+/**
+ * Hook to restore an archived project (symmetric to useArchiveProject).
+ */
+export function useUnarchiveProject() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: unarchiveProject,
 		onSuccess: async () => {
 			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
