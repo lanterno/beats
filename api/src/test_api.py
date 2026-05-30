@@ -87,6 +87,85 @@ class TestProjectAPI:
         )
         assert response.status_code == 401
 
+    def test_projects_list_include_populates_aggregations(self):
+        """P3.0 — when GET /api/projects/ is called with include=totals,
+        this_week,last_tracked, each item in the response gains the
+        aggregation fields populated (vs null when the flag is omitted).
+        Locks in the wire shape the /projects index page consumes.
+        """
+        # Create a project + log a beat so the aggregations have
+        # something to report. The beat ends now so it counts in the
+        # current-week breakdown and as last_tracked_at.
+        from datetime import UTC, datetime, timedelta
+
+        proj_resp = client.post(
+            "/api/projects/",
+            json={"name": f"agg-{time.time()}", "weekly_goal": 5.0},
+            headers=auth_headers,
+        )
+        assert proj_resp.status_code == 201
+        pid = proj_resp.json()["id"]
+
+        end = datetime.now(UTC)
+        start = end - timedelta(minutes=30)
+        beat_resp = client.post(
+            "/api/beats/",
+            json={
+                "project_id": pid,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert beat_resp.status_code == 201, beat_resp.text
+
+        # Without `include` — aggregation slots are present but null.
+        listing = client.get("/api/projects/", headers=auth_headers).json()
+        slim = next(p for p in listing if p["id"] == pid)
+        for key in (
+            "total_minutes",
+            "weekly_minutes",
+            "effective_goal",
+            "last_tracked_at",
+        ):
+            assert key in slim, key
+            assert slim[key] is None, (key, slim[key])
+
+        # With include=totals,this_week,last_tracked — populated.
+        listing = client.get(
+            "/api/projects/?include=totals,this_week,last_tracked",
+            headers=auth_headers,
+        ).json()
+        rich = next(p for p in listing if p["id"] == pid)
+        # 30 minutes logged → totals + this-week reflect that.
+        assert rich["total_minutes"] is not None and rich["total_minutes"] >= 30
+        assert rich["weekly_minutes"] is not None and rich["weekly_minutes"] >= 30
+        # Goal trio populated.
+        assert rich["effective_goal"] == 5.0
+        assert rich["effective_goal_type"] == "target"
+        assert rich["effective_goal_overridden"] is False
+        # last_tracked_at survives JSON round-trip as an ISO string.
+        assert rich["last_tracked_at"] is not None
+
+    def test_projects_list_include_subset(self):
+        """Each include token is independent — requesting only 'totals'
+        leaves the this_week/last_tracked slots null."""
+        proj_resp = client.post(
+            "/api/projects/",
+            json={"name": f"subset-{time.time()}"},
+            headers=auth_headers,
+        )
+        pid = proj_resp.json()["id"]
+
+        listing = client.get(
+            "/api/projects/?include=totals",
+            headers=auth_headers,
+        ).json()
+        match = next(p for p in listing if p["id"] == pid)
+        assert match["total_minutes"] is not None  # populated (zero)
+        assert match["weekly_minutes"] is None
+        assert match["last_tracked_at"] is None
+
     def test_project_response_carries_every_domain_field(self):
         """Regression guard: ProjectResponse used to declare 6 of 11
         fields and the list/create/update routes had no response_model,

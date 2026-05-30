@@ -2220,6 +2220,180 @@
         "title": "ProjectResponse",
         "type": "object"
       },
+      "ProjectsListItemResponse": {
+        "description": "The list response shape \u2014 same fields as ProjectResponse, plus\noptional aggregations populated when GET /api/projects/ is called\nwith `include=totals,this_week,last_tracked`. Each field is None\nwhen its corresponding include flag wasn't requested. Backward\ncompatible because absent values stay None.\n\nAdded in P3.0 of the project-management revamp so the /projects\nindex page (P3.1) can load with a single round-trip instead of\nthe previous N+1 fan-out the UI did per project.",
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "autostart_repos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Autostart Repos",
+            "type": "array"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "effective_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Goal"
+          },
+          "effective_goal_overridden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Goal Overridden"
+          },
+          "effective_goal_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimation"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "goal_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/GoalOverrideResponse"
+            },
+            "title": "Goal Overrides",
+            "type": "array"
+          },
+          "goal_type": {
+            "$ref": "#/components/schemas/GoalType",
+            "default": "target"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_tracked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tracked At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "total_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Minutes"
+          },
+          "weekly_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal"
+          },
+          "weekly_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Minutes"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ProjectsListItemResponse",
+        "type": "object"
+      },
       "RecentDriftResponse": {
         "description": "Drift events recent enough to be worth notifying the user about.\n\nThe companion's notification poller queries this endpoint on a 5-minute\nforeground tick, fires `notifyDriftAlert` for any event id it hasn't\nseen, and dedupes via SharedPreferences. `since` defaults to 30 minutes\nago so a brief network blip doesn't cause the poller to miss a window.",
         "properties": {
@@ -7262,7 +7436,7 @@
     },
     "/api/projects/": {
       "get": {
-        "description": "List all projects, optionally filtering by archived status.",
+        "description": "List projects, optionally augmented with aggregation fields.\n\nBackward compatible: without `include`, the response carries the same\nfields as ProjectResponse plus null aggregation slots \u2014 older clients\nthat ignore unknown null fields keep working.\n\nP3.0 of the project-management revamp. First cut loops per-project\nserver-side; if profiling shows it's needed, a follow-up (P3.0b)\nmoves to a Mongo $facet pipeline for true batched aggregation.",
         "operationId": "list_projects_api_projects__get",
         "parameters": [
           {
@@ -7274,6 +7448,24 @@
               "title": "Archived",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+              "title": "Include"
+            }
           }
         ],
         "responses": {
@@ -7282,7 +7474,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ProjectResponse"
+                    "$ref": "#/components/schemas/ProjectsListItemResponse"
                   },
                   "title": "Response List Projects Api Projects  Get",
                   "type": "array"

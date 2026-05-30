@@ -1854,7 +1854,15 @@ export interface paths {
         };
         /**
          * List Projects
-         * @description List all projects, optionally filtering by archived status.
+         * @description List projects, optionally augmented with aggregation fields.
+         *
+         *     Backward compatible: without `include`, the response carries the same
+         *     fields as ProjectResponse plus null aggregation slots — older clients
+         *     that ignore unknown null fields keep working.
+         *
+         *     P3.0 of the project-management revamp. First cut loops per-project
+         *     server-side; if profiling shows it's needed, a follow-up (P3.0b)
+         *     moves to a Mongo $facet pipeline for true batched aggregation.
          */
         get: operations["list_projects_api_projects__get"];
         /**
@@ -3359,6 +3367,58 @@ export interface components {
             name: string;
             /** Weekly Goal */
             weekly_goal?: number | null;
+        };
+        /**
+         * ProjectsListItemResponse
+         * @description The list response shape — same fields as ProjectResponse, plus
+         *     optional aggregations populated when GET /api/projects/ is called
+         *     with `include=totals,this_week,last_tracked`. Each field is None
+         *     when its corresponding include flag wasn't requested. Backward
+         *     compatible because absent values stay None.
+         *
+         *     Added in P3.0 of the project-management revamp so the /projects
+         *     index page (P3.1) can load with a single round-trip instead of
+         *     the previous N+1 fan-out the UI did per project.
+         */
+        ProjectsListItemResponse: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Autostart Repos */
+            autostart_repos?: string[];
+            /** Category */
+            category?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Effective Goal */
+            effective_goal?: number | null;
+            /** Effective Goal Overridden */
+            effective_goal_overridden?: boolean | null;
+            effective_goal_type?: components["schemas"]["GoalType"] | null;
+            /** Estimation */
+            estimation?: string | null;
+            /** Github Repo */
+            github_repo?: string | null;
+            /** Goal Overrides */
+            goal_overrides?: components["schemas"]["GoalOverrideResponse"][];
+            /** @default target */
+            goal_type: components["schemas"]["GoalType"];
+            /** Id */
+            id: string;
+            /** Last Tracked At */
+            last_tracked_at?: string | null;
+            /** Name */
+            name: string;
+            /** Total Minutes */
+            total_minutes?: number | null;
+            /** Weekly Goal */
+            weekly_goal?: number | null;
+            /** Weekly Minutes */
+            weekly_minutes?: number | null;
         };
         /**
          * RecentDriftResponse
@@ -6674,6 +6734,8 @@ export interface operations {
         parameters: {
             query?: {
                 archived?: boolean;
+                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
+                include?: string | null;
             };
             header?: never;
             path?: never;
@@ -6687,7 +6749,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectResponse"][];
+                    "application/json": components["schemas"]["ProjectsListItemResponse"][];
                 };
             };
             /** @description Not found */

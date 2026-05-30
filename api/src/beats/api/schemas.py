@@ -133,6 +133,26 @@ class ProjectResponse(BaseModel):
     autostart_repos: list[str] = Field(default_factory=list)
 
 
+class ProjectsListItemResponse(ProjectResponse):
+    """The list response shape — same fields as ProjectResponse, plus
+    optional aggregations populated when GET /api/projects/ is called
+    with `include=totals,this_week,last_tracked`. Each field is None
+    when its corresponding include flag wasn't requested. Backward
+    compatible because absent values stay None.
+
+    Added in P3.0 of the project-management revamp so the /projects
+    index page (P3.1) can load with a single round-trip instead of
+    the previous N+1 fan-out the UI did per project.
+    """
+
+    total_minutes: float | None = None
+    weekly_minutes: float | None = None
+    effective_goal: float | None = None
+    effective_goal_type: GoalType | None = None
+    effective_goal_overridden: bool | None = None
+    last_tracked_at: datetime | None = None
+
+
 class TimerStatusResponse(BaseModel):
     """Response schema for timer status."""
 

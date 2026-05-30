@@ -18,6 +18,7 @@ from beats.api.schemas import (
     GoalOverrideRequest,
     MonthlyTotalsResponse,
     ProjectResponse,
+    ProjectsListItemResponse,
     RecordTimeRequest,
     UpdateProjectRequest,
 )
@@ -30,11 +31,57 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=list[ProjectResponse])
-async def list_projects(service: ProjectServiceDep, archived: bool = False):
-    """List all projects, optionally filtering by archived status."""
+@router.get("/", response_model=list[ProjectsListItemResponse])
+async def list_projects(
+    service: ProjectServiceDep,
+    archived: bool = False,
+    include: str | None = Query(
+        default=None,
+        description=(
+            "Comma-separated aggregations to populate per project. Supported: "
+            "'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal "
+            "trio), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response."
+        ),
+    ),
+):
+    """List projects, optionally augmented with aggregation fields.
+
+    Backward compatible: without `include`, the response carries the same
+    fields as ProjectResponse plus null aggregation slots — older clients
+    that ignore unknown null fields keep working.
+
+    P3.0 of the project-management revamp. First cut loops per-project
+    server-side; if profiling shows it's needed, a follow-up (P3.0b)
+    moves to a Mongo $facet pipeline for true batched aggregation.
+    """
     projects = await service.list_projects(archived=archived)
-    return [p.model_dump() for p in projects]
+    include_set = {token.strip() for token in (include or "").split(",") if token.strip()}
+
+    items: list[dict] = []
+    for p in projects:
+        item = p.model_dump(mode="json")
+        if not p.id:
+            items.append(item)
+            continue
+
+        if "totals" in include_set:
+            totals = await service.get_monthly_totals(p.id)
+            item["total_minutes"] = totals.get("total_minutes", 0)
+
+        if "this_week" in include_set:
+            week = await service.get_week_breakdown(project_id=p.id, weeks_ago=0)
+            total_hours = week.get("total_hours", 0) or 0
+            item["weekly_minutes"] = float(total_hours) * 60
+            item["effective_goal"] = week.get("effective_goal")
+            item["effective_goal_type"] = week.get("effective_goal_type")
+            item["effective_goal_overridden"] = week.get("effective_goal_overridden")
+
+        if "last_tracked" in include_set:
+            last = await service.get_last_tracked_at(p.id)
+            item["last_tracked_at"] = last.isoformat() if last else None
+
+        items.append(item)
+    return items
 
 
 @router.post("/", status_code=http.HTTPStatus.CREATED, response_model=ProjectResponse)

@@ -3,7 +3,7 @@
  * Low-level API calls for projects.
  */
 
-import type { ApiGoalOverride, ApiProject } from "@/shared/api";
+import type { ApiGoalOverride, ApiProject, ApiProjectListItem } from "@/shared/api";
 import {
 	ApiProjectListSchema,
 	ApiProjectSchema,
@@ -16,10 +16,26 @@ import {
 } from "@/shared/api";
 
 /**
- * Fetch all projects from the API
+ * Per-project aggregations the backend can fold into the list response when
+ * requested via `?include=`. P3.0 of the project-management revamp.
  */
-export async function fetchProjects(): Promise<ApiProject[]> {
-	const data = await get<unknown>("/api/projects/");
+export type ProjectInclude = "totals" | "this_week" | "last_tracked";
+
+/**
+ * Fetch all projects from the API, optionally augmented with the aggregations
+ * needed by useProjects + the upcoming /projects index page. Without
+ * `include`, returns the slim shape — `total_minutes`, `weekly_minutes`,
+ * `effective_goal*`, and `last_tracked_at` come back as `null`.
+ */
+export async function fetchProjects(
+	options: { include?: ProjectInclude[] } = {},
+): Promise<ApiProjectListItem[]> {
+	const params = new URLSearchParams();
+	if (options.include && options.include.length > 0) {
+		params.set("include", options.include.join(","));
+	}
+	const qs = params.toString();
+	const data = await get<unknown>(qs ? `/api/projects/?${qs}` : "/api/projects/");
 	return parseApiResponse(ApiProjectListSchema, data);
 }
 

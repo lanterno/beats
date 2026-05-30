@@ -10,7 +10,6 @@ import {
 	archiveProject,
 	createProject,
 	fetchProjects,
-	fetchProjectTotal,
 	fetchProjectWeek,
 	unarchiveProject,
 	updateGoalOverrides,
@@ -30,46 +29,36 @@ export const projectKeys = {
 };
 
 /**
- * Hook to fetch all projects with their total and weekly duration
+ * Hook to fetch all projects augmented with totals + this-week + last-tracked.
+ *
+ * P3.0 of the project-management revamp: this used to fan out 2 extra requests
+ * per project (fetchProjectTotal + fetchProjectWeek), so a user with 30
+ * projects paid for 61 round-trips on a cold load. The augmented list
+ * endpoint collapses that to one.
  */
 export function useProjects() {
 	return useQuery({
 		queryKey: projectKeys.list(),
 		queryFn: async (): Promise<ProjectWithDuration[]> => {
-			const apiProjects = await fetchProjects();
+			const items = await fetchProjects({
+				include: ["totals", "this_week", "last_tracked"],
+			});
 
-			// Fetch totals and weekly hours in parallel
-			const projectsWithTotals = await Promise.all(
-				apiProjects.map(async (apiProject) => {
-					const project = toProject(apiProject);
-					if (!project.id) {
-						return { ...project, totalMinutes: 0, weeklyMinutes: 0 };
-					}
-
-					const [totalMinutes, weeklyData] = await Promise.all([
-						fetchProjectTotal(project.id),
-						fetchProjectWeek(project.id, 0).catch(() => ({
-							totalHours: 0,
-							dailyDurations: {},
-							effectiveGoal: undefined,
-							effectiveGoalType: undefined,
-							effectiveGoalOverridden: false,
-						})),
-					]);
-
-					const weeklyMinutes = Math.round(weeklyData.totalHours * 60);
-					return {
-						...project,
-						totalMinutes,
-						weeklyMinutes,
-						effectiveGoal: weeklyData.effectiveGoal,
-						effectiveGoalType: weeklyData.effectiveGoalType,
-						effectiveGoalOverridden: weeklyData.effectiveGoalOverridden,
-					};
-				}),
-			);
-
-			return projectsWithTotals;
+			return items.map((item) => {
+				const project = toProject(item);
+				return {
+					...project,
+					totalMinutes: item.total_minutes ?? 0,
+					// Round so downstream tabular-nums chips don't show 60.000000001h.
+					weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
+					// Preserve null vs undefined: null = override sets "no goal" for
+					// this week; undefined = field absent (e.g. older response).
+					effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
+					effectiveGoalType: item.effective_goal_type ?? undefined,
+					effectiveGoalOverridden: item.effective_goal_overridden ?? false,
+					lastTrackedAt: item.last_tracked_at ?? undefined,
+				};
+			});
 		},
 		staleTime: 30_000, // Consider fresh for 30 seconds
 	});
@@ -89,35 +78,23 @@ export function useProject(projectId: string | undefined) {
 			const cached = cachedProjects?.find((p) => p.id === projectId);
 			if (cached) return cached;
 
-			// Otherwise fetch all and find
-			const apiProjects = await fetchProjects();
-			const apiProject = apiProjects.find((p) => p.id === projectId);
-			if (!apiProject) return null;
+			// Otherwise fetch the augmented list and find — uses the same
+			// single-round-trip path useProjects does (P3.0).
+			const items = await fetchProjects({
+				include: ["totals", "this_week", "last_tracked"],
+			});
+			const item = items.find((p) => p.id === projectId);
+			if (!item) return null;
 
-			const project = toProject(apiProject);
-			if (!project.id) {
-				return { ...project, totalMinutes: 0, weeklyMinutes: 0 };
-			}
-
-			const [totalMinutes, weeklyData] = await Promise.all([
-				fetchProjectTotal(project.id),
-				fetchProjectWeek(project.id, 0).catch(() => ({
-					totalHours: 0,
-					dailyDurations: {},
-					effectiveGoal: undefined,
-					effectiveGoalType: undefined,
-					effectiveGoalOverridden: false,
-				})),
-			]);
-
-			const weeklyMinutes = Math.round(weeklyData.totalHours * 60);
+			const project = toProject(item);
 			return {
 				...project,
-				totalMinutes,
-				weeklyMinutes,
-				effectiveGoal: weeklyData.effectiveGoal,
-				effectiveGoalType: weeklyData.effectiveGoalType,
-				effectiveGoalOverridden: weeklyData.effectiveGoalOverridden,
+				totalMinutes: item.total_minutes ?? 0,
+				weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
+				effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
+				effectiveGoalType: item.effective_goal_type ?? undefined,
+				effectiveGoalOverridden: item.effective_goal_overridden ?? false,
+				lastTrackedAt: item.last_tracked_at ?? undefined,
 			};
 		},
 		enabled: !!projectId,
