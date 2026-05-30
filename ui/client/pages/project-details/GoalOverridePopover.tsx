@@ -143,8 +143,11 @@ export function GoalOverridePopover({
 				</>
 			)}
 
-			{/* Scope selector */}
-			<div className="flex gap-1 mb-2">
+			{/* Scope selector. "Temporary shift" (renamed from "From here on")
+			    is de-emphasized — for routine adjustments, editing the project's
+			    DEFAULT weekly goal in Settings is the better path. P3.4 of the
+			    project-management revamp. */}
+			<div className="flex gap-1 mb-1">
 				<button
 					onClick={() => setScope("week")}
 					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
@@ -157,15 +160,21 @@ export function GoalOverridePopover({
 				</button>
 				<button
 					onClick={() => setScope("permanent")}
-					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+					title="Adds an override from this week forward. Prefer changing the project's default goal in Settings for routine adjustments."
+					className={`flex-1 text-[10px] py-1 rounded border transition-colors ${
 						scope === "permanent"
-							? "bg-accent text-accent-foreground"
-							: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+							? "bg-accent/80 text-accent-foreground border-accent/80"
+							: "bg-transparent text-muted-foreground/60 border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/60"
 					}`}
 				>
-					From here on
+					Temporary shift
 				</button>
 			</div>
+			{scope === "permanent" && (
+				<p className="text-[10px] text-muted-foreground/70 mb-2 leading-tight">
+					For lasting changes, edit the default weekly goal in Settings.
+				</p>
+			)}
 
 			<input
 				type="text"
