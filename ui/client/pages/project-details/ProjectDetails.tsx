@@ -39,6 +39,7 @@ import {
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
+import { ProjectIntentionStrip } from "./ProjectIntentionStrip";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
 
@@ -470,6 +471,10 @@ export default function ProjectDetails() {
 			</header>
 
 			<main className="max-w-5xl mx-auto px-6 pb-24">
+				{/* Intentions strip (P4.2) — today's intention for this project
+				    + the recurring template, near the header. */}
+				<ProjectIntentionStrip projectId={project.id} projectName={project.name} />
+
 				{/* Stats above the fold (P4.0) — lead the page with project shape,
 				    not the session list. */}
 				<ProjectStats sessions={sessionList} lastTrackedAt={project.lastTrackedAt} />
