@@ -39,6 +39,7 @@ import {
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
+import { ProjectHealthRail } from "./ProjectHealthRail";
 import { ProjectIntentionStrip } from "./ProjectIntentionStrip";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
@@ -474,6 +475,15 @@ export default function ProjectDetails() {
 				{/* Intentions strip (P4.2) — today's intention for this project
 				    + the recurring template, near the header. */}
 				<ProjectIntentionStrip projectId={project.id} projectName={project.name} />
+
+				{/* Project Health rail (P4.3) — alerts + recency + goal trend +
+				    today's average focus. */}
+				<ProjectHealthRail
+					projectId={project.id}
+					todaysProjectSessions={sessionList.filter(
+						(s) => parseUtcIso(s.startTime) >= startOfDay(),
+					)}
+				/>
 
 				{/* Stats above the fold (P4.0) — lead the page with project shape,
 				    not the session list. */}
