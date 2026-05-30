@@ -5,9 +5,15 @@ import type { ApiProject } from "@/shared/api";
 import { NewProjectDialog } from "./NewProjectDialog";
 
 const mutateAsync = vi.fn();
+const useProjectsMock = vi.fn(() => ({ data: [] }));
 
 vi.mock("../api", () => ({
 	useCreateProject: () => ({ mutateAsync, isPending: false }),
+	useProjects: () => useProjectsMock(),
+}));
+
+vi.mock("@/entities/github", () => ({
+	useGitHubStatus: () => ({ data: { connected: false } }),
 }));
 
 vi.mock("sonner", () => ({
@@ -27,10 +33,11 @@ const CREATED: ApiProject = {
 	autostart_repos: [],
 };
 
-describe("NewProjectDialog", () => {
+describe("NewProjectDialog (P1.3 — ProjectForm-hosted)", () => {
 	beforeEach(() => {
 		mutateAsync.mockReset();
 		mutateAsync.mockResolvedValue(CREATED);
+		useProjectsMock.mockReturnValue({ data: [] });
 	});
 
 	afterEach(() => {
@@ -38,40 +45,54 @@ describe("NewProjectDialog", () => {
 		vi.clearAllMocks();
 	});
 
-	it("renders nothing when closed", () => {
-		const { container } = render(<NewProjectDialog open={false} onClose={() => {}} />);
-		expect(container).toBeEmptyDOMElement();
+	it("does not render the dialog content when closed", () => {
+		render(<NewProjectDialog open={false} onClose={() => {}} />);
+		// Radix Dialog mounts to a portal but renders nothing when closed.
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
 
-	it("disables Create until a name is entered", async () => {
-		render(<NewProjectDialog open onClose={() => {}} />);
-		const create = screen.getByRole("button", { name: "Create project" });
-		expect(create).toBeDisabled();
-
-		await userEvent.type(screen.getByLabelText("Name"), "Alpha");
-		expect(create).toBeEnabled();
-	});
-
-	it("creates the project and reports the created project, then closes", async () => {
+	it("creates the project with the full canonical field set on submit", async () => {
 		const onClose = vi.fn();
 		const onCreated = vi.fn();
 		render(<NewProjectDialog open onClose={onClose} onCreated={onCreated} />);
 
 		await userEvent.type(screen.getByLabelText("Name"), "  Alpha  ");
+		await userEvent.type(screen.getByLabelText(/Weekly goal/), "10");
+
 		await userEvent.click(screen.getByRole("button", { name: "Create project" }));
 
-		// Name is trimmed; an empty goal is sent as null (no convenience default).
-		expect(mutateAsync).toHaveBeenCalledWith({ name: "Alpha", weekly_goal: null });
+		// Every backend Project field is sent — defaults supplied for omitted
+		// inputs (description=null, category=null, github_repo=null, autostart=[]).
+		expect(mutateAsync).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: "Alpha",
+				weekly_goal: 10,
+				description: null,
+				category: null,
+				github_repo: null,
+				autostart_repos: [],
+			}),
+		);
 		expect(onClose).toHaveBeenCalled();
 		expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "new-1", name: "Alpha" }));
 	});
 
-	it("passes a numeric weekly goal through", async () => {
+	it("submits advanced fields when the Advanced disclosure is used", async () => {
 		render(<NewProjectDialog open onClose={() => {}} />);
+
 		await userEvent.type(screen.getByLabelText("Name"), "Beta");
-		await userEvent.type(screen.getByLabelText(/Weekly goal/), "10");
+		await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+		await userEvent.type(screen.getByLabelText("Category"), "coding");
+		await userEvent.type(screen.getByLabelText("GitHub repo"), "lanterno/beats");
+
 		await userEvent.click(screen.getByRole("button", { name: "Create project" }));
 
-		expect(mutateAsync).toHaveBeenCalledWith({ name: "Beta", weekly_goal: 10 });
+		expect(mutateAsync).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: "Beta",
+				category: "coding",
+				github_repo: "lanterno/beats",
+			}),
+		);
 	});
 });
