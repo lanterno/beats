@@ -128,6 +128,23 @@ export function ProjectPicker({
 		}
 	}, [open]);
 
+	// Keep the highlighted option in view as the user arrow-keys through the
+	// list. With more than ~7 projects, the previous behavior left the
+	// aria-activedescendant pointing off-screen, breaking the WAI-ARIA
+	// combobox contract for keyboard + screen reader users.
+	const activeOptionId = items[highlight]?.id ? optionId(items[highlight].id) : null;
+	useEffect(() => {
+		if (!open || !activeOptionId || !listRef.current) return;
+		const node = listRef.current.querySelector<HTMLLIElement>(
+			`[id="${CSS.escape(activeOptionId)}"]`,
+		);
+		// jsdom doesn't implement scrollIntoView; the type-guard keeps both
+		// runtimes happy without leaking a test-only branch.
+		if (node && typeof node.scrollIntoView === "function") {
+			node.scrollIntoView({ block: "nearest" });
+		}
+	}, [open, activeOptionId]);
+
 	const handleSelect = (projectId: string) => {
 		onChange(projectId);
 		if (recencyBoost) recordPickerRecent(userKey, projectId);
@@ -155,7 +172,14 @@ export function ProjectPicker({
 		}
 	};
 
-	const activeId = items[highlight]?.id ? optionId(items[highlight].id) : undefined;
+	const activeId = activeOptionId ?? undefined;
+
+	// Reflect the selection in the trigger's accessible name. Before this,
+	// the trigger always announced just "Project, button" regardless of what
+	// was chosen, so AT users had no way to tell what the picker held.
+	const triggerAriaLabel = selectedProject
+		? `${ariaLabel}: ${selectedProject.name}${selectedProject.archived ? " (archived)" : ""}`
+		: ariaLabel;
 
 	return (
 		<div ref={containerRef} className={cn("relative", className)}>
@@ -164,7 +188,7 @@ export function ProjectPicker({
 				onClick={() => setOpen((o) => !o)}
 				aria-haspopup="listbox"
 				aria-expanded={open}
-				aria-label={ariaLabel}
+				aria-label={triggerAriaLabel}
 				disabled={disabled}
 				className={cn(
 					"w-full inline-flex items-center gap-2 rounded-md border border-input bg-background text-left text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
