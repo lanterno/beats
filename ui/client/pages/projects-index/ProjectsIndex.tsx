@@ -121,8 +121,10 @@ export default function ProjectsIndex() {
 	const [dialogOpen, setDialogOpen] = useState(false);
 
 	const { data: activeProjects, isLoading: activeLoading } = useProjects();
-	// Only fetch archived once the user actually opens the tab — avoids the
-	// cost on first paint for users who never use it.
+	// Archived projects are eager-loaded on first paint — the Archived count
+	// badge on the tab and the cross-tab category chips both need to know
+	// the archived set before the user opens that tab. The earlier comment
+	// claimed lazy-on-open, which the implementation never matched.
 	const { data: archivedProjects, isLoading: archivedLoading } = useArchivedProjects();
 
 	const unarchive = useUnarchiveProject();
@@ -578,37 +580,47 @@ function ProjectsCardList({
 	return (
 		<div className="md:hidden space-y-2">
 			{list.map((project) => (
-				<Link
+				// FF.8: navigate target and Restore action live as SIBLINGS now,
+				// not nested. A <button> inside an <a> is invalid HTML (axe's
+				// nested-interactive rule), and screen readers folded Restore
+				// into the link instead of exposing it as its own target. The
+				// Link covers the descriptive top half; Restore sits in a
+				// separated section below.
+				<div
 					key={project.id}
-					to={`/project/${project.id}`}
-					className="block rounded-lg border border-border/80 bg-card p-3 hover:bg-secondary/20 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+					className="rounded-lg border border-border/80 bg-card hover:bg-secondary/20 transition-colors overflow-hidden"
 				>
-					<div className="flex items-center gap-2 mb-1">
-						<span
-							className="inline-block w-2 h-2 rounded-full shrink-0"
-							style={{ backgroundColor: project.color }}
-							aria-hidden="true"
-						/>
-						<span className="text-sm font-medium text-foreground truncate flex-1">
-							{project.name}
-						</span>
-						<IntegrationIcons project={project} />
-					</div>
-					{project.description && (
-						<p className="text-[11px] text-muted-foreground/70 line-clamp-1 mb-1">
-							{project.description}
-						</p>
-					)}
-					<div className="flex items-center justify-between text-[11px] text-muted-foreground">
-						<WeeklyProgress project={project} />
-						<span className="tabular-nums">{formatRelativeDays(project.lastTrackedAt)}</span>
-					</div>
+					<Link
+						to={`/project/${project.id}`}
+						className="block p-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+					>
+						<div className="flex items-center gap-2 mb-1">
+							<span
+								className="inline-block w-2 h-2 rounded-full shrink-0"
+								style={{ backgroundColor: project.color }}
+								aria-hidden="true"
+							/>
+							<span className="text-sm font-medium text-foreground truncate flex-1">
+								{project.name}
+							</span>
+							<IntegrationIcons project={project} />
+						</div>
+						{project.description && (
+							<p className="text-[11px] text-muted-foreground/70 line-clamp-1 mb-1">
+								{project.description}
+							</p>
+						)}
+						<div className="flex items-center justify-between text-[11px] text-muted-foreground">
+							<WeeklyProgress project={project} />
+							<span className="tabular-nums">{formatRelativeDays(project.lastTrackedAt)}</span>
+						</div>
+					</Link>
 					{archivedView && (
-						<div className="mt-2 pt-2 border-t border-border/40">
+						<div className="px-3 py-2 border-t border-border/40">
 							<RestoreButton project={project} onRestore={onRestore} restoringId={restoringId} />
 						</div>
 					)}
-				</Link>
+				</div>
 			))}
 		</div>
 	);
