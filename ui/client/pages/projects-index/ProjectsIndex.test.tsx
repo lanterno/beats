@@ -146,6 +146,44 @@ describe("ProjectsIndex", () => {
 		expect(unarchiveMutate).toHaveBeenCalledWith("old", expect.anything());
 	});
 
+	it("FF.13: Archived tab drops the Integrations and This week columns; Active keeps them", async () => {
+		// The MED finding from the live prod inspection was that 'Last tracked'
+		// at 36px wide wrapped to one-char-per-line. The root cause was a
+		// missing colgroup + table-layout: fixed letting the Project column
+		// eat all the width. Asserting the column set + the table-fixed class
+		// regression-proofs both the column trim AND the layout fix.
+		useArchivedProjectsMock.mockReturnValue({
+			data: [project({ id: "old", name: "OldProject", archived: true, weeklyMinutes: 0 })],
+			isLoading: false,
+		});
+		renderPage();
+
+		// Active tab has 5 column headers: Project, Category, Integrations, This week, Last tracked.
+		const activeHeaders = within(screen.getByRole("table"))
+			.getAllByRole("columnheader")
+			.map((h) => h.textContent?.trim());
+		// "This week" carries a "↓" suffix because it's the default sort.
+		expect(activeHeaders).toEqual([
+			"Project",
+			"Category",
+			"Integrations",
+			"This week↓",
+			"Last tracked",
+		]);
+
+		// table-layout: fixed is critical — without it the Project column auto-
+		// sizes wide and the narrow columns wrap their text vertically. JSDOM
+		// doesn't compute styles fully so we assert the class itself.
+		expect(screen.getByRole("table").className).toMatch(/table-fixed/);
+
+		// Switch to Archived → Integrations and This week disappear; Restore appears.
+		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
+		const archivedHeaders = within(screen.getByRole("table"))
+			.getAllByRole("columnheader")
+			.map((h) => h.textContent?.trim());
+		expect(archivedHeaders).toEqual(["Project", "Category", "Last tracked", "Restore"]);
+	});
+
 	it("FF.8: mobile archived card renders the Restore button as a SIBLING of the Link, not nested inside it", async () => {
 		// JSDOM has no media-query CSS so both desktop + mobile branches render;
 		// query the mobile list specifically and assert the Restore button's
