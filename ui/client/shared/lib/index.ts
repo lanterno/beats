@@ -7,6 +7,7 @@ export { cn } from "./cn";
 // Date utilities
 export {
 	formatDate,
+	formatDateOnly,
 	formatDateShort,
 	formatTime,
 	getCurrentWeekRange,

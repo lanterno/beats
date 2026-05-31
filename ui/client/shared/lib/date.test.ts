@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	formatDateOnly,
 	formatDateShort,
 	getDayName,
 	getISOWeek,
@@ -41,6 +42,46 @@ describe("parseUtcIso", () => {
 		const date = parseUtcIso("2026-04-07T10:30:00.123456");
 		expect(date.getUTCHours()).toBe(10);
 		expect(date.getUTCMinutes()).toBe(30);
+	});
+});
+
+describe("formatDateOnly", () => {
+	it("formats a bare 'YYYY-MM-DD' as the calendar day it names", () => {
+		// Locale-tolerant: the exact format depends on Intl, but the day must
+		// stay on the named day. Verify the day-of-month + month label appear.
+		const out = formatDateOnly("2026-05-25");
+		expect(out).toMatch(/\b25\b/);
+		expect(out).toMatch(/May/);
+		expect(out).toMatch(/2026/);
+	});
+
+	it("does NOT shift to the previous day in any timezone (the OverrideManagementPanel bug)", () => {
+		// 2026-05-25 must stay May 25 regardless of the runner's local tz —
+		// formatDate (the old call) parsed this as UTC midnight and rendered
+		// May 24 for any user west of UTC.
+		const out = formatDateOnly("2026-05-25");
+		expect(out).not.toMatch(/\b24\b/);
+	});
+
+	it("returns the configured fallback for null/undefined/empty input", () => {
+		expect(formatDateOnly(null)).toBe("—");
+		expect(formatDateOnly(undefined)).toBe("—");
+		expect(formatDateOnly("")).toBe("—");
+		expect(formatDateOnly(null, "n/a")).toBe("n/a");
+	});
+
+	it("refuses non 'YYYY-MM-DD' shapes — does not silently format an ISO instant", () => {
+		// Full ISO timestamps belong in formatDate, not formatDateOnly.
+		expect(formatDateOnly("2026-05-25T10:30:00Z")).toBe("—");
+		expect(formatDateOnly("not a date")).toBe("—");
+		expect(formatDateOnly("2026/05/25")).toBe("—");
+	});
+
+	it("formats December 31 (year-boundary) correctly", () => {
+		const out = formatDateOnly("2026-12-31");
+		expect(out).toMatch(/\b31\b/);
+		expect(out).toMatch(/Dec/);
+		expect(out).toMatch(/2026/);
 	});
 });
 
