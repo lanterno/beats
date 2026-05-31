@@ -3,7 +3,7 @@
  */
 
 // Color utilities
-export { assignColor } from "./colors";
+export { assignColor, PROJECT_COLORS } from "./colors";
 // Mappers
 export { toProject } from "./mappers";
 // Picker recents (user-scoped localStorage)

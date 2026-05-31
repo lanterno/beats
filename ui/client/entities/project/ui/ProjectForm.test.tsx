@@ -86,6 +86,27 @@ describe("ProjectForm", () => {
 		expect(screen.getByLabelText("Category")).toBeInTheDocument();
 	});
 
+	it("FF.11: the goal-type radiogroup has a real accessible name (legend id resolves)", () => {
+		render(<ProjectForm onSubmit={vi.fn()} />);
+		// aria-labelledby="project-form-goal-type" must now resolve to the
+		// legend's id, so the group announces "Goal type" — not the
+		// unlabeled-group disaster pre-FF.11.
+		expect(screen.getByRole("radiogroup", { name: "Goal type" })).toBeInTheDocument();
+	});
+
+	it("FF.11: consecutive new projects get different default colors (no more always #5B9CF6)", () => {
+		// Render two ProjectForms back-to-back. Their default color seeds
+		// differ — pre-FF.11 both came out #5B9CF6 because assignColor("new")
+		// always hashed to PROJECT_COLORS[0].
+		const { unmount } = render(<ProjectForm onSubmit={vi.fn()} />);
+		const firstHex = screen.getByText(/#[0-9A-F]{6}/).textContent;
+		unmount();
+
+		render(<ProjectForm onSubmit={vi.fn()} />);
+		const secondHex = screen.getByText(/#[0-9A-F]{6}/).textContent;
+		expect(secondHex).not.toBe(firstHex);
+	});
+
 	it("includes the advanced field values in onSubmit when the disclosure is opened", async () => {
 		const onSubmit = vi.fn();
 		render(

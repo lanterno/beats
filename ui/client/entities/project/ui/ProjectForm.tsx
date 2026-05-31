@@ -14,8 +14,21 @@
 import { ChevronDown, ChevronRight, Target, TrendingDown } from "lucide-react";
 import { useState } from "react";
 import { Button, ColorPicker } from "@/shared/ui";
-import { assignColor } from "../model";
+import { PROJECT_COLORS } from "../model";
 import { AdvancedFields, isValidGithubRepo } from "./AdvancedFields";
+
+// FF.11: rotate the default color through PROJECT_COLORS per ProjectForm
+// mount so consecutive new projects don't all open with the same #5B9CF6
+// seed (the pre-FF.11 `assignColor("new")` always hashed to index 0).
+// Module-level counter is intentional — deterministic per session, no
+// plumbing required from consumers, and the user can still override via
+// the ColorPicker before submit.
+let nextDefaultColorIndex = 0;
+function pickDefaultProjectColor(): string {
+	const color = PROJECT_COLORS[nextDefaultColorIndex % PROJECT_COLORS.length];
+	nextDefaultColorIndex += 1;
+	return color;
+}
 
 /**
  * Field set captured by the form. Aligns with the domain Project shape so
@@ -54,7 +67,7 @@ function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues 
 	return {
 		name: initial?.name ?? "",
 		description: initial?.description ?? "",
-		color: initial?.color ?? assignColor("new"),
+		color: initial?.color ?? pickDefaultProjectColor(),
 		weeklyGoal: initial?.weeklyGoal ?? "",
 		goalType: initial?.goalType ?? "target",
 		category: initial?.category ?? "",
@@ -210,7 +223,9 @@ export function ProjectForm({
 
 			{/* Goal type — radio with icon + text per a11y principle (no color-only state). */}
 			<fieldset>
-				<legend className={labelCls}>Goal type</legend>
+				<legend id="project-form-goal-type" className={labelCls}>
+					Goal type
+				</legend>
 				<div className="flex gap-2" role="radiogroup" aria-labelledby="project-form-goal-type">
 					{[
 						{
