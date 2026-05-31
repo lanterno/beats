@@ -147,6 +147,32 @@ class TestProjectAPI:
         # last_tracked_at survives JSON round-trip as an ISO string.
         assert rich["last_tracked_at"] is not None
 
+    def test_projects_list_include_preserves_order_under_parallelization(self):
+        """FF.9 — list_projects fans out the per-project aggregations through
+        asyncio.gather. Returned order MUST equal the order from
+        service.list_projects, regardless of which aggregation finishes
+        first (gather returns in input order — this test guards against a
+        future regression that swaps to as_completed or a dict comprehension)."""
+        import time as _time
+
+        # Create projects with deterministically ordered names.
+        names = [f"order-{i}-{_time.time()}" for i in range(5)]
+        ids = []
+        for name in names:
+            r = client.post("/api/projects/", json={"name": name}, headers=auth_headers)
+            assert r.status_code == 201
+            ids.append(r.json()["id"])
+
+        listing = client.get(
+            "/api/projects/?include=totals,this_week,last_tracked",
+            headers=auth_headers,
+        ).json()
+        # Filter to our created projects (the list also contains pre-existing
+        # ones from other tests) and assert the relative order matches.
+        ours_in_listing = [p["id"] for p in listing if p["id"] in ids]
+        # The service returns projects in creation order; the route preserves it.
+        assert ours_in_listing == ids, (ours_in_listing, ids)
+
     def test_projects_list_include_subset(self):
         """Each include token is independent — requesting only 'totals'
         leaves the this_week/last_tracked slots null."""
