@@ -23,6 +23,9 @@ export interface AdvancedFieldsProps {
 	categorySuggestions?: string[];
 	/** Whether the user has GitHub OAuth connected — surfaces a hint if not. */
 	githubConnected?: boolean;
+	/** When the parent form opens with focus targeting an Advanced field
+	 *  (only 'githubRepo' for now), autofocus that input on mount. */
+	autoFocusField?: "githubRepo";
 }
 
 // Loose owner/repo match: word chars, dots, hyphens, exactly one slash.
@@ -47,6 +50,7 @@ export function AdvancedFields({
 	onChange,
 	categorySuggestions,
 	githubConnected,
+	autoFocusField,
 }: AdvancedFieldsProps) {
 	const catListId = useId();
 	const repoInvalid = !isValidGithubRepo(values.githubRepo);
@@ -108,6 +112,7 @@ export function AdvancedFields({
 						value={values.githubRepo}
 						onChange={(e) => set("githubRepo", e.target.value)}
 						placeholder="owner/repo"
+						autoFocus={autoFocusField === "githubRepo"}
 						aria-invalid={repoInvalid}
 						aria-describedby={
 							repoInvalid

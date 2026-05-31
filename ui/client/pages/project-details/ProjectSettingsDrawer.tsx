@@ -28,7 +28,7 @@ interface ProjectSettingsDrawerProps {
 	open: boolean;
 	onClose: () => void;
 	/** Which field to focus when the drawer opens — used by inline-clickable header. */
-	autoFocusField?: "name" | "description" | "weeklyGoal";
+	autoFocusField?: "name" | "description" | "weeklyGoal" | "githubRepo";
 }
 
 export function ProjectSettingsDrawer({
