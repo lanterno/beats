@@ -66,4 +66,21 @@ describe("SidebarProjectList archived handling", () => {
 		renderList([project({ id: "a", name: "Alpha" })]);
 		expect(screen.queryByText(/Archived \(/)).not.toBeInTheDocument();
 	});
+
+	it("FF.10: suppresses the 'New project' empty-state when only archived projects exist", () => {
+		// Pre-FF.10 the empty-state CTA rendered above the Archived rail,
+		// contradicting itself by claiming the user had no projects when
+		// the rail listed the projects they did have.
+		// getByText (not getByRole) discriminates the inline empty-state
+		// button (visible text "New project") from the header's icon-only
+		// "+" button (aria-label-only "New project").
+		renderList([project({ id: "b", name: "Beta", archived: true })]);
+		expect(screen.getByText(/Archived \(1\)/)).toBeInTheDocument();
+		expect(screen.queryByText("New project")).not.toBeInTheDocument();
+	});
+
+	it("FF.10: still shows the empty-state when truly nothing exists", () => {
+		renderList([]);
+		expect(screen.getByText("New project")).toBeInTheDocument();
+	});
 });

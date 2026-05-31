@@ -57,10 +57,13 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 					const pinned = isPinned(project.id);
 
 					return (
+						// FF.10: padding moved from the wrapper to the navigate button so
+						// clicks on the px-2/py-1.5 region also navigate (the wrapper had
+						// dead zones at the edges where neither child handled the click).
 						<div
 							key={project.id}
 							className={cn(
-								"group w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors",
+								"group w-full flex items-center rounded-md transition-colors",
 								isActive
 									? "bg-sidebar-accent text-sidebar-foreground"
 									: "hover:bg-sidebar-accent/50 text-sidebar-foreground",
@@ -70,7 +73,7 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 							<button
 								type="button"
 								onClick={() => navigate(`/project/${project.id}`)}
-								className="flex items-center gap-2 flex-1 min-w-0 text-left text-sm"
+								className="flex items-center gap-2 flex-1 min-w-0 text-left text-sm px-2 py-1.5 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 							>
 								<div
 									className="w-2 h-2 rounded-full shrink-0"
@@ -94,11 +97,14 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 								aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
 								aria-pressed={pinned}
 								title={pinned ? "Unpin from top" : "Pin to top"}
+								// FF.10: focus-visible:opacity-100 + group-focus-within
+								// reveal the otherwise invisible button when reached by
+								// keyboard — was a silent tab stop pre-FF.10.
 								className={cn(
-									"p-1 rounded transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+									"p-1 mr-1 rounded transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
 									pinned
 										? "text-accent"
-										: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent",
+										: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-accent",
 								)}
 							>
 								<Star
@@ -110,7 +116,13 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 						</div>
 					);
 				})}
-				{sortedVisible.length === 0 && (
+				{/* FF.10: only show the New-project empty-state when there are
+				    truly NO projects (active or archived). A user with only
+				    archived projects sees the "Archived (N)" rail below and
+				    the CTA at the top header (+) — pre-FF.10 the empty-state
+				    contradicted itself by claiming "no projects" above an
+				    archived rail listing the projects. */}
+				{sortedVisible.length === 0 && sortedArchived.length === 0 && (
 					<button
 						type="button"
 						onClick={() => setDialogOpen(true)}
