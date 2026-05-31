@@ -195,7 +195,7 @@ export default function ProjectsIndex() {
 	};
 
 	return (
-		<div className="max-w-6xl mx-auto px-6 py-6 space-y-5">
+		<div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
 			<header className="flex items-center gap-3">
 				<Layers className="w-5 h-5 text-accent" />
 				<h1 className="font-heading text-xl text-foreground">Projects</h1>
@@ -414,20 +414,49 @@ function ProjectsTable({
 	restoringId,
 }: ProjectsTableProps) {
 	return (
+		// FF.13: switched to table-layout: fixed + an explicit <colgroup>.
+		// Before this, the Project cell's `truncate` Tailwind class lived on an
+		// inline <a> and applied `white-space: nowrap` without ever clipping
+		// (truncate needs a block-level container). The Project column then
+		// auto-sized to fit the full name+description on one line — ~1059px
+		// of the ~1200px table width — leaving the other columns ~36px each.
+		// "64 months ago" in a 36px column wrapped to ONE CHAR PER LINE,
+		// producing 200-260px tall rows × 87 archived projects = a 20K-pixel
+		// page. table-fixed honors the colgroup widths regardless of content,
+		// and the Project content is now wrapped in a flex container whose
+		// truncate actually clips.
+		//
+		// Archived view drops the Integrations + This week columns since both
+		// are always em-dashes for archived projects (no recent activity, the
+		// integration display is a navigation aid that belongs on Active).
 		<div className="hidden md:block overflow-x-auto rounded-lg border border-border/80 bg-card shadow-soft">
-			<table className="w-full text-sm">
+			<table className="w-full text-sm table-fixed">
+				<colgroup>
+					{/* Project — flexible, eats whatever's left */}
+					<col />
+					<col style={{ width: "140px" }} />
+					{/* Integrations: 128px so the "INTEGRATIONS" header fits one line at
+					    the page's uppercase + letter-spacing-0.14em treatment + py-2 px-3
+					    button padding. */}
+					{!archivedView && <col style={{ width: "128px" }} />}
+					{!archivedView && <col style={{ width: "112px" }} />}
+					<col style={{ width: "128px" }} />
+					{archivedView && <col style={{ width: "96px" }} />}
+				</colgroup>
 				<thead className="bg-secondary/30 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
 					<tr>
 						<SortHeader label="Project" sortKey="name" current={sort} onSort={onSort} />
 						<SortHeader label="Category" sortKey="category" current={sort} onSort={onSort} />
-						<th className="text-left px-3 py-2">Integrations</th>
-						<SortHeader
-							label="This week"
-							sortKey="weekly"
-							current={sort}
-							onSort={onSort}
-							align="right"
-						/>
+						{!archivedView && <th className="text-left px-3 py-2">Integrations</th>}
+						{!archivedView && (
+							<SortHeader
+								label="This week"
+								sortKey="weekly"
+								current={sort}
+								onSort={onSort}
+								align="right"
+							/>
+						)}
 						<SortHeader
 							label="Last tracked"
 							sortKey="lastTracked"
@@ -445,37 +474,45 @@ function ProjectsTable({
 							className="border-t border-border/40 hover:bg-secondary/20 cursor-pointer"
 							onClick={() => onNavigate(project.id)}
 						>
-							<td className="px-3 py-2">
+							<td className="px-3 py-2 min-w-0">
 								<div className="flex items-center gap-2 min-w-0">
 									<span
 										className="inline-block w-2 h-2 rounded-full shrink-0"
 										style={{ backgroundColor: project.color }}
 										aria-hidden="true"
 									/>
+									{/* Project name + optional description, both in one truncating
+									    line. The outer block + flex with min-w-0 lets `truncate`
+									    actually clip when the row is narrow. */}
 									<Link
 										to={`/project/${project.id}`}
 										onClick={(e) => e.stopPropagation()}
-										className="text-foreground font-medium truncate hover:text-accent"
+										className="block truncate text-foreground font-medium hover:text-accent min-w-0 shrink"
 									>
 										{project.name}
+										{project.description && (
+											<span className="text-xs text-muted-foreground/60 hidden lg:inline">
+												{" · "}
+												{project.description}
+											</span>
+										)}
 									</Link>
-									{project.description && (
-										<span className="text-xs text-muted-foreground/60 truncate hidden lg:inline">
-											· {project.description}
-										</span>
-									)}
 								</div>
 							</td>
-							<td className="px-3 py-2 text-muted-foreground">
+							<td className="px-3 py-2 text-muted-foreground truncate">
 								{project.category ?? <span className="text-muted-foreground/40">—</span>}
 							</td>
-							<td className="px-3 py-2">
-								<IntegrationIcons project={project} />
-							</td>
-							<td className="px-3 py-2 text-right">
-								<WeeklyProgress project={project} />
-							</td>
-							<td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
+							{!archivedView && (
+								<td className="px-3 py-2">
+									<IntegrationIcons project={project} />
+								</td>
+							)}
+							{!archivedView && (
+								<td className="px-3 py-2 text-right">
+									<WeeklyProgress project={project} />
+								</td>
+							)}
+							<td className="px-3 py-2 text-right text-muted-foreground tabular-nums whitespace-nowrap">
 								{formatRelativeDays(project.lastTrackedAt)}
 							</td>
 							{archivedView && (
