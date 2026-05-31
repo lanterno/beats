@@ -146,6 +146,28 @@ describe("ProjectsIndex", () => {
 		expect(unarchiveMutate).toHaveBeenCalledWith("old", expect.anything());
 	});
 
+	it("FF.8: mobile archived card renders the Restore button as a SIBLING of the Link, not nested inside it", async () => {
+		// JSDOM has no media-query CSS so both desktop + mobile branches render;
+		// query the mobile list specifically and assert the Restore button's
+		// ancestor chain does NOT include an <a>. Pre-FF.8 this nesting was
+		// invalid HTML (axe: nested-interactive).
+		useArchivedProjectsMock.mockReturnValue({
+			data: [project({ id: "old", name: "OldProject", archived: true, weeklyMinutes: 0 })],
+			isLoading: false,
+		});
+		renderPage();
+		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
+
+		// Pick the mobile-list Restore button: the desktop one is inside a
+		// <tr>, the mobile one is inside the md:hidden wrapper.
+		const restoreButtons = screen.getAllByRole("button", { name: "Restore OldProject" });
+		// At least one in each surface (table + cards), both render in JSDOM.
+		expect(restoreButtons.length).toBeGreaterThanOrEqual(1);
+		for (const btn of restoreButtons) {
+			expect(btn.closest("a")).toBeNull();
+		}
+	});
+
 	it("shows the archived zero-state when there are no archived projects", async () => {
 		renderPage();
 		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
