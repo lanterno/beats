@@ -10,6 +10,7 @@
  */
 
 import { Calendar, Loader2, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type { GoalOverride, Project } from "@/entities/project";
 import { useUpdateGoalOverrides } from "@/entities/project";
@@ -42,6 +43,10 @@ function describeGoal(o: GoalOverride): string {
 export function OverrideManagementPanel({ project }: OverrideManagementPanelProps) {
 	const updateOverrides = useUpdateGoalOverrides();
 	const overrides = project.goalOverrides ?? [];
+	// FF.6: track which row is currently mid-delete by source-array index.
+	// The pre-FF.6 implementation lit every row's spinner while ANY delete
+	// was in flight, hiding which override the user was removing.
+	const [pendingIndex, setPendingIndex] = useState<number | null>(null);
 
 	if (overrides.length === 0) {
 		return (
@@ -65,7 +70,16 @@ export function OverrideManagementPanel({ project }: OverrideManagementPanelProp
 	});
 
 	const handleDelete = (target: GoalOverride) => {
-		const next = overrides.filter((o) => overrideKey(o) !== overrideKey(target));
+		// FF.6: identify the target by source-array index, not by the composite
+		// (weekOf, effectiveFrom) key — two overrides sharing the same scope
+		// (a legacy case the panel header already documents as cleanup
+		// territory) would otherwise BOTH get nuked when the user clicks
+		// delete on one row. Reference equality on the original objects in
+		// `overrides` is the unambiguous predicate.
+		const sourceIndex = overrides.indexOf(target);
+		if (sourceIndex === -1) return;
+		const next = overrides.filter((_, i) => i !== sourceIndex);
+		setPendingIndex(sourceIndex);
 		updateOverrides.mutate(
 			{
 				projectId: project.id,
@@ -80,11 +94,10 @@ export function OverrideManagementPanel({ project }: OverrideManagementPanelProp
 			{
 				onSuccess: () => toast.success("Override removed"),
 				onError: (err) => toast.error(describeError(err, "Failed to remove override")),
+				onSettled: () => setPendingIndex(null),
 			},
 		);
 	};
-
-	const pendingKey = updateOverrides.isPending && updateOverrides.variables ? "pending" : null;
 
 	return (
 		<section className="rounded-lg border border-border/60 bg-secondary/10 p-3">
@@ -97,6 +110,12 @@ export function OverrideManagementPanel({ project }: OverrideManagementPanelProp
 			<ul className="space-y-1">
 				{sorted.map((o) => {
 					const scope = describeScope(o);
+					const sourceIndex = overrides.indexOf(o);
+					const isPending = pendingIndex === sourceIndex;
+					// Disable every row's button while *any* row is in flight (don't
+					// allow a second delete to race the first), but only show the
+					// spinner on the row actually being deleted.
+					const anyPending = pendingIndex !== null;
 					return (
 						<li
 							key={overrideKey(o)}
@@ -115,13 +134,13 @@ export function OverrideManagementPanel({ project }: OverrideManagementPanelProp
 							<button
 								type="button"
 								onClick={() => handleDelete(o)}
-								disabled={pendingKey !== null}
+								disabled={anyPending}
 								aria-label={`Remove override for ${
 									scope.date ? formatDateOnly(scope.date) : scope.label
 								}`}
 								className="ml-auto p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 							>
-								{pendingKey ? (
+								{isPending ? (
 									<Loader2 className="w-3 h-3 animate-spin" />
 								) : (
 									<Trash2 className="w-3 h-3" />
