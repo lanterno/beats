@@ -82,6 +82,43 @@ describe("AdvancedFields", () => {
 		});
 	});
 
+	it("FF.4: deleting a middle autostart row keeps the trailing input's React identity", async () => {
+		// Smoke-test the stable-key fix by spying on input.focus(): with index
+		// keys, deleting row #1 unmounts row #2 and re-mounts what was row #3
+		// in its place, blurring the focused input. With identity keys, the
+		// trailing rows shift down by index but keep the same DOM node, so
+		// activeElement stays put.
+		const onChange = vi.fn();
+		const initial: AdvancedFieldsValues = {
+			...EMPTY,
+			autostartRepos: ["/a", "/b", "/c"],
+		};
+		const { rerender } = render(<AdvancedFields values={initial} onChange={onChange} />);
+
+		// Focus the third row's input — that's the one we want to keep alive.
+		const thirdInput = screen.getByLabelText("Autostart path 3");
+		thirdInput.focus();
+		expect(document.activeElement).toBe(thirdInput);
+
+		// User clicks Remove on row #1.
+		await userEvent.click(screen.getByRole("button", { name: /Remove autostart path 1/ }));
+		expect(onChange).toHaveBeenLastCalledWith({
+			...EMPTY,
+			autostartRepos: ["/b", "/c"],
+		});
+
+		// Parent applies the shrunken array.
+		rerender(
+			<AdvancedFields values={{ ...EMPTY, autostartRepos: ["/b", "/c"] }} onChange={onChange} />,
+		);
+
+		// The DOM node that holds "/c" is the SAME element we focused earlier.
+		// Querying by its value is the cleanest assertion; activeElement is
+		// preserved by React because the parent <div> key didn't change.
+		const stillThere = screen.getByDisplayValue("/c");
+		expect(stillThere).toBe(thirdInput);
+	});
+
 	it("seeds the category combobox with deduped + sorted suggestions", () => {
 		render(
 			<AdvancedFields
