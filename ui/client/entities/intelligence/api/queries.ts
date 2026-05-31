@@ -152,8 +152,18 @@ export function useDismissInboxItem() {
 				queryClient.setQueryData(intelligenceKeys.inbox(), ctx.prev);
 			}
 		},
-		onSettled: () => {
+		onSettled: (_data, _err, itemId) => {
 			queryClient.invalidateQueries({ queryKey: intelligenceKeys.inbox() });
+			// FF.5: project_health alerts come from a *separate* cache (the
+			// projectHealth list) — without invalidating it, the rail on the
+			// project page keeps showing the destructive-bordered alert + the
+			// Snooze 7d button for up to the staleTime after a successful
+			// dismiss. Other dismiss targets (patterns, suggestions) don't
+			// share this cache; gate the invalidation on the prefix so we
+			// don't refetch for free.
+			if (itemId.startsWith("project_health:")) {
+				queryClient.invalidateQueries({ queryKey: intelligenceKeys.projectHealth() });
+			}
 		},
 	});
 }
