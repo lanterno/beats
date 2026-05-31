@@ -34,6 +34,31 @@ export function formatDate(dateString: string): string {
 }
 
 /**
+ * Format a bare 'YYYY-MM-DD' as the literal calendar day it names, with no
+ * timezone translation. Use this for fields the API treats as date-only
+ * (a Monday-of-week, an effective_from boundary, a planned-day key) — running
+ * those through formatDate would parse them as UTC midnight, then shift them
+ * to the previous day for any user west of UTC.
+ *
+ * Returns a fallback ('—' by default) when the string isn't a parseable
+ * 'YYYY-MM-DD'. Does NOT accept full ISO timestamps — those still belong in
+ * formatDate / parseUtcIso.
+ */
+export function formatDateOnly(yyyyMmDd: string | null | undefined, fallback = "—"): string {
+	if (!yyyyMmDd || typeof yyyyMmDd !== "string") return fallback;
+	const m = yyyyMmDd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (!m) return fallback;
+	const [, y, mo, d] = m;
+	const date = new Date(Number(y), Number(mo) - 1, Number(d), 12, 0, 0, 0);
+	if (Number.isNaN(date.getTime())) return fallback;
+	return date.toLocaleDateString(undefined, {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+}
+
+/**
  * Format a time for display in the user's local timezone (e.g., "02:30 PM")
  */
 export function formatTime(dateString: string): string {

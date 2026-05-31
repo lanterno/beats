@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import type { GoalOverride, Project } from "@/entities/project";
 import { useUpdateGoalOverrides } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { formatDate } from "@/shared/lib";
+import { formatDateOnly } from "@/shared/lib";
 
 interface OverrideManagementPanelProps {
 	project: Project;
@@ -105,7 +105,7 @@ export function OverrideManagementPanel({ project }: OverrideManagementPanelProp
 							<Calendar className="w-3 h-3 text-muted-foreground/60 shrink-0" aria-hidden="true" />
 							<span className="text-muted-foreground tabular-nums shrink-0">{scope.label}</span>
 							<span className="text-foreground tabular-nums shrink-0">
-								{scope.date ? formatDate(scope.date) : "—"}
+								{formatDateOnly(scope.date)}
 							</span>
 							<span className="text-foreground/80 shrink-0">·</span>
 							<span className="text-foreground shrink-0">{describeGoal(o)}</span>
@@ -117,7 +117,7 @@ export function OverrideManagementPanel({ project }: OverrideManagementPanelProp
 								onClick={() => handleDelete(o)}
 								disabled={pendingKey !== null}
 								aria-label={`Remove override for ${
-									scope.date ? formatDate(scope.date) : scope.label
+									scope.date ? formatDateOnly(scope.date) : scope.label
 								}`}
 								className="ml-auto p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 							>
