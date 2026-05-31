@@ -72,4 +72,35 @@ describe("OverrideManagementPanel", () => {
 		expect(args[0].overrides).toHaveLength(1);
 		expect(args[0].overrides[0].week_of).toBe("2026-04-20");
 	});
+
+	it("FF.6: deleting one of two overrides sharing the same scope removes only the clicked row", async () => {
+		// Two overrides for the same Monday (legacy cleanup territory per
+		// the panel header). The pre-FF.6 implementation filtered by the
+		// composite (weekOf, effectiveFrom) key and nuked both. Identity-
+		// based filtering keeps the other one in place.
+		render(
+			<OverrideManagementPanel
+				project={project([
+					{ weekOf: "2026-05-25", weeklyGoal: 12, goalType: "target" },
+					{ weekOf: "2026-05-25", weeklyGoal: 8, goalType: "cap" },
+				])}
+			/>,
+		);
+
+		// Both rows render. Both labelled identically (same date), so query
+		// by all and click the second.
+		const buttons = screen.getAllByRole("button", { name: /Remove override/ });
+		expect(buttons).toHaveLength(2);
+		await userEvent.click(buttons[1]);
+
+		expect(mutate).toHaveBeenCalledTimes(1);
+		const [args] = mutate.mock.calls;
+		expect(args[0].overrides).toHaveLength(1);
+		// The surviving override is the one we did NOT click. The sort is
+		// week-desc-then-input order, but with equal weekOf the input order
+		// is preserved — index 1 (in sorted) maps back to overrides[1]
+		// (the cap), so the survivor is the target (weeklyGoal=12).
+		expect(args[0].overrides[0].weekly_goal).toBe(12);
+		expect(args[0].overrides[0].goal_type).toBe("target");
+	});
 });
