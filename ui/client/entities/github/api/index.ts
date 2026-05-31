@@ -4,4 +4,5 @@ export {
 	useConnectGitHub,
 	useDisconnectGitHub,
 	useGitHubStatus,
+	useProjectGitActivityByWeek,
 } from "./queries";

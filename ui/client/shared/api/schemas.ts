@@ -389,6 +389,15 @@ export const GitHubStatusSchema = z.object({
 
 export type GitHubStatus = z.infer<typeof GitHubStatusSchema>;
 
+export const GitCommitDaySchema = z.object({
+	date: z.string(),
+	commit_count: z.number(),
+});
+
+export type GitCommitDay = z.infer<typeof GitCommitDaySchema>;
+
+export const GitCommitActivitySchema = z.array(GitCommitDaySchema);
+
 // ============================================================================
 // Gap schemas
 // ============================================================================

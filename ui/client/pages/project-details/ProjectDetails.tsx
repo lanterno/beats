@@ -7,6 +7,7 @@ import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
 import type { GoalOverride } from "@/entities/project";
 import {
@@ -39,6 +40,7 @@ import {
 import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
+import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
 import { ProjectIntentionStrip } from "./ProjectIntentionStrip";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
@@ -108,6 +110,10 @@ export default function ProjectDetails() {
 	// for a row = "no plan entry that week" (em-dash); 0 = explicit zero.
 	const mondayIsoList = computeMondayIsoList(weekCount);
 	const { byMondayIso: plannedByMonday } = useProjectPlannedByWeek(projectId, mondayIsoList);
+	// P4.4: weekly commit counts for the project's linked GitHub repo. Empty
+	// map when the repo isn't set or the user isn't OAuth-connected — the
+	// table renders an em-dash with a tooltip explaining the precondition.
+	const { byMondayIso: commitsByMonday } = useProjectGitActivityByWeek(projectId, mondayIsoList);
 
 	// Reset per-project view state when the route project changes. projectId is
 	// the intentional trigger here (the body only calls stable setters), so it
@@ -428,6 +434,10 @@ export default function ProjectDetails() {
 							+ Add description
 						</button>
 					)}
+					<ProjectGitHubBadge
+						githubRepo={project.githubRepo}
+						onConfigure={() => openSettings("name")}
+					/>
 					<div className="ml-auto shrink-0 flex items-center gap-4">
 						{goalPct !== null ? (
 							<button
@@ -494,7 +504,7 @@ export default function ProjectDetails() {
 					<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 						{/* Header */}
 						<div
-							className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_64px]"} px-3 py-2 border-b border-border/60`}
+							className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_56px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_56px_64px]"} px-3 py-2 border-b border-border/60`}
 						>
 							<div />
 							{WEEKDAY_SHORT.map((d, i) => (
@@ -512,6 +522,12 @@ export default function ProjectDetails() {
 								title="Planned hours for this project this week"
 							>
 								Planned
+							</div>
+							<div
+								className="text-right text-[10px] uppercase tracking-widest text-muted-foreground"
+								title="Commits to the linked GitHub repo this week"
+							>
+								Commits
 							</div>
 							<div className="text-right text-[10px] uppercase tracking-widest text-muted-foreground">
 								Total
@@ -540,7 +556,7 @@ export default function ProjectDetails() {
 							return (
 								<div
 									key={row.label}
-									className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_64px]"} px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
+									className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_56px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_56px_64px]"} px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
 										rowIdx === 0 ? "bg-secondary/10" : "hover:bg-secondary/10"
 									}`}
 								>
@@ -581,6 +597,10 @@ export default function ProjectDetails() {
 										</div>
 									))}
 									<PlannedCell hours={plannedByMonday.get(row.mondayIso)} />
+									<CommitsCell
+										count={commitsByMonday.get(row.mondayIso)}
+										hasRepo={!!project.githubRepo}
+									/>
 									{hasAnyGoal ? (
 										<>
 											<div className="relative flex flex-col items-end gap-0.5">
@@ -882,6 +902,50 @@ function PlannedCell({ hours }: { hours: number | undefined }) {
 	return (
 		<div className="text-right text-xs tabular-nums text-muted-foreground" title="Planned hours">
 			{hours.toFixed(1)}h
+		</div>
+	);
+}
+
+/**
+ * Commits cell for the week-history table (P4.4).
+ *
+ * - `hasRepo === false` → em-dash with a tooltip pointing at the linked-repo
+ *   precondition. Same em-dash as "no plan" so the column doesn't shout an
+ *   empty state at a user who hasn't opted into the integration.
+ * - `hasRepo === true` and count is undefined/0 → "0" in muted color.
+ * - `hasRepo === true` and count > 0 → the count, with a tooltip.
+ *
+ * The Map from useProjectGitActivityByWeek seeds every visible Monday with 0
+ * up-front, so an empty repo period reads "0" rather than the no-repo "—".
+ */
+function CommitsCell({ count, hasRepo }: { count: number | undefined; hasRepo: boolean }) {
+	if (!hasRepo) {
+		return (
+			<div
+				className="text-right text-xs tabular-nums text-muted-foreground/30"
+				title="Link a GitHub repo to see weekly commit counts here"
+			>
+				—
+			</div>
+		);
+	}
+	const n = count ?? 0;
+	if (n === 0) {
+		return (
+			<div
+				className="text-right text-xs tabular-nums text-muted-foreground/40"
+				title="No commits this week"
+			>
+				0
+			</div>
+		);
+	}
+	return (
+		<div
+			className="text-right text-xs tabular-nums text-muted-foreground"
+			title={`${n} commits this week`}
+		>
+			{n}
 		</div>
 	);
 }
