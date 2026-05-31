@@ -72,4 +72,60 @@ describe("usePinnedProjects", () => {
 		expect(result.current.isPinned("p1")).toBe(true);
 		expect([...result.current.pins]).toEqual(["p1"]);
 	});
+
+	it("FF.12: ignores unrelated storage events from other modules", () => {
+		// Pre-FF.12 the bare `storage` listener ran refresh() for every
+		// localStorage write in any other tab — auth, timer, theme, etc.
+		// The filter checks e.key against the pins key (and null for
+		// localStorage.clear()).
+		togglePin(USER, "p1");
+		const { result } = renderHook(() => usePinnedProjects());
+		const initialPins = result.current.pins;
+
+		act(() => {
+			window.dispatchEvent(
+				new StorageEvent("storage", { key: "beats:auth-token", newValue: "newtoken" }),
+			);
+		});
+
+		// Reference equality: a no-op refresh on an unrelated event would
+		// create a brand-new Set even with identical contents, forcing a
+		// re-render in every consumer. The filter keeps the prior Set.
+		expect(result.current.pins).toBe(initialPins);
+	});
+
+	it("FF.12: still picks up localStorage.clear() (key === null) so a wipe is honored", () => {
+		togglePin(USER, "p1");
+		const { result } = renderHook(() => usePinnedProjects());
+		expect(result.current.isPinned("p1")).toBe(true);
+
+		// Simulate localStorage.clear() in another tab: spec says storage
+		// fires with e.key === null.
+		act(() => {
+			window.localStorage.clear();
+			window.dispatchEvent(new StorageEvent("storage", { key: null }));
+		});
+
+		expect(result.current.pins.size).toBe(0);
+	});
+
+	it("FF.12: re-reads when the pins key itself changes (cross-tab toggle)", () => {
+		const { result } = renderHook(() => usePinnedProjects());
+		expect(result.current.pins.size).toBe(0);
+
+		act(() => {
+			// Another tab wrote a new pin set.
+			window.localStorage.setItem(
+				"beats:project-pins:v1:alice@example.com",
+				JSON.stringify(["x", "y"]),
+			);
+			window.dispatchEvent(
+				new StorageEvent("storage", {
+					key: "beats:project-pins:v1:alice@example.com",
+				}),
+			);
+		});
+
+		expect([...result.current.pins].sort()).toEqual(["x", "y"]);
+	});
 });

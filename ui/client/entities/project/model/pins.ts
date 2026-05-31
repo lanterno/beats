@@ -84,12 +84,21 @@ export function usePinnedProjects(): {
 		setPins(readPins(userKey));
 		if (!userKey || typeof window === "undefined") return;
 		const refresh = () => setPins(readPins(userKey));
+		// FF.12: `storage` fires for EVERY localStorage write from another tab —
+		// auth, timer, theme, recents, install-prompt, etc. Filter by the
+		// pins key for this user (or e.key === null, which is fired by
+		// localStorage.clear() and must still wipe). Otherwise unrelated
+		// activity in a sibling tab re-parses pins and creates a fresh Set,
+		// forcing a redundant re-render in every consumer.
+		const pinsKey = keyFor(userKey);
+		const onStorage = (e: StorageEvent) => {
+			if (e.key === null || e.key === pinsKey) refresh();
+		};
 		window.addEventListener(EVENT_NAME, refresh);
-		// Cross-tab updates still arrive via the standard `storage` event.
-		window.addEventListener("storage", refresh);
+		window.addEventListener("storage", onStorage);
 		return () => {
 			window.removeEventListener(EVENT_NAME, refresh);
-			window.removeEventListener("storage", refresh);
+			window.removeEventListener("storage", onStorage);
 		};
 	}, [userKey]);
 

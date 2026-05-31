@@ -860,7 +860,12 @@ export default function ProjectDetails() {
 										onClick={() => setVisibleCount((c) => c + SESSIONS_PER_PAGE)}
 										className="w-full py-2.5 text-sm text-accent hover:bg-accent/5 transition-colors"
 									>
-										Show {Math.min(SESSIONS_PER_PAGE, sortedSessions.length - visibleCount)} more
+										{/* FF.12: scope to scopedSessions, not sortedSessions —
+										    when the user has clicked a week label the visible
+										    list is scoped to that week's Mon..Sun range, so the
+										    count must reflect what THIS click will actually
+										    reveal. */}
+										Show {Math.min(SESSIONS_PER_PAGE, scopedSessions.length - visibleCount)} more
 										sessions...
 									</button>
 								</div>
