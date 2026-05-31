@@ -8,7 +8,7 @@
  */
 
 import { GitBranch, Plus, Trash2 } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 export interface AdvancedFieldsValues {
 	category: string;
@@ -45,6 +45,12 @@ const inputCls =
 	"w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40";
 const labelCls = "block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5";
 
+let rowIdCounter = 0;
+function newRowId(): string {
+	rowIdCounter += 1;
+	return `autostart-row-${rowIdCounter}`;
+}
+
 export function AdvancedFields({
 	values,
 	onChange,
@@ -63,6 +69,26 @@ export function AdvancedFields({
 	const set = <K extends keyof AdvancedFieldsValues>(k: K, v: AdvancedFieldsValues[K]) =>
 		onChange({ ...values, [k]: v });
 
+	// FF.4: stable per-row ids so React keys autostart rows by identity
+	// instead of index. Deleting a middle row was unmounting the trailing
+	// input and dropping any focus / in-progress IME composition on it,
+	// because the array shift reused the lower index for a different value.
+	const [autostartIds, setAutostartIds] = useState<string[]>(() =>
+		values.autostartRepos.map(() => newRowId()),
+	);
+
+	// Re-sync ids if the value length changes from outside this component
+	// (e.g., a parent resets the form). Best-effort — if a caller reorders
+	// the array, ids and values will be misaligned, but no caller does that.
+	useEffect(() => {
+		if (autostartIds.length === values.autostartRepos.length) return;
+		setAutostartIds((prev) => {
+			const next = prev.slice(0, values.autostartRepos.length);
+			while (next.length < values.autostartRepos.length) next.push(newRowId());
+			return next;
+		});
+	}, [values.autostartRepos.length, autostartIds.length]);
+
 	const setRepo = (i: number, v: string) => {
 		const next = values.autostartRepos.slice();
 		next[i] = v;
@@ -72,10 +98,18 @@ export function AdvancedFields({
 	const removeRepo = (i: number) => {
 		const next = values.autostartRepos.slice();
 		next.splice(i, 1);
+		setAutostartIds((prev) => {
+			const out = prev.slice();
+			out.splice(i, 1);
+			return out;
+		});
 		set("autostartRepos", next);
 	};
 
-	const addRepo = () => set("autostartRepos", [...values.autostartRepos, ""]);
+	const addRepo = () => {
+		setAutostartIds((prev) => [...prev, newRowId()]);
+		set("autostartRepos", [...values.autostartRepos, ""]);
+	};
 
 	return (
 		<div className="space-y-4">
@@ -152,7 +186,7 @@ export function AdvancedFields({
 				</p>
 				<div className="space-y-1.5" role="group" aria-labelledby="project-form-autostart-label">
 					{values.autostartRepos.map((repo, i) => (
-						<div key={i} className="flex items-center gap-2">
+						<div key={autostartIds[i] ?? `tail-${i}`} className="flex items-center gap-2">
 							<input
 								value={repo}
 								onChange={(e) => setRepo(i, e.target.value)}
