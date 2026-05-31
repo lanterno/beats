@@ -21,6 +21,25 @@ interface ProjectIntentionStripProps {
 }
 
 const DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const DAY_NAMES = [
+	"Monday",
+	"Tuesday",
+	"Wednesday",
+	"Thursday",
+	"Friday",
+	"Saturday",
+	"Sunday",
+] as const;
+
+/** Compose a screen-reader-friendly summary of the active weekdays so the
+ *  group can announce "Mon, Wed, Fri" instead of seven per-cell active/
+ *  inactive declarations. FF.7. */
+function summarizeDays(days: number[]): string {
+	if (days.length === 0) return "no days";
+	if (days.length === 7) return "every day";
+	const sorted = [...days].sort((a, b) => a - b);
+	return sorted.map((d) => DAY_NAMES[d]).join(", ");
+}
 
 function todayIso(): string {
 	const d = new Date();
@@ -132,20 +151,32 @@ export function ProjectIntentionStrip({ projectId, projectName }: ProjectIntenti
 						aria-hidden="true"
 					/>
 					<span className="uppercase tracking-[0.12em] text-muted-foreground">Recurring</span>
-					<div className="flex gap-0.5" role="group" aria-label="Active weekdays">
-						{DAY_LABELS.map((label, i) => (
-							<span
-								key={label}
-								className={cn(
-									"text-[10px] w-4 text-center rounded",
-									recurringTemplate.days_of_week.includes(i)
-										? "bg-accent/20 text-accent"
-										: "text-muted-foreground/30",
-								)}
-							>
-								{label[0]}
-							</span>
-						))}
+					<div
+						className="flex gap-0.5"
+						role="group"
+						aria-label={`Active on ${summarizeDays(recurringTemplate.days_of_week)}`}
+					>
+						{DAY_LABELS.map((label, i) => {
+							const active = recurringTemplate.days_of_week.includes(i);
+							return (
+								<span
+									key={label}
+									// Non-color cue for users with achromatopsia: bold + ring for
+									// active, regular weight + no ring for inactive. aria-hidden
+									// on each cell because the group's aria-label already conveys
+									// the active set; per-cell announcements would just spam.
+									aria-hidden="true"
+									className={cn(
+										"text-[10px] w-4 text-center rounded",
+										active
+											? "bg-accent/20 text-accent font-bold ring-1 ring-accent/40"
+											: "text-muted-foreground/30 font-normal",
+									)}
+								>
+									{label[0]}
+								</span>
+							);
+						})}
 					</div>
 					<span className="text-foreground tabular-nums">
 						{formatDuration(recurringTemplate.planned_minutes)}

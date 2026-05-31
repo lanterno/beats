@@ -81,6 +81,40 @@ describe("ProjectIntentionStrip", () => {
 		expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/plan");
 	});
 
+	it("FF.7: the weekday group announces the active set as a single phrase", () => {
+		useRecurringMock.mockReturnValue({
+			data: [
+				{
+					id: "r1",
+					project_id: "p1",
+					planned_minutes: 60,
+					days_of_week: [0, 2, 4],
+					enabled: true,
+				},
+			],
+		});
+		renderStrip();
+		expect(
+			screen.getByRole("group", { name: "Active on Monday, Wednesday, Friday" }),
+		).toBeInTheDocument();
+	});
+
+	it("FF.7: collapses an all-days set to 'every day'", () => {
+		useRecurringMock.mockReturnValue({
+			data: [
+				{
+					id: "r1",
+					project_id: "p1",
+					planned_minutes: 60,
+					days_of_week: [0, 1, 2, 3, 4, 5, 6],
+					enabled: true,
+				},
+			],
+		});
+		renderStrip();
+		expect(screen.getByRole("group", { name: "Active on every day" })).toBeInTheDocument();
+	});
+
 	it("ignores intentions/templates that belong to other projects", () => {
 		useIntentionsMock.mockReturnValue({
 			data: [
