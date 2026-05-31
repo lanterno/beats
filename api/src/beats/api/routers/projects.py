@@ -1,5 +1,6 @@
 """Projects API router - thin controller for project operations."""
 
+import asyncio
 import http
 from datetime import date, timedelta
 
@@ -56,32 +57,59 @@ async def list_projects(
     """
     projects = await service.list_projects(archived=archived)
     include_set = {token.strip() for token in (include or "").split(",") if token.strip()}
+    want_totals = "totals" in include_set
+    want_week = "this_week" in include_set
+    want_last = "last_tracked" in include_set
 
-    items: list[dict] = []
-    for p in projects:
+    # FF.9: parallelize the per-project aggregations on TWO axes so a user
+    # with 30 projects no longer pays for 90 serial Mongo round-trips on
+    # every /projects load.
+    #
+    # - Inner: the three aggregations for ONE project (totals + week
+    #   breakdown + last_tracked_at) share no dependency on each other, so
+    #   asyncio.gather them.
+    # - Outer: each project's bundle runs concurrently with every other
+    #   project's bundle through the same gather() at the end.
+    #
+    # Order is preserved because asyncio.gather returns in input order.
+    # Memoizing the underlying beats fetch across the three calls would
+    # squeeze out another factor of three, but that touches the service
+    # layer; defer until profiling says it matters.
+
+    async def gather_one(p: Project) -> dict:
         item = p.model_dump(mode="json")
         if not p.id:
-            items.append(item)
-            continue
+            return item
 
-        if "totals" in include_set:
-            totals = await service.get_monthly_totals(p.id)
-            item["total_minutes"] = totals.get("total_minutes", 0)
+        coros: list = []
+        if want_totals:
+            coros.append(service.get_monthly_totals(p.id))
+        if want_week:
+            coros.append(service.get_week_breakdown(project_id=p.id, weeks_ago=0))
+        if want_last:
+            coros.append(service.get_last_tracked_at(p.id))
 
-        if "this_week" in include_set:
-            week = await service.get_week_breakdown(project_id=p.id, weeks_ago=0)
+        results = await asyncio.gather(*coros) if coros else []
+
+        idx = 0
+        if want_totals:
+            item["total_minutes"] = results[idx].get("total_minutes", 0)
+            idx += 1
+        if want_week:
+            week = results[idx]
             total_hours = week.get("total_hours", 0) or 0
             item["weekly_minutes"] = float(total_hours) * 60
             item["effective_goal"] = week.get("effective_goal")
             item["effective_goal_type"] = week.get("effective_goal_type")
             item["effective_goal_overridden"] = week.get("effective_goal_overridden")
-
-        if "last_tracked" in include_set:
-            last = await service.get_last_tracked_at(p.id)
+            idx += 1
+        if want_last:
+            last = results[idx]
             item["last_tracked_at"] = last.isoformat() if last else None
+            idx += 1
+        return item
 
-        items.append(item)
-    return items
+    return await asyncio.gather(*(gather_one(p) for p in projects))
 
 
 @router.post("/", status_code=http.HTTPStatus.CREATED, response_model=ProjectResponse)
