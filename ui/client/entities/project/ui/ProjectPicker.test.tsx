@@ -43,15 +43,63 @@ describe("ProjectPicker", () => {
 
 	it("renders the current selection (color dot + name) and opens the listbox on click", async () => {
 		render(<ProjectPicker value="a" onChange={vi.fn()} projects={PROJECTS} />);
-		expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("Alpha");
+		// FF.3: the trigger's accessible name now reflects the selection.
+		const trigger = screen.getByRole("button", { name: "Project: Alpha" });
+		expect(trigger).toHaveTextContent("Alpha");
 
-		await userEvent.click(screen.getByRole("button", { name: "Project" }));
+		await userEvent.click(trigger);
 
 		expect(screen.getByRole("combobox")).toBeInTheDocument();
 		expect(screen.getByRole("listbox")).toBeInTheDocument();
 		// The archived project is hidden by default — the visibility filter
 		// from P0.3 still applies inside the picker.
 		expect(screen.queryByRole("option", { name: /OldProject/ })).not.toBeInTheDocument();
+	});
+
+	it("FF.3: the trigger's accessible name reflects the selected project", () => {
+		const { rerender } = render(
+			<ProjectPicker value={null} onChange={vi.fn()} projects={PROJECTS} />,
+		);
+		// No selection → bare label.
+		expect(screen.getByRole("button", { name: "Project" })).toBeInTheDocument();
+
+		// Selection → label : name.
+		rerender(<ProjectPicker value="b" onChange={vi.fn()} projects={PROJECTS} />);
+		expect(screen.getByRole("button", { name: "Project: Beta" })).toBeInTheDocument();
+
+		// Archived selection is signalled in the accessible name.
+		rerender(<ProjectPicker value="old" onChange={vi.fn()} projects={PROJECTS} showArchived />);
+		expect(
+			screen.getByRole("button", { name: "Project: OldProject (archived)" }),
+		).toBeInTheDocument();
+	});
+
+	it("FF.3: respects a custom ariaLabel when nothing is selected", () => {
+		render(
+			<ProjectPicker
+				value={null}
+				onChange={vi.fn()}
+				projects={PROJECTS}
+				ariaLabel="Filter by project"
+			/>,
+		);
+		expect(screen.getByRole("button", { name: "Filter by project" })).toBeInTheDocument();
+	});
+
+	it("FF.3: scrolls the highlighted option into view as the user arrow-keys", async () => {
+		// jsdom doesn't implement scrollIntoView; install a spy so we can
+		// assert the effect ran on the right node.
+		const scrollSpy = vi.fn();
+		Element.prototype.scrollIntoView = scrollSpy;
+
+		render(<ProjectPicker value={null} onChange={vi.fn()} projects={PROJECTS} />);
+		await userEvent.click(screen.getByRole("button", { name: "Project" }));
+		// One call on open for the already-highlighted first option.
+		const initialCalls = scrollSpy.mock.calls.length;
+
+		fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+		// A second call now that the highlight moved.
+		expect(scrollSpy.mock.calls.length).toBeGreaterThan(initialCalls);
 	});
 
 	it("filters as the user types", async () => {
