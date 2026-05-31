@@ -40,7 +40,7 @@ export interface ProjectFormProps {
 	onSubmit: (values: ProjectFormValues) => void;
 	onCancel?: () => void;
 	/** Which field gets autofocused on mount — used by inline-clickable headers. */
-	autoFocusField?: "name" | "description" | "weeklyGoal";
+	autoFocusField?: "name" | "description" | "weeklyGoal" | "githubRepo";
 	/** Existing category strings shown as datalist suggestions in Advanced. */
 	categorySuggestions?: string[];
 	/** Whether the user has GitHub OAuth connected — surfaces a hint in Advanced. */
@@ -81,8 +81,12 @@ export function ProjectForm({
 		(initialValues?.category && initialValues.category.trim() !== "") ||
 		(initialValues?.githubRepo && initialValues.githubRepo.trim() !== "") ||
 		(initialValues?.autostartRepos && initialValues.autostartRepos.length > 0);
+	// Forcing Advanced open when an advanced field is the autofocus target —
+	// otherwise the autoFocus prop targets an unmounted input and the drawer
+	// opens with no visible focus signal.
+	const advancedFocusRequested = autoFocusField === "githubRepo";
 	const [advancedOpen, setAdvancedOpen] = useState(
-		advancedOpenDefault ?? Boolean(hasAdvancedValues),
+		advancedOpenDefault ?? (Boolean(hasAdvancedValues) || advancedFocusRequested),
 	);
 
 	const trimmedName = values.name.trim();
@@ -287,6 +291,7 @@ export function ProjectForm({
 							}
 							categorySuggestions={categorySuggestions}
 							githubConnected={githubConnected}
+							autoFocusField={autoFocusField === "githubRepo" ? "githubRepo" : undefined}
 						/>
 					</div>
 				)}

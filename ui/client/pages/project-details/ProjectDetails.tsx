@@ -5,7 +5,7 @@
 
 import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
@@ -83,13 +83,16 @@ export default function ProjectDetails() {
 	const [weekCount, setWeekCount] = useState(5);
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
-	const [settingsFocus, setSettingsFocus] = useState<"name" | "description" | "weeklyGoal">("name");
+	const [settingsFocus, setSettingsFocus] = useState<
+		"name" | "description" | "weeklyGoal" | "githubRepo"
+	>("name");
+	const navigate = useNavigate();
 	// P4.0: click a week label in the history table to scope the sessions
 	// list below to that week's Mon..Sun range. null = no scope.
 	const [scopedWeeksAgo, setScopedWeeksAgo] = useState<number | null>(null);
 	const hasSetInitialExpand = useRef(false);
 
-	const openSettings = (field: "name" | "description" | "weeklyGoal") => {
+	const openSettings = (field: "name" | "description" | "weeklyGoal" | "githubRepo") => {
 		setSettingsFocus(field);
 		setSettingsOpen(true);
 	};
@@ -436,7 +439,8 @@ export default function ProjectDetails() {
 					)}
 					<ProjectGitHubBadge
 						githubRepo={project.githubRepo}
-						onConfigure={() => openSettings("name")}
+						onConfigureRepo={() => openSettings("githubRepo")}
+						onConnectGitHub={() => navigate("/settings")}
 					/>
 					<div className="ml-auto shrink-0 flex items-center gap-4">
 						{goalPct !== null ? (
