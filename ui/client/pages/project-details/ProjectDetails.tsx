@@ -440,7 +440,7 @@ export default function ProjectDetails() {
 					<ProjectGitHubBadge
 						githubRepo={project.githubRepo}
 						onConfigureRepo={() => openSettings("githubRepo")}
-						onConnectGitHub={() => navigate("/settings")}
+						onConnectGitHub={() => navigate("/settings#github")}
 					/>
 					<div className="ml-auto shrink-0 flex items-center gap-4">
 						{goalPct !== null ? (
