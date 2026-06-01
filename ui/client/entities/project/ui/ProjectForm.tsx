@@ -12,7 +12,7 @@
  */
 
 import { ChevronDown, ChevronRight, Target, TrendingDown } from "lucide-react";
-import { useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import { Button, ColorPicker } from "@/shared/ui";
 import { PROJECT_COLORS } from "../model";
 import { AdvancedFields, isValidGithubRepo } from "./AdvancedFields";
@@ -104,7 +104,7 @@ export function ProjectForm({
 
 	const trimmedName = values.name.trim();
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setError(null);
 
