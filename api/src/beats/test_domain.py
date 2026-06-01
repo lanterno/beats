@@ -3252,6 +3252,16 @@ class _FakeBeatRepoForServices:
     async def list_by_project(self, project_id: str) -> list[Beat]:
         return [b for b in self._beats if b.project_id == project_id]
 
+    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
+        # Mirror the real repo: every requested id is present in the result
+        # (empty list when no beats), and unsolicited project_ids are not.
+        buckets: dict[str, list[Beat]] = {pid: [] for pid in project_ids}
+        requested = set(project_ids)
+        for b in self._beats:
+            if b.project_id in requested:
+                buckets[b.project_id].append(b)
+        return buckets
+
 
 class _FakeProjectRepoForServices:
     """In-memory ProjectRepository fake."""
@@ -3812,6 +3822,116 @@ class TestProjectServiceTimeAggregations:
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
         result = await svc.get_daily_summary("p1")
         assert result == {"2026-04-01": "1:00:00", "2026-04-02": "1:00:00"}
+
+
+# =============================================================================
+# FF.15 — Beats-batched aggregation helpers
+# =============================================================================
+
+
+class TestProjectServiceBeatsBatchHelpers:
+    """Pure-Python helpers that take pre-fetched beats and return the
+    same shapes as the public per-project aggregations. The list_projects
+    route fetches every displayed project's beats in ONE Mongo find and
+    calls these helpers directly, sharing the same in-memory list across
+    the three aggregations.
+
+    Why these tests matter: the helpers MUST stay byte-for-byte
+    equivalent to the public methods, or the /projects index page
+    silently disagrees with the /project/{id}/week and /total endpoints.
+    The matches_public_method tests run both paths over identical input
+    and pin equality of the result dicts."""
+
+    @staticmethod
+    def _at(d: date, hour: int = 9) -> datetime:
+        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
+
+    @staticmethod
+    def _completed(id_: str, project_id: str, day: date, hour: int = 9, minutes: int = 60) -> Beat:
+        s = TestProjectServiceBeatsBatchHelpers._at(day, hour)
+        return Beat(id=id_, project_id=project_id, start=s, end=s + timedelta(minutes=minutes))
+
+    @staticmethod
+    def _running(id_: str, project_id: str, day: date, hour: int = 9) -> Beat:
+        return Beat(
+            id=id_,
+            project_id=project_id,
+            start=TestProjectServiceBeatsBatchHelpers._at(day, hour),
+            end=None,
+        )
+
+    def test_last_tracked_from_beats_empty_returns_none(self):
+        from beats.domain.services import ProjectService
+
+        assert ProjectService._last_tracked_from_beats([]) is None
+
+    def test_last_tracked_from_beats_uses_start_when_end_is_none(self):
+        """A running beat's start counts as last activity if later than
+        any completed end. Pin so an in-progress timer surfaces as 'just
+        now' the same way the public method does."""
+        from beats.domain.services import ProjectService
+
+        today = date.today()
+        beats = [
+            self._completed("b-old", "p1", today - timedelta(days=2), minutes=60),
+            self._running("b-now", "p1", today, hour=14),
+        ]
+        result = ProjectService._last_tracked_from_beats(beats)
+        assert result == self._at(today, hour=14)
+
+    async def test_monthly_totals_from_beats_matches_public_method(self):
+        """Helper output is byte-identical to get_monthly_totals(pid)
+        for the same beats. Regression-proofs that the refactor
+        preserves the contract — if someone edits one path and not the
+        other they break this test loudly."""
+        from beats.domain.services import ProjectService
+
+        beats = [
+            self._completed("b1", "p1", date(2026, 4, 1), minutes=60),
+            self._completed("b2", "p1", date(2026, 4, 15), minutes=30),
+            self._completed("b3", "p1", date(2026, 5, 1), minutes=120),
+            self._running("b4", "p1", date.today()),
+        ]
+        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
+        via_public = await svc.get_monthly_totals("p1")
+        via_helper = ProjectService._monthly_totals_from_beats(beats)
+        assert via_helper == via_public
+
+    async def test_week_breakdown_from_beats_matches_public_method(self):
+        """Helper output equals get_week_breakdown(pid) for the current
+        week, including effective_goal_overridden. Pin the equality so
+        the /projects index page can't drift from /project/{id}/week."""
+        from beats.domain.services import ProjectService
+
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        beats = [
+            self._completed("b1", "p1", monday, minutes=60),
+            self._completed("b2", "p1", monday + timedelta(days=2), minutes=30),
+        ]
+        project = _project("p1", "Alpha", weekly_goal=5.0)
+        svc = _project_service(projects=[project], beats=beats)
+        via_public = await svc.get_week_breakdown("p1")
+        via_helper = ProjectService._week_breakdown_from_beats(beats, project, weeks_ago=0)
+        assert via_helper == via_public
+        # effective_goal_overridden carried through both paths.
+        assert "effective_goal_overridden" in via_helper
+
+    def test_week_breakdown_from_beats_total_hours_precision(self):
+        """A single 1h30m beat in the current week yields total_hours
+        == 1.5 EXACTLY, and float(total_hours)*60 == 90.0 EXACTLY. The
+        list_projects route multiplies total_hours by 60 to populate
+        weekly_minutes — drift in this precision moves what users see
+        as 'this week' on the projects index."""
+        from beats.domain.services import ProjectService
+
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        beats = [self._completed("b1", "p1", monday, minutes=90)]
+        project = _project("p1", "Alpha")
+        result = ProjectService._week_breakdown_from_beats(beats, project, weeks_ago=0)
+        assert result["total_hours"] == 1.5
+        assert float(result["total_hours"]) * 60 == 90.0
 
 
 # =============================================================================

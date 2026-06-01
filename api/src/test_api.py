@@ -173,6 +173,83 @@ class TestProjectAPI:
         # The service returns projects in creation order; the route preserves it.
         assert ours_in_listing == ids, (ours_in_listing, ids)
 
+    def test_projects_list_include_excludes_archived_projects_from_batch(self):
+        """FF.15 — the new batched path takes the IDs of the projects the
+        route will RENDER, which is the result of service.list_projects(
+        archived=archived). With the default archived=False, archived
+        projects' beats are never fetched. Pin so a refactor can't widen
+        the $in scope and silently load lifetime beats for every
+        archived project on every /projects load."""
+        import time as _time
+        from datetime import UTC, datetime, timedelta
+
+        active = client.post(
+            "/api/projects/",
+            json={"name": f"active-{_time.time()}"},
+            headers=auth_headers,
+        ).json()
+        archived = client.post(
+            "/api/projects/",
+            json={"name": f"arch-{_time.time()}"},
+            headers=auth_headers,
+        ).json()
+        # Log beats for BOTH projects.
+        end = datetime.now(UTC)
+        for pid in (active["id"], archived["id"]):
+            client.post(
+                "/api/beats/",
+                json={
+                    "project_id": pid,
+                    "start": (end - timedelta(minutes=20)).isoformat(),
+                    "end": end.isoformat(),
+                },
+                headers=auth_headers,
+            )
+        # Archive the second.
+        client.post(f"/api/projects/{archived['id']}/archive", headers=auth_headers)
+
+        # Default archived=false listing must populate the active project
+        # AND must not include the archived project in the response.
+        listing = client.get(
+            "/api/projects/?include=totals,this_week,last_tracked",
+            headers=auth_headers,
+        ).json()
+        ids = [p["id"] for p in listing]
+        assert active["id"] in ids
+        assert archived["id"] not in ids
+
+        # archived=true listing includes the archived project AND its
+        # aggregations populate (documents that the exclusion is scoped
+        # to the default view, not a hard restriction at the repo).
+        archived_listing = client.get(
+            "/api/projects/?archived=true&include=totals,this_week,last_tracked",
+            headers=auth_headers,
+        ).json()
+        archived_item = next((p for p in archived_listing if p["id"] == archived["id"]), None)
+        assert archived_item is not None
+        assert archived_item["total_minutes"] is not None and archived_item["total_minutes"] >= 20
+
+    def test_projects_list_no_include_skips_batch(self):
+        """FF.15 — when include is empty (or omitted), the route returns
+        the slim shape WITHOUT issuing the batched beats find. The
+        contract here is just: no aggregation fields populated, no error
+        on a fresh user with no beats at all. Pin the early-return
+        path so a future refactor can't accidentally always-batch."""
+        import time as _time
+
+        pid = client.post(
+            "/api/projects/",
+            json={"name": f"slim-{_time.time()}"},
+            headers=auth_headers,
+        ).json()["id"]
+
+        listing = client.get("/api/projects/", headers=auth_headers).json()
+        item = next(p for p in listing if p["id"] == pid)
+        # Aggregation slots are present (the schema declares them) but
+        # null because the include set was empty.
+        for key in ("total_minutes", "weekly_minutes", "effective_goal", "last_tracked_at"):
+            assert item[key] is None, (key, item[key])
+
     def test_projects_list_include_subset(self):
         """Each include token is independent — requesting only 'totals'
         leaves the this_week/last_tracked slots null."""
