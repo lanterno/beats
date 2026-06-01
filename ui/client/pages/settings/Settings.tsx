@@ -25,7 +25,8 @@ import {
 	Upload,
 	Webhook,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
 	fetchCalendarAuthUrl,
@@ -638,6 +639,20 @@ function GitHubSection() {
 	const connectMutation = useConnectGitHub();
 	const disconnectMutation = useDisconnectGitHub();
 	const connectGitHub = connectMutation.mutate;
+	// FF.14: when arriving at /settings#github (the path ProjectGitHubBadge's
+	// "Connect GitHub" CTA dispatches to), scroll this section into view +
+	// nudge focus to the connect button so the precondition closes the loop.
+	const sectionRef = useRef<HTMLElement | null>(null);
+	const location = useLocation();
+	useEffect(() => {
+		if (location.hash !== "#github" || !sectionRef.current) return;
+		// rAF defers until after layout so the scroll lands on the right
+		// element (some sections above might still be hydrating).
+		const id = requestAnimationFrame(() => {
+			sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+		});
+		return () => cancelAnimationFrame(id);
+	}, [location.hash]);
 
 	useOAuthCallback(
 		"github",
@@ -663,7 +678,7 @@ function GitHubSection() {
 	};
 
 	return (
-		<section className="mb-8">
+		<section ref={sectionRef} id="github" className="mb-8 scroll-mt-6">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
 				<GitBranch className="w-4 h-4 text-accent" />
 				GitHub
