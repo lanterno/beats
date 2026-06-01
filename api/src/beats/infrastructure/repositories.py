@@ -145,6 +145,19 @@ class BeatRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
+        """Fetch all beats for the given project ids in one round-trip,
+        bucketed by project_id.
+
+        FF.15: lets list_projects collapse the N×3 fan-out the FF.9 comment
+        flagged into a single Mongo query whose result is shared across the
+        three aggregations (totals + this_week + last_tracked). Returns a
+        dict keyed by every requested id (empty list when the project has
+        no beats), so callers can skip a None check.
+        """
+        ...
+
+    @abstractmethod
     async def list_all_completed(self) -> list[Beat]:
         """List all completed beats (with end time set)."""
         ...
@@ -257,6 +270,22 @@ class MongoBeatRepository(MongoUserScoped, BeatRepository):
         cursor = self.collection.find(self._q({"project_id": project_id}))
         docs = await cursor.to_list(length=None)
         return [Beat(**serialize_from_document(doc)) for doc in docs]
+
+    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
+        # Early-return without round-tripping: $in: [] matches nothing but
+        # still costs a query. Critically important when list_projects is
+        # called with no projects (a fresh user).
+        if not project_ids:
+            return {}
+        cursor = self.collection.find(self._q({"project_id": {"$in": project_ids}}))
+        docs = await cursor.to_list(length=None)
+        buckets: dict[str, list[Beat]] = {pid: [] for pid in project_ids}
+        for doc in docs:
+            beat = Beat(**serialize_from_document(doc))
+            # Defensive bucket creation in case Mongo returns a project_id
+            # we didn't ask for (shouldn't happen with $in but cheap).
+            buckets.setdefault(beat.project_id, []).append(beat)
+        return buckets
 
     async def list_all_completed(self) -> list[Beat]:
         cursor = self.collection.find(self._q({"end": {"$ne": None}}))

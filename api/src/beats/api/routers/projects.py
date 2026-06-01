@@ -1,6 +1,5 @@
 """Projects API router - thin controller for project operations."""
 
-import asyncio
 import http
 from datetime import date, timedelta
 
@@ -61,55 +60,48 @@ async def list_projects(
     want_week = "this_week" in include_set
     want_last = "last_tracked" in include_set
 
-    # FF.9: parallelize the per-project aggregations on TWO axes so a user
-    # with 30 projects no longer pays for 90 serial Mongo round-trips on
-    # every /projects load.
+    # FF.15: One Mongo find for ALL displayed projects' beats; per-project
+    # aggregation is pure Python over the in-memory bucket. The previous
+    # FF.9 shape parallelized the 3 aggregations per project but each was
+    # still its own list_by_project query — N projects × 3 = 3N round
+    # trips. The route now issues 1 round-trip total when aggregations
+    # are requested.
     #
-    # - Inner: the three aggregations for ONE project (totals + week
-    #   breakdown + last_tracked_at) share no dependency on each other, so
-    #   asyncio.gather them.
-    # - Outer: each project's bundle runs concurrently with every other
-    #   project's bundle through the same gather() at the end.
+    # When archived=False (the only case the /projects index page hits),
+    # the pid list excludes archived projects so we never load their
+    # beats. When archived=True the caller explicitly opted in.
     #
-    # Order is preserved because asyncio.gather returns in input order.
-    # Memoizing the underlying beats fetch across the three calls would
-    # squeeze out another factor of three, but that touches the service
-    # layer; defer until profiling says it matters.
+    # Skipping the slim path entirely when nothing's requested keeps a
+    # users-with-zero-beats cold load from issuing a no-op find.
+    if not (want_totals or want_week or want_last):
+        return [p.model_dump(mode="json") for p in projects]
 
-    async def gather_one(p: Project) -> dict:
+    project_ids = [p.id for p in projects if p.id]
+    beats_by_pid = await service.beat_repo.list_grouped_by_project_ids(project_ids)
+
+    def aggregate_one(p: Project) -> dict:
         item = p.model_dump(mode="json")
         if not p.id:
             return item
-
-        coros: list = []
+        beats = beats_by_pid.get(p.id, [])
         if want_totals:
-            coros.append(service.get_monthly_totals(p.id))
+            totals = service._monthly_totals_from_beats(beats)
+            item["total_minutes"] = totals.get("total_minutes", 0)
         if want_week:
-            coros.append(service.get_week_breakdown(project_id=p.id, weeks_ago=0))
-        if want_last:
-            coros.append(service.get_last_tracked_at(p.id))
-
-        results = await asyncio.gather(*coros) if coros else []
-
-        idx = 0
-        if want_totals:
-            item["total_minutes"] = results[idx].get("total_minutes", 0)
-            idx += 1
-        if want_week:
-            week = results[idx]
+            week = service._week_breakdown_from_beats(beats, p, weeks_ago=0)
             total_hours = week.get("total_hours", 0) or 0
             item["weekly_minutes"] = float(total_hours) * 60
             item["effective_goal"] = week.get("effective_goal")
             item["effective_goal_type"] = week.get("effective_goal_type")
             item["effective_goal_overridden"] = week.get("effective_goal_overridden")
-            idx += 1
         if want_last:
-            last = results[idx]
+            last = service._last_tracked_from_beats(beats)
             item["last_tracked_at"] = last.isoformat() if last else None
-            idx += 1
         return item
 
-    return await asyncio.gather(*(gather_one(p) for p in projects))
+    # Pure-Python aggregation now — no need for asyncio.gather. Order is
+    # preserved by the list comprehension matching `projects`.
+    return [aggregate_one(p) for p in projects]
 
 
 @router.post("/", status_code=http.HTTPStatus.CREATED, response_model=ProjectResponse)

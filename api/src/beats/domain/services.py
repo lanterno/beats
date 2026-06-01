@@ -222,6 +222,20 @@ class ProjectService:
         an in-progress timer counts as "just now".
         """
         beats = await self.beat_repo.list_by_project(project_id)
+        return self._last_tracked_from_beats(beats)
+
+    # ------------------------------------------------------------------ #
+    # FF.15: pure-Python helpers below. Each public method above fetches
+    # beats per-project and delegates. The list_projects route (after
+    # FF.15) fetches every displayed project's beats in ONE Mongo find and
+    # calls these helpers directly, sharing the same in-memory list across
+    # the three aggregations. The helpers MUST stay byte-for-byte
+    # equivalent to the original public-method bodies — the
+    # `*_matches_public_method` tests in test_domain.py guard the drift.
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _last_tracked_from_beats(beats: list[Beat]) -> datetime | None:
         if not beats:
             return None
         return max(b.end or b.start for b in beats)
@@ -243,7 +257,18 @@ class ProjectService:
             Dict with time per day and total hours.
         """
         beats = await self.beat_repo.list_by_project(project_id)
+        project = await self.project_repo.get_by_id(project_id)
+        return self._week_breakdown_from_beats(
+            beats, project, weeks_ago=weeks_ago, include_log_details=include_log_details
+        )
 
+    @staticmethod
+    def _week_breakdown_from_beats(
+        beats: list[Beat],
+        project: Project | None,
+        weeks_ago: int = 0,
+        include_log_details: bool = False,
+    ) -> dict:
         # Calculate week boundaries
         today = date.today() - timedelta(weeks=weeks_ago)
         start_of_week = today - timedelta(days=today.weekday())  # Monday
@@ -290,7 +315,6 @@ class ProjectService:
         result["week_start"] = start_of_week.isoformat()
 
         # Resolve effective goal for this week
-        project = await self.project_repo.get_by_id(project_id)
         if project:
             eff_goal, eff_type = project.effective_goal(start_of_week)
             result["effective_goal"] = eff_goal
@@ -310,6 +334,10 @@ class ProjectService:
             Dict with durations per month, total minutes, and any warnings.
         """
         beats = await self.beat_repo.list_by_project(project_id)
+        return self._monthly_totals_from_beats(beats)
+
+    @staticmethod
+    def _monthly_totals_from_beats(beats: list[Beat]) -> dict:
         warnings: list[str] = []
 
         # Filter to completed beats and collect durations
