@@ -4,7 +4,7 @@ import {
 	startRegistration,
 } from "@simplewebauthn/browser";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { describeError } from "@/shared/api";
 import { Button } from "@/shared/ui";
@@ -66,7 +66,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 
 	if (!open) return null;
 
-	const handleEmailSubmit = async (e: React.FormEvent) => {
+	const handleEmailSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setError(null);
 		setIsProcessing(true);
