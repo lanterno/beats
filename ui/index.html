@@ -8,7 +8,47 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/pwa-192.svg" />
-    <title>Beats</title>
+
+    <title>Beats — Your time, tracked while you work.</title>
+    <meta
+      name="description"
+      content="Beats is a free, open-source rhythm system. A background daemon catches your sessions across your editor, desktop, and an optional wall clock — then a coach helps you review the week."
+    />
+
+    <!-- Open Graph / link previews -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Beats" />
+    <meta property="og:title" content="Beats — Your time, tracked while you work." />
+    <meta
+      property="og:description"
+      content="Free, open-source time-tracking. A background daemon catches your sessions across editor, desktop, and an optional wall clock."
+    />
+    <meta property="og:url" content="https://beats.lanterno.dev/" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Beats — Your time, tracked while you work." />
+    <meta
+      name="twitter:description"
+      content="Free, open-source time-tracking. A background daemon catches your sessions across editor, desktop, and an optional wall clock."
+    />
+
+    <!-- Preconnect to image CDN used in the hero badge row -->
+    <link rel="preconnect" href="https://img.shields.io" crossorigin />
+
+    <!-- Analytics: no-op unless VITE_PLAUSIBLE_DOMAIN is set at build time.
+         Plausible is privacy-friendly and matches the page's positioning. -->
+    <script>
+      (function () {
+        var d = "%VITE_PLAUSIBLE_DOMAIN%";
+        if (!d || d.indexOf("VITE_PLAUSIBLE_DOMAIN") !== -1) return;
+        var s = document.createElement("script");
+        s.defer = true;
+        s.setAttribute("data-domain", d);
+        s.src = "https://plausible.io/js/script.js";
+        document.head.appendChild(s);
+      })();
+    </script>
   </head>
 
   <body>

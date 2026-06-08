@@ -3,6 +3,7 @@
 .pijul/
 .idea/
 .claude/
+.playwright-mcp/
 
 # Terraform
 *.tfvars
