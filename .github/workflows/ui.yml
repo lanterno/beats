@@ -50,6 +50,7 @@ jobs:
       - run: pnpm build
         env:
           VITE_API_URL: https://api.lifepete.com
+          VITE_GIT_SHA: ${{ github.sha }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

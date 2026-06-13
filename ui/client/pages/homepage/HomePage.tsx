@@ -848,8 +848,8 @@ function FooterNew() {
 				<FooterCol
 					title="Legal"
 					links={[
-						{ label: "Privacy", href: `${GITHUB_URL}#privacy` },
-						{ label: "Data handling", href: `${GITHUB_URL}#data` },
+						{ label: "Privacy", href: `${GITHUB_URL}/blob/main/PRIVACY.md` },
+						{ label: "Data handling", href: `${GITHUB_URL}/blob/main/DATA.md` },
 						{ label: "Contact", href: "mailto:ahmed.elghareeb@proton.me" },
 					]}
 				/>
