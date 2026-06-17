@@ -17,7 +17,7 @@ dependencies = [
     "httpx>=0.28.1",
     "uvicorn>=0.48.0",
     "webauthn>=2.7.1",
-    "python-multipart>=0.0.29",
+    "python-multipart>=0.0.31",
     "slowapi>=0.1.9",
 ]
 
