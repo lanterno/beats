@@ -20,6 +20,7 @@ import ProjectDetails from "@/pages/project-details";
 import ProjectsIndex from "@/pages/projects-index";
 import Settings from "@/pages/settings";
 import { Toaster, TooltipProvider } from "@/shared/ui";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
 import { QueryProvider } from "./providers";
 
@@ -78,40 +79,42 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
 export function App() {
 	return (
-		<QueryProvider>
-			<TooltipProvider>
-				<Toaster />
-				<AuthInitializer>
-					<BrowserRouter>
-						<Routes>
-							{/* Public routes */}
-							<Route path="/" element={<HomeOrDashboard />} />
-							{/* Protected routes with persistent layout */}
-							<Route
-								element={
-									<ProtectedRoute>
-										<Layout />
-									</ProtectedRoute>
-								}
-							>
-								<Route path="/app" element={<Index />} />
-								<Route path="/insights" element={<Insights />} />
-								<Route path="/insights/digests" element={<Digests />} />
-								<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
-								<Route path="/insights/year/:year" element={<YearInReview />} />
-								<Route path="/projects" element={<ProjectsIndex />} />
-								<Route path="/project/:projectId" element={<ProjectDetails />} />
-								<Route path="/plan" element={<PlanPage />} />
-								<Route path="/coach" element={<Coach />} />
-								<Route path="/settings" element={<Settings />} />
-							</Route>
+		<ErrorBoundary>
+			<QueryProvider>
+				<TooltipProvider>
+					<Toaster />
+					<AuthInitializer>
+						<BrowserRouter>
+							<Routes>
+								{/* Public routes */}
+								<Route path="/" element={<HomeOrDashboard />} />
+								{/* Protected routes with persistent layout */}
+								<Route
+									element={
+										<ProtectedRoute>
+											<Layout />
+										</ProtectedRoute>
+									}
+								>
+									<Route path="/app" element={<Index />} />
+									<Route path="/insights" element={<Insights />} />
+									<Route path="/insights/digests" element={<Digests />} />
+									<Route path="/insights/month/:yearMonth" element={<MonthlyRetrospective />} />
+									<Route path="/insights/year/:year" element={<YearInReview />} />
+									<Route path="/projects" element={<ProjectsIndex />} />
+									<Route path="/project/:projectId" element={<ProjectDetails />} />
+									<Route path="/plan" element={<PlanPage />} />
+									<Route path="/coach" element={<Coach />} />
+									<Route path="/settings" element={<Settings />} />
+								</Route>
 
-							{/* Fallback */}
-							<Route path="*" element={<NotFound />} />
-						</Routes>
-					</BrowserRouter>
-				</AuthInitializer>
-			</TooltipProvider>
-		</QueryProvider>
+								{/* Fallback */}
+								<Route path="*" element={<NotFound />} />
+							</Routes>
+						</BrowserRouter>
+					</AuthInitializer>
+				</TooltipProvider>
+			</QueryProvider>
+		</ErrorBoundary>
 	);
 }

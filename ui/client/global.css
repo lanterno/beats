@@ -626,13 +626,31 @@
 	body {
 		@apply bg-background text-foreground antialiased;
 		font-family: var(--font-body);
+		min-height: 100vh;
+	}
+
+	/*
+	  Viewport-fixed background glow.
+
+	  Previously this lived on `body` via `background-attachment: fixed`. On iOS
+	  Safari (and some Android WebViews) a `fixed`-attachment background composited
+	  under a full-screen `backdrop-filter` overlay (morning briefing, weekly /
+	  end-of-day review) renders as a solid BLACK rectangle — the whole app went
+	  black a moment after load. A `position: fixed` layer is the supported way to
+	  pin the background and does not trigger that bug.
+	*/
+	body::before {
+		content: "";
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		pointer-events: none;
+		background-color: hsl(var(--background));
 		background-image: radial-gradient(
 			ellipse at 50% 0%,
 			hsl(var(--body-glow, 38 20% 12%)) 0%,
 			hsl(var(--background)) 60%
 		);
-		background-attachment: fixed;
-		min-height: 100vh;
 	}
 
 	h1,
