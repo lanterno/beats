@@ -6,30 +6,30 @@ authors = [{ name = "Ahmed Elghareeb", email = "a@elghareeb.space" }]
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "anthropic>=0.104.1",
+    "anthropic>=0.116.0",
     "dnspython>=2.8.0",
-    "fastapi>=0.136.3",
+    "fastapi>=0.139.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "pymongo>=4.17.0",
     "pyjwt>=2.13.0",
     "python-dotenv>=1.2.2",
     "httpx>=0.28.1",
-    "uvicorn>=0.48.0",
-    "webauthn>=2.7.1",
+    "uvicorn>=0.50.2",
+    "webauthn>=3.0.0",
     "python-multipart>=0.0.29",
-    "slowapi>=0.1.9",
+    "slowapi>=0.1.10",
 ]
 
 [dependency-groups]
 dev = [
     "ipython>=9.13.0",
-    "ruff>=0.15.14",
+    "ruff>=0.15.20",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "testcontainers[mongodb]>=4.14.2",
-    "ty>=0.0.39",
+    "ty>=0.0.56",
 ]
 
 [build-system]
@@ -58,6 +58,13 @@ quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
 docstring-code-format = true
+
+[tool.ty.terminal]
+# ty 0.0.5x changed the default to exit non-zero when only warning-level
+# diagnostics exist. The rules below are intentionally demoted to warnings
+# (dynamic PyMongo/Pydantic types), so keep a clean check exit code as long
+# as there are no error-level diagnostics.
+error-on-warning = false
 
 [tool.ty.rules]
 # Suppress false positives from PyMongo/Pydantic dynamic types until ty matures
