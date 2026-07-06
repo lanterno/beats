@@ -47,7 +47,7 @@ jobs:
       # cgo on for the darwin cadence tap; off elsewhere to stay static.
       CGO_ENABLED: ${{ matrix.goos == 'darwin' && '1' || '0' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
