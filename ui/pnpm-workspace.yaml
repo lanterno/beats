@@ -1,0 +1,21 @@
+# pnpm 11 settings (moved out of package.json's "pnpm" field, which pnpm 11
+# no longer reads).
+
+# Dependency overrides — security pins for transitive dependencies.
+overrides:
+  vite>rollup: ">=4.59.0"
+  "picomatch@>=4.0.0 <4.0.4": ">=4.0.4"
+  "yaml@>=2.0.0 <2.8.3": ">=2.8.3"
+  "serialize-javascript@<7.0.5": ">=7.0.5"
+
+# Postinstall build scripts. These ship prebuilt platform binaries via optional
+# deps, so their build scripts are not needed (matches prior pnpm 10 behavior
+# where they were ignored and the build + tests passed).
+allowBuilds:
+  "@swc/core": false
+  esbuild: false
+
+# Supply-chain cooldown: pnpm 11's default minimumReleaseAge is intentionally
+# kept ON — freshly published packages (< ~24h) are rejected on fresh
+# resolution. This can briefly block CI right after a dependency is published;
+# that trade-off is accepted for the supply-chain protection.
