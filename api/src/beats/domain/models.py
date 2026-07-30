@@ -118,7 +118,6 @@ class Project(BaseModel):
     id: str | None = None
     name: str
     description: str | None = None
-    estimation: str | None = None
     color: str | None = None  # User-chosen hex color, e.g. "#5B9CF6"
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
@@ -153,37 +152,6 @@ class Project(BaseModel):
         return self.weekly_goal, self.goal_type
 
 
-class Intention(BaseModel):
-    """A daily time-boxed intention for a project.
-
-    Users set 1-3 intentions each morning: "2h on API refactor."
-    Auto-checked when tracked time exceeds the planned duration.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str | None = None
-    project_id: str
-    date: date_type = Field(default_factory=lambda: datetime.now(UTC).date())
-    planned_minutes: int = 60
-    completed: bool = False
-
-
-class DailyNote(TzNormalizedModel):
-    """An end-of-day reflection with optional mood rating.
-
-    Captures how the day went with a brief text note and mood score.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str | None = None
-    date: date_type = Field(default_factory=lambda: datetime.now(UTC).date())
-    note: str = ""
-    mood: int | None = None  # 1-5 scale
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
 class WeeklyDigest(TzNormalizedModel):
     """A generated weekly summary with insights and productivity score."""
 
@@ -211,7 +179,7 @@ class InsightCard(BaseModel):
     """A single detected pattern or insight."""
 
     id: str  # uuid for dismiss tracking
-    type: str  # day_pattern, time_pattern, stale_project, mood_correlation, etc.
+    type: str  # day_pattern, time_pattern, stale_project, session_trend, etc.
     title: str
     body: str
     data: dict = Field(default_factory=dict)
@@ -237,32 +205,6 @@ class WeeklyPlan(BaseModel):
     id: str | None = None
     week_of: date_type  # Monday of the week
     budgets: list[dict] = Field(default_factory=list)  # [{project_id, planned_hours}]
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
-class RecurringIntention(BaseModel):
-    """A template for auto-creating daily intentions."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str | None = None
-    project_id: str
-    planned_minutes: int = 60
-    days_of_week: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4])  # Mon-Fri
-    enabled: bool = True
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
-class WeeklyReview(BaseModel):
-    """A weekly reflection stored alongside the digest."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str | None = None
-    week_of: date_type  # Monday of the week
-    went_well: str = ""
-    didnt_go_well: str = ""
-    to_change: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

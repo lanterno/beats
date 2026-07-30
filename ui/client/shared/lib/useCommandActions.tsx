@@ -150,7 +150,7 @@ function buildItems(
 			"Go to Planning",
 			"/plan",
 			<CalendarCheck key="p" className="w-4 h-4" />,
-			["intentions", "week", "plan"],
+			["targets", "budget", "week", "plan"],
 		],
 		[
 			"nav.settings",

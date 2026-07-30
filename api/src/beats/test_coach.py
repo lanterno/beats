@@ -11,7 +11,6 @@ The test_api.py suite covers the HTTP layer; this file covers the
 modules underneath.
 """
 
-import json
 import os
 from datetime import UTC, date, datetime, timedelta
 
@@ -22,7 +21,6 @@ from beats.coach import brief as brief_module
 from beats.coach import chat as chat_module
 from beats.coach import context as context_module
 from beats.coach import memory_rewrite as memory_rewrite_module
-from beats.coach import review as review_module
 from beats.coach import tools as tools_module
 from beats.coach.gateway import (
     SONNET_CACHE_READ_PER_MTOK,
@@ -40,7 +38,6 @@ from beats.coach.repos import (
     COACH_MEMORY_COLLECTION,
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
-    REVIEW_ANSWERS_COLLECTION,
     fmt_minutes,
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker
@@ -640,268 +637,6 @@ class TestGetAndListBriefs:
         assert a_briefs[0]["body"] == "A's brief"
 
 
-def _gateway_response_from_text(text: str) -> GatewayResponse:
-    """Builds a GatewayResponse whose content[0] is the given text. Used
-    by review tests to drive different LLM-output shapes through
-    generate_review_questions's parser."""
-    return GatewayResponse(
-        content=[_FakeTextBlock(text)],
-        model="claude-opus-4-7",
-        input_tokens=100,
-        output_tokens=50,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
-        cost_usd=0.001,
-        stop_reason="end_turn",
-    )
-
-
-class TestGenerateReviewQuestions:
-    """generate_review_questions calls the LLM, parses JSON, persists.
-    Pin: parse-success path persists what the LLM returned;
-    parse-failure path falls back to 3 generic questions (so the EOD
-    review never breaks the user's flow); upsert preserves prior
-    answers when re-generating."""
-
-    @pytest.fixture(autouse=True)
-    async def _setup(self):
-        await Database.connect()
-        await Database.get_db()[REVIEW_ANSWERS_COLLECTION].delete_many({})
-        yield
-        await Database.disconnect()
-
-    @pytest.fixture
-    def patched_gateway(self, monkeypatch):
-        captured: dict = {}
-
-        async def fake_build(user_id, prompt, target_date=None, tz=None):
-            captured["build_args"] = {
-                "user_id": user_id,
-                "prompt": prompt,
-                "target_date": target_date,
-            }
-            return ("system", [{"role": "user", "content": prompt}], None)
-
-        monkeypatch.setattr(review_module, "build_coach_messages", fake_build)
-        return captured
-
-    async def test_parses_valid_json_array(self, monkeypatch, patched_gateway):
-        """Happy path: LLM returns a JSON array of question dicts;
-        each persists verbatim."""
-        questions_json = json.dumps(
-            [
-                {"question": "Did the auth refactor land?", "derived_from": {"kind": "intention"}},
-                {"question": "Why did the meeting overrun?", "derived_from": {"kind": "calendar"}},
-                {
-                    "question": "Mood is lower than last week — why?",
-                    "derived_from": {"kind": "mood"},
-                },
-            ]
-        )
-
-        async def fake_complete(**_kwargs):
-            return _gateway_response_from_text(questions_json)
-
-        monkeypatch.setattr(review_module, "complete", fake_complete)
-
-        from datetime import date as date_type
-
-        result = await review_module.generate_review_questions(
-            "user-1", target_date=date_type(2026, 5, 1)
-        )
-
-        assert len(result) == 3
-        assert result[0]["question"] == "Did the auth refactor land?"
-        assert result[2]["derived_from"]["kind"] == "mood"
-
-        # And the persisted doc carries the same questions.
-        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
-            {"user_id": "user-1", "date": "2026-05-01"}
-        )
-        assert stored is not None
-        assert len(stored["questions"]) == 3
-        assert stored["answers"] == [None, None, None]
-        assert "created_at" in stored
-        assert "updated_at" in stored
-
-    async def test_falls_back_when_llm_returns_garbage(self, monkeypatch, patched_gateway):
-        """If the LLM returns invalid JSON (model temperature spike,
-        prompt drift, anything), the user must still get a usable
-        review form. Pin the fallback — three generic questions
-        rather than a 500 or empty list."""
-
-        async def fake_complete(**_kwargs):
-            return _gateway_response_from_text("here are some questions: 1) why...")
-
-        monkeypatch.setattr(review_module, "complete", fake_complete)
-
-        result = await review_module.generate_review_questions("user-1")
-        assert len(result) == 3
-        # All fallback questions tagged so callers can tell the
-        # difference between AI-generated and stock prompts.
-        assert all(q["derived_from"]["kind"] == "fallback" for q in result)
-        # They're real strings, not empty placeholders.
-        assert all(q["question"] for q in result)
-
-    async def test_falls_back_when_llm_returns_non_array_json(self, monkeypatch, patched_gateway):
-        """Valid JSON but wrong shape (e.g. dict instead of list) →
-        same fallback. Pin so a future prompt change that produces
-        valid-but-wrong-shape output doesn't crash."""
-
-        async def fake_complete(**_kwargs):
-            return _gateway_response_from_text(json.dumps({"questions": []}))
-
-        monkeypatch.setattr(review_module, "complete", fake_complete)
-
-        result = await review_module.generate_review_questions("user-1")
-        assert len(result) == 3
-        assert all(q["derived_from"]["kind"] == "fallback" for q in result)
-
-    async def test_passes_purpose_review_to_gateway(self, monkeypatch, patched_gateway):
-        """purpose="review" tag separates review LLM spend from chat
-        and brief in the cost dashboard's per-purpose breakdown."""
-        captured = {}
-
-        async def fake_complete(**kwargs):
-            captured.update(kwargs)
-            return _gateway_response_from_text(json.dumps([]))
-
-        monkeypatch.setattr(review_module, "complete", fake_complete)
-
-        await review_module.generate_review_questions("user-99")
-        assert captured["purpose"] == "review"
-        assert captured["user_id"] == "user-99"
-
-    async def test_upsert_preserves_answers_on_regenerate(self, monkeypatch, patched_gateway):
-        """Locks $setOnInsert vs $set: a regenerate replaces questions
-        but does NOT reset answers. Without this, a user who answered
-        Q1 then triggered a regenerate would lose their progress."""
-        from datetime import date as date_type
-
-        target = date_type(2026, 5, 1)
-
-        async def fake_first(**_kwargs):
-            return _gateway_response_from_text(
-                json.dumps([{"question": "v1-q1", "derived_from": {"kind": "x"}}])
-            )
-
-        monkeypatch.setattr(review_module, "complete", fake_first)
-        await review_module.generate_review_questions("user-1", target_date=target)
-
-        # User answers Q1.
-        await review_module.save_answer("user-1", target, 0, "answered")
-
-        # Regenerate — different questions.
-        async def fake_second(**_kwargs):
-            return _gateway_response_from_text(
-                json.dumps([{"question": "v2-q1", "derived_from": {"kind": "y"}}])
-            )
-
-        monkeypatch.setattr(review_module, "complete", fake_second)
-        await review_module.generate_review_questions("user-1", target_date=target)
-
-        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
-            {"user_id": "user-1", "date": "2026-05-01"}
-        )
-        assert stored is not None
-        assert stored["questions"][0]["question"] == "v2-q1"
-        # Answer survived the regenerate (the $set updates questions
-        # but $setOnInsert wouldn't re-write answers).
-        assert stored["answers"][0]["text"] == "answered"
-
-
-class TestSaveAnswerAndReadbacks:
-    """save_answer is the per-question persist path the EOD modal
-    calls; get_review / list_reviews are the read paths the API
-    exposes. Pin atomicity, indexing, and the empty-state shapes."""
-
-    @pytest.fixture(autouse=True)
-    async def _setup(self):
-        await Database.connect()
-        await Database.get_db()[REVIEW_ANSWERS_COLLECTION].delete_many({})
-        yield
-        await Database.disconnect()
-
-    async def _seed_review(self, user_id: str, date_str: str, n_questions: int = 3) -> None:
-        await Database.get_db()[REVIEW_ANSWERS_COLLECTION].insert_one(
-            {
-                "user_id": user_id,
-                "date": date_str,
-                "questions": [{"question": f"Q{i}"} for i in range(n_questions)],
-                "answers": [None] * n_questions,
-            }
-        )
-
-    async def test_save_answer_writes_to_specific_index(self):
-        """Locks the $set on `answers.{i}` — atomically writes one
-        slot without touching the others. A user who has Q0 and Q2
-        answered must still see Q0 and Q2 after a Q1 update."""
-        from datetime import date as date_type
-
-        target = date_type(2026, 5, 1)
-        await self._seed_review("user-1", "2026-05-01")
-        await review_module.save_answer("user-1", target, 0, "first answer")
-        await review_module.save_answer("user-1", target, 2, "third answer")
-
-        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
-            {"user_id": "user-1", "date": "2026-05-01"}
-        )
-        assert stored is not None
-        assert stored["answers"][0]["text"] == "first answer"
-        assert stored["answers"][1] is None  # untouched
-        assert stored["answers"][2]["text"] == "third answer"
-        # Each answered slot carries an answered_at timestamp.
-        assert "answered_at" in stored["answers"][0]
-
-    async def test_save_answer_overwrites_same_index(self):
-        """Re-answering Q0 replaces, doesn't append. Pin so a refactor
-        to $push doesn't accumulate answers per slot."""
-        from datetime import date as date_type
-
-        target = date_type(2026, 5, 1)
-        await self._seed_review("user-1", "2026-05-01")
-        await review_module.save_answer("user-1", target, 0, "first")
-        await review_module.save_answer("user-1", target, 0, "revised")
-
-        stored = await Database.get_db()[REVIEW_ANSWERS_COLLECTION].find_one(
-            {"user_id": "user-1", "date": "2026-05-01"}
-        )
-        assert stored is not None
-        assert stored["answers"][0]["text"] == "revised"
-
-    async def test_get_review_returns_none_for_missing(self):
-        from datetime import date as date_type
-
-        result = await review_module.get_review("user-1", target_date=date_type(2026, 5, 1))
-        assert result is None
-
-    async def test_get_review_strips_objectid(self):
-        from datetime import date as date_type
-
-        await self._seed_review("user-1", "2026-05-01")
-        result = await review_module.get_review("user-1", target_date=date_type(2026, 5, 1))
-        assert result is not None
-        assert "_id" not in result
-
-    async def test_list_reviews_descending_by_date(self):
-        await self._seed_review("user-1", "2026-04-29")
-        await self._seed_review("user-1", "2026-05-01")
-        await self._seed_review("user-1", "2026-04-30")
-
-        result = await review_module.list_reviews("user-1")
-        assert [r["date"] for r in result] == ["2026-05-01", "2026-04-30", "2026-04-29"]
-
-    async def test_list_reviews_isolates_users(self):
-        await self._seed_review("user-a", "2026-05-01")
-        await self._seed_review("user-b", "2026-05-01")
-
-        a = await review_module.list_reviews("user-a")
-        assert len(a) == 1
-        # The seeded shape distinguishes via the user_id (which is in
-        # the doc) — we just verify count to confirm the user_id
-        # filter excluded user-b's row.
-
-
 class TestEstimateCost:
     """The deterministic cost math the gateway uses to bill users.
     Wrong here = wrong dashboard + wrong budget enforcement.
@@ -1486,23 +1221,12 @@ class TestHandleChatTurn:
 class TestRecentDataSummary:
     """_recent_data_summary builds the human-readable context block
     that's prepended to the memory-rewrite LLM prompt. It walks
-    7 days of beats / intentions / mood / reviews and renders
-    Markdown.
+    7 days of beats and renders Markdown.
 
     Why test directly: the existing TestRewriteCoachMemory stubs
     this whole helper out, so a regression in the rendering would
     silently degrade the LLM's input quality without any test
-    failure. Pin each of the four sections (sessions, intentions,
-    mood, reviews) plus the empty-state fallback."""
-
-    @pytest.fixture
-    def stub_reviews_empty(self, monkeypatch):
-        """list_reviews defaults to empty unless a test opts in."""
-
-        async def fake_list_reviews(_user_id, limit=7):
-            return []
-
-        monkeypatch.setattr(memory_rewrite_module, "list_reviews", fake_list_reviews)
+    failure. Pin the sessions section plus the empty-state fallback."""
 
     @pytest.fixture
     def patch_repos(self, monkeypatch):
@@ -1517,24 +1241,16 @@ class TestRecentDataSummary:
 
         return setter
 
-    async def test_empty_data_renders_no_sessions_line(self, patch_repos, stub_reviews_empty):
-        """No beats / intentions / notes / reviews → output still
-        renders the section headers with the documented empty-state
-        line. Pin so the LLM gets a stable structure even on a
-        first-week user."""
+    async def test_empty_data_renders_no_sessions_line(self, patch_repos):
+        """No beats → output still renders the section header with the
+        documented empty-state line. Pin so the LLM gets a stable
+        structure even on a first-week user."""
         patch_repos(_FakeCoachRepos())
         out = await memory_rewrite_module._recent_data_summary("user-1")
         assert "## Last 7 days of sessions" in out
         assert "(No sessions in the last 7 days)" in out
-        assert "## Recent intentions" in out
-        assert "## Mood" in out
-        # Reviews section is OMITTED when empty (only renders if
-        # at least one review has answers)
-        assert "## Review answers" not in out
 
-    async def test_recent_beats_render_with_project_name_and_duration(
-        self, patch_repos, stub_reviews_empty
-    ):
+    async def test_recent_beats_render_with_project_name_and_duration(self, patch_repos):
         """A beat in the last 7 days renders as
         `**YYYY-MM-DD** (Xh): ProjectName (45m)`. Pin the
         project name resolution + the fmt_minutes formatting."""
@@ -1557,7 +1273,7 @@ class TestRecentDataSummary:
         # The empty-state line must NOT appear
         assert "(No sessions in the last 7 days)" not in out
 
-    async def test_old_beats_excluded_from_session_summary(self, patch_repos, stub_reviews_empty):
+    async def test_old_beats_excluded_from_session_summary(self, patch_repos):
         """A beat from 10 days ago must not appear in the
         last-7-days section. Pin so the rewrite prompt isn't
         polluted with stale activity."""
@@ -1575,114 +1291,9 @@ class TestRecentDataSummary:
         out = await memory_rewrite_module._recent_data_summary("user-1")
         # The beat IS in beats but should be filtered out by the >= week_ago check
         assert "(No sessions in the last 7 days)" in out
-        assert "Alpha" not in out.split("## Recent intentions")[0]
+        assert "Alpha" not in out
 
-    async def test_intentions_render_with_done_and_missed_status(
-        self, patch_repos, stub_reviews_empty
-    ):
-        """Each intention renders as `ProjectName Nm [done|missed]`.
-        Pin both status branches so a regression doesn't silently
-        flip the meaning."""
-        from beats.domain.models import Intention
-
-        today = datetime.now(UTC).date()
-        yesterday = today - timedelta(days=1)
-        intentions_by_date = {
-            today: [
-                Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
-            ],
-            yesterday: [
-                Intention(
-                    project_id="p1",
-                    date=yesterday,
-                    planned_minutes=30,
-                    completed=False,
-                ),
-            ],
-        }
-        repos = _FakeCoachRepos(
-            projects=[_project("p1", "Alpha")],
-            intentions_by_date=intentions_by_date,
-        )
-        patch_repos(repos)
-        out = await memory_rewrite_module._recent_data_summary("user-1")
-        # Done intention from today
-        assert "Alpha 60m [done]" in out
-        # Missed intention from yesterday
-        assert "Alpha 30m [missed]" in out
-
-    async def test_mood_section_renders_when_notes_have_mood(self, patch_repos, stub_reviews_empty):
-        """Daily notes with mood render as
-        `**YYYY-MM-DD**: M/5 — "<text>"`. Pin so a refactor of
-        DailyNote can't drop the mood line."""
-        from beats.domain.models import DailyNote
-
-        target_dates = {
-            datetime.now(UTC).date() - timedelta(days=1): DailyNote(
-                date=datetime.now(UTC).date() - timedelta(days=1),
-                mood=4,
-                note="Felt focused in the morning",
-            ),
-        }
-
-        class _MoodFakeNoteRepo:
-            async def get_by_date(self, d):
-                return target_dates.get(d)
-
-        repos = _FakeCoachRepos()
-        repos.note = _MoodFakeNoteRepo()
-        patch_repos(repos)
-        out = await memory_rewrite_module._recent_data_summary("user-1")
-        assert "4/5" in out
-        assert "Felt focused in the morning" in out
-
-    async def test_mood_section_skips_notes_without_mood(self, patch_repos, stub_reviews_empty):
-        """A note that exists but has mood=None → no line under
-        the Mood header. Pin so empty mood doesn't render as
-        "None/5"."""
-        from beats.domain.models import DailyNote
-
-        d = datetime.now(UTC).date() - timedelta(days=1)
-
-        class _NoMoodNoteRepo:
-            async def get_by_date(self, dd):
-                if dd == d:
-                    return DailyNote(date=d, mood=None, note="just a journal entry")
-                return None
-
-        repos = _FakeCoachRepos()
-        repos.note = _NoMoodNoteRepo()
-        patch_repos(repos)
-        out = await memory_rewrite_module._recent_data_summary("user-1")
-        assert "/5" not in out
-        assert "just a journal entry" not in out
-
-    async def test_reviews_section_renders_when_answers_present(self, patch_repos, monkeypatch):
-        """A review with at least one answered question renders
-        under "## Review answers". Pin so the rewrite prompt
-        carries the user's most recent reflections."""
-
-        async def fake_list_reviews(_user_id, limit=7):
-            return [
-                {
-                    "date": "2026-04-30",
-                    "answers": [
-                        {"text": "I shipped the auth roadmap"},
-                        {"text": ""},
-                    ],
-                }
-            ]
-
-        monkeypatch.setattr(memory_rewrite_module, "list_reviews", fake_list_reviews)
-        patch_repos(_FakeCoachRepos())
-        out = await memory_rewrite_module._recent_data_summary("user-1")
-        assert "## Review answers" in out
-        assert "2026-04-30" in out
-        assert "I shipped the auth roadmap" in out
-
-    async def test_unknown_project_id_renders_as_question_mark(
-        self, patch_repos, stub_reviews_empty
-    ):
+    async def test_unknown_project_id_renders_as_question_mark(self, patch_repos):
         """Beat references a project_id not in the project map
         (project deleted between session creation and rewrite)
         → renders as "? (45m)" rather than crashing on KeyError.
@@ -1882,19 +1493,6 @@ class TestRewriteCoachMemory:
 # ---------------------------------------------------------------------
 
 
-class _FakeIntentionRepo:
-    def __init__(self, by_date: dict | None = None):
-        self._by_date = by_date or {}
-
-    async def list_by_date(self, d):
-        return list(self._by_date.get(d, []))
-
-
-class _FakeNoteRepo:
-    async def get_by_date(self, _d):
-        return None
-
-
 class _FakeProjectRepoForTools:
     """Returns a fixed list of project objects."""
 
@@ -1922,14 +1520,9 @@ class _FakeBeatRepoForTools:
 class _FakeCoachRepos:
     """Mirrors the CoachRepos dataclass shape for tests."""
 
-    def __init__(self, *, projects=None, beats=None, intentions_by_date=None):
-        # `note` is typed loosely so individual tests can swap in their own
-        # duck-typed note-repo fakes (each implementing get_by_date) without
-        # tripping ty's attribute-type inference.
-        self.note: object = _FakeNoteRepo()
+    def __init__(self, *, projects=None, beats=None):
         self.project = _FakeProjectRepoForTools(projects or [])
         self.beat = _FakeBeatRepoForTools(beats or [])
-        self.intention = _FakeIntentionRepo(intentions_by_date or {})
         self.digest = None  # not used by tools.py
 
 
@@ -2089,61 +1682,14 @@ class TestToolsDispatch:
         )
         assert "No sessions found" in result
 
-    # -- get_intentions --
-
-    async def test_get_intentions_lists_status(self):
-        from beats.domain.models import Intention
-
-        today = datetime.now(UTC).date()
-        intentions_by_date = {
-            today: [
-                Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
-                Intention(project_id="p2", date=today, planned_minutes=30, completed=False),
-            ]
-        }
-        projects = [_project("p1", "Alpha"), _project("p2", "Beta")]
-        repos = _FakeCoachRepos(projects=projects, intentions_by_date=intentions_by_date)
-
-        result = await tools_module.execute_tool(
-            "user-1", "get_intentions", {}, repos=repos, projects=projects
-        )
-        assert "Alpha: 60min [done]" in result
-        assert "Beta: 30min [pending]" in result
-
-    async def test_get_intentions_explicit_date_uses_that_day(self):
-        from beats.domain.models import Intention
-
-        target = date(2026, 5, 1)
-        intentions_by_date = {target: [Intention(project_id="p1", date=target, planned_minutes=45)]}
-        projects = [_project("p1", "Alpha")]
-        repos = _FakeCoachRepos(projects=projects, intentions_by_date=intentions_by_date)
-
-        result = await tools_module.execute_tool(
-            "user-1",
-            "get_intentions",
-            {"date": "2026-05-01"},
-            repos=repos,
-            projects=projects,
-        )
-        assert "Alpha: 45min" in result
-
-    async def test_get_intentions_empty_day_returns_friendly_text(self):
-        projects = [_project("p1", "Alpha")]
-        repos = _FakeCoachRepos(projects=projects, intentions_by_date={})
-        result = await tools_module.execute_tool(
-            "user-1", "get_intentions", {}, repos=repos, projects=projects
-        )
-        assert "No intentions set" in result
-
     # -- get_productivity_score --
 
     async def test_get_productivity_score_formats_components(self, monkeypatch):
         async def fake_score(_self):
             return {
-                "score": 67,
+                "score": 87,
                 "components": {
                     "consistency": 80,
-                    "intentions": 50,
                     "goals": 70,
                     "quality": 65,
                 },
@@ -2158,9 +1704,10 @@ class TestToolsDispatch:
         result = await tools_module.execute_tool(
             "user-1", "get_productivity_score", {}, repos=repos, projects=projects
         )
-        assert "Score: 67/100" in result
+        assert "Score: 87/100" in result
         assert "Consistency: 80" in result
-        assert "Intentions: 50" in result
+        assert "Goals: 70" in result
+        assert "Intentions" not in result
 
     async def test_get_productivity_score_swallows_exception(self, monkeypatch):
         """If IntelligenceService raises (e.g. divide-by-zero on fresh
@@ -2427,7 +1974,6 @@ class TestBuildUserContext:
                 "score": 75,
                 "components": {
                     "consistency": 80,
-                    "intentions": 70,
                     "goals": 75,
                     "quality": 75,
                 },
@@ -2483,7 +2029,6 @@ class TestBuildUserContext:
                 "score": 50,
                 "components": {
                     "consistency": 50,
-                    "intentions": 50,
                     "goals": 50,
                     "quality": 50,
                 },
@@ -2507,7 +2052,6 @@ class TestBuildUserContext:
                 "score": 60,
                 "components": {
                     "consistency": 60,
-                    "intentions": 60,
                     "goals": 60,
                     "quality": 60,
                 },
@@ -2535,7 +2079,6 @@ class TestBuildUserContext:
                 "score": 50,
                 "components": {
                     "consistency": 50,
-                    "intentions": 50,
                     "goals": 50,
                     "quality": 50,
                 },
@@ -2923,9 +2466,9 @@ class TestGatewayCacheControlIntegration:
 
 
 class TestBuildDayContext:
-    """build_day_context renders today's signals (beats, intentions,
-    mood, calendar, biometrics) into the small per-turn context
-    block that's prepended to chat / brief / review prompts.
+    """build_day_context renders today's signals (beats, calendar,
+    biometrics) into the small per-turn context block that's
+    prepended to chat / brief prompts.
 
     Why test directly: existing tests stub this whole function out,
     leaving 130+ lines (38% of context.py) uncovered. A regression
@@ -2950,10 +2493,10 @@ class TestBuildDayContext:
         await Database.disconnect()
 
     async def test_empty_data_renders_headers_with_empty_state(self):
-        """No beats / intentions / notes / calendar / biometrics →
-        the four section headers still render with documented
-        empty-state lines. Pin so a coach turn on a first-day
-        account doesn't crash on missing keys."""
+        """No beats / calendar / biometrics → the section headers
+        still render with documented empty-state lines. Pin so a
+        coach turn on a first-day account doesn't crash on missing
+        keys."""
         target = datetime.now(UTC).date()
         repos = _FakeCoachRepos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
@@ -2962,8 +2505,6 @@ class TestBuildDayContext:
         assert "No sessions yesterday." in out
         assert "### Today's sessions so far" in out
         assert "No sessions today." in out
-        assert "### Today's intentions" in out
-        assert "No intentions set for today." in out
         # Calendar + biometric sections are omitted when empty
         assert "### Calendar today" not in out
         assert "### Last night's biometrics" not in out
@@ -3043,7 +2584,7 @@ class TestBuildDayContext:
         # yesterday's section, not today's
         yesterday_block, _, today_block = out.partition("### Today's sessions so far")
         assert "14:00 — Alpha (1h 0m)" in yesterday_block
-        assert "Alpha" not in today_block.split("### Today's intentions")[0]
+        assert "Alpha" not in today_block
 
     async def test_beat_with_note_renders_note_suffix(self):
         """A beat with .note set renders as `... [note: <note>]`.
@@ -3065,61 +2606,6 @@ class TestBuildDayContext:
         )
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "[note: deep work]" in out
-
-    async def test_intentions_render_with_done_and_pending_status(self):
-        """Today's intentions render with done|pending status.
-        Pin both branches so a regression doesn't silently flip
-        the coach's view of what's complete."""
-        from beats.domain.models import Intention
-
-        target = datetime.now(UTC).date()
-        intentions_by_date = {
-            target: [
-                Intention(
-                    project_id="p1",
-                    date=target,
-                    planned_minutes=60,
-                    completed=True,
-                ),
-                Intention(
-                    project_id="p1",
-                    date=target,
-                    planned_minutes=30,
-                    completed=False,
-                ),
-            ]
-        }
-        repos = _FakeCoachRepos(
-            projects=[_project("p1", "Alpha")],
-            intentions_by_date=intentions_by_date,
-        )
-        out = await context_module.build_day_context("user-1", repos, target_date=target)
-        assert "Alpha: 60min [done]" in out
-        assert "Alpha: 30min [pending]" in out
-
-    async def test_yesterday_mood_line_renders_with_truncated_note(self):
-        """Yesterday's note with mood + text → renders as
-        `Yesterday's mood: M/5 — "<truncated note>"`. Pin so
-        the coach can pick up on emotional context day-over-day."""
-        from beats.domain.models import DailyNote
-
-        target = datetime.now(UTC).date()
-        yesterday = target - timedelta(days=1)
-        long_note = "Felt great. " * 20  # > 100 chars
-
-        class _MoodNoteRepo:
-            async def get_by_date(self, d):
-                if d == yesterday:
-                    return DailyNote(date=yesterday, mood=4, note=long_note)
-                return None
-
-        repos = _FakeCoachRepos()
-        repos.note = _MoodNoteRepo()
-        out = await context_module.build_day_context("user-1", repos, target_date=target)
-        assert "Yesterday's mood: 4/5" in out
-        # Note is truncated to 100 chars
-        assert long_note[:100] in out
-        assert long_note[:101] not in out
 
     async def test_biometric_block_renders_when_doc_exists(self):
         """A biometric_days doc for yesterday → renders the

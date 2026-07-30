@@ -98,7 +98,6 @@ function Sparkline({
 
 const componentLabels: Record<string, string> = {
 	consistency: "Consistency",
-	intentions: "Intentions",
 	goals: "Goal progress",
 	quality: "Session quality",
 };

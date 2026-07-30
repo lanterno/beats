@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     MongoBeatRepository,
-    MongoDailyNoteRepository,
-    MongoIntentionRepository,
     MongoProjectRepository,
     MongoWeeklyDigestRepository,
 )
@@ -20,7 +18,6 @@ from beats.infrastructure.repositories import (
 # Collection names — single source of truth for all coach Mongo collections.
 COACH_MEMORY_COLLECTION = "coach_memory"
 DAILY_BRIEFS_COLLECTION = "daily_briefs"
-REVIEW_ANSWERS_COLLECTION = "review_answers"
 COACH_CONVERSATIONS_COLLECTION = "coach_conversations"
 LLM_USAGE_COLLECTION = "llm_usage"
 
@@ -31,8 +28,6 @@ class CoachRepos:
 
     project: MongoProjectRepository
     beat: MongoBeatRepository
-    intention: MongoIntentionRepository
-    note: MongoDailyNoteRepository
     digest: MongoWeeklyDigestRepository
 
 
@@ -47,7 +42,5 @@ async def build_repos(user_id: str) -> CoachRepos:
     return CoachRepos(
         project=MongoProjectRepository(db.projects, user_id=user_id),
         beat=MongoBeatRepository(db.timeLogs, user_id=user_id),
-        intention=MongoIntentionRepository(db.intentions, user_id=user_id),
-        note=MongoDailyNoteRepository(db.dailyNotes, user_id=user_id),
         digest=MongoWeeklyDigestRepository(db.weeklyDigests, user_id=user_id),
     )

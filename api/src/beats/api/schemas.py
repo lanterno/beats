@@ -21,7 +21,6 @@ class CreateProjectRequest(BaseModel):
 
     name: str
     description: str | None = None
-    estimation: str | None = None
     color: str | None = None
     weekly_goal: float | None = None  # Weekly goal in hours
     # category is settable on update — without exposing it here too,
@@ -38,7 +37,6 @@ class UpdateProjectRequest(BaseModel):
     id: str
     name: str
     description: str | None = None
-    estimation: str | None = None
     color: str | None = None
     archived: bool = False
     weekly_goal: float | None = None  # Weekly goal in hours
@@ -122,7 +120,6 @@ class ProjectResponse(BaseModel):
     id: str
     name: str
     description: str | None = None
-    estimation: str | None = None
     color: str | None = None
     archived: bool = False
     weekly_goal: float | None = None
@@ -210,55 +207,6 @@ class RhythmSlotResponse(BaseModel):
     minutes: float
 
 
-# Intention schemas
-
-
-class CreateIntentionRequest(BaseModel):
-    """Request body for creating a daily intention."""
-
-    project_id: str
-    date: date_type | None = None
-    planned_minutes: int = 60
-
-
-class UpdateIntentionRequest(BaseModel):
-    """Request body for updating an intention."""
-
-    completed: bool | None = None
-    planned_minutes: int | None = None
-
-
-class IntentionResponse(BaseModel):
-    """Response schema for an intention."""
-
-    id: str
-    project_id: str
-    date: date_type
-    planned_minutes: int
-    completed: bool
-
-
-# DailyNote schemas
-
-
-class UpsertDailyNoteRequest(BaseModel):
-    """Request body for creating or updating a daily note."""
-
-    date: date_type | None = None
-    note: str = ""
-    mood: int | None = None  # 1-5
-
-
-class DailyNoteResponse(BaseModel):
-    """Response schema for a daily note."""
-
-    id: str
-    date: date_type
-    note: str
-    mood: int | None = None
-    created_at: datetime
-
-
 # Intelligence schemas
 
 
@@ -330,28 +278,6 @@ class FocusScoreResponse(BaseModel):
     beat_id: str
     score: int
     components: dict[str, int]
-
-
-class MoodCorrelationResponse(BaseModel):
-    """Response schema for mood-productivity correlation."""
-
-    mood_trend: list[dict]
-    correlation: dict
-    high_mood_avg_hours: float
-    low_mood_avg_hours: float
-    high_mood_avg_sessions: float
-    low_mood_avg_sessions: float
-
-
-class EstimationAccuracyResponse(BaseModel):
-    """Response schema for estimation accuracy per project."""
-
-    project_id: str
-    project_name: str
-    avg_planned_min: float
-    avg_actual_min: float
-    accuracy_pct: float
-    bias: str
 
 
 class ProjectHealthResponse(BaseModel):

@@ -19,44 +19,36 @@ from beats.infrastructure.repositories import (
     BeatRepository,
     BiometricDayRepository,
     CalendarIntegrationRepository,
-    DailyNoteRepository,
     DeviceRegistrationRepository,
     FitbitIntegrationRepository,
     FlowWindowRepository,
     GitHubIntegrationRepository,
     InsightsRepository,
-    IntentionRepository,
     MongoAutoStartRuleRepository,
     MongoBeatRepository,
     MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
-    MongoDailyNoteRepository,
     MongoDeviceRegistrationRepository,
     MongoFitbitIntegrationRepository,
     MongoFlowWindowRepository,
     MongoGitHubIntegrationRepository,
     MongoInsightsRepository,
-    MongoIntentionRepository,
     MongoOuraIntegrationRepository,
     MongoPairingCodeRepository,
     MongoPendingSuggestionRepository,
     MongoProjectRepository,
-    MongoRecurringIntentionRepository,
     MongoSignalSummaryRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
     MongoWeeklyPlanRepository,
-    MongoWeeklyReviewRepository,
     OuraIntegrationRepository,
     PairingCodeRepository,
     PendingSuggestionRepository,
     ProjectRepository,
-    RecurringIntentionRepository,
     SignalSummaryRepository,
     WebhookRepository,
     WeeklyDigestRepository,
     WeeklyPlanRepository,
-    WeeklyReviewRepository,
 )
 from beats.settings import Settings
 
@@ -150,18 +142,6 @@ def get_analytics_service(
     return AnalyticsService(beat_repo=beat_repo)
 
 
-def get_intention_repository(user_id: CurrentUserId) -> IntentionRepository:
-    """Get the intention repository instance scoped to the current user."""
-    db = Database.get_db()
-    return MongoIntentionRepository(db.intentions, user_id=user_id)
-
-
-def get_daily_note_repository(user_id: CurrentUserId) -> DailyNoteRepository:
-    """Get the daily note repository instance scoped to the current user."""
-    db = Database.get_db()
-    return MongoDailyNoteRepository(db.daily_notes, user_id=user_id)
-
-
 def get_webhook_repository(user_id: CurrentUserId) -> WebhookRepository:
     """Get the webhook repository instance scoped to the current user."""
     db = Database.get_db()
@@ -183,15 +163,11 @@ def get_insights_repository(user_id: CurrentUserId) -> InsightsRepository:
 def get_intelligence_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
-    intention_repo: Annotated[IntentionRepository, Depends(get_intention_repository)],
-    daily_note_repo: Annotated[DailyNoteRepository, Depends(get_daily_note_repository)],
 ) -> IntelligenceService:
     """Get the intelligence service with injected repositories."""
     return IntelligenceService(
         beat_repo=beat_repo,
         project_repo=project_repo,
-        intention_repo=intention_repo,
-        daily_note_repo=daily_note_repo,
     )
 
 
@@ -216,8 +192,6 @@ TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
-IntentionRepoDep = Annotated[IntentionRepository, Depends(get_intention_repository)]
-DailyNoteRepoDep = Annotated[DailyNoteRepository, Depends(get_daily_note_repository)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]
 InsightsRepoDep = Annotated[InsightsRepository, Depends(get_insights_repository)]
@@ -257,23 +231,7 @@ def get_weekly_plan_repository(user_id: CurrentUserId) -> WeeklyPlanRepository:
     return MongoWeeklyPlanRepository(db.weekly_plans, user_id=user_id)
 
 
-def get_recurring_intention_repository(user_id: CurrentUserId) -> RecurringIntentionRepository:
-    """Get the recurring intention repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoRecurringIntentionRepository(db.recurring_intentions, user_id=user_id)
-
-
-def get_weekly_review_repository(user_id: CurrentUserId) -> WeeklyReviewRepository:
-    """Get the weekly review repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoWeeklyReviewRepository(db.weekly_reviews, user_id=user_id)
-
-
 WeeklyPlanRepoDep = Annotated[WeeklyPlanRepository, Depends(get_weekly_plan_repository)]
-RecurringIntentionRepoDep = Annotated[
-    RecurringIntentionRepository, Depends(get_recurring_intention_repository)
-]
-WeeklyReviewRepoDep = Annotated[WeeklyReviewRepository, Depends(get_weekly_review_repository)]
 
 
 def get_pairing_code_repository() -> PairingCodeRepository:

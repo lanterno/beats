@@ -16,8 +16,6 @@ from fastapi.responses import Response, StreamingResponse
 from beats.api.dependencies import (
     BeatServiceDep,
     CurrentUserId,
-    DailyNoteRepoDep,
-    IntentionRepoDep,
     ProjectServiceDep,
 )
 from beats.domain.export_signing import SignatureMismatch, sign, verify
@@ -88,18 +86,14 @@ async def export_sessions_csv(
 async def export_full_json(
     beat_service: BeatServiceDep,
     project_service: ProjectServiceDep,
-    intention_repo: IntentionRepoDep,
-    daily_note_repo: DailyNoteRepoDep,
 ):
     """Export everything as JSON for backup."""
-    payload = await _gather_payload(beat_service, project_service, intention_repo, daily_note_repo)
+    payload = await _gather_payload(beat_service, project_service)
     data = {
         "exported_at": datetime.now(UTC).isoformat(),
         "version": "1.0",
         "projects": payload.projects,
         "beats": payload.beats,
-        "intentions": payload.intentions,
-        "daily_notes": payload.daily_notes,
     }
 
     output = json.dumps(data, indent=2, default=str)
@@ -114,18 +108,12 @@ async def export_full_json(
 async def _gather_payload(
     beat_service: BeatServiceDep,
     project_service: ProjectServiceDep,
-    intention_repo: IntentionRepoDep,
-    daily_note_repo: DailyNoteRepoDep,
 ) -> ExportPayload:
     beats = await beat_service.beat_repo.list()
     projects = await project_service.project_repo.list()
-    intentions = await intention_repo.list_all()
-    notes = await daily_note_repo.list_all()
     return ExportPayload(
         projects=[p.model_dump(mode="json") for p in projects],
         beats=[b.model_dump(mode="json") for b in beats],
-        intentions=[i.model_dump(mode="json") for i in intentions],
-        daily_notes=[n.model_dump(mode="json") for n in notes],
     )
 
 
@@ -134,8 +122,6 @@ async def export_sqlite(
     user_id: CurrentUserId,
     beat_service: BeatServiceDep,
     project_service: ProjectServiceDep,
-    intention_repo: IntentionRepoDep,
-    daily_note_repo: DailyNoteRepoDep,
 ) -> Response:
     """Export a signed SQLite snapshot as a `.zip` bundle.
 
@@ -148,7 +134,7 @@ async def export_sqlite(
     The private key lives only in Mongo and is never served — the public key
     ships with the bundle so a user can run the verify path entirely offline.
     """
-    payload = await _gather_payload(beat_service, project_service, intention_repo, daily_note_repo)
+    payload = await _gather_payload(beat_service, project_service)
     sqlite_bytes = build_sqlite_bytes(payload)
     manifest = build_manifest(payload, sqlite_bytes, EXPORT_VERSION)
     manifest_bytes = canonical_manifest_bytes(manifest)
@@ -178,8 +164,6 @@ async def import_sqlite(
     file: UploadFile,
     beat_service: BeatServiceDep,
     project_service: ProjectServiceDep,
-    intention_repo: IntentionRepoDep,
-    daily_note_repo: DailyNoteRepoDep,
 ):
     """Import a previously signed SQLite bundle. The signature is verified
     against the signing user's stored public key before any mutation runs —
@@ -227,7 +211,7 @@ async def import_sqlite(
 
     # At this point the bundle is authentic. Read rows out of SQLite and
     # upsert through the same repos used by the JSON import path.
-    counts = {"projects": 0, "beats": 0, "intentions": 0, "daily_notes": 0}
+    counts = {"projects": 0, "beats": 0}
     with tempfile.NamedTemporaryFile(suffix=".sqlite") as tmp:
         Path(tmp.name).write_bytes(sqlite_bytes)
         conn = sqlite3.connect(tmp.name)
@@ -245,12 +229,6 @@ async def import_sqlite(
                     beat.pop(k, None)
                 await beat_service.beat_repo.upsert(beat)
                 counts["beats"] += 1
-            for row in conn.execute("SELECT data FROM intentions"):
-                await intention_repo.upsert(json.loads(row["data"]))
-                counts["intentions"] += 1
-            for row in conn.execute("SELECT data FROM daily_notes"):
-                await daily_note_repo.upsert_raw(json.loads(row["data"]))
-                counts["daily_notes"] += 1
         finally:
             conn.close()
 
@@ -262,14 +240,12 @@ async def import_full_json(
     file: UploadFile,
     beat_service: BeatServiceDep,
     project_service: ProjectServiceDep,
-    intention_repo: IntentionRepoDep,
-    daily_note_repo: DailyNoteRepoDep,
 ):
     """Import a full JSON backup. Upserts by ID — safe to re-import."""
     content = await file.read()
     data = json.loads(content)
 
-    counts = {"projects": 0, "beats": 0, "intentions": 0, "daily_notes": 0}
+    counts = {"projects": 0, "beats": 0}
 
     for proj in data.get("projects", []):
         for k in _COMPUTED_FIELDS:
@@ -282,13 +258,5 @@ async def import_full_json(
             beat.pop(k, None)
         await beat_service.beat_repo.upsert(beat)
         counts["beats"] += 1
-
-    for intention in data.get("intentions", []):
-        await intention_repo.upsert(intention)
-        counts["intentions"] += 1
-
-    for note in data.get("daily_notes", []):
-        await daily_note_repo.upsert_raw(note)
-        counts["daily_notes"] += 1
 
     return {"status": "ok", "imported": counts}

@@ -1,9 +1,8 @@
 """Memory rewrite — coach rewrites its own memory from recent data.
 
 Triggered manually via POST /coach/memory/rewrite or (later) by a weekly
-scheduler. Reads the last 7 days of sessions, intentions, reviews, mood,
-and the current memory file, then asks the coach to produce an updated
-Markdown summary.
+scheduler. Reads the last 7 days of sessions and the current memory file,
+then asks the coach to produce an updated Markdown summary.
 """
 
 from __future__ import annotations
@@ -17,7 +16,6 @@ from beats.coach.gateway import complete
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import MEMORY_REWRITE_PROMPT
 from beats.coach.repos import build_repos, fmt_minutes
-from beats.coach.review import list_reviews
 from beats.infrastructure.database import Database
 
 
@@ -45,40 +43,6 @@ async def _recent_data_summary(user_id: str) -> str:
         lines.append(f"**{d.isoformat()}** ({total:.1f}h): {', '.join(by_day[d])}")
     if not by_day:
         lines.append("(No sessions in the last 7 days)")
-
-    # Intentions
-    lines.append("\n## Recent intentions")
-    for offset in range(7):
-        d = today - timedelta(days=offset)
-        intentions = await repos.intention.list_by_date(d)
-        if intentions:
-            items = []
-            for i in intentions:
-                name = project_map.get(i.project_id, "?")
-                status = "done" if i.completed else "missed"
-                items.append(f"{name} {i.planned_minutes}m [{status}]")
-            lines.append(f"**{d.isoformat()}**: {', '.join(items)}")
-
-    # Mood
-    lines.append("\n## Mood")
-    for offset in range(7):
-        d = today - timedelta(days=offset)
-        note = await repos.note.get_by_date(d)
-        if note and note.mood:
-            text = f' — "{note.note[:80]}"' if note.note else ""
-            lines.append(f"**{d.isoformat()}**: {note.mood}/5{text}")
-
-    # Reviews
-    reviews = await list_reviews(user_id, limit=7)
-    if reviews:
-        lines.append("\n## Review answers")
-        for r in reviews:
-            answers = r.get("answers", [])
-            answered = [a for a in answers if a]
-            if answered:
-                lines.append(f"**{r['date']}**:")
-                for a in answered:
-                    lines.append(f"  - {a['text'][:150]}")
 
     return "\n".join(lines)
 

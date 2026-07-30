@@ -49,35 +49,6 @@ export async function fetchChatHistory(
 	return get(`/api/coach/chat/history?${params}`);
 }
 
-// ── Reviews ─────────────────────────────────────────────────────────
-
-export type ReviewResponse = Schemas["ReviewResponse"];
-
-export async function startReview(): Promise<ReviewResponse> {
-	return post<ReviewResponse>(
-		`/api/coach/review/start?tz=${encodeURIComponent(browserTimeZone())}`,
-		{},
-	);
-}
-
-export async function fetchTodayReview(): Promise<ReviewResponse | null> {
-	return get<ReviewResponse | null>(
-		`/api/coach/review/today?tz=${encodeURIComponent(browserTimeZone())}`,
-	);
-}
-
-export async function submitReviewAnswer(
-	reviewDate: string,
-	questionIndex: number,
-	answer: string,
-): Promise<void> {
-	await post("/api/coach/review/answer", {
-		date: reviewDate,
-		question_index: questionIndex,
-		answer,
-	});
-}
-
 // ── Memory ──────────────────────────────────────────────────────────
 
 export type MemoryResponse = Schemas["MemoryResponse"];

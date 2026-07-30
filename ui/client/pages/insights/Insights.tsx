@@ -13,7 +13,6 @@ import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
 import { DistractionsToday } from "./DistractionsToday";
-import { EstimationAccuracy } from "./EstimationAccuracy";
 import { FlowByApp } from "./FlowByApp";
 import { FlowByLanguage } from "./FlowByLanguage";
 import { FlowByRepo } from "./FlowByRepo";
@@ -23,7 +22,6 @@ import { FlowRhythm } from "./FlowRhythm";
 import { FlowThisWeek } from "./FlowThisWeek";
 import { FlowToday } from "./FlowToday";
 import { FlowTrend } from "./FlowTrend";
-import { MoodCorrelation } from "./MoodCorrelation";
 import { PatternCards } from "./PatternCards";
 import { ProjectHealth } from "./ProjectHealth";
 import { TopProjects } from "./TopProjects";
@@ -266,12 +264,10 @@ export default function Insights() {
 				{!selectedProjectId && <TopProjects tag={selectedTag} />}
 			</div>
 
-			{/* Intelligence: Mood, Health, Estimation */}
+			{/* Intelligence: Project Health */}
 			{!selectedProjectId && !selectedTag && (
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-					<MoodCorrelation />
 					<ProjectHealth />
-					<EstimationAccuracy />
 				</div>
 			)}
 

@@ -46,10 +46,9 @@ void main() {
     });
 
     test('payload without the auto-timer prefix', () {
-      // Other payloads (`brief`, `review`, `eod-mood`, `drift:...`)
-      // should NOT match — the router routes them differently.
+      // Other payloads (`brief`, `drift:...`) should NOT match — the
+      // router routes them differently.
       expect(parseAutoTimerPayload('brief'), isNull);
-      expect(parseAutoTimerPayload('review'), isNull);
       expect(parseAutoTimerPayload('drift:com.spotify.client'), isNull);
       expect(parseAutoTimerPayload(''), isNull);
     });

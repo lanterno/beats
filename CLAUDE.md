@@ -119,12 +119,10 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
-| `/api/intentions` | Daily intentions |
-| `/api/daily-notes` | End-of-day notes with mood |
 | `/api/intelligence` | Digests, score, patterns, suggestions, focus scores, inbox |
-| `/api/plans` | Weekly plans, recurring intentions, reviews, streaks |
+| `/api/plans` | Weekly plans (structured per-project hour targets) |
 | `/api/webhooks` | Webhook CRUD, daily summary trigger |
-| `/api/coach` | Brief generation, streaming chat, end-of-day reviews, usage, memory |
+| `/api/coach` | Brief generation, streaming chat, usage, memory |
 | `/api/biometrics` | Daily health data from companion app / HealthKit / Health Connect |
 | `/api/calendar` | Google Calendar OAuth + events |
 | `/api/github` | GitHub OAuth + status |

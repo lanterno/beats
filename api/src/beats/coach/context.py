@@ -5,7 +5,7 @@ Each block maps to a cache-control boundary:
   - UserContextBlock: 30-day aggregates + memory (~3–5k tokens, cached nightly)
   - DayContextBlock: today's raw signals (~0.5–2k tokens, not cached)
 
-The blocks are composed into messages by the brief/chat/review callers.
+The blocks are composed into messages by the brief/chat callers.
 """
 
 from __future__ import annotations
@@ -69,15 +69,12 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
     intel = IntelligenceService(
         beat_repo=repos.beat,
         project_repo=repos.project,
-        intention_repo=repos.intention,
-        daily_note_repo=repos.note,
     )
     try:
         score_data = await intel.compute_productivity_score()
         score_line = (
             f"Productivity score: {score_data['score']}/100 "
             f"(consistency={score_data['components']['consistency']}, "
-            f"intentions={score_data['components']['intentions']}, "
             f"goals={score_data['components']['goals']}, "
             f"quality={score_data['components']['quality']})"
         )
@@ -152,23 +149,6 @@ async def build_day_context(
         lines.append(f"  Total: {total:.1f}h across {len(beats_list)} sessions")
         return lines
 
-    # Intentions
-    today_intentions = await repos.intention.list_by_date(today)
-    intention_lines = []
-    for i in today_intentions:
-        name = project_map.get(i.project_id, "?")
-        status = "done" if i.completed else "pending"
-        intention_lines.append(f"  {name}: {i.planned_minutes}min [{status}]")
-
-    # Yesterday's mood
-    yesterday_note = await repos.note.get_by_date(yesterday)
-    mood_line = ""
-    if yesterday_note:
-        mood = yesterday_note.mood
-        note_text = yesterday_note.note
-        note_part = f' — "{note_text[:100]}"' if note_text else ""
-        mood_line = f"Yesterday's mood: {mood}/5{note_part}"
-
     # Calendar events (if connected). The whole block is best-effort —
     # a missing/unconfigured calendar integration must NOT break the
     # day briefing. The previous version had two latent bugs that the
@@ -221,12 +201,8 @@ async def build_day_context(
         "### Yesterday's sessions",
         *beats_summary(yesterday_beats, "yesterday"),
         "",
-        *(["", mood_line, ""] if mood_line else [""]),
         "### Today's sessions so far",
         *beats_summary(today_beats, "today"),
-        "",
-        "### Today's intentions",
-        *(intention_lines if intention_lines else ["  No intentions set for today."]),
     ]
 
     if calendar_lines:

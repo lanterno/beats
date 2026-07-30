@@ -9,10 +9,8 @@ export { ColorPicker } from "./color-picker";
 export { type CommandItem, CommandPalette } from "./command-palette";
 export { Dialog, type DialogProps } from "./dialog";
 export { EmptyState } from "./empty-state";
-export { EndOfDayReview } from "./end-of-day-review";
 export { FocusMode } from "./focus-mode";
 export { GoalRing } from "./goal-ring";
-export { MorningBriefing } from "./morning-briefing";
 export { Progress } from "./progress";
 export { Reveal } from "./reveal";
 export { Toaster } from "./sonner";
@@ -34,4 +32,3 @@ export {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./tooltip";
-export { WeeklyReviewDialog } from "./weekly-review";
