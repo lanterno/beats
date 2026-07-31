@@ -3,7 +3,7 @@
  * Horizontal bar chart showing hours per project for a period.
  */
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useProjects } from "@/entities/project";
 import { useProjectBreakdown } from "@/entities/session";
 import { cn, formatDuration } from "@/shared/lib";

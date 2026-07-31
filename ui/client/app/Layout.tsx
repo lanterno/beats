@@ -6,7 +6,7 @@
  * Handles favicon indicator, keyboard shortcuts, command palette, and focus mode.
  */
 import { useCallback, useMemo, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router";
 import { useProjects, visibleProjects } from "@/entities/project";
 import { useTimer } from "@/features/timer";
 import {

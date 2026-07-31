@@ -5,7 +5,7 @@
  */
 import { X } from "lucide-react";
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";

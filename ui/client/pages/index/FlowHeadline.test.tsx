@@ -10,7 +10,7 @@
  * - hide while loading (no flash of placeholder)
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlowWindowSummary } from "@/shared/api";
 import { FlowHeadline } from "./FlowHeadline";

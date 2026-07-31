@@ -5,7 +5,7 @@
 import "../global.css";
 
 import { useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { initializeAuth, useAuth } from "@/features/auth";
 import Coach from "@/pages/coach/Coach";
 import HomePage from "@/pages/homepage/HomePage";

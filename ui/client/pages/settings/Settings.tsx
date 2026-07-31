@@ -26,7 +26,7 @@ import {
 	Webhook,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
 import {
 	fetchCalendarAuthUrl,

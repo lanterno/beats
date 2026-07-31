@@ -5,7 +5,7 @@ import {
 } from "@simplewebauthn/browser";
 import { X } from "lucide-react";
 import { type SyntheticEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { describeError } from "@/shared/api";
 import { Button } from "@/shared/ui";
 import {

@@ -5,7 +5,7 @@
 
 import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
