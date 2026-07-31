@@ -1,5 +1,6 @@
 name: UI
 on:
+  workflow_dispatch:
   push:
     paths: [ui/**]
   pull_request:
@@ -15,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ui/package.json
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -29,7 +32,7 @@ jobs:
   deploy:
     name: Deploy to Firebase Hosting
     needs: quality
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,6 +40,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ui/package.json
       - uses: actions/setup-node@v6
         with:
           node-version: 24
