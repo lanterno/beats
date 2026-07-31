@@ -45,7 +45,7 @@
     "jsdom": "^29.1.1",
     "lucide-react": "^1.23.0",
     "openapi-typescript": "^7.13.0",
-    "postcss": "^8.5.16",
+    "postcss": "^8.5.18",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
