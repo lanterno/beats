@@ -23,9 +23,14 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
+      # uv is needed by gen:types:check, which dumps the OpenAPI spec from the API.
+      - uses: astral-sh/setup-uv@v8.3.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # Fail CI if the committed OpenAPI types drift from the API schema. Was
+      # previously only enforced in the pre-push hook (skippable / not in CI).
+      - run: pnpm gen:types:check
       - run: pnpm test
       - run: pnpm build
 
