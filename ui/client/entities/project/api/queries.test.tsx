@@ -42,7 +42,6 @@ function apiProject(weeklyGoal: number): ApiProject {
 		description: null,
 		color: "#FBBF24",
 		archived: false,
-		estimation: null,
 		weekly_goal: weeklyGoal,
 		goal_type: "target",
 		goal_overrides: [],

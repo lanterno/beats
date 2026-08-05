@@ -124,7 +124,7 @@ cd companion && flutter analyze && flutter test
 cd integrations/vscode-beats && npm test
 ```
 
-API integration tests spin up a real MongoDB via [testcontainers](https://testcontainers.com/) — no manual database setup needed, just Docker running. The pytest suite covers the HTTP contract end-to-end; the older `tests/hurl/` files are historical and not run from CI.
+API integration tests spin up a real MongoDB via [testcontainers](https://testcontainers.com/) — no manual database setup needed, just Docker running. The pytest suite covers the HTTP contract end-to-end.
 
 ## Code Quality
 

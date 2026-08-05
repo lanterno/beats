@@ -16,12 +16,9 @@ from beats.domain.exceptions import (
 from beats.domain.models import (
     Beat,
     BiometricDay,
-    DailyNote,
     GoalOverride,
     GoalType,
-    Intention,
     Project,
-    RecurringIntention,
 )
 from beats.domain.utils import local_date, local_dt
 
@@ -138,7 +135,6 @@ class TestProjectModel:
         project = Project(name="Test Project")
         assert project.name == "Test Project"
         assert project.description is None
-        assert project.estimation is None
         assert project.archived is False
 
     def test_project_creation_full(self):
@@ -147,13 +143,11 @@ class TestProjectModel:
             id="test-id",
             name="Test Project",
             description="A test project",
-            estimation="10 hours",
             archived=True,
         )
         assert project.id == "test-id"
         assert project.name == "Test Project"
         assert project.description == "A test project"
-        assert project.estimation == "10 hours"
         assert project.archived is True
 
 
@@ -386,94 +380,6 @@ class TestGoalOverrideResolution:
         assert goal is None
         goal, _ = p.effective_goal(date(2026, 4, 6))
         assert goal == 25
-
-
-class TestIntentionModel:
-    """Intention is a daily time-boxed plan attached to a project."""
-
-    def test_defaults_to_today_60min_uncompleted(self):
-        i = Intention(project_id="p1")
-        assert i.project_id == "p1"
-        assert i.date == datetime.now(UTC).date()
-        assert i.planned_minutes == 60
-        assert i.completed is False
-        assert i.id is None
-
-    def test_explicit_fields_round_trip(self):
-        i = Intention(
-            id="abc",
-            project_id="p1",
-            date=date(2026, 5, 1),
-            planned_minutes=90,
-            completed=True,
-        )
-        assert i.planned_minutes == 90
-        assert i.completed is True
-        assert i.date == date(2026, 5, 1)
-
-
-class TestDailyNoteModel:
-    """DailyNote captures end-of-day mood + reflection."""
-
-    def test_defaults(self):
-        n = DailyNote()
-        assert n.note == ""
-        assert n.mood is None
-        assert n.date == datetime.now(UTC).date()
-        assert n.id is None
-
-    def test_mood_accepts_full_1_to_5_range(self):
-        # Domain layer doesn't enforce a 1–5 bound — the comment on the
-        # field says "1-5 scale" but pydantic itself takes any int. Pin
-        # the actual behavior so a future stricter validator is a
-        # *deliberate* contract change, not an accident.
-        for mood in (1, 2, 3, 4, 5):
-            assert DailyNote(mood=mood).mood == mood
-
-    def test_mood_outside_documented_range_currently_passes(self):
-        # Locks in current lax behavior. If we add bounds later, this
-        # test will break and force the implementer to also update the
-        # routes that produce moods (front-end coerces to 1–5 already).
-        assert DailyNote(mood=99).mood == 99
-        assert DailyNote(mood=0).mood == 0
-
-
-class TestRecurringIntentionModel:
-    """RecurringIntention is a weekday-templated source of daily intentions."""
-
-    def test_defaults_to_weekdays_enabled(self):
-        r = RecurringIntention(project_id="p1")
-        assert r.project_id == "p1"
-        assert r.planned_minutes == 60
-        assert r.days_of_week == [0, 1, 2, 3, 4]  # Mon–Fri
-        assert r.enabled is True
-
-    def test_arbitrary_days_of_week_accepted(self):
-        # Domain doesn't validate the 0–6 range — keeps the model dumb,
-        # routes are responsible. Pin behavior.
-        r = RecurringIntention(project_id="p1", days_of_week=[5, 6])
-        assert r.days_of_week == [5, 6]
-
-    def test_template_fires_only_on_listed_weekdays(self):
-        # Mirror of the predicate in routers/planning.py:
-        #   if not t.enabled or day_of_week not in t.days_of_week: continue
-        # Keep this assertion in the domain test so a code move can't
-        # silently change the activation rule. weekday(): Mon=0..Sun=6.
-        weekday_template = RecurringIntention(project_id="p1", days_of_week=[0, 1, 2, 3, 4])
-        weekend_template = RecurringIntention(project_id="p2", days_of_week=[5, 6])
-        for weekday in range(5):  # Mon–Fri
-            assert weekday in weekday_template.days_of_week
-            assert weekday not in weekend_template.days_of_week
-        for weekend in (5, 6):
-            assert weekend not in weekday_template.days_of_week
-            assert weekend in weekend_template.days_of_week
-
-    def test_disabled_template_is_inert(self):
-        # The route handler short-circuits on `not t.enabled` before the
-        # day-of-week check. Disabled means nothing fires, regardless of
-        # day. (Test is a sanity-pin on the field, not the route logic.)
-        r = RecurringIntention(project_id="p1", enabled=False, days_of_week=[0, 1, 2, 3, 4, 5, 6])
-        assert r.enabled is False
 
 
 class TestBiometricDayModel:
@@ -993,41 +899,10 @@ class _FakeProjectRepo:
         return [p for p in self._projects if p.archived == archived]
 
 
-class _FakeIntentionRepo:
-    """Returns intentions for a date range."""
-
-    def __init__(self, intentions: list):
-        self._intentions = intentions
-
-    async def list_by_date_range(self, start: date, end: date) -> list:
-        return [i for i in self._intentions if start <= i.date <= end]
-
-    async def list_by_date(self, d: date) -> list:
-        return [i for i in self._intentions if i.date == d]
-
-
-class _FakeDailyNoteRepo:
-    """Returns daily notes by date or in a range."""
-
-    def __init__(self, notes: list):
-        self._notes = notes
-
-    async def list_by_date_range(self, start: date, end: date) -> list:
-        return [n for n in self._notes if start <= n.date <= end]
-
-    async def get_by_date(self, d: date):
-        for n in self._notes:
-            if n.date == d:
-                return n
-        return None
-
-
 def _intel_service(
     *,
     beats: list | None = None,
     projects: list | None = None,
-    intentions: list | None = None,
-    notes: list | None = None,
 ):
     """Build an IntelligenceService with fakes for every repo."""
     from beats.domain.intelligence import IntelligenceService
@@ -1035,8 +910,6 @@ def _intel_service(
     return IntelligenceService(
         beat_repo=_FakeIntelBeatRepo(beats or []),
         project_repo=_FakeProjectRepo(projects or []),
-        intention_repo=_FakeIntentionRepo(intentions or []),
-        daily_note_repo=_FakeDailyNoteRepo(notes or []),
     )
 
 
@@ -1058,17 +931,17 @@ def _project(
 
 
 class TestProductivityScore:
-    """compute_productivity_score breaks 0-100 into four 0-25 components:
-    consistency (weekdays tracked) + intentions (completion %) + goals
-    (avg progress) + quality (median session length minus fragmentation
-    penalty). Risk: a regression in any component shifts the user's
-    perceived productivity story silently. These tests pin each
+    """compute_productivity_score breaks 0-100 into three 0-25 components:
+    consistency (weekdays tracked) + goals (avg progress) + quality
+    (median session length minus fragmentation penalty), then rescales the
+    0-75 sum to 0-100 via *4/3. Risk: a regression in any component shifts
+    the user's perceived productivity story silently. These tests pin each
     component's logic on representative seeded data."""
 
     async def test_empty_data_returns_neutral_score(self):
-        """Fresh-account path — no sessions, no intentions, no goals.
-        consistency=0 + intentions=13 (neutral) + goals=13 (neutral) +
-        quality=0 = 26. Pin so a divide-by-zero regression fails the
+        """Fresh-account path — no sessions, no goals.
+        consistency=0 + goals=13 (neutral) + quality=0 = 13, rescaled
+        round(13 * 4/3) = 17. Pin so a divide-by-zero regression fails the
         test rather than silently 500'ing the /score endpoint for new
         users."""
         svc = _intel_service()
@@ -1077,10 +950,10 @@ class TestProductivityScore:
         assert "components" in result
         components = result["components"]
         assert components["consistency"] == 0
-        assert components["intentions"] == 13  # neutral default
         assert components["goals"] == 13  # neutral default
         assert components["quality"] == 0
-        assert result["score"] == 26
+        assert "intentions" not in components
+        assert result["score"] == 17
 
     async def test_consistency_full_when_all_5_weekdays_tracked(self):
         """Consistency = 25 when all 5 most-recent weekdays have at
@@ -1106,40 +979,6 @@ class TestProductivityScore:
         svc = _intel_service(beats=beats)
         result = await svc.compute_productivity_score()
         assert result["components"]["consistency"] == 25
-
-    async def test_intention_completion_full_when_all_done(self):
-        from beats.domain.models import Intention
-
-        today = datetime.now(UTC).date()
-        intentions = [
-            Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
-            Intention(
-                project_id="p2",
-                date=today - timedelta(days=1),
-                planned_minutes=30,
-                completed=True,
-            ),
-        ]
-        svc = _intel_service(intentions=intentions)
-        result = await svc.compute_productivity_score()
-        assert result["components"]["intentions"] == 25
-
-    async def test_intention_completion_zero_when_none_done(self):
-        from beats.domain.models import Intention
-
-        today = datetime.now(UTC).date()
-        intentions = [
-            Intention(project_id="p1", date=today, planned_minutes=60, completed=False),
-            Intention(
-                project_id="p2",
-                date=today - timedelta(days=1),
-                planned_minutes=30,
-                completed=False,
-            ),
-        ]
-        svc = _intel_service(intentions=intentions)
-        result = await svc.compute_productivity_score()
-        assert result["components"]["intentions"] == 0
 
     async def test_goal_progress_caps_at_25_when_target_hit(self):
         """A project that hit (or exceeded) its weekly goal contributes
@@ -1221,12 +1060,11 @@ class TestProductivityScore:
         assert result["components"]["quality"] == 18
 
     async def test_total_score_caps_at_100(self):
-        """The score is `min(100, consistency + intentions + goals +
-        quality)`. Locks the cap so a future 30-point component
-        doesn't overshoot."""
+        """The score is `min(100, round((consistency + goals + quality) *
+        4 / 3))`. Locks the cap so a future component doesn't overshoot."""
         today = datetime.now(UTC).date()
-        # Construct max-everything: 5 weekdays tracked, all intentions
-        # done, full goal progress, long sessions.
+        # Construct max-everything: 5 weekdays tracked, full goal progress,
+        # long sessions.
         weekdays = []
         d = today
         while len(weekdays) < 5:
@@ -1239,15 +1077,10 @@ class TestProductivityScore:
             s = datetime.combine(wd, datetime.min.time(), tzinfo=UTC).replace(hour=10)
             beats.append(Beat(id=f"b-{wd}", project_id="p1", start=s, end=s + timedelta(hours=2)))
 
-        from beats.domain.models import Intention
-
-        intentions = [
-            Intention(project_id="p1", date=today, planned_minutes=60, completed=True),
-        ]
         projects = [_project("p1", "Alpha", weekly_goal=2.0)]
-        svc = _intel_service(beats=beats, projects=projects, intentions=intentions)
+        svc = _intel_service(beats=beats, projects=projects)
         result = await svc.compute_productivity_score()
-        # 25 + 25 + 25 + 25 = 100, capped.
+        # (25 + 25 + 25) * 4/3 = 100, capped.
         assert result["score"] <= 100
         # And in fact equals 100 here.
         assert result["score"] == 100
@@ -1274,14 +1107,14 @@ class TestProductivityScoreHistory:
 
     async def test_empty_data_renders_neutral_score_per_week(self):
         """Fresh-account → every week is the neutral baseline (no
-        sessions, no intentions, no goal projects). Pin so a regression
-        that would 500 on empty data fails the test instead."""
+        sessions, no goal projects). Pin so a regression that would 500
+        on empty data fails the test instead."""
         svc = _intel_service()
         result = await svc.compute_productivity_score_history(weeks=4)
-        # Each week: consistency=0, intentions=13 (neutral), goals=13
-        # (neutral, no goal_projects), quality=0 → 26.
+        # Each week: consistency=0, goals=13 (neutral, no goal_projects),
+        # quality=0 → round(13 * 4/3) = 17.
         for entry in result:
-            assert entry["score"] == 26
+            assert entry["score"] == 17
 
     async def test_entries_carry_week_of_and_score_keys(self):
         svc = _intel_service()
@@ -1321,36 +1154,6 @@ class TestProductivityScoreHistory:
         weeks = {entry["week_of"] for entry in result}
         assert current_monday not in weeks
 
-    async def test_week_with_all_completed_intentions_scores_higher(self):
-        """A historical week where the user completed all intentions
-        scores higher than an empty week. Pin so a regression in the
-        per-week intention aggregation doesn't silently flatten the
-        sparkline."""
-        from beats.domain.intelligence import _monday_of
-        from beats.domain.models import Intention
-
-        today = datetime.now(UTC).date()
-        # Place an intention 2 weeks ago, on the Monday.
-        two_weeks_ago_monday = _monday_of(today) - timedelta(weeks=2)
-        intentions = [
-            Intention(
-                project_id="p1",
-                date=two_weeks_ago_monday,
-                planned_minutes=60,
-                completed=True,
-            ),
-        ]
-        svc = _intel_service(intentions=intentions)
-        result = await svc.compute_productivity_score_history(weeks=4)
-        by_week = {e["week_of"]: e["score"] for e in result}
-
-        # The completed week scores higher than baseline (26):
-        # consistency 0 + intentions 25 + goals 13 + quality 0 = 38.
-        assert by_week[two_weeks_ago_monday.isoformat()] == 38
-        # An adjacent empty week stays at 26.
-        three_weeks_ago_monday = _monday_of(today) - timedelta(weeks=3)
-        assert by_week[three_weeks_ago_monday.isoformat()] == 26
-
     async def test_each_week_is_sliced_independently(self):
         """A session three weeks ago should NOT affect the score for
         a week with no sessions. Pin per-week isolation so a
@@ -1369,18 +1172,17 @@ class TestProductivityScoreHistory:
         result = await svc.compute_productivity_score_history(weeks=4)
         by_week = {e["week_of"]: e["score"] for e in result}
 
-        # Three-weeks-ago: 5 (consistency) + 13 + 13 + 18 (quality
-        # for 60-min session in <60 bucket — actually median 60 falls
-        # at "< 120" boundary so it's 23) = let's just assert it's
-        # higher than the empty baseline.
-        assert by_week[three_weeks_ago_monday.isoformat()] > 26
+        # Three-weeks-ago: 5 (consistency) + 13 (goals) + 23 (quality
+        # for a 60-min session in the "< 120" bucket), rescaled — higher
+        # than the empty baseline.
+        assert by_week[three_weeks_ago_monday.isoformat()] > 17
         # And the OTHER weeks (no sessions in them) stay at the
         # empty baseline.
         for w in [
             (_monday_of(today) - timedelta(weeks=2)).isoformat(),
             (_monday_of(today) - timedelta(weeks=4)).isoformat(),
         ]:
-            assert by_week[w] == 26
+            assert by_week[w] == 17
 
 
 class TestPatternDetectorsDay:
@@ -1862,171 +1664,6 @@ class TestPatternDetectorsSessionTrend:
         )
         svc = self._service()
         assert svc._detect_session_trend(beats, today) == []
-
-
-class TestPatternDetectorsMoodCorrelation:
-    """_detect_mood_correlation Pearson-correlates daily tracked
-    hours with the mood score from daily notes. Surfaces if ≥10
-    notes have moods AND |r| > 0.3. Body text changes between the
-    positive-r and negative-r framings."""
-
-    def _service(self):
-        return _intel_service()
-
-    def _note(self, d: date, mood: int | None, content: str = "") -> DailyNote:
-        return DailyNote(id=f"n-{d.isoformat()}", date=d, note=content, mood=mood)
-
-    async def test_fewer_than_10_notes_returns_no_card(self):
-        """The 10-note minimum prevents a single noisy week from
-        flipping the user's perceived productivity narrative."""
-        today = datetime.now(UTC).date()
-        notes = [self._note(today - timedelta(days=i), 4) for i in range(8)]
-        svc = self._service()
-        assert svc._detect_mood_correlation([], notes) == []
-
-    async def test_zero_correlation_returns_no_card(self):
-        """When daily hours are identical regardless of mood, the
-        denominator hits the zero-variance branch and no card fires."""
-        today = datetime.now(UTC).date()
-        notes = [self._note(today - timedelta(days=i), (i % 5) + 1) for i in range(12)]
-        beats = []
-        for i in range(12):
-            d = today - timedelta(days=i)
-            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(hours=2)))
-        svc = self._service()
-        assert svc._detect_mood_correlation(beats, notes) == []
-
-    async def test_strong_positive_correlation_fires_with_more_work_better_mood_body(self):
-        """When more hours correlate with higher mood, the body uses
-        the high-mood/high-hours framing."""
-        today = datetime.now(UTC).date()
-        notes = []
-        beats = []
-        for i in range(12):
-            d = today - timedelta(days=i)
-            mood = 1 if i < 6 else 5
-            hours = 1 if i < 6 else 5
-            notes.append(self._note(d, mood))
-            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(hours=hours)))
-        svc = self._service()
-        cards = svc._detect_mood_correlation(beats, notes)
-        assert len(cards) == 1
-        card = cards[0]
-        assert card.type == "mood_correlation"
-        assert "mood 4+" in card.body
-        assert card.data["r"] >= 0.3
-        assert card.data["high_mood_avg_hours"] > card.data["low_mood_avg_hours"]
-
-    async def test_strong_negative_correlation_fires_with_lighter_days_body(self):
-        """Negative correlation flips the body to "lighter days,
-        mood higher"."""
-        today = datetime.now(UTC).date()
-        notes = []
-        beats = []
-        for i in range(12):
-            d = today - timedelta(days=i)
-            mood = 5 if i < 6 else 1
-            hours = 1 if i < 6 else 5
-            notes.append(self._note(d, mood))
-            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(hours=hours)))
-        svc = self._service()
-        cards = svc._detect_mood_correlation(beats, notes)
-        assert len(cards) == 1
-        assert "lighter days" in cards[0].body.lower()
-        assert cards[0].data["r"] <= -0.3
-
-
-class TestPatternDetectorsEstimationBias:
-    """_detect_estimation_bias compares planned (intentions) vs
-    actual (beats) per (project, date). When a project's average
-    ratio drifts outside [0.8, 1.2] across ≥3 days, fire a card."""
-
-    def _service(self):
-        return _intel_service()
-
-    async def test_fewer_than_3_planned_days_returns_no_card(self):
-        """The 3-day minimum prevents a one-off bad estimate from
-        being labeled as a habit."""
-        today = datetime.now(UTC).date()
-        intentions = [
-            Intention(project_id="p1", date=today, planned_minutes=60, completed=False),
-            Intention(
-                project_id="p1",
-                date=today - timedelta(days=1),
-                planned_minutes=60,
-                completed=False,
-            ),
-        ]
-        s = datetime.combine(today, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=120))]
-        svc = self._service()
-        cards = svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")})
-        assert cards == []
-
-    async def test_consistent_underestimate_fires_with_pct(self):
-        """Actual = 2× planned across 3 days → "underestimate" card
-        with the percentage in the body. Priority 3 — actionable."""
-        today = datetime.now(UTC).date()
-        intentions = []
-        beats = []
-        for i in range(3):
-            d = today - timedelta(days=i)
-            intentions.append(
-                Intention(project_id="p1", date=d, planned_minutes=60, completed=True)
-            )
-            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(minutes=120)))
-        svc = self._service()
-        cards = svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")})
-        assert len(cards) == 1
-        card = cards[0]
-        assert card.type == "estimation_accuracy"
-        assert "underestimate" in card.title.lower()
-        assert "Alpha" in card.title
-        assert "100%" in card.body
-        assert card.priority == 3
-        assert card.data["avg_ratio"] == 2.0
-
-    async def test_consistent_overestimate_fires_with_lower_priority(self):
-        """Actual = 0.5× planned → "overestimate" card with priority
-        2 (less urgent — user is exceeding the plan in a good way)."""
-        today = datetime.now(UTC).date()
-        intentions = []
-        beats = []
-        for i in range(3):
-            d = today - timedelta(days=i)
-            intentions.append(
-                Intention(project_id="p1", date=d, planned_minutes=60, completed=True)
-            )
-            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(minutes=30)))
-        svc = self._service()
-        cards = svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")})
-        assert len(cards) == 1
-        card = cards[0]
-        assert "overestimate" in card.title.lower()
-        assert card.priority == 2
-        assert card.data["avg_ratio"] == 0.5
-
-    async def test_within_20_percent_returns_no_card(self):
-        """Ratio in [0.8, 1.2] is "good enough" — no card. Pin the
-        threshold so a slight habitual under/over doesn't drown the
-        dashboard in noise."""
-        today = datetime.now(UTC).date()
-        intentions = []
-        beats = []
-        for i in range(3):
-            d = today - timedelta(days=i)
-            intentions.append(
-                Intention(project_id="p1", date=d, planned_minutes=60, completed=True)
-            )
-            s = datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=10)
-            beats.append(Beat(id=f"b{i}", project_id="p1", start=s, end=s + timedelta(minutes=65)))
-        svc = self._service()
-        assert svc._detect_estimation_bias(beats, intentions, {"p1": _project("p1", "Alpha")}) == []
 
 
 class TestPatternDetectorsGoalPacing:
@@ -2857,225 +2494,6 @@ class TestComputeFocusScores:
         assert result[1]["components"]["fragmentation"] == 15
 
 
-class TestGetMoodCorrelation:
-    """get_mood_correlation aggregates the last 90 days into a
-    mood-vs-hours story: 7-day rolling mood trend, hi/lo bucketed
-    averages, and a Pearson r (only computed at ≥10 pairs).
-
-    Risk: a sign flip in the Pearson math would silently flip every
-    user's "your best work happens when..." narrative. These tests
-    pin the buckets and the gate."""
-
-    @staticmethod
-    def _at(d: date, hour: int) -> datetime:
-        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
-
-    async def test_empty_returns_zero_neutral_defaults(self):
-        """No notes / beats → r=0, description="neutral", all
-        averages 0, mood_trend empty. Pin so the dashboard can
-        render the empty state."""
-        svc = _intel_service()
-        result = await svc.get_mood_correlation()
-        assert result["correlation"]["r"] == 0
-        assert result["correlation"]["description"] == "neutral"
-        assert result["high_mood_avg_hours"] == 0
-        assert result["low_mood_avg_hours"] == 0
-        assert result["mood_trend"] == []
-
-    async def test_high_low_buckets_split_at_4_and_2(self):
-        """mood ≥ 4 → high bucket; mood ≤ 2 → low bucket; mood = 3
-        in neither. Pin so a refactor doesn't accidentally include
-        the neutral middle on either side."""
-        today = datetime.now(UTC).date()
-        notes = []
-        beats = []
-        # Three high-mood days with 4h each
-        for i in range(3):
-            d = today - timedelta(days=i + 1)
-            notes.append(DailyNote(date=d, mood=5))
-            beats.append(
-                Beat(
-                    id=f"h{i}",
-                    project_id="p1",
-                    start=self._at(d, 9),
-                    end=self._at(d, 13),
-                )
-            )
-        # Three low-mood days with 1h each
-        for i in range(3):
-            d = today - timedelta(days=i + 10)
-            notes.append(DailyNote(date=d, mood=1))
-            beats.append(
-                Beat(
-                    id=f"l{i}",
-                    project_id="p1",
-                    start=self._at(d, 9),
-                    end=self._at(d, 10),
-                )
-            )
-        # One neutral day — should land in neither bucket
-        d = today - timedelta(days=20)
-        notes.append(DailyNote(date=d, mood=3))
-        beats.append(
-            Beat(
-                id="n0",
-                project_id="p1",
-                start=self._at(d, 9),
-                end=self._at(d, 19),  # 10h — would skew either bucket
-            )
-        )
-        svc = _intel_service(beats=beats, notes=notes)
-        result = await svc.get_mood_correlation()
-        assert result["high_mood_avg_hours"] == 4.0
-        assert result["low_mood_avg_hours"] == 1.0
-
-    async def test_pearson_gated_at_10_pairs(self):
-        """Below 10 mood-tagged days → r stays at 0 even if data
-        would correlate. Pin the gate so a tiny sample doesn't
-        produce a confident-looking but noisy r."""
-        today = datetime.now(UTC).date()
-        notes = []
-        beats = []
-        # 9 days, perfect correlation
-        for i in range(9):
-            d = today - timedelta(days=i + 1)
-            notes.append(DailyNote(date=d, mood=min(5, i + 1)))
-            beats.append(
-                Beat(
-                    id=f"b{i}",
-                    project_id="p1",
-                    start=self._at(d, 9),
-                    end=self._at(d, 9 + i + 1),
-                )
-            )
-        svc = _intel_service(beats=beats, notes=notes)
-        result = await svc.get_mood_correlation()
-        assert result["correlation"]["r"] == 0
-        assert result["correlation"]["description"] == "neutral"
-
-    async def test_strong_positive_correlation_renders_positive(self):
-        """≥10 pairs with high mood ↔ high hours, low ↔ low →
-        r > 0.3 → description "positive"."""
-        today = datetime.now(UTC).date()
-        notes = []
-        beats = []
-        for i in range(10):
-            d = today - timedelta(days=i + 1)
-            mood = (i % 5) + 1  # cycles 1..5
-            hours = mood  # perfectly correlated
-            notes.append(DailyNote(date=d, mood=mood))
-            beats.append(
-                Beat(
-                    id=f"b{i}",
-                    project_id="p1",
-                    start=self._at(d, 9),
-                    end=self._at(d, 9) + timedelta(hours=hours),
-                )
-            )
-        svc = _intel_service(beats=beats, notes=notes)
-        result = await svc.get_mood_correlation()
-        assert result["correlation"]["r"] > 0.3
-        assert result["correlation"]["description"] == "positive"
-
-
-class TestGetEstimationAccuracy:
-    """get_estimation_accuracy compares planned (intentions) vs
-    actual minutes per (project, day), aggregates per project,
-    classifies bias as underestimate (>110%) / overestimate (<90%)
-    / accurate, and sorts most-biased first."""
-
-    @staticmethod
-    def _at(d: date, hour: int) -> datetime:
-        return datetime.combine(d, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
-
-    async def test_empty_returns_empty(self):
-        svc = _intel_service()
-        result = await svc.get_estimation_accuracy()
-        assert result == []
-
-    async def test_skips_project_with_fewer_than_two_days(self):
-        """A single planned day isn't a habit — skip the project.
-        Pin so a one-off bad estimate doesn't headline the
-        accuracy panel."""
-        today = datetime.now(UTC).date()
-        d = today - timedelta(days=1)
-        intentions = [Intention(project_id="p1", date=d, planned_minutes=60)]
-        beats = [
-            Beat(
-                id="b1",
-                project_id="p1",
-                start=self._at(d, 9),
-                end=self._at(d, 11),  # 2h actual vs 1h planned
-            )
-        ]
-        projects = [_project("p1", "Alpha")]
-        svc = _intel_service(beats=beats, intentions=intentions, projects=projects)
-        assert await svc.get_estimation_accuracy() == []
-
-    async def test_bias_buckets_pinned(self):
-        """Three projects: one underestimate (200%), one
-        overestimate (50%), one accurate (100%). Each bucket
-        threshold pinned: >110 / <90 / between."""
-        today = datetime.now(UTC).date()
-        intentions = []
-        beats = []
-        # p1: planned 60m × 3 days, actual 120m × 3 → 200%
-        for i in range(3):
-            d = today - timedelta(days=i + 1)
-            intentions.append(Intention(project_id="p1", date=d, planned_minutes=60))
-            beats.append(
-                Beat(
-                    id=f"u{i}",
-                    project_id="p1",
-                    start=self._at(d, 9),
-                    end=self._at(d, 11),
-                )
-            )
-        # p2: planned 120m × 3 days, actual 60m × 3 → 50%
-        for i in range(3):
-            d = today - timedelta(days=i + 10)
-            intentions.append(Intention(project_id="p2", date=d, planned_minutes=120))
-            beats.append(
-                Beat(
-                    id=f"o{i}",
-                    project_id="p2",
-                    start=self._at(d, 9),
-                    end=self._at(d, 10),
-                )
-            )
-        # p3: planned 60m × 3 days, actual 60m × 3 → 100%
-        for i in range(3):
-            d = today - timedelta(days=i + 20)
-            intentions.append(Intention(project_id="p3", date=d, planned_minutes=60))
-            beats.append(
-                Beat(
-                    id=f"a{i}",
-                    project_id="p3",
-                    start=self._at(d, 9),
-                    end=self._at(d, 10),
-                )
-            )
-        projects = [
-            _project("p1", "Under"),
-            _project("p2", "Over"),
-            _project("p3", "Spot"),
-        ]
-        svc = _intel_service(beats=beats, intentions=intentions, projects=projects)
-        result = await svc.get_estimation_accuracy()
-
-        by_pid = {r["project_id"]: r for r in result}
-        assert by_pid["p1"]["bias"] == "underestimate"
-        assert by_pid["p1"]["accuracy_pct"] == 200.0
-        assert by_pid["p2"]["bias"] == "overestimate"
-        assert by_pid["p2"]["accuracy_pct"] == 50.0
-        assert by_pid["p3"]["bias"] == "accurate"
-        assert by_pid["p3"]["accuracy_pct"] == 100.0
-
-        # Sort: most-biased (largest |accuracy-100|) first.
-        # |200-100|=100, |50-100|=50, |100-100|=0
-        assert [r["project_id"] for r in result] == ["p1", "p2", "p3"]
-
-
 class TestGetProjectHealth:
     """get_project_health surfaces stale projects and downward
     weekly trends. Two alert paths:
@@ -3301,13 +2719,157 @@ class _FakeProjectRepoForServices:
         return [p for p in self._projects if p.archived == archived]
 
 
-def _timer_service(*, beats: list[Beat] | None = None, projects: list[Project] | None = None):
+class _FakeFlowRepo:
+    """In-memory FlowWindowRepository fake. list_by_range returns windows
+    whose window_start falls within [start, end], matching the real Mongo
+    query's boundary semantics."""
+
+    def __init__(self, windows=None):
+        self._windows = list(windows or [])
+
+    async def create(self, window):
+        self._windows.append(window)
+        return window
+
+    async def list_by_range(
+        self,
+        start,
+        end,
+        project_id=None,
+        editor_repo=None,
+        editor_language=None,
+        bundle_id=None,
+        dominant_category=None,
+    ):
+        return [w for w in self._windows if start <= w.window_start <= end]
+
+
+def _flow_win(start: datetime, *, minutes: int = 5, repo=None, language=None):
+    from beats.domain.models import FlowWindow
+
+    return FlowWindow(
+        device_id="dev-1",
+        window_start=start,
+        window_end=start + timedelta(minutes=minutes),
+        flow_score=0.8,
+        editor_repo=repo,
+        editor_language=language,
+    )
+
+
+def _timer_service(
+    *,
+    beats: list[Beat] | None = None,
+    projects: list[Project] | None = None,
+    flow_windows=None,
+):
     from beats.domain.services import TimerService
 
     return TimerService(
         beat_repo=_FakeBeatRepoForServices(beats),
         project_repo=_FakeProjectRepoForServices(projects),
+        flow_repo=_FakeFlowRepo(flow_windows) if flow_windows is not None else None,
     )
+
+
+class TestDeriveFlowTags:
+    """derive_flow_tags turns the daemon's flow-window signals into session
+    tags — the app takes no manual tag input. Repos come first (more
+    specific), then languages; both deduped, basename'd, lowercased, capped."""
+
+    async def test_repos_before_languages_deduped(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        repo = _FakeFlowRepo(
+            [
+                _flow_win(start, repo="/home/me/beats", language="Python"),
+                _flow_win(start + timedelta(minutes=6), repo="/home/me/beats", language="Python"),
+            ]
+        )
+        tags = await derive_flow_tags(repo, start, start + timedelta(minutes=30))
+        assert tags == ["beats", "python"]
+
+    async def test_basename_lowercase_and_owner_repo_form(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        repo = _FakeFlowRepo(
+            [
+                _flow_win(start, repo="acme/Widgets", language="TypeScript"),
+                _flow_win(start + timedelta(minutes=6), repo=None, language="Go"),
+            ]
+        )
+        tags = await derive_flow_tags(repo, start, start + timedelta(minutes=30))
+        assert tags == ["Widgets", "typescript", "go"]
+
+    async def test_no_end_returns_empty(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        repo = _FakeFlowRepo([_flow_win(start, repo="beats", language="Python")])
+        assert await derive_flow_tags(repo, start, None) == []
+
+    async def test_caps_at_six(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        windows = [
+            _flow_win(start + timedelta(minutes=i), repo=f"repo{i}", language=f"lang{i}")
+            for i in range(10)
+        ]
+        tags = await derive_flow_tags(_FakeFlowRepo(windows), start, start + timedelta(hours=1))
+        assert len(tags) == 6
+
+    async def test_stop_timer_autotags_beat(self):
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        active = Beat(id="b1", project_id="p1", start=start, end=None)
+        svc = _timer_service(
+            beats=[active],
+            projects=[_project("p1", "Alpha")],
+            flow_windows=[_flow_win(start + timedelta(minutes=5), repo="beats", language="Python")],
+        )
+        stopped = await svc.stop_timer(end_time=start + timedelta(minutes=30))
+        assert stopped.tags == ["beats", "python"]
+
+
+class TestSummarizeFlow:
+    """summarize_flow reduces daemon flow windows to a coach headline:
+    count/avg/peak + top repo (basename) and top language, excluding
+    drift (flow_score=0) events from the average."""
+
+    def test_none_for_empty_or_all_drift(self):
+        from beats.domain.flow import summarize_flow
+        from beats.domain.models import FlowWindow
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        assert summarize_flow([]) is None
+        # flow_score=0 windows are drift markers — excluded, so all-drift -> None
+        drift = FlowWindow(
+            device_id="d",
+            window_start=start,
+            window_end=start + timedelta(minutes=5),
+            flow_score=0.0,
+            dominant_category="drift",
+        )
+        assert summarize_flow([drift]) is None
+
+    def test_aggregates_and_basenames_top_repo(self):
+        from beats.domain.flow import summarize_flow
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        windows = [
+            _flow_win(start, repo="/home/me/beats", language="Python"),
+            _flow_win(start + timedelta(minutes=6), repo="/home/me/beats", language="Python"),
+            _flow_win(start + timedelta(minutes=12), repo="acme/widgets", language="Go"),
+        ]
+        fs = summarize_flow(windows)
+        assert fs is not None
+        assert fs.count == 3
+        assert fs.top_repo == "beats"  # basename, most frequent
+        assert fs.top_language == "python"
+        assert 0.0 < fs.avg_score <= 1.0
+        assert fs.peak_score == 0.8
 
 
 class TestTimerServiceStart:
@@ -4081,7 +3643,6 @@ class TestExportSqlite:
                     "user_id": "u1",
                     "name": "Alpha",
                     "description": "main project",
-                    "estimation": "small",
                     "color": "#ff0000",
                     "archived": False,
                     "weekly_goal": 5.0,
@@ -4098,25 +3659,6 @@ class TestExportSqlite:
                     "end": "2026-04-01T10:00:00+00:00",
                     "note": "deep work",
                     "tags": ["focus", "morning"],
-                }
-            ],
-            "intentions": [
-                {
-                    "id": "i1",
-                    "user_id": "u1",
-                    "project_id": "p1",
-                    "date": "2026-04-01",
-                    "planned_minutes": 90,
-                    "completed": True,
-                }
-            ],
-            "daily_notes": [
-                {
-                    "id": "n1",
-                    "user_id": "u1",
-                    "date": "2026-04-01",
-                    "note": "good day",
-                    "mood": 4,
                 }
             ],
         }
@@ -4156,19 +3698,19 @@ class TestExportSqlite:
         assert len(out) > 1024  # minimum meaningful db size
 
     def test_empty_payload_still_produces_valid_db_with_schema(self):
-        """An empty export must still create the four tables —
-        otherwise opening the bundle with sqlite3 would error.
-        Pin the schema-always-applied invariant."""
+        """An empty export must still create the tables — otherwise
+        opening the bundle with sqlite3 would error. Pin the
+        schema-always-applied invariant."""
         from beats.domain.export_sqlite import (
             ExportPayload,
             build_sqlite_bytes,
         )
 
-        empty = ExportPayload(projects=[], beats=[], intentions=[], daily_notes=[])
+        empty = ExportPayload(projects=[], beats=[])
         out = build_sqlite_bytes(empty)
         tables = self._query(out, "SELECT name FROM sqlite_master WHERE type='table'")
         names = {row[0] for row in tables}
-        assert {"projects", "beats", "intentions", "daily_notes"}.issubset(names)
+        assert {"projects", "beats"}.issubset(names)
 
     def test_projects_typed_columns_round_trip(self):
         """Project columns map to typed SQLite columns. Pin the
@@ -4230,16 +3772,6 @@ class TestExportSqlite:
         rows = self._query(out, "SELECT tags FROM beats WHERE id = 'bN'")
         assert json.loads(rows[0][0]) == []
 
-    def test_intentions_completed_serialized_as_int(self):
-        """completed bool → 0/1 mirrors the archived treatment.
-        Pin both projects.archived and intentions.completed lambdas
-        — easy to slip if one is updated and the other isn't."""
-        from beats.domain.export_sqlite import build_sqlite_bytes
-
-        out = build_sqlite_bytes(self._payload())
-        rows = self._query(out, "SELECT id, planned_minutes, completed FROM intentions")
-        assert rows == [("i1", 90, 1)]
-
     def test_data_column_holds_full_row_json(self):
         """Every table has a `data` column containing the original
         dict serialized as JSON — the self-describing escape hatch
@@ -4259,10 +3791,9 @@ class TestExportSqlite:
     # ---------------- build_manifest ----------------
 
     def test_manifest_has_version_counts_and_hash(self):
-        """Manifest shape: {version, counts: {projects, beats,
-        intentions, daily_notes}, sqlite_sha256}. Pin the keys —
-        signed bundles outlive the code that wrote them, so the
-        format is a long-term contract."""
+        """Manifest shape: {version, counts: {projects, beats},
+        sqlite_sha256}. Pin the keys — signed bundles outlive the code
+        that wrote them, so the format is a long-term contract."""
         from beats.domain.export_sqlite import (
             build_manifest,
             build_sqlite_bytes,
@@ -4275,8 +3806,6 @@ class TestExportSqlite:
         assert manifest["counts"] == {
             "projects": 1,
             "beats": 1,
-            "intentions": 1,
-            "daily_notes": 1,
         }
         # sha256 hex is 64 chars
         assert len(manifest["sqlite_sha256"]) == 64
@@ -5828,110 +5357,6 @@ class TestDetectChronotype:
         result = detect_chronotype(windows)
         assert len(result) == 1
         assert result[0].data["label"] == "evening"
-
-
-# =============================================================================
-# Biometric correlations — Pearson HRV/sleep × mood
-# =============================================================================
-
-
-def _bio_day(d: date, *, hrv: float | None = None, sleep_min: int | None = None):
-    from beats.domain.models import BiometricDay
-
-    return BiometricDay(date=d, source="oura", hrv_ms=hrv, sleep_minutes=sleep_min)
-
-
-def _note(d: date, mood: int):
-    from beats.domain.models import DailyNote
-
-    return DailyNote(date=d, mood=mood)
-
-
-class TestDetectBiometricCorrelations:
-    """Pearson r between HRV/sleep and mood. Threshold |r| ≥ 0.4
-    (stricter than project-level correlation's 0.3 — biometrics
-    are more sensitive to noise)."""
-
-    def test_empty_returns_no_cards(self):
-        from beats.domain.intelligence import detect_biometric_correlations
-
-        assert detect_biometric_correlations([], []) == []
-
-    def test_below_7_pairs_returns_no_cards(self):
-        """_pearson_r returns 0.0 below 7 pairs. Pin so a tiny
-        sample doesn't produce a confident r."""
-        from beats.domain.intelligence import detect_biometric_correlations
-
-        bio = []
-        notes = []
-        for i in range(6):
-            d = date(2026, 4, 1) + timedelta(days=i)
-            bio.append(_bio_day(d, hrv=40 + i * 5))
-            notes.append(_note(d, mood=1 + i % 5))
-        assert detect_biometric_correlations(bio, notes) == []
-
-    def test_strong_hrv_mood_correlation_emits_card(self):
-        """≥7 pairs with HRV monotonic alongside mood → r > 0.4 →
-        card. Pin body framing + r/n values."""
-        from beats.domain.intelligence import detect_biometric_correlations
-
-        bio = []
-        notes = []
-        for i in range(10):
-            d = date(2026, 4, 1) + timedelta(days=i)
-            bio.append(_bio_day(d, hrv=30 + i * 5))
-            notes.append(_note(d, mood=(i % 5) + 1))
-        result = detect_biometric_correlations(bio, notes)
-        hrv_cards = [c for c in result if c.type == "hrv_mood_correlation"]
-        if hrv_cards:
-            card = hrv_cards[0]
-            assert "higher" in card.body.lower() or "lower" in card.body.lower()
-            assert card.data["n"] == 10
-            assert abs(card.data["r"]) >= 0.4
-
-    def test_strong_sleep_mood_correlation_emits_card(self):
-        from beats.domain.intelligence import detect_biometric_correlations
-
-        bio = []
-        notes = []
-        for i in range(10):
-            d = date(2026, 4, 1) + timedelta(days=i)
-            bio.append(_bio_day(d, sleep_min=300 + i * 30))
-            notes.append(_note(d, mood=(i % 5) + 1))
-        result = detect_biometric_correlations(bio, notes)
-        sleep_cards = [c for c in result if c.type == "sleep_mood_correlation"]
-        if sleep_cards:
-            assert sleep_cards[0].data["n"] == 10
-            assert abs(sleep_cards[0].data["r"]) >= 0.4
-
-    def test_constant_x_yields_zero_r_no_card(self):
-        """Constant x → _pearson_r denom-zero → 0.0 → no card.
-        Pin so a stable-HRV user doesn't see a phantom
-        correlation card."""
-        from beats.domain.intelligence import detect_biometric_correlations
-
-        bio = []
-        notes = []
-        for i in range(10):
-            d = date(2026, 4, 1) + timedelta(days=i)
-            bio.append(_bio_day(d, hrv=40, sleep_min=420))
-            notes.append(_note(d, mood=1 + i % 5))
-        assert detect_biometric_correlations(bio, notes) == []
-
-    def test_pairs_only_built_for_dates_with_both_signals(self):
-        """A bio_day on a date without a mood note → not paired.
-        Pin the join semantics so a partial day doesn't pull a
-        phantom value into the regression."""
-        from beats.domain.intelligence import detect_biometric_correlations
-
-        bio = [_bio_day(date(2026, 4, 1) + timedelta(days=i), hrv=40) for i in range(10)]
-        notes = [
-            _note(date(2026, 4, 1), mood=4),
-            _note(date(2026, 4, 2), mood=3),
-            _note(date(2026, 4, 3), mood=5),
-        ]
-        # Only 3 pairs < 7 → no card
-        assert detect_biometric_correlations(bio, notes) == []
 
 
 # =============================================================================

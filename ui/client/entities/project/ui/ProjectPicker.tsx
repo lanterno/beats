@@ -1,9 +1,9 @@
 /**
  * ProjectPicker — the one project-choice primitive.
  *
- * Replaces the seven ad-hoc project pickers across the app (native <select>s
- * in SidebarTimer / QuickLog / TodaysPlan / RecurringIntentions / Insights
- * filter, the bespoke ProjectSelector on the homepage). Every consumer gets
+ * Replaces the ad-hoc project pickers across the app (native <select>s
+ * in SidebarTimer / QuickLog / Insights filter, the bespoke ProjectSelector
+ * on the homepage). Every consumer gets
  * the same search, archive filtering, recents-on-top, keyboard nav, and
  * color context for free.
  *

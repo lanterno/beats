@@ -24,13 +24,11 @@ from beats.api.routers.beats import router as beats_router
 from beats.api.routers.biometrics import router as biometrics_router
 from beats.api.routers.calendar import router as calendar_router
 from beats.api.routers.coach import router as coach_router
-from beats.api.routers.daily_notes import router as daily_notes_router
 from beats.api.routers.device import router as device_router
 from beats.api.routers.export import router as export_router
 from beats.api.routers.fitbit import router as fitbit_router
 from beats.api.routers.github import router as github_router
 from beats.api.routers.intelligence import router as intelligence_router
-from beats.api.routers.intentions import router as intentions_router
 from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
@@ -65,9 +63,6 @@ DEVICE_ALLOWED_PREFIXES = (
     # an optional note + tags via PUT /api/beats/.
     "/api/beats",
     "/api/coach/brief",
-    "/api/coach/review",
-    "/api/intentions",
-    "/api/daily-notes",
     # Companion timer screen renders today/week totals + streak from the heatmap.
     # Other /api/analytics/* endpoints remain off-limits.
     "/api/analytics/heatmap",
@@ -221,8 +216,6 @@ app.include_router(projects_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)
-app.include_router(intentions_router)
-app.include_router(daily_notes_router)
 app.include_router(device_router)
 app.include_router(export_router)
 app.include_router(intelligence_router)

@@ -15,7 +15,7 @@ src/beats/
 │   ├── schemas.py    Request/response Pydantic models
 │   └── dependencies.py
 ├── domain/       Business logic + models (no framework deps)
-│   ├── models.py        Pydantic domain models (Beat, Project, Intention, …)
+│   ├── models.py        Pydantic domain models (Beat, Project, WeeklyPlan, …)
 │   ├── exceptions.py    DomainException hierarchy → unified envelope
 │   ├── services.py      TimerService, ProjectService, BeatService
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
@@ -27,8 +27,8 @@ src/beats/
 │   ├── export_sqlite.py Encrypted SQLite export bundle
 │   ├── export_signing.py Signing/verification for export bundles
 │   └── utils.py         Date helpers (week-of, ISO conversion)
-├── coach/        AI coach — streaming chat, brief generation, EOD reviews
-│   ├── chat.py, gateway.py, context.py, tools.py, review.py, memory.py, …
+├── coach/        AI coach — streaming chat, brief generation, memory
+│   ├── chat.py, gateway.py, context.py, tools.py, memory.py, …
 ├── infrastructure/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
 │   ├── repositories.py  Abstract + MongoDB repo implementations

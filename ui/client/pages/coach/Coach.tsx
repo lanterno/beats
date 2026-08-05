@@ -2,18 +2,16 @@
  * Coach page — AI chat with streaming + tool-use visualization.
  */
 
-import { Brain, Loader2, MessageCircle, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
+import { Brain, Loader2, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ChatMessage, useCoachChat } from "@/entities/coach";
 import { cn } from "@/shared/lib";
 import { CoachMemoryDialog } from "./CoachMemoryDialog";
-import { ReviewFlow } from "./ReviewFlow";
 
 export default function Coach() {
 	const { messages, streaming, currentTool, loadingHistory, sendMessage, stop, reset } =
 		useCoachChat();
 	const [input, setInput] = useState("");
-	const [reviewOpen, setReviewOpen] = useState(false);
 	const [memoryOpen, setMemoryOpen] = useState(false);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -62,14 +60,6 @@ export default function Coach() {
 						title="Coach memory"
 					>
 						<Brain className="w-4 h-4" />
-					</button>
-					<button
-						type="button"
-						onClick={() => setReviewOpen(true)}
-						className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
-						title="End-of-day review"
-					>
-						<MessageCircle className="w-4 h-4" />
 					</button>
 					{messages.length > 0 && (
 						<button
@@ -154,7 +144,6 @@ export default function Coach() {
 					)}
 				</div>
 			</div>
-			<ReviewFlow open={reviewOpen} onClose={() => setReviewOpen(false)} />
 			<CoachMemoryDialog open={memoryOpen} onClose={() => setMemoryOpen(false)} />
 		</div>
 	);

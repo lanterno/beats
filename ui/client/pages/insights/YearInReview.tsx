@@ -8,7 +8,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, Copy } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { fetchBeats, sessionKeys, toSession, useHeatmap } from "@/entities/session";

@@ -1,4 +1,4 @@
-"""Coach API router — briefs, chat, reviews, usage, and memory."""
+"""Coach API router — briefs, chat, usage, and memory."""
 
 from __future__ import annotations
 
@@ -21,9 +21,7 @@ from beats.coach.repos import (
     COACH_MEMORY_COLLECTION,
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
-    REVIEW_ANSWERS_COLLECTION,
 )
-from beats.coach.review import generate_review_questions, get_review, save_answer
 from beats.coach.usage import BudgetExceeded, UsageTracker
 from beats.infrastructure.database import Database
 from beats.settings import settings
@@ -77,23 +75,6 @@ class ChatMessageResponse(BaseModel):
     content: str
     tool_calls: list[dict] | None = None
     created_at: datetime
-
-
-class ReviewQuestionResponse(BaseModel):
-    question: str
-    derived_from: dict | None = None
-
-
-class ReviewResponse(BaseModel):
-    date: str
-    questions: list[ReviewQuestionResponse]
-    answers: list[dict | None] = []
-
-
-class ReviewAnswerRequest(BaseModel):
-    date: str
-    question_index: int
-    answer: str
 
 
 class MemoryResponse(BaseModel):
@@ -255,68 +236,6 @@ async def get_usage(
     )
 
 
-# ── Reviews ──────────────────────────────────────────────────────────
-
-
-@router.post("/review/start", response_model=ReviewResponse)
-async def start_review(user_id: CurrentUserId, tz: TimezoneDep):
-    """Generate 3 end-of-day review questions from today's data."""
-    # Resolve the local day once so the generate and the immediate read-back
-    # below key on the same date even if the clock crosses local midnight
-    # between the two calls.
-    today = datetime.now(tz).date()
-    try:
-        await generate_review_questions(user_id, target_date=today, tz=tz)
-    except BudgetExceeded as exc:
-        raise HTTPException(
-            status_code=429,
-            detail={"code": "BUDGET_EXCEEDED", "message": str(exc)},
-        ) from exc
-    except Exception as exc:
-        logger.exception("Review generation failed for user=%s", user_id)
-        raise HTTPException(
-            status_code=502,
-            detail="Review generation failed — the coach is resting.",
-        ) from exc
-
-    doc = await get_review(user_id, target_date=today, tz=tz)
-    if not doc:
-        raise HTTPException(status_code=500, detail="Review not found after generation")
-    return ReviewResponse(
-        date=doc["date"],
-        questions=[ReviewQuestionResponse(**q) for q in doc.get("questions", [])],
-        answers=doc.get("answers", []),
-    )
-
-
-@router.post("/review/answer")
-async def answer_review(user_id: CurrentUserId, request: ReviewAnswerRequest):
-    """Save an answer to a review question."""
-    try:
-        target = date.fromisoformat(request.date)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "INVALID_DATE", "message": str(exc)},
-        ) from exc
-
-    await save_answer(user_id, target, request.question_index, request.answer)
-    return {"status": "ok"}
-
-
-@router.get("/review/today", response_model=ReviewResponse | None)
-async def get_today_review(user_id: CurrentUserId, tz: TimezoneDep):
-    """Get today's review if it exists."""
-    doc = await get_review(user_id, tz=tz)
-    if not doc:
-        return None
-    return ReviewResponse(
-        date=doc["date"],
-        questions=[ReviewQuestionResponse(**q) for q in doc.get("questions", [])],
-        answers=doc.get("answers", []),
-    )
-
-
 # ── Memory ───────────────────────────────────────────────────────────
 
 
@@ -343,13 +262,12 @@ async def delete_memory(user_id: CurrentUserId):
 
 @router.delete("/data")
 async def delete_all_coach_data(user_id: CurrentUserId):
-    """Delete ALL coach data for this user: memory, briefs, reviews,
+    """Delete ALL coach data for this user: memory, briefs,
     conversations, and usage logs. Irreversible."""
     db = Database.get_db()
     for col_name in [
         COACH_MEMORY_COLLECTION,
         DAILY_BRIEFS_COLLECTION,
-        REVIEW_ANSWERS_COLLECTION,
         COACH_CONVERSATIONS_COLLECTION,
         LLM_USAGE_COLLECTION,
     ]:
@@ -363,7 +281,7 @@ async def rewrite_memory(user_id: CurrentUserId):
     try:
         content = await rewrite_coach_memory(user_id)
     except BudgetExceeded as exc:
-        # Match the brief / review branches: explicit BUDGET_EXCEEDED
+        # Match the brief branch: explicit BUDGET_EXCEEDED
         # code so clients can render "monthly LLM budget reached"
         # rather than the generic RATE_LIMITED that the bare-string
         # detail used to map to.

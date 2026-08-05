@@ -18,7 +18,6 @@ interface GoalOverridePopoverProps {
 		weeklyGoal: number | null;
 		goalType: "target" | "cap";
 		scope: "week" | "permanent";
-		note: string;
 	}) => void;
 	/** Called to remove existing override */
 	onRemove: () => void;
@@ -37,7 +36,6 @@ export function GoalOverridePopover({
 	const [hours, setHours] = useState(currentGoal != null ? String(currentGoal) : "");
 	const [goalType, setGoalType] = useState<"target" | "cap">(currentGoalType);
 	const [scope, setScope] = useState<"week" | "permanent">("week");
-	const [note, setNote] = useState("");
 	const [noGoal, setNoGoal] = useState(existingOverrideIsNull);
 	const ref = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -56,12 +54,12 @@ export function GoalOverridePopover({
 
 	const handleSave = () => {
 		if (noGoal) {
-			onSave({ weeklyGoal: null, goalType, scope, note });
+			onSave({ weeklyGoal: null, goalType, scope });
 			return;
 		}
 		const val = Number.parseFloat(hours);
 		if (Number.isNaN(val) || val <= 0) return;
-		onSave({ weeklyGoal: val, goalType, scope, note });
+		onSave({ weeklyGoal: val, goalType, scope });
 	};
 
 	return (
@@ -175,18 +173,6 @@ export function GoalOverridePopover({
 					For lasting changes, edit the default weekly goal in Settings.
 				</p>
 			)}
-
-			<input
-				type="text"
-				value={note}
-				onChange={(e) => setNote(e.target.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter") handleSave();
-					if (e.key === "Escape") onClose();
-				}}
-				placeholder="Reason (optional)"
-				className="w-full text-xs bg-secondary/50 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-accent mb-2"
-			/>
 
 			<div className="flex gap-1">
 				<button

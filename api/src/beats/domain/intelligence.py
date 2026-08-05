@@ -1,18 +1,15 @@
 """Intelligence service — productivity scoring, pattern detection, and smart suggestions."""
 
-import math
 import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
-from beats.domain.models import Beat, BiometricDay, FlowWindow, InsightCard, WeeklyDigest
+from beats.domain.models import Beat, FlowWindow, InsightCard, WeeklyDigest
 from beats.domain.utils import local_date, local_dt
 from beats.infrastructure.repositories import (
     BeatRepository,
-    DailyNoteRepository,
-    IntentionRepository,
     ProjectRepository,
 )
 
@@ -31,6 +28,15 @@ def _format_hours(minutes: float) -> str:
     return f"{int(minutes)}m"
 
 
+def _rescale_score(consistency: float, goals: float, quality: float) -> int:
+    """Combine the three 0-25 components into a 0-100 productivity score.
+
+    Each component maxes at 25 (sum ≤ 75); the ``* 4 / 3`` stretches that to
+    0-100, clamped. Single source of truth for the live score, its weekly
+    history, and the digest (which passes a neutral goals=13)."""
+    return min(100, round((consistency + goals + quality) * 4 / 3))
+
+
 class IntelligenceService:
     """Service for computing productivity insights and patterns."""
 
@@ -38,13 +44,9 @@ class IntelligenceService:
         self,
         beat_repo: BeatRepository,
         project_repo: ProjectRepository,
-        intention_repo: IntentionRepository,
-        daily_note_repo: DailyNoteRepository,
     ):
         self.beat_repo = beat_repo
         self.project_repo = project_repo
-        self.intention_repo = intention_repo
-        self.daily_note_repo = daily_note_repo
 
     # =========================================================================
     # Productivity Score
@@ -61,7 +63,6 @@ class IntelligenceService:
         beats = await self.beat_repo.list_completed_in_range(
             range_start - timedelta(days=1), today + timedelta(days=1)
         )
-        intentions = await self.intention_repo.list_by_date_range(range_start, today)
         projects = await self.project_repo.list(archived=False)
 
         # 1. Consistency (0-25): weekdays tracked in last 5 weekdays
@@ -76,14 +77,7 @@ class IntelligenceService:
         weekdays_tracked = sum(1 for d in weekdays if d in tracked_dates)
         consistency = round(weekdays_tracked / max(len(weekdays), 1) * 25)
 
-        # 2. Intention completion (0-25)
-        if intentions:
-            completed = sum(1 for i in intentions if i.completed)
-            intention_score = round(completed / len(intentions) * 25)
-        else:
-            intention_score = 13  # neutral
-
-        # 3. Goal progress (0-25)
+        # 2. Goal progress (0-25)
         goal_projects = [p for p in projects if p.weekly_goal]
         if goal_projects:
             # Sum hours per project this week
@@ -102,7 +96,7 @@ class IntelligenceService:
         else:
             goal_score = 13  # neutral
 
-        # 4. Session quality (0-25)
+        # 3. Session quality (0-25)
         durations = [b.duration.total_seconds() / 60 for b in beats]
         if durations:
             med = median(durations)
@@ -135,12 +129,11 @@ class IntelligenceService:
         else:
             quality_score = 0
 
-        total = min(100, consistency + intention_score + goal_score + quality_score)
+        total = _rescale_score(consistency, goal_score, quality_score)
         return {
             "score": total,
             "components": {
                 "consistency": consistency,
-                "intentions": intention_score,
                 "goals": goal_score,
                 "quality": quality_score,
             },
@@ -157,7 +150,6 @@ class IntelligenceService:
         # Load all data for the full range
         range_start = current_monday - timedelta(weeks=weeks)
         all_beats = await self.beat_repo.list_completed_in_range(range_start, today)
-        all_intentions = await self.intention_repo.list_by_date_range(range_start, today)
         projects = await self.project_repo.list(archived=False)
         goal_projects = [p for p in projects if p.weekly_goal]
 
@@ -166,18 +158,11 @@ class IntelligenceService:
             sunday = monday + timedelta(days=6)
 
             week_beats = [b for b in all_beats if monday <= local_date(b.start, tz) <= sunday]
-            week_intentions = [i for i in all_intentions if monday <= i.date <= sunday]
 
             # Simplified score for history
             tracked_dates = {local_date(b.start, tz) for b in week_beats}
             weekdays = [monday + timedelta(days=d) for d in range(5)]
             consistency = round(sum(1 for d in weekdays if d in tracked_dates) / 5 * 25)
-
-            if week_intentions:
-                completed = sum(1 for i in week_intentions if i.completed)
-                intent_score = round(completed / len(week_intentions) * 25)
-            else:
-                intent_score = 13
 
             project_hours: dict[str, float] = defaultdict(float)
             for b in week_beats:
@@ -208,7 +193,7 @@ class IntelligenceService:
             else:
                 quality = 0
 
-            score = min(100, consistency + intent_score + goal_s + quality)
+            score = _rescale_score(consistency, goal_s, quality)
             history.append({"week_of": monday.isoformat(), "score": score})
 
         return history
@@ -327,7 +312,10 @@ class IntelligenceService:
                 quality = 23
             else:
                 quality = 25
-        score = min(100, consistency + 13 + 13 + quality)  # neutral for intentions/goals
+        # Simplified digest score: goals held at a neutral 13 (unlike the live
+        # productivity score, which computes real weekly goal progress),
+        # consistency + quality from this week's sessions, rescaled to 0-100.
+        score = _rescale_score(consistency, 13, quality)
 
         return WeeklyDigest(
             week_of=week_monday,
@@ -402,16 +390,11 @@ class IntelligenceService:
             range_start - timedelta(days=1), today + timedelta(days=1)
         )
         projects = await self.project_repo.list(archived=False)
-        project_map = {p.id: p for p in projects}
-        notes = await self.daily_note_repo.list_by_date_range(range_start, today)
-        intentions = await self.intention_repo.list_by_date_range(range_start, today)
 
         insights.extend(self._detect_day_pattern(beats, today, tz))
         insights.extend(self._detect_peak_hours(beats, tz))
         insights.extend(self._detect_stale_projects(beats, projects, today, tz))
-        insights.extend(self._detect_mood_correlation(beats, notes, tz))
         insights.extend(self._detect_session_trend(beats, today, tz))
-        insights.extend(self._detect_estimation_bias(beats, intentions, project_map, tz))
         insights.extend(self._detect_goal_pacing(beats, projects, today, tz))
 
         insights.sort(key=lambda x: -x.priority)
@@ -520,73 +503,6 @@ class IntelligenceService:
                 )
         return results
 
-    def _detect_mood_correlation(
-        self, beats: list[Beat], notes: list, tz: ZoneInfo = UTC_TZ
-    ) -> list[InsightCard]:
-        """Correlate mood scores with daily tracked hours."""
-        mood_data = [n for n in notes if n.mood is not None]
-        if len(mood_data) < 10:
-            return []
-
-        date_hours: dict[date, float] = defaultdict(float)
-        for b in beats:
-            date_hours[local_date(b.start, tz)] += b.duration.total_seconds() / 3600
-
-        pairs = []
-        for n in mood_data:
-            hrs = date_hours.get(n.date, 0)
-            pairs.append((n.mood, hrs))
-
-        if len(pairs) < 10:
-            return []
-
-        # Pearson correlation
-        n_pairs = len(pairs)
-        sum_x = sum(p[0] for p in pairs)
-        sum_y = sum(p[1] for p in pairs)
-        sum_xy = sum(p[0] * p[1] for p in pairs)
-        sum_x2 = sum(p[0] ** 2 for p in pairs)
-        sum_y2 = sum(p[1] ** 2 for p in pairs)
-        denom = math.sqrt((n_pairs * sum_x2 - sum_x**2) * (n_pairs * sum_y2 - sum_y**2))
-        if denom == 0:
-            return []
-        r = (n_pairs * sum_xy - sum_x * sum_y) / denom
-
-        if abs(r) < 0.3:
-            return []
-
-        # Compute averages for high vs low mood
-        high = [h for m, h in pairs if m >= 4]
-        low = [h for m, h in pairs if m <= 2]
-        high_avg = sum(high) / len(high) if high else 0
-        low_avg = sum(low) / len(low) if low else 0
-
-        if r > 0:
-            body = (
-                f"On days you rate mood 4+, you average {high_avg:.1f}h tracked "
-                f"vs {low_avg:.1f}h on mood 2 or below. More work, better mood — or vice versa."
-            )
-        else:
-            body = (
-                f"On lighter days ({low_avg:.1f}h), your mood tends higher. "
-                f"Heavy days ({high_avg:.1f}h) correlate with lower mood scores."
-            )
-
-        return [
-            InsightCard(
-                id=str(uuid.uuid4()),
-                type="mood_correlation",
-                title="Mood and productivity are linked",
-                body=body,
-                data={
-                    "r": round(r, 2),
-                    "high_mood_avg_hours": round(high_avg, 1),
-                    "low_mood_avg_hours": round(low_avg, 1),
-                },
-                priority=2,
-            )
-        ]
-
     def _detect_session_trend(
         self, beats: list[Beat], today: date, tz: ZoneInfo = UTC_TZ
     ) -> list[InsightCard]:
@@ -622,64 +538,6 @@ class IntelligenceService:
                 priority=2,
             )
         ]
-
-    def _detect_estimation_bias(
-        self, beats: list[Beat], intentions: list, project_map: dict, tz: ZoneInfo = UTC_TZ
-    ) -> list[InsightCard]:
-        """Check if planned vs actual shows consistent bias."""
-        # Group intentions and beats by (project, date)
-        planned: dict[tuple[str, date], int] = {}
-        for i in intentions:
-            key = (i.project_id, i.date)
-            planned[key] = planned.get(key, 0) + i.planned_minutes
-
-        actual: dict[tuple[str, date], float] = defaultdict(float)
-        for b in beats:
-            key = (b.project_id, local_date(b.start, tz))
-            if key in planned:
-                actual[key] += b.duration.total_seconds() / 60
-
-        # Per-project accuracy
-        project_ratios: dict[str, list[float]] = defaultdict(list)
-        for key, plan_min in planned.items():
-            if plan_min > 0:
-                act_min = actual.get(key, 0)
-                project_ratios[key[0]].append(act_min / plan_min)
-
-        results = []
-        for pid, ratios in project_ratios.items():
-            if len(ratios) < 3:
-                continue
-            avg_ratio = sum(ratios) / len(ratios)
-            if avg_ratio < 0.8 or avg_ratio > 1.2:
-                p = project_map.get(pid)
-                name = p.name if p else "a project"
-                if avg_ratio > 1.2:
-                    pct = round((avg_ratio - 1) * 100)
-                    results.append(
-                        InsightCard(
-                            id=str(uuid.uuid4()),
-                            type="estimation_accuracy",
-                            title=f"You underestimate {name}",
-                            body=f"You consistently spend {pct}% more time on {name} than planned. "
-                            f"Consider budgeting more time.",
-                            data={"project_id": pid, "avg_ratio": round(avg_ratio, 2)},
-                            priority=3,
-                        )
-                    )
-                else:
-                    pct = round((1 - avg_ratio) * 100)
-                    results.append(
-                        InsightCard(
-                            id=str(uuid.uuid4()),
-                            type="estimation_accuracy",
-                            title=f"You overestimate {name}",
-                            body=f"You typically use only {100 - pct}% of planned time on {name}.",
-                            data={"project_id": pid, "avg_ratio": round(avg_ratio, 2)},
-                            priority=2,
-                        )
-                    )
-        return results
 
     def _detect_goal_pacing(
         self, beats: list[Beat], projects: list, today: date, tz: ZoneInfo = UTC_TZ
@@ -730,7 +588,7 @@ class IntelligenceService:
     # =========================================================================
 
     async def suggest_daily_plan(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
-        """Suggest up to 3 projects and durations for today's intentions."""
+        """Suggest up to 3 projects and durations to focus on today."""
         dow = target_date.weekday()
         monday = _monday_of(target_date)
 
@@ -928,134 +786,6 @@ class IntelligenceService:
         }
 
     # =========================================================================
-    # Mood-Productivity Correlation
-    # =========================================================================
-
-    async def get_mood_correlation(self, tz: ZoneInfo = UTC_TZ) -> dict:
-        """Compute mood trend and correlation with daily hours."""
-        today = datetime.now(tz).date()
-        range_start = today - timedelta(days=90)
-        notes = await self.daily_note_repo.list_by_date_range(range_start, today)
-        beats = await self.beat_repo.list_completed_in_range(range_start, today)
-
-        mood_notes = sorted([n for n in notes if n.mood is not None], key=lambda n: n.date)
-
-        date_hours: dict[date, float] = defaultdict(float)
-        date_sessions: dict[date, int] = defaultdict(int)
-        for b in beats:
-            d = local_date(b.start, tz)
-            date_hours[d] += b.duration.total_seconds() / 3600
-            date_sessions[d] += 1
-
-        # Mood trend (7-day rolling average)
-        mood_trend = []
-        for i, n in enumerate(mood_notes):
-            window = mood_notes[max(0, i - 6) : i + 1]
-            avg = sum(w.mood for w in window if w.mood) / len(window)
-            mood_trend.append({"date": n.date.isoformat(), "mood_avg": round(avg, 2)})
-
-        # Correlation
-        pairs = [(n.mood, date_hours.get(n.date, 0)) for n in mood_notes]
-
-        high = [h for m, h in pairs if m and m >= 4]
-        low = [h for m, h in pairs if m and m <= 2]
-
-        high_avg_hours = round(sum(high) / len(high), 1) if high else 0
-        low_avg_hours = round(sum(low) / len(low), 1) if low else 0
-
-        high_sessions = [date_sessions.get(n.date, 0) for n in mood_notes if n.mood and n.mood >= 4]
-        low_sessions = [date_sessions.get(n.date, 0) for n in mood_notes if n.mood and n.mood <= 2]
-
-        # Pearson r
-        r = 0.0
-        if len(pairs) >= 10:
-            n_p = len(pairs)
-            sx = sum(p[0] for p in pairs if p[0])
-            sy = sum(p[1] for p in pairs)
-            sxy = sum(p[0] * p[1] for p in pairs if p[0])
-            sx2 = sum(p[0] ** 2 for p in pairs if p[0])
-            sy2 = sum(p[1] ** 2 for p in pairs)
-            denom = math.sqrt((n_p * sx2 - sx**2) * (n_p * sy2 - sy**2))
-            if denom > 0:
-                r = (n_p * sxy - sx * sy) / denom
-
-        description = "positive" if r > 0.3 else "negative" if r < -0.3 else "neutral"
-
-        return {
-            "mood_trend": mood_trend,
-            "correlation": {"r": round(r, 2), "description": description},
-            "high_mood_avg_hours": high_avg_hours,
-            "low_mood_avg_hours": low_avg_hours,
-            "high_mood_avg_sessions": (
-                round(sum(high_sessions) / len(high_sessions), 1) if high_sessions else 0
-            ),
-            "low_mood_avg_sessions": (
-                round(sum(low_sessions) / len(low_sessions), 1) if low_sessions else 0
-            ),
-        }
-
-    # =========================================================================
-    # Estimation Accuracy
-    # =========================================================================
-
-    async def get_estimation_accuracy(self, tz: ZoneInfo = UTC_TZ) -> list[dict]:
-        """Compute per-project estimation accuracy from intentions vs actual time."""
-        today = datetime.now(tz).date()
-        range_start = today - timedelta(days=90)
-        intentions = await self.intention_repo.list_by_date_range(range_start, today)
-        beats = await self.beat_repo.list_completed_in_range(range_start, today)
-        projects = await self.project_repo.list(archived=False)
-        project_map = {p.id: p for p in projects}
-
-        # Planned per (project, date)
-        planned: dict[tuple[str, date], int] = defaultdict(int)
-        for i in intentions:
-            planned[(i.project_id, i.date)] += i.planned_minutes
-
-        # Actual per (project, date)
-        actual: dict[tuple[str, date], float] = defaultdict(float)
-        for b in beats:
-            key = (b.project_id, local_date(b.start, tz))
-            if key in planned:
-                actual[key] += b.duration.total_seconds() / 60
-
-        # Per-project aggregation
-        project_data: dict[str, dict] = defaultdict(lambda: {"planned": [], "actual": []})
-        for key, plan_min in planned.items():
-            pid = key[0]
-            act_min = actual.get(key, 0)
-            project_data[pid]["planned"].append(plan_min)
-            project_data[pid]["actual"].append(act_min)
-
-        results = []
-        for pid, data in project_data.items():
-            if len(data["planned"]) < 2:
-                continue
-            avg_planned = sum(data["planned"]) / len(data["planned"])
-            avg_actual = sum(data["actual"]) / len(data["actual"])
-            accuracy = round(avg_actual / avg_planned * 100, 1) if avg_planned > 0 else 0
-            if accuracy > 110:
-                bias = "underestimate"
-            elif accuracy < 90:
-                bias = "overestimate"
-            else:
-                bias = "accurate"
-            p = project_map.get(pid)
-            results.append(
-                {
-                    "project_id": pid,
-                    "project_name": p.name if p else "Unknown",
-                    "avg_planned_min": round(avg_planned, 1),
-                    "avg_actual_min": round(avg_actual, 1),
-                    "accuracy_pct": accuracy,
-                    "bias": bias,
-                }
-            )
-
-        results.sort(key=lambda x: abs(x["accuracy_pct"] - 100), reverse=True)
-        return results
-
-    # =========================================================================
     # Project Health
     # =========================================================================
 
@@ -1210,81 +940,3 @@ def detect_chronotype(flow_windows: list[FlowWindow]) -> list[InsightCard]:
             priority=4,
         )
     ]
-
-
-# =========================================================================
-# Biometric × Mood Correlation (Stage 4)
-# =========================================================================
-
-
-def _pearson_r(pairs: list[tuple[float, float]]) -> float:
-    """Compute Pearson correlation coefficient for a list of (x, y) pairs."""
-    n = len(pairs)
-    if n < 7:
-        return 0.0
-    sx = sum(p[0] for p in pairs)
-    sy = sum(p[1] for p in pairs)
-    sxy = sum(p[0] * p[1] for p in pairs)
-    sx2 = sum(p[0] ** 2 for p in pairs)
-    sy2 = sum(p[1] ** 2 for p in pairs)
-    denom = math.sqrt((n * sx2 - sx**2) * (n * sy2 - sy**2))
-    if denom == 0:
-        return 0.0
-    return (n * sxy - sx * sy) / denom
-
-
-def detect_biometric_correlations(
-    bio_days: list[BiometricDay],
-    notes: list,
-) -> list[InsightCard]:
-    """Detect correlations between biometric data and mood scores."""
-    insights: list[InsightCard] = []
-    mood_by_date = {n.date: n.mood for n in notes if n.mood is not None}
-
-    # HRV × mood
-    hrv_mood_pairs = [
-        (b.hrv_ms, float(mood_by_date[b.date]))
-        for b in bio_days
-        if b.hrv_ms is not None and b.date in mood_by_date
-    ]
-    r = _pearson_r(hrv_mood_pairs)
-    if abs(r) >= 0.4:
-        direction = "higher" if r > 0 else "lower"
-        insights.append(
-            InsightCard(
-                id=str(uuid.uuid4()),
-                type="hrv_mood_correlation",
-                title="HRV and mood are linked",
-                body=(
-                    f"Days with {direction} HRV tend to come with better mood scores (r={r:.2f}). "
-                    f"Your heart rate variability may be a useful recovery signal."
-                ),
-                data={"r": round(r, 2), "n": len(hrv_mood_pairs)},
-                priority=3,
-            )
-        )
-
-    # Sleep × mood
-    sleep_mood_pairs = [
-        (float(b.sleep_minutes), float(mood_by_date[b.date]))
-        for b in bio_days
-        if b.sleep_minutes is not None and b.date in mood_by_date
-    ]
-    r = _pearson_r(sleep_mood_pairs)
-    if abs(r) >= 0.4:
-        direction = "more" if r > 0 else "less"
-        insights.append(
-            InsightCard(
-                id=str(uuid.uuid4()),
-                type="sleep_mood_correlation",
-                title="Sleep and mood are connected",
-                body=(
-                    f"On days after {direction} sleep, your mood tends higher (r={r:.2f}). "
-                    f"Prioritizing sleep may directly improve how you feel."
-                ),
-                data={"r": round(r, 2), "n": len(sleep_mood_pairs)},
-                priority=3,
-            )
-        )
-
-    return insights

@@ -12,7 +12,40 @@ from beats.domain.exceptions import (
 )
 from beats.domain.models import Beat, Project
 from beats.domain.utils import normalize_tz
-from beats.infrastructure.repositories import BeatRepository, ProjectRepository
+from beats.infrastructure.repositories import (
+    BeatRepository,
+    FlowWindowRepository,
+    ProjectRepository,
+)
+
+# Cap on auto-derived tags per session — enough to capture the repos + languages
+# a focused session touches without turning the tag cloud into noise.
+_MAX_FLOW_TAGS = 6
+
+
+async def derive_flow_tags(
+    flow_repo: FlowWindowRepository, start: datetime, end: datetime | None
+) -> list[str]:
+    """Derive session tags from the ambient daemon's flow-window signals.
+
+    Replaces manual tagging (the app takes no free-text input): tags are the
+    distinct repos and editor languages the daemon observed while the session
+    ran, over [start, end]. Repos come first (more specific), then languages.
+    Best-effort — returns [] when the session has no end yet or no windows
+    overlap (e.g. the daemon wasn't running).
+    """
+    if end is None:
+        return []
+    windows = await flow_repo.list_by_range(start, end)
+    repos = [w.editor_repo.rstrip("/").split("/")[-1] for w in windows if w.editor_repo]
+    langs = [w.editor_language.strip().lower() for w in windows if w.editor_language]
+    seen: set[str] = set()
+    tags: list[str] = []
+    for tag in (*repos, *langs):
+        if tag and tag not in seen:
+            seen.add(tag)
+            tags.append(tag)
+    return tags[:_MAX_FLOW_TAGS]
 
 
 def _has_override_for_week(project: Project, week_monday: date) -> bool:
@@ -33,9 +66,15 @@ class TimerService:
     including validation that only one timer can run at a time.
     """
 
-    def __init__(self, beat_repo: BeatRepository, project_repo: ProjectRepository):
+    def __init__(
+        self,
+        beat_repo: BeatRepository,
+        project_repo: ProjectRepository,
+        flow_repo: FlowWindowRepository | None = None,
+    ):
         self.beat_repo = beat_repo
         self.project_repo = project_repo
+        self.flow_repo = flow_repo
 
     async def start_timer(self, project_id: str, start_time: datetime | None = None) -> Beat:
         """Start a new timer for a project.
@@ -95,6 +134,8 @@ class TimerService:
             raise InvalidEndTime()
 
         active.end = end
+        if self.flow_repo is not None:
+            active.tags = await derive_flow_tags(self.flow_repo, active.start, end)
         return await self.beat_repo.update(active)
 
     async def get_status(self) -> dict:
@@ -135,11 +176,14 @@ class TimerService:
 class BeatService:
     """Service for managing beat CRUD operations."""
 
-    def __init__(self, beat_repo: BeatRepository):
+    def __init__(self, beat_repo: BeatRepository, flow_repo: FlowWindowRepository | None = None):
         self.beat_repo = beat_repo
+        self.flow_repo = flow_repo
 
     async def create_beat(self, beat: Beat) -> Beat:
-        """Create a new beat."""
+        """Create a new beat, auto-tagging it from daemon flow signals."""
+        if self.flow_repo is not None and beat.end is not None:
+            beat.tags = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
         return await self.beat_repo.create(beat)
 
     async def get_beat(self, beat_id: str) -> Beat:
@@ -147,13 +191,25 @@ class BeatService:
         return await self.beat_repo.get_by_id(beat_id)
 
     async def update_beat(self, beat: Beat) -> Beat:
-        """Update an existing beat."""
+        """Update an existing beat, re-deriving tags from daemon flow signals.
+
+        If the daemon has no windows for the (possibly edited) range we keep the
+        beat's existing tags rather than wiping them — non-destructive for any
+        tags captured before this range was last touched.
+        """
         # Validate the beat can be stopped if end is being set
         if beat.end:
             start = normalize_tz(beat.start)
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        if self.flow_repo is not None and beat.end is not None:
+            derived = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
+            if derived:
+                beat.tags = derived
+            elif beat.id is not None:
+                existing = await self.beat_repo.get_by_id(beat.id)
+                beat.tags = existing.tags
         return await self.beat_repo.update(beat)
 
     async def delete_beat(self, beat_id: str) -> bool:

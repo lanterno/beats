@@ -5,7 +5,6 @@ import 'screens/coach_screen.dart';
 import 'screens/flow_screen.dart';
 import 'screens/health_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/intentions_screen.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/timer_screen.dart';
 import 'services/api_client.dart';
@@ -105,8 +104,8 @@ class _AppShellState extends State<AppShell> {
   ///   with the project id encoded in the payload — no screen ever
   ///   opens. A confirmation snackbar lands on whatever screen the user
   ///   is already on.
-  /// - Body taps on any other Beats notification (`brief`, `review`,
-  ///   `eod-mood`, plain `auto-timer:*`) route to the Coach tab.
+  /// - Body taps on any other Beats notification (`brief`, plain
+  ///   `auto-timer:*`) route to the Coach tab.
   Future<void> _initNotifications() async {
     final svc = NotificationsService.instance;
     await svc.init();
@@ -124,7 +123,7 @@ class _AppShellState extends State<AppShell> {
       // Route every coach-flavored payload to the Coach tab. Auto-timer
       // body taps also land here so the user sees the suggestion in
       // context if they ignore the Start button.
-      const coachTab = 3;
+      const coachTab = 2;
       setState(() => _currentTab = coachTab);
     });
 
@@ -178,7 +177,6 @@ class _AppShellState extends State<AppShell> {
     _poller = null;
     _notificationTaps?.cancel();
     _notificationTaps = null;
-    NotificationsService.instance.cancelEodMoodPrompt();
     setState(() {
       _paired = false;
       _client = null;
@@ -234,10 +232,9 @@ class _AppShellState extends State<AppShell> {
     switch (_currentTab) {
       case 0: return TimerScreen(client: _client!);
       case 1: return FlowScreen(client: _client!);
-      case 2: return IntentionsScreen(client: _client!);
-      case 3: return CoachScreen(client: _client!);
-      case 4: return HealthScreen(client: _client!);
-      case 5: return HomeScreen(onUnpaired: _onUnpaired);
+      case 2: return CoachScreen(client: _client!);
+      case 3: return HealthScreen(client: _client!);
+      case 4: return HomeScreen(onUnpaired: _onUnpaired);
       default: return TimerScreen(client: _client!);
     }
   }
@@ -253,7 +250,6 @@ class _BeatsNavBar extends StatelessWidget {
   static const _items = [
     (icon: Icons.timer_outlined, activeIcon: Icons.timer, label: 'Timer'),
     (icon: Icons.insights_outlined, activeIcon: Icons.insights, label: 'Flow'),
-    (icon: Icons.checklist_outlined, activeIcon: Icons.checklist, label: 'Plan'),
     (icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome, label: 'Coach'),
     (icon: Icons.monitor_heart_outlined, activeIcon: Icons.monitor_heart, label: 'Health'),
     (icon: Icons.tune_outlined, activeIcon: Icons.tune, label: 'Settings'),

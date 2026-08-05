@@ -5,7 +5,7 @@
 
 import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
@@ -42,7 +42,6 @@ import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
 import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
-import { ProjectIntentionStrip } from "./ProjectIntentionStrip";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
 
@@ -296,7 +295,6 @@ export default function ProjectDetails() {
 			weeklyGoal: number | null;
 			goalType: "target" | "cap";
 			scope: "week" | "permanent";
-			note: string;
 		},
 	) => {
 		const overrides = [...(project.goalOverrides || [])];
@@ -308,7 +306,6 @@ export default function ProjectDetails() {
 				weekOf: mondayIso,
 				weeklyGoal: values.weeklyGoal,
 				goalType: values.goalType,
-				note: values.note || undefined,
 			});
 			saveOverrides(filtered);
 		} else {
@@ -318,7 +315,6 @@ export default function ProjectDetails() {
 				effectiveFrom: mondayIso,
 				weeklyGoal: values.weeklyGoal,
 				goalType: values.goalType,
-				note: values.note || undefined,
 			});
 			saveOverrides(filtered);
 		}
@@ -340,7 +336,6 @@ export default function ProjectDetails() {
 					effective_from: o.effectiveFrom ?? null,
 					weekly_goal: o.weeklyGoal,
 					goal_type: o.goalType ?? null,
-					note: o.note ?? null,
 				})),
 			},
 			{
@@ -486,10 +481,6 @@ export default function ProjectDetails() {
 			</header>
 
 			<main className="max-w-5xl mx-auto px-6 pb-24">
-				{/* Intentions strip (P4.2) — today's intention for this project
-				    + the recurring template, near the header. */}
-				<ProjectIntentionStrip projectId={project.id} projectName={project.name} />
-
 				{/* Project Health rail (P4.3) — alerts + recency + goal trend +
 				    today's average focus. */}
 				<ProjectHealthRail

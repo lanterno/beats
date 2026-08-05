@@ -13,9 +13,7 @@ import 'notifications.dart';
 ///
 /// **Limitations of the free-tier path**: this is *not* true server-pushed
 /// delivery. If the user closes the app and the coach generates a brief at
-/// 7 AM, they won't see the notification until they reopen. Pair this with
-/// [NotificationsService.scheduleEodMoodPrompt] for the EOD reminder, which
-/// fires from the OS-level scheduler regardless of app state.
+/// 7 AM, they won't see the notification until they reopen.
 class NotificationPoller {
   final ApiClient client;
   final NotificationsService notifications;
@@ -34,7 +32,7 @@ class NotificationPoller {
 
   void start() {
     if (_timer != null) return;
-    // Tick once immediately so the user sees today's pending brief / review
+    // Tick once immediately so the user sees today's pending brief
     // shortly after the app is opened, then on the configured cadence.
     unawaited(_tick());
     _timer = Timer.periodic(interval, (_) => _tick());
@@ -51,7 +49,6 @@ class NotificationPoller {
     try {
       await Future.wait([
         _pollBrief(),
-        _pollReview(),
         _pollDrift(),
         _pollAutoTimer(),
       ]);
@@ -75,30 +72,6 @@ class NotificationPoller {
     }
   }
 
-  Future<void> _pollReview() async {
-    try {
-      final review = await client.getTodayReview();
-      if (review == null) return;
-      final date = review['date'] as String?;
-      if (date == null) return;
-      if (await _dedupe.alreadyNotified('review', date)) return;
-      await notifications.notifyReviewAvailable();
-      await _dedupe.markNotified('review', date);
-    } catch (_) {
-      // Same as above — best-effort.
-    }
-  }
-
-  /// Polls `/api/signals/recent-drift` and fires a drift notification for
-  /// every event id we haven't seen. Dedupe keys live in SharedPreferences
-  /// so the user doesn't see the same drift twice if the poller restarts.
-  ///
-  /// The daemon already fires native macOS notifications via osascript on
-  /// the desktop; this companion-side path covers iOS / Android and any
-  /// desktop where the daemon isn't installed. Both paths firing in
-  /// parallel is fine — they target different channels (OS-level
-  /// notification center vs Beats' in-app channel) and the user-visible
-  /// message is the same prompt either way.
   /// Polls `/api/signals/pending-suggestions` and fires an auto-timer
   /// suggestion notification for every id we haven't seen. The API stamps
   /// the suggestion when `/suggest-timer` returns a positive match
@@ -134,6 +107,16 @@ class NotificationPoller {
     }
   }
 
+  /// Polls `/api/signals/recent-drift` and fires a drift notification for
+  /// every event id we haven't seen. Dedupe keys live in SharedPreferences
+  /// so the user doesn't see the same drift twice if the poller restarts.
+  ///
+  /// The daemon already fires native macOS notifications via osascript on
+  /// the desktop; this companion-side path covers iOS / Android and any
+  /// desktop where the daemon isn't installed. Both paths firing in
+  /// parallel is fine — they target different channels (OS-level
+  /// notification center vs Beats' in-app channel) and the user-visible
+  /// message is the same prompt either way.
   Future<void> _pollDrift() async {
     try {
       final events = await client.getRecentDrift();
@@ -150,7 +133,7 @@ class NotificationPoller {
         await _dedupe.markNotified('drift', id);
       }
     } catch (_) {
-      // Best-effort — same logic as brief / review polls.
+      // Best-effort — same logic as the other polls.
     }
   }
 }

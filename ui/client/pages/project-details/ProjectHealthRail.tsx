@@ -4,9 +4,8 @@
  * Insights surfaces globally onto the project's own page (the missing-pull
  * the completeness critic flagged in the gap review).
  *
- * - When there's an active alert (stale_project / intention_completion_low),
- *   show it with a Snooze 7d button that dismisses the corresponding inbox
- *   item server-side.
+ * - When there's an active alert (e.g. a stale project), show it with a
+ *   Snooze 7d button that dismisses the corresponding inbox item server-side.
  * - When there's no alert, render a friendly "All clear — last tracked X
  *   days ago" line so the rail doesn't disappear and force the user to
  *   wonder where the signal went.
@@ -33,8 +32,6 @@ function describeAlert(alert: string): string {
 	switch (alert) {
 		case "stale_project":
 			return "This project has been quiet for a while.";
-		case "intention_completion_low":
-			return "Recent intentions aren't getting completed.";
 		default:
 			return alert;
 	}
