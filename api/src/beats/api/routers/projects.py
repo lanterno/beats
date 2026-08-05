@@ -160,7 +160,6 @@ async def update_goal_overrides(
             effective_from=o.effective_from,
             weekly_goal=o.weekly_goal,
             goal_type=o.goal_type,
-            note=o.note,
         )
         for o in overrides
     ]

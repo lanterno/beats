@@ -164,20 +164,6 @@ class ApiClient {
     return jsonDecode(resp.body);
   }
 
-  /// Updates an existing beat in place. The API requires the full beat shape;
-  /// callers typically pass the dict returned by [stopTimer] with the user's
-  /// edits applied (note, tags).
-  Future<void> updateBeat(Map<String, dynamic> beat) async {
-    final resp = await http.put(
-      Uri.parse('$baseUrl/api/beats/'),
-      headers: _headers,
-      body: jsonEncode(beat),
-    );
-    if (resp.statusCode != 200) {
-      throw _apiError(resp, 'Update beat failed');
-    }
-  }
-
   Future<List<Map<String, dynamic>>> getProjects() async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/projects/'),
@@ -192,29 +178,10 @@ class ApiClient {
 
   // ---- Analytics ----
 
-  /// Returns the union of all tags this user has ever attached to a beat,
-  /// alphabetized. Used by the post-stop sheet to surface chips.
-  ///
-  /// Throws [ApiException] on non-200 — aligns with the rest of the
-  /// client (start/stopTimer, getProjects, etc.). Callers that want
-  /// to gracefully degrade (e.g. tag chips are decoration, not
-  /// blocking) wrap in try/catch and ignore.
-  Future<List<String>> getTags() async {
-    final resp = await http.get(
-      Uri.parse('$baseUrl/api/analytics/tags'),
-      headers: _headers,
-    );
-    if (resp.statusCode != 200) {
-      throw _apiError(resp, 'Tags failed');
-    }
-    final list = jsonDecode(resp.body) as List;
-    return list.cast<String>();
-  }
-
   /// Returns one entry per day in the given year (default: current year).
   /// Each entry: {date: 'YYYY-MM-DD', total_minutes: int, session_count: int, project_count: int}.
   ///
-  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
+  /// Throws [ApiException] on non-200. See [getProjects] for the rationale.
   Future<List<Map<String, dynamic>>> getHeatmap({int? year}) async {
     final query = year != null ? '?year=$year' : '';
     final resp = await http.get(
@@ -230,7 +197,7 @@ class ApiClient {
 
   // ---- Flow Score ----
 
-  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
+  /// Throws [ApiException] on non-200. See [getProjects] for the rationale.
   Future<List<Map<String, dynamic>>> getFlowWindows(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/signals/flow-windows?start=$start&end=$end'),
@@ -328,7 +295,7 @@ class ApiClient {
     }
   }
 
-  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
+  /// Throws [ApiException] on non-200. See [getProjects] for the rationale.
   Future<List<Map<String, dynamic>>> getSignalSummaries(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/signals/summaries?start=$start&end=$end'),
@@ -356,7 +323,7 @@ class ApiClient {
 
   // ---- Biometrics ----
 
-  /// Throws [ApiException] on non-200. See [getTags] for the rationale.
+  /// Throws [ApiException] on non-200. See [getProjects] for the rationale.
   Future<List<Map<String, dynamic>>> getBiometrics(String start, String end) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/biometrics/?start=$start&end=$end'),

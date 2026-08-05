@@ -295,7 +295,6 @@ export default function ProjectDetails() {
 			weeklyGoal: number | null;
 			goalType: "target" | "cap";
 			scope: "week" | "permanent";
-			note: string;
 		},
 	) => {
 		const overrides = [...(project.goalOverrides || [])];
@@ -307,7 +306,6 @@ export default function ProjectDetails() {
 				weekOf: mondayIso,
 				weeklyGoal: values.weeklyGoal,
 				goalType: values.goalType,
-				note: values.note || undefined,
 			});
 			saveOverrides(filtered);
 		} else {
@@ -317,7 +315,6 @@ export default function ProjectDetails() {
 				effectiveFrom: mondayIso,
 				weeklyGoal: values.weeklyGoal,
 				goalType: values.goalType,
-				note: values.note || undefined,
 			});
 			saveOverrides(filtered);
 		}
@@ -339,7 +336,6 @@ export default function ProjectDetails() {
 					effective_from: o.effectiveFrom ?? null,
 					weekly_goal: o.weeklyGoal,
 					goal_type: o.goalType ?? null,
-					note: o.note ?? null,
 				})),
 			},
 			{

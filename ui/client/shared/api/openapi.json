@@ -396,7 +396,7 @@
         "type": "object"
       },
       "CreateBeatRequest": {
-        "description": "Request body for creating a beat.",
+        "description": "Request body for creating a beat.\n\nNo note/tags: the app takes no free-text input. Tags are auto-derived\nserver-side from the daemon's flow signals (see BeatService).",
         "properties": {
           "end": {
             "anyOf": [
@@ -410,17 +410,6 @@
             ],
             "title": "End"
           },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
           "project_id": {
             "title": "Project Id",
             "type": "string"
@@ -429,13 +418,6 @@
             "format": "date-time",
             "title": "Start",
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags",
-            "type": "array"
           }
         },
         "required": [
@@ -1105,17 +1087,6 @@
                 "type": "null"
               }
             ]
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
           },
           "week_of": {
             "anyOf": [
@@ -2437,7 +2408,7 @@
         "type": "object"
       },
       "UpdateBeatRequest": {
-        "description": "Request body for updating a beat.",
+        "description": "Request body for updating a beat. Tags are auto-derived, not sent.",
         "properties": {
           "end": {
             "anyOf": [
@@ -2455,17 +2426,6 @@
             "title": "Id",
             "type": "string"
           },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
           "project_id": {
             "title": "Project Id",
             "type": "string"
@@ -2474,13 +2434,6 @@
             "format": "date-time",
             "title": "Start",
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags",
-            "type": "array"
           }
         },
         "required": [

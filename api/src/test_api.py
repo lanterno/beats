@@ -669,7 +669,7 @@ class TestGoalOverridesAPI:
         resp = client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[
-                {"week_of": "2026-04-06", "weekly_goal": 10, "note": "holiday"},
+                {"week_of": "2026-04-06", "weekly_goal": 10},
                 {"effective_from": "2026-03-02", "weekly_goal": 30},
             ],
             headers=auth_headers,
@@ -739,7 +739,7 @@ class TestGoalOverridesAPI:
         project = self._create_project(weekly_goal=20)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
-            json=[{"week_of": "2020-01-06", "weekly_goal": None, "note": "holiday"}],
+            json=[{"week_of": "2020-01-06", "weekly_goal": None}],
             headers=auth_headers,
         )
         # Past week (same Monday as the override): no goal
@@ -751,7 +751,6 @@ class TestGoalOverridesAPI:
         overrides = found["goal_overrides"]
         assert len(overrides) == 1
         assert overrides[0]["weekly_goal"] is None
-        assert overrides[0]["note"] == "holiday"
 
     def test_permanent_null_override_clears_forward(self):
         """A permanent null override clears the goal from that Monday forward."""
@@ -1788,11 +1787,34 @@ class TestAnalyticsRouterEndpoints:
 
     def test_tags_returns_sorted_unique_tags_from_user_beats(self):
         """GET /api/analytics/tags surfaces every unique tag across
-        the user's beats, sorted alphabetically. Pin the
-        deduplication + sort — the companion app's tag-suggestion
-        chips bind to this list directly."""
+        the user's beats, sorted alphabetically. Tags are auto-derived
+        from the daemon's flow-window signals (repo + editor language)
+        when a timer stops — the app takes no manual tag input."""
         project_id = self._create_project()
-        # Start + stop a timer to create one completed beat
+
+        # Seed daemon flow windows inside the session's range. The stop
+        # handler auto-tags the beat from these (repo basename + language).
+        def _post_window(start: str, end: str, repo: str | None, language: str | None):
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": start,
+                    "window_end": end,
+                    "flow_score": 0.8,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 0.5,
+                    "idle_fraction": 0.1,
+                    "editor_repo": repo,
+                    "editor_language": language,
+                },
+                headers=auth_headers,
+            )
+
+        _post_window("2026-04-01T09:05:00Z", "2026-04-01T09:15:00Z", "/home/me/beats", "Python")
+        _post_window("2026-04-01T09:16:00Z", "2026-04-01T09:25:00Z", None, "TypeScript")
+
+        # Start + stop a timer spanning those windows -> auto-tagged beat.
         client.post(
             f"/api/projects/{project_id}/start",
             json={"time": "2026-04-01T09:00:00Z"},
@@ -1803,25 +1825,12 @@ class TestAnalyticsRouterEndpoints:
             json={"time": "2026-04-01T09:30:00Z"},
             headers=auth_headers,
         )
-        # Find that beat's id and update with tags
-        resp = client.get("/api/beats/", headers=auth_headers)
-        assert resp.status_code == 200
-        beats = resp.json()
-        assert len(beats) >= 1
-        beat = beats[0]
-        # Update via PUT — same shape as the companion's post-stop edit
-        beat["tags"] = ["focus", "morning", "focus"]  # dedup probe
-        client.put(
-            "/api/beats/",
-            json=beat,
-            headers=auth_headers,
-        )
 
         resp = client.get("/api/analytics/tags", headers=auth_headers)
         assert resp.status_code == 200
         tags = resp.json()
-        # Deduplicated AND sorted
-        assert tags == ["focus", "morning"]
+        # Deduplicated AND sorted: repo basename + lowercased languages.
+        assert tags == ["beats", "python", "typescript"]
 
 
 class TestAnalyticsTimezone:
@@ -4219,8 +4228,8 @@ class TestDevicePairingAPI:
         assert resp.status_code == 200
 
     def test_device_token_allowed_on_analytics_tags(self):
-        """Device tokens can read /api/analytics/tags — used by companion's
-        post-stop prompt to suggest recent tags as one-tap chips."""
+        """Device tokens can read /api/analytics/tags — the companion surfaces
+        the auto-derived tag list (repo/language) in its analytics views."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})
@@ -4231,8 +4240,8 @@ class TestDevicePairingAPI:
         assert resp.status_code == 200
 
     def test_device_token_allowed_on_beats(self):
-        """Device tokens can read /api/beats — used by companion's post-stop
-        'How did it go?' prompt to update the just-stopped beat with note + tags."""
+        """Device tokens can read /api/beats — the companion lists recent
+        sessions after a timer stops (no manual note/tags edit anymore)."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})

@@ -59,28 +59,28 @@ class GoalOverrideRequest(BaseModel):
     effective_from: date_type | None = None
     weekly_goal: float | None = None
     goal_type: GoalType | None = None
-    note: str | None = None
+    # No note: overrides carry only structured targets, no free-text reason.
 
 
 class CreateBeatRequest(BaseModel):
-    """Request body for creating a beat."""
+    """Request body for creating a beat.
+
+    No note/tags: the app takes no free-text input. Tags are auto-derived
+    server-side from the daemon's flow signals (see BeatService).
+    """
 
     project_id: str
     start: datetime = Field(default_factory=lambda: datetime.now(UTC))
     end: datetime | None = None
-    note: str | None = None
-    tags: list[str] = Field(default_factory=list)
 
 
 class UpdateBeatRequest(BaseModel):
-    """Request body for updating a beat."""
+    """Request body for updating a beat. Tags are auto-derived, not sent."""
 
     id: str
     project_id: str
     start: datetime
     end: datetime | None = None
-    note: str | None = None
-    tags: list[str] = Field(default_factory=list)
 
 
 # Response schemas

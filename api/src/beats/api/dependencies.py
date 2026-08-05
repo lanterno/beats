@@ -112,19 +112,27 @@ def get_project_repository(user_id: CurrentUserId) -> ProjectRepository:
     return MongoProjectRepository(db.projects, user_id=user_id)
 
 
+def get_flow_window_repository(user_id: CurrentUserId) -> FlowWindowRepository:
+    """Get the flow window repository scoped to the current user."""
+    db = Database.get_db()
+    return MongoFlowWindowRepository(db.flow_windows, user_id=user_id)
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    flow_repo: Annotated[FlowWindowRepository, Depends(get_flow_window_repository)],
 ) -> TimerService:
     """Get the timer service with injected repositories."""
-    return TimerService(beat_repo=beat_repo, project_repo=project_repo)
+    return TimerService(beat_repo=beat_repo, project_repo=project_repo, flow_repo=flow_repo)
 
 
 def get_beat_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    flow_repo: Annotated[FlowWindowRepository, Depends(get_flow_window_repository)],
 ) -> BeatService:
     """Get the beat service with injected repository."""
-    return BeatService(beat_repo=beat_repo)
+    return BeatService(beat_repo=beat_repo, flow_repo=flow_repo)
 
 
 def get_project_service(
@@ -250,12 +258,6 @@ PairingCodeRepoDep = Annotated[PairingCodeRepository, Depends(get_pairing_code_r
 DeviceRegistrationRepoDep = Annotated[
     DeviceRegistrationRepository, Depends(get_device_registration_repository)
 ]
-
-
-def get_flow_window_repository(user_id: CurrentUserId) -> FlowWindowRepository:
-    """Get the flow window repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoFlowWindowRepository(db.flow_windows, user_id=user_id)
 
 
 def get_signal_summary_repository(user_id: CurrentUserId) -> SignalSummaryRepository:

@@ -2719,13 +2719,118 @@ class _FakeProjectRepoForServices:
         return [p for p in self._projects if p.archived == archived]
 
 
-def _timer_service(*, beats: list[Beat] | None = None, projects: list[Project] | None = None):
+class _FakeFlowRepo:
+    """In-memory FlowWindowRepository fake. list_by_range returns windows
+    whose window_start falls within [start, end], matching the real Mongo
+    query's boundary semantics."""
+
+    def __init__(self, windows=None):
+        self._windows = list(windows or [])
+
+    async def create(self, window):
+        self._windows.append(window)
+        return window
+
+    async def list_by_range(
+        self,
+        start,
+        end,
+        project_id=None,
+        editor_repo=None,
+        editor_language=None,
+        bundle_id=None,
+        dominant_category=None,
+    ):
+        return [w for w in self._windows if start <= w.window_start <= end]
+
+
+def _flow_win(start: datetime, *, minutes: int = 5, repo=None, language=None):
+    from beats.domain.models import FlowWindow
+
+    return FlowWindow(
+        device_id="dev-1",
+        window_start=start,
+        window_end=start + timedelta(minutes=minutes),
+        flow_score=0.8,
+        editor_repo=repo,
+        editor_language=language,
+    )
+
+
+def _timer_service(
+    *,
+    beats: list[Beat] | None = None,
+    projects: list[Project] | None = None,
+    flow_windows=None,
+):
     from beats.domain.services import TimerService
 
     return TimerService(
         beat_repo=_FakeBeatRepoForServices(beats),
         project_repo=_FakeProjectRepoForServices(projects),
+        flow_repo=_FakeFlowRepo(flow_windows) if flow_windows is not None else None,
     )
+
+
+class TestDeriveFlowTags:
+    """derive_flow_tags turns the daemon's flow-window signals into session
+    tags — the app takes no manual tag input. Repos come first (more
+    specific), then languages; both deduped, basename'd, lowercased, capped."""
+
+    async def test_repos_before_languages_deduped(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        repo = _FakeFlowRepo(
+            [
+                _flow_win(start, repo="/home/me/beats", language="Python"),
+                _flow_win(start + timedelta(minutes=6), repo="/home/me/beats", language="Python"),
+            ]
+        )
+        tags = await derive_flow_tags(repo, start, start + timedelta(minutes=30))
+        assert tags == ["beats", "python"]
+
+    async def test_basename_lowercase_and_owner_repo_form(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        repo = _FakeFlowRepo(
+            [
+                _flow_win(start, repo="acme/Widgets", language="TypeScript"),
+                _flow_win(start + timedelta(minutes=6), repo=None, language="Go"),
+            ]
+        )
+        tags = await derive_flow_tags(repo, start, start + timedelta(minutes=30))
+        assert tags == ["Widgets", "typescript", "go"]
+
+    async def test_no_end_returns_empty(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        repo = _FakeFlowRepo([_flow_win(start, repo="beats", language="Python")])
+        assert await derive_flow_tags(repo, start, None) == []
+
+    async def test_caps_at_six(self):
+        from beats.domain.services import derive_flow_tags
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        windows = [
+            _flow_win(start + timedelta(minutes=i), repo=f"repo{i}", language=f"lang{i}")
+            for i in range(10)
+        ]
+        tags = await derive_flow_tags(_FakeFlowRepo(windows), start, start + timedelta(hours=1))
+        assert len(tags) == 6
+
+    async def test_stop_timer_autotags_beat(self):
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        active = Beat(id="b1", project_id="p1", start=start, end=None)
+        svc = _timer_service(
+            beats=[active],
+            projects=[_project("p1", "Alpha")],
+            flow_windows=[_flow_win(start + timedelta(minutes=5), repo="beats", language="Python")],
+        )
+        stopped = await svc.stop_timer(end_time=start + timedelta(minutes=30))
+        assert stopped.tags == ["beats", "python"]
 
 
 class TestTimerServiceStart:

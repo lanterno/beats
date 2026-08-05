@@ -25,7 +25,6 @@ export {
 	TableHeader,
 	TableRow,
 } from "./table";
-export { TagInput } from "./tag-input";
 export {
 	Tooltip,
 	TooltipContent,

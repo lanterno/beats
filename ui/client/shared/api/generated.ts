@@ -2283,12 +2283,13 @@ export interface components {
         /**
          * CreateBeatRequest
          * @description Request body for creating a beat.
+         *
+         *     No note/tags: the app takes no free-text input. Tags are auto-derived
+         *     server-side from the daemon's flow signals (see BeatService).
          */
         CreateBeatRequest: {
             /** End */
             end?: string | null;
-            /** Note */
-            note?: string | null;
             /** Project Id */
             project_id: string;
             /**
@@ -2296,8 +2297,6 @@ export interface components {
              * Format: date-time
              */
             start?: string;
-            /** Tags */
-            tags?: string[];
         };
         /**
          * CreateProjectRequest
@@ -2551,8 +2550,6 @@ export interface components {
             /** Effective From */
             effective_from?: string | null;
             goal_type?: components["schemas"]["GoalType"] | null;
-            /** Note */
-            note?: string | null;
             /** Week Of */
             week_of?: string | null;
             /** Weekly Goal */
@@ -3104,15 +3101,13 @@ export interface components {
         };
         /**
          * UpdateBeatRequest
-         * @description Request body for updating a beat.
+         * @description Request body for updating a beat. Tags are auto-derived, not sent.
          */
         UpdateBeatRequest: {
             /** End */
             end?: string | null;
             /** Id */
             id: string;
-            /** Note */
-            note?: string | null;
             /** Project Id */
             project_id: string;
             /**
@@ -3120,8 +3115,6 @@ export interface components {
              * Format: date-time
              */
             start: string;
-            /** Tags */
-            tags?: string[];
         };
         /**
          * UpdateProjectRequest
