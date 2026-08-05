@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     MongoBeatRepository,
+    MongoFlowWindowRepository,
     MongoProjectRepository,
     MongoWeeklyDigestRepository,
 )
@@ -29,6 +30,7 @@ class CoachRepos:
     project: MongoProjectRepository
     beat: MongoBeatRepository
     digest: MongoWeeklyDigestRepository
+    flow: MongoFlowWindowRepository
 
 
 def fmt_minutes(minutes: float) -> str:
@@ -43,4 +45,5 @@ async def build_repos(user_id: str) -> CoachRepos:
         project=MongoProjectRepository(db.projects, user_id=user_id),
         beat=MongoBeatRepository(db.timeLogs, user_id=user_id),
         digest=MongoWeeklyDigestRepository(db.weeklyDigests, user_id=user_id),
+        flow=MongoFlowWindowRepository(db.flow_windows, user_id=user_id),
     )

@@ -2833,6 +2833,45 @@ class TestDeriveFlowTags:
         assert stopped.tags == ["beats", "python"]
 
 
+class TestSummarizeFlow:
+    """summarize_flow reduces daemon flow windows to a coach headline:
+    count/avg/peak + top repo (basename) and top language, excluding
+    drift (flow_score=0) events from the average."""
+
+    def test_none_for_empty_or_all_drift(self):
+        from beats.domain.flow import summarize_flow
+        from beats.domain.models import FlowWindow
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        assert summarize_flow([]) is None
+        # flow_score=0 windows are drift markers — excluded, so all-drift -> None
+        drift = FlowWindow(
+            device_id="d",
+            window_start=start,
+            window_end=start + timedelta(minutes=5),
+            flow_score=0.0,
+            dominant_category="drift",
+        )
+        assert summarize_flow([drift]) is None
+
+    def test_aggregates_and_basenames_top_repo(self):
+        from beats.domain.flow import summarize_flow
+
+        start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+        windows = [
+            _flow_win(start, repo="/home/me/beats", language="Python"),
+            _flow_win(start + timedelta(minutes=6), repo="/home/me/beats", language="Python"),
+            _flow_win(start + timedelta(minutes=12), repo="acme/widgets", language="Go"),
+        ]
+        fs = summarize_flow(windows)
+        assert fs is not None
+        assert fs.count == 3
+        assert fs.top_repo == "beats"  # basename, most frequent
+        assert fs.top_language == "python"
+        assert 0.0 < fs.avg_score <= 1.0
+        assert fs.peak_score == 0.8
+
+
 class TestTimerServiceStart:
     """TimerService.start_timer pre-flight checks: project must exist
     and no other timer can be running. Pin both error paths so a

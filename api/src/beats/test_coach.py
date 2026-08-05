@@ -1517,13 +1517,24 @@ class _FakeBeatRepoForTools:
         return [b for b in self._beats if b.end is not None]
 
 
+class _FakeFlowRepoForCoach:
+    """Returns flow windows whose window_start falls in [start, end]."""
+
+    def __init__(self, windows):
+        self._windows = windows
+
+    async def list_by_range(self, start, end, **kwargs):
+        return [w for w in self._windows if start <= w.window_start <= end]
+
+
 class _FakeCoachRepos:
     """Mirrors the CoachRepos dataclass shape for tests."""
 
-    def __init__(self, *, projects=None, beats=None):
+    def __init__(self, *, projects=None, beats=None, flow_windows=None):
         self.project = _FakeProjectRepoForTools(projects or [])
         self.beat = _FakeBeatRepoForTools(beats or [])
         self.digest = None  # not used by tools.py
+        self.flow = _FakeFlowRepoForCoach(flow_windows or [])
 
 
 def _project(id_: str, name: str, *, weekly_goal=None, goal_type="target", archived=False):
@@ -2016,6 +2027,45 @@ class TestBuildUserContext:
         repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
         result = await context_module.build_user_context("user-1", repos)
         assert "Productivity score: unavailable" in result
+
+    async def test_flow_rollup_renders_from_daemon_windows(self, monkeypatch):
+        """The 30-day flow rollup surfaces avg score + top repo/language
+        from the ambient daemon's windows — the coach's automatic
+        understanding of what work looked like. Pin so it doesn't drop out."""
+        from datetime import UTC, datetime, timedelta
+
+        from beats.domain.intelligence import IntelligenceService
+        from beats.domain.models import FlowWindow
+
+        async def fake_score(_self):
+            return {"score": 70, "components": {"consistency": 70, "goals": 70, "quality": 70}}
+
+        monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
+
+        recent = datetime.now(UTC) - timedelta(days=2)
+        windows = [
+            FlowWindow(
+                device_id="d",
+                window_start=recent,
+                window_end=recent + timedelta(minutes=5),
+                flow_score=0.8,
+                editor_repo="/home/me/beats",
+                editor_language="Python",
+            ),
+            FlowWindow(
+                device_id="d",
+                window_start=recent + timedelta(minutes=6),
+                window_end=recent + timedelta(minutes=11),
+                flow_score=0.6,
+                editor_repo="/home/me/beats",
+                editor_language="Python",
+            ),
+        ]
+        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")], flow_windows=windows)
+        result = await context_module.build_user_context("user-1", repos)
+        assert "### Flow (30 days, from ambient signals)" in result
+        assert "repo beats" in result
+        assert "top language python" in result
 
     async def test_no_memory_renders_empty_marker(self, monkeypatch):
         """First-run users have no coach_memory document. The context

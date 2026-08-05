@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
 from beats.coach.repos import CoachRepos, build_repos, fmt_minutes
+from beats.domain.flow import summarize_flow
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.utils import local_date, local_dt
 from beats.infrastructure.database import Database
@@ -88,6 +89,22 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         if p.weekly_goal:
             goals.append(f"  {p.name}: {p.weekly_goal}h/week ({p.goal_type})")
 
+    # 30-day flow rollup from the ambient daemon (best-effort — the coach
+    # must render even when the daemon has never reported).
+    flow_lines: list[str] = []
+    try:
+        windows = await repos.flow.list_by_range(thirty_days_ago, now)
+        fs = summarize_flow(windows)
+        if fs:
+            parts = [f"avg {round(fs.avg_score * 100)}/100 across {fs.count} focus windows"]
+            if fs.top_repo:
+                parts.append(f"most in repo {fs.top_repo}")
+            if fs.top_language:
+                parts.append(f"top language {fs.top_language}")
+            flow_lines = ["", "### Flow (30 days, from ambient signals)", "  " + ", ".join(parts)]
+    except Exception:
+        logger.debug("Flow rollup unavailable for user context", exc_info=True)
+
     # Coach memory
     memory_store = MemoryStore(db, user_id)
     memory = await memory_store.read()
@@ -108,6 +125,7 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         *week_totals,
         "",
         score_line,
+        *flow_lines,
         "",
         "### Weekly goals",
         *(goals if goals else ["  (No goals set)"]),
@@ -232,6 +250,26 @@ async def build_day_context(
                 lines += ["", "### Last night's biometrics", *bio_lines]
     except Exception:
         logger.debug("Biometric fetch failed for day context", exc_info=True)
+
+    # Today's flow signals from the ambient daemon (best-effort). Converts the
+    # user's local day to a UTC instant range to match how the daemon stores
+    # window_start.
+    try:
+        start_utc = datetime.combine(today, datetime.min.time(), tzinfo=tz).astimezone(UTC)
+        end_utc = datetime.combine(today, datetime.max.time(), tzinfo=tz).astimezone(UTC)
+        fs = summarize_flow(await repos.flow.list_by_range(start_utc, end_utc))
+        if fs:
+            flow_lines = [
+                f"  {fs.count} focus windows, avg {round(fs.avg_score * 100)}/100 "
+                f"(peak {round(fs.peak_score * 100)}/100)"
+            ]
+            if fs.top_repo:
+                flow_lines.append(f"  Most time in repo: {fs.top_repo}")
+            if fs.top_language:
+                flow_lines.append(f"  Dominant language: {fs.top_language}")
+            lines += ["", "### Flow today (ambient signals)", *flow_lines]
+    except Exception:
+        logger.debug("Flow fetch failed for day context", exc_info=True)
 
     return "\n".join(lines)
 
