@@ -5,7 +5,7 @@
 
 import { ChevronDown, Clock, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useFocusScores } from "@/entities/intelligence";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";

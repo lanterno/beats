@@ -11,9 +11,7 @@ const typeIcons: Record<string, string> = {
 	day_pattern: "📅",
 	time_pattern: "⏰",
 	stale_project: "💤",
-	mood_correlation: "🧠",
 	session_trend: "📊",
-	estimation_accuracy: "🎯",
 	goal_pacing: "🏃",
 };
 

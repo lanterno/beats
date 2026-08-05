@@ -2,9 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest_all.dart' as tz_db;
-import 'package:timezone/timezone.dart' as tz;
 
 /// One tap event from the notification surface. [actionId] is null when
 /// the user tapped the notification body itself (rather than a specific
@@ -33,14 +30,10 @@ const String _autoTimerCategoryId = 'beats.auto-timer';
 /// permission, scheduling, and tap routing.
 ///
 /// **Free-tier path**: this is purely local notifications — no APNs/FCM, no
-/// server-side push. Two delivery mechanisms:
-///
-/// 1. `scheduleEodMoodPrompt` schedules a daily repeating notification at a
-///    user-chosen time. This fires even when the app isn't running.
-/// 2. `notifyBriefAvailable`, `notifyReviewAvailable`, etc. fire instantly.
-///    The companion's [NotificationPoller] checks the API on a 5-minute
-///    foreground loop and calls these when new content arrives — so they
-///    only fire while the app is alive.
+/// server-side push. `notifyBriefAvailable`, `notifyAutoTimerSuggestion`,
+/// etc. fire instantly. The companion's [NotificationPoller] checks the API
+/// on a 5-minute foreground loop and calls these when new content arrives —
+/// so they only fire while the app is alive.
 class NotificationsService {
   NotificationsService._();
   static final NotificationsService instance = NotificationsService._();
@@ -48,18 +41,16 @@ class NotificationsService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
 
-  /// Notification IDs are stable so re-scheduling the EOD prompt overwrites
-  /// the previous schedule rather than stacking duplicates.
-  static const int _idEod = 100;
+  /// Notification IDs are stable so re-firing a notification overwrites
+  /// the previous one rather than stacking duplicates.
   static const int _idBrief = 101;
-  static const int _idReview = 102;
   static const int _idAutoTimer = 103;
   static const int _idDrift = 104;
 
   /// Channel identifiers (Android only — iOS uses a single global channel).
   static const String _channelId = 'beats.coach';
   static const String _channelName = 'Beats Coach';
-  static const String _channelDesc = 'Brief, review, mood, and auto-timer prompts';
+  static const String _channelDesc = 'Brief and auto-timer prompts';
 
   /// Streams every tap on a Beats notification. Subscribers get the
   /// payload + the optional actionId (null when the user tapped the body
@@ -71,17 +62,6 @@ class NotificationsService {
 
   Future<void> init() async {
     if (_ready) return;
-
-    // Initialize the timezone database so zonedSchedule has names.
-    tz_db.initializeTimeZones();
-    try {
-      final localTz = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(localTz.identifier));
-    } catch (_) {
-      // Fall back to UTC if the platform can't tell us the local TZ —
-      // worst case the EOD prompt fires at the wrong hour for one day
-      // until the user resets it.
-    }
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     // Register the auto-timer action category on iOS / macOS up-front so
@@ -180,39 +160,6 @@ class NotificationsService {
         linux: const LinuxNotificationDetails(),
       );
 
-  /// Cancels the existing EOD schedule (if any) and reschedules a daily
-  /// repeating notification at [time]. The notification fires even when the
-  /// app isn't running.
-  Future<void> scheduleEodMoodPrompt({
-    required int hour,
-    required int minute,
-  }) async {
-    if (!_ready) await init();
-    await _plugin.cancel(id: _idEod);
-
-    final now = tz.TZDateTime.now(tz.local);
-    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    if (!when.isAfter(now)) {
-      when = when.add(const Duration(days: 1));
-    }
-
-    await _plugin.zonedSchedule(
-      id: _idEod,
-      title: 'How was today?',
-      body: 'A minute of reflection — log your mood and what went well.',
-      scheduledDate: when,
-      notificationDetails: _details(subtitle: 'Beats'),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time, // repeat daily at HH:MM
-      payload: 'eod-mood',
-    );
-  }
-
-  Future<void> cancelEodMoodPrompt() async {
-    if (!_ready) await init();
-    await _plugin.cancel(id: _idEod);
-  }
-
   /// One-shot "your morning brief is ready" prompt. Caller is responsible
   /// for de-duplication (only call once per brief).
   Future<void> notifyBriefAvailable({String? preview}) async {
@@ -223,17 +170,6 @@ class NotificationsService {
       body: preview ?? 'Tap to read what the coach has for you today.',
       notificationDetails: _details(subtitle: 'Beats coach'),
       payload: 'brief',
-    );
-  }
-
-  Future<void> notifyReviewAvailable() async {
-    if (!_ready) await init();
-    await _plugin.show(
-      id: _idReview,
-      title: 'Time to review the day',
-      body: 'A few questions to help close the loop.',
-      notificationDetails: _details(subtitle: 'Beats coach'),
-      payload: 'review',
     );
   }
 

@@ -23,7 +23,6 @@ export interface Project {
 	description?: string;
 	color: string;
 	archived: boolean;
-	estimation?: string;
 	weeklyGoal?: number; // Weekly goal in hours
 	goalType?: "target" | "cap";
 	goalOverrides: GoalOverride[];

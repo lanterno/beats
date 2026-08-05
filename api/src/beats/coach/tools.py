@@ -56,7 +56,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "name": "get_productivity_score",
         "description": (
             "Get the current productivity score (0–100) with component breakdown: "
-            "consistency, intention completion, goal progress, session quality."
+            "consistency, goal progress, session quality."
         ),
         "input_schema": {
             "type": "object",
@@ -65,24 +65,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "get_intentions",
-        "description": "Get daily intentions for a specific date.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date": {
-                    "type": "string",
-                    "description": "ISO date (YYYY-MM-DD). Defaults to today.",
-                },
-            },
-            "required": [],
-        },
-    },
-    {
         "name": "get_patterns",
         "description": (
             "Get detected productivity patterns: day patterns, peak hours, "
-            "stale projects, mood correlation, session trends."
+            "stale projects, session trends."
         ),
         "input_schema": {
             "type": "object",
@@ -119,8 +105,6 @@ class _ToolContext:
         return IntelligenceService(
             beat_repo=self.repos.beat,
             project_repo=self.repos.project,
-            intention_repo=self.repos.intention,
-            daily_note_repo=self.repos.note,
         )
 
 
@@ -172,26 +156,11 @@ async def _handle_get_productivity_score(ctx: _ToolContext, _tool_input: dict) -
         return (
             f"Score: {score['score']}/100\n"
             f"  Consistency: {c['consistency']}\n"
-            f"  Intentions: {c['intentions']}\n"
             f"  Goals: {c['goals']}\n"
             f"  Quality: {c['quality']}"
         )
     except Exception as exc:
         return f"Could not compute score: {exc}"
-
-
-async def _handle_get_intentions(ctx: _ToolContext, tool_input: dict) -> str:
-    date_str = tool_input.get("date")
-    target = date.fromisoformat(date_str) if date_str else datetime.now(UTC).date()
-    intentions = await ctx.repos.intention.list_by_date(target)
-    if not intentions:
-        return f"No intentions set for {target.isoformat()}."
-    lines = []
-    for i in intentions:
-        name = ctx.project_map.get(i.project_id, "?")
-        status = "done" if i.completed else "pending"
-        lines.append(f"- {name}: {i.planned_minutes}min [{status}]")
-    return "\n".join(lines)
 
 
 async def _handle_get_patterns(ctx: _ToolContext, _tool_input: dict) -> str:
@@ -232,7 +201,6 @@ _TOOL_HANDLERS = {
     "get_projects": _handle_get_projects,
     "get_beats": _handle_get_beats,
     "get_productivity_score": _handle_get_productivity_score,
-    "get_intentions": _handle_get_intentions,
     "get_patterns": _handle_get_patterns,
     "search_beats": _handle_search_beats,
 }

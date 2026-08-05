@@ -26,7 +26,6 @@ const CREATED: ApiProject = {
 	description: null,
 	color: null,
 	archived: false,
-	estimation: null,
 	weekly_goal: null,
 	goal_type: "target",
 	goal_overrides: [],

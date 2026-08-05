@@ -6,7 +6,6 @@ export type {
 	ChatHistoryMessage,
 	ChatSSEEvent,
 	MemoryResponse,
-	ReviewResponse,
 	UsageSummaryResponse,
 } from "./api";
 export {
@@ -15,13 +14,10 @@ export {
 	useCoachBrief,
 	useCoachBriefHistory,
 	useCoachMemory,
-	useCoachReview,
 	useCoachUsage,
 	useDeleteCoachData,
 	useDeleteMemory,
 	useGenerateBrief,
 	useRewriteMemory,
-	useStartReview,
-	useSubmitReviewAnswer,
 } from "./api";
 export { type ChatMessage, useCoachChat } from "./useCoachChat";

@@ -12,12 +12,10 @@ from beats.api.dependencies import (
     WeeklyDigestRepoDep,
 )
 from beats.api.schemas import (
-    EstimationAccuracyResponse,
     FocusScoreResponse,
     InboxItemResponse,
     InboxResponse,
     InsightCardResponse,
-    MoodCorrelationResponse,
     PatternsResponse,
     ProductivityScoreResponse,
     ProjectHealthResponse,
@@ -178,26 +176,6 @@ async def get_focus_scores(
     d = target_date or datetime.now(tz).date()
     results = await service.compute_focus_scores(d, tz=tz)
     return [FocusScoreResponse(**r) for r in results]
-
-
-@router.get("/mood", response_model=MoodCorrelationResponse)
-async def get_mood_correlation(
-    service: IntelligenceServiceDep,
-    tz: TimezoneDep,
-) -> MoodCorrelationResponse:
-    """Get mood-productivity correlation analysis."""
-    result = await service.get_mood_correlation(tz=tz)
-    return MoodCorrelationResponse(**result)
-
-
-@router.get("/estimation", response_model=list[EstimationAccuracyResponse])
-async def get_estimation_accuracy(
-    service: IntelligenceServiceDep,
-    tz: TimezoneDep,
-) -> list[EstimationAccuracyResponse]:
-    """Get per-project estimation accuracy (planned vs actual)."""
-    results = await service.get_estimation_accuracy(tz=tz)
-    return [EstimationAccuracyResponse(**r) for r in results]
 
 
 @router.get("/project-health", response_model=list[ProjectHealthResponse])

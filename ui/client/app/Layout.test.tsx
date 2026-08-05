@@ -1,49 +1,29 @@
 /**
  * Tests for Layout — the authenticated app shell.
  *
- * Layout pulls from a wide surface (7 entity hooks, 6 lib hooks, 7
- * child components). The tests here pin the *coordination* contracts
- * that only Layout owns:
+ * Layout coordinates the timer, sync engine, command palette, and focus
+ * mode. The tests here pin the contracts that only Layout owns:
  *
- * - applyRecurringIntentions runs at most once per day (localStorage
- *   key gates the effect; a second mount on the same day must not
- *   re-fire)
+ * - the shell mounts (sidebar, mobile header, command palette, focus mode)
  * - timer props are passed through to both Sidebar and MobileHeader
  *   (a bug there means the sidebar shows stale state)
- * - todayTotalMinutes / todaySessionCount / topProject are computed
- *   correctly from the sessions data
  *
  * Child components are stubbed to capture their props. The hooks are
  * mocked so we can drive Layout into specific states.
  */
 import { cleanup, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mocks ──────────────────────────────────────────────────────────
-
-const applyRecurringIntentions = vi.fn();
-vi.mock("@/entities/planning", () => ({
-	applyRecurringIntentions: (...args: unknown[]) => applyRecurringIntentions(...args),
-	useDailyNote: vi.fn(() => ({ data: undefined })),
-	useIntentions: vi.fn(() => ({ data: [] })),
-	useUpsertDailyNote: vi.fn(() => ({ mutate: vi.fn() })),
-}));
 
 const mockUseProjects = vi.fn();
 vi.mock("@/entities/project", () => ({
 	useProjects: () => mockUseProjects(),
 	// Match the real export so consumers that filter archived (e.g. Layout's
-	// activeProjects, after P0.3) work without re-mocking per test.
+	// activeProjects) work without re-mocking per test.
 	visibleProjects: <T extends { archived: boolean }>(list: T[] | undefined) =>
 		(list ?? []).filter((p) => !p.archived),
-}));
-
-const mockUseTodaySessions = vi.fn();
-const mockUseThisWeekSessions = vi.fn();
-vi.mock("@/entities/session", () => ({
-	useTodaySessions: () => mockUseTodaySessions(),
-	useThisWeekSessions: () => mockUseThisWeekSessions(),
 }));
 
 const mockUseTimer = vi.fn();
@@ -71,7 +51,6 @@ vi.mock("@/shared/lib", async () => {
 // Capture the props each child renders with so we can assert on them.
 const sidebarProps = vi.fn();
 const mobileHeaderProps = vi.fn();
-const endOfDayProps = vi.fn();
 vi.mock("@/widgets/sidebar", () => ({
 	Sidebar: (props: Record<string, unknown>) => {
 		sidebarProps(props);
@@ -85,13 +64,7 @@ vi.mock("@/widgets/sidebar", () => ({
 
 vi.mock("@/shared/ui", () => ({
 	CommandPalette: () => <div data-testid="command-palette" />,
-	EndOfDayReview: (props: Record<string, unknown>) => {
-		endOfDayProps(props);
-		return <div data-testid="end-of-day" />;
-	},
 	FocusMode: () => <div data-testid="focus-mode" />,
-	MorningBriefing: () => <div data-testid="morning-briefing" />,
-	WeeklyReviewDialog: () => <div data-testid="weekly-review" />,
 }));
 
 import { Layout } from "./Layout";
@@ -117,26 +90,16 @@ const PROJECTS = [
 ];
 
 function setupHooks(
-	overrides: {
-		timer?: Partial<ReturnType<typeof defaultTimer>>;
-		projects?: typeof PROJECTS;
-		todaySessions?: Array<{ projectId?: string; duration: number; startTime: string }>;
-		weekSessions?: Array<{ projectId?: string; duration: number; startTime: string }>;
-	} = {},
+	overrides: { timer?: Partial<ReturnType<typeof defaultTimer>>; projects?: typeof PROJECTS } = {},
 ) {
 	mockUseTimer.mockReturnValue({ ...defaultTimer(), ...overrides.timer });
 	mockUseProjects.mockReturnValue({ data: overrides.projects ?? PROJECTS });
-	mockUseTodaySessions.mockReturnValue({ data: overrides.todaySessions ?? [] });
-	mockUseThisWeekSessions.mockReturnValue({ data: overrides.weekSessions ?? [] });
 }
 
 beforeEach(() => {
 	localStorage.clear();
-	applyRecurringIntentions.mockReset();
-	applyRecurringIntentions.mockResolvedValue(undefined);
 	sidebarProps.mockReset();
 	mobileHeaderProps.mockReset();
-	endOfDayProps.mockReset();
 });
 
 afterEach(cleanup);
@@ -153,52 +116,13 @@ function renderLayout() {
 
 describe("Layout", () => {
 	describe("renders the shell", () => {
-		it("mounts sidebar, mobile header, and the dialog set", () => {
+		it("mounts sidebar, mobile header, command palette, and focus mode", () => {
 			setupHooks();
 			renderLayout();
 			expect(screen.getByTestId("sidebar")).toBeInTheDocument();
 			expect(screen.getByTestId("mobile-header")).toBeInTheDocument();
 			expect(screen.getByTestId("command-palette")).toBeInTheDocument();
-			expect(screen.getByTestId("end-of-day")).toBeInTheDocument();
-			expect(screen.getByTestId("morning-briefing")).toBeInTheDocument();
-			expect(screen.getByTestId("weekly-review")).toBeInTheDocument();
 			expect(screen.getByTestId("focus-mode")).toBeInTheDocument();
-		});
-	});
-
-	describe("recurring intentions effect", () => {
-		it("calls applyRecurringIntentions on first mount of the day", async () => {
-			setupHooks();
-			renderLayout();
-			await vi.waitFor(() => {
-				expect(applyRecurringIntentions).toHaveBeenCalledTimes(1);
-			});
-		});
-
-		it("skips applyRecurringIntentions when today's key already exists", () => {
-			const today = new Date().toISOString().slice(0, 10);
-			localStorage.setItem("beats_recurring_applied", today);
-			setupHooks();
-			renderLayout();
-			expect(applyRecurringIntentions).not.toHaveBeenCalled();
-		});
-
-		it("re-applies when the stored date is yesterday (the new-day case)", async () => {
-			localStorage.setItem("beats_recurring_applied", "1999-01-01");
-			setupHooks();
-			renderLayout();
-			await vi.waitFor(() => {
-				expect(applyRecurringIntentions).toHaveBeenCalledTimes(1);
-			});
-		});
-
-		it("writes today's key after a successful apply", async () => {
-			setupHooks();
-			renderLayout();
-			const today = new Date().toISOString().slice(0, 10);
-			await vi.waitFor(() => {
-				expect(localStorage.getItem("beats_recurring_applied")).toBe(today);
-			});
 		});
 	});
 
@@ -227,49 +151,6 @@ describe("Layout", () => {
 			expect(mobile.selectedProjectId).toBe(sidebar.selectedProjectId);
 			expect(mobile.elapsedSeconds).toBe(sidebar.elapsedSeconds);
 			expect(mobile.projects).toEqual(sidebar.projects);
-		});
-	});
-
-	describe("end-of-day review props", () => {
-		it("computes total minutes and session count from todaySessions", () => {
-			setupHooks({
-				todaySessions: [
-					{ projectId: "p1", duration: 30, startTime: "2026-05-01T09:00:00Z" },
-					{ projectId: "p1", duration: 45, startTime: "2026-05-01T10:00:00Z" },
-					{ projectId: "p2", duration: 15, startTime: "2026-05-01T11:00:00Z" },
-				],
-			});
-			renderLayout();
-			const props = endOfDayProps.mock.calls[0][0];
-			expect(props.totalMinutesToday).toBe(90);
-			expect(props.sessionCount).toBe(3);
-		});
-
-		it("picks the project with the most minutes today as the topProject", () => {
-			// p1: 75 min total; p2: 15 min — p1 wins.
-			setupHooks({
-				todaySessions: [
-					{ projectId: "p1", duration: 30, startTime: "2026-05-01T09:00:00Z" },
-					{ projectId: "p1", duration: 45, startTime: "2026-05-01T10:00:00Z" },
-					{ projectId: "p2", duration: 15, startTime: "2026-05-01T11:00:00Z" },
-				],
-			});
-			renderLayout();
-			expect(endOfDayProps.mock.calls[0][0].topProjectName).toBe("Alpha");
-		});
-
-		it("topProject is undefined when there are no sessions", () => {
-			setupHooks({ todaySessions: [] });
-			renderLayout();
-			expect(endOfDayProps.mock.calls[0][0].topProjectName).toBeUndefined();
-		});
-
-		it("zero totals when no sessions", () => {
-			setupHooks({ todaySessions: [] });
-			renderLayout();
-			const props = endOfDayProps.mock.calls[0][0];
-			expect(props.totalMinutesToday).toBe(0);
-			expect(props.sessionCount).toBe(0);
 		});
 	});
 

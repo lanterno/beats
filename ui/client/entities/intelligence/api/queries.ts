@@ -8,10 +8,8 @@ import {
 	dismissInboxItem,
 	dismissPattern,
 	fetchDigests,
-	fetchEstimationAccuracy,
 	fetchFocusScores,
 	fetchInbox,
-	fetchMoodCorrelation,
 	fetchPatterns,
 	fetchProductivityScore,
 	fetchProjectHealth,
@@ -34,8 +32,6 @@ export const intelligenceKeys = {
 		[...intelligenceKeys.all, "suggestions", date ?? "today"] as const,
 	focusScores: (date?: string) =>
 		[...intelligenceKeys.all, "focus-scores", date ?? "today"] as const,
-	mood: () => [...intelligenceKeys.all, "mood"] as const,
-	estimation: () => [...intelligenceKeys.all, "estimation"] as const,
 	projectHealth: () => [...intelligenceKeys.all, "project-health"] as const,
 	inbox: () => [...intelligenceKeys.all, "inbox"] as const,
 };
@@ -187,28 +183,6 @@ export function useFocusScores(date?: string) {
 		queryKey: intelligenceKeys.focusScores(date),
 		queryFn: () => fetchFocusScores(date),
 		staleTime: 5 * 60_000, // 5 minutes
-	});
-}
-
-/**
- * Fetch mood-productivity correlation analysis
- */
-export function useMoodCorrelation() {
-	return useQuery({
-		queryKey: intelligenceKeys.mood(),
-		queryFn: fetchMoodCorrelation,
-		staleTime: 60 * 60_000, // 1 hour
-	});
-}
-
-/**
- * Fetch per-project estimation accuracy
- */
-export function useEstimationAccuracy() {
-	return useQuery({
-		queryKey: intelligenceKeys.estimation(),
-		queryFn: fetchEstimationAccuracy,
-		staleTime: 60 * 60_000, // 1 hour
 	});
 }
 

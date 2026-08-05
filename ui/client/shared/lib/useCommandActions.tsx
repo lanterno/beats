@@ -19,7 +19,7 @@ import {
 	Sun,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
-import { type NavigateFunction, useNavigate } from "react-router-dom";
+import { type NavigateFunction, useNavigate } from "react-router";
 import { clearSessionToken, logout } from "@/features/auth";
 import type { CommandItem } from "@/shared/ui";
 import {
@@ -150,7 +150,7 @@ function buildItems(
 			"Go to Planning",
 			"/plan",
 			<CalendarCheck key="p" className="w-4 h-4" />,
-			["intentions", "week", "plan"],
+			["targets", "budget", "week", "plan"],
 		],
 		[
 			"nav.settings",

@@ -87,7 +87,7 @@ client/
 │   ├── homepage/               Public landing
 │   ├── insights/               Flow trends, contribution heatmap, retrospectives
 │   ├── coach/                  AI coach chat
-│   ├── plan/                   Weekly plan + recurring intentions
+│   ├── plan/                   Weekly plan (per-project hour targets)
 │   ├── project-details/        Project deep-dive
 │   ├── settings/               Account, theme, integrations, devices
 │   └── not-found/              404
@@ -102,7 +102,7 @@ client/
 ├── entities/
 │   ├── project/                Projects + goal overrides
 │   ├── session/                Beats / sessions / flow windows
-│   ├── planning/               Intentions, daily notes, weekly plans
+│   ├── planning/               Weekly plans (per-project hour targets)
 │   ├── coach/                  Coach chat hooks + history
 │   ├── intelligence/           Productivity score, patterns, suggestions
 │   ├── calendar/               Google Calendar integration

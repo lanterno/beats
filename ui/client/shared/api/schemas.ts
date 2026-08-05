@@ -28,7 +28,6 @@ export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),
 	description: z.string().nullable().optional(),
-	estimation: z.string().nullable().optional(),
 	color: z.string().nullable().optional(),
 	archived: z.boolean().optional().default(false),
 	weekly_goal: z.number().nullable().optional(),
@@ -195,36 +194,6 @@ export const FlowWindowSummarySchema = z.object({
 export type FlowWindowSummary = z.infer<typeof FlowWindowSummarySchema>;
 
 // ============================================================================
-// Intention schemas
-// ============================================================================
-
-export const IntentionSchema = z.object({
-	id: z.string(),
-	project_id: z.string(),
-	date: z.string(),
-	planned_minutes: z.number(),
-	completed: z.boolean(),
-});
-
-export type Intention = z.infer<typeof IntentionSchema>;
-
-export const IntentionListSchema = z.array(IntentionSchema);
-
-// ============================================================================
-// DailyNote schemas
-// ============================================================================
-
-export const DailyNoteSchema = z.object({
-	id: z.string(),
-	date: z.string(),
-	note: z.string(),
-	mood: z.number().nullable().optional(),
-	created_at: z.string(),
-});
-
-export type DailyNote = z.infer<typeof DailyNoteSchema>;
-
-// ============================================================================
 // Intelligence schemas
 // ============================================================================
 
@@ -232,7 +201,6 @@ export const ProductivityScoreSchema = z.object({
 	score: z.number(),
 	components: z.object({
 		consistency: z.number(),
-		intentions: z.number(),
 		goals: z.number(),
 		quality: z.number(),
 	}),
@@ -314,38 +282,6 @@ export const FocusScoreSchema = z.object({
 export type FocusScore = z.infer<typeof FocusScoreSchema>;
 
 export const FocusScoreListSchema = z.array(FocusScoreSchema);
-
-export const MoodCorrelationSchema = z.object({
-	mood_trend: z.array(
-		z.object({
-			date: z.string(),
-			mood_avg: z.number(),
-		}),
-	),
-	correlation: z.object({
-		r: z.number(),
-		description: z.string(),
-	}),
-	high_mood_avg_hours: z.number(),
-	low_mood_avg_hours: z.number(),
-	high_mood_avg_sessions: z.number(),
-	low_mood_avg_sessions: z.number(),
-});
-
-export type MoodCorrelation = z.infer<typeof MoodCorrelationSchema>;
-
-export const EstimationAccuracySchema = z.object({
-	project_id: z.string(),
-	project_name: z.string(),
-	avg_planned_min: z.number(),
-	avg_actual_min: z.number(),
-	accuracy_pct: z.number(),
-	bias: z.string(),
-});
-
-export type EstimationAccuracy = z.infer<typeof EstimationAccuracySchema>;
-
-export const EstimationAccuracyListSchema = z.array(EstimationAccuracySchema);
 
 export const ProjectHealthSchema = z.object({
 	project_id: z.string(),

@@ -14,7 +14,7 @@ import {
 	Sparkles,
 	X,
 } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router";
 import type { ProjectWithDuration } from "@/entities/project";
 import { clearSessionToken, logout, useAuth } from "@/features/auth";
 import { cn, useInstallPrompt } from "@/shared/lib";

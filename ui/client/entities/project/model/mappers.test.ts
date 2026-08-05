@@ -13,7 +13,6 @@ describe("Project mapper round-trip", () => {
 			description: "x",
 			color: "#FBBF24",
 			archived: false,
-			estimation: null,
 			weekly_goal: 10,
 			goal_type: "target",
 			goal_overrides: [],

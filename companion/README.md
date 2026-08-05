@@ -4,10 +4,9 @@ Cross-platform Flutter app — desktop tray icon + mobile companion for the Beat
 
 ## What it does
 
-- **Timer** — start/stop, project picker with recents, custom start/stop times, post-stop note + tags sheet
-- **Coach** — streaming chat with the AI coach over `/api/coach/chat`, mood sparkline from the last 7 days of daily notes
+- **Timer** — start/stop, project picker with recents, custom start/stop times (no manual note/tags — tags are auto-derived server-side from daemon flow signals)
+- **Coach** — streaming chat with the AI coach over `/api/coach/chat`
 - **Flow** — today's flow score with timeline, top repo / language / app, daemon-driven flow windows
-- **Intentions** — set, complete, and review daily intentions
 - **Health** — HRV / sleep / readiness from connected Fitbit, Oura, HealthKit (iOS/macOS), Health Connect (Android)
 - **Tray icon** (desktop) — running/idle indicator with quick start/stop from the menu bar
 - **Notifications** — drift alerts, pomodoro completion, auto-timer suggestions
@@ -44,8 +43,9 @@ lib/
 │   ├── coach_screen.dart
 │   ├── flow_screen.dart
 │   ├── health_screen.dart
-│   ├── intentions_screen.dart
-│   └── pairing_screen.dart
+│   ├── monastic_screen.dart
+│   ├── pairing_screen.dart
+│   └── qr_pairing_screen.dart
 ├── services/               Cross-cutting concerns
 │   ├── api_client.dart            HTTP client → Beats API
 │   ├── token_storage.dart         OS keychain via flutter_secure_storage
@@ -54,10 +54,8 @@ lib/
 │   ├── tray_service.dart          Desktop tray menu + click handling
 │   ├── flow_summary.dart          Flow window aggregation helpers
 │   ├── recent_projects.dart       Local recents list (SharedPreferences)
-│   ├── tag_parsing.dart           Hashtag extraction from notes
 │   ├── repo_path.dart             Path-shortening for display
 │   └── ...
-├── models/                 Domain models (timer, project, mood, ...)
 └── theme/                  Design system: colors, typography, animations
 ```
 
@@ -71,7 +69,7 @@ Connects to the Beats API via `ApiClient` (`lib/services/api_client.dart`). Pair
 
 All subsequent requests carry `Authorization: Bearer <jwt>`. The error envelope `{detail, code, fields?}` is parsed into `ApiException` with a `code` field that callers can branch on (mirrors the daemon Go client and UI's `ApiError`).
 
-Read-only analytics methods (`getTags`, `getHeatmap`, `getFlowWindows`, `getSignalSummaries`, `getIntentions`, `getDailyNotesRange`, `getBiometrics`) throw `ApiException` on non-200 — callers wrap in try/catch where graceful degradation is desired (e.g. tag chips are decoration, not blocking). `getFlowWindowsSummary` deliberately returns `Map?` for the empty-state render path.
+Read-only analytics methods (`getHeatmap`, `getFlowWindows`, `getSignalSummaries`, `getBiometrics`) throw `ApiException` on non-200 — callers wrap in try/catch where graceful degradation is desired. `getFlowWindowsSummary` and `getTodayBrief` deliberately return `Map?` for the empty-state render path.
 
 ## Testing
 

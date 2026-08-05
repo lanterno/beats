@@ -359,26 +359,14 @@ function CompanionMock() {
 				<div className="homepage-mock-phone-notch" />
 				<div className="homepage-mock-phone-screen">
 					<span className="homepage-mock-phone-title">Today</span>
-					<div className="homepage-mock-mood-row">
-						{["😴", "🙂", "😀", "🧘", "😶"].map((e, i) => (
-							<button
-								key={i}
-								type="button"
-								className={`homepage-mock-mood ${i === 2 ? "is-active" : ""}`}
-								tabIndex={-1}
-								aria-hidden
-							>
-								{e}
-							</button>
-						))}
-					</div>
 					<div className="homepage-mock-bio">
+						<BioRow label="Focus" value="4h 12m" source="beatsd" />
 						<BioRow label="Sleep" value="7h 24m" source="HealthKit" />
 						<BioRow label="HRV" value="58 ms" source="Oura" />
 						<BioRow label="Steps" value="6,421" source="HealthKit" />
 					</div>
 					<div className="homepage-mock-phone-cta">
-						<span className="font-mono">End of day · log in 1 tap</span>
+						<span className="font-mono">Tracked automatically · nothing to log</span>
 					</div>
 				</div>
 			</div>
@@ -473,9 +461,9 @@ const SURFACES: Surface[] = [
 	},
 	{
 		n: "4.0",
-		title: "Companion — mood, energy, sleep from your phone",
+		title: "Companion — energy, sleep, activity from your phone",
 		outcome:
-			"Flutter app on iOS and Android. Pulls from HealthKit, Health Connect, Fitbit, Oura — so end-of-day is one tap, not a survey.",
+			"Flutter app on iOS and Android. Pulls sleep, HRV, and activity from HealthKit, Health Connect, Fitbit, and Oura — automatically, nothing to log.",
 		detail: "Optional · biometrics never leave your account",
 		sourceLabel: "View companion/",
 		sourceHref: `${GITHUB_URL}/tree/main/companion`,

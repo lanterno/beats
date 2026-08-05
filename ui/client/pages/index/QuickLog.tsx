@@ -1,6 +1,7 @@
 /**
  * QuickLog Component
- * Manual session entry: project, date, start/end, optional note.
+ * Manual session entry: project, date, start/end. No note/tags — the app
+ * takes no free-text input; tags are auto-derived from daemon flow signals.
  */
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,15 +9,13 @@ import { Check, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
-import { sessionKeys, useAllTags } from "@/entities/session";
+import { sessionKeys } from "@/entities/session";
 import { post } from "@/shared/api";
 import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
-import { TagInput } from "@/shared/ui";
 
 export function QuickLog() {
 	const [open, setOpen] = useState(false);
 	const { data: projects } = useProjects();
-	const { data: allTags } = useAllTags();
 	const queryClient = useQueryClient();
 
 	const [projectId, setProjectId] = useState("");
@@ -24,8 +23,6 @@ export function QuickLog() {
 		toLocalDatetimeLocalString(new Date(Date.now() - 60 * 60 * 1000)),
 	);
 	const [endTime, setEndTime] = useState(() => toLocalDatetimeLocalString(new Date()));
-	const [note, setNote] = useState("");
-	const [tags, setTags] = useState<string[]>([]);
 	const [saving, setSaving] = useState(false);
 
 	// Refresh start/end defaults each time the form opens so reopening it later
@@ -48,14 +45,10 @@ export function QuickLog() {
 				project_id: projectId,
 				start: new Date(startTime).toISOString(),
 				end: new Date(endTime).toISOString(),
-				note: note || null,
-				tags,
 			});
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			toast("Session logged");
 			setOpen(false);
-			setNote("");
-			setTags([]);
 		} catch {
 			toast.error("Failed to log session");
 		} finally {
@@ -119,21 +112,6 @@ export function QuickLog() {
 					/>
 				</div>
 			</div>
-
-			<input
-				type="text"
-				value={note}
-				onChange={(e) => setNote(e.target.value)}
-				placeholder="What did you work on? (optional)"
-				className="w-full text-xs bg-secondary/50 border border-border rounded px-2 py-1.5 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-accent"
-			/>
-
-			<TagInput
-				tags={tags}
-				onChange={setTags}
-				suggestions={allTags ?? []}
-				placeholder="Tags (optional)"
-			/>
 
 			{!validRange && (
 				<p className="text-[11px] text-red-400" role="alert">

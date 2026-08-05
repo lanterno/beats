@@ -82,10 +82,9 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest`.
   Set `BEATS_TEST_ENV=1` to skip testcontainers (e.g., in Docker Compose or CI with service containers).
-  The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo) so a separate hurl runner isn't needed for routine work.
+  The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
 - **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env). The `.ts` files cover pure helpers in `shared/lib/`; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
-- **`api/tests/hurl/`** holds standalone HTTP contract tests dating from before the WebAuthn/JWT auth migration; they still reference `X-API-Token` and are not run from CI or any hook. Treat them as historical until reauthored to mint a JWT in a setup step.
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test). Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
 - **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
@@ -119,12 +118,10 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
-| `/api/intentions` | Daily intentions |
-| `/api/daily-notes` | End-of-day notes with mood |
 | `/api/intelligence` | Digests, score, patterns, suggestions, focus scores, inbox |
-| `/api/plans` | Weekly plans, recurring intentions, reviews, streaks |
+| `/api/plans` | Weekly plans (structured per-project hour targets) |
 | `/api/webhooks` | Webhook CRUD, daily summary trigger |
-| `/api/coach` | Brief generation, streaming chat, end-of-day reviews, usage, memory |
+| `/api/coach` | Brief generation, streaming chat, usage, memory |
 | `/api/biometrics` | Daily health data from companion app / HealthKit / Health Connect |
 | `/api/calendar` | Google Calendar OAuth + events |
 | `/api/github` | GitHub OAuth + status |

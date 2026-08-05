@@ -110,7 +110,6 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
     project = Project(
         name=request.name,
         description=request.description,
-        estimation=request.estimation,
         color=request.color,
         weekly_goal=request.weekly_goal,
         category=request.category,
@@ -130,7 +129,6 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         id=request.id,
         name=request.name,
         description=request.description,
-        estimation=request.estimation,
         color=request.color,
         archived=request.archived,
         weekly_goal=request.weekly_goal,
@@ -162,7 +160,6 @@ async def update_goal_overrides(
             effective_from=o.effective_from,
             weekly_goal=o.weekly_goal,
             goal_type=o.goal_type,
-            note=o.note,
         )
         for o in overrides
     ]
