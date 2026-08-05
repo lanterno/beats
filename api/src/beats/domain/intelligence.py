@@ -28,6 +28,15 @@ def _format_hours(minutes: float) -> str:
     return f"{int(minutes)}m"
 
 
+def _rescale_score(consistency: float, goals: float, quality: float) -> int:
+    """Combine the three 0-25 components into a 0-100 productivity score.
+
+    Each component maxes at 25 (sum ≤ 75); the ``* 4 / 3`` stretches that to
+    0-100, clamped. Single source of truth for the live score, its weekly
+    history, and the digest (which passes a neutral goals=13)."""
+    return min(100, round((consistency + goals + quality) * 4 / 3))
+
+
 class IntelligenceService:
     """Service for computing productivity insights and patterns."""
 
@@ -120,7 +129,7 @@ class IntelligenceService:
         else:
             quality_score = 0
 
-        total = min(100, round((consistency + goal_score + quality_score) * 4 / 3))
+        total = _rescale_score(consistency, goal_score, quality_score)
         return {
             "score": total,
             "components": {
@@ -184,7 +193,7 @@ class IntelligenceService:
             else:
                 quality = 0
 
-            score = min(100, round((consistency + goal_s + quality) * 4 / 3))
+            score = _rescale_score(consistency, goal_s, quality)
             history.append({"week_of": monday.isoformat(), "score": score})
 
         return history
@@ -306,7 +315,7 @@ class IntelligenceService:
         # Simplified digest score: goals held at a neutral 13 (unlike the live
         # productivity score, which computes real weekly goal progress),
         # consistency + quality from this week's sessions, rescaled to 0-100.
-        score = min(100, round((consistency + 13 + quality) * 4 / 3))
+        score = _rescale_score(consistency, 13, quality)
 
         return WeeklyDigest(
             week_of=week_monday,
