@@ -638,7 +638,7 @@ export interface paths {
         post?: never;
         /**
          * Delete All Coach Data
-         * @description Delete ALL coach data for this user: memory, briefs, reviews,
+         * @description Delete ALL coach data for this user: memory, briefs,
          *     conversations, and usage logs. Irreversible.
          */
         delete: operations["delete_all_coach_data_api_coach_data_delete"];
@@ -691,66 +691,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/coach/review/answer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Answer Review
-         * @description Save an answer to a review question.
-         */
-        post: operations["answer_review_api_coach_review_answer_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/coach/review/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start Review
-         * @description Generate 3 end-of-day review questions from today's data.
-         */
-        post: operations["start_review_api_coach_review_start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/coach/review/today": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Today Review
-         * @description Get today's review if it exists.
-         */
-        get: operations["get_today_review_api_coach_review_today_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/coach/usage": {
         parameters: {
             query?: never;
@@ -763,61 +703,6 @@ export interface paths {
          * @description Usage breakdown for the cost dashboard.
          */
         get: operations["get_usage_api_coach_usage_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/daily-notes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Daily Note
-         * @description Get the daily note for a given date (defaults to today).
-         */
-        get: operations["get_daily_note_api_daily_notes_get"];
-        /**
-         * Upsert Daily Note
-         * @description Create or update the daily note for a date.
-         *
-         *     Accepts both PUT and POST so older clients posting to this endpoint don't
-         *     silently 405 — the operation is idempotent on (user_id, date).
-         */
-        put: operations["upsert_daily_note_api_daily_notes_put"];
-        /**
-         * Upsert Daily Note
-         * @description Create or update the daily note for a date.
-         *
-         *     Accepts both PUT and POST so older clients posting to this endpoint don't
-         *     silently 405 — the operation is idempotent on (user_id, date).
-         */
-        post: operations["upsert_daily_note_api_daily_notes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/daily-notes/range": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Daily Notes
-         * @description List daily notes between [start, end] (inclusive). Used by clients
-         *     that render mood sparklines / streaks.
-         */
-        get: operations["list_daily_notes_api_daily_notes_range_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1328,26 +1213,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/intelligence/estimation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Estimation Accuracy
-         * @description Get per-project estimation accuracy (planned vs actual).
-         */
-        get: operations["get_estimation_accuracy_api_intelligence_estimation_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/intelligence/focus-scores": {
         parameters: {
             query?: never;
@@ -1412,26 +1277,6 @@ export interface paths {
          *     /patterns/{id}/dismiss route (bare id) keeps working too.
          */
         post: operations["dismiss_inbox_item_api_intelligence_inbox__item_id__dismiss_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/intelligence/mood": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Mood Correlation
-         * @description Get mood-productivity correlation analysis.
-         */
-        get: operations["get_mood_correlation_api_intelligence_mood_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1578,61 +1423,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/intentions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Intentions
-         * @description List intentions for a given date (defaults to today).
-         */
-        get: operations["list_intentions_api_intentions_get"];
-        put?: never;
-        /**
-         * Create Intention
-         * @description Create a daily intention.
-         */
-        post: operations["create_intention_api_intentions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/intentions/{intention_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Intention
-         * @description Delete an intention.
-         */
-        delete: operations["delete_intention_api_intentions__intention_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Intention
-         * @description Update an intention (toggle completion or change planned minutes).
-         *
-         *     Looks up by id directly. The previous implementation listed
-         *     today's intentions and filtered, which silently 404'd any
-         *     update on yesterday-or-earlier intentions — even though the
-         *     list endpoint accepted target_date for any day. Asymmetric
-         *     surface: users could VIEW historical intentions but couldn't
-         *     toggle them off.
-         */
-        patch: operations["update_intention_api_intentions__intention_id__patch"];
-        trace?: never;
-    };
     "/api/oura/connect": {
         parameters: {
             query?: never;
@@ -1685,134 +1475,6 @@ export interface paths {
          * @description Check if Oura is connected.
          */
         get: operations["get_status_api_oura_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/intention-streaks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Intention Streaks
-         * @description Compute consecutive days with all intentions completed.
-         */
-        get: operations["get_intention_streaks_api_plans_intention_streaks_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/recurring": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Recurring Intentions
-         * @description List all recurring intention templates.
-         */
-        get: operations["list_recurring_intentions_api_plans_recurring_get"];
-        put?: never;
-        /**
-         * Create Recurring Intention
-         * @description Create a new recurring intention template.
-         */
-        post: operations["create_recurring_intention_api_plans_recurring_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/recurring/apply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Apply Recurring Intentions
-         * @description Apply recurring intentions for today — creates intentions that don't already exist.
-         */
-        post: operations["apply_recurring_intentions_api_plans_recurring_apply_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/recurring/{intention_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Recurring Intention
-         * @description Delete a recurring intention template.
-         */
-        delete: operations["delete_recurring_intention_api_plans_recurring__intention_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/reviews/weekly": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Weekly Review
-         * @description Get a weekly review for a given week.
-         */
-        get: operations["get_weekly_review_api_plans_reviews_weekly_get"];
-        /**
-         * Upsert Weekly Review
-         * @description Create or update a weekly review.
-         */
-        put: operations["upsert_weekly_review_api_plans_reviews_weekly_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/reviews/weekly/recent": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Recent Reviews
-         * @description List recent weekly reviews.
-         */
-        get: operations["list_recent_reviews_api_plans_reviews_weekly_recent_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2621,12 +2283,13 @@ export interface components {
         /**
          * CreateBeatRequest
          * @description Request body for creating a beat.
+         *
+         *     No note/tags: the app takes no free-text input. Tags are auto-derived
+         *     server-side from the daemon's flow signals (see BeatService).
          */
         CreateBeatRequest: {
             /** End */
             end?: string | null;
-            /** Note */
-            note?: string | null;
             /** Project Id */
             project_id: string;
             /**
@@ -2634,23 +2297,6 @@ export interface components {
              * Format: date-time
              */
             start?: string;
-            /** Tags */
-            tags?: string[];
-        };
-        /**
-         * CreateIntentionRequest
-         * @description Request body for creating a daily intention.
-         */
-        CreateIntentionRequest: {
-            /** Date */
-            date?: string | null;
-            /**
-             * Planned Minutes
-             * @default 60
-             */
-            planned_minutes: number;
-            /** Project Id */
-            project_id: string;
         };
         /**
          * CreateProjectRequest
@@ -2663,24 +2309,10 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Estimation */
-            estimation?: string | null;
             /** Name */
             name: string;
             /** Weekly Goal */
             weekly_goal?: number | null;
-        };
-        /** CreateRecurringIntentionRequest */
-        CreateRecurringIntentionRequest: {
-            /** Days Of Week */
-            days_of_week?: number[];
-            /**
-             * Planned Minutes
-             * @default 60
-             */
-            planned_minutes: number;
-            /** Project Id */
-            project_id: string;
         };
         /** CreateWebhookRequest */
         CreateWebhookRequest: {
@@ -2694,28 +2326,6 @@ export interface components {
             events: string[];
             /** Url */
             url: string;
-        };
-        /**
-         * DailyNoteResponse
-         * @description Response schema for a daily note.
-         */
-        DailyNoteResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Id */
-            id: string;
-            /** Mood */
-            mood?: number | null;
-            /** Note */
-            note: string;
         };
         /** DeleteSignalsResponse */
         DeleteSignalsResponse: {
@@ -2852,24 +2462,6 @@ export interface components {
             /** Duration */
             duration: string;
         };
-        /**
-         * EstimationAccuracyResponse
-         * @description Response schema for estimation accuracy per project.
-         */
-        EstimationAccuracyResponse: {
-            /** Accuracy Pct */
-            accuracy_pct: number;
-            /** Avg Actual Min */
-            avg_actual_min: number;
-            /** Avg Planned Min */
-            avg_planned_min: number;
-            /** Bias */
-            bias: string;
-            /** Project Id */
-            project_id: string;
-            /** Project Name */
-            project_name: string;
-        };
         /** FlowWindowResponse */
         FlowWindowResponse: {
             /** Active Project Id */
@@ -2958,8 +2550,6 @@ export interface components {
             /** Effective From */
             effective_from?: string | null;
             goal_type?: components["schemas"]["GoalType"] | null;
-            /** Note */
-            note?: string | null;
             /** Week Of */
             week_of?: string | null;
             /** Weekly Goal */
@@ -3068,25 +2658,6 @@ export interface components {
             /** Type */
             type: string;
         };
-        /**
-         * IntentionResponse
-         * @description Response schema for an intention.
-         */
-        IntentionResponse: {
-            /** Completed */
-            completed: boolean;
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Id */
-            id: string;
-            /** Planned Minutes */
-            planned_minutes: number;
-            /** Project Id */
-            project_id: string;
-        };
         /** LoginOptionsResponse */
         LoginOptionsResponse: {
             /** Options */
@@ -3128,28 +2699,6 @@ export interface components {
             total_minutes: number;
             /** Warnings */
             warnings: string[];
-        };
-        /**
-         * MoodCorrelationResponse
-         * @description Response schema for mood-productivity correlation.
-         */
-        MoodCorrelationResponse: {
-            /** Correlation */
-            correlation: {
-                [key: string]: unknown;
-            };
-            /** High Mood Avg Hours */
-            high_mood_avg_hours: number;
-            /** High Mood Avg Sessions */
-            high_mood_avg_sessions: number;
-            /** Low Mood Avg Hours */
-            low_mood_avg_hours: number;
-            /** Low Mood Avg Sessions */
-            low_mood_avg_sessions: number;
-            /** Mood Trend */
-            mood_trend: {
-                [key: string]: unknown;
-            }[];
         };
         /** OuraConnectRequest */
         OuraConnectRequest: {
@@ -3353,8 +2902,6 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Estimation */
-            estimation?: string | null;
             /** Github Repo */
             github_repo?: string | null;
             /** Goal Overrides */
@@ -3399,8 +2946,6 @@ export interface components {
             /** Effective Goal Overridden */
             effective_goal_overridden?: boolean | null;
             effective_goal_type?: components["schemas"]["GoalType"] | null;
-            /** Estimation */
-            estimation?: string | null;
             /** Github Repo */
             github_repo?: string | null;
             /** Goal Overrides */
@@ -3481,38 +3026,6 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
-        /** ReviewAnswerRequest */
-        ReviewAnswerRequest: {
-            /** Answer */
-            answer: string;
-            /** Date */
-            date: string;
-            /** Question Index */
-            question_index: number;
-        };
-        /** ReviewQuestionResponse */
-        ReviewQuestionResponse: {
-            /** Derived From */
-            derived_from?: {
-                [key: string]: unknown;
-            } | null;
-            /** Question */
-            question: string;
-        };
-        /** ReviewResponse */
-        ReviewResponse: {
-            /**
-             * Answers
-             * @default []
-             */
-            answers: ({
-                [key: string]: unknown;
-            } | null)[];
-            /** Date */
-            date: string;
-            /** Questions */
-            questions: components["schemas"]["ReviewQuestionResponse"][];
-        };
         /**
          * RhythmSlotResponse
          * @description Response schema for a half-hour slot in the daily rhythm chart.
@@ -3588,15 +3101,13 @@ export interface components {
         };
         /**
          * UpdateBeatRequest
-         * @description Request body for updating a beat.
+         * @description Request body for updating a beat. Tags are auto-derived, not sent.
          */
         UpdateBeatRequest: {
             /** End */
             end?: string | null;
             /** Id */
             id: string;
-            /** Note */
-            note?: string | null;
             /** Project Id */
             project_id: string;
             /**
@@ -3604,18 +3115,6 @@ export interface components {
              * Format: date-time
              */
             start: string;
-            /** Tags */
-            tags?: string[];
-        };
-        /**
-         * UpdateIntentionRequest
-         * @description Request body for updating an intention.
-         */
-        UpdateIntentionRequest: {
-            /** Completed */
-            completed?: boolean | null;
-            /** Planned Minutes */
-            planned_minutes?: number | null;
         };
         /**
          * UpdateProjectRequest
@@ -3635,8 +3134,6 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Estimation */
-            estimation?: string | null;
             /** Github Repo */
             github_repo?: string | null;
             /** @default target */
@@ -3648,21 +3145,6 @@ export interface components {
             /** Weekly Goal */
             weekly_goal?: number | null;
         };
-        /**
-         * UpsertDailyNoteRequest
-         * @description Request body for creating or updating a daily note.
-         */
-        UpsertDailyNoteRequest: {
-            /** Date */
-            date?: string | null;
-            /** Mood */
-            mood?: number | null;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-        };
         /** UpsertWeeklyPlanRequest */
         UpsertWeeklyPlanRequest: {
             /** Budgets */
@@ -3672,29 +3154,6 @@ export interface components {
              * Format: date
              */
             week_of: string;
-        };
-        /** UpsertWeeklyReviewRequest */
-        UpsertWeeklyReviewRequest: {
-            /**
-             * Didnt Go Well
-             * @default
-             */
-            didnt_go_well: string;
-            /**
-             * To Change
-             * @default
-             */
-            to_change: string;
-            /**
-             * Week Of
-             * Format: date
-             */
-            week_of: string;
-            /**
-             * Went Well
-             * @default
-             */
-            went_well: string;
         };
         /** UsageDayResponse */
         UsageDayResponse: {
@@ -4965,103 +4424,6 @@ export interface operations {
             };
         };
     };
-    answer_review_api_coach_review_answer_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReviewAnswerRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_review_api_coach_review_start_post: {
-        parameters: {
-            query?: {
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_today_review_api_coach_review_today_get: {
-        parameters: {
-            query?: {
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewResponse"] | null;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_usage_api_coach_usage_get: {
         parameters: {
             query?: {
@@ -5080,135 +4442,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageSummaryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_daily_note_api_daily_notes_get: {
-        parameters: {
-            query?: {
-                target_date?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyNoteResponse"] | null;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_daily_note_api_daily_notes_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpsertDailyNoteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyNoteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_daily_note_api_daily_notes_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpsertDailyNoteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyNoteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_daily_notes_api_daily_notes_range_get: {
-        parameters: {
-            query: {
-                start: string;
-                end: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyNoteResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -5870,38 +5103,6 @@ export interface operations {
             };
         };
     };
-    get_estimation_accuracy_api_intelligence_estimation_get: {
-        parameters: {
-            query?: {
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EstimationAccuracyResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_focus_scores_api_intelligence_focus_scores_get: {
         parameters: {
             query?: {
@@ -5985,38 +5186,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_mood_correlation_api_intelligence_mood_get: {
-        parameters: {
-            query?: {
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MoodCorrelationResponse"];
-                };
             };
             /** @description Validation Error */
             422: {
@@ -6240,134 +5409,6 @@ export interface operations {
             };
         };
     };
-    list_intentions_api_intentions_get: {
-        parameters: {
-            query?: {
-                target_date?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntentionResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_intention_api_intentions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateIntentionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntentionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_intention_api_intentions__intention_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                intention_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_intention_api_intentions__intention_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                intention_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateIntentionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntentionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     connect_api_oura_connect_post: {
         parameters: {
             query?: never;
@@ -6443,225 +5484,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-        };
-    };
-    get_intention_streaks_api_plans_intention_streaks_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    list_recurring_intentions_api_plans_recurring_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    create_recurring_intention_api_plans_recurring_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRecurringIntentionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    apply_recurring_intentions_api_plans_recurring_apply_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    delete_recurring_intention_api_plans_recurring__intention_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                intention_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_weekly_review_api_plans_reviews_weekly_get: {
-        parameters: {
-            query?: {
-                week_of?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_weekly_review_api_plans_reviews_weekly_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpsertWeeklyReviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_recent_reviews_api_plans_reviews_weekly_recent_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

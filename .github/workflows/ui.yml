@@ -1,5 +1,6 @@
 name: UI
 on:
+  workflow_dispatch:
   push:
     paths: [ui/**]
   pull_request:
@@ -13,37 +14,46 @@ jobs:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          package_json_file: ui/package.json
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
+      # uv is needed by gen:types:check, which dumps the OpenAPI spec from the API.
+      - uses: astral-sh/setup-uv@v8.3.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # Fail CI if the committed OpenAPI types drift from the API schema. Was
+      # previously only enforced in the pre-push hook (skippable / not in CI).
+      # dump_openapi.py imports the app, which needs a JWT_SECRET (>=32 bytes) to
+      # build Settings(); the value never affects the emitted schema.
+      - run: pnpm gen:types:check
+        env:
+          JWT_SECRET: ci_openapi_dump_placeholder_secret_0123456789
       - run: pnpm test
       - run: pnpm build
 
   deploy:
     name: Deploy to Firebase Hosting
     needs: quality
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          package_json_file: ui/package.json
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile

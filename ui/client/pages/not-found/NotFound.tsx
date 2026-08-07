@@ -3,7 +3,7 @@
  * 404 error page.
  */
 
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 export default function NotFound() {
 	return (

@@ -18,7 +18,8 @@
     {
       "matchManagers": ["npm"],
       "groupName": "Node dependencies",
-      "description": "Group all Node.js dependency updates"
+      "minimumReleaseAge": "3 days",
+      "description": "Group all Node.js updates; wait 3d so packages clear pnpm's minimumReleaseAge (24h) cutoff and CI/automerge can go green without a manual rebase"
     },
     {
       "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],

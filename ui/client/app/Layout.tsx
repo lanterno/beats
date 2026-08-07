@@ -5,20 +5,12 @@
  * Mobile: sticky header with hamburger drawer.
  * Handles favicon indicator, keyboard shortcuts, command palette, and focus mode.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
-import {
-	applyRecurringIntentions,
-	useDailyNote,
-	useIntentions,
-	useUpsertDailyNote,
-} from "@/entities/planning";
+import { useCallback, useMemo, useState } from "react";
+import { Outlet, useLocation } from "react-router";
 import { useProjects, visibleProjects } from "@/entities/project";
-import { useThisWeekSessions, useTodaySessions } from "@/entities/session";
 import { useTimer } from "@/features/timer";
 import {
 	parseUtcIso,
-	startOfDay,
 	useCommandActions,
 	useFavicon,
 	useKeyboardShortcuts,
@@ -26,24 +18,13 @@ import {
 	useTheme,
 	useTimerNotification,
 } from "@/shared/lib";
-import {
-	CommandPalette,
-	EndOfDayReview,
-	FocusMode,
-	MorningBriefing,
-	WeeklyReviewDialog,
-} from "@/shared/ui";
+import { CommandPalette, FocusMode } from "@/shared/ui";
 import { MobileHeader, Sidebar } from "@/widgets/sidebar";
 
 export function Layout() {
 	const { data: projects } = useProjects();
 	const timer = useTimer();
 	const location = useLocation();
-	const { data: todaySessions } = useTodaySessions();
-	const { data: weekSessions } = useThisWeekSessions();
-	const { data: dailyNote } = useDailyNote();
-	const upsertNote = useUpsertDailyNote();
-	const { data: todayIntentions } = useIntentions();
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 	const [focusModeOpen, setFocusModeOpen] = useState(false);
 
@@ -53,32 +34,9 @@ export function Layout() {
 	// Start the offline mutation sync engine exactly once.
 	useSyncEngine();
 
-	// Apply recurring intentions on first load each day
-	useEffect(() => {
-		const key = "beats_recurring_applied";
-		const today = new Date().toISOString().slice(0, 10);
-		if (localStorage.getItem(key) !== today) {
-			applyRecurringIntentions()
-				.then(() => localStorage.setItem(key, today))
-				.catch(() => {});
-		}
-	}, []);
-
 	const projectsList = projects || [];
 	const activeProjects = visibleProjects(projectsList);
 	const selectedProject = projectsList.find((p) => p.id === timer.selectedProjectId);
-
-	// Today's summary for end-of-day review
-	const todayTotalMinutes = (todaySessions ?? []).reduce((sum, s) => sum + (s.duration || 0), 0);
-	const todaySessionCount = (todaySessions ?? []).length;
-	const topProject = useMemo(() => {
-		const byProject: Record<string, number> = {};
-		for (const s of todaySessions ?? []) {
-			if (s.projectId) byProject[s.projectId] = (byProject[s.projectId] ?? 0) + (s.duration || 0);
-		}
-		const topId = Object.entries(byProject).sort((a, b) => b[1] - a[1])[0]?.[0];
-		return topId ? projectsList.find((p) => p.id === topId)?.name : undefined;
-	}, [todaySessions, projectsList]);
 
 	// Compute total seconds (handles custom start time)
 	let totalSeconds = timer.elapsedSeconds;
@@ -189,44 +147,6 @@ export function Layout() {
 					timer.stopTimer();
 					setFocusModeOpen(false);
 				}}
-			/>
-
-			{/* Morning briefing */}
-			<MorningBriefing
-				yesterdayMinutes={(() => {
-					const today = startOfDay();
-					const yesterday = startOfDay();
-					yesterday.setDate(yesterday.getDate() - 1);
-					const ySessions = (weekSessions ?? []).filter((s) => {
-						const d = parseUtcIso(s.startTime);
-						return d >= yesterday && d < today;
-					});
-					return ySessions.reduce((sum, s) => sum + s.duration, 0);
-				})()}
-				yesterdaySessionCount={(() => {
-					const today = startOfDay();
-					const yesterday = startOfDay();
-					yesterday.setDate(yesterday.getDate() - 1);
-					return (weekSessions ?? []).filter((s) => {
-						const d = parseUtcIso(s.startTime);
-						return d >= yesterday && d < today;
-					}).length;
-				})()}
-				todayIntentionCount={(todayIntentions ?? []).length}
-				goalWarnings={[]}
-			/>
-
-			{/* Weekly review */}
-			<WeeklyReviewDialog />
-
-			{/* End-of-day review */}
-			<EndOfDayReview
-				totalMinutesToday={todayTotalMinutes}
-				sessionCount={todaySessionCount}
-				topProjectName={topProject}
-				existingNote={dailyNote?.note}
-				existingMood={dailyNote?.mood ?? undefined}
-				onSave={(note, mood) => upsertNote.mutate({ note, mood })}
 			/>
 		</div>
 	);

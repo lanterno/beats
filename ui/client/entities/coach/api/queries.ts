@@ -10,12 +10,9 @@ import {
 	fetchBriefHistory,
 	fetchMemory,
 	fetchTodayBrief,
-	fetchTodayReview,
 	fetchUsage,
 	generateBrief,
 	rewriteMemory,
-	startReview,
-	submitReviewAnswer,
 } from "./coachApi";
 
 export const coachKeys = {
@@ -23,7 +20,6 @@ export const coachKeys = {
 	brief: () => [...coachKeys.all, "brief"] as const,
 	briefHistory: (limit: number) => [...coachKeys.all, "brief-history", limit] as const,
 	usage: (days: number) => [...coachKeys.all, "usage", days] as const,
-	review: () => [...coachKeys.all, "review"] as const,
 	memory: () => [...coachKeys.all, "memory"] as const,
 };
 
@@ -62,34 +58,6 @@ export function useCoachUsage(days = 30) {
 		queryKey: coachKeys.usage(days),
 		queryFn: () => fetchUsage(days),
 		staleTime: 5 * 60_000,
-	});
-}
-
-export function useCoachReview() {
-	return useQuery({
-		queryKey: coachKeys.review(),
-		queryFn: fetchTodayReview,
-		staleTime: 5 * 60_000,
-	});
-}
-
-export function useStartReview() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: () => startReview(),
-		// Seed the review cache from the returned doc instead of refetching
-		// /review/today, which could key to a different local day if midnight
-		// passes between the POST and the GET, hiding the just-generated review.
-		onSuccess: (data) => queryClient.setQueryData(coachKeys.review(), data),
-	});
-}
-
-export function useSubmitReviewAnswer() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: (vars: { date: string; questionIndex: number; answer: string }) =>
-			submitReviewAnswer(vars.date, vars.questionIndex, vars.answer),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: coachKeys.review() }),
 	});
 }
 

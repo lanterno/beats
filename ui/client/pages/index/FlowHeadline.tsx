@@ -13,7 +13,7 @@
  * keys, so the yesterday call is cached across the home + future
  * Insights uses.
  */
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { useFlowWindowsSummary } from "@/entities/session";
 import { shortBundleLabel } from "@/shared/lib/bundleLabel";
 

@@ -13,24 +13,20 @@ from beats.domain.models import (
     Beat,
     BiometricDay,
     CalendarIntegration,
-    DailyNote,
     DeviceRegistration,
     FitbitIntegration,
     FlowWindow,
     GitHubIntegration,
-    Intention,
     OuraIntegration,
     PairingCode,
     PendingSuggestion,
     Project,
-    RecurringIntention,
     SignalSummary,
     User,
     UserInsights,
     Webhook,
     WeeklyDigest,
     WeeklyPlan,
-    WeeklyReview,
 )
 
 
@@ -386,158 +382,6 @@ class MongoUserRepository(UserRepository):
         return await self.collection.count_documents({})
 
 
-# Intention Repository
-
-
-class IntentionRepository(ABC):
-    """Abstract interface for Intention persistence operations."""
-
-    @abstractmethod
-    async def list_by_date(self, target_date: date) -> list[Intention]: ...
-
-    @abstractmethod
-    async def list_by_date_range(self, start: date, end: date) -> list[Intention]: ...
-
-    @abstractmethod
-    async def list_all(self) -> list[Intention]: ...
-
-    @abstractmethod
-    async def get_by_id(self, intention_id: str) -> Intention | None: ...
-
-    @abstractmethod
-    async def create(self, intention: Intention) -> Intention: ...
-
-    @abstractmethod
-    async def update(self, intention: Intention) -> Intention: ...
-
-    @abstractmethod
-    async def delete(self, intention_id: str) -> bool: ...
-
-    @abstractmethod
-    async def upsert(self, data: dict) -> None: ...
-
-
-class MongoIntentionRepository(MongoUserScoped, IntentionRepository):
-    """MongoDB implementation of IntentionRepository."""
-
-    async def list_by_date(self, target_date: date) -> list[Intention]:
-        cursor = self.collection.find(self._q({"date": target_date.isoformat()}))
-        docs = await cursor.to_list(length=None)
-        return [Intention(**serialize_from_document(doc)) for doc in docs]
-
-    async def list_by_date_range(self, start: date, end: date) -> list[Intention]:
-        cursor = self.collection.find(
-            self._q({"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
-        )
-        docs = await cursor.to_list(length=None)
-        return [Intention(**serialize_from_document(doc)) for doc in docs]
-
-    async def get_by_id(self, intention_id: str) -> Intention | None:
-        doc = await self.collection.find_one(self._q({"_id": ObjectId(intention_id)}))
-        if not doc:
-            return None
-        return Intention(**serialize_from_document(doc))
-
-    async def create(self, intention: Intention) -> Intention:
-        data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return Intention(**serialize_from_document({**data, "_id": result.inserted_id}))
-
-    async def update(self, intention: Intention) -> Intention:
-        if not intention.id:
-            raise ValueError("Intention ID is required for update")
-        data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        await self.collection.replace_one(self._q({"_id": ObjectId(intention.id)}), data)
-        return intention
-
-    async def list_all(self) -> list[Intention]:
-        cursor = self.collection.find(self._q())
-        docs = await cursor.to_list(length=None)
-        return [Intention(**serialize_from_document(doc)) for doc in docs]
-
-    async def delete(self, intention_id: str) -> bool:
-        result = await self.collection.delete_one(self._q({"_id": ObjectId(intention_id)}))
-        return result.deleted_count > 0
-
-    async def upsert(self, data: dict) -> None:
-        doc = serialize_to_document(dict(data))
-        doc["user_id"] = self.user_id
-        doc_id = doc.pop("_id", None)
-        if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
-        else:
-            await self.collection.insert_one(doc)
-
-
-# DailyNote Repository
-
-
-class DailyNoteRepository(ABC):
-    """Abstract interface for DailyNote persistence operations."""
-
-    @abstractmethod
-    async def get_by_date(self, target_date: date) -> DailyNote | None: ...
-
-    @abstractmethod
-    async def list_by_date_range(self, start: date, end: date) -> list[DailyNote]: ...
-
-    @abstractmethod
-    async def list_all(self) -> list[DailyNote]: ...
-
-    @abstractmethod
-    async def upsert(self, note: DailyNote) -> DailyNote: ...
-
-    @abstractmethod
-    async def upsert_raw(self, data: dict) -> None:
-        """Upsert from raw dict for import/restore."""
-        ...
-
-
-class MongoDailyNoteRepository(MongoUserScoped, DailyNoteRepository):
-    """MongoDB implementation of DailyNoteRepository."""
-
-    async def get_by_date(self, target_date: date) -> DailyNote | None:
-        doc = await self.collection.find_one(self._q({"date": target_date.isoformat()}))
-        if not doc:
-            return None
-        return DailyNote(**serialize_from_document(doc))
-
-    async def list_by_date_range(self, start: date, end: date) -> list[DailyNote]:
-        cursor = self.collection.find(
-            self._q({"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
-        )
-        docs = await cursor.to_list(length=None)
-        return [DailyNote(**serialize_from_document(doc)) for doc in docs]
-
-    async def list_all(self) -> list[DailyNote]:
-        cursor = self.collection.find(self._q())
-        docs = await cursor.to_list(length=None)
-        return [DailyNote(**serialize_from_document(doc)) for doc in docs]
-
-    async def upsert(self, note: DailyNote) -> DailyNote:
-        data = serialize_to_document(note.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q({"date": note.date.isoformat()}),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return DailyNote(**serialize_from_document(result))
-
-    async def upsert_raw(self, data: dict) -> None:
-        doc = serialize_to_document(dict(data))
-        doc["user_id"] = self.user_id
-        doc_id = doc.pop("_id", None)
-        if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
-        else:
-            await self.collection.insert_one(doc)
-
-
 # Webhook Repository
 
 
@@ -838,84 +682,6 @@ class MongoWeeklyPlanRepository(MongoUserScoped, WeeklyPlanRepository):
             return_document=True,
         )
         return WeeklyPlan(**serialize_from_document(result))
-
-
-# Recurring Intention Repository
-
-
-class RecurringIntentionRepository(ABC):
-    """Abstract interface for RecurringIntention persistence."""
-
-    @abstractmethod
-    async def list_all(self) -> list[RecurringIntention]: ...
-
-    @abstractmethod
-    async def create(self, intention: RecurringIntention) -> RecurringIntention: ...
-
-    @abstractmethod
-    async def delete(self, intention_id: str) -> bool: ...
-
-
-class MongoRecurringIntentionRepository(MongoUserScoped, RecurringIntentionRepository):
-    """MongoDB implementation of RecurringIntentionRepository."""
-
-    async def list_all(self) -> list[RecurringIntention]:
-        cursor = self.collection.find(self._q())
-        docs = await cursor.to_list(length=None)
-        return [RecurringIntention(**serialize_from_document(doc)) for doc in docs]
-
-    async def create(self, intention: RecurringIntention) -> RecurringIntention:
-        data = serialize_to_document(intention.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return RecurringIntention(**serialize_from_document({**data, "_id": result.inserted_id}))
-
-    async def delete(self, intention_id: str) -> bool:
-        result = await self.collection.delete_one(self._q({"_id": ObjectId(intention_id)}))
-        return result.deleted_count > 0
-
-
-# Weekly Review Repository
-
-
-class WeeklyReviewRepository(ABC):
-    """Abstract interface for WeeklyReview persistence."""
-
-    @abstractmethod
-    async def get_by_week(self, week_of: date) -> WeeklyReview | None: ...
-
-    @abstractmethod
-    async def upsert(self, review: WeeklyReview) -> WeeklyReview: ...
-
-    @abstractmethod
-    async def list_recent(self, limit: int = 12) -> list[WeeklyReview]: ...
-
-
-class MongoWeeklyReviewRepository(MongoUserScoped, WeeklyReviewRepository):
-    """MongoDB implementation of WeeklyReviewRepository."""
-
-    async def get_by_week(self, week_of: date) -> WeeklyReview | None:
-        doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
-        if not doc:
-            return None
-        return WeeklyReview(**serialize_from_document(doc))
-
-    async def upsert(self, review: WeeklyReview) -> WeeklyReview:
-        data = serialize_to_document(review.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q({"week_of": review.week_of.isoformat()}),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return WeeklyReview(**serialize_from_document(result))
-
-    async def list_recent(self, limit: int = 12) -> list[WeeklyReview]:
-        cursor = self.collection.find(self._q()).sort("week_of", -1).limit(limit)
-        docs = await cursor.to_list(length=None)
-        return [WeeklyReview(**serialize_from_document(doc)) for doc in docs]
 
 
 # Pairing Code Repository

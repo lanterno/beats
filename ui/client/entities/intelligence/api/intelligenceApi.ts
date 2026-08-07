@@ -4,9 +4,7 @@
  */
 
 import type {
-	EstimationAccuracy,
 	FocusScore,
-	MoodCorrelation,
 	PatternsResponse,
 	ProductivityScore,
 	ProjectHealth,
@@ -20,10 +18,8 @@ export type InboxResponse = Schemas["InboxResponse"];
 export type InboxItem = Schemas["InboxItemResponse"];
 
 import {
-	EstimationAccuracyListSchema,
 	FocusScoreListSchema,
 	get,
-	MoodCorrelationSchema,
 	PatternsResponseSchema,
 	ProductivityScoreSchema,
 	ProjectHealthListSchema,
@@ -110,18 +106,6 @@ export async function fetchFocusScores(date?: string): Promise<FocusScore[]> {
 		: `/api/intelligence/focus-scores?tz=${tz}`;
 	const data = await get<unknown>(url);
 	return parseApiResponse(FocusScoreListSchema, data);
-}
-
-export async function fetchMoodCorrelation(): Promise<MoodCorrelation> {
-	const tz = encodeURIComponent(browserTimeZone());
-	const data = await get<unknown>(`/api/intelligence/mood?tz=${tz}`);
-	return parseApiResponse(MoodCorrelationSchema, data);
-}
-
-export async function fetchEstimationAccuracy(): Promise<EstimationAccuracy[]> {
-	const tz = encodeURIComponent(browserTimeZone());
-	const data = await get<unknown>(`/api/intelligence/estimation?tz=${tz}`);
-	return parseApiResponse(EstimationAccuracyListSchema, data);
 }
 
 export async function fetchProjectHealth(): Promise<ProjectHealth[]> {

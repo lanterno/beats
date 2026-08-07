@@ -12,8 +12,6 @@ from pydantic import BaseModel
 
 from beats.api.dependencies import (
     BeatServiceDep,
-    DailyNoteRepoDep,
-    IntentionRepoDep,
     ProjectServiceDep,
     WebhookRepoDep,
 )
@@ -64,8 +62,6 @@ async def trigger_daily_summary(
     webhook_repo: WebhookRepoDep,
     beat_service: BeatServiceDep,
     project_service: ProjectServiceDep,
-    intention_repo: IntentionRepoDep,
-    daily_note_repo: DailyNoteRepoDep,
     target_date: date = Query(default_factory=date.today),
 ):
     """Trigger a daily summary webhook for a given date (defaults to today)."""
@@ -91,24 +87,11 @@ async def trigger_daily_summary(
 
     total_minutes = sum(item["minutes"] for item in breakdown)
 
-    # Intentions
-    intentions = await intention_repo.list_by_date(target_date)
-    intentions_data = [
-        {"project_id": i.project_id, "planned_minutes": i.planned_minutes, "completed": i.completed}
-        for i in intentions
-    ]
-
-    # Daily note
-    daily_note = await daily_note_repo.get_by_date(target_date)
-
     payload = {
         "date": target_date.isoformat(),
         "total_minutes": total_minutes,
         "session_count": len(completed),
         "project_breakdown": breakdown,
-        "intentions": intentions_data,
-        "daily_note": daily_note.note if daily_note else None,
-        "mood": daily_note.mood if daily_note else None,
     }
 
     await dispatch_webhook_event("daily.summary", payload, webhook_repo)

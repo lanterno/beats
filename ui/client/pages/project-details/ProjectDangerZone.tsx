@@ -8,7 +8,7 @@
 
 import { Archive, ArchiveRestore, Loader2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useArchiveProject, useUnarchiveProject } from "@/entities/project";
 import { describeError } from "@/shared/api";

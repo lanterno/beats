@@ -26,7 +26,7 @@ import {
 	Webhook,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
 import {
 	fetchCalendarAuthUrl,
@@ -95,9 +95,7 @@ export default function Settings() {
 			if (!res.ok) throw new Error("Import failed");
 			const result = await res.json();
 			const { imported } = result;
-			toast.success(
-				`Imported ${imported.projects} projects, ${imported.beats} sessions, ${imported.intentions} intentions, ${imported.daily_notes} notes`,
-			);
+			toast.success(`Imported ${imported.projects} projects, ${imported.beats} sessions`);
 		} catch {
 			toast.error("Import failed — check the file format");
 		} finally {
@@ -244,8 +242,7 @@ export default function Settings() {
 							<div className="flex-1">
 								<p className="text-sm font-medium text-foreground">Full JSON Backup</p>
 								<p className="text-xs text-muted-foreground mt-0.5">
-									Complete dump of all projects, sessions, intentions, and daily notes.
-									Re-importable for disaster recovery.
+									Complete dump of all projects and sessions. Re-importable for disaster recovery.
 								</p>
 								<button
 									onClick={handleExportJSON}

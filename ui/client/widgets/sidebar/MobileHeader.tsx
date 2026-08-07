@@ -15,7 +15,7 @@ import {
 	X,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import type { ProjectWithDuration } from "@/entities/project";
 import { clearSessionToken, logout, useAuth } from "@/features/auth";
 import { cn, formatSecondsToTime, parseUtcIso, useInstallPrompt } from "@/shared/lib";

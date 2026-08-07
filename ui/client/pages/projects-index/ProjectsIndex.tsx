@@ -13,7 +13,7 @@
  */
 import { ArchiveRestore, GitBranch, Layers, Loader2, Plus, Search, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
 	extractCategories,

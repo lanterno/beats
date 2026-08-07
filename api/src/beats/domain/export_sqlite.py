@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS projects (
     user_id TEXT,
     name TEXT,
     description TEXT,
-    estimation TEXT,
     color TEXT,
     archived INTEGER,
     weekly_goal REAL,
@@ -43,28 +42,8 @@ CREATE TABLE IF NOT EXISTS beats (
     data JSON
 );
 
-CREATE TABLE IF NOT EXISTS intentions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    project_id TEXT,
-    date TEXT,
-    planned_minutes INTEGER,
-    completed INTEGER,
-    data JSON
-);
-
-CREATE TABLE IF NOT EXISTS daily_notes (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    date TEXT,
-    note TEXT,
-    mood INTEGER,
-    data JSON
-);
-
 CREATE INDEX IF NOT EXISTS idx_beats_start ON beats(start);
 CREATE INDEX IF NOT EXISTS idx_beats_project ON beats(project_id);
-CREATE INDEX IF NOT EXISTS idx_intentions_date ON intentions(date);
 """
 
 
@@ -74,8 +53,6 @@ class ExportPayload:
 
     projects: list[dict[str, Any]]
     beats: list[dict[str, Any]]
-    intentions: list[dict[str, Any]]
-    daily_notes: list[dict[str, Any]]
 
 
 def build_sqlite_bytes(payload: ExportPayload) -> bytes:
@@ -105,8 +82,6 @@ def build_manifest(payload: ExportPayload, sqlite_bytes: bytes, version: str) ->
         "counts": {
             "projects": len(payload.projects),
             "beats": len(payload.beats),
-            "intentions": len(payload.intentions),
-            "daily_notes": len(payload.daily_notes),
         },
         "sqlite_sha256": hashlib.sha256(sqlite_bytes).hexdigest(),
     }
@@ -131,7 +106,6 @@ _INSERT_PLANS: list[tuple[str, tuple[str, ...], _RowExtractor]] = [
             "user_id",
             "name",
             "description",
-            "estimation",
             "color",
             "archived",
             "weekly_goal",
@@ -143,7 +117,6 @@ _INSERT_PLANS: list[tuple[str, tuple[str, ...], _RowExtractor]] = [
             r.get("user_id"),
             r.get("name"),
             r.get("description"),
-            r.get("estimation"),
             r.get("color"),
             1 if r.get("archived") else 0,
             r.get("weekly_goal"),
@@ -162,29 +135,6 @@ _INSERT_PLANS: list[tuple[str, tuple[str, ...], _RowExtractor]] = [
             r.get("end"),
             r.get("note"),
             json.dumps(r.get("tags") or []),
-        ),
-    ),
-    (
-        "intentions",
-        ("id", "user_id", "project_id", "date", "planned_minutes", "completed"),
-        lambda r: (
-            r.get("id"),
-            r.get("user_id"),
-            r.get("project_id"),
-            r.get("date"),
-            r.get("planned_minutes"),
-            1 if r.get("completed") else 0,
-        ),
-    ),
-    (
-        "daily_notes",
-        ("id", "user_id", "date", "note", "mood"),
-        lambda r: (
-            r.get("id"),
-            r.get("user_id"),
-            r.get("date"),
-            r.get("note"),
-            r.get("mood"),
         ),
     ),
 ]

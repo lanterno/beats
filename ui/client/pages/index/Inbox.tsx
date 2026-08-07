@@ -10,7 +10,7 @@
 
 import { AlertTriangle, Inbox as InboxIcon, Lightbulb, Sparkles, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { type InboxItem, useDismissInboxItem, useInbox } from "@/entities/intelligence";
 import { cn } from "@/shared/lib";
 

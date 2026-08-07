@@ -300,7 +300,6 @@ class TestProjectAPI:
             "id",
             "name",
             "description",
-            "estimation",
             "color",
             "archived",
             "weekly_goal",
@@ -670,7 +669,7 @@ class TestGoalOverridesAPI:
         resp = client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[
-                {"week_of": "2026-04-06", "weekly_goal": 10, "note": "holiday"},
+                {"week_of": "2026-04-06", "weekly_goal": 10},
                 {"effective_from": "2026-03-02", "weekly_goal": 30},
             ],
             headers=auth_headers,
@@ -740,7 +739,7 @@ class TestGoalOverridesAPI:
         project = self._create_project(weekly_goal=20)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
-            json=[{"week_of": "2020-01-06", "weekly_goal": None, "note": "holiday"}],
+            json=[{"week_of": "2020-01-06", "weekly_goal": None}],
             headers=auth_headers,
         )
         # Past week (same Monday as the override): no goal
@@ -752,7 +751,6 @@ class TestGoalOverridesAPI:
         overrides = found["goal_overrides"]
         assert len(overrides) == 1
         assert overrides[0]["weekly_goal"] is None
-        assert overrides[0]["note"] == "holiday"
 
     def test_permanent_null_override_clears_forward(self):
         """A permanent null override clears the goal from that Monday forward."""
@@ -1091,7 +1089,7 @@ class TestTimerAPI:
 class TestCoachEndpoints:
     """Smoke tests for coach endpoints. Since we can't call the real Anthropic
     API in tests, we only test endpoints that don't require LLM calls (usage,
-    brief retrieval, review retrieval, memory read) and verify auth/shape."""
+    brief retrieval, memory read) and verify auth/shape."""
 
     def test_brief_today_returns_null_when_empty(self):
         response = client.get("/api/coach/brief/today", headers=auth_headers)
@@ -1103,11 +1101,6 @@ class TestCoachEndpoints:
         response = client.get("/api/coach/brief/history", headers=auth_headers)
         assert response.status_code == 200
         assert isinstance(response.json(), list)
-
-    def test_review_today_returns_null_when_empty(self):
-        response = client.get("/api/coach/review/today", headers=auth_headers)
-        assert response.status_code == 200
-        assert response.json() is None
 
     def test_memory_returns_empty_content(self):
         response = client.get("/api/coach/memory", headers=auth_headers)
@@ -1129,7 +1122,6 @@ class TestCoachEndpoints:
         for path in [
             "/api/coach/brief/today",
             "/api/coach/brief/history",
-            "/api/coach/review/today",
             "/api/coach/memory",
             "/api/coach/usage",
         ]:
@@ -1143,10 +1135,9 @@ class TestCoachEndpoints:
 class TestCoachRouterGapFill:
     """Coach routes whose logic isn't covered by the smoke suite —
     /chat/history pagination + filtering, /usage with seeded rows,
-    /review/start + /review/answer happy paths, and the
-    BUDGET_EXCEEDED 429 envelope. Mocks the LLM-touching modules so
-    the tests run deterministically; uses real Mongo via testcontainers
-    for the persistence assertions."""
+    and the BUDGET_EXCEEDED 429 envelope. Mocks the LLM-touching
+    modules so the tests run deterministically; uses real Mongo via
+    testcontainers for the persistence assertions."""
 
     @pytest.fixture(autouse=True)
     def _reset_coach_collections(self, auth_info):
@@ -1163,7 +1154,6 @@ class TestCoachRouterGapFill:
         for coll in (
             "coach_conversations",
             "llm_usage",
-            "review_answers",
         ):
             db[coll].delete_many({})
         sync.close()
@@ -1319,151 +1309,6 @@ class TestCoachRouterGapFill:
             resp = client.get(f"/api/coach/usage{q}", headers=auth_info["headers"])
             assert resp.status_code == 422
 
-    # ── /review/start + /review/answer ───────────────────────────────
-
-    def test_review_start_returns_questions_after_generation(self, auth_info, monkeypatch):
-        """Router calls generate_review_questions then reads the
-        persisted doc. Mock the LLM-touching call; verify the response
-        shape matches what the UI parses."""
-        from datetime import UTC as _UTC
-        from datetime import datetime as _dt
-
-        from beats.api.routers import coach as coach_router
-
-        # Stub the heavy generate_review_questions to write a doc and
-        # return — exactly what the real one does after the LLM call.
-        async def fake_generate(user_id, target_date=None, tz=None):
-            import os
-
-            from bson import ObjectId
-            from pymongo import MongoClient
-
-            dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
-            db_name = os.environ.get("DB_NAME", "beats_test")
-            sync = MongoClient(dsn)
-            today = (target_date or _dt.now(_UTC).date()).isoformat()
-            sync[db_name].review_answers.insert_one(
-                {
-                    "_id": ObjectId(),
-                    "user_id": user_id,
-                    "date": today,
-                    "questions": [
-                        {"question": "Q1", "derived_from": {"kind": "x"}},
-                        {"question": "Q2", "derived_from": {"kind": "y"}},
-                        {"question": "Q3", "derived_from": {"kind": "z"}},
-                    ],
-                    "answers": [None, None, None],
-                }
-            )
-            sync.close()
-            return []
-
-        monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
-
-        resp = client.post("/api/coach/review/start", headers=auth_info["headers"])
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert "date" in body
-        assert "questions" in body
-        assert len(body["questions"]) == 3
-        # Each question carries the documented shape.
-        for q in body["questions"]:
-            assert "question" in q
-            assert "derived_from" in q
-
-    def test_review_start_budget_exceeded_returns_429_with_envelope(self, auth_info, monkeypatch):
-        """When the user's monthly budget is over, the router maps
-        BudgetExceeded → 429 with code=BUDGET_EXCEEDED. Pin the
-        envelope shape; clients use the code to render
-        "monthly LLM budget reached" instead of "rate limited"."""
-        from beats.api.routers import coach as coach_router
-        from beats.coach.usage import BudgetExceeded
-
-        async def fake_generate(_user_id, target_date=None, tz=None):
-            raise BudgetExceeded(spent=15.0, limit=10.0)
-
-        monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
-
-        resp = client.post("/api/coach/review/start", headers=auth_info["headers"])
-        assert resp.status_code == 429
-        body = resp.json()
-        assert body["code"] == "BUDGET_EXCEEDED"
-
-    def test_review_start_generic_failure_returns_502(self, auth_info, monkeypatch):
-        """Any other exception during generation surfaces as 502
-        with the friendly "coach is resting" message — distinct
-        from BUDGET_EXCEEDED so clients can tell "your budget is
-        over" from "the LLM API is down"."""
-        from beats.api.routers import coach as coach_router
-
-        async def fake_generate(_user_id, target_date=None, tz=None):
-            raise RuntimeError("anthropic 500")
-
-        monkeypatch.setattr(coach_router, "generate_review_questions", fake_generate)
-
-        resp = client.post("/api/coach/review/start", headers=auth_info["headers"])
-        assert resp.status_code == 502
-        body = resp.json()
-        assert "coach is resting" in body["detail"]
-
-    def test_review_answer_persists_and_returns_ok(self, auth_info):
-        """Seed a review doc, post an answer, verify it landed in the
-        right slot."""
-        # Seed
-        import os
-        from datetime import UTC as _UTC
-        from datetime import datetime as _dt
-
-        from bson import ObjectId
-        from pymongo import MongoClient
-
-        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
-        db_name = os.environ.get("DB_NAME", "beats_test")
-        today = _dt.now(_UTC).date().isoformat()
-        sync = MongoClient(dsn)
-        sync[db_name].review_answers.insert_one(
-            {
-                "_id": ObjectId(),
-                "user_id": auth_info["user_id"],
-                "date": today,
-                "questions": [
-                    {"question": "Q1", "derived_from": {"kind": "x"}},
-                ],
-                "answers": [None],
-            }
-        )
-        sync.close()
-
-        resp = client.post(
-            "/api/coach/review/answer",
-            json={"date": today, "question_index": 0, "answer": "my answer"},
-            headers=auth_info["headers"],
-        )
-        assert resp.status_code == 200
-        assert resp.json() == {"status": "ok"}
-
-        # Verify persistence.
-        sync = MongoClient(dsn)
-        doc = sync[db_name].review_answers.find_one(
-            {"user_id": auth_info["user_id"], "date": today}
-        )
-        sync.close()
-        assert doc is not None
-        assert doc["answers"][0]["text"] == "my answer"
-
-    def test_review_answer_invalid_date_returns_400_envelope(self, auth_info):
-        """The handler raises with code=INVALID_DATE on bad date input
-        (locks the override pattern that this session's coach error-
-        codes commit established)."""
-        resp = client.post(
-            "/api/coach/review/answer",
-            json={"date": "not-a-date", "question_index": 0, "answer": "x"},
-            headers=auth_info["headers"],
-        )
-        assert resp.status_code == 400
-        body = resp.json()
-        assert body["code"] == "INVALID_DATE"
-
     def test_memory_rewrite_budget_exceeded_uses_envelope_code(self, auth_info, monkeypatch):
         """Pin parity with /brief and /review: a BudgetExceeded on
         memory rewrite must surface as 429 + code=BUDGET_EXCEEDED,
@@ -1491,8 +1336,7 @@ class TestCoachDeleteAndChatSse:
     1. DELETE /api/coach/memory — destructive (drops the per-user
        coach personality)
     2. DELETE /api/coach/data — IRREVERSIBLE bulk delete across
-       five collections (memory + briefs + reviews + conversations
-       + usage)
+       four collections (memory + briefs + conversations + usage)
     3. /api/coach/chat SSE — the streaming endpoint's three
        branches: happy-path event emission, BudgetExceeded → SSE
        error event with code=429, generic Exception → 502 event
@@ -1517,7 +1361,6 @@ class TestCoachDeleteAndChatSse:
         for coll in (
             "coach_memory",
             "daily_briefs",
-            "review_answers",
             "coach_conversations",
             "llm_usage",
         ):
@@ -1526,9 +1369,9 @@ class TestCoachDeleteAndChatSse:
         yield
 
     def _seed_all_coach_data(self, user_id: str):
-        """Insert one row in each of the five coach collections
+        """Insert one row in each of the four coach collections
         for the given user. Used by the DELETE /data test to
-        verify all five are wiped in one shot."""
+        verify all four are wiped in one shot."""
         from datetime import UTC, datetime
 
         sync, db = self._db()
@@ -1541,14 +1384,6 @@ class TestCoachDeleteAndChatSse:
                 "date": "2026-04-01",
                 "brief": "morning",
                 "created_at": datetime.now(UTC),
-            }
-        )
-        db.review_answers.insert_one(
-            {
-                "user_id": user_id,
-                "date": "2026-04-01",
-                "questions": [],
-                "answers": [],
             }
         )
         db.coach_conversations.insert_one(
@@ -1580,7 +1415,6 @@ class TestCoachDeleteAndChatSse:
             for coll in (
                 "coach_memory",
                 "daily_briefs",
-                "review_answers",
                 "coach_conversations",
                 "llm_usage",
             )
@@ -1612,15 +1446,14 @@ class TestCoachDeleteAndChatSse:
 
     # ---------------- DELETE /api/coach/data ----------------
 
-    def test_delete_data_wipes_all_five_collections_for_user(self, auth_info):
+    def test_delete_data_wipes_all_coach_collections_for_user(self, auth_info):
         """DELETE /data is the "factory reset" — it MUST wipe all
-        five coach collections (memory + briefs + reviews +
-        conversations + usage) for the requesting user. Pin all
-        five so a refactor that skips one (e.g. forgets the new
-        usage logs) is caught."""
+        four coach collections (memory + briefs + conversations +
+        usage) for the requesting user. Pin all four so a refactor
+        that skips one (e.g. forgets the new usage logs) is caught."""
         self._seed_all_coach_data(auth_info["user_id"])
 
-        # Sanity: all five non-zero before the delete
+        # Sanity: all four non-zero before the delete
         before = self._count_user_data(auth_info["user_id"])
         assert all(c == 1 for c in before.values()), before
 
@@ -1630,7 +1463,7 @@ class TestCoachDeleteAndChatSse:
         assert body["status"] == "ok"
         assert "all coach data" in body["deleted"]
 
-        # All five collections empty for this user
+        # All four collections empty for this user
         after = self._count_user_data(auth_info["user_id"])
         assert all(c == 0 for c in after.values()), after
 
@@ -1748,7 +1581,7 @@ class TestCoachDeleteAndChatSse:
         assert body.rstrip().endswith("data: [DONE]")
 
 
-class TestCoachBriefAndReviewErrorPaths:
+class TestCoachBriefErrorPaths:
     """Three coach endpoints with uncovered error envelopes:
     /brief/generate (BudgetExceeded → 429, generic → 502),
     /memory/rewrite (generic → 502, BudgetExceeded already
@@ -1770,7 +1603,6 @@ class TestCoachBriefAndReviewErrorPaths:
     def _reset_briefs(self, auth_info):
         sync, db = self._db()
         db.daily_briefs.delete_many({})
-        db.review_answers.delete_many({})
         db.coach_memory.delete_many({})
         sync.close()
         yield
@@ -1840,29 +1672,6 @@ class TestCoachBriefAndReviewErrorPaths:
         body = resp.json()
         assert body["code"] == "INVALID_TIMEZONE"
         assert isinstance(body["detail"], str)
-
-    def test_review_today_honors_tz_query_param(self, auth_info):
-        """/review/today resolves 'today' in the requested timezone — the
-        same local-day key-agreement property as brief/today."""
-        from datetime import UTC, datetime
-        from zoneinfo import ZoneInfo
-
-        sync, db = self._db()
-        tokyo_today = datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat()
-        db.review_answers.insert_one(
-            {
-                "user_id": auth_info["user_id"],
-                "date": tokyo_today,
-                "questions": [],
-                "answers": [],
-                "created_at": datetime.now(UTC),
-            }
-        )
-        sync.close()
-
-        resp = client.get("/api/coach/review/today?tz=Asia/Tokyo", headers=auth_info["headers"])
-        assert resp.status_code == 200
-        assert resp.json()["date"] == tokyo_today
 
     def test_brief_generate_budget_exceeded_returns_429_envelope(self, monkeypatch, auth_info):
         """POST /brief/generate when BudgetExceeded fires inside
@@ -1978,11 +1787,34 @@ class TestAnalyticsRouterEndpoints:
 
     def test_tags_returns_sorted_unique_tags_from_user_beats(self):
         """GET /api/analytics/tags surfaces every unique tag across
-        the user's beats, sorted alphabetically. Pin the
-        deduplication + sort — the companion app's tag-suggestion
-        chips bind to this list directly."""
+        the user's beats, sorted alphabetically. Tags are auto-derived
+        from the daemon's flow-window signals (repo + editor language)
+        when a timer stops — the app takes no manual tag input."""
         project_id = self._create_project()
-        # Start + stop a timer to create one completed beat
+
+        # Seed daemon flow windows inside the session's range. The stop
+        # handler auto-tags the beat from these (repo basename + language).
+        def _post_window(start: str, end: str, repo: str | None, language: str | None):
+            client.post(
+                "/api/signals/flow-windows",
+                json={
+                    "window_start": start,
+                    "window_end": end,
+                    "flow_score": 0.8,
+                    "cadence_score": 0.5,
+                    "coherence_score": 0.5,
+                    "category_fit_score": 0.5,
+                    "idle_fraction": 0.1,
+                    "editor_repo": repo,
+                    "editor_language": language,
+                },
+                headers=auth_headers,
+            )
+
+        _post_window("2026-04-01T09:05:00Z", "2026-04-01T09:15:00Z", "/home/me/beats", "Python")
+        _post_window("2026-04-01T09:16:00Z", "2026-04-01T09:25:00Z", None, "TypeScript")
+
+        # Start + stop a timer spanning those windows -> auto-tagged beat.
         client.post(
             f"/api/projects/{project_id}/start",
             json={"time": "2026-04-01T09:00:00Z"},
@@ -1993,25 +1825,12 @@ class TestAnalyticsRouterEndpoints:
             json={"time": "2026-04-01T09:30:00Z"},
             headers=auth_headers,
         )
-        # Find that beat's id and update with tags
-        resp = client.get("/api/beats/", headers=auth_headers)
-        assert resp.status_code == 200
-        beats = resp.json()
-        assert len(beats) >= 1
-        beat = beats[0]
-        # Update via PUT — same shape as the companion's post-stop edit
-        beat["tags"] = ["focus", "morning", "focus"]  # dedup probe
-        client.put(
-            "/api/beats/",
-            json=beat,
-            headers=auth_headers,
-        )
 
         resp = client.get("/api/analytics/tags", headers=auth_headers)
         assert resp.status_code == 200
         tags = resp.json()
-        # Deduplicated AND sorted
-        assert tags == ["focus", "morning"]
+        # Deduplicated AND sorted: repo basename + lowercased languages.
+        assert tags == ["beats", "python", "typescript"]
 
 
 class TestAnalyticsTimezone:
@@ -2178,203 +1997,6 @@ class TestErrorEnvelope:
         body = resp.json()
         assert body["code"] == "BAD_REQUEST"
         assert "No timer" in body["detail"]
-
-
-class TestIntentionsAPI:
-    """Intentions endpoints — list, create, patch, delete."""
-
-    def _create_project(self) -> str:
-        resp = client.post(
-            "/api/projects/",
-            json={"name": "Intention Test Project"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 201, resp.text
-        return resp.json()["id"]
-
-    def test_patch_finds_intention_by_id_regardless_of_date(self):
-        """Regression guard: PATCH /api/intentions/{id} used to scan
-        only today's intentions and 404 anything older — even though
-        the GET endpoint accepts a target_date for any day. Locks in
-        that the lookup is now by id, so a user can toggle off an
-        intention from yesterday or earlier (the companion app's
-        intentions screen surfaces them).
-        """
-        project_id = self._create_project()
-        # Create an intention dated yesterday so PATCH can't find it
-        # if it's still doing the today-only filter.
-        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
-        resp = client.post(
-            "/api/intentions",
-            json={
-                "project_id": project_id,
-                "date": yesterday,
-                "planned_minutes": 60,
-            },
-            headers=auth_headers,
-        )
-        assert resp.status_code == 201, resp.text
-        intention_id = resp.json()["id"]
-
-        # Toggle completed — must succeed even though the intention
-        # belongs to yesterday, not today.
-        resp = client.patch(
-            f"/api/intentions/{intention_id}",
-            json={"completed": True},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["completed"] is True
-
-    def test_patch_returns_404_for_unknown_intention_id(self):
-        """A genuinely missing id still 404s — important to keep the
-        existing behavior since the companion's error toast routes
-        on this status code."""
-        resp = client.patch(
-            "/api/intentions/507f1f77bcf86cd799439011",
-            json={"completed": True},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 404
-
-    def test_list_intentions_returns_today_by_default(self):
-        """GET /api/intentions without ?target_date= scopes to today.
-        Pin so the dashboard's "today's intentions" widget binds to
-        a stable default."""
-        project_id = self._create_project()
-        # Create one for today, one for yesterday
-        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
-        client.post(
-            "/api/intentions",
-            json={"project_id": project_id, "planned_minutes": 60},
-            headers=auth_headers,
-        )
-        client.post(
-            "/api/intentions",
-            json={"project_id": project_id, "date": yesterday, "planned_minutes": 30},
-            headers=auth_headers,
-        )
-        resp = client.get("/api/intentions", headers=auth_headers)
-        assert resp.status_code == 200
-        items = resp.json()
-        # Today's intention is in the result; yesterday's is not
-        today_iso = datetime.now(UTC).date().isoformat()
-        dates = {i["date"] for i in items}
-        assert today_iso in dates
-        assert yesterday not in dates
-
-    def test_patch_planned_minutes_persists(self):
-        """PATCH with `planned_minutes` only (no `completed`) updates
-        the time-box. Pin the second branch of the patch handler —
-        the existing test_patch_finds_intention_by_id only exercises
-        the `completed` branch."""
-        project_id = self._create_project()
-        resp = client.post(
-            "/api/intentions",
-            json={"project_id": project_id, "planned_minutes": 60},
-            headers=auth_headers,
-        )
-        intention_id = resp.json()["id"]
-
-        resp = client.patch(
-            f"/api/intentions/{intention_id}",
-            json={"planned_minutes": 90},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["planned_minutes"] == 90
-        # Existing completed state should be preserved
-        assert body["completed"] is False
-
-    def test_delete_intention_returns_204(self):
-        """DELETE /api/intentions/{id} → 204 No Content. Pin the
-        status code (companion app uses it to confirm deletion)."""
-        project_id = self._create_project()
-        resp = client.post(
-            "/api/intentions",
-            json={"project_id": project_id, "planned_minutes": 30},
-            headers=auth_headers,
-        )
-        intention_id = resp.json()["id"]
-        resp = client.delete(f"/api/intentions/{intention_id}", headers=auth_headers)
-        assert resp.status_code == 204
-        # Confirm it's actually gone — PATCH on the deleted id 404s
-        resp = client.patch(
-            f"/api/intentions/{intention_id}",
-            json={"completed": True},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 404
-
-
-class TestDailyNotes:
-    """Daily-notes endpoints: upsert (PUT + POST alias), single-day get,
-    and the date-range list used by mood sparklines."""
-
-    def test_upsert_via_put(self):
-        resp = client.put(
-            "/api/daily-notes",
-            json={"date": "2026-04-30", "mood": 4, "note": "good day"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["date"] == "2026-04-30"
-        assert body["mood"] == 4
-        assert body["note"] == "good day"
-
-    def test_upsert_via_post_alias(self):
-        # POST is exposed as an alias to keep older clients working.
-        resp = client.post(
-            "/api/daily-notes",
-            json={"date": "2026-04-29", "mood": 3, "note": ""},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        assert resp.json()["mood"] == 3
-
-    def test_get_single_day(self):
-        client.put(
-            "/api/daily-notes",
-            json={"date": "2026-04-28", "mood": 5},
-            headers=auth_headers,
-        )
-        resp = client.get(
-            "/api/daily-notes",
-            params={"target_date": "2026-04-28"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        assert resp.json()["mood"] == 5
-
-    def test_list_by_range(self):
-        # Seed a few days, fetch a window that covers them.
-        for d, m in [("2026-04-25", 2), ("2026-04-26", 3), ("2026-04-27", 4)]:
-            client.put(
-                "/api/daily-notes",
-                json={"date": d, "mood": m, "note": ""},
-                headers=auth_headers,
-            )
-        resp = client.get(
-            "/api/daily-notes/range",
-            params={"start": "2026-04-25", "end": "2026-04-27"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        rows = resp.json()
-        assert isinstance(rows, list)
-        moods = {row["date"]: row["mood"] for row in rows}
-        assert moods["2026-04-25"] == 2
-        assert moods["2026-04-26"] == 3
-        assert moods["2026-04-27"] == 4
-
-    def test_range_requires_auth(self):
-        resp = client.get(
-            "/api/daily-notes/range",
-            params={"start": "2026-04-25", "end": "2026-04-27"},
-        )
-        assert resp.status_code == 401
 
 
 class TestMiscellaneousEndpoints:
@@ -2692,7 +2314,7 @@ class TestCsvAndJsonExport:
 
     def test_full_json_export_shape(self):
         """GET /api/export/full returns a JSON envelope with the
-        five top-level keys the import endpoint reads back. Pin so
+        top-level keys the import endpoint reads back. Pin so
         the export → reimport round trip can't drift."""
         self._create_project("JSON Probe")
         resp = client.get("/api/export/full", headers=auth_headers)
@@ -2704,8 +2326,6 @@ class TestCsvAndJsonExport:
             "version",
             "projects",
             "beats",
-            "intentions",
-            "daily_notes",
         }
         # version is a string
         assert isinstance(body["version"], str)
@@ -2764,13 +2384,12 @@ class TestCsvAndJsonExport:
         assert resp.status_code == 400
         assert "missing entries" in resp.text.lower()
 
-    def test_full_json_round_trip_with_all_four_entity_types(self):
-        """Existing round-trip seeds only projects. Pin that beats,
-        intentions, AND daily_notes round-trip too — those are
-        separate import branches (lines 280-292) and a regression
-        in any one would silently lose user data on cross-deploy
-        migrations."""
-        # Seed: project + beat + intention + daily note
+    def test_full_json_round_trip_with_projects_and_beats(self):
+        """Existing round-trip seeds only projects. Pin that beats
+        round-trip too — those are separate import branches and a
+        regression in either would silently lose user data on
+        cross-deploy migrations."""
+        # Seed: project + beat
         project_id = self._create_project("Full Round Trip")
         client.post(
             f"/api/projects/{project_id}/start",
@@ -2782,25 +2401,13 @@ class TestCsvAndJsonExport:
             json={"time": "2026-04-01T09:30:00Z"},
             headers=auth_headers,
         )
-        client.post(
-            "/api/intentions",
-            json={"project_id": project_id, "planned_minutes": 60},
-            headers=auth_headers,
-        )
-        client.put(
-            "/api/daily-notes",
-            json={"date": "2026-04-01", "note": "good day", "mood": 4},
-            headers=auth_headers,
-        )
 
         export = client.get("/api/export/full", headers=auth_headers)
         assert export.status_code == 200
         body = export.json()
-        # All four entity types present in export
+        # Both entity types present in export
         assert len(body["projects"]) >= 1
         assert len(body["beats"]) >= 1
-        assert len(body["intentions"]) >= 1
-        assert len(body["daily_notes"]) >= 1
 
         imported = client.post(
             "/api/export/import",
@@ -2809,19 +2416,17 @@ class TestCsvAndJsonExport:
         )
         assert imported.status_code == 200
         imp = imported.json()["imported"]
-        # All four counts non-zero — pin so a refactor that drops
-        # one of the four import branches surfaces immediately
+        # Both counts non-zero — pin so a refactor that drops
+        # one of the import branches surfaces immediately
         assert imp["projects"] >= 1
         assert imp["beats"] >= 1
-        assert imp["intentions"] >= 1
-        assert imp["daily_notes"] >= 1
 
-    def test_sqlite_round_trip_with_all_four_entity_types(self):
+    def test_sqlite_round_trip_with_projects_and_beats(self):
         """Same as the JSON round-trip test, but for the signed
-        SQLite bundle. The SQLite import has its own four
-        branches (lines 236-253) — pin so a regression in the
-        sqlite3.execute(SELECT data FROM ...) loop on any one
-        table doesn't silently drop user data on import."""
+        SQLite bundle. The SQLite import has its own branches — pin
+        so a regression in the sqlite3.execute(SELECT data FROM ...)
+        loop on either table doesn't silently drop user data on
+        import."""
         project_id = self._create_project("SQLite Round Trip")
         client.post(
             f"/api/projects/{project_id}/start",
@@ -2831,16 +2436,6 @@ class TestCsvAndJsonExport:
         client.post(
             "/api/projects/stop",
             json={"time": "2026-04-02T09:15:00Z"},
-            headers=auth_headers,
-        )
-        client.post(
-            "/api/intentions",
-            json={"project_id": project_id, "planned_minutes": 30},
-            headers=auth_headers,
-        )
-        client.put(
-            "/api/daily-notes",
-            json={"date": "2026-04-02", "note": "shipping", "mood": 5},
             headers=auth_headers,
         )
 
@@ -2855,8 +2450,6 @@ class TestCsvAndJsonExport:
         imp = imported.json()["imported"]
         assert imp["projects"] >= 1
         assert imp["beats"] >= 1
-        assert imp["intentions"] >= 1
-        assert imp["daily_notes"] >= 1
 
 
 class TestIntelligenceInbox:
@@ -3652,28 +3245,6 @@ class TestIntelligenceAPI:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_mood_returns_envelope_for_empty_user(self):
-        """GET /mood with no notes → {correlation:{r,description},
-        high_mood_avg_hours, low_mood_avg_hours, mood_trend}.
-        Pin the keys — the Mood panel binds to the correlation
-        nested object directly."""
-        resp = client.get("/api/intelligence/mood", headers=auth_headers)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "correlation" in body
-        assert body["correlation"]["r"] == 0
-        assert body["correlation"]["description"] == "neutral"
-        assert body["high_mood_avg_hours"] == 0
-        assert body["low_mood_avg_hours"] == 0
-        assert body["mood_trend"] == []
-
-    def test_estimation_accuracy_returns_list_for_empty_user(self):
-        """GET /estimation with no intentions → []. Pin so the
-        Estimation Accuracy section renders an empty state."""
-        resp = client.get("/api/intelligence/estimation", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json() == []
-
     def test_project_health_returns_list_for_empty_user(self):
         """GET /project-health with no projects → []. Pin the empty
         contract for first-run users."""
@@ -3863,136 +3434,6 @@ class TestAutoStartAPI:
             assert resp.status_code == 401, f"{method} {path} should require auth"
 
 
-class TestDailyNotesAPI:
-    """/api/daily-notes — end-of-day reflections (note + mood). Consumed
-    by the EndOfDayReview modal in the UI and the coach's day context.
-    Previously zero coverage; tests pin GET/PUT/POST round-trip,
-    range listing, today-as-default, and the dual-method upsert."""
-
-    @pytest.fixture(autouse=True)
-    def _reset_daily_notes(self):
-        import os
-
-        from pymongo import MongoClient
-
-        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
-        db_name = os.environ.get("DB_NAME", "beats_test")
-        sync = MongoClient(dsn)
-        sync[db_name].daily_notes.delete_many({})
-        sync.close()
-        yield
-
-    def test_get_returns_null_when_no_note_for_today(self):
-        resp = client.get("/api/daily-notes", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json() is None
-
-    def test_put_creates_note_and_get_returns_it(self):
-        resp = client.put(
-            "/api/daily-notes",
-            json={"date": "2026-05-01", "note": "shipped X", "mood": 4},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["note"] == "shipped X"
-        assert body["mood"] == 4
-        assert body["date"] == "2026-05-01"
-        assert body["id"]
-
-        # GET round-trips by date.
-        resp = client.get("/api/daily-notes?target_date=2026-05-01", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json()["note"] == "shipped X"
-
-    def test_put_is_idempotent_on_date(self):
-        """The repo upserts on (user_id, date), so a second write for
-        the same date overwrites — locks in that the EndOfDayReview's
-        re-saves don't pile up duplicate rows."""
-        for note, mood in [("first", 3), ("revised", 5)]:
-            resp = client.put(
-                "/api/daily-notes",
-                json={"date": "2026-05-01", "note": note, "mood": mood},
-                headers=auth_headers,
-            )
-            assert resp.status_code == 200
-
-        body = client.get("/api/daily-notes?target_date=2026-05-01", headers=auth_headers).json()
-        assert body["note"] == "revised"
-        assert body["mood"] == 5
-
-    def test_post_alias_works_for_older_clients(self):
-        """The route accepts both PUT and POST so a client that posts
-        doesn't silently 405. Pins this — without the dual decorator
-        a stray POST would land somewhere unexpected."""
-        resp = client.post(
-            "/api/daily-notes",
-            json={"date": "2026-05-02", "note": "via POST", "mood": 3},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["note"] == "via POST"
-
-    def test_get_today_default_when_no_target_date(self):
-        from datetime import datetime as _dt
-
-        today = _dt.now(UTC).date().isoformat()
-        client.put(
-            "/api/daily-notes",
-            json={"date": today, "note": "today's reflection", "mood": 4},
-            headers=auth_headers,
-        )
-
-        # No target_date → defaults to today.
-        resp = client.get("/api/daily-notes", headers=auth_headers)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body is not None
-        assert body["note"] == "today's reflection"
-
-    def test_range_returns_inclusive_window(self):
-        # Seed three days; query a window that covers two of them.
-        for d, note in [
-            ("2026-04-29", "before"),
-            ("2026-04-30", "in-window-1"),
-            ("2026-05-01", "in-window-2"),
-            ("2026-05-02", "after"),
-        ]:
-            client.put(
-                "/api/daily-notes",
-                json={"date": d, "note": note, "mood": 3},
-                headers=auth_headers,
-            )
-
-        resp = client.get(
-            "/api/daily-notes/range?start=2026-04-30&end=2026-05-01",
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        notes = sorted(n["note"] for n in body)
-        assert notes == ["in-window-1", "in-window-2"]
-
-    def test_mood_is_optional(self):
-        resp = client.put(
-            "/api/daily-notes",
-            json={"date": "2026-05-03", "note": "no mood today"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        assert resp.json()["mood"] is None
-
-    def test_endpoints_require_auth(self):
-        for method, path in [
-            ("GET", "/api/daily-notes"),
-            ("GET", "/api/daily-notes/range?start=2026-01-01&end=2026-01-31"),
-            ("PUT", "/api/daily-notes"),
-            ("POST", "/api/daily-notes"),
-        ]:
-            resp = client.request(method, path)
-            assert resp.status_code == 401, f"{method} {path} should require auth"
-
-
 class TestWebhooksAPI:
     """/api/webhooks/* — CRUD + the daily-summary dispatch path. The
     dispatch path is the important one: it's fire-and-forget, was
@@ -4089,17 +3530,11 @@ class TestWebhooksAPI:
             "total_minutes",
             "session_count",
             "project_breakdown",
-            "intentions",
-            "daily_note",
-            "mood",
         ):
             assert key in body, f"missing {key} in payload"
         assert body["total_minutes"] == 0
         assert body["session_count"] == 0
         assert body["project_breakdown"] == []
-        assert body["intentions"] == []
-        assert body["daily_note"] is None
-        assert body["mood"] is None
 
     def test_daily_summary_dispatch_pins_task_against_gc(self, monkeypatch):
         """The asyncio GC race fix: dispatch_webhook_event creates
@@ -4185,12 +3620,9 @@ class TestWebhooksAPI:
 
 
 class TestPlanningAPI:
-    """/api/plans/* — weekly plans, recurring intentions, weekly reviews,
-    intention streaks. Previously zero coverage. Tests pin the
-    template-application logic (day-of-week filter + dedup against
-    existing) and the streak math (current walks back from today, best
-    scans the full set), since those are the parts with real logic
-    rather than thin CRUD."""
+    """/api/plans/* — structured weekly plans (per-project hour budgets).
+    Tests pin the default-week resolution and the upsert (full
+    replacement, not merge) round-trip."""
 
     @pytest.fixture(autouse=True)
     def _reset_planning_state(self, auth_info):
@@ -4204,12 +3636,7 @@ class TestPlanningAPI:
         db_name = os.environ.get("DB_NAME", "beats_test")
         sync = MongoClient(dsn)
         db = sync[db_name]
-        for coll in (
-            "weekly_plans",
-            "recurring_intentions",
-            "weekly_reviews",
-            "intentions",
-        ):
+        for coll in ("weekly_plans",):
             db[coll].delete_many({})
         sync.close()
         yield
@@ -4269,214 +3696,12 @@ class TestPlanningAPI:
         # Only the second write survives — full replacement, not merge.
         assert [b["project_id"] for b in body["budgets"]] == ["p2"]
 
-    # ── Recurring intentions ──────────────────────────────────────────
-
-    def test_create_then_list_recurring_intention(self):
-        resp = client.post(
-            "/api/plans/recurring",
-            json={"project_id": "p-x", "planned_minutes": 90, "days_of_week": [0, 2, 4]},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 201, resp.text
-        created = resp.json()
-        assert created["project_id"] == "p-x"
-        assert created["planned_minutes"] == 90
-        assert created["days_of_week"] == [0, 2, 4]
-        assert created["enabled"] is True
-
-        listing = client.get("/api/plans/recurring", headers=auth_headers).json()
-        assert len(listing) == 1
-        assert listing[0]["project_id"] == "p-x"
-
-    def test_delete_recurring_intention(self):
-        created = client.post(
-            "/api/plans/recurring",
-            json={"project_id": "p-doomed"},
-            headers=auth_headers,
-        ).json()
-
-        resp = client.delete(f"/api/plans/recurring/{created['id']}", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json()["deleted"] is True
-
-        assert client.get("/api/plans/recurring", headers=auth_headers).json() == []
-
-    def test_apply_creates_intentions_for_matching_weekday(self):
-        """Templates whose days_of_week includes today's weekday should
-        produce intentions; others should not. Templates that match but
-        whose project already has an intention today should be skipped
-        (idempotent re-apply)."""
-        from datetime import date
-
-        today_dow = date.today().weekday()
-        other_dow = (today_dow + 1) % 7
-
-        # Matches today
-        client.post(
-            "/api/plans/recurring",
-            json={
-                "project_id": "fires-today",
-                "planned_minutes": 45,
-                "days_of_week": [today_dow],
-            },
-            headers=auth_headers,
-        )
-        # Doesn't match today
-        client.post(
-            "/api/plans/recurring",
-            json={
-                "project_id": "fires-other-day",
-                "planned_minutes": 30,
-                "days_of_week": [other_dow],
-            },
-            headers=auth_headers,
-        )
-
-        # First apply creates exactly the matching one.
-        resp = client.post("/api/plans/recurring/apply", headers=auth_headers)
-        assert resp.status_code == 200
-        first = resp.json()
-        assert first["created"] == 1
-        assert first["date"] == date.today().isoformat()
-
-        # Second apply is idempotent — the intention already exists.
-        resp = client.post("/api/plans/recurring/apply", headers=auth_headers)
-        assert resp.json()["created"] == 0
-
-    # ── Weekly reviews ────────────────────────────────────────────────
-
-    def test_get_weekly_review_default_returns_empty_shape(self):
-        from datetime import date, timedelta
-
-        resp = client.get("/api/plans/reviews/weekly", headers=auth_headers)
-        assert resp.status_code == 200
-        body = resp.json()
-        expected = (date.today() - timedelta(days=date.today().weekday())).isoformat()
-        assert body == {
-            "week_of": expected,
-            "went_well": "",
-            "didnt_go_well": "",
-            "to_change": "",
-        }
-
-    def test_upsert_weekly_review_round_trip(self):
-        client.put(
-            "/api/plans/reviews/weekly",
-            json={
-                "week_of": "2026-04-27",
-                "went_well": "shipped feature X",
-                "didnt_go_well": "too many context switches",
-                "to_change": "block mornings for deep work",
-            },
-            headers=auth_headers,
-        )
-        body = client.get(
-            "/api/plans/reviews/weekly?week_of=2026-04-27", headers=auth_headers
-        ).json()
-        assert body["went_well"] == "shipped feature X"
-        assert body["didnt_go_well"] == "too many context switches"
-        assert body["to_change"] == "block mornings for deep work"
-
-    def test_recent_reviews_lists_in_recency_order(self):
-        for week, note in [
-            ("2026-03-30", "older"),
-            ("2026-04-06", "middle"),
-            ("2026-04-13", "newer"),
-        ]:
-            client.put(
-                "/api/plans/reviews/weekly",
-                json={"week_of": week, "went_well": note},
-                headers=auth_headers,
-            )
-
-        body = client.get("/api/plans/reviews/weekly/recent", headers=auth_headers).json()
-        assert len(body) == 3
-        # repo.list_recent is by week descending — newest first.
-        assert body[0]["week_of"] == "2026-04-13"
-        assert body[-1]["week_of"] == "2026-03-30"
-
-    # ── Streaks ───────────────────────────────────────────────────────
-
-    def test_streaks_zero_on_no_data(self):
-        resp = client.get("/api/plans/intention-streaks", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json() == {"current_streak": 0, "best_streak": 0}
-
-    def test_streaks_count_only_days_where_all_intentions_completed(self, auth_info):
-        """A day with one completed and one not-completed intention does
-        NOT count — the current/best streaks both walk only the
-        all-complete days. Locks in the predicate at planning.py:196."""
-        import os
-        from datetime import date, timedelta
-
-        from bson import ObjectId
-        from pymongo import MongoClient
-
-        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
-        db_name = os.environ.get("DB_NAME", "beats_test")
-        sync = MongoClient(dsn)
-        db = sync[db_name]
-
-        user_id = auth_info["user_id"]
-        today = date.today()
-        yesterday = today - timedelta(days=1)
-        # Today: two intentions, both completed → counts.
-        # Yesterday: two intentions, one not completed → does not count.
-        db.intentions.insert_many(
-            [
-                {
-                    "_id": ObjectId(),
-                    "user_id": user_id,
-                    "project_id": "p1",
-                    "date": today.isoformat(),
-                    "planned_minutes": 60,
-                    "completed": True,
-                },
-                {
-                    "_id": ObjectId(),
-                    "user_id": user_id,
-                    "project_id": "p2",
-                    "date": today.isoformat(),
-                    "planned_minutes": 60,
-                    "completed": True,
-                },
-                {
-                    "_id": ObjectId(),
-                    "user_id": user_id,
-                    "project_id": "p1",
-                    "date": yesterday.isoformat(),
-                    "planned_minutes": 60,
-                    "completed": True,
-                },
-                {
-                    "_id": ObjectId(),
-                    "user_id": user_id,
-                    "project_id": "p2",
-                    "date": yesterday.isoformat(),
-                    "planned_minutes": 60,
-                    "completed": False,  # ← breaks the streak
-                },
-            ]
-        )
-        sync.close()
-
-        body = client.get("/api/plans/intention-streaks", headers=auth_headers).json()
-        # Today is the only fully-complete day → current = 1, best = 1.
-        assert body == {"current_streak": 1, "best_streak": 1}
-
     # ── Auth ──────────────────────────────────────────────────────────
 
     def test_planning_endpoints_require_auth(self):
         for method, path in [
             ("GET", "/api/plans/weekly"),
             ("PUT", "/api/plans/weekly"),
-            ("GET", "/api/plans/recurring"),
-            ("POST", "/api/plans/recurring"),
-            ("POST", "/api/plans/recurring/apply"),
-            ("GET", "/api/plans/reviews/weekly"),
-            ("PUT", "/api/plans/reviews/weekly"),
-            ("GET", "/api/plans/reviews/weekly/recent"),
-            ("GET", "/api/plans/intention-streaks"),
         ]:
             resp = client.request(method, path)
             assert resp.status_code == 401, f"{method} {path} should require auth"
@@ -5003,8 +4228,8 @@ class TestDevicePairingAPI:
         assert resp.status_code == 200
 
     def test_device_token_allowed_on_analytics_tags(self):
-        """Device tokens can read /api/analytics/tags — used by companion's
-        post-stop prompt to suggest recent tags as one-tap chips."""
+        """Device tokens can read /api/analytics/tags — the companion surfaces
+        the auto-derived tag list (repo/language) in its analytics views."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})
@@ -5015,8 +4240,8 @@ class TestDevicePairingAPI:
         assert resp.status_code == 200
 
     def test_device_token_allowed_on_beats(self):
-        """Device tokens can read /api/beats — used by companion's post-stop
-        'How did it go?' prompt to update the just-stopped beat with note + tags."""
+        """Device tokens can read /api/beats — the companion lists recent
+        sessions after a timer stops (no manual note/tags edit anymore)."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})

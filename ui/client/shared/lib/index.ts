@@ -29,7 +29,6 @@ export {
 } from "./format";
 // Fuzzy matching (command palette)
 export { fuzzyRank, score as fuzzyScore } from "./fuzzyMatch";
-
 // Offline mutation queue
 export {
 	drainPending,
@@ -38,7 +37,6 @@ export {
 	newClientId,
 	type PendingMutation,
 } from "./mutationQueue";
-
 // Hooks
 export { type CommandContext, useCommandActions } from "./useCommandActions";
 export { useCountUp } from "./useCountUp";

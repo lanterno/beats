@@ -42,7 +42,7 @@ TOOL_RESULT_DISPLAY_LIMIT = 500
 # the budgeted cost per turn before any failure surfaces. Set to 8
 # rather than the previous 5 because legitimate research-style
 # turns can chain 4-5 tools (e.g. get_projects → get_beats →
-# get_intentions → get_patterns → text); 8 leaves headroom for a
+# get_productivity_score → get_patterns → text); 8 leaves headroom for a
 # clarifying follow-up before the cap kicks in. When exhausted,
 # we emit a typed error event the UI already handles, then done.
 MAX_TOOL_TURNS = 8
