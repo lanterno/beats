@@ -218,16 +218,78 @@ func TestComputeCadence_MixedAvailability_OnlyEventTapSamplesCount(t *testing.T)
 }
 
 func TestComputeCoherence_EmptyAndSingleSample(t *testing.T) {
-	// Empty input: implementation has no samples, no bundle counts → n=0
-	// → returns 1.0 (defensible: "nothing happened" reads as
-	// "you weren't context switching").
-	if got := computeCoherence(nil); got != 1.0 {
-		t.Errorf("empty samples should give coherence 1.0, got %f", got)
+	// No bundle counts at all → 0.5, the same "unknown" the cadence
+	// fallback and the empty-window path use.
+	//
+	// This assertion used to read 1.0, on the reasoning that "nothing
+	// happened" reads as "you weren't context switching". That holds
+	// looking at coherence alone and breaks looking at the system: the
+	// score isn't a question we answer, it's a measurement we persist.
+	// A platform whose FrontmostApp always returns empty took this
+	// branch on every window and published 0.600 forever — 0.4 cadence
+	// fallback plus 0.4 phantom coherence — indistinguishable from a
+	// real reading. Absence of evidence has to score as absence, not as
+	// evidence of ideal focus.
+	if got := computeCoherence(nil); got != 0.5 {
+		t.Errorf("no observed apps should give coherence 0.5, got %f", got)
 	}
-	// Single sample, single bundle: definitely focused.
+	// Samples that arrived but carried no bundle ID are the same
+	// situation as no samples: we saw nothing.
+	blind := []Sample{{BundleID: ""}, {BundleID: ""}, {BundleID: ""}}
+	if got := computeCoherence(blind); got != 0.5 {
+		t.Errorf("blind samples should give coherence 0.5, got %f", got)
+	}
+	// Single sample, single bundle: definitely focused. One *observed*
+	// app is still full coherence — that's the case n == 1 keeps.
 	got := computeCoherence([]Sample{{BundleID: "com.apple.dt.Xcode"}})
 	if got != 1.0 {
 		t.Errorf("single-sample coherence should be 1.0, got %f", got)
+	}
+}
+
+// TestComputeFlowWindow_BlindWindowIsNotPlausible is the regression
+// guard for the defect that motivated the Windows collector work.
+//
+// The sample shape here is exactly what a platform with no app
+// detection and no event tap produces: samples arrive on schedule,
+// every field the scorer reads is empty. Before the coherence fix this
+// yielded precisely 0.600 on every window forever, which is squarely
+// inside the range a real working session produces — so nothing
+// downstream could tell it apart from data.
+func TestComputeFlowWindow_BlindWindowIsNotPlausible(t *testing.T) {
+	start := time.Now().UTC()
+	end := start.Add(time.Minute)
+
+	samples := make([]Sample, 0, 12)
+	for i := range 12 {
+		samples = append(samples, Sample{
+			CollectedAt: start.Add(time.Duration(i) * 5 * time.Second),
+			BundleID:    "", // app detection unavailable
+			AppName:     "",
+			IdleSeconds: 0.0, // idle detection unavailable — reads as active
+			EventCount:  -1,  // event tap unavailable
+		})
+	}
+
+	w := ComputeFlowWindow(samples, start, end, "", "")
+
+	if w.FlowScore == 0.6 {
+		t.Errorf("blind window scored exactly 0.600 again — the phantom-coherence " +
+			"regression is back; a window where nothing was observed must not " +
+			"land in the middle of the plausible range")
+	}
+	if w.CoherenceScore != 0.5 {
+		t.Errorf("blind window coherence = %f, want 0.5", w.CoherenceScore)
+	}
+	if w.CadenceScore != 0.5 {
+		t.Errorf("blind window cadence = %f, want 0.5 (fallback)", w.CadenceScore)
+	}
+	// 0.4(0.5) + 0.4(0.5) + 0.2(0) = 0.4
+	if math.Abs(w.FlowScore-0.4) > 1e-9 {
+		t.Errorf("blind window flow = %f, want 0.4", w.FlowScore)
+	}
+	if w.DominantBundleID != "" {
+		t.Errorf("blind window should have no dominant bundle, got %q", w.DominantBundleID)
 	}
 }
 

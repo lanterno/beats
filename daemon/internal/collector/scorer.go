@@ -130,6 +130,22 @@ func computeCadence(samples []Sample, windowDuration time.Duration) float64 {
 
 // computeCoherence returns 1 − normalized entropy of the app distribution.
 // 1.0 = single app (fully focused), 0.0 = maximum context switching.
+//
+// Zero observed apps is NOT full coherence. This used to fold n == 0
+// into the n <= 1 branch and return 1.0, which meant "app detection
+// produced nothing all window" scored identically to "the user never
+// left their editor". On a platform where FrontmostApp always returns
+// empty that is not a rounding error — it pins every flow window at
+// exactly 0.600 (0.4 cadence fallback + 0.4 phantom coherence + 0
+// category fit) and writes confident-looking fabricated data forever,
+// with no error anywhere to notice.
+//
+// So n == 0 returns the same 0.5 "unknown" the cadence fallback and
+// the empty-window path already use. A blind window now reads 0.400,
+// which is at least honestly mid-range rather than a claim of ideal
+// focus. `beatsd doctor`'s signal-sources check is the loud half of
+// this fix; this is the quiet half that holds when detection breaks
+// after startup.
 func computeCoherence(samples []Sample) float64 {
 	counts := make(map[string]int)
 	for _, s := range samples {
@@ -138,7 +154,10 @@ func computeCoherence(samples []Sample) float64 {
 		}
 	}
 	n := len(counts)
-	if n <= 1 {
+	if n == 0 {
+		return 0.5
+	}
+	if n == 1 {
 		return 1.0
 	}
 
