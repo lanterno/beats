@@ -1,7 +1,3 @@
-# pnpm 11 settings (moved out of package.json's "pnpm" field, which pnpm 11
-# no longer reads).
-
-# Dependency overrides — security pins for transitive dependencies.
 overrides:
   vite>rollup: ">=4.59.0"
   "picomatch@>=4.0.0 <4.0.4": ">=4.0.4"
@@ -10,9 +6,9 @@ overrides:
   # Keep each target within the patched major line — the vulnerable ranges are
   # all in-major, and an unbounded ">=x" lets pnpm jump a major (e.g. js-yaml 5.x
   # dropped types.merge, breaking @redocly/openapi-core used by gen:types).
-  "brace-expansion@>=2.0.0 <2.1.2": ">=2.1.2 <3"
-  "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1 <5"
-  "fast-uri@<3.1.5": ">=3.1.5 <4"
+  "brace-expansion@>=2.0.0 <2.1.2": ">=2.1.2 <6"
+  "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1 <6"
+  "fast-uri@<3.1.5": ">=3.1.5 <5"
   "esbuild@>=0.27.3 <0.28.1": ">=0.28.1 <0.29"
 
 # Postinstall build scripts. These ship prebuilt platform binaries via optional
@@ -21,8 +17,3 @@ overrides:
 allowBuilds:
   "@swc/core": false
   esbuild: false
-
-# Supply-chain cooldown: pnpm 11's default minimumReleaseAge is intentionally
-# kept ON — freshly published packages (< ~24h) are rejected on fresh
-# resolution. This can briefly block CI right after a dependency is published;
-# that trade-off is accepted for the supply-chain protection.
