@@ -888,9 +888,22 @@ function FooterCol({ title, links }: { title: string; links: { label: string; hr
 
 // ───────────────────── homepage root ─────────────────────
 
+/**
+ * True when the browser has just come back from the home.space identity
+ * service, which redirects to `?sso=callback` after setting its cookie.
+ * The modal has to be open for its callback effect to run, so the marker
+ * is read once at mount rather than after a click.
+ */
+function isSsoCallback(): boolean {
+	if (typeof window === "undefined") return false;
+	return new URLSearchParams(window.location.search).get("sso") === "callback";
+}
+
 export default function HomePage() {
-	const [authOpen, setAuthOpen] = useState(false);
-	const [authMode, setAuthMode] = useState<"login" | "register-email">("register-email");
+	const [authOpen, setAuthOpen] = useState(isSsoCallback);
+	const [authMode, setAuthMode] = useState<"login" | "register-email">(() =>
+		isSsoCallback() ? "login" : "register-email",
+	);
 
 	const open: AuthHandler = (mode) => {
 		setAuthMode(mode);

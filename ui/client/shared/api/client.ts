@@ -156,6 +156,14 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 
 	const response = await fetch(`${config.apiBaseUrl}${endpoint}`, {
 		...options,
+		// Send cookies. Beats' own auth is a Bearer token and needs none,
+		// but the home.space `Home-Session` cookie has to reach
+		// /api/account/refresh — that is what lets the API re-check a
+		// federated identity against its issuer before extending a
+		// session, and what makes revoking a device actually end it here.
+		// "include" rather than the default "same-origin" so this also
+		// holds when the SPA and API are split across ports in dev.
+		credentials: "include",
 		headers: {
 			...defaultHeaders,
 			...options?.headers,

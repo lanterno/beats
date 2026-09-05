@@ -30,6 +30,44 @@ export interface VerifyResponse {
 export interface UserInfo {
 	email: string;
 	display_name: string | null;
+	sso: SSOLinkInfo;
+}
+
+// ============================================================================
+// home.space SSO
+// ============================================================================
+
+export interface SSOConfig {
+	enabled: boolean;
+	provider_name: string;
+	/** Where to send the browser for a home.space session. "" when it could
+	 *  not be derived (a bare localhost) — the button stays hidden then. */
+	login_url: string;
+	/** Whether the browser already carries a Home-Session cookie. */
+	session_present: boolean;
+}
+
+export interface SSOLinkInfo {
+	linked: boolean;
+	provider_name: string;
+	did: string | null;
+	holder_name: string | null;
+	roles: string[];
+	linked_at: string | null;
+	provisioned: boolean;
+}
+
+export interface SSOSessionResponse {
+	verified: boolean;
+	token: string;
+	created: boolean;
+	did: string;
+	holder_name: string;
+	roles: string[];
+	display_name: string | null;
+	/** "issuer" when revocation was checked, "offline" when auth.home.space
+	 *  was unreachable and only the signature could be verified. */
+	verified_by: "issuer" | "offline";
 }
 
 // ============================================================================
@@ -75,6 +113,74 @@ export function getLoginOptions(): Promise<LoginOptions> {
 
 export function verifyLogin(credential: unknown): Promise<VerifyResponse> {
 	return authPost("/login/verify", { credential });
+}
+
+// ============================================================================
+// home.space SSO
+//
+// Every call here sends cookies. The `Home-Session` cookie is scoped to
+// `.home.space`, so on the home deployment (where the SPA and the API share
+// an origin) it rides along automatically — but `credentials: "include"`
+// keeps this working when the two are split across ports in development.
+// ============================================================================
+
+/**
+ * Whether this instance offers home.space SSO, and where to go for it.
+ * Never throws: the login screen calls it on every load, and a deployment
+ * without SSO should render exactly as it always did.
+ */
+export async function getSsoConfig(): Promise<SSOConfig> {
+	const disabled: SSOConfig = {
+		enabled: false,
+		provider_name: "",
+		login_url: "",
+		session_present: false,
+	};
+	try {
+		const response = await fetch(`${AUTH_BASE}/sso/config`, { credentials: "include" });
+		if (!response.ok) return disabled;
+		return await response.json();
+	} catch {
+		return disabled;
+	}
+}
+
+/**
+ * Exchange the browser's home.space session for a beats session token.
+ * Throws an ApiError-shaped Error carrying `code` so the caller can tell
+ * "no session yet" (redirect) from "not allowed" (explain).
+ */
+export async function ssoSignIn(): Promise<SSOSessionResponse> {
+	const response = await fetch(`${AUTH_BASE}/sso/session`, {
+		method: "POST",
+		credentials: "include",
+	});
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		const error = new Error(body.detail || "home.space sign-in failed") as Error & {
+			code?: string;
+			status?: number;
+		};
+		error.code = body.code;
+		error.status = response.status;
+		throw error;
+	}
+	return response.json();
+}
+
+/**
+ * Attach the browser's home.space identity to the signed-in beats account.
+ * Requires both a beats session token and a Home-Session cookie.
+ */
+export async function linkSsoIdentity(): Promise<UserInfo> {
+	const { post } = await import("@/shared/api");
+	return post<UserInfo>("/api/account/sso/link");
+}
+
+/** Detach the linked home.space identity. */
+export async function unlinkSsoIdentity(): Promise<UserInfo> {
+	const { del } = await import("@/shared/api");
+	return del<UserInfo>("/api/account/sso/link");
 }
 
 /**

@@ -3,15 +3,18 @@ import {
 	startAuthentication,
 	startRegistration,
 } from "@simplewebauthn/browser";
-import { X } from "lucide-react";
-import { type SyntheticEvent, useEffect, useState } from "react";
+import { KeyRound, X } from "lucide-react";
+import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { describeError } from "@/shared/api";
 import { Button } from "@/shared/ui";
 import {
 	getCurrentUser,
 	getLoginOptions,
+	getSsoConfig,
 	registerStart,
+	type SSOConfig,
+	ssoSignIn,
 	verifyLogin,
 	verifyRegistration,
 } from "../api/authApi";
@@ -39,11 +42,115 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 		ReturnType<typeof registerStart>
 	> | null>(null);
 
+	const [sso, setSso] = useState<SSOConfig | null>(null);
+
+	// ------------------------------------------------------------------
+	// home.space SSO — the second door
+	// ------------------------------------------------------------------
+
+	// Guards the return-from-issuer exchange to exactly one attempt. Without
+	// it, `completeSsoSignIn` being a fresh closure on every render makes the
+	// callback effect re-fire each time it sets state — a redirect loop
+	// dressed up as a dependency array.
+	const ssoCallbackHandled = useRef(false);
+
+	const ssoLoginUrl = sso?.login_url ?? "";
+	const ssoProviderName = sso?.provider_name ?? "home.space";
+
+	/** Send the browser to the identity service, asking it to come back here. */
+	const redirectToIssuer = useCallback((loginUrl: string) => {
+		const returnTo = `${window.location.origin}${window.location.pathname}?sso=callback`;
+		window.location.href = `${loginUrl}/?return_to=${encodeURIComponent(returnTo)}`;
+	}, []);
+
+	/**
+	 * Trade the Home-Session cookie for a beats session.
+	 *
+	 * `fromCallback` marks the attempt made on return from the issuer. It
+	 * suppresses the redirect-on-missing-session, which would otherwise
+	 * bounce the browser straight back to an issuer that just declined to
+	 * give us a cookie — an infinite loop instead of an error message.
+	 */
+	const completeSsoSignIn = useCallback(
+		async (fromCallback = true): Promise<void> => {
+			setError(null);
+			setIsProcessing(true);
+			try {
+				const result = await ssoSignIn();
+				setSessionToken(result.token);
+				getCurrentUser()
+					.then((u) => setUser({ email: u.email, displayName: u.display_name }))
+					.catch(() => {});
+				navigate("/app", { replace: true });
+			} catch (err) {
+				const failure = err as Error & { code?: string };
+				const needsIssuer =
+					failure.code === "SSO_NO_SESSION" || failure.code === "SSO_INVALID_SESSION";
+				if (needsIssuer && !fromCallback && ssoLoginUrl) {
+					redirectToIssuer(ssoLoginUrl);
+					return;
+				}
+				if (needsIssuer) {
+					setError(`No active ${ssoProviderName} session. Sign in there, then try again.`);
+				} else {
+					setError(failure.message || "Sign-in failed. Please try again.");
+				}
+			} finally {
+				setIsProcessing(false);
+			}
+		},
+		[navigate, redirectToIssuer, ssoLoginUrl, ssoProviderName],
+	);
+
+	const handleSsoClick = () => {
+		if (!sso?.enabled) return;
+		// A cookie is already here — try it before sending the user away.
+		if (sso.session_present) {
+			void completeSsoSignIn(false);
+			return;
+		}
+		if (ssoLoginUrl) {
+			redirectToIssuer(ssoLoginUrl);
+			return;
+		}
+		void completeSsoSignIn(true);
+	};
+
 	useEffect(() => {
 		if (!browserSupportsWebAuthn()) {
 			setWebAuthnSupported(false);
 		}
 	}, []);
+
+	// Ask the API whether this instance offers home.space SSO. It answers
+	// "disabled" rather than erroring when it doesn't, so a deployment
+	// without an identity service renders exactly as it always did.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		getSsoConfig().then((cfg) => {
+			if (!cancelled) setSso(cfg);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open]);
+
+	// Coming back from auth.home.space, which redirects to
+	// `?sso=callback` once it has set the Home-Session cookie. Exchange it
+	// straight away so the round trip looks like one click.
+	useEffect(() => {
+		if (!open || !sso?.enabled || ssoCallbackHandled.current) return;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get("sso") !== "callback") return;
+		ssoCallbackHandled.current = true;
+		// Drop the marker too, so a failed exchange doesn't leave a URL that
+		// re-triggers on the next reload.
+		params.delete("sso");
+		const query = params.toString();
+		window.history.replaceState({}, "", window.location.pathname + (query ? `?${query}` : ""));
+		void completeSsoSignIn(true);
+	}, [open, sso?.enabled, completeSsoSignIn]);
 
 	useEffect(() => {
 		if (open) {
@@ -65,6 +172,11 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 	}, [open, isProcessing, onClose]);
 
 	if (!open) return null;
+
+	// The button needs somewhere to send the browser. An enabled instance
+	// with no derivable login URL (a bare `localhost`, where there is no
+	// `auth.` sibling) would render a button that goes nowhere.
+	const ssoAvailable = Boolean(sso?.enabled && sso.login_url);
 
 	const handleEmailSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -285,6 +397,33 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 								</Button>
 								<p className="text-xs text-muted-foreground text-center">
 									Use your registered passkey to sign in.
+								</p>
+							</div>
+						)}
+
+						{/* home.space SSO — offered alongside, never instead of, the
+						    passkey login above. Hidden entirely when the instance
+						    has no identity service configured. */}
+						{ssoAvailable && (mode === "login" || mode === "register-email") && (
+							<div className="mt-6">
+								<div className="flex items-center gap-3 mb-4">
+									<span className="h-px flex-1 bg-border" />
+									<span className="text-xs text-muted-foreground uppercase tracking-wide">or</span>
+									<span className="h-px flex-1 bg-border" />
+								</div>
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full"
+									size="lg"
+									onClick={handleSsoClick}
+									disabled={isProcessing}
+								>
+									<KeyRound size={16} />
+									Continue with {sso?.provider_name}
+								</Button>
+								<p className="mt-2 text-xs text-muted-foreground text-center">
+									Use the identity you already have on {sso?.provider_name}.
 								</p>
 							</div>
 						)}

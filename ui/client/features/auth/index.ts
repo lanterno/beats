@@ -1,18 +1,32 @@
 /**
  * Auth Feature
- * WebAuthn/Passkey authentication for the Beats app.
+ *
+ * Two independent ways into an account:
+ * - WebAuthn/Passkey — Beats' own registration and login.
+ * - home.space SSO — the optional federated door, hidden unless the API
+ *   reports it enabled. Linking an existing account is done from Settings.
  */
 
 // API
-export type { CredentialInfo, UserInfo } from "./api/authApi";
+export type {
+	CredentialInfo,
+	SSOConfig,
+	SSOLinkInfo,
+	SSOSessionResponse,
+	UserInfo,
+} from "./api/authApi";
 export {
 	deleteCredential,
 	getCurrentUser,
 	getLoginOptions,
+	getSsoConfig,
+	linkSsoIdentity,
 	listCredentials,
 	logout,
 	refreshToken,
 	registerStart,
+	ssoSignIn,
+	unlinkSsoIdentity,
 	verifyLogin,
 	verifyRegistration,
 } from "./api/authApi";

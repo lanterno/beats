@@ -2263,6 +2263,157 @@
         "title": "RhythmSlotResponse",
         "type": "object"
       },
+      "SSOConfigResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "login_url": {
+            "title": "Login Url",
+            "type": "string"
+          },
+          "provider_name": {
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "session_present": {
+            "title": "Session Present",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "provider_name",
+          "login_url",
+          "session_present"
+        ],
+        "title": "SSOConfigResponse",
+        "type": "object"
+      },
+      "SSOLinkInfo": {
+        "description": "The home.space identity attached to this account, if any.",
+        "properties": {
+          "did": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Did"
+          },
+          "holder_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Name"
+          },
+          "linked": {
+            "title": "Linked",
+            "type": "boolean"
+          },
+          "linked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked At"
+          },
+          "provider_name": {
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "provisioned": {
+            "default": false,
+            "title": "Provisioned",
+            "type": "boolean"
+          },
+          "roles": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "linked",
+          "provider_name"
+        ],
+        "title": "SSOLinkInfo",
+        "type": "object"
+      },
+      "SSOSessionResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "did": {
+            "title": "Did",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "verified_by": {
+            "title": "Verified By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verified",
+          "token",
+          "created",
+          "did",
+          "holder_name",
+          "roles",
+          "display_name",
+          "verified_by"
+        ],
+        "title": "SSOSessionResponse",
+        "type": "object"
+      },
       "ScoreHistoryItem": {
         "description": "A single week's productivity score.",
         "properties": {
@@ -2640,11 +2791,15 @@
           "email": {
             "title": "Email",
             "type": "string"
+          },
+          "sso": {
+            "$ref": "#/components/schemas/SSOLinkInfo"
           }
         },
         "required": [
           "email",
-          "display_name"
+          "display_name",
+          "sso"
         ],
         "title": "UserResponse",
         "type": "object"
@@ -2991,7 +3146,7 @@
     },
     "/api/account/refresh": {
       "post": {
-        "description": "Exchange a valid session token for a new one.",
+        "description": "Exchange a valid session token for a new one.\n\nA session that began as a home.space SSO login carries an `sso` claim,\nand is re-checked against the issuer here before being extended.\nWithout that, revoking a device in `auth`'s `/devices` would stop new\nlogins while leaving an already-issued beats session renewing itself\nforever \u2014 the revocation would be cosmetic.\n\nSessions from beats' own passkey login carry no `sso` claim and are\nuntouched by any of this.",
         "operationId": "refresh_token_api_account_refresh_post",
         "responses": {
           "200": {
@@ -3006,6 +3161,48 @@
           }
         },
         "summary": "Refresh Token",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/sso/link": {
+      "delete": {
+        "description": "Detach the linked home.space identity.\n\nRefused if the account holds no passkey, since the link would be the\nonly remaining way in \u2014 the same rule `delete_credential` applies to the\nlast passkey, seen from the other side.",
+        "operationId": "unlink_sso_identity_api_account_sso_link_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Unlink Sso Identity",
+        "tags": [
+          "account"
+        ]
+      },
+      "post": {
+        "description": "Attach the caller's home.space identity to their beats account.\n\nProves both sides in one request: the Bearer token proves the beats\naccount, the `Home-Session` cookie proves the home.space identity.",
+        "operationId": "link_sso_identity_api_account_sso_link_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Link Sso Identity",
         "tags": [
           "account"
         ]
@@ -3438,6 +3635,50 @@
         "summary": "Verify Registration",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/auth/sso/config": {
+      "get": {
+        "description": "Whether this instance offers home.space SSO, and where to go for it.\n\nAlways 200, even when disabled: the login screen calls this on every\nload to decide whether to render the second button, and an error there\nwould be noise on every deployment that does not use SSO.",
+        "operationId": "get_sso_config_api_auth_sso_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Sso Config",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/api/auth/sso/session": {
+      "post": {
+        "description": "Exchange a verified `Home-Session` cookie for a beats session token.",
+        "operationId": "create_sso_session_api_auth_sso_session_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create Sso Session",
+        "tags": [
+          "sso"
         ]
       }
     },

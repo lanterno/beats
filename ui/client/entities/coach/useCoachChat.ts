@@ -7,9 +7,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionToken } from "@/features/auth/stores/authStore";
+import { config } from "@/shared/config";
 import { type ChatHistoryMessage, type ChatSSEEvent, fetchChatHistory } from "./api/coachApi";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:7999";
+// The shared resolver, not a second copy of it. The copy that used to live
+// here read `VITE_API_URL || "http://localhost:7999"`, and `||` throws away
+// the empty string that means "same origin" — so on a same-origin deployment
+// the chat stream alone would have dialled the *browser's* port 7999 while
+// every other call went to the right place.
+const API_URL = config.apiBaseUrl;
 
 export interface ChatMessage {
 	id: string;

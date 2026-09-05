@@ -96,9 +96,49 @@ export interface paths {
         /**
          * Refresh Token
          * @description Exchange a valid session token for a new one.
+         *
+         *     A session that began as a home.space SSO login carries an `sso` claim,
+         *     and is re-checked against the issuer here before being extended.
+         *     Without that, revoking a device in `auth`'s `/devices` would stop new
+         *     logins while leaving an already-issued beats session renewing itself
+         *     forever — the revocation would be cosmetic.
+         *
+         *     Sessions from beats' own passkey login carry no `sso` claim and are
+         *     untouched by any of this.
          */
         post: operations["refresh_token_api_account_refresh_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/account/sso/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Sso Identity
+         * @description Attach the caller's home.space identity to their beats account.
+         *
+         *     Proves both sides in one request: the Bearer token proves the beats
+         *     account, the `Home-Session` cookie proves the home.space identity.
+         */
+        post: operations["link_sso_identity_api_account_sso_link_post"];
+        /**
+         * Unlink Sso Identity
+         * @description Detach the linked home.space identity.
+         *
+         *     Refused if the account holds no passkey, since the link would be the
+         *     only remaining way in — the same rule `delete_credential` applies to the
+         *     last passkey, seen from the other side.
+         */
+        delete: operations["unlink_sso_identity_api_account_sso_link_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -258,6 +298,50 @@ export interface paths {
          * @description Verify registration response and store the credential.
          */
         post: operations["verify_registration_api_auth_register_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sso Config
+         * @description Whether this instance offers home.space SSO, and where to go for it.
+         *
+         *     Always 200, even when disabled: the login screen calls this on every
+         *     load to decide whether to render the second button, and an error there
+         *     would be noise on every deployment that does not use SSO.
+         */
+        get: operations["get_sso_config_api_auth_sso_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Sso Session
+         * @description Exchange a verified `Home-Session` cookie for a beats session token.
+         */
+        post: operations["create_sso_session_api_auth_sso_session_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3036,6 +3120,62 @@ export interface components {
             /** Slot */
             slot: number;
         };
+        /** SSOConfigResponse */
+        SSOConfigResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Login Url */
+            login_url: string;
+            /** Provider Name */
+            provider_name: string;
+            /** Session Present */
+            session_present: boolean;
+        };
+        /**
+         * SSOLinkInfo
+         * @description The home.space identity attached to this account, if any.
+         */
+        SSOLinkInfo: {
+            /** Did */
+            did?: string | null;
+            /** Holder Name */
+            holder_name?: string | null;
+            /** Linked */
+            linked: boolean;
+            /** Linked At */
+            linked_at?: string | null;
+            /** Provider Name */
+            provider_name: string;
+            /**
+             * Provisioned
+             * @default false
+             */
+            provisioned: boolean;
+            /**
+             * Roles
+             * @default []
+             */
+            roles: string[];
+        };
+        /** SSOSessionResponse */
+        SSOSessionResponse: {
+            /** Created */
+            created: boolean;
+            /** Did */
+            did: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Holder Name */
+            holder_name: string;
+            /** Roles */
+            roles: string[];
+            /** Token */
+            token: string;
+            /** Verified */
+            verified: boolean;
+            /** Verified By */
+            verified_by: string;
+        };
         /**
          * ScoreHistoryItem
          * @description A single week's productivity score.
@@ -3187,6 +3327,7 @@ export interface components {
             display_name: string | null;
             /** Email */
             email: string;
+            sso: components["schemas"]["SSOLinkInfo"];
         };
         /** ValidationError */
         ValidationError: {
@@ -3410,6 +3551,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefreshResponse"];
+                };
+            };
+        };
+    };
+    link_sso_identity_api_account_sso_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+        };
+    };
+    unlink_sso_identity_api_account_sso_link_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
         };
@@ -3652,6 +3833,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sso_config_api_auth_sso_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOConfigResponse"];
+                };
+            };
+        };
+    };
+    create_sso_session_api_auth_sso_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOSessionResponse"];
                 };
             };
         };
