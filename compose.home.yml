@@ -1,0 +1,118 @@
+# Beats on the home network.
+#
+# Separate from `api/compose.yml`, which stays exactly as it is for local
+# development (it publishes Mongo on 27017 and the API on 7999, and is what
+# `just up` in api/ still runs). This file is what the home.space stack
+# starts, and it differs in three ways that matter:
+#
+#   1. ONE published port, 6008, on the `web` container. Mongo and the API
+#      are on an internal network only — nothing else on the LAN can reach
+#      the database, and there is no second origin to keep in sync.
+#   2. The SPA is built and served here rather than shipped to Firebase.
+#   3. home.space SSO is switched on, and the API is told how to reach the
+#      identity issuer running on the host.
+#
+# Everything the stack needs from this file is behind a verb in ./justfile —
+# services.toml names the verb and knows nothing about compose.
+
+name: beats
+
+services:
+  db:
+    image: mongo:8
+    container_name: beats-home-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${BEATS_DB_USER:-mango}
+      MONGO_INITDB_ROOT_PASSWORD: ${BEATS_DB_PASSWORD:-bango}
+      MONGO_INITDB_DATABASE: beats
+    volumes:
+      - beats_home_mongo:/data/db
+    networks: [beats-home]
+    # Deliberately no `ports:`. The development compose publishes 27017;
+    # this one must not — the LAN has no business reaching the database,
+    # and `just backup` runs mongodump inside the container anyway.
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: beats-home-api:latest
+    container_name: beats-home-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # JWT_SECRET, ANTHROPIC_API_KEY and the OAuth client secrets come from
+    # the existing api/.env; the values below override the ones in it that
+    # are wrong for this topology (the DSN in particular points at
+    # localhost, which inside a container is the container itself).
+    env_file:
+      - ./api/.env
+    environment:
+      PORT: 8000
+      DB_DSN: mongodb://${BEATS_DB_USER:-mango}:${BEATS_DB_PASSWORD:-bango}@db:27017/?authSource=admin
+      DB_NAME: beats
+
+      # WebAuthn is origin-bound: a passkey registered against one RP ID
+      # will not work against another. `beats.home.space` is the name the
+      # ingress serves, so it is the name the ceremony has to name.
+      WEBAUTHN_RP_ID: ${BEATS_RP_ID:-beats.home.space}
+      WEBAUTHN_RP_NAME: Beats
+      WEBAUTHN_ORIGIN: ${BEATS_ORIGIN:-https://beats.home.space}
+
+      # --- home.space SSO ---
+      BEATS_SSO_ENABLED: "true"
+      BEATS_SSO_ISSUER: did:web:auth.home.space
+      # host-gateway, not 127.0.0.1: inside this container loopback is the
+      # container. The issuer runs on the HOST as home-auth.service, bound
+      # to 0.0.0.0:6007.
+      BEATS_SSO_AUTH_BASE_URL: http://host.docker.internal:6007
+      # Left empty on purpose — the API derives the browser-facing issuer
+      # URL from each request's own Host, so one image serves
+      # beats.home.space, beats.<lan-ip>.nip.io and the WAN name without
+      # being rebuilt. Set it only to override that.
+      BEATS_SSO_LOGIN_URL: ""
+      BEATS_SSO_PROVISION_ROLES: ${BEATS_SSO_PROVISION_ROLES:-owner,admin}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [beats-home]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    image: beats-home-web:latest
+    container_name: beats-home-web
+    restart: unless-stopped
+    depends_on:
+      # `service_healthy`, not a bare `depends_on`. nginx resolves upstream
+      # hostnames once, at startup, and exits if `api` does not resolve yet --
+      # so a plain start-ordering dependency gives a crash loop on a cold
+      # boot rather than a wait.
+      api:
+        condition: service_healthy
+    ports:
+      # The stack's one port for beats. Same number inside and out, so
+      # `http://localhost:6008` is the same URL in both worlds.
+      - "6008:6008"
+    networks: [beats-home]
+
+networks:
+  beats-home:
+    name: beats-home
+
+volumes:
+  beats_home_mongo:
+    name: beats-home-mongo-data
