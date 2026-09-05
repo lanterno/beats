@@ -33,6 +33,7 @@ from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
 from beats.api.routers.signals import router as signals_router
+from beats.api.routers.sso import router as sso_router
 from beats.api.routers.timer import router as timer_router
 from beats.api.routers.webhooks import router as webhooks_router
 from beats.domain.exceptions import DomainException
@@ -102,6 +103,17 @@ origins = [
     "https://lifepete.com",
     "https://api.lifepete.com",
 ]
+
+# The home.space deployment serves the SPA and this API from ONE origin
+# (nginx in front of both), so CORS is not involved there at all. This regex
+# exists for the split case: running `pnpm dev` on :8080 against the deployed
+# API, and the three names the same stack answers to — `beats.home.space`,
+# `beats.<lan-ip>.nip.io`, and the WAN `beats.home.elghareeb.space`.
+HOME_ORIGIN_REGEX = (
+    r"^https?://([a-z0-9-]+\.)*"
+    r"(home\.space|home\.elghareeb\.space|\d+\.\d+\.\d+\.\d+\.nip\.io)"
+    r"(:\d+)?$"
+)
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
@@ -211,6 +223,7 @@ async def domain_exception_handler(request: Request, exc: DomainException):
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(sso_router)
 app.include_router(account_router)
 app.include_router(projects_router)
 app.include_router(beats_router)
@@ -260,6 +273,7 @@ async def ding_post():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=HOME_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

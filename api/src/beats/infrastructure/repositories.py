@@ -87,7 +87,13 @@ class UserRepository(ABC):
     async def get_by_email(self, email: str) -> User | None: ...
 
     @abstractmethod
+    async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None: ...
+
+    @abstractmethod
     async def create(self, user: User) -> User: ...
+
+    @abstractmethod
+    async def update(self, user: User) -> User: ...
 
     @abstractmethod
     async def count(self) -> int: ...
@@ -373,10 +379,39 @@ class MongoUserRepository(UserRepository):
             return None
         return User(**serialize_from_document(doc))
 
+    async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None:
+        """Find the user holding a linked home.space identity.
+
+        Matched on the (issuer, subject) pair rather than the subject
+        alone, so that a second issuer added later cannot collide with
+        this one's DIDs.
+        """
+        doc = await self.collection.find_one({"sso_issuer": issuer, "sso_subject": subject})
+        if not doc:
+            return None
+        return User(**serialize_from_document(doc))
+
     async def create(self, user: User) -> User:
         data = serialize_to_document(user.model_dump(mode="json", exclude_none=True))
         result = await self.collection.insert_one(data)
         return User(**serialize_from_document({**data, "_id": result.inserted_id}))
+
+    async def update(self, user: User) -> User:
+        """Persist a mutated user. Requires `user.id`.
+
+        `exclude_none` is deliberately NOT used here, unlike `create`:
+        unlinking an SSO identity sets the `sso_*` fields back to None,
+        and dropping them from the update would leave the old link in
+        place — the user would still be signed in by a credential they
+        had just detached.
+        """
+        if not user.id:
+            raise ValueError("Cannot update a user without an id")
+        data = serialize_to_document(user.model_dump(mode="json"))
+        data.pop("_id", None)
+        data.pop("id", None)
+        await self.collection.update_one({"_id": ObjectId(user.id)}, {"$set": data})
+        return user
 
     async def count(self) -> int:
         return await self.collection.count_documents({})

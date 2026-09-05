@@ -44,6 +44,14 @@ class Database:
         if cls.db is None:
             return
         await cls.db.users.create_index("email", unique=True)
+        # One home.space identity maps to exactly one beats account. Partial
+        # rather than plain-unique because most users have no link at all, and
+        # a plain unique index would let only ONE of them hold a null subject.
+        await cls.db.users.create_index(
+            [("sso_issuer", 1), ("sso_subject", 1)],
+            unique=True,
+            partialFilterExpression={"sso_subject": {"$type": "string"}},
+        )
         await cls.db.credentials.create_index("credential_id", unique=True)
         await cls.db.credentials.create_index("user_id")
         # Device pairing indexes

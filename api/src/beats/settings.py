@@ -82,6 +82,69 @@ class Settings(BaseSettings):
         validation_alias="FITBIT_REDIRECT_URI",
     )
 
+    # ------------------------------------------------------------------
+    # home.space SSO (optional second front door)
+    #
+    # Beats keeps its own email + passkey login exactly as it is. These
+    # settings add a SECOND way in, for the `home.space` stack this
+    # instance is deployed into: the `auth` issuer at auth.home.space
+    # mints an Ed25519 `Home-Session` cookie scoped to `.home.space`,
+    # which every sibling vhost -- including this one -- receives.
+    #
+    # Default OFF. Beats on Cloud Run, or on `localhost:7999` with no
+    # issuer running, behaves precisely as it did before: /api/auth/sso/*
+    # reports disabled and nothing else changes.
+    # ------------------------------------------------------------------
+    sso_enabled: bool = Field(default=False, validation_alias="BEATS_SSO_ENABLED")
+
+    # The issuer DID we require in the `iss` claim. Not a URL: the home
+    # stack identifies its issuer as a did:web, and the DID is what is
+    # actually signed into the token.
+    sso_issuer: str = Field(default="did:web:auth.home.space", validation_alias="BEATS_SSO_ISSUER")
+
+    # Where THIS PROCESS reaches the issuer -- loopback inside the home
+    # stack, so introspection never leaves the machine and never depends
+    # on DNS, the ingress or TLS being healthy.
+    sso_auth_base_url: str = Field(
+        default="http://127.0.0.1:6007", validation_alias="BEATS_SSO_AUTH_BASE_URL"
+    )
+
+    # Where the BROWSER is sent to obtain a session. Empty means "derive
+    # it from the request's own Host", which is what makes one build work
+    # unchanged on beats.home.space, beats.<lan-ip>.nip.io and
+    # beats.home.elghareeb.space -- the same three-name problem the auth
+    # service solves dynamically in its own cookie-domain logic.
+    sso_login_url: str = Field(default="", validation_alias="BEATS_SSO_LOGIN_URL")
+
+    sso_cookie_name: str = Field(default="Home-Session", validation_alias="BEATS_SSO_COOKIE_NAME")
+    sso_provider_name: str = Field(default="home.space", validation_alias="BEATS_SSO_PROVIDER_NAME")
+
+    # Roles allowed to CREATE a beats account on first SSO login. Any
+    # role may still link to an account that already exists -- this gates
+    # provisioning only. `just invite "Visitor" guest 60` deliberately
+    # does not leave a permanent user record behind.
+    sso_provision_roles: str = Field(
+        default="owner,admin", validation_alias="BEATS_SSO_PROVISION_ROLES"
+    )
+
+    # How long a fetched JWKS is trusted before refetching. The cached
+    # copy is kept indefinitely past this as an offline fallback.
+    sso_jwks_ttl_seconds: int = Field(default=300, validation_alias="BEATS_SSO_JWKS_TTL_SECONDS")
+
+    # Timeout for issuer introspection. Loopback, so this is generous;
+    # exceeding it falls back to offline signature verification rather
+    # than failing the login.
+    sso_issuer_timeout_seconds: float = Field(
+        default=2.0, validation_alias="BEATS_SSO_ISSUER_TIMEOUT_SECONDS"
+    )
+
+    @property
+    def sso_provision_role_set(self) -> frozenset[str]:
+        """Roles permitted to auto-provision, lowercased. Empty means any."""
+        return frozenset(
+            r.strip().lower() for r in self.sso_provision_roles.split(",") if r.strip()
+        )
+
     # AI Coach (Stage 2)
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     coach_model: str = Field(default="claude-sonnet-4-6", validation_alias="COACH_MODEL")

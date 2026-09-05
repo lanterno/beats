@@ -10,7 +10,13 @@ from beats.domain.utils import TzNormalizedModel, normalize_tz
 
 
 class User(TzNormalizedModel):
-    """A registered user of the Beats system."""
+    """A registered user of the Beats system.
+
+    A user may hold two independent ways in: passkeys registered against
+    beats itself (`credentials` collection), and at most one linked
+    `home.space` identity (the `sso_*` fields). Neither implies the other,
+    and either alone is enough to sign in.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -18,6 +24,29 @@ class User(TzNormalizedModel):
     email: str
     display_name: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # --- Linked home.space identity -----------------------------------
+    #
+    # Keyed on (sso_issuer, sso_subject), never on a name or an email.
+    # `sso_subject` is a did:key derived from the device's public key:
+    # stable, unique, and not reassignable. `sso_holder_name` is the
+    # enrollment label ("Primary Laptop") and is refreshed from the
+    # credential on each login, since the issuer owns it.
+    sso_issuer: str | None = None
+    sso_subject: str | None = None
+    sso_holder_name: str | None = None
+    sso_roles: list[str] = Field(default_factory=list)
+    sso_linked_at: datetime | None = None
+
+    # True when the account was created BY an SSO login rather than
+    # linked to one afterwards. Purely informational — it is what lets
+    # the UI explain why an account has no passkey yet, and what makes
+    # "unlink" refuse on an account that would have no way back in.
+    sso_provisioned: bool = False
+
+    @property
+    def has_sso_link(self) -> bool:
+        return bool(self.sso_subject)
 
 
 class GoalType(StrEnum):

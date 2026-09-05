@@ -131,8 +131,18 @@ class SessionManager:
             return None
         return self._pending_registrations.get(challenge_b64)
 
-    def create_session_token(self, user_id: str, email: str = "") -> str:
-        """Create a JWT session token."""
+    def create_session_token(
+        self, user_id: str, email: str = "", sso_subject: str | None = None
+    ) -> str:
+        """Create a JWT session token.
+
+        `sso_subject` marks the session as having been obtained through
+        home.space SSO, and records which DID obtained it. It is what
+        lets `/api/account/refresh` re-check that identity against the
+        issuer before extending the session — without it, revoking a
+        device would stop new logins but leave an already-issued beats
+        session refreshing itself indefinitely.
+        """
         now = datetime.now(UTC)
         payload: dict[str, Any] = {
             "sub": user_id,
@@ -143,6 +153,8 @@ class SessionManager:
         }
         if email:
             payload["email"] = email
+        if sso_subject:
+            payload["sso"] = sso_subject
 
         token = jwt.encode(payload, self._jwt_secret, algorithm="HS256")
         logger.info(f"Created session token for user: {user_id}")
@@ -202,17 +214,24 @@ class SessionManager:
             return None
 
     def refresh_token(self, token: str) -> str | None:
-        """Issue a new token from a valid existing one, revoking the old one."""
+        """Issue a new token from a valid existing one, revoking the old one.
+
+        The `sso` claim is carried across, so a session that began as an
+        SSO login stays re-checkable against the issuer for its whole
+        life rather than laundering itself into an ordinary session at
+        the first refresh.
+        """
         payload = self.validate_session_token(token)
         if payload is None:
             return None
 
         user_id = payload["sub"]
         email = payload.get("email", "")
+        sso_subject = payload.get("sso")
 
         # Revoke the old token and issue a new one
         self.revoke_token(token)
-        return self.create_session_token(user_id, email)
+        return self.create_session_token(user_id, email, sso_subject=sso_subject)
 
     def revoke_token(self, token: str) -> None:
         """Add a token to the revocation list. It stays until its natural expiry."""

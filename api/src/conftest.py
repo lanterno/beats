@@ -60,6 +60,11 @@ def clean_db():
         db[name].drop()
     # Recreate unique indexes (matches Database._ensure_indexes)
     db.users.create_index("email", unique=True)
+    db.users.create_index(
+        [("sso_issuer", 1), ("sso_subject", 1)],
+        unique=True,
+        partialFilterExpression={"sso_subject": {"$type": "string"}},
+    )
     db.credentials.create_index("credential_id", unique=True)
     db.credentials.create_index("user_id")
     db.pairing_codes.create_index("code_hash", unique=True)
