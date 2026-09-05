@@ -95,19 +95,59 @@ func TestCheckEditorPort_PassesWhenPortHeldByOwnDaemon(t *testing.T) {
 	}
 }
 
-func TestCheckEventTap_NonDarwinFallsBackInformatively(t *testing.T) {
-	// Linux / Windows runners hit the stub, which should report
-	// "stub fallback" with NO error — informational, not a failure
-	// (cadence just defaults to 0.5).
-	if runtime.GOOS == "darwin" {
+func TestCheckEventTap_UnimplementedPlatformFallsBackInformatively(t *testing.T) {
+	// Platforms with no input-counting implementation report the
+	// fallback with NO error — informational, not a failure, since
+	// cadence just defaults to 0.5 by design.
+	//
+	// darwin and windows are both excluded: each has a real
+	// implementation, so a probe failure there is a genuine fault
+	// (revoked Accessibility permission; refused Raw Input
+	// registration) and must surface as one. This test used to cover
+	// windows alongside linux, back when the stub did.
+	switch runtime.GOOS {
+	case "darwin":
 		t.Skip("happy/sad paths on darwin depend on Accessibility permission")
+	case "windows":
+		t.Skip("windows has a real Raw Input implementation; failure there is a real failure")
 	}
+
 	detail, err := checkEventTap()
 	if err != nil {
-		t.Errorf("non-darwin should not surface an error, got %v", err)
+		t.Errorf("platform without an implementation should not surface an error, got %v", err)
 	}
-	if !strings.Contains(detail, "stub fallback") {
-		t.Errorf("expected stub-fallback detail, got %q", detail)
+	if !strings.Contains(detail, "no implementation") {
+		t.Errorf("expected no-implementation detail, got %q", detail)
+	}
+	if !strings.Contains(detail, runtime.GOOS) {
+		t.Errorf("detail should name the platform, got %q", detail)
+	}
+}
+
+// TestFrontmostAppRemedy_CoversEveryPlatform pins that the remedy text
+// is actionable rather than generic — it's the sentence a user reads
+// when the flow score has gone constant, so it has to say what to do.
+func TestFrontmostAppRemedy_CoversEveryPlatform(t *testing.T) {
+	got := frontmostAppRemedy()
+	if got == "" {
+		t.Fatal("remedy must not be empty")
+	}
+
+	// Whatever the platform, the text must either name a concrete fix
+	// or explain the consequence — never just "not available".
+	switch runtime.GOOS {
+	case "linux":
+		if !strings.Contains(got, "xdotool") {
+			t.Errorf("linux remedy should name the missing tool, got %q", got)
+		}
+	case "windows":
+		if !strings.Contains(got, "session") {
+			t.Errorf("windows remedy should mention the session, got %q", got)
+		}
+	case "darwin":
+		if !strings.Contains(got, "lsappinfo") {
+			t.Errorf("darwin remedy should name lsappinfo, got %q", got)
+		}
 	}
 }
 

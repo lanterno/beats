@@ -11,9 +11,9 @@ API.
 └─────────────┘                          │     beatsd      │
                                           │  (this binary)  │  ── flow window ──►  api.lifepete.com
 ┌─────────────┐                          │                 │
-│ macOS HID   │  ─── CGEventTap ──────►  │                 │
-│ events      │     (kbd / mouse cnt)    └─────────────────┘
-└─────────────┘                                  ▲
+│ OS input    │  ── CGEventTap (macOS) ─► │                 │
+│ events      │     Raw Input (windows)  └─────────────────┘
+└─────────────┘     (counts only)                ▲
                                                   │
                                                   └─── /api/signals/timer-context  (30s poll)
 ```
@@ -55,8 +55,11 @@ For background use, install via [Homebrew](../docs/homebrew-tap.md) and
 Each 1-minute window contains:
 
 - **flow_score** (composite, 0–1) = 40% cadence + 40% coherence + 20% category fit
-- **cadence_score** — input event rate from CGEventTap (darwin only); 0.5 fallback elsewhere
-- **coherence_score** — how concentrated the user was on a single app vs context-switching
+- **cadence_score** — input event rate, from CGEventTap on macOS and Raw
+  Input on Windows; 0.5 fallback where neither is available (currently Linux)
+- **coherence_score** — how concentrated the user was on a single app vs
+  context-switching. A window in which *no* app was observed scores 0.5
+  ("unknown"), not 1.0 — see the note under Platform support
 - **category_fit_score** — does the dominant app category match the running timer's project category?
 - **idle_fraction** — share of samples where no input was detected
 - **dominant_bundle_id** + **dominant_category** — which app was most active
@@ -90,8 +93,34 @@ category_weight = 0.2
 idle_threshold_sec = 30   # samples with IdleSeconds > this count as idle
 ```
 
-Device token lives in the OS keychain (macOS: Keychain Access; Linux: libsecret),
-not the config file.
+Device token lives in the OS keychain (macOS: Keychain Access; Linux:
+libsecret; Windows: Credential Manager), not the config file.
+
+## Platform support
+
+| Signal | macOS | Windows | Linux |
+|---|---|---|---|
+| Frontmost app | `lsappinfo` | `GetForegroundWindow` + `QueryFullProcessImageName` | `xdotool`/`xprop`, or `swaymsg` |
+| Idle time | `ioreg` HIDIdleTime | `GetLastInputInfo` | `xprintidle` |
+| Input cadence | CGEventTap (needs Accessibility) | Raw Input (no permission needed) | — falls back to 0.5 |
+
+Windows app identity is the extension-less executable basename —
+`C:\…\Code.exe` becomes `Code`. The extension is stripped at the source
+because `bundle.ShortLabel` splits unknown ids on the final dot, so
+`Code.exe` would surface as "exe" everywhere it's displayed. The window
+title is deliberately never read: titles carry document names and full
+paths, which would break the "no file paths beyond the workspace root"
+guarantee below.
+
+**Why a blind window scores 0.4 and not 0.6.** If app detection returns
+nothing for a whole window, `coherence` reports 0.5 ("unknown") rather
+than 1.0. It used to report 1.0, on the reading that "no apps seen" means
+"no context switching" — which meant a platform with no app detection
+published a flow score of exactly 0.600 on every window forever,
+indistinguishable from a real measurement. `beatsd doctor`'s
+**Desktop signal sources** check is the loud guard against that state;
+the coherence floor is the quiet one that still holds if detection
+breaks after startup.
 
 ## Architecture
 
@@ -108,8 +137,9 @@ daemon/
 │   │                    sentences ("flow-windows GET failed (HTTP 401):
 │   │                    Device token expired [UNAUTHORIZED]") instead
 │   │                    of bare status codes.
-│   ├── collector/      Sample loop, flow score computation, CGEventTap
-│   │                    cadence probe (cadence_darwin.go), non-darwin stub.
+│   ├── collector/      Sample loop, flow score computation, per-platform
+│   │                    cadence probes (cadence_darwin.go = CGEventTap,
+│   │                    cadence_windows.go = Raw Input, cadence.go = stub).
 │   ├── config/         TOML config loading.
 │   ├── editor/         Loopback HTTP listener (127.0.0.1:37499) for editor
 │   │                    heartbeats from the VS Code extension.
@@ -145,7 +175,31 @@ or
 ```
 
 The implementation lives in `internal/collector/cadence_darwin.go`
-(real `CGEventTapCreate`) with a non-darwin fallback in `cadence.go`.
+(real `CGEventTapCreate`) with a fallback in `cadence.go`.
+
+## Raw Input (cadence) — Windows
+
+Windows needs no permission grant. `cadence_windows.go` creates a
+message-only window (parented to `HWND_MESSAGE`, so it is never visible
+and never enumerated), registers for keyboard and mouse HID usages with
+`RIDEV_INPUTSINK` so input arrives even when unfocused, and counts
+`WM_INPUT` messages on a dedicated `runtime.LockOSThread`'d goroutine
+running its own message pump.
+
+Raw Input rather than the `WH_KEYBOARD_LL` / `WH_MOUSE_LL` hooks most
+examples reach for, because low-level hooks put this process on the
+synchronous delivery path for every input event in the session — a slow
+callback stalls the desktop, and Windows silently evicts hooks that
+exceed `LowLevelHooksTimeout`. Global input hooks are also a well-known
+antivirus heuristic. Raw Input has none of those properties and needs a
+message pump either way.
+
+Privacy: we never call `GetRawInputData`, so the keycode, the mouse
+delta and the device handle are never read into the process at all —
+the event's *existence* is the entire payload. That's a stronger
+guarantee than the macOS tap, whose callback is handed the event
+regardless. `TranslateMessage` is likewise absent from the pump, since
+its whole job is turning key events into character messages.
 
 ## Editor heartbeats
 
@@ -161,21 +215,32 @@ fields.
 ## Build + test
 
 ```bash
-go test ./...              # run all unit tests
-go build ./...             # darwin native build
-GOOS=linux go build ./...  # cross-compile for linux
+go test ./...                                   # run all unit tests
+go build ./...                                  # native build
+GOOS=linux go build ./...                       # cross-compile for linux
+GOOS=windows CGO_ENABLED=0 go build ./...       # cross-compile for windows
+GOOS=windows CGO_ENABLED=0 go vet ./...         # vet the windows-tagged files
 ```
 
+Windows cross-compiles from any host with `CGO_ENABLED=0` — the Raw
+Input collector goes through `golang.org/x/sys/windows`, which is pure
+Go syscall wrappers, so no mingw toolchain is involved. Note that a
+plain `go vet ./...` only ever sees the host's build tags, so the
+`_windows.go` files need the explicit `GOOS=windows` vet above; CI runs
+it for the same reason.
+
 For tagged releases, `.github/workflows/release-daemon.yml` builds
-darwin + linux × arm64 + amd64 tarballs and uploads them to the GitHub
-release. Bump the [Homebrew formula](../integrations/homebrew-formula/)
-SHA256s afterwards.
+darwin + linux × arm64 + amd64 tarballs plus a windows/amd64 zip and
+uploads them to the GitHub release. Bump the
+[Homebrew formula](../integrations/homebrew-formula/) SHA256s afterwards.
 
 ## Troubleshooting
 
 | Symptom | First thing to check |
 |---|---|
-| Flow score stuck at 0.5 cadence | `beatsd doctor` — did the Accessibility prompt appear? |
+| Flow score stuck at 0.5 cadence | `beatsd doctor` — did the Accessibility prompt appear (macOS)? On Windows, did the Raw Input row pass? |
+| Flow score is the same number every window | `beatsd doctor` — the **Desktop signal sources** row. A constant score means no app was detected, so coherence is reporting "unknown" every time. |
+| Windows: every app shows as "other" | The category map keys off the extension-less exe basename (`Code`, not `Code.exe`). Run `beatsd status` to see what the collector actually recorded, then add the name to `internal/collector/categories.go`. |
 | API errors on `run` | `beatsd doctor` — does the heartbeat row pass? Check `~/.config/beats/daemon.toml` `base_url`. |
 | "port in use" on startup | Another `beatsd run` is already up. `beatsd status` reports `daemon: running`. |
 | Editor context not appearing on flow windows | `beatsd doctor` confirms 37499 is bound. Check that the VS Code extension is installed and focused. |

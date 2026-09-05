@@ -30,7 +30,34 @@ jobs:
             exit 1
           fi
       - run: go vet ./...
+      # `go vet ./...` only ever sees the host's build tags, so the
+      # windows-only collector files (appinfo_windows.go,
+      # idletime_windows.go, cadence_windows.go) would be invisible to
+      # this job and first compile on a release runner. Vetting the
+      # windows target explicitly closes that gap. darwin can't be
+      # vetted from here — cadence_darwin.go is cgo — so it stays
+      # covered by the macos build matrix below.
+      - name: Vet (windows target)
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...
       - run: go test ./... -v -race
+
+  # The windows collector is the one surface with no coverage from the
+  # ubuntu job: its Raw Input sink can only be exercised on a real
+  # Windows session. This job runs the windows-tagged tests so window
+  # creation, device registration and teardown are proven rather than
+  # assumed.
+  windows-tests:
+    name: Test (windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: daemon
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+      - run: go test ./... -v
 
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
@@ -54,22 +81,31 @@ jobs:
           - goos: linux
             goarch: amd64
             runner: ubuntu-latest
+          # windows cross-compiles cleanly from ubuntu: the collector's
+          # Raw Input path uses golang.org/x/sys/windows, which is pure
+          # Go syscall wrappers, so no mingw toolchain is involved.
+          - goos: windows
+            goarch: amd64
+            runner: ubuntu-latest
     defaults:
       run:
         working-directory: daemon
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
-      # cgo on for darwin (native macOS clang); off for the pure-Go
-      # linux stub so it stays statically linked.
+      # cgo on for darwin (native macOS clang); off everywhere else so
+      # the binaries stay statically linked and cross-compilable.
       CGO_ENABLED: ${{ matrix.goos == 'darwin' && '1' || '0' }}
+      # Windows needs the .exe suffix; with an explicit -o, Go writes
+      # exactly the name it's given rather than adding one.
+      EXT: ${{ matrix.goos == 'windows' && '.exe' || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
-      - run: go build -o beatsd-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/beatsd/
+      - run: go build -o beatsd-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./cmd/beatsd/
       - uses: actions/upload-artifact@v7
         with:
           name: beatsd-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}

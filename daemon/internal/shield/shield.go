@@ -10,14 +10,25 @@ import (
 	"github.com/ahmedElghable/beats/daemon/internal/notify"
 )
 
-// DefaultDistractionBundles are bundle IDs considered distracting during work.
+// DefaultDistractionBundles are app identities considered distracting
+// during work — macOS bundle IDs, Linux WM_CLASS values, and Windows
+// executable basenames, keyed in the same map because each platform's
+// identities are unambiguous within it.
 var DefaultDistractionBundles = map[string]bool{
+	// macOS
 	"com.twitter.twitter-mac": true,
 	"com.spotify.client":      true,
 	"com.apple.Music":         true,
 	"com.netflix.Netflix":     true,
 	"tv.twitch.studio":        true,
 	"com.hnc.Discord":         true, // when timer running on non-communication project
+
+	// Windows (extension-less exe basename, per windowsExeIdentity)
+	"Spotify": true,
+	"Netflix": true,
+	"Discord": true,
+	"steam":   true,
+	"vlc":     true,
 }
 
 // DistractionBrowserPatterns are URL patterns that indicate browser-based distractions.

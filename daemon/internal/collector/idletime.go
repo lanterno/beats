@@ -8,7 +8,8 @@ import (
 )
 
 // IdleSeconds returns the number of seconds since the last user input event.
-// On macOS, uses ioreg. On Linux, uses xprintidle.
+// On macOS, uses ioreg. On Linux, uses xprintidle. On Windows, uses
+// GetLastInputInfo.
 // Returns 0.0 on any error (assumes active).
 func IdleSeconds() float64 {
 	switch runtime.GOOS {
@@ -16,9 +17,40 @@ func IdleSeconds() float64 {
 		return idleSecondsMacOS()
 	case "linux":
 		return idleSecondsLinux()
+	case "windows":
+		return idleSecondsWindows()
 	default:
 		return 0.0
 	}
+}
+
+// maxPlausibleIdleMillis caps what we'll believe from the tick
+// subtraction below: ~24.8 days, half the uint32 tick space. Anything
+// larger is not a real idle period, it's the two clocks disagreeing.
+const maxPlausibleIdleMillis = 1 << 31
+
+// idleSecondsFromTicks computes idle seconds from a 64-bit uptime tick
+// count and the 32-bit tick stamp of the last input event.
+//
+// The subtlety this exists to contain: GetTickCount64 returns
+// milliseconds since boot as a uint64, but LASTINPUTINFO.dwTime is a
+// uint32 that wraps every ~49.7 days. Truncating the former to uint32
+// before subtracting makes the arithmetic wrap in lockstep with the
+// latter, so the difference stays correct straight through a
+// rollover. Widening dwTime to uint64 instead — the obvious-looking
+// alternative — produces a ~49-day idle reading for the first 49 days
+// after every wrap.
+//
+// Extracted from the syscall so the wrap case is testable on any
+// platform; you cannot reach a 49-day uptime in a unit test otherwise.
+func idleSecondsFromTicks(nowTicks uint64, lastInputTick uint32) float64 {
+	idleMs := uint32(nowTicks) - lastInputTick
+	if idleMs >= maxPlausibleIdleMillis {
+		// Clock anomaly (or lastInput ahead of now by a hair). Assume
+		// active, matching this file's behaviour on every other error.
+		return 0.0
+	}
+	return float64(idleMs) / 1000.0
 }
 
 func idleSecondsMacOS() float64 {

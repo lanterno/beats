@@ -1,7 +1,8 @@
 name: Release Daemon
 # Triggers on tag push (e.g. `git tag v0.1.0 && git push --tags`).
 # Cross-compiles the daemon for darwin and linux on both arm64 and amd64,
-# packages each as a tar.gz, and attaches them to a GitHub release.
+# plus windows on amd64; packages each (tar.gz, or zip for windows) and
+# attaches them to a GitHub release.
 #
 # These binaries are what the Homebrew formula at
 # integrations/homebrew-formula/beatsd.rb downloads — once the
@@ -38,6 +39,12 @@ jobs:
           - goos: linux
             goarch: amd64
             runner: ubuntu-latest
+          # windows cross-compiles from ubuntu with CGO_ENABLED=0 — the
+          # Raw Input collector goes through golang.org/x/sys/windows,
+          # which is pure-Go syscall wrappers, so no mingw is needed.
+          - goos: windows
+            goarch: amd64
+            runner: ubuntu-latest
     defaults:
       run:
         working-directory: daemon
@@ -46,6 +53,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       # cgo on for the darwin cadence tap; off elsewhere to stay static.
       CGO_ENABLED: ${{ matrix.goos == 'darwin' && '1' || '0' }}
+      EXT: ${{ matrix.goos == 'windows' && '.exe' || '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -57,20 +65,32 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
-            -o beatsd ./cmd/beatsd/
+            -o "beatsd${EXT}" ./cmd/beatsd/
 
+      # Windows gets a .zip, everything else a .tar.gz. Not cosmetic:
+      # Explorer opens a zip natively, and the Phase-2 companion build
+      # unpacks this artifact to bundle beatsd.exe beside the Flutter
+      # runner.
       - name: Package
         run: |
-          tar czf "beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" beatsd
-          shasum -a 256 "beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
-            > "beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256"
+          BASE="beatsd-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -q "${BASE}.zip" beatsd.exe
+            ARCHIVE="${BASE}.zip"
+          else
+            tar czf "${BASE}.tar.gz" beatsd
+            ARCHIVE="${BASE}.tar.gz"
+          fi
+          shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
 
       - uses: actions/upload-artifact@v7
         with:
           name: beatsd-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-            daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+            daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+            daemon/beatsd-${{ matrix.goos }}-${{ matrix.goarch }}.*.sha256
+          if-no-files-found: error
 
   release:
     name: GitHub Release
@@ -86,7 +106,7 @@ jobs:
         # the release action wants a flat list of files.
         run: |
           mkdir -p dist
-          find artifacts -type f \( -name "*.tar.gz" -o -name "*.sha256" \) \
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) \
             -exec mv {} dist/ \;
           ls -la dist
 
@@ -96,7 +116,9 @@ jobs:
           generate_release_notes: true
           body: |
             Cross-compiled `beatsd` binaries for darwin and linux
-            (arm64 + amd64). SHA256 sums next to each tarball.
+            (arm64 + amd64) plus windows (amd64). SHA256 sums next to
+            each archive; windows ships as a `.zip`, the rest as
+            `.tar.gz`.
 
             Homebrew users: `brew upgrade beatsd` once the tap formula is
             bumped. Manual install:

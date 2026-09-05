@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
+	"runtime"
 	"time"
 
 	"github.com/ahmedElghable/beats/daemon/internal/client"
@@ -34,6 +34,7 @@ func runDoctor(cfg *config.Config, asJSON bool) error {
 		{name: "API reachable", fn: func() (string, error) { return checkAPI(cfg) }},
 		{name: "Editor listener port", fn: checkEditorPort},
 		{name: "Input event tap (cadence)", fn: checkEventTap},
+		{name: "Desktop signal sources", fn: checkSignalSources},
 		{name: "Flow data flowing", fn: func() (string, error) { return checkFlowData(cfg) }},
 	}
 
@@ -264,19 +265,73 @@ func flowDataDetail(c *client.Client) string {
 	return fmt.Sprintf("%d windows · avg %d (last hour)", s.Count, int(s.Avg*100))
 }
 
-// checkEventTap: is macOS Accessibility permission granted? Uses
-// ProbeEventTap rather than the full StartEventTap so doctor doesn't have
-// to spin up + tear down a CFRunLoop for a yes/no answer.
+// checkEventTap: can the daemon count input events? On macOS that means
+// Accessibility permission is granted; on Windows it means the Raw
+// Input sink registered.
+//
+// Dispatches on runtime.GOOS rather than pattern-matching the error
+// text, which is what this used to do. The old form treated any error
+// containing "event tap not available" as an informational stub
+// fallback — a rule that silently swallowed the real Windows failures
+// this file now has to distinguish, since they wrap that same
+// sentinel.
 func checkEventTap() (string, error) {
-	if err := collector.ProbeEventTap(); err != nil {
-		// Non-darwin platforms always report unavailable from the stub.
-		// Treat that as informational, not a failure — cadence just falls
-		// back to 0.5.
-		if strings.Contains(err.Error(), "not available on this platform") ||
-			err.Error() == "event tap not available" {
-			return "stub fallback (cadence will default to 0.5)", nil
-		}
-		return "", fmt.Errorf("%w — grant via System Settings → Privacy & Security → Accessibility", err)
+	err := collector.ProbeEventTap()
+	if err == nil {
+		return "available", nil
 	}
-	return "available", nil
+
+	switch runtime.GOOS {
+	case "darwin":
+		return "", fmt.Errorf("%w — grant via System Settings → Privacy & Security → Accessibility", err)
+	case "windows":
+		return "", fmt.Errorf("%w — Raw Input registration failed; cadence would default to 0.5", err)
+	default:
+		// No input-counting implementation on this platform. The
+		// collector falls back to a neutral 0.5 by design, so this is
+		// informational rather than a failure.
+		return fmt.Sprintf("no implementation on %s (cadence defaults to 0.5)", runtime.GOOS), nil
+	}
+}
+
+// checkSignalSources verifies the collector can actually observe the
+// desktop, by asking for the frontmost app the same way the sample
+// loop does.
+//
+// This is the check that catches a silently degenerate pipeline. When
+// FrontmostApp returns nothing, computeCoherence sees an empty app
+// distribution, takes its n <= 1 branch, and returns 1.0 — scoring
+// "I could not see any application" identically to "the user stayed in
+// a single app the whole minute". Combined with the 0.5 cadence
+// fallback and a zero category fit, every flow window comes out at
+// exactly 0.600, forever, with nothing else in this report looking
+// wrong. Plausible fabricated data is worse than an obvious outage, so
+// this check fails rather than reporting a detail.
+func checkSignalSources() (string, error) {
+	bundleID, appName := collector.FrontmostApp()
+	if bundleID == "" {
+		return "", fmt.Errorf("no frontmost app detected — %s", frontmostAppRemedy())
+	}
+
+	label := bundleID
+	if appName != "" && appName != bundleID {
+		label = fmt.Sprintf("%s (%s)", appName, bundleID)
+	}
+	return fmt.Sprintf("frontmost app: %s · category %s",
+		label, collector.CategoryFor(bundleID)), nil
+}
+
+// frontmostAppRemedy returns the platform-specific fix for app
+// detection returning nothing.
+func frontmostAppRemedy() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "lsappinfo returned nothing; check the daemon runs in a logged-in user session rather than over plain ssh"
+	case "linux":
+		return "install xdotool and xprop (X11), or run under Sway; without them coherence pins at 1.0 and the flow score is a constant"
+	case "windows":
+		return "GetForegroundWindow returned nothing; check the daemon runs in the interactive session rather than as a session-0 service, and that the workstation is unlocked"
+	default:
+		return runtime.GOOS + " has no app-detection implementation; coherence pins at 1.0 and the flow score is a constant"
+	}
 }

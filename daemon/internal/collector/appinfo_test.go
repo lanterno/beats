@@ -1,6 +1,9 @@
 package collector
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseLsappinfo(t *testing.T) {
 	output := `"bundleID" = "com.apple.dt.Xcode"
@@ -189,5 +192,108 @@ func TestParseSwaymsgTree_MultipleWindowsPicksFocused(t *testing.T) {
 	app, _ := parseSwaymsgTree(tree)
 	if app != "foreground_app" {
 		t.Errorf("expected foreground_app, got %q", app)
+	}
+}
+
+func TestWindowsExeIdentity(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		wantID   string
+		wantName string
+	}{
+		{
+			name:     "typical install path",
+			path:     `C:\Program Files\Microsoft VS Code\Code.exe`,
+			wantID:   "Code",
+			wantName: "Code",
+		},
+		{
+			name:     "per-user install with spaces in the profile",
+			path:     `C:\Users\Ada Lovelace\AppData\Local\Programs\Cursor\Cursor.exe`,
+			wantID:   "Cursor",
+			wantName: "Cursor",
+		},
+		{
+			name:     "system executable",
+			path:     `C:\Windows\System32\notepad.exe`,
+			wantID:   "notepad",
+			wantName: "notepad",
+		},
+		{
+			// The extension strip is what keeps bundle.ShortLabel from
+			// rendering this app as "exe" — it splits unknown ids on
+			// the final dot.
+			name:     "uppercase extension still stripped",
+			path:     `C:\Apps\Thing.EXE`,
+			wantID:   "Thing",
+			wantName: "Thing",
+		},
+		{
+			name:     "bare filename with no directory",
+			path:     `chrome.exe`,
+			wantID:   "chrome",
+			wantName: "chrome",
+		},
+		{
+			name:     "forward slashes",
+			path:     `C:/Program Files/Git/git-bash.exe`,
+			wantID:   "git-bash",
+			wantName: "git-bash",
+		},
+		{
+			// Only ".exe" is stripped; guessing at other extensions
+			// would mangle more names than it fixed.
+			name:     "non-exe extension left intact",
+			path:     `C:\Windows\System32\screensaver.scr`,
+			wantID:   "screensaver.scr",
+			wantName: "screensaver.scr",
+		},
+		{
+			name:     "empty path",
+			path:     "",
+			wantID:   "",
+			wantName: "",
+		},
+		{
+			name:     "trailing separator yields nothing",
+			path:     `C:\Program Files\`,
+			wantID:   "",
+			wantName: "",
+		},
+		{
+			// ".exe" and nothing else: 4 chars, so the length guard
+			// keeps it rather than producing an empty identity.
+			name:     "bare extension is not stripped to empty",
+			path:     `.exe`,
+			wantID:   ".exe",
+			wantName: ".exe",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotID, gotName := windowsExeIdentity(tt.path)
+			if gotID != tt.wantID || gotName != tt.wantName {
+				t.Errorf("windowsExeIdentity(%q) = (%q, %q), want (%q, %q)",
+					tt.path, gotID, gotName, tt.wantID, tt.wantName)
+			}
+		})
+	}
+}
+
+// TestWindowsExeIdentity_SurvivesShortLabel pins the cross-surface
+// contract that motivated stripping the extension at the source.
+// bundle.ShortLabel falls back to the segment after the final dot for
+// ids it doesn't know, so emitting "Code.exe" here would surface the
+// app as "exe" in the web pill, the companion's flow line and `beatsd
+// stats` alike. Asserting it here — rather than only in the bundle
+// package — keeps the constraint next to the code that has to honour
+// it.
+func TestWindowsExeIdentity_SurvivesShortLabel(t *testing.T) {
+	id, _ := windowsExeIdentity(`C:\Program Files\Microsoft VS Code\Code.exe`)
+	if strings.Contains(id, ".") {
+		t.Fatalf("identity %q contains a dot; bundle.ShortLabel would truncate it to %q",
+			id, id[strings.LastIndex(id, ".")+1:])
 	}
 }

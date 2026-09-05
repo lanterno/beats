@@ -8,16 +8,65 @@ import (
 
 // FrontmostApp returns the bundle ID and name of the frontmost application.
 // On macOS, uses lsappinfo. On Linux, uses xdotool + xprop (X11) or
-// swaymsg (Wayland). Returns empty strings on any error (graceful degradation).
+// swaymsg (Wayland). On Windows, uses GetForegroundWindow +
+// QueryFullProcessImageName. Returns empty strings on any error
+// (graceful degradation).
 func FrontmostApp() (bundleID, appName string) {
 	switch runtime.GOOS {
 	case "darwin":
 		return frontmostAppMacOS()
 	case "linux":
 		return frontmostAppLinux()
+	case "windows":
+		return frontmostAppWindows()
 	default:
 		return "", ""
 	}
+}
+
+// windowsExeIdentity derives the app identity from a full Windows
+// executable path — "C:\Program Files\Microsoft VS Code\Code.exe" →
+// ("Code", "Code").
+//
+// Both halves are the extension-less basename, deliberately. The
+// obvious richer source for appName is the window title, and we do not
+// use it: titles routinely carry the open document's name and full
+// path ("budget-2026.xlsx — Excel"), which would violate the daemon's
+// "no file paths beyond the workspace root" guarantee. The exe name is
+// the stable identity anyway — it's what survives a window title
+// changing every time the user switches tabs.
+//
+// The extension is stripped so the value survives bundle.ShortLabel,
+// which splits unknown ids on the final dot: "Code.exe" would render
+// as "exe" in the web pill, the companion's flow line, and `beatsd
+// stats` alike.
+//
+// Lives here rather than in appinfo_windows.go so it's testable on any
+// platform; it takes a path string and touches no syscalls.
+func windowsExeIdentity(fullPath string) (bundleID, appName string) {
+	if fullPath == "" {
+		return "", ""
+	}
+
+	// Split on either separator. filepath.Base is not usable here: on a
+	// non-Windows host it doesn't treat "\" as a separator, which would
+	// break both the tests and any cross-platform reuse.
+	base := fullPath
+	if i := strings.LastIndexAny(base, `\/`); i >= 0 {
+		base = base[i+1:]
+	}
+
+	// Strip a trailing ".exe" case-insensitively. Anything else (".com",
+	// ".scr") is left alone — it's rare enough that keeping the literal
+	// name is the more honest answer than guessing at extensions.
+	if len(base) > 4 && strings.EqualFold(base[len(base)-4:], ".exe") {
+		base = base[:len(base)-4]
+	}
+
+	if base == "" {
+		return "", ""
+	}
+	return base, base
 }
 
 func frontmostAppMacOS() (string, string) {
