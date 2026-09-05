@@ -2,7 +2,7 @@
 
 Personal time tracking that lives on your desk, in your browser, and in your pocket.
 
-A full-stack system across six surfaces — Python API, React SPA, Go daemon, Flutter desktop companion, VS Code extension, and ESP32 wall clock — deployed to Google Cloud.
+A full-stack system across six surfaces — Python API, React SPA, Go daemon, Flutter desktop companion, VS Code extension, and ESP32 wall clock — running on the home network as part of the [`home.space`](../README.md) stack.
 
 ```
                             ┌─────────────┐
@@ -29,7 +29,7 @@ A full-stack system across six surfaces — Python API, React SPA, Go daemon, Fl
 | **Companion** | Flutter (macOS/iOS/Android/Linux/Windows), HealthKit + Health Connect bridges |
 | **VS Code extension** | TypeScript, sends `{repo, branch, language}` heartbeats to the daemon |
 | **Wall Clock** | ESP32 firmware (Arduino/C++) with WS2812B LED + e-ink display |
-| **Infrastructure** | Terraform, GCP Cloud Run, Cloud Build, Artifact Registry |
+| **Infrastructure** | Docker Compose on the home network (nginx + MongoDB); Terraform/GCP kept for reference |
 
 ## Quick Start
 
@@ -56,7 +56,9 @@ daemon/                       Go daemon — ambient signal collection + Flow Sco
 companion/                    Flutter desktop companion (timer, coach, integrations)
 integrations/vscode-beats/    VS Code extension (workspace heartbeats + status bar)
 wall-clock/                   ESP32 firmware + docs
-terraform/                    GCP infrastructure-as-code
+compose.home.yml              Home-network deployment (Mongo + API + SPA on one port)
+justfile                      Verbs the home.space stack calls
+terraform/                    GCP infrastructure-as-code (previous deployment)
 docs/                         Design notes
 ```
 
@@ -135,7 +137,61 @@ API integration tests spin up a real MongoDB via [testcontainers](https://testco
 
 **CI** (GitHub Actions) runs lint, type check, tests, and build on every push and PR — separately for `api/` and `ui/` changes.
 
-**Deployment** is handled by Google Cloud Build: pushes to main trigger a Docker build, push to Artifact Registry, and deploy to Cloud Run.
+## Deployment
+
+Beats runs on the **home network**, in the `home.space` stack:
+
+```bash
+just build          # build both images (pnpm install + vite build; slow the first time)
+just up-detached    # start Mongo, the API and the SPA
+just health         # ask the API, through the same nginx a browser uses
+just logs           # follow all three
+just backup <dir>   # mongodump into <dir>
+```
+
+It answers on **one** port, `http://localhost:6008`, and through the stack's
+ingress at `http://beats.home.space` / `http://beats.<lan-ip>.nip.io:8080`. The
+SPA and the API share that single origin deliberately — see
+[Sign-in](#sign-in) below.
+
+The stack starts and stops it through `services.toml` at the stack root, which
+names the verbs above and knows nothing else about beats.
+
+`terraform/` and `cloudbuild.yaml` describe the previous Google Cloud
+deployment (Cloud Run + Firebase Hosting + Cloud Build). They are kept for
+reference and are not what runs.
+
+## Sign-in
+
+Two independent doors into an account. Neither disables the other:
+
+**Beats' own login** — email plus a WebAuthn passkey, exactly as before.
+
+**home.space SSO** — the stack runs an identity issuer at `auth.home.space`
+that mints an Ed25519-signed `Home-Session` cookie scoped to `.home.space`.
+Beats verifies that cookie itself and exchanges it for an ordinary beats
+session. On the login screen it appears as *Continue with home.space*.
+
+- **Already have a beats account?** Sign in with your passkey, then
+  **Settings → home.space identity → Link**. Linking always runs from an
+  authenticated beats session — that is what proves you control both sides.
+- **New to beats?** A home.space identity carrying an `owner` or `admin` role
+  gets an account created on first sign-in. Guest and family credentials can be
+  linked to an account, but cannot create one.
+
+Revocation is real: revoke a device in the issuer's `/devices` page and its
+beats session ends within one refresh cycle, because beats re-checks any
+SSO-derived session against the issuer before extending it. If the issuer is
+*unreachable*, beats falls back to verifying the cookie's signature against a
+cached JWKS, so a stopped identity service degrades to "existing sessions keep
+working" rather than "nobody can sign in".
+
+Off unless `BEATS_SSO_ENABLED` is set — see `api/.env.example`. Run
+`just sso-doctor` when it misbehaves.
+
+Note that WebAuthn is origin-bound: a passkey registered against the old
+`lifepete.com` origin will not work against `beats.home.space`. Linking a
+home.space identity is the way an old account gets back in.
 
 ## Features
 
@@ -146,7 +202,7 @@ API integration tests spin up a real MongoDB via [testcontainers](https://testco
 - Monthly retrospectives and year-in-review
 - Full JSON backup/restore, CSV export, webhooks
 - Five dark themes, three density levels
-- WebAuthn passkey login
+- WebAuthn passkey login, plus optional home.space SSO
 - ESP32 wall clock with ambient daily progress display
 - PWA-ready with offline timer support
 - Ambient daemon with Flow Score (macOS + Linux)

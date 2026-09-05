@@ -95,7 +95,11 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 - TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100
 - Go: gofmt + `go vet`; tests use stdlib `testing` only (no testify). Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
 - Dart: `flutter analyze` (no extra linter config); tests use `flutter_test` package.
-- API auth: JWT Bearer token (WebAuthn sessions) for all endpoints
+- API auth: JWT Bearer token for all endpoints. Two ways to obtain one — beats'
+  own WebAuthn passkey login, or a home.space SSO exchange. After the exchange the
+  token is an ordinary beats session; nothing downstream distinguishes them except
+  the `sso` claim, which exists so `/api/account/refresh` can re-check the identity
+  against its issuer.
 - Dates: API sends UTC, UI converts to local timezone on display
 - API errors: every non-2xx response shares the unified envelope `{detail, code, fields?}` (see `api/src/beats/api/errors.py`). The daemon Go client, UI ApiError, and companion ApiException all parse this shape.
 
@@ -104,6 +108,45 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 `beatsd` is the Go daemon. After `beatsd pair <code>`, every read-side command (`recent`, `top`, `stats`, `status`, `doctor`, `config`, `version`) supports `--json` for shell pipelines. `--here` is shorthand for `--repo $(git rev-parse --show-toplevel)`. See [daemon/README.md](daemon/README.md) for the full command reference.
 
 ## Infrastructure
+
+Beats now runs on the **home network**, in the `home.space` stack at
+`/home/green/lab/home`. `terraform/` and `cloudbuild.yaml` describe the previous
+Google Cloud deployment and are kept for reference — they are not what runs.
+
+### Home deployment (current)
+
+`compose.home.yml` at the repo root: Mongo and the API on an internal network, plus
+an nginx that serves the built SPA and proxies `/api` to the API. **One** published
+port, 6008. `justfile` at the repo root holds the verbs the stack calls
+(`up-detached`, `down`, `build`, `health`, `logs`, `backup`, `restore`).
+
+The SPA and the API deliberately share one origin. That is not a packaging
+preference: home.space SSO rides on a `Home-Session` cookie scoped to
+`.home.space`, and a browser only attaches it to same-origin requests. The old
+Firebase-plus-Cloud-Run split had two origins joined by CORS; restoring that
+split silently breaks SSO. `ui/Dockerfile` builds with `VITE_API_URL=""` and fails
+the build if the bundle still names `localhost:7999`.
+
+`api/compose.yml` is untouched and is still what local development uses.
+
+### home.space SSO
+
+A second, optional door beside beats' own passkey login — see
+`/home/green/lab/home/AGENTS.md` for the full writeup and the four decisions behind
+it. In this repo:
+
+- `src/beats/auth/sso.py` — verifies the cookie (issuer introspection first, offline
+  JWKS signature check as the fallback).
+- `src/beats/auth/sso_accounts.py` — link / provision / unlink.
+- `src/beats/api/routers/sso.py` — the public endpoints.
+- `src/beats/test_sso.py` — unit tests, no DB or network (scripted issuer via
+  `httpx.MockTransport`, real Ed25519 tokens in the issuer's exact format).
+- `TestSSOAPI` in `src/test_api.py` — the HTTP contract.
+
+Off by default (`BEATS_SSO_ENABLED`), so nothing changes for a deployment without an
+identity service. `just sso-doctor` from the repo root diagnoses it.
+
+### Google Cloud (previous)
 
 - **Deploy**: Terraform owns all Cloud Run config. Cloud Build builds the image and runs `terraform apply`.
 - **State**: GCS backend (`beats-476914-terraform-state`), shared by local and CI.
@@ -131,5 +174,6 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | `/api/auto-start` | Auto-start rules + webhook trigger |
 | `/api/device` | Wall clock status, favorites, weekly bars, heartbeat, pairing |
 | `/api/export` | CSV/JSON export and import |
-| `/api/account` | User account management (me, refresh, credentials, logout) |
+| `/api/account` | User account management (me, refresh, credentials, logout, home.space link) |
 | `/api/auth` | WebAuthn registration + login (public) |
+| `/api/auth/sso` | home.space SSO config + session exchange (public) |
