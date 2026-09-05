@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -120,7 +121,12 @@ func gitToplevel(dir string) (string, bool) {
 	if root == "" {
 		return "", false
 	}
-	return root, true
+	// git always prints the toplevel with forward slashes, including on
+	// Windows ("D:/src/beats"), while os.Getwd and every other path the
+	// daemon reports use the platform separator ("D:\src\beats"). Left
+	// as-is, `--here` would send a repo path that no heartbeat ever
+	// matches, so the flag would silently select nothing on Windows.
+	return filepath.FromSlash(root), true
 }
 
 // openBrowser invokes the system's URL handler. Cross-platform shim —

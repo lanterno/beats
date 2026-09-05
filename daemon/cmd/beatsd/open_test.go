@@ -178,15 +178,14 @@ func TestGitToplevel_FromInsideThisRepoReturnsRoot(t *testing.T) {
 }
 
 func TestGitToplevel_OutsideAnyRepoReturnsNotOk(t *testing.T) {
-	// /tmp on macOS / Linux is not inside a git work tree. The
-	// helper must report (not ok) so resolveHereRepo can fall back
-	// to the bare cwd. Skip on platforms where /tmp doesn't exist
-	// (windows runs unlikely but defensive).
-	if _, err := os.Stat("/tmp"); err != nil {
-		t.Skip("no /tmp on this platform")
-	}
-	if _, ok := gitToplevel("/tmp"); ok {
-		t.Errorf("expected /tmp to not be inside any git repo")
+	// A fresh temp dir is not inside a git work tree on any platform,
+	// so the helper must report (not ok) and let resolveHereRepo fall
+	// back to the bare cwd. This used to probe a hard-coded "/tmp",
+	// which simply skipped on Windows — the one platform whose path
+	// handling this is most worth exercising.
+	dir := t.TempDir()
+	if _, ok := gitToplevel(dir); ok {
+		t.Errorf("expected %q to not be inside any git repo", dir)
 	}
 }
 
