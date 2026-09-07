@@ -1,10 +1,3 @@
-/**
- * Timer Feature Types
- */
-
-/**
- * Timer state
- */
 export interface TimerState {
 	isRunning: boolean;
 	selectedProjectId: string | null;
@@ -12,9 +5,6 @@ export interface TimerState {
 	customStartTime: string | null;
 }
 
-/**
- * Timer status from API
- */
 export interface TimerStatus {
 	isBeating: boolean;
 	project: string | null;

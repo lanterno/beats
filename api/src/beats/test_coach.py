@@ -1543,7 +1543,6 @@ class TestRewriteCoachMemory:
 
 
 # Tool dispatch test scaffolding
-# ---------------------------------------------------------------------
 
 
 class _FakeProjectRepoForTools:

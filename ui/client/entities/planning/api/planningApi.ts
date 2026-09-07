@@ -5,8 +5,6 @@
 
 import { get, put } from "@/shared/api";
 
-// Weekly Plans
-
 export async function fetchWeeklyPlan(weekOf: string) {
 	return get<{ week_of: string; budgets: Array<{ project_id: string; planned_hours: number }> }>(
 		`/api/plans/weekly?week_of=${weekOf}`,

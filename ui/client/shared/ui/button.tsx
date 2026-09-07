@@ -1,6 +1,6 @@
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import * as React from "react";
+import type * as React from "react";
 
 import { cn } from "../lib";
 
@@ -32,19 +32,25 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-	extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+	extends React.ComponentPropsWithRef<"button">,
 		VariantProps<typeof buttonVariants> {
 	asChild?: boolean;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-	({ className, variant, size, asChild = false, ...props }, ref) => {
-		const Comp = asChild ? Slot : "button";
-		return (
-			<Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
-		);
-	},
-);
-Button.displayName = "Button";
+// React 19 passes `ref` as an ordinary prop — no forwardRef needed.
+function Button({ className, variant, size, asChild = false, type, ref, ...props }: ButtonProps) {
+	const Comp = asChild ? Slot : "button";
+	return (
+		<Comp
+			// A <button> with no type submits the form it sits in. Actions are
+			// the common case here, so default to "button" and let a real submit
+			// say so; `asChild` renders someone else's element, which has no type.
+			type={asChild ? undefined : (type ?? "button")}
+			className={cn(buttonVariants({ variant, size, className }))}
+			ref={ref}
+			{...props}
+		/>
+	);
+}
 
 export { Button, buttonVariants };

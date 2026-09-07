@@ -22,7 +22,13 @@ export function EmptyState({ variant, message }: EmptyStateProps) {
 
 function PulsingClock() {
 	return (
-		<svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
+		<svg
+			viewBox="0 0 64 64"
+			fill="none"
+			className="w-full h-full"
+			aria-hidden="true"
+			focusable="false"
+		>
 			<circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="2" opacity="0.4">
 				<animate attributeName="r" values="26;28;26" dur="3s" repeatCount="indefinite" />
 				<animate attributeName="opacity" values="0.3;0.5;0.3" dur="3s" repeatCount="indefinite" />
@@ -74,7 +80,13 @@ function PulsingClock() {
 
 function SproutingSeedling() {
 	return (
-		<svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
+		<svg
+			viewBox="0 0 64 64"
+			fill="none"
+			className="w-full h-full"
+			aria-hidden="true"
+			focusable="false"
+		>
 			{/* Ground line */}
 			<line
 				x1="16"
@@ -134,7 +146,13 @@ function SproutingSeedling() {
 
 function GrowingChart() {
 	return (
-		<svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
+		<svg
+			viewBox="0 0 64 64"
+			fill="none"
+			className="w-full h-full"
+			aria-hidden="true"
+			focusable="false"
+		>
 			{/* Base line */}
 			<line
 				x1="12"

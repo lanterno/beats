@@ -290,6 +290,7 @@ function CategoryChips({
 	onClear: () => void;
 }) {
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here.
 		<div
 			className="flex flex-wrap items-center gap-1.5"
 			role="group"

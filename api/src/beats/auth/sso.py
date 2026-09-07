@@ -122,9 +122,7 @@ class HomeSSOVerifier:
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
 
-    # ------------------------------------------------------------------
     # Public entry point
-    # ------------------------------------------------------------------
 
     async def verify(self, token: str) -> HomeIdentity:
         """Verify a `Home-Session` token and return the identity it carries.
@@ -145,9 +143,7 @@ class HomeSSOVerifier:
 
         return await self._verify_offline(token)
 
-    # ------------------------------------------------------------------
     # 1. Issuer introspection — authoritative, sees revocation
-    # ------------------------------------------------------------------
 
     async def _verify_via_issuer(self, token: str) -> HomeIdentity:
         url = f"{self._base}/api/session/verify"
@@ -189,9 +185,7 @@ class HomeSSOVerifier:
             verified_by="issuer",
         )
 
-    # ------------------------------------------------------------------
     # 2. Offline signature verification — no revocation, but survives outage
-    # ------------------------------------------------------------------
 
     async def _verify_offline(self, token: str) -> HomeIdentity:
         keys = await self._get_jwks()

@@ -66,9 +66,6 @@ function HomeOrDashboard() {
 	return <Navigate to="/app" replace />;
 }
 
-/**
- * Auth initializer component.
- */
 function AuthInitializer({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		initializeAuth();

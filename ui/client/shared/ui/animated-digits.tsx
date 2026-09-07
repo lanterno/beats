@@ -42,16 +42,21 @@ interface AnimatedDigitsProps {
 
 export function AnimatedDigits({ value, className, colonClassName }: AnimatedDigitsProps) {
 	return (
-		<span className={cn("inline-flex items-baseline", className)} aria-label={value}>
-			{value.split("").map((char, i) =>
-				char === ":" ? (
-					<span key={i} className={cn("w-[0.35em] text-center opacity-60", colonClassName)}>
-						:
-					</span>
-				) : (
-					<RollingDigit key={i} digit={parseInt(char, 10)} />
-				),
-			)}
+		<span className={cn("inline-flex items-baseline", className)}>
+			{/* The per-character spans exist to animate each digit; read the value
+			    once as text rather than letting it be spelled out. */}
+			<span className="sr-only">{value}</span>
+			<span aria-hidden="true" className="inline-flex items-baseline">
+				{value.split("").map((char, i) =>
+					char === ":" ? (
+						<span key={i} className={cn("w-[0.35em] text-center opacity-60", colonClassName)}>
+							:
+						</span>
+					) : (
+						<RollingDigit key={i} digit={parseInt(char, 10)} />
+					),
+				)}
+			</span>
 		</span>
 	);
 }

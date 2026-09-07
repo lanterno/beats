@@ -35,10 +35,12 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 
 ## Key Details
 
-- **Path aliases**: `@/` → `client/`, `@shared/` → `shared/`
+- **Path alias**: `@/` → `client/`
 - **API**: Connects to `VITE_API_URL` (default `http://localhost:7999`)
 - **Data fetching**: TanStack Query v5 with Zod v4 validation
-- **Linting**: Biome (replaces ESLint+Prettier) — tabs, line width 100
+- **Linting**: Biome (replaces ESLint+Prettier) — tabs, line width 100. Covers
+  `client/`, `e2e/` and the root config files; accessibility rules are on, with
+  seven at `warn` pending per-component decisions (see `biome.json`).
 - **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives
 - **PWA**: vite-plugin-pwa with workbox runtime caching
 - **Node**: >=25.0.0
@@ -60,7 +62,7 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 ## Linting
 
 ```bash
-pnpm lint          # biome check client/
-pnpm lint:fix      # biome check --write client/
+pnpm lint          # biome check .
+pnpm lint:fix      # biome check --write .
 pnpm typecheck     # tsc
 ```

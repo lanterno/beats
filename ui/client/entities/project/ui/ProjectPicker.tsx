@@ -275,6 +275,8 @@ export function ProjectPicker({
 								const isHighlighted = i === highlight;
 								const isSelected = p.id === value;
 								return (
+									// biome-ignore lint/a11y/useFocusableInteractive: in the WAI-ARIA combobox pattern the input keeps focus and aria-activedescendant points at the highlighted option, so options are deliberately not tabbable.
+									// biome-ignore lint/a11y/useKeyWithClickEvents: the arrow and enter handling lives on the combobox input above, not on each option.
 									<li
 										key={p.id}
 										id={optionId(p.id)}

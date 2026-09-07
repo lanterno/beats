@@ -5,9 +5,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-/**
- * Configure the query client with sensible defaults
- */
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
@@ -31,9 +28,6 @@ interface QueryProviderProps {
 	children: ReactNode;
 }
 
-/**
- * Provides TanStack Query context to the application
- */
 export function QueryProvider({ children }: QueryProviderProps) {
 	return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

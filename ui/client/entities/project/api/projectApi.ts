@@ -79,9 +79,6 @@ export async function unarchiveProject(projectId: string): Promise<void> {
 	await post<{ status: string }>(`/api/projects/${projectId}/unarchive`, {});
 }
 
-/**
- * Fetch project week breakdown
- */
 export interface WeekBreakdownResult {
 	totalHours: number;
 	dailyDurations: Record<string, string>;
@@ -127,12 +124,6 @@ export async function fetchProjectWeek(
 	};
 }
 
-/**
- * Fetch project total minutes
- */
-/**
- * Update a project
- */
 export async function updateProject(project: {
 	id: string;
 	name: string;
@@ -149,9 +140,6 @@ export async function updateProject(project: {
 	return parseApiResponse(ApiProjectSchema, data);
 }
 
-/**
- * Replace goal overrides for a project
- */
 export async function updateGoalOverrides(
 	projectId: string,
 	overrides: ApiGoalOverride[],

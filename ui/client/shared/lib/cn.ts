@@ -1,6 +1,3 @@
-/**
- * Tailwind CSS class name utility
- */
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 

@@ -48,9 +48,6 @@ function resolveApiBaseUrl(): string {
 	return import.meta.env.DEV ? "http://localhost:7999" : "";
 }
 
-/**
- * Application configuration singleton
- */
 export const config: AppConfig = {
 	apiBaseUrl: resolveApiBaseUrl(),
 	isDev: import.meta.env.DEV,

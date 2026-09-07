@@ -3,9 +3,6 @@
  * Pure domain types for work sessions (beats).
  */
 
-/**
- * A work session (time entry)
- */
 export interface Session {
 	id: string;
 	projectId: string;
@@ -16,9 +13,6 @@ export interface Session {
 	tags: string[];
 }
 
-/**
- * Daily summary for a project
- */
 export interface DaySummary {
 	date: Date;
 	dayName: string;
@@ -48,9 +42,6 @@ export interface DayProjectBreakdown {
 	totalMinutes: number;
 }
 
-/**
- * Project option for select inputs
- */
 export interface ProjectOption {
 	id: string;
 	name: string;

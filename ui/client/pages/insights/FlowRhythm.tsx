@@ -54,6 +54,7 @@ export function FlowRhythm({
 				<p className="text-[11px] text-muted-foreground">last {DAYS} days · by hour of day</p>
 			</div>
 
+			{/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here. */}
 			<div
 				className="flex items-end gap-[2px] h-20"
 				role="group"

@@ -4,7 +4,7 @@
  */
 
 import { Calendar, Play, Square } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { ProjectPicker, type ProjectWithDuration, readPickerRecents } from "@/entities/project";
 import { useAuth } from "@/features/auth";
@@ -108,6 +108,8 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 		}
 	};
 
+	const fieldId = useId();
+
 	return (
 		<div
 			className={cn(
@@ -194,10 +196,14 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 
 			{showStartTimeInput && !isRunning && (
 				<div className="mt-4 pt-4 border-t border-border/60">
-					<label className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-2">
+					<label
+						htmlFor={`${fieldId}-start`}
+						className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-2"
+					>
 						Start time
 					</label>
 					<input
+						id={`${fieldId}-start`}
 						type="datetime-local"
 						value={
 							customStartTime
@@ -215,10 +221,14 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 
 			{showStopTimeInput && isRunning && (
 				<div className="mt-4 pt-4 border-t border-border/60">
-					<label className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-2">
+					<label
+						htmlFor={`${fieldId}-stop`}
+						className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-2"
+					>
 						Stop time
 					</label>
 					<input
+						id={`${fieldId}-stop`}
 						type="datetime-local"
 						value={
 							customStopTime

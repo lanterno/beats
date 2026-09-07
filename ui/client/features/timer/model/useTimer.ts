@@ -17,9 +17,6 @@ const TIMER_STATUS_KEY = ["timer", "status"] as const;
 const REFETCH_WHILE_RUNNING_MS = 15_000;
 const REFETCH_WHILE_IDLE_MS = 30_000;
 
-/**
- * Timer management hook with API synchronization
- */
 export function useTimer() {
 	const queryClient = useQueryClient();
 

@@ -1,7 +1,3 @@
-/**
- * Calendar API Functions
- */
-
 import type { CalendarEvent, CalendarStatus } from "@/shared/api";
 import {
 	CalendarEventListSchema,

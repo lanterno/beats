@@ -5,10 +5,6 @@
  */
 import { useSyncExternalStore } from "react";
 
-// ============================================================================
-// Constants
-// ============================================================================
-
 const SESSION_TOKEN_KEY = "beats_session_token";
 
 // Buffer in seconds — treat token as expired this many seconds early so
@@ -36,10 +32,6 @@ function isTokenExpired(token: string): boolean {
 	if (!payload?.exp) return true;
 	return Date.now() / 1000 > payload.exp - EXPIRY_BUFFER_SECONDS;
 }
-
-// ============================================================================
-// State
-// ============================================================================
 
 export interface UserInfo {
 	email: string;
@@ -72,9 +64,7 @@ function emitChange() {
 	}
 }
 
-// ============================================================================
 // Token Auto-Refresh
-// ============================================================================
 
 /**
  * Schedule a token refresh 5 minutes before expiry.
@@ -143,10 +133,6 @@ if (typeof document !== "undefined") {
 	});
 }
 
-// ============================================================================
-// Actions
-// ============================================================================
-
 /**
  * Initialize the auth store from localStorage.
  * If a token exists, fetches user info from the API.
@@ -188,9 +174,6 @@ export async function initializeAuth(): Promise<void> {
 	}
 }
 
-/**
- * Set the session token after successful login/registration.
- */
 export function setSessionToken(token: string): void {
 	localStorage.setItem(SESSION_TOKEN_KEY, token);
 	state = {
@@ -203,17 +186,11 @@ export function setSessionToken(token: string): void {
 	scheduleRefresh(token);
 }
 
-/**
- * Set user info after fetching from API.
- */
 export function setUser(user: UserInfo): void {
 	state = { ...state, user };
 	emitChange();
 }
 
-/**
- * Clear the session token (logout).
- */
 export function clearSessionToken(): void {
 	cancelRefresh();
 	localStorage.removeItem(SESSION_TOKEN_KEY);
@@ -226,9 +203,6 @@ export function clearSessionToken(): void {
 	emitChange();
 }
 
-/**
- * Get the current session token.
- */
 export function getSessionToken(): string | null {
 	if (state.token && isTokenExpired(state.token)) {
 		clearSessionToken();
@@ -237,16 +211,9 @@ export function getSessionToken(): string | null {
 	return state.token;
 }
 
-/**
- * Check if the user is authenticated.
- */
 export function isAuthenticated(): boolean {
 	return state.isAuthenticated;
 }
-
-// ============================================================================
-// React Hook
-// ============================================================================
 
 function subscribe(callback: () => void): () => void {
 	listeners.add(callback);

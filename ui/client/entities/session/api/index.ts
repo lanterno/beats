@@ -1,7 +1,3 @@
-/**
- * Session API layer - public API
- */
-
 // TanStack Query hooks
 export {
 	calculateDailySummary,

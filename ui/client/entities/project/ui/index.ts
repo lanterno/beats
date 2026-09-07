@@ -1,7 +1,3 @@
-/**
- * Project UI components - public API
- */
-
 export {
 	AdvancedFields,
 	type AdvancedFieldsProps,

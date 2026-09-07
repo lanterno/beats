@@ -108,16 +108,10 @@ export function getWeekRange(weekOffset: number): { start: Date; end: Date } {
 	return { start: monday, end: sunday };
 }
 
-/**
- * Get day name from a date
- */
 export function getDayName(date: Date, format: "short" | "long" = "short"): string {
 	return date.toLocaleDateString("en-US", { weekday: format });
 }
 
-/**
- * Format date for short display (e.g., "Dec 11")
- */
 export function formatDateShort(date: Date): string {
 	return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

@@ -1,7 +1,3 @@
-/**
- * Sidebar Widget - public API
- */
-
 export { MobileHeader } from "./MobileHeader";
 export { Sidebar } from "./Sidebar";
 export { SidebarProjectList } from "./SidebarProjectList";

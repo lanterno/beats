@@ -25,11 +25,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/account", tags=["account"])
 
 
-# ============================================================================
-# Response Models
-# ============================================================================
-
-
 class SSOLinkInfo(BaseModel):
     """The home.space identity attached to this account, if any."""
 
@@ -69,11 +64,6 @@ def _user_response(user: User) -> UserResponse:
             provisioned=user.sso_provisioned,
         ),
     )
-
-
-# ============================================================================
-# Session Endpoints
-# ============================================================================
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -194,11 +184,6 @@ async def _revalidate_sso_session(request: Request, sso_subject: str) -> None:
         )
 
 
-# ============================================================================
-# Profile Endpoints
-# ============================================================================
-
-
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
     user_id: CurrentUserId,
@@ -214,14 +199,12 @@ async def get_current_user(
     return _user_response(user)
 
 
-# ============================================================================
 # home.space identity linking
 #
 # Both directions require an authenticated beats session. Linking from an
 # unauthenticated SSO arrival — "we see identity X, is this your account?" —
 # is the shape that turns a settable attribute into account takeover, and is
 # not offered. See `beats.auth.sso_accounts` for the full reasoning.
-# ============================================================================
 
 
 @router.post("/sso/link", response_model=UserResponse)
@@ -303,11 +286,6 @@ async def unlink_sso_identity(
         ) from e
 
     return _user_response(user)
-
-
-# ============================================================================
-# Credential Endpoints
-# ============================================================================
 
 
 @router.get("/credentials")

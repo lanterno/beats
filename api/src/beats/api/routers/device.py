@@ -49,9 +49,6 @@ def hex_to_rgb(hex_color: str) -> list[int]:
     return [int(h[i : i + 2], 16) for i in (0, 2, 4)]
 
 
-# Schemas
-
-
 # Theme accent colors — mirrors ui/client/shared/lib/useTheme.ts
 THEME_ACCENTS = {
     "ember": "#d4952a",

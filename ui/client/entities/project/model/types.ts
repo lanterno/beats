@@ -14,9 +14,6 @@ export interface GoalOverride {
 	note?: string;
 }
 
-/**
- * Core Project entity
- */
 export interface Project {
 	id: string;
 	name: string;
@@ -34,9 +31,6 @@ export interface Project {
 	autostartRepos: string[];
 }
 
-/**
- * Project with calculated total time
- */
 export interface ProjectWithDuration extends Project {
 	totalMinutes: number;
 	weeklyMinutes: number;
@@ -50,9 +44,6 @@ export interface ProjectWithDuration extends Project {
 	lastTrackedAt?: string;
 }
 
-/**
- * Daily summary for a project
- */
 export interface DailySummary {
 	day: string;
 	hours: number;
@@ -61,9 +52,6 @@ export interface DailySummary {
 	sessionCount: number;
 }
 
-/**
- * Weekly hours data for a project
- */
 export interface WeekHours {
 	weeksAgo: number;
 	hours: number;

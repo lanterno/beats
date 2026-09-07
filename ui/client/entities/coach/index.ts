@@ -1,6 +1,3 @@
-/**
- * Coach entity — public API
- */
 export type {
 	BriefResponse,
 	ChatHistoryMessage,

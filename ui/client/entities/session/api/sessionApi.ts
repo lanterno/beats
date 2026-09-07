@@ -24,25 +24,16 @@ import {
 	RhythmSlotListSchema,
 } from "@/shared/api";
 
-/**
- * Fetch all beats, optionally filtered by project
- */
 export async function fetchBeats(projectId?: string): Promise<ApiBeat[]> {
 	const url = projectId ? `/api/beats/?project_id=${projectId}` : "/api/beats/";
 	const data = await get<unknown>(url);
 	return parseApiResponse(ApiBeatListSchema, data);
 }
 
-/**
- * Update a beat (work session)
- */
 export async function updateBeat(beat: ApiBeat): Promise<void> {
 	await put<void>("/api/beats/", beat);
 }
 
-/**
- * Delete a beat (work session) by id.
- */
 export async function deleteBeat(beatId: string): Promise<void> {
 	await del<{ deleted: boolean }>(`/api/beats/${beatId}`);
 }
@@ -84,16 +75,10 @@ export async function fetchDailyRhythm(
 	return parseApiResponse(RhythmSlotListSchema, data);
 }
 
-/**
- * Fetch all unique tags used across sessions
- */
 export async function fetchAllTags(): Promise<string[]> {
 	return get<string[]>("/api/analytics/tags");
 }
 
-/**
- * Fetch untracked time gaps for a given date
- */
 export async function fetchGaps(targetDate: string): Promise<Gap[]> {
 	const tz = encodeURIComponent(browserTimeZone());
 	const data = await get<unknown>(`/api/analytics/gaps?target_date=${targetDate}&tz=${tz}`);

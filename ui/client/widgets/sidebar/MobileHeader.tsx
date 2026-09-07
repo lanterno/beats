@@ -89,7 +89,12 @@ export function MobileHeader(props: MobileHeaderProps) {
 			{/* Drawer overlay */}
 			{drawerOpen && (
 				<div className="lg:hidden fixed inset-0 z-[60]">
-					<div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={closeDrawer} />
+					<button
+						type="button"
+						aria-label="Close menu"
+						className="absolute inset-0 w-full bg-black/50 backdrop-blur-xs"
+						onClick={closeDrawer}
+					/>
 					<aside
 						className={cn(
 							"absolute top-0 left-0 bottom-0 w-72 bg-sidebar border-r border-sidebar-border",

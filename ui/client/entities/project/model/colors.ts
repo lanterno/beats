@@ -3,9 +3,6 @@
  * Consistent color assignment based on project ID.
  */
 
-/**
- * Color palette for projects
- */
 export const PROJECT_COLORS = [
 	"#5B9CF6", // Blue
 	"#34D399", // Green

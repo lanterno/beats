@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth/sso", tags=["sso"])
 
-
 # Shared process-wide so the JWKS cache is shared. Constructed unconditionally
 # — it makes no network call until something asks it to verify, so an instance
 # with SSO disabled costs nothing.
@@ -46,11 +45,6 @@ def get_sso_accounts(user_repo: UserRepoDep) -> SSOAccountService:
 
 
 SSOAccountsDep = Annotated[SSOAccountService, Depends(get_sso_accounts)]
-
-
-# ============================================================================
-# Response models
-# ============================================================================
 
 
 class SSOConfigResponse(BaseModel):
@@ -81,11 +75,6 @@ class SSOSessionResponse(BaseModel):
     # could be verified. Surfaced so the UI can say so rather than pretend
     # the two are the same.
     verified_by: str
-
-
-# ============================================================================
-# Helpers
-# ============================================================================
 
 
 def derive_login_url(request: Request) -> str:
@@ -170,11 +159,6 @@ async def verify_home_cookie(request: Request, verifier: HomeSSOVerifier) -> Hom
                 "message": "The home.space identity service is unreachable. Try again shortly.",
             },
         ) from e
-
-
-# ============================================================================
-# Endpoints
-# ============================================================================
 
 
 @router.get("/config", response_model=SSOConfigResponse)

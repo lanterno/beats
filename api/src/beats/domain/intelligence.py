@@ -64,10 +64,6 @@ class IntelligenceService:
         self.beat_repo = beat_repo
         self.project_repo = project_repo
 
-    # =========================================================================
-    # Productivity Score
-    # =========================================================================
-
     async def compute_productivity_score(self, tz: ZoneInfo = UTC_TZ) -> dict:
         """Compute current productivity score (0-100) with component breakdown."""
         today = datetime.now(tz).date()
@@ -208,10 +204,6 @@ class IntelligenceService:
             history.append({"week_of": monday.isoformat(), "score": score})
 
         return history
-
-    # =========================================================================
-    # Weekly Digest
-    # =========================================================================
 
     async def generate_weekly_digest(
         self, week_monday: date, tz: ZoneInfo = UTC_TZ
@@ -375,10 +367,6 @@ class IntelligenceService:
 
         # 4. Fallback
         return f"You tracked {total_hours:.1f}h across {session_count} sessions this week."
-
-    # =========================================================================
-    # Pattern Detection
-    # =========================================================================
 
     async def detect_patterns(self, tz: ZoneInfo = UTC_TZ) -> list[InsightCard]:
         """Detect non-obvious patterns in the user's data."""
@@ -580,10 +568,6 @@ class IntelligenceService:
                 )
         return results
 
-    # =========================================================================
-    # Smart Daily Plan Suggestions
-    # =========================================================================
-
     async def suggest_daily_plan(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Suggest up to 3 projects and durations to focus on today."""
         dow = target_date.weekday()
@@ -687,10 +671,6 @@ class IntelligenceService:
             for pid, _, mins, reason in scores[:3]
         ]
 
-    # =========================================================================
-    # Focus Quality Score
-    # =========================================================================
-
     async def compute_focus_scores(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Compute focus quality scores for all sessions on a given local date."""
         beats = await _beats_in_local_range(self.beat_repo, target_date, target_date, tz)
@@ -773,10 +753,6 @@ class IntelligenceService:
             "components": {"length": length, "peak_hours": peak, "fragmentation": frag},
         }
 
-    # =========================================================================
-    # Project Health
-    # =========================================================================
-
     async def get_project_health(self, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Compute health metrics for each active project."""
         today = datetime.now(tz).date()
@@ -845,9 +821,7 @@ class IntelligenceService:
         return results
 
 
-# =========================================================================
 # Chronotype Detection (Stage 4)
-# =========================================================================
 
 CHRONOTYPE_LABELS = {
     "early": (6, 10),

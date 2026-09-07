@@ -22,7 +22,7 @@ function ScoreRing({ score, size = 56 }: { score: number; size?: number }) {
 				: "var(--color-accent)";
 
 	return (
-		<svg width={size} height={size} className="shrink-0">
+		<svg width={size} height={size} className="shrink-0" aria-hidden="true" focusable="false">
 			<circle
 				cx={size / 2}
 				cy={size / 2}
@@ -82,7 +82,7 @@ function Sparkline({
 		.join(" ");
 
 	return (
-		<svg width={width} height={height} className="shrink-0">
+		<svg width={width} height={height} className="shrink-0" aria-hidden="true" focusable="false">
 			<polyline
 				points={points}
 				fill="none"

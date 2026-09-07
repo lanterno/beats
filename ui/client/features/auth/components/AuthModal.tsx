@@ -44,9 +44,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 
 	const [sso, setSso] = useState<SSOConfig | null>(null);
 
-	// ------------------------------------------------------------------
 	// home.space SSO — the second door
-	// ------------------------------------------------------------------
 
 	// Guards the return-from-issuer exchange to exactly one attempt. Without
 	// it, `completeSsoSignIn` being a fresh closure on every render makes the
@@ -274,13 +272,15 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 	};
 
 	return (
-		<div
-			className="fixed inset-0 z-50 flex items-center justify-center"
-			onClick={(e) => {
-				if (e.target === e.currentTarget && !isProcessing) onClose();
-			}}
-		>
-			<div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+		<div className="fixed inset-0 z-50 flex items-center justify-center">
+			<button
+				type="button"
+				aria-label="Close"
+				tabIndex={-1}
+				disabled={isProcessing}
+				className="absolute inset-0 w-full bg-black/60 backdrop-blur-sm"
+				onClick={onClose}
+			/>
 			<div className="relative w-full max-w-md mx-6 bg-card border border-border rounded-lg p-8 shadow-soft animate-in fade-in zoom-in-95 duration-200">
 				{/* Close button */}
 				<button

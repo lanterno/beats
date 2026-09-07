@@ -7,8 +7,6 @@ from pydantic import BaseModel, Field
 
 from beats.domain.models import GoalType
 
-# Request schemas
-
 
 class RecordTimeRequest(BaseModel):
     """Request body for recording time (start/stop timer)."""
@@ -81,9 +79,6 @@ class UpdateBeatRequest(BaseModel):
     project_id: str
     start: datetime
     end: datetime | None = None
-
-
-# Response schemas
 
 
 class BeatResponse(BaseModel):
@@ -205,9 +200,6 @@ class RhythmSlotResponse(BaseModel):
 
     slot: int
     minutes: float
-
-
-# Intelligence schemas
 
 
 class ProductivityScoreResponse(BaseModel):

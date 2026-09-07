@@ -40,10 +40,7 @@ ISSUER = "did:web:auth.home.space"
 BASE = "http://issuer.test"
 DID = "did:key:z6MkuDeviceKeyExample"
 
-
-# ============================================================================
 # Token minting — mirrors the Rust issuer byte for byte
-# ============================================================================
 
 
 def _b64(raw: bytes) -> str:
@@ -107,9 +104,7 @@ def verifier_with(handler, **kwargs) -> HomeSSOVerifier:
     )
 
 
-# ============================================================================
 # Issuer introspection — the authoritative path
-# ============================================================================
 
 
 class TestIssuerIntrospection:
@@ -172,9 +167,7 @@ class TestIssuerIntrospection:
             await verifier_with(handler).verify("")
 
 
-# ============================================================================
 # Offline fallback — issuer down
-# ============================================================================
 
 
 class TestOfflineFallback:
@@ -265,11 +258,6 @@ class TestOfflineFallback:
         assert second.verified_by == "offline"
 
 
-# ============================================================================
-# Role gate
-# ============================================================================
-
-
 class TestRoleGate:
     @pytest.mark.parametrize(
         ("roles", "allowed"),
@@ -299,11 +287,6 @@ class TestRoleGate:
             did=DID, holder_name="x", roles=["Owner"], issuer=ISSUER, verified_by="issuer"
         )
         assert identity.has_any_role(frozenset({"owner"})) is True
-
-
-# ============================================================================
-# Account mapping
-# ============================================================================
 
 
 class FakeUserRepo:

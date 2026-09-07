@@ -1,6 +1,3 @@
-/**
- * Formatting utilities for display
- */
 import { parseUtcIso } from "./date";
 
 /**
@@ -17,9 +14,6 @@ export function formatDuration(minutes: number): string {
 	return `${hours}h ${remainingMins.toFixed(2)}m`;
 }
 
-/**
- * Calculate duration in minutes between two ISO datetime strings
- */
 export function calculateDurationMinutes(startTime: string, endTime: string): number {
 	const start = parseUtcIso(startTime);
 	const end = parseUtcIso(endTime);
@@ -65,9 +59,6 @@ export function parseTimedeltaToMinutes(str: string): number {
 	return totalSeconds / 60;
 }
 
-/**
- * Format seconds to HH:MM:SS display
- */
 export function formatSecondsToTime(totalSeconds: number): string {
 	const hours = Math.floor(totalSeconds / 3600);
 	const minutes = Math.floor((totalSeconds % 3600) / 60);

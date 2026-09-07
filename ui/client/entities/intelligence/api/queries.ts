@@ -19,9 +19,6 @@ import {
 	refreshPatterns,
 } from "./intelligenceApi";
 
-/**
- * Query keys for intelligence data
- */
 export const intelligenceKeys = {
 	all: ["intelligence"] as const,
 	score: () => [...intelligenceKeys.all, "score"] as const,
@@ -36,9 +33,6 @@ export const intelligenceKeys = {
 	inbox: () => [...intelligenceKeys.all, "inbox"] as const,
 };
 
-/**
- * Fetch current productivity score
- */
 export function useProductivityScore() {
 	return useQuery({
 		queryKey: intelligenceKeys.score(),
@@ -47,9 +41,6 @@ export function useProductivityScore() {
 	});
 }
 
-/**
- * Fetch weekly productivity score history for sparkline
- */
 export function useScoreHistory(weeks = 8) {
 	return useQuery({
 		queryKey: intelligenceKeys.scoreHistory(weeks),
@@ -58,9 +49,6 @@ export function useScoreHistory(weeks = 8) {
 	});
 }
 
-/**
- * Fetch recent weekly digests
- */
 export function useDigests(limit = 12) {
 	return useQuery({
 		queryKey: intelligenceKeys.digests(limit),
@@ -69,9 +57,6 @@ export function useDigests(limit = 12) {
 	});
 }
 
-/**
- * Generate a weekly digest
- */
 export function useGenerateDigest() {
 	const queryClient = useQueryClient();
 
@@ -83,9 +68,6 @@ export function useGenerateDigest() {
 	});
 }
 
-/**
- * Fetch cached pattern detection results
- */
 export function usePatterns() {
 	return useQuery({
 		queryKey: intelligenceKeys.patterns(),
@@ -94,9 +76,6 @@ export function usePatterns() {
 	});
 }
 
-/**
- * Refresh pattern detection
- */
 export function useRefreshPatterns() {
 	const queryClient = useQueryClient();
 
@@ -108,9 +87,6 @@ export function useRefreshPatterns() {
 	});
 }
 
-/**
- * Dismiss a pattern insight card
- */
 export function useDismissPattern() {
 	const queryClient = useQueryClient();
 
@@ -164,9 +140,6 @@ export function useDismissInboxItem() {
 	});
 }
 
-/**
- * Fetch smart daily plan suggestions
- */
 export function useSuggestions(date?: string) {
 	return useQuery({
 		queryKey: intelligenceKeys.suggestions(date),
@@ -175,9 +148,6 @@ export function useSuggestions(date?: string) {
 	});
 }
 
-/**
- * Fetch focus quality scores for a date
- */
 export function useFocusScores(date?: string) {
 	return useQuery({
 		queryKey: intelligenceKeys.focusScores(date),
@@ -186,9 +156,6 @@ export function useFocusScores(date?: string) {
 	});
 }
 
-/**
- * Fetch project health metrics
- */
 export function useProjectHealth() {
 	return useQuery({
 		queryKey: intelligenceKeys.projectHealth(),
@@ -197,9 +164,6 @@ export function useProjectHealth() {
 	});
 }
 
-/**
- * Fetch the aggregated intelligence Inbox for the dashboard
- */
 export function useInbox() {
 	return useQuery({
 		queryKey: intelligenceKeys.inbox(),

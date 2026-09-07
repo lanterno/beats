@@ -4,7 +4,7 @@
  */
 
 import { Save, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
 	calculateDurationMinutes,
 	formatDuration,
@@ -32,13 +32,19 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 		onSave(session.id, editStartTime, editEndTime, editProjectId);
 	};
 
+	const fieldId = useId();
+
 	return (
 		<div className="rounded-lg border border-border/80 bg-card shadow-soft p-5 space-y-4">
 			<div>
-				<label className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5">
+				<label
+					htmlFor={`${fieldId}-project`}
+					className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5"
+				>
 					Project
 				</label>
 				<select
+					id={`${fieldId}-project`}
 					value={editProjectId}
 					onChange={(e) => setEditProjectId(e.target.value)}
 					className="w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
@@ -51,10 +57,14 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 				</select>
 			</div>
 			<div>
-				<label className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5">
+				<label
+					htmlFor={`${fieldId}-start`}
+					className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5"
+				>
 					Start
 				</label>
 				<input
+					id={`${fieldId}-start`}
 					type="datetime-local"
 					value={toLocalDatetimeLocalString(new Date(editStartTime))}
 					onChange={(e) => setEditStartTime(new Date(e.target.value).toISOString())}
@@ -62,10 +72,14 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 				/>
 			</div>
 			<div>
-				<label className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5">
+				<label
+					htmlFor={`${fieldId}-end`}
+					className="block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5"
+				>
 					End
 				</label>
 				<input
+					id={`${fieldId}-end`}
 					type="datetime-local"
 					value={toLocalDatetimeLocalString(new Date(editEndTime))}
 					onChange={(e) => setEditEndTime(new Date(e.target.value).toISOString())}

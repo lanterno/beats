@@ -877,7 +877,6 @@ class TestAnalyticsUntrackedGaps:
 
 
 # IntelligenceService test scaffolding
-# ---------------------------------------------------------------------
 
 
 class _FakeIntelBeatRepo(_FakeBeatRepo):
@@ -2593,9 +2592,7 @@ class TestGetProjectHealth:
         assert result[1]["alert"] is None
 
 
-# =============================================================================
 # Domain Services — TimerService, BeatService, ProjectService
-# =============================================================================
 
 
 class _FakeBeatRepoForServices:
@@ -3382,9 +3379,7 @@ class TestProjectServiceTimeAggregations:
         assert result == {"2026-04-01": "1:00:00", "2026-04-02": "1:00:00"}
 
 
-# =============================================================================
 # FF.15 — Beats-batched aggregation helpers
-# =============================================================================
 
 
 class TestProjectServiceBeatsBatchHelpers:
@@ -3492,9 +3487,7 @@ class TestProjectServiceBeatsBatchHelpers:
         assert float(result["total_hours"]) * 60 == 90.0
 
 
-# =============================================================================
 # Export bundle signing — Ed25519 sign/verify primitives
-# =============================================================================
 
 
 class TestExportSigning:
@@ -3612,9 +3605,7 @@ class TestExportSigning:
             verify(b"\x00" * 16, b"payload", b"\x00" * 64)
 
 
-# =============================================================================
 # Export bundle SQLite — build_sqlite_bytes + manifest helpers
-# =============================================================================
 
 
 class TestExportSqlite:
@@ -3849,9 +3840,7 @@ class TestExportSqlite:
         assert b"\n" not in out
 
 
-# =============================================================================
 # Oura Service — personal access token + daily biometric fetch
-# =============================================================================
 
 
 class _FakeHTTPResponse:
@@ -4097,9 +4086,7 @@ class TestOuraServiceDisconnect:
         assert await svc.disconnect() is False
 
 
-# =============================================================================
 # Fitbit Service — OAuth flow + biometric fetch with token refresh
-# =============================================================================
 
 
 class _FakeFitbitIntegrationRepo:
@@ -4424,9 +4411,7 @@ class TestFitbitDisconnect:
         assert await svc_empty.disconnect() is False
 
 
-# =============================================================================
 # GitHub Service — OAuth flow + commit-activity fetch with pagination
-# =============================================================================
 
 
 class _FakeGitHubIntegrationRepo:
@@ -4730,9 +4715,7 @@ class TestGitHubDisconnect:
         assert await svc_empty.disconnect() is False
 
 
-# =============================================================================
 # Calendar Service — Google Calendar OAuth + event fetch
-# =============================================================================
 
 
 class _FakeCalendarIntegrationRepo:
@@ -5245,9 +5228,7 @@ class TestCalendarDisconnect:
         assert await svc_empty.disconnect() is False
 
 
-# =============================================================================
 # Chronotype detector — Flow Score × time-of-day
-# =============================================================================
 
 
 def _flow_window(*, day: date, hour: int, score: float, minute: int = 0):
@@ -5355,9 +5336,7 @@ class TestDetectChronotype:
         assert result[0].data["label"] == "evening"
 
 
-# =============================================================================
 # Datetime utilities — normalize_tz
-# =============================================================================
 
 
 class TestNormalizeTz:

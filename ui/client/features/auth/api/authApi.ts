@@ -9,10 +9,6 @@ import type {
 import { config } from "@/shared/config";
 import { getSessionToken } from "../stores/authStore";
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface RegisterStartResponse {
 	options: PublicKeyCredentialCreationOptionsJSON;
 	user_id: string;
@@ -33,9 +29,7 @@ export interface UserInfo {
 	sso: SSOLinkInfo;
 }
 
-// ============================================================================
 // home.space SSO
-// ============================================================================
 
 export interface SSOConfig {
 	enabled: boolean;
@@ -69,10 +63,6 @@ export interface SSOSessionResponse {
 	 *  was unreachable and only the signature could be verified. */
 	verified_by: "issuer" | "offline";
 }
-
-// ============================================================================
-// API Functions
-// ============================================================================
 
 const AUTH_BASE = `${config.apiBaseUrl}/api/auth`;
 
@@ -115,14 +105,12 @@ export function verifyLogin(credential: unknown): Promise<VerifyResponse> {
 	return authPost("/login/verify", { credential });
 }
 
-// ============================================================================
 // home.space SSO
 //
 // Every call here sends cookies. The `Home-Session` cookie is scoped to
 // `.home.space`, so on the home deployment (where the SPA and the API share
 // an origin) it rides along automatically — but `credentials: "include"`
 // keeps this working when the two are split across ports in development.
-// ============================================================================
 
 /**
  * Whether this instance offers home.space SSO, and where to go for it.
@@ -183,17 +171,11 @@ export async function unlinkSsoIdentity(): Promise<UserInfo> {
 	return del<UserInfo>("/api/account/sso/link");
 }
 
-/**
- * Logout: revoke the session token server-side.
- */
 export async function logout(): Promise<void> {
 	const { post } = await import("@/shared/api");
 	await post("/api/account/logout");
 }
 
-/**
- * Refresh the session token before it expires.
- */
 export async function refreshToken(): Promise<string | null> {
 	const token = getSessionToken();
 	if (!token) return null;
@@ -206,9 +188,7 @@ export async function refreshToken(): Promise<string | null> {
 	}
 }
 
-// ============================================================================
 // Credential Management (authed endpoints — use centralized client)
-// ============================================================================
 
 export interface CredentialInfo {
 	id: string;
@@ -216,25 +196,16 @@ export interface CredentialInfo {
 	created_at: string;
 }
 
-/**
- * List registered passkeys for the current user.
- */
 export async function listCredentials(): Promise<CredentialInfo[]> {
 	const { get } = await import("@/shared/api");
 	return get<CredentialInfo[]>("/api/account/credentials");
 }
 
-/**
- * Delete a passkey by credential ID.
- */
 export async function deleteCredential(credentialId: string): Promise<void> {
 	const { del } = await import("@/shared/api");
 	await del(`/api/account/credentials/${encodeURIComponent(credentialId)}`);
 }
 
-/**
- * Get current user info.
- */
 export async function getCurrentUser(): Promise<UserInfo> {
 	const { get } = await import("@/shared/api");
 	return get<UserInfo>("/api/account/me");

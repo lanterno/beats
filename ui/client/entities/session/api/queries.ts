@@ -29,9 +29,6 @@ import {
 	updateBeat,
 } from "./sessionApi";
 
-/**
- * Query keys for session data
- */
 export const sessionKeys = {
 	all: ["sessions"] as const,
 	allBeats: () => [...sessionKeys.all, "all-beats"] as const,
@@ -51,9 +48,6 @@ export function useAllBeats() {
 	});
 }
 
-/**
- * Hook to fetch sessions for a project
- */
 export function useSessions(projectId: string | undefined) {
 	return useQuery({
 		queryKey: sessionKeys.list(projectId),
@@ -65,9 +59,6 @@ export function useSessions(projectId: string | undefined) {
 	});
 }
 
-/**
- * Hook to update a session
- */
 export function useUpdateSession() {
 	const queryClient = useQueryClient();
 
@@ -139,9 +130,6 @@ export function useAllCurrentWeekSessions() {
 	});
 }
 
-/**
- * Calculate daily summary from sessions
- */
 export function calculateDailySummary(sessions: Session[]): DaySummary[] {
 	const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
 
@@ -253,9 +241,6 @@ export function useWeeklySessionsByProject(
 	});
 }
 
-/**
- * Hook to fetch recent sessions across all projects
- */
 export function useRecentSessions(limit = 10) {
 	const { data: allBeats } = useAllBeats();
 	return useQuery({
@@ -653,9 +638,6 @@ export function useLastWeekTotal() {
 	});
 }
 
-/**
- * Hook to fetch all unique tags used across sessions
- */
 export function useAllTags() {
 	return useQuery({
 		queryKey: [...sessionKeys.all, "tags"],

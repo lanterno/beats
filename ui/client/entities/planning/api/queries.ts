@@ -1,6 +1,3 @@
-/**
- * Planning TanStack Query hooks
- */
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchWeeklyPlan, upsertWeeklyPlan } from "./planningApi";
 
@@ -8,8 +5,6 @@ export const planningKeys = {
 	all: ["planning"] as const,
 	weeklyPlan: (weekOf: string) => [...planningKeys.all, "weekly-plan", weekOf] as const,
 };
-
-// Weekly Plans
 
 export function useWeeklyPlan(weekOf: string) {
 	return useQuery({

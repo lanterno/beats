@@ -6,7 +6,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
@@ -14,6 +14,7 @@ import { post } from "@/shared/api";
 import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
 
 export function QuickLog() {
+	const fieldId = useId();
 	const [open, setOpen] = useState(false);
 	const { data: projects } = useProjects();
 	const queryClient = useQueryClient();
@@ -96,8 +97,11 @@ export function QuickLog() {
 
 			<div className="grid grid-cols-2 gap-2">
 				<div>
-					<label className="text-[10px] text-muted-foreground/60">Start</label>
+					<label htmlFor={`${fieldId}-start`} className="text-[10px] text-muted-foreground/60">
+						Start
+					</label>
 					<input
+						id={`${fieldId}-start`}
 						type="datetime-local"
 						value={startTime}
 						onChange={(e) => setStartTime(e.target.value)}
@@ -105,8 +109,11 @@ export function QuickLog() {
 					/>
 				</div>
 				<div>
-					<label className="text-[10px] text-muted-foreground/60">End</label>
+					<label htmlFor={`${fieldId}-end`} className="text-[10px] text-muted-foreground/60">
+						End
+					</label>
 					<input
+						id={`${fieldId}-end`}
 						type="datetime-local"
 						value={endTime}
 						onChange={(e) => setEndTime(e.target.value)}

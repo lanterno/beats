@@ -1,7 +1,3 @@
-/**
- * Shared library utilities - public API
- */
-
 // Class name utility
 export { cn } from "./cn";
 // Date utilities

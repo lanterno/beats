@@ -45,6 +45,8 @@ export function GoalRing({
 			height={size}
 			viewBox={`0 0 ${size} ${size}`}
 			className={cn("shrink-0", className)}
+			aria-hidden="true"
+			focusable="false"
 		>
 			{/* Track */}
 			<circle

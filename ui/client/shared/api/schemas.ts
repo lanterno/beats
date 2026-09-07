@@ -4,13 +4,8 @@
  */
 import { z } from "zod";
 
-// ============================================================================
 // API Response Schemas (raw backend responses)
-// ============================================================================
 
-/**
- * Goal override for a specific week or date range
- */
 export const GoalOverrideSchema = z.object({
 	week_of: z.string().nullable().optional(),
 	effective_from: z.string().nullable().optional(),
@@ -21,9 +16,6 @@ export const GoalOverrideSchema = z.object({
 
 export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
 
-/**
- * Project as returned by the API
- */
 export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),
@@ -59,9 +51,6 @@ export const ApiProjectListItemSchema = ApiProjectSchema.extend({
 
 export type ApiProjectListItem = z.infer<typeof ApiProjectListItemSchema>;
 
-/**
- * Beat (work session) as returned by the API
- */
 export const ApiBeatSchema = z.object({
 	id: z.string().nullable().optional(),
 	start: z.string(), // ISO datetime
@@ -73,9 +62,6 @@ export const ApiBeatSchema = z.object({
 
 export type ApiBeat = z.infer<typeof ApiBeatSchema>;
 
-/**
- * Timer status as returned by the API
- */
 export const TimerStatusSchema = z.object({
 	isBeating: z.boolean(),
 	project: ApiProjectSchema.nullable().optional(),
@@ -85,9 +71,6 @@ export const TimerStatusSchema = z.object({
 
 export type TimerStatus = z.infer<typeof TimerStatusSchema>;
 
-/**
- * Week breakdown response from project week endpoint
- */
 export const WeekBreakdownSchema = z.object({
 	Monday: z.string().optional().default("0:00:00"),
 	Tuesday: z.string().optional().default("0:00:00"),
@@ -105,19 +88,12 @@ export const WeekBreakdownSchema = z.object({
 
 export type WeekBreakdown = z.infer<typeof WeekBreakdownSchema>;
 
-/**
- * Project total response
- */
 export const ProjectTotalSchema = z.object({
 	total_minutes: z.number().optional(),
 	durations_per_month: z.record(z.string(), z.number()).optional(),
 });
 
 export type ProjectTotal = z.infer<typeof ProjectTotalSchema>;
-
-// ============================================================================
-// Analytics schemas
-// ============================================================================
 
 export const HeatmapDaySchema = z.object({
 	date: z.string(),
@@ -137,10 +113,6 @@ export type RhythmSlot = z.infer<typeof RhythmSlotSchema>;
 
 export const HeatmapDayListSchema = z.array(HeatmapDaySchema);
 export const RhythmSlotListSchema = z.array(RhythmSlotSchema);
-
-// ----------------------------------------------------------------------------
-// Flow window schemas
-// ----------------------------------------------------------------------------
 
 /**
  * One flow-state window from the daemon's signal collector. Each window
@@ -192,10 +164,6 @@ export const FlowWindowSummarySchema = z.object({
 	top_bundle: FlowTopBucketSchema.nullable(),
 });
 export type FlowWindowSummary = z.infer<typeof FlowWindowSummarySchema>;
-
-// ============================================================================
-// Intelligence schemas
-// ============================================================================
 
 export const ProductivityScoreSchema = z.object({
 	score: z.number(),
@@ -296,10 +264,6 @@ export type ProjectHealth = z.infer<typeof ProjectHealthSchema>;
 
 export const ProjectHealthListSchema = z.array(ProjectHealthSchema);
 
-// ============================================================================
-// Calendar schemas
-// ============================================================================
-
 export const CalendarEventSchema = z.object({
 	summary: z.string(),
 	start: z.string(),
@@ -334,10 +298,6 @@ export type GitCommitDay = z.infer<typeof GitCommitDaySchema>;
 
 export const GitCommitActivitySchema = z.array(GitCommitDaySchema);
 
-// ============================================================================
-// Gap schemas
-// ============================================================================
-
 export const GapSchema = z.object({
 	start: z.string(),
 	end: z.string(),
@@ -348,16 +308,12 @@ export type Gap = z.infer<typeof GapSchema>;
 
 export const GapListSchema = z.array(GapSchema);
 
-// ============================================================================
 // Array schemas for list endpoints
-// ============================================================================
 
 export const ApiProjectListSchema = z.array(ApiProjectListItemSchema);
 export const ApiBeatListSchema = z.array(ApiBeatSchema);
 
-// ============================================================================
 // Validation helpers
-// ============================================================================
 
 /**
  * Safely parse API response with a schema, returning parsed data or throwing

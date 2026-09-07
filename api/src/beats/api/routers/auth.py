@@ -62,11 +62,6 @@ def get_webauthn_manager(
 WebAuthnDep = Annotated[WebAuthnManager, Depends(get_webauthn_manager)]
 
 
-# ============================================================================
-# Request/Response Models
-# ============================================================================
-
-
 class RegisterStartRequest(BaseModel):
     email: str
     display_name: str | None = None
@@ -98,11 +93,6 @@ class LoginVerifyRequest(BaseModel):
 class LoginVerifyResponse(BaseModel):
     verified: bool
     token: str
-
-
-# ============================================================================
-# Endpoints
-# ============================================================================
 
 
 @router.post("/register/start", response_model=RegisterStartResponse)

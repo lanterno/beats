@@ -16,9 +16,6 @@ import {
 	updateProject,
 } from "./projectApi";
 
-/**
- * Query keys for project data
- */
 export const projectKeys = {
 	all: ["projects"] as const,
 	list: () => [...projectKeys.all, "list"] as const,
@@ -225,9 +222,6 @@ export function useUnarchiveProject() {
 	});
 }
 
-/**
- * Hook to update a project (e.g. color change)
- */
 export function useUpdateProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
@@ -242,9 +236,6 @@ export function useUpdateProject() {
 	});
 }
 
-/**
- * Hook to update goal overrides for a project
- */
 export function useUpdateGoalOverrides() {
 	const queryClient = useQueryClient();
 	return useMutation({

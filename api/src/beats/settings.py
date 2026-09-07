@@ -76,7 +76,6 @@ class Settings(BaseSettings):
         validation_alias="FITBIT_REDIRECT_URI",
     )
 
-    # ------------------------------------------------------------------
     # home.space SSO (optional second front door)
     #
     # Beats keeps its own email + passkey login exactly as it is. These
@@ -88,7 +87,6 @@ class Settings(BaseSettings):
     # Default OFF. Beats on Cloud Run, or on `localhost:7999` with no
     # issuer running, behaves precisely as it did before: /api/auth/sso/*
     # reports disabled and nothing else changes.
-    # ------------------------------------------------------------------
     sso_enabled: bool = Field(default=False, validation_alias="BEATS_SSO_ENABLED")
 
     # The issuer DID we require in the `iss` claim. Not a URL: the home

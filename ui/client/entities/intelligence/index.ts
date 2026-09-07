@@ -1,7 +1,3 @@
-/**
- * Intelligence entity - public API
- */
-
 export {
 	intelligenceKeys,
 	useDigests,

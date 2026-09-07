@@ -13,10 +13,6 @@ import {
 	type PendingMutation,
 } from "../lib/mutationQueue";
 
-// ============================================================================
-// Error Types
-// ============================================================================
-
 /**
  * One entry in the {@link ApiError.fields} array. Mirrors the API's
  * 422 validation envelope (api/src/beats/api/errors.py:95) so a form
@@ -106,10 +102,6 @@ function appendFieldDetails(detail: string, fields: ApiErrorField[]): string {
 	return parts.length === 0 ? detail : `${detail}: ${parts.join(", ")}`;
 }
 
-// ============================================================================
-// Request Helpers
-// ============================================================================
-
 /**
  * Get headers for authenticated JSON requests.
  * Uses JWT Bearer token from WebAuthn session.
@@ -143,13 +135,6 @@ function getReadHeaders(): Record<string, string> {
 	return headers;
 }
 
-// ============================================================================
-// API Client
-// ============================================================================
-
-/**
- * Generic API client for making typed requests
- */
 export async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T> {
 	const isWrite = options?.method && options.method !== "GET";
 	const defaultHeaders = isWrite ? getAuthHeaders() : getReadHeaders();
@@ -202,20 +187,10 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	return response.json();
 }
 
-// ============================================================================
-// Convenience Methods
-// ============================================================================
-
-/**
- * GET request
- */
 export function get<T>(endpoint: string): Promise<T> {
 	return apiClient<T>(endpoint, { method: "GET" });
 }
 
-/**
- * POST request with JSON body
- */
 export function post<T>(endpoint: string, body?: unknown): Promise<T> {
 	return apiClient<T>(endpoint, {
 		method: "POST",
@@ -223,9 +198,6 @@ export function post<T>(endpoint: string, body?: unknown): Promise<T> {
 	});
 }
 
-/**
- * PUT request with JSON body
- */
 export function put<T>(endpoint: string, body: unknown): Promise<T> {
 	return apiClient<T>(endpoint, {
 		method: "PUT",
@@ -233,9 +205,6 @@ export function put<T>(endpoint: string, body: unknown): Promise<T> {
 	});
 }
 
-/**
- * PATCH request with JSON body
- */
 export function patch<T>(endpoint: string, body: unknown): Promise<T> {
 	return apiClient<T>(endpoint, {
 		method: "PATCH",
@@ -243,16 +212,11 @@ export function patch<T>(endpoint: string, body: unknown): Promise<T> {
 	});
 }
 
-/**
- * DELETE request
- */
 export function del<T>(endpoint: string): Promise<T> {
 	return apiClient<T>(endpoint, { method: "DELETE" });
 }
 
-// ============================================================================
 // Offline-aware mutation wrapper (Stage 1.4)
-// ============================================================================
 
 /**
  * Signals a network-layer failure so callers can branch on "queue vs throw".

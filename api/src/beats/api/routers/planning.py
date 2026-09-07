@@ -11,11 +11,6 @@ from beats.domain.models import WeeklyPlan
 router = APIRouter(prefix="/api/plans", tags=["planning"])
 
 
-# =========================================================================
-# Weekly Plans
-# =========================================================================
-
-
 class WeeklyPlanBudget(BaseModel):
     project_id: str
     planned_hours: float

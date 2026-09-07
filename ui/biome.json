@@ -25,14 +25,7 @@
 			"a11y": {
 				"recommended": true,
 				"noAutofocus": "off",
-				"noNoninteractiveElementToInteractiveRole": "off",
-				"noSvgWithoutTitle": "warn",
-				"noLabelWithoutControl": "warn",
-				"useSemanticElements": "warn",
-				"useKeyWithClickEvents": "warn",
-				"noStaticElementInteractions": "warn",
-				"useAriaPropsSupportedByRole": "warn",
-				"useFocusableInteractive": "warn"
+				"noNoninteractiveElementToInteractiveRole": "off"
 			},
 			"suspicious": {
 				"noArrayIndexKey": "off"

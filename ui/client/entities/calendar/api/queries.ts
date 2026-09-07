@@ -1,7 +1,3 @@
-/**
- * Calendar TanStack Query Hooks
- */
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CalendarEvent, CalendarStatus } from "@/shared/api";
 import {

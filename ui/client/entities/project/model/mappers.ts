@@ -6,9 +6,6 @@ import type { ApiGoalOverride, ApiProject } from "@/shared/api";
 import { assignColor } from "./colors";
 import type { GoalOverride, Project } from "./types";
 
-/**
- * Convert API project to domain Project
- */
 export function toProject(apiProject: ApiProject): Project {
 	const id = apiProject.id || "";
 	return {
@@ -26,9 +23,6 @@ export function toProject(apiProject: ApiProject): Project {
 	};
 }
 
-/**
- * Convert domain Project to API format
- */
 export function toApiProject(project: Project): ApiProject {
 	return {
 		id: project.id,

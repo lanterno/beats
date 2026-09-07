@@ -184,6 +184,7 @@ export function AdvancedFields({
 				<p className="text-[11px] text-muted-foreground/60 mb-2">
 					Local repo paths the daemon auto-starts a timer for.
 				</p>
+				{/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here. */}
 				<div className="space-y-1.5" role="group" aria-labelledby="project-form-autostart-label">
 					{values.autostartRepos.map((repo, i) => (
 						<div key={autostartIds[i] ?? `tail-${i}`} className="flex items-center gap-2">

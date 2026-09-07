@@ -1,7 +1,3 @@
-/**
- * Project API layer - public API
- */
-
 // Low-level API functions
 export {
 	archiveProject,

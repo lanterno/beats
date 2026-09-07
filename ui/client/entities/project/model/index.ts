@@ -1,7 +1,3 @@
-/**
- * Project model - public API
- */
-
 // Color utilities
 export { assignColor, PROJECT_COLORS } from "./colors";
 // Mappers

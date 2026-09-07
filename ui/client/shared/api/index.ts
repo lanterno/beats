@@ -1,7 +1,3 @@
-/**
- * Shared API layer - public API
- */
-
 // API client and error handling
 export {
 	ApiError,

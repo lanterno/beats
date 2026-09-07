@@ -90,9 +90,7 @@ class SSOAccountService:
         self._users = user_repo
         self._provision_roles = provision_roles
 
-    # ------------------------------------------------------------------
     # Cold arrival: sign in, or provision
-    # ------------------------------------------------------------------
 
     async def sign_in(self, identity: HomeIdentity) -> tuple[User, bool]:
         """Resolve a verified identity to a beats user.
@@ -135,9 +133,7 @@ class SSOAccountService:
         )
         return created, True
 
-    # ------------------------------------------------------------------
     # Warm arrival: link an identity to the account already signed in
-    # ------------------------------------------------------------------
 
     async def link(self, user_id: str, identity: HomeIdentity) -> User:
         """Attach a verified identity to an existing, authenticated account."""
@@ -167,10 +163,6 @@ class SSOAccountService:
         updated = await self._users.update(user)
         logger.info("Linked home.space identity %s to beats account %s", identity.did, user_id)
         return updated
-
-    # ------------------------------------------------------------------
-    # Detach
-    # ------------------------------------------------------------------
 
     async def unlink(self, user_id: str, passkey_count: int) -> User:
         """Detach the linked identity.
@@ -202,8 +194,6 @@ class SSOAccountService:
         updated = await self._users.update(user)
         logger.info("Unlinked home.space identity from beats account %s", user_id)
         return updated
-
-    # ------------------------------------------------------------------
 
     async def _refresh_claims(self, user: User, identity: HomeIdentity) -> User:
         """Re-sync issuer-owned attributes on each sign-in.

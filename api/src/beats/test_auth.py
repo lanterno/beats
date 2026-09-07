@@ -7,10 +7,7 @@ import time
 import jwt
 import pytest
 
-# =============================================================================
 # SessionManager — JWT tokens, WebAuthn challenges, revocation
-# =============================================================================
-
 
 JWT_SECRET = "test-secret-do-not-use-in-prod-this-is-a-fixed-string-32+bytes"
 
@@ -301,9 +298,7 @@ class TestSessionManagerChallenges:
         assert sm.get_pending_registration_user_id("registration") is None
 
 
-# =============================================================================
 # WebAuthnManager — registration + authentication orchestration
-# =============================================================================
 
 
 class _FakeCredentialStorage:
@@ -859,9 +854,7 @@ class TestWebAuthnDeleteCredential:
         assert await storage.count_credentials("user-B") == 2
 
 
-# =============================================================================
 # Settings — JWT_SECRET length validator
-# =============================================================================
 
 
 class TestJwtSecretValidator:
@@ -937,9 +930,7 @@ class TestJwtSecretValidator:
         assert s.jwt_secret == multibyte
 
 
-# =============================================================================
 # MongoCredentialStorage — real-Mongo CRUD coverage
-# =============================================================================
 
 
 class TestMongoCredentialStorage:

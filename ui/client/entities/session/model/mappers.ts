@@ -5,9 +5,6 @@
 import type { ApiBeat } from "@/shared/api";
 import type { Session } from "./types";
 
-/**
- * Convert API beat to domain Session
- */
 export function toSession(beat: ApiBeat): Session {
 	const startTime = new Date(beat.start);
 	const endTime = beat.end ? new Date(beat.end) : new Date();
@@ -24,9 +21,6 @@ export function toSession(beat: ApiBeat): Session {
 	};
 }
 
-/**
- * Convert domain Session to API format
- */
 export function toApiBeat(session: Session): ApiBeat {
 	return {
 		id: session.id,
@@ -38,9 +32,6 @@ export function toApiBeat(session: Session): ApiBeat {
 	};
 }
 
-/**
- * Calculate duration in minutes between two times
- */
 export function calculateDuration(startTime: string, endTime: string): number {
 	const start = new Date(startTime);
 	const end = new Date(endTime);

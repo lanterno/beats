@@ -1,7 +1,3 @@
-/**
- * GitHub API Functions
- */
-
 import type { GitCommitDay, GitHubStatus } from "@/shared/api";
 import {
 	del,

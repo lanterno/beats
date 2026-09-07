@@ -1,7 +1,3 @@
-/**
- * GitHub TanStack Query Hooks
- */
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { GitCommitDay, GitHubStatus } from "@/shared/api";
