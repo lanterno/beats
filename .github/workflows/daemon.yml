@@ -44,6 +44,10 @@ jobs:
       # Pinned rather than @latest so a new release can't fail an unrelated PR.
       - name: staticcheck
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+      # The app-label table is generated into three languages from one JSON
+      # file; fail if this repo's copy has drifted from the source.
+      - name: app-label tables are current
+        run: python3 ../scripts/gen_app_labels.py --check
       - run: go test ./... -v -race
 
   # The windows collector is the one surface with no coverage from the

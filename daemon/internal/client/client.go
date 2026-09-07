@@ -55,38 +55,74 @@ func describeErrorBody(body []byte) string {
 	return string(bytes.TrimSpace(body))
 }
 
-// postJSON sends a JSON POST request to the given path with Bearer auth.
-func (c *Client) postJSON(ctx context.Context, path string, body any) error {
-	data, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
+// do sends one API call and returns the response body, having already
+// checked the status and rendered any error envelope. `op` names the
+// operation for the error message, e.g. "flow-windows GET".
+//
+// Every request the daemon makes went through this shape by hand before:
+// build, set Content-Type when there is a body, attach the device token,
+// send, check the status, read the envelope, decode. Eight copies of it
+// drifted in small ways — some checked `!= 200`, others `>= 300`.
+func (c *Client) do(ctx context.Context, method, path string, body any, op string) ([]byte, error) {
+	var reader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshal %s request: %w", op, err)
+		}
+		reader = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+path, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("create %s request: %w", op, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	// Empty on the pairing exchange, which is public by design.
 	if c.deviceToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
 	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("request to %s failed: %w", path, err)
+		return nil, fmt.Errorf("%s request failed: %w", op, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return fmt.Errorf("request to %s failed (HTTP %d): %s", path, resp.StatusCode, detail)
-		}
-		return fmt.Errorf("request to %s failed (HTTP %d)", path, resp.StatusCode)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read %s response: %w", op, err)
 	}
 
-	return nil
+	if resp.StatusCode >= 300 {
+		if detail := describeErrorBody(respBody); detail != "" {
+			return nil, fmt.Errorf("%s failed (HTTP %d): %s", op, resp.StatusCode, detail)
+		}
+		return nil, fmt.Errorf("%s failed (HTTP %d)", op, resp.StatusCode)
+	}
+	return respBody, nil
+}
+
+// fetch is do plus a JSON decode. A free function rather than a method
+// because Go does not allow type parameters on methods.
+func fetch[T any](ctx context.Context, c *Client, method, path string, body any, op string) (T, error) {
+	var out T
+	respBody, err := c.do(ctx, method, path, body, op)
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(respBody, &out); err != nil {
+		return out, fmt.Errorf("decode %s response: %w", op, err)
+	}
+	return out, nil
+}
+
+// postJSON sends a JSON POST request to the given path with Bearer auth.
+func (c *Client) postJSON(ctx context.Context, path string, body any) error {
+	_, err := c.do(ctx, http.MethodPost, path, body, "request to "+path)
+	return err
 }
 
 // Client is an HTTP client for the Beats API.
@@ -125,30 +161,7 @@ type Project struct {
 // GetProjects lists the user's projects (active and archived). Used by
 // `beatsd start <hint>` to resolve the hint to a project id.
 func (c *Client) GetProjects(ctx context.Context) ([]Project, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/projects/", nil)
-	if err != nil {
-		return nil, err
-	}
-	if c.deviceToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("list projects failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("list projects failed (HTTP %d)", resp.StatusCode)
-	}
-	var result []Project
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return fetch[[]Project](ctx, c, http.MethodGet, "/api/projects/", nil, "list projects")
 }
 
 // StartTimer starts a timer for the given project. The start time is
@@ -169,36 +182,13 @@ type StoppedBeat struct {
 // StopTimer stops the currently running timer and returns the completed
 // beat so the caller can report the logged duration.
 func (c *Client) StopTimer(ctx context.Context) (*StoppedBeat, error) {
-	data, err := json.Marshal(map[string]any{})
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/api/projects/stop", bytes.NewReader(data))
+	beat, err := fetch[*StoppedBeat](
+		ctx, c, http.MethodPost, "/api/projects/stop", map[string]any{}, "stop timer",
+	)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.deviceToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("stop timer failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("stop timer failed (HTTP %d)", resp.StatusCode)
-	}
-	var result StoppedBeat
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return beat, nil
 }
 
 // ExchangePairCode exchanges a pairing code for a device token.
@@ -208,43 +198,9 @@ func (c *Client) ExchangePairCode(ctx context.Context, code, deviceName string) 
 	if deviceName != "" {
 		body["device_name"] = deviceName
 	}
-
-	data, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/api/device/pair/exchange", bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("exchange request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("exchange failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("exchange failed (HTTP %d)", resp.StatusCode)
-	}
-
-	var result PairExchangeResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	return &result, nil
+	return fetch[*PairExchangeResponse](
+		ctx, c, http.MethodPost, "/api/device/pair/exchange", body, "exchange",
+	)
 }
 
 // FlowWindowRequest is the body for POST /api/signals/flow-windows.
@@ -330,34 +286,10 @@ func (c *Client) GetFlowWindowsFiltered(
 	if filter.BundleID != "" {
 		q.Set("bundle_id", filter.BundleID)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		c.baseURL+"/api/signals/flow-windows?"+q.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
-	if c.deviceToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("flow-windows GET failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("flow-windows GET failed (HTTP %d)", resp.StatusCode)
-	}
-
-	var out []FlowWindowRecord
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return fetch[[]FlowWindowRecord](
+		ctx, c, http.MethodGet,
+		"/api/signals/flow-windows?"+q.Encode(), nil, "flow-windows GET",
+	)
 }
 
 // FlowWindowSummary mirrors the API's FlowWindowSummaryResponse — a
@@ -402,34 +334,10 @@ func (c *Client) GetFlowWindowsSummary(
 	if filter.BundleID != "" {
 		q.Set("bundle_id", filter.BundleID)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		c.baseURL+"/api/signals/flow-windows/summary?"+q.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
-	if c.deviceToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("flow-windows summary GET failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("flow-windows summary GET failed (HTTP %d)", resp.StatusCode)
-	}
-
-	var out FlowWindowSummary
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
-	}
-	return &out, nil
+	return fetch[*FlowWindowSummary](
+		ctx, c, http.MethodGet,
+		"/api/signals/flow-windows/summary?"+q.Encode(), nil, "flow-windows summary GET",
+	)
 }
 
 // TimerContextResponse is the response from GET /api/signals/timer-context.
@@ -441,34 +349,9 @@ type TimerContextResponse struct {
 
 // GetTimerContext fetches the current timer state for flow score context.
 func (c *Client) GetTimerContext(ctx context.Context) (*TimerContextResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		c.baseURL+"/api/signals/timer-context", nil)
-	if err != nil {
-		return nil, err
-	}
-	if c.deviceToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("timer-context failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("timer-context failed (HTTP %d)", resp.StatusCode)
-	}
-
-	var result TimerContextResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return fetch[*TimerContextResponse](
+		ctx, c, http.MethodGet, "/api/signals/timer-context", nil, "timer-context",
+	)
 }
 
 // AutoTimerSuggestion is the response from POST /api/signals/suggest-timer.
@@ -480,39 +363,9 @@ type AutoTimerSuggestion struct {
 
 // SuggestTimer asks the API if a timer should be auto-started.
 func (c *Client) SuggestTimer(ctx context.Context, w FlowWindowRequest) (*AutoTimerSuggestion, error) {
-	data, err := json.Marshal(w)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/api/signals/suggest-timer", bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.deviceToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.deviceToken)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("suggest-timer failed (HTTP %d): %s", resp.StatusCode, detail)
-		}
-		return nil, fmt.Errorf("suggest-timer failed (HTTP %d)", resp.StatusCode)
-	}
-
-	var result AutoTimerSuggestion
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return fetch[*AutoTimerSuggestion](
+		ctx, c, http.MethodPost, "/api/signals/suggest-timer", w, "suggest-timer",
+	)
 }
 
 // DriftEventRequest is the body for POST /api/signals/drift.

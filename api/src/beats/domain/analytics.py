@@ -4,8 +4,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from beats.domain.ports import CompletedBeatReader
 from beats.domain.utils import local_date, local_dt
-from beats.infrastructure.repositories import BeatRepository
 
 UTC_TZ = ZoneInfo("UTC")
 
@@ -13,7 +13,7 @@ UTC_TZ = ZoneInfo("UTC")
 class AnalyticsService:
     """Service for computing analytics across all projects."""
 
-    def __init__(self, beat_repo: BeatRepository):
+    def __init__(self, beat_repo: CompletedBeatReader):
         self.beat_repo = beat_repo
 
     async def get_heatmap(

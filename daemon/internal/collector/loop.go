@@ -20,10 +20,13 @@ import (
 // than the per-window callback — e.g. the distraction shield tracker which
 // needs to detect drift in near-realtime.
 //
+// scorer carries the tunables; pass DefaultScorer() for the shipped weights.
+//
 // Run blocks until ctx is cancelled.
 func Run(
 	ctx context.Context,
 	cfg config.CollectorConfig,
+	scorer *Scorer,
 	onWindow func(FlowWindow),
 	onSample func(Sample),
 ) error {
@@ -67,7 +70,7 @@ func Run(
 		case <-ctx.Done():
 			// Final flush on shutdown
 			if len(samples) > 0 {
-				w := ComputeFlowWindow(samples, windowStart, time.Now().UTC(), "", "")
+				w := scorer.ComputeFlowWindow(samples, windowStart, time.Now().UTC(), "", "")
 				onWindow(w)
 			}
 			return ctx.Err()
@@ -85,7 +88,7 @@ func Run(
 				continue
 			}
 			windowEnd := now.UTC()
-			w := ComputeFlowWindow(samples, windowStart, windowEnd, "", "")
+			w := scorer.ComputeFlowWindow(samples, windowStart, windowEnd, "", "")
 			onWindow(w)
 
 			// Reset for next window

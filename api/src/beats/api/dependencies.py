@@ -1,5 +1,6 @@
 """FastAPI dependency injection configuration."""
 
+from collections.abc import Callable
 from functools import lru_cache
 from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -73,6 +74,32 @@ async def get_current_user_id(request: Request) -> str:
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 
 
+def _user_scoped[R](repo: Callable[..., R], collection: str) -> Callable[[str], R]:
+    """Build a FastAPI dependency yielding `repo` bound to the caller's data.
+
+    The `Annotated[...]` aliases at the bottom of this module are what routes
+    actually depend on, and they still name the interface; these constructors
+    only ever differed by class and collection name.
+    """
+
+    def dependency(user_id: CurrentUserId) -> R:
+        return repo(getattr(Database.get_db(), collection), user_id=user_id)
+
+    return dependency
+
+
+def _unscoped[R](repo: Callable[..., R], collection: str) -> Callable[[], R]:
+    """Same, for the two collections that are looked up across all users:
+    pairing codes (redeemed by an unauthenticated device) and device
+    registrations (resolved from a device token before its owner is known).
+    """
+
+    def dependency() -> R:
+        return repo(getattr(Database.get_db(), collection))
+
+    return dependency
+
+
 def get_timezone(
     tz: Annotated[
         str | None,
@@ -100,22 +127,13 @@ def get_timezone(
 TimezoneDep = Annotated[ZoneInfo, Depends(get_timezone)]
 
 
-def get_beat_repository(user_id: CurrentUserId) -> BeatRepository:
-    """Get the beat repository instance scoped to the current user."""
-    db = Database.get_db()
-    return MongoBeatRepository(db.timeLogs, user_id=user_id)
+get_beat_repository = _user_scoped(MongoBeatRepository, "timeLogs")
 
 
-def get_project_repository(user_id: CurrentUserId) -> ProjectRepository:
-    """Get the project repository instance scoped to the current user."""
-    db = Database.get_db()
-    return MongoProjectRepository(db.projects, user_id=user_id)
+get_project_repository = _user_scoped(MongoProjectRepository, "projects")
 
 
-def get_flow_window_repository(user_id: CurrentUserId) -> FlowWindowRepository:
-    """Get the flow window repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoFlowWindowRepository(db.flow_windows, user_id=user_id)
+get_flow_window_repository = _user_scoped(MongoFlowWindowRepository, "flow_windows")
 
 
 def get_timer_service(
@@ -150,22 +168,13 @@ def get_analytics_service(
     return AnalyticsService(beat_repo=beat_repo)
 
 
-def get_webhook_repository(user_id: CurrentUserId) -> WebhookRepository:
-    """Get the webhook repository instance scoped to the current user."""
-    db = Database.get_db()
-    return MongoWebhookRepository(db.webhooks, user_id=user_id)
+get_webhook_repository = _user_scoped(MongoWebhookRepository, "webhooks")
 
 
-def get_weekly_digest_repository(user_id: CurrentUserId) -> WeeklyDigestRepository:
-    """Get the weekly digest repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoWeeklyDigestRepository(db.weekly_digests, user_id=user_id)
+get_weekly_digest_repository = _user_scoped(MongoWeeklyDigestRepository, "weekly_digests")
 
 
-def get_insights_repository(user_id: CurrentUserId) -> InsightsRepository:
-    """Get the insights repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoInsightsRepository(db.insights, user_id=user_id)
+get_insights_repository = _user_scoped(MongoInsightsRepository, "insights")
 
 
 def get_intelligence_service(
@@ -179,10 +188,9 @@ def get_intelligence_service(
     )
 
 
-def get_calendar_integration_repository(user_id: CurrentUserId) -> CalendarIntegrationRepository:
-    """Get the calendar integration repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoCalendarIntegrationRepository(db.calendar_integrations, user_id=user_id)
+get_calendar_integration_repository = _user_scoped(
+    MongoCalendarIntegrationRepository, "calendar_integrations"
+)
 
 
 def get_calendar_service(
@@ -207,10 +215,9 @@ IntelligenceServiceDep = Annotated[IntelligenceService, Depends(get_intelligence
 CalendarServiceDep = Annotated[CalendarService, Depends(get_calendar_service)]
 
 
-def get_github_integration_repository(user_id: CurrentUserId) -> GitHubIntegrationRepository:
-    """Get the GitHub integration repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoGitHubIntegrationRepository(db.github_integrations, user_id=user_id)
+get_github_integration_repository = _user_scoped(
+    MongoGitHubIntegrationRepository, "github_integrations"
+)
 
 
 def get_github_service(
@@ -224,34 +231,24 @@ def get_github_service(
 GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]
 
 
-def get_auto_start_rule_repository(user_id: CurrentUserId) -> AutoStartRuleRepository:
-    """Get the auto-start rule repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoAutoStartRuleRepository(db.auto_start_rules, user_id=user_id)
+get_auto_start_rule_repository = _user_scoped(MongoAutoStartRuleRepository, "auto_start_rules")
 
 
 AutoStartRuleRepoDep = Annotated[AutoStartRuleRepository, Depends(get_auto_start_rule_repository)]
 
 
-def get_weekly_plan_repository(user_id: CurrentUserId) -> WeeklyPlanRepository:
-    """Get the weekly plan repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoWeeklyPlanRepository(db.weekly_plans, user_id=user_id)
+get_weekly_plan_repository = _user_scoped(MongoWeeklyPlanRepository, "weekly_plans")
 
 
 WeeklyPlanRepoDep = Annotated[WeeklyPlanRepository, Depends(get_weekly_plan_repository)]
 
 
-def get_pairing_code_repository() -> PairingCodeRepository:
-    """Get the pairing code repository (not user-scoped)."""
-    db = Database.get_db()
-    return MongoPairingCodeRepository(db.pairing_codes)
+get_pairing_code_repository = _unscoped(MongoPairingCodeRepository, "pairing_codes")
 
 
-def get_device_registration_repository() -> DeviceRegistrationRepository:
-    """Get the device registration repository (not user-scoped)."""
-    db = Database.get_db()
-    return MongoDeviceRegistrationRepository(db.device_registrations)
+get_device_registration_repository = _unscoped(
+    MongoDeviceRegistrationRepository, "device_registrations"
+)
 
 
 PairingCodeRepoDep = Annotated[PairingCodeRepository, Depends(get_pairing_code_repository)]
@@ -260,10 +257,7 @@ DeviceRegistrationRepoDep = Annotated[
 ]
 
 
-def get_signal_summary_repository(user_id: CurrentUserId) -> SignalSummaryRepository:
-    """Get the signal summary repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoSignalSummaryRepository(db.signal_summaries, user_id=user_id)
+get_signal_summary_repository = _user_scoped(MongoSignalSummaryRepository, "signal_summaries")
 
 
 FlowWindowRepoDep = Annotated[FlowWindowRepository, Depends(get_flow_window_repository)]
@@ -283,22 +277,15 @@ PendingSuggestionRepoDep = Annotated[
 ]
 
 
-def get_biometric_repository(user_id: CurrentUserId) -> BiometricDayRepository:
-    """Get the biometric day repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoBiometricDayRepository(db.biometric_days, user_id=user_id)
+get_biometric_repository = _user_scoped(MongoBiometricDayRepository, "biometric_days")
 
 
-def get_fitbit_integration_repository(user_id: CurrentUserId) -> FitbitIntegrationRepository:
-    """Get the Fitbit integration repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoFitbitIntegrationRepository(db.fitbit_integrations, user_id=user_id)
+get_fitbit_integration_repository = _user_scoped(
+    MongoFitbitIntegrationRepository, "fitbit_integrations"
+)
 
 
-def get_oura_integration_repository(user_id: CurrentUserId) -> OuraIntegrationRepository:
-    """Get the Oura integration repository scoped to the current user."""
-    db = Database.get_db()
-    return MongoOuraIntegrationRepository(db.oura_integrations, user_id=user_id)
+get_oura_integration_repository = _user_scoped(MongoOuraIntegrationRepository, "oura_integrations")
 
 
 BiometricRepoDep = Annotated[BiometricDayRepository, Depends(get_biometric_repository)]

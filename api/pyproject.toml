@@ -86,12 +86,14 @@ line-ending = "lf"
 docstring-code-format = true
 
 [tool.ty.terminal]
-# Still false, but no longer permanent. The count is down from 717 to 209 now
-# that the tests take the client as a fixture rather than a module global; what
-# remains is mostly the repository ABCs being handed duck-typed test fakes,
-# which clears when those ABCs become Protocols. `scripts/ty_budget.py` holds
-# the line at the current count in the meantime, so a new diagnostic fails CI
-# even though the existing ones do not.
+# Still false, but the number is now small enough to be worth finishing. 717 ->
+# 209 came from the tests taking the client as a fixture rather than a module
+# global; 209 -> 116 from the repository interfaces becoming Protocols and the
+# domain services asking for the narrow ports in `beats.domain.ports` rather
+# than a whole repository. What is left is mostly dynamic **kwargs splats in
+# test factories, which no annotation can rescue. `scripts/ty_budget.py` holds
+# the line at the current count, so a new diagnostic fails CI even though the
+# existing ones do not.
 error-on-warning = false
 
 [tool.ty.rules]

@@ -12,7 +12,7 @@ import re
 import subprocess
 import sys
 
-BUDGET = 209
+BUDGET = 116
 
 
 def main() -> int:

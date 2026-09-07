@@ -37,7 +37,7 @@ func TestRun_DeliversShutdownWindow(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, cfg, onWindow, onSample) }()
+	go func() { done <- Run(ctx, cfg, DefaultScorer(), onWindow, onSample) }()
 
 	// Wait for at least one sample so the shutdown window is non-empty
 	// (Run only emits a final window when len(samples) > 0).
@@ -85,7 +85,7 @@ func TestRun_NoShutdownWindowWhenNoSamples(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, cfg, onWindow, nil) }()
+	go func() { done <- Run(ctx, cfg, DefaultScorer(), onWindow, nil) }()
 
 	// Cancel immediately — no poll tick will have fired.
 	cancel()

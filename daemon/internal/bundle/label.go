@@ -9,6 +9,7 @@ package bundle
 
 import "strings"
 
+// Generated from shared/app-labels.json by scripts/gen_app_labels.py — do not edit.
 var appLabels = map[string]string{
 	"com.microsoft.VSCode":      "VS Code",
 	"com.apple.dt.Xcode":        "Xcode",

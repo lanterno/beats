@@ -7,13 +7,29 @@ from statistics import median
 from zoneinfo import ZoneInfo
 
 from beats.domain.models import Beat, FlowWindow, InsightCard, WeeklyDigest
+from beats.domain.ports import ProjectLister, RangeBeatReader
 from beats.domain.utils import local_date, local_dt
-from beats.infrastructure.repositories import (
-    BeatRepository,
-    ProjectRepository,
-)
 
 UTC_TZ = ZoneInfo("UTC")
+
+
+async def _beats_covering(repo: RangeBeatReader, start: date, end: date) -> list[Beat]:
+    """Completed beats for [start, end], widened by a day at each end.
+
+    Beats are stored with UTC timestamps. A session at 23:30 local on the 3rd
+    is stored under the 4th, so a query for exactly [start, end] loses the
+    sessions nearest each boundary. Callers that bucket by local date
+    themselves want those edge sessions present and do the narrowing after.
+    """
+    return await repo.list_completed_in_range(start - timedelta(days=1), end + timedelta(days=1))
+
+
+async def _beats_in_local_range(
+    repo: RangeBeatReader, start: date, end: date, tz: ZoneInfo
+) -> list[Beat]:
+    """Completed beats whose *local* date falls within [start, end]."""
+    beats = await _beats_covering(repo, start, end)
+    return [b for b in beats if start <= local_date(b.start, tz) <= end]
 
 
 def _monday_of(d: date) -> date:
@@ -42,8 +58,8 @@ class IntelligenceService:
 
     def __init__(
         self,
-        beat_repo: BeatRepository,
-        project_repo: ProjectRepository,
+        beat_repo: RangeBeatReader,
+        project_repo: ProjectLister,
     ):
         self.beat_repo = beat_repo
         self.project_repo = project_repo
@@ -57,12 +73,7 @@ class IntelligenceService:
         today = datetime.now(tz).date()
         week_start = _monday_of(today)
 
-        # Load data for the last 7 days (widen by a day so local-date
-        # bucketing near the UTC boundary still finds edge sessions).
-        range_start = today - timedelta(days=6)
-        beats = await self.beat_repo.list_completed_in_range(
-            range_start - timedelta(days=1), today + timedelta(days=1)
-        )
+        beats = await _beats_covering(self.beat_repo, today - timedelta(days=6), today)
         projects = await self.project_repo.list(archived=False)
 
         # 1. Consistency (0-25): weekdays tracked in last 5 weekdays
@@ -210,18 +221,8 @@ class IntelligenceService:
         prev_monday = week_monday - timedelta(days=7)
         prev_sunday = prev_monday + timedelta(days=6)
 
-        # Widen repo queries by a day so local-date bucketing keeps sessions
-        # whose UTC date sits just outside the week boundary.
-        beats = await self.beat_repo.list_completed_in_range(
-            week_monday - timedelta(days=1), sunday + timedelta(days=1)
-        )
-        beats = [b for b in beats if week_monday <= local_date(b.start, tz) <= sunday]
-        prev_beats = await self.beat_repo.list_completed_in_range(
-            prev_monday - timedelta(days=1), prev_sunday + timedelta(days=1)
-        )
-        prev_beats = [
-            b for b in prev_beats if prev_monday <= local_date(b.start, tz) <= prev_sunday
-        ]
+        beats = await _beats_in_local_range(self.beat_repo, week_monday, sunday, tz)
+        prev_beats = await _beats_in_local_range(self.beat_repo, prev_monday, prev_sunday, tz)
         projects = await self.project_repo.list(archived=False)
         project_map = {p.id: p for p in projects}
 
@@ -384,11 +385,7 @@ class IntelligenceService:
         today = datetime.now(tz).date()
         insights: list[InsightCard] = []
 
-        # Load data (widen by a day for local-date bucketing at the edges)
-        range_start = today - timedelta(days=60)
-        beats = await self.beat_repo.list_completed_in_range(
-            range_start - timedelta(days=1), today + timedelta(days=1)
-        )
+        beats = await _beats_covering(self.beat_repo, today - timedelta(days=60), today)
         projects = await self.project_repo.list(archived=False)
 
         insights.extend(self._detect_day_pattern(beats, today, tz))
@@ -592,11 +589,7 @@ class IntelligenceService:
         dow = target_date.weekday()
         monday = _monday_of(target_date)
 
-        # Load 8 weeks of history for this day of week (widen for local-date edges)
-        range_start = target_date - timedelta(weeks=8)
-        beats = await self.beat_repo.list_completed_in_range(
-            range_start - timedelta(days=1), target_date + timedelta(days=1)
-        )
+        beats = await _beats_covering(self.beat_repo, target_date - timedelta(weeks=8), target_date)
         projects = await self.project_repo.list(archived=False)
         project_map = {p.id: p for p in projects}
 
@@ -700,12 +693,7 @@ class IntelligenceService:
 
     async def compute_focus_scores(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         """Compute focus quality scores for all sessions on a given local date."""
-        # Widen the query by a day so sessions whose UTC date differs from
-        # their local date are included, then scope precisely by local date.
-        beats = await self.beat_repo.list_completed_in_range(
-            target_date - timedelta(days=1), target_date + timedelta(days=1)
-        )
-        beats = [b for b in beats if local_date(b.start, tz) == target_date]
+        beats = await _beats_in_local_range(self.beat_repo, target_date, target_date, tz)
         if not beats:
             return []
 

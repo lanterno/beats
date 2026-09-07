@@ -5,6 +5,8 @@ Personal time-tracking system: Python API + React SPA + Go daemon + Flutter comp
 ## Repository Layout
 
 ```
+shared/                       Cross-surface data (app-labels.json)
+scripts/                      Cross-surface codegen (gen_app_labels.py)
 api/                          Python (FastAPI + PyMongo/MongoDB)
 ui/                           React 19 SPA (Vite + TypeScript)
 daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
@@ -104,11 +106,20 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test). Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Bundle-label parity** is structural, not tested: `shared/app-labels.json` is the
+  single source and `scripts/gen_app_labels.py` renders it into the Go, TypeScript
+  and Dart tables. Edit the JSON, run the script, commit the output;
+  `--check` fails CI and pre-push when it is stale.
 - **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
 
 ## Conventions
 
 - Python: Ruff for linting/formatting, ty for type checking, line length 100.
+  Repository interfaces are `Protocol`s in `infrastructure/repositories.py`; the
+  Mongo classes inherit them for a nominal check while test fakes satisfy them
+  structurally. Domain services depend on the narrow ports in `domain/ports.py`
+  instead, so the dependency points inward and a service that reads beats cannot
+  quietly start writing them.
   The ruff select list in `api/pyproject.toml` documents what each group is for
   and, just as usefully, which groups are deliberately left out. `ty` cannot fail
   CI on its own yet (`error-on-warning = false`); `api/scripts/ty_budget.py` holds
@@ -118,7 +129,9 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   extension has its own config. Accessibility rules are on; seven of them run at
   `warn` because their remaining sites need per-component decisions rather than a
   blanket fix (see `ui/biome.json` for which and why).
-- Go: gofmt + `go vet` + `staticcheck`; tests use stdlib `testing` only (no testify). Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
+- Go: gofmt + `go vet` + `staticcheck`; tests use stdlib `testing` only (no testify).
+  `main()` only turns `run(args) int` into a process exit, so the CLI dispatch is
+  testable without spawning a process. Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
 - Dart: `flutter analyze` (no extra linter config); tests use `flutter_test` package.
 - API auth: JWT Bearer token for all endpoints. Two ways to obtain one — beats'
   own WebAuthn passkey login, or a home.space SSO exchange. After the exchange the

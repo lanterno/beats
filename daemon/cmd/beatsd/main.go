@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -41,10 +42,15 @@ const (
 	flowShutdownPostTimeout = 10 * time.Second
 )
 
-func main() {
-	if len(os.Args) < 2 {
+// main exists only to turn run's exit code into a process exit. Keeping the
+// dispatch in a function that returns rather than calls os.Exit is what lets
+// the commands be exercised from tests.
+func main() { os.Exit(run(os.Args[1:])) }
+
+func run(args []string) int {
+	if len(args) == 0 {
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
 
 	// Help is recognized BEFORE config loads — a user just looking
@@ -56,15 +62,15 @@ func main() {
 	// previous implementation only matched the first arg, so per-
 	// command help silently fell through to actually executing
 	// the command (which then failed on "not paired" or similar).
-	if hasHelpFlag(os.Args[1:]) {
+	if hasHelpFlag(args) {
 		printHelp()
-		return
+		return 0
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// Handle both SIGINT (Ctrl-C) and SIGTERM (systemctl stop /
@@ -77,26 +83,25 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Check for --dry-run flag
+	// --dry-run is accepted in any position, so strip it before dispatch.
 	dryRun := false
-	args := os.Args[1:]
 	for i, arg := range args {
 		if arg == "--dry-run" {
 			dryRun = true
-			args = append(args[:i], args[i+1:]...)
+			args = slices.Delete(args, i, i+1)
 			break
 		}
 	}
 	if len(args) == 0 {
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
 
 	switch args[0] {
 	case "pair":
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "usage: beatsd pair <code>")
-			os.Exit(1)
+			return 1
 		}
 		code := args[1]
 		deviceName, _ := os.Hostname()
@@ -117,7 +122,7 @@ func main() {
 		deviceID, err := pair.Run(ctx, c, code, deviceName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "pairing failed: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Printf("Paired successfully. Device ID: %s\n", deviceID)
 		fmt.Printf("Token stored in OS keychain.\n")
@@ -129,11 +134,11 @@ func main() {
 			token, err := pair.LoadToken()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error loading device token: %v\n", err)
-				os.Exit(1)
+				return 1
 			}
 			if token == "" {
 				fmt.Fprintln(os.Stderr, "not paired. Run 'beatsd pair <code>' first.")
-				os.Exit(1)
+				return 1
 			}
 			cfg.API.DeviceToken = token
 		}
@@ -215,10 +220,9 @@ func main() {
 			}(ev)
 		})
 
-		// Apply scoring tunables from daemon.toml. Zero values are
-		// ignored, so a config file without a [scoring] section keeps
-		// the shipped defaults.
-		collector.ConfigureScoring(collector.ScoringParams{
+		// Scoring tunables from daemon.toml. Zero values are ignored, so a
+		// config file without a [scoring] section keeps the shipped defaults.
+		scorer := collector.NewScorer(collector.ScoringParams{
 			CadenceWeight:    cfg.Scoring.CadenceWeight,
 			CoherenceWeight:  cfg.Scoring.CoherenceWeight,
 			CategoryWeight:   cfg.Scoring.CategoryWeight,
@@ -254,7 +258,7 @@ func main() {
 			return c.PostFlowWindow(postCtx, req)
 		}
 
-		runErr := collector.Run(ctx, cfg.Collector, func(w collector.FlowWindow) {
+		runErr := collector.Run(ctx, cfg.Collector, scorer, func(w collector.FlowWindow) {
 			if hb := editorListener.Latest(); hb != nil {
 				w.EditorRepo = hb.Repo
 				w.EditorBranch = hb.Branch
@@ -310,7 +314,7 @@ func main() {
 		})
 		if runErr != nil && runErr != context.Canceled {
 			fmt.Fprintf(os.Stderr, "collector error: %v\n", runErr)
-			os.Exit(1)
+			return 1
 		}
 
 	case "doctor":
@@ -321,7 +325,7 @@ func main() {
 			}
 		}
 		if err := runDoctor(cfg, asJSON); err != nil {
-			os.Exit(1)
+			return 1
 		}
 
 	case "status":
@@ -332,29 +336,29 @@ func main() {
 			}
 		}
 		if err := runStatus(cfg, asJSON); err != nil {
-			os.Exit(1)
+			return 1
 		}
 
 	case "recent":
 		f, err := applyHereFlag(parseFlowFlags(args))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		if err := runRecent(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "stats":
 		f, err := applyHereFlag(parseFlowFlags(args))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		if err := runStats(cfg, f.Minutes, f.Filter, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "top":
@@ -366,7 +370,7 @@ func main() {
 		f, err := applyHereFlag(parseFlowFlags(args))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		limit := f.Limit
 		if limit == 0 {
@@ -374,7 +378,7 @@ func main() {
 		}
 		if err := runTop(cfg, f.Minutes, f.Filter, limit, f.AsJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "open":
@@ -410,30 +414,30 @@ func main() {
 		if useHere {
 			if filter.Repo != "" {
 				fmt.Fprintln(os.Stderr, "error: --here and --repo are mutually exclusive")
-				os.Exit(1)
+				return 1
 			}
 			repo, err := resolveHereRepo()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(1)
+				return 1
 			}
 			filter.Repo = repo
 		}
 		if err := runOpen(cfg, filter, printOnly); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "start":
 		if err := runStart(cfg, args); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "stop":
 		if err := runStop(cfg, args); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "config":
@@ -445,7 +449,7 @@ func main() {
 		}
 		if err := runConfig(cfg, asJSON); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 
 	case "version":
@@ -460,7 +464,7 @@ func main() {
 			out, err := formatVersionJSON(v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(1)
+				return 1
 			}
 			fmt.Print(out)
 		} else {
@@ -481,7 +485,7 @@ func main() {
 		}
 		if err := pair.DeleteToken(); err != nil {
 			fmt.Fprintf(os.Stderr, "error removing token: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		if hadToken {
 			fmt.Println("Device token removed from keychain.")
@@ -496,8 +500,9 @@ func main() {
 			fmt.Fprintf(os.Stderr, "did you mean `%s`?\n", suggestion)
 		}
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // pollTimerContext keeps `running` in sync with whether the user has an

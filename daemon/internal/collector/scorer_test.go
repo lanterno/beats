@@ -8,7 +8,7 @@ import (
 
 func TestComputeFlowWindow_EmptySamples(t *testing.T) {
 	now := time.Now().UTC()
-	w := ComputeFlowWindow(nil, now, now.Add(time.Minute), "", "")
+	w := DefaultScorer().ComputeFlowWindow(nil, now, now.Add(time.Minute), "", "")
 
 	if w.CadenceScore != 0.5 {
 		t.Errorf("expected cadence 0.5 for empty, got %f", w.CadenceScore)
@@ -34,7 +34,7 @@ func TestComputeFlowWindow_SingleApp_NotIdle(t *testing.T) {
 		}
 	}
 
-	w := ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+	w := DefaultScorer().ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
 
 	if w.CoherenceScore != 1.0 {
 		t.Errorf("expected coherence 1.0 for single app, got %f", w.CoherenceScore)
@@ -77,7 +77,7 @@ func TestComputeFlowWindow_MultipleApps_HighEntropy(t *testing.T) {
 		})
 	}
 
-	w := ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+	w := DefaultScorer().ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
 
 	// 4 apps with equal distribution: entropy is maximal, coherence should be low
 	if w.CoherenceScore > 0.1 {
@@ -106,7 +106,7 @@ func TestComputeFlowWindow_WithIdlePenalty(t *testing.T) {
 		})
 	}
 
-	w := ComputeFlowWindow(samples, now, now.Add(50*time.Second), "", "")
+	w := DefaultScorer().ComputeFlowWindow(samples, now, now.Add(50*time.Second), "", "")
 
 	if math.Abs(w.IdleFraction-0.5) > 0.01 {
 		t.Errorf("expected idle fraction 0.5, got %f", w.IdleFraction)
@@ -271,7 +271,7 @@ func TestComputeFlowWindow_BlindWindowIsNotPlausible(t *testing.T) {
 		})
 	}
 
-	w := ComputeFlowWindow(samples, start, end, "", "")
+	w := DefaultScorer().ComputeFlowWindow(samples, start, end, "", "")
 
 	if w.FlowScore == 0.6 {
 		t.Errorf("blind window scored exactly 0.600 again — the phantom-coherence " +
@@ -314,14 +314,14 @@ func TestComputeIdleFraction_BoundaryConditions(t *testing.T) {
 	// Idle threshold is 30s. A sample at exactly 30 should NOT count as
 	// idle (the impl uses strict >, not >=). One above does.
 	at30 := []Sample{{IdleSeconds: 30.0}}
-	if computeIdleFraction(at30) != 0.0 {
+	if DefaultScorer().computeIdleFraction(at30) != 0.0 {
 		t.Errorf("exactly 30s idle should not count as idle")
 	}
 	above := []Sample{{IdleSeconds: 30.5}}
-	if computeIdleFraction(above) != 1.0 {
+	if DefaultScorer().computeIdleFraction(above) != 1.0 {
 		t.Errorf("30.5s should fully count as idle")
 	}
-	if computeIdleFraction(nil) != 0.0 {
+	if DefaultScorer().computeIdleFraction(nil) != 0.0 {
 		t.Errorf("empty samples should give 0.0 idle fraction")
 	}
 }
@@ -354,41 +354,32 @@ func TestComputeFlowWindow_CategoryFit(t *testing.T) {
 	}}
 
 	// Timer running on a coding project
-	w := ComputeFlowWindow(samples, now, now.Add(5*time.Second), "proj-123", "coding")
+	w := DefaultScorer().ComputeFlowWindow(samples, now, now.Add(5*time.Second), "proj-123", "coding")
 	if w.CategoryFitScore != 1.0 {
 		t.Errorf("expected category fit 1.0 for coding match, got %f", w.CategoryFitScore)
 	}
 
 	// Timer running on a design project (mismatch)
-	w = ComputeFlowWindow(samples, now, now.Add(5*time.Second), "proj-456", "design")
+	w = DefaultScorer().ComputeFlowWindow(samples, now, now.Add(5*time.Second), "proj-456", "design")
 	if w.CategoryFitScore != 0.0 {
 		t.Errorf("expected category fit 0.0 for mismatch, got %f", w.CategoryFitScore)
 	}
 
 	// No timer running
-	w = ComputeFlowWindow(samples, now, now.Add(5*time.Second), "", "")
+	w = DefaultScorer().ComputeFlowWindow(samples, now, now.Add(5*time.Second), "", "")
 	if w.CategoryFitScore != 0.0 {
 		t.Errorf("expected category fit 0.0 with no timer, got %f", w.CategoryFitScore)
 	}
 }
 
-// TestConfigureScoring_ShiftsFlowScore verifies that ConfigureScoring
-// actually changes the formula at runtime. Using identical samples,
-// the same input under different weights must produce different
-// scores — otherwise the wiring is broken (defaults still in use).
+// TestScoringWeights_ShiftFlowScore verifies the weights actually reach the
+// formula. Identical samples under different weights must produce different
+// scores — otherwise the wiring is broken and the defaults are still in use.
 //
-// Restores defaults at end so other tests in this package are
-// unaffected (package-level vars are global within the test process).
-func TestConfigureScoring_ShiftsFlowScore(t *testing.T) {
-	t.Cleanup(func() {
-		ConfigureScoring(ScoringParams{
-			CadenceWeight:    0.4,
-			CoherenceWeight:  0.4,
-			CategoryWeight:   0.2,
-			IdleThresholdSec: 30.0,
-		})
-	})
-
+// No cleanup needed: each Scorer owns its own weights, so a test that tunes
+// them cannot leak into the next one. That was not true of the package-level
+// vars this replaced.
+func TestScoringWeights_ShiftFlowScore(t *testing.T) {
 	// All-coherence sample (single app, no event tap data so cadence
 	// defaults to 0.5).
 	now := time.Now().UTC()
@@ -397,18 +388,18 @@ func TestConfigureScoring_ShiftsFlowScore(t *testing.T) {
 		{CollectedAt: now, BundleID: "com.apple.Xcode", IdleSeconds: 0, EventCount: -1},
 	}
 
-	wDefault := ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+	wDefault := DefaultScorer().ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
 
 	// All-coherence config: tiny weight on cadence/category, full on
 	// coherence. Score should rise (default 0.4*0.5 + 0.4*1.0 + 0.2*0
 	// = 0.6; tuned ~1.0*1.0 = 1.0).
-	ConfigureScoring(ScoringParams{
-		CadenceWeight:    0.001, // Configure ignores zeros — tiny positive.
+	tuned := NewScorer(ScoringParams{
+		CadenceWeight:    0.001, // zero means "keep the default" — tiny positive.
 		CoherenceWeight:  1.0,
 		CategoryWeight:   0.001,
 		IdleThresholdSec: 30.0,
 	})
-	wTuned := ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+	wTuned := tuned.ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
 
 	if wTuned.FlowScore <= wDefault.FlowScore {
 		t.Errorf(
@@ -424,42 +415,53 @@ func TestConfigureScoring_ShiftsFlowScore(t *testing.T) {
 	}
 }
 
-// TestConfigureScoring_IgnoresZeros: Configure treats 0 as "keep
-// current default". This lets the daemon pass through a partially-
-// populated ScoringConfig (e.g. user only sets idle_threshold_sec
-// in the toml) without zeroing the rest.
-func TestConfigureScoring_IgnoresZeros(t *testing.T) {
-	t.Cleanup(func() {
-		ConfigureScoring(ScoringParams{
-			CadenceWeight:    0.4,
-			CoherenceWeight:  0.4,
-			CategoryWeight:   0.2,
-			IdleThresholdSec: 30.0,
-		})
-	})
+// TestNewScorer_IgnoresZeros: a zero field means "keep the shipped default".
+// That lets the daemon pass a partially-populated ScoringConfig straight
+// through — e.g. a toml setting only idle_threshold_sec — without zeroing the
+// weights it did not mention.
+func TestNewScorer_IgnoresZeros(t *testing.T) {
+	sc := NewScorer(ScoringParams{IdleThresholdSec: 60.0})
 
-	// Set known non-default values first.
-	ConfigureScoring(ScoringParams{
-		CadenceWeight:    0.5,
-		CoherenceWeight:  0.3,
-		CategoryWeight:   0.2,
-		IdleThresholdSec: 45.0,
-	})
+	if sc.cadenceWeight != defaultCadenceWeight {
+		t.Errorf("cadence weight clobbered by zero: got %f, want %f",
+			sc.cadenceWeight, defaultCadenceWeight)
+	}
+	if sc.coherenceWeight != defaultCoherenceWeight {
+		t.Errorf("coherence weight clobbered by zero: got %f, want %f",
+			sc.coherenceWeight, defaultCoherenceWeight)
+	}
+	if sc.categoryWeight != defaultCategoryWeight {
+		t.Errorf("category weight clobbered by zero: got %f, want %f",
+			sc.categoryWeight, defaultCategoryWeight)
+	}
+	if sc.idleThresholdSec != 60.0 {
+		t.Errorf("idle threshold not applied: got %f, want 60", sc.idleThresholdSec)
+	}
+}
 
-	// Now apply a "partial" config — only idle threshold changes;
-	// the three weights are zero and should be left at 0.5/0.3/0.2.
-	ConfigureScoring(ScoringParams{IdleThresholdSec: 60.0})
+// TestScorers_AreIndependent pins what the struct bought: two Scorers with
+// different tunables coexist. With package-level vars the second construction
+// silently rewrote the first one's weights.
+func TestScorers_AreIndependent(t *testing.T) {
+	now := time.Now().UTC()
+	samples := []Sample{
+		{CollectedAt: now, BundleID: "com.apple.Xcode", IdleSeconds: 0, EventCount: -1},
+		{CollectedAt: now, BundleID: "com.apple.Xcode", IdleSeconds: 0, EventCount: -1},
+	}
 
-	if cadenceWeight != 0.5 {
-		t.Errorf("cadence weight clobbered by zero: got %f, want 0.5", cadenceWeight)
+	lenient := NewScorer(ScoringParams{CoherenceWeight: 1.0, CadenceWeight: 0.001, CategoryWeight: 0.001})
+	strict := DefaultScorer()
+
+	first := lenient.ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+	second := strict.ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+	third := lenient.ComputeFlowWindow(samples, now, now.Add(time.Minute), "", "")
+
+	if first.FlowScore != third.FlowScore {
+		t.Errorf("lenient scorer changed after another was used: %.3f then %.3f",
+			first.FlowScore, third.FlowScore)
 	}
-	if coherenceWeight != 0.3 {
-		t.Errorf("coherence weight clobbered by zero: got %f, want 0.3", coherenceWeight)
-	}
-	if categoryWeight != 0.2 {
-		t.Errorf("category weight clobbered by zero: got %f, want 0.2", categoryWeight)
-	}
-	if idleThresholdSec != 60.0 {
-		t.Errorf("idle threshold not applied: got %f, want 60", idleThresholdSec)
+	if second.FlowScore >= first.FlowScore {
+		t.Errorf("expected the default scorer to score lower here: default=%.3f lenient=%.3f",
+			second.FlowScore, first.FlowScore)
 	}
 }

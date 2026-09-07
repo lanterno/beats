@@ -9,6 +9,7 @@
  * recognizable to anyone who's seen `osascript` output.
  */
 
+// Generated from shared/app-labels.json by scripts/gen_app_labels.py — do not edit.
 const APP_LABELS: Record<string, string> = {
 	"com.microsoft.VSCode": "VS Code",
 	"com.apple.dt.Xcode": "Xcode",

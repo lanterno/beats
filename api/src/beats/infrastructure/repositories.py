@@ -1,11 +1,22 @@
-"""Repository implementations for MongoDB using the PyMongo async driver."""
+"""Repository implementations for MongoDB using the PyMongo async driver.
 
-from abc import ABC, abstractmethod
+The interfaces are `Protocol`s rather than ABCs. The Mongo classes inherit them
+anyway, so a missing method is still a type error here, but the test suite's
+in-memory fakes satisfy them structurally without having to subclass anything —
+which is how they were already written, and what the ABCs could not express.
+
+`MongoStore` holds the mechanics every user-scoped repository shares: the
+user_id filter, and the conversion between documents and Pydantic models.
+`MongoSingletonStore` adds the get/upsert/delete trio for the collections that
+hold exactly one document per user.
+"""
+
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, Literal, Protocol
 
 from bson import ObjectId
 from bson.errors import InvalidId
+from pydantic import BaseModel
 from pymongo.asynchronous.collection import AsyncCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
@@ -61,8 +72,15 @@ def serialize_to_document(data: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-class MongoUserScoped:
-    """Mixin: user-scoped query builder shared by all Mongo repositories."""
+class MongoStore[ModelT: BaseModel]:
+    """Mechanics shared by every user-scoped Mongo repository."""
+
+    model: type[ModelT]
+
+    # Beats are stored with native datetimes; everything else stores the JSON
+    # form, where datetimes become ISO strings. Changing either would silently
+    # break range queries against already-written documents.
+    dump_mode: Literal["json", "python"] = "json"
 
     def __init__(self, collection: AsyncCollection, user_id: str):
         self.collection = collection
@@ -74,237 +92,65 @@ class MongoUserScoped:
             q.update(extra)
         return q
 
+    def _load(self, doc: dict[str, Any]) -> ModelT:
+        return self.model(**serialize_from_document(doc))
 
-# Abstract Repository Interfaces
+    def _dump(self, model: ModelT) -> dict[str, Any]:
+        data = serialize_to_document(model.model_dump(mode=self.dump_mode, exclude_none=True))
+        data["user_id"] = self.user_id
+        return data
 
+    async def _find_one(self, extra: dict[str, Any] | None = None) -> ModelT | None:
+        doc = await self.collection.find_one(self._q(extra))
+        return self._load(doc) if doc else None
 
-class UserRepository(ABC):
-    """Abstract interface for User persistence operations."""
-
-    @abstractmethod
-    async def get_by_id(self, user_id: str) -> User | None: ...
-
-    @abstractmethod
-    async def get_by_email(self, email: str) -> User | None: ...
-
-    @abstractmethod
-    async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None: ...
-
-    @abstractmethod
-    async def create(self, user: User) -> User: ...
-
-    @abstractmethod
-    async def update(self, user: User) -> User: ...
-
-    @abstractmethod
-    async def count(self) -> int: ...
-
-
-class BeatRepository(ABC):
-    """Abstract interface for Beat persistence operations."""
-
-    @abstractmethod
-    async def get_by_id(self, beat_id: str) -> Beat:
-        """Retrieve a beat by its ID."""
-        ...
-
-    @abstractmethod
-    async def get_active(self) -> Beat | None:
-        """Get the currently active beat (timer running), if any."""
-        ...
-
-    @abstractmethod
-    async def get_last(self) -> Beat:
-        """Get the most recent beat by start time."""
-        ...
-
-    @abstractmethod
-    async def create(self, beat: Beat) -> Beat:
-        """Create a new beat and return it with its assigned ID."""
-        ...
-
-    @abstractmethod
-    async def update(self, beat: Beat) -> Beat:
-        """Update an existing beat."""
-        ...
-
-    @abstractmethod
-    async def delete(self, beat_id: str) -> bool:
-        """Delete a beat by ID. Returns True if deleted."""
-        ...
-
-    @abstractmethod
-    async def list(
+    async def _find_many(
         self,
-        project_id: str | None = None,
-        date_filter: date | None = None,
-    ) -> list[Beat]:
-        """List beats with optional filters."""
-        ...
+        extra: dict[str, Any] | None = None,
+        *,
+        sort: tuple[str, int] | None = None,
+        limit: int | None = None,
+    ) -> list[ModelT]:
+        cursor = self.collection.find(self._q(extra))
+        if sort is not None:
+            cursor = cursor.sort(*sort)
+        if limit is not None:
+            cursor = cursor.limit(limit)
+        docs = await cursor.to_list(length=None)
+        return [self._load(doc) for doc in docs]
 
-    @abstractmethod
-    async def list_by_project(self, project_id: str) -> list[Beat]:
-        """List all beats for a specific project."""
-        ...
-
-    @abstractmethod
-    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
-        """Fetch all beats for the given project ids in one round-trip,
-        bucketed by project_id.
-
-        FF.15: lets list_projects collapse the N×3 fan-out the FF.9 comment
-        flagged into a single Mongo query whose result is shared across the
-        three aggregations (totals + this_week + last_tracked). Returns a
-        dict keyed by every requested id (empty list when the project has
-        no beats), so callers can skip a None check.
-        """
-        ...
-
-    @abstractmethod
-    async def list_all_completed(self) -> list[Beat]:
-        """List all completed beats (with end time set)."""
-        ...
-
-    @abstractmethod
-    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]:
-        """List completed beats with start date in [start, end]."""
-        ...
-
-    @abstractmethod
-    async def upsert(self, data: dict) -> None:
-        """Upsert a beat by ID for import/restore."""
-        ...
-
-
-class ProjectRepository(ABC):
-    """Abstract interface for Project persistence operations."""
-
-    @abstractmethod
-    async def get_by_id(self, project_id: str) -> Project:
-        """Retrieve a project by its ID."""
-        ...
-
-    @abstractmethod
-    async def exists(self, project_id: str) -> bool:
-        """Check if a project exists."""
-        ...
-
-    @abstractmethod
-    async def create(self, project: Project) -> Project:
-        """Create a new project and return it with its assigned ID."""
-        ...
-
-    @abstractmethod
-    async def update(self, project: Project) -> Project:
-        """Update an existing project."""
-        ...
-
-    @abstractmethod
-    async def list(self, archived: bool = False) -> list[Project]:
-        """List projects with optional archived filter."""
-        ...
-
-    @abstractmethod
-    async def upsert(self, data: dict) -> None:
-        """Upsert a project by ID for import/restore."""
-        ...
-
-
-# MongoDB Implementations
-
-
-class MongoBeatRepository(MongoUserScoped, BeatRepository):
-    """MongoDB implementation of BeatRepository using PyMongo's async driver."""
-
-    async def get_by_id(self, beat_id: str) -> Beat:
-        doc = await self.collection.find_one(self._q({"_id": ObjectId(beat_id)}))
-        if not doc:
-            raise BeatNotFound(beat_id)
-        return Beat(**serialize_from_document(doc))
-
-    async def get_active(self) -> Beat | None:
-        doc = await self.collection.find_one(self._q({"end": None}))
-        if not doc:
-            return None
-        return Beat(**serialize_from_document(doc))
-
-    async def get_last(self) -> Beat:
-        doc = await self.collection.find_one(self._q(), sort=[("start", -1)])
-        if not doc:
-            raise NoObjectMatched()
-        return Beat(**serialize_from_document(doc))
-
-    async def create(self, beat: Beat) -> Beat:
-        data = serialize_to_document(beat.model_dump(exclude_none=True))
-        data["user_id"] = self.user_id
+    async def _insert(self, model: ModelT) -> ModelT:
+        data = self._dump(model)
         result = await self.collection.insert_one(data)
-        return Beat(**serialize_from_document({**data, "_id": result.inserted_id}))
+        return self._load({**data, "_id": result.inserted_id})
 
-    async def update(self, beat: Beat) -> Beat:
-        if not beat.id:
-            raise ValueError("Beat ID is required for update")
-        data = serialize_to_document(beat.model_dump(exclude_none=True))
-        data["user_id"] = self.user_id
-        await self.collection.replace_one(self._q({"_id": ObjectId(beat.id)}), data)
-        return beat
+    async def _replace(self, model_id: str | None, model: ModelT) -> ModelT:
+        if not model_id:
+            raise ValueError(f"{self.model.__name__} ID is required for update")
+        await self.collection.replace_one(self._q({"_id": ObjectId(model_id)}), self._dump(model))
+        return model
 
-    async def delete(self, beat_id: str) -> bool:
-        result = await self.collection.delete_one(self._q({"_id": ObjectId(beat_id)}))
+    async def _upsert(self, model: ModelT, extra: dict[str, Any] | None = None) -> ModelT:
+        data = self._dump(model)
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_update(
+            self._q(extra),
+            {"$set": data},
+            upsert=True,
+            return_document=True,
+        )
+        return self._load(result)
+
+    async def _delete_one(self, extra: dict[str, Any] | None = None) -> bool:
+        result = await self.collection.delete_one(self._q(extra))
         return result.deleted_count > 0
 
-    async def list(
-        self,
-        project_id: str | None = None,
-        date_filter: date | None = None,
-    ) -> list[Beat]:
-        query = self._q()
-        if project_id:
-            query["project_id"] = project_id
-        if date_filter:
-            start_of_day = datetime.combine(date_filter, datetime.min.time())
-            end_of_day = datetime.combine(date_filter, datetime.max.time())
-            query["start"] = {"$gte": start_of_day, "$lte": end_of_day}
+    async def _delete_all(self) -> int:
+        result = await self.collection.delete_many(self._q())
+        return result.deleted_count
 
-        cursor = self.collection.find(query)
-        docs = await cursor.to_list(length=None)
-        return [Beat(**serialize_from_document(doc)) for doc in docs]
-
-    async def list_by_project(self, project_id: str) -> list[Beat]:
-        cursor = self.collection.find(self._q({"project_id": project_id}))
-        docs = await cursor.to_list(length=None)
-        return [Beat(**serialize_from_document(doc)) for doc in docs]
-
-    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
-        # Early-return without round-tripping: $in: [] matches nothing but
-        # still costs a query. Critically important when list_projects is
-        # called with no projects (a fresh user).
-        if not project_ids:
-            return {}
-        cursor = self.collection.find(self._q({"project_id": {"$in": project_ids}}))
-        docs = await cursor.to_list(length=None)
-        buckets: dict[str, list[Beat]] = {pid: [] for pid in project_ids}
-        for doc in docs:
-            beat = Beat(**serialize_from_document(doc))
-            # Defensive bucket creation in case Mongo returns a project_id
-            # we didn't ask for (shouldn't happen with $in but cheap).
-            buckets.setdefault(beat.project_id, []).append(beat)
-        return buckets
-
-    async def list_all_completed(self) -> list[Beat]:
-        cursor = self.collection.find(self._q({"end": {"$ne": None}}))
-        docs = await cursor.to_list(length=None)
-        return [Beat(**serialize_from_document(doc)) for doc in docs]
-
-    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]:
-        start_dt = datetime.combine(start, datetime.min.time())
-        end_dt = datetime.combine(end, datetime.max.time())
-        cursor = self.collection.find(
-            self._q({"start": {"$gte": start_dt, "$lte": end_dt}, "end": {"$ne": None}})
-        )
-        docs = await cursor.to_list(length=None)
-        return [Beat(**serialize_from_document(doc)) for doc in docs]
-
-    async def upsert(self, data: dict) -> None:
+    async def _upsert_raw(self, data: dict) -> None:
+        """Import/restore path: write a document that arrived as a dict."""
         doc = serialize_to_document(dict(data))
         doc["user_id"] = self.user_id
         doc_id = doc.pop("_id", None)
@@ -314,14 +160,157 @@ class MongoBeatRepository(MongoUserScoped, BeatRepository):
             await self.collection.insert_one(doc)
 
 
-class MongoProjectRepository(MongoUserScoped, ProjectRepository):
-    """MongoDB implementation of ProjectRepository using PyMongo's async driver."""
+class MongoSingletonStore[ModelT: BaseModel](MongoStore[ModelT]):
+    """A collection holding exactly one document per user."""
+
+    async def get(self) -> ModelT | None:
+        return await self._find_one()
+
+    async def upsert(self, model: ModelT) -> ModelT:
+        return await self._upsert(model)
+
+    async def delete(self) -> bool:
+        return await self._delete_one()
+
+
+class UserRepository(Protocol):
+    """User persistence. Not user-scoped — it is what defines a user."""
+
+    async def get_by_id(self, user_id: str) -> User | None: ...
+    async def get_by_email(self, email: str) -> User | None: ...
+    async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None: ...
+    async def create(self, user: User) -> User: ...
+    async def update(self, user: User) -> User: ...
+    async def count(self) -> int: ...
+
+
+class BeatRepository(Protocol):
+    """Beat persistence operations."""
+
+    async def get_by_id(self, beat_id: str) -> Beat: ...
+    async def get_active(self) -> Beat | None: ...
+    async def get_last(self) -> Beat: ...
+    async def create(self, beat: Beat) -> Beat: ...
+    async def update(self, beat: Beat) -> Beat: ...
+    async def delete(self, beat_id: str) -> bool: ...
+    async def list(
+        self, project_id: str | None = None, date_filter: date | None = None
+    ) -> list[Beat]: ...
+    async def list_by_project(self, project_id: str) -> list[Beat]: ...
+    async def list_grouped_by_project_ids(
+        self, project_ids: list[str]
+    ) -> dict[str, list[Beat]]: ...
+    async def list_all_completed(self) -> list[Beat]: ...
+    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]: ...
+    async def upsert(self, data: dict) -> None: ...
+
+
+class ProjectRepository(Protocol):
+    """Project persistence operations."""
+
+    async def get_by_id(self, project_id: str) -> Project: ...
+    async def exists(self, project_id: str) -> bool: ...
+    async def create(self, project: Project) -> Project: ...
+    async def update(self, project: Project) -> Project: ...
+    async def list(self, archived: bool = False) -> list[Project]: ...
+    async def upsert(self, data: dict) -> None: ...
+
+
+class MongoBeatRepository(MongoStore[Beat], BeatRepository):
+    """MongoDB implementation of BeatRepository."""
+
+    model = Beat
+    dump_mode = "python"
+
+    async def get_by_id(self, beat_id: str) -> Beat:
+        beat = await self._find_one({"_id": ObjectId(beat_id)})
+        if beat is None:
+            raise BeatNotFound(beat_id)
+        return beat
+
+    async def get_active(self) -> Beat | None:
+        return await self._find_one({"end": None})
+
+    async def get_last(self) -> Beat:
+        doc = await self.collection.find_one(self._q(), sort=[("start", -1)])
+        if not doc:
+            raise NoObjectMatched()
+        return self._load(doc)
+
+    async def create(self, beat: Beat) -> Beat:
+        return await self._insert(beat)
+
+    async def update(self, beat: Beat) -> Beat:
+        return await self._replace(beat.id, beat)
+
+    async def delete(self, beat_id: str) -> bool:
+        return await self._delete_one({"_id": ObjectId(beat_id)})
+
+    async def list(
+        self,
+        project_id: str | None = None,
+        date_filter: date | None = None,
+    ) -> list[Beat]:
+        extra: dict[str, Any] = {}
+        if project_id:
+            extra["project_id"] = project_id
+        if date_filter:
+            extra["start"] = {
+                "$gte": datetime.combine(date_filter, datetime.min.time()),
+                "$lte": datetime.combine(date_filter, datetime.max.time()),
+            }
+        return await self._find_many(extra)
+
+    async def list_by_project(self, project_id: str) -> list[Beat]:
+        return await self._find_many({"project_id": project_id})
+
+    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
+        """Fetch every beat for the given projects in one round-trip, bucketed.
+
+        Lets list_projects collapse an N×3 fan-out into a single query whose
+        result is shared across totals, this-week and last-tracked. Every
+        requested id gets a key, so callers never need a None check.
+        """
+        # $in: [] matches nothing but still costs a query — and a fresh user
+        # with no projects hits this path on every page load.
+        if not project_ids:
+            return {}
+        beats = await self._find_many({"project_id": {"$in": project_ids}})
+        buckets: dict[str, list[Beat]] = {pid: [] for pid in project_ids}
+        for beat in beats:
+            # setdefault rather than [] in case Mongo returns a project_id we
+            # did not ask for — shouldn't happen under $in, but it is cheap.
+            buckets.setdefault(beat.project_id, []).append(beat)
+        return buckets
+
+    async def list_all_completed(self) -> list[Beat]:
+        return await self._find_many({"end": {"$ne": None}})
+
+    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]:
+        return await self._find_many(
+            {
+                "start": {
+                    "$gte": datetime.combine(start, datetime.min.time()),
+                    "$lte": datetime.combine(end, datetime.max.time()),
+                },
+                "end": {"$ne": None},
+            }
+        )
+
+    async def upsert(self, data: dict) -> None:
+        await self._upsert_raw(data)
+
+
+class MongoProjectRepository(MongoStore[Project], ProjectRepository):
+    """MongoDB implementation of ProjectRepository."""
+
+    model = Project
 
     async def get_by_id(self, project_id: str) -> Project:
-        doc = await self.collection.find_one(self._q({"_id": ObjectId(project_id)}))
-        if not doc:
+        project = await self._find_one({"_id": ObjectId(project_id)})
+        if project is None:
             raise ProjectNotFound(project_id)
-        return Project(**serialize_from_document(doc))
+        return project
 
     async def exists(self, project_id: str) -> bool:
         # A malformed id is a "no such project", not an error. Anything else —
@@ -331,70 +320,48 @@ class MongoProjectRepository(MongoUserScoped, ProjectRepository):
             oid = ObjectId(project_id)
         except InvalidId:
             return False
-        doc = await self.collection.find_one(self._q({"_id": oid}))
-        return doc is not None
+        return await self.collection.find_one(self._q({"_id": oid})) is not None
 
     async def create(self, project: Project) -> Project:
-        data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return Project(**serialize_from_document({**data, "_id": result.inserted_id}))
+        return await self._insert(project)
 
     async def update(self, project: Project) -> Project:
-        if not project.id:
-            raise ValueError("Project ID is required for update")
-        data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        await self.collection.replace_one(self._q({"_id": ObjectId(project.id)}), data)
-        return project
+        return await self._replace(project.id, project)
 
     async def list(self, archived: bool = False) -> list[Project]:
-        cursor = self.collection.find(self._q({"archived": archived}))
-        docs = await cursor.to_list(length=None)
-        return [Project(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many({"archived": archived})
 
     async def upsert(self, data: dict) -> None:
-        doc = serialize_to_document(dict(data))
-        doc["user_id"] = self.user_id
-        doc_id = doc.pop("_id", None)
-        if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
-        else:
-            await self.collection.insert_one(doc)
-
-
-# User Repository
+        await self._upsert_raw(data)
 
 
 class MongoUserRepository(UserRepository):
-    """MongoDB implementation of UserRepository."""
+    """MongoDB implementation of UserRepository.
+
+    Not a MongoStore: users are the thing user scoping is defined against, so
+    there is no user_id filter to inherit.
+    """
 
     def __init__(self, collection: AsyncCollection):
         self.collection = collection
 
+    async def _find_one(self, query: dict[str, Any]) -> User | None:
+        doc = await self.collection.find_one(query)
+        return User(**serialize_from_document(doc)) if doc else None
+
     async def get_by_id(self, user_id: str) -> User | None:
-        doc = await self.collection.find_one({"_id": ObjectId(user_id)})
-        if not doc:
-            return None
-        return User(**serialize_from_document(doc))
+        return await self._find_one({"_id": ObjectId(user_id)})
 
     async def get_by_email(self, email: str) -> User | None:
-        doc = await self.collection.find_one({"email": email})
-        if not doc:
-            return None
-        return User(**serialize_from_document(doc))
+        return await self._find_one({"email": email})
 
     async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None:
         """Find the user holding a linked home.space identity.
 
-        Matched on the (issuer, subject) pair rather than the subject
-        alone, so that a second issuer added later cannot collide with
-        this one's DIDs.
+        Matched on the (issuer, subject) pair rather than the subject alone, so
+        that a second issuer added later cannot collide with this one's DIDs.
         """
-        doc = await self.collection.find_one({"sso_issuer": issuer, "sso_subject": subject})
-        if not doc:
-            return None
-        return User(**serialize_from_document(doc))
+        return await self._find_one({"sso_issuer": issuer, "sso_subject": subject})
 
     async def create(self, user: User) -> User:
         data = serialize_to_document(user.model_dump(mode="json", exclude_none=True))
@@ -405,10 +372,9 @@ class MongoUserRepository(UserRepository):
         """Persist a mutated user. Requires `user.id`.
 
         `exclude_none` is deliberately NOT used here, unlike `create`:
-        unlinking an SSO identity sets the `sso_*` fields back to None,
-        and dropping them from the update would leave the old link in
-        place — the user would still be signed in by a credential they
-        had just detached.
+        unlinking an SSO identity sets the `sso_*` fields back to None, and
+        dropping them from the update would leave the old link in place — the
+        user would still be signed in by a credential they had just detached.
         """
         if not user.id:
             raise ValueError("Cannot update a user without an id")
@@ -422,139 +388,60 @@ class MongoUserRepository(UserRepository):
         return await self.collection.count_documents({})
 
 
-# Webhook Repository
-
-
-class WebhookRepository(ABC):
-    """Abstract interface for Webhook persistence operations."""
-
-    @abstractmethod
+class WebhookRepository(Protocol):
     async def list_all(self) -> list[Webhook]: ...
-
-    @abstractmethod
     async def list_by_event(self, event: str) -> list[Webhook]: ...
-
-    @abstractmethod
     async def create(self, webhook: Webhook) -> Webhook: ...
-
-    @abstractmethod
     async def delete(self, webhook_id: str) -> bool: ...
-
-    @abstractmethod
     async def update(self, webhook: Webhook) -> Webhook: ...
 
 
-class MongoWebhookRepository(MongoUserScoped, WebhookRepository):
-    """MongoDB implementation of WebhookRepository."""
+class MongoWebhookRepository(MongoStore[Webhook], WebhookRepository):
+    model = Webhook
 
     async def list_all(self) -> list[Webhook]:
-        cursor = self.collection.find(self._q())
-        docs = await cursor.to_list(length=None)
-        return [Webhook(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many()
 
     async def list_by_event(self, event: str) -> list[Webhook]:
-        cursor = self.collection.find(self._q({"events": event, "active": True}))
-        docs = await cursor.to_list(length=None)
-        return [Webhook(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many({"events": event, "active": True})
 
     async def create(self, webhook: Webhook) -> Webhook:
-        data = serialize_to_document(webhook.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return Webhook(**serialize_from_document({**data, "_id": result.inserted_id}))
+        return await self._insert(webhook)
 
     async def delete(self, webhook_id: str) -> bool:
-        result = await self.collection.delete_one(self._q({"_id": ObjectId(webhook_id)}))
-        return result.deleted_count > 0
+        return await self._delete_one({"_id": ObjectId(webhook_id)})
 
     async def update(self, webhook: Webhook) -> Webhook:
-        if not webhook.id:
-            raise ValueError("Webhook ID is required for update")
-        data = serialize_to_document(webhook.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        await self.collection.replace_one(self._q({"_id": ObjectId(webhook.id)}), data)
-        return webhook
+        return await self._replace(webhook.id, webhook)
 
 
-# Weekly Digest Repository
-
-
-class WeeklyDigestRepository(ABC):
-    """Abstract interface for WeeklyDigest persistence operations."""
-
-    @abstractmethod
+class WeeklyDigestRepository(Protocol):
     async def get_by_week(self, week_of: date) -> WeeklyDigest | None: ...
-
-    @abstractmethod
     async def list_recent(self, limit: int = 12) -> list[WeeklyDigest]: ...
-
-    @abstractmethod
     async def upsert(self, digest: WeeklyDigest) -> WeeklyDigest: ...
 
 
-class MongoWeeklyDigestRepository(MongoUserScoped, WeeklyDigestRepository):
-    """MongoDB implementation of WeeklyDigestRepository."""
+class MongoWeeklyDigestRepository(MongoStore[WeeklyDigest], WeeklyDigestRepository):
+    model = WeeklyDigest
 
     async def get_by_week(self, week_of: date) -> WeeklyDigest | None:
-        doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
-        if not doc:
-            return None
-        return WeeklyDigest(**serialize_from_document(doc))
+        return await self._find_one({"week_of": week_of.isoformat()})
 
     async def list_recent(self, limit: int = 12) -> list[WeeklyDigest]:
-        cursor = self.collection.find(self._q()).sort("week_of", -1).limit(limit)
-        docs = await cursor.to_list(length=None)
-        return [WeeklyDigest(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many(sort=("week_of", -1), limit=limit)
 
     async def upsert(self, digest: WeeklyDigest) -> WeeklyDigest:
-        data = serialize_to_document(digest.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q({"week_of": digest.week_of.isoformat()}),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return WeeklyDigest(**serialize_from_document(result))
+        return await self._upsert(digest, {"week_of": digest.week_of.isoformat()})
 
 
-# Insights Repository
-
-
-class InsightsRepository(ABC):
-    """Abstract interface for UserInsights persistence operations."""
-
-    @abstractmethod
+class InsightsRepository(Protocol):
     async def get(self) -> UserInsights | None: ...
-
-    @abstractmethod
     async def upsert(self, insights: UserInsights) -> UserInsights: ...
-
-    @abstractmethod
     async def dismiss_insight(self, insight_id: str) -> None: ...
 
 
-class MongoInsightsRepository(MongoUserScoped, InsightsRepository):
-    """MongoDB implementation of InsightsRepository."""
-
-    async def get(self) -> UserInsights | None:
-        doc = await self.collection.find_one(self._q())
-        if not doc:
-            return None
-        return UserInsights(**serialize_from_document(doc))
-
-    async def upsert(self, insights: UserInsights) -> UserInsights:
-        data = serialize_to_document(insights.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q(),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return UserInsights(**serialize_from_document(result))
+class MongoInsightsRepository(MongoSingletonStore[UserInsights], InsightsRepository):
+    model = UserInsights
 
     async def dismiss_insight(self, insight_id: str) -> None:
         # Upsert: a user who has never had patterns generated has no
@@ -568,183 +455,100 @@ class MongoInsightsRepository(MongoUserScoped, InsightsRepository):
         )
 
 
-# Calendar Integration Repository
-
-
-class GitHubIntegrationRepository(ABC):
-    """Abstract interface for GitHubIntegration persistence."""
-
-    @abstractmethod
+class GitHubIntegrationRepository(Protocol):
     async def get(self) -> GitHubIntegration | None: ...
-
-    @abstractmethod
     async def upsert(self, integration: GitHubIntegration) -> GitHubIntegration: ...
-
-    @abstractmethod
     async def delete(self) -> bool: ...
 
 
-class MongoGitHubIntegrationRepository(MongoUserScoped, GitHubIntegrationRepository):
-    """MongoDB implementation of GitHubIntegrationRepository."""
-
-    async def get(self) -> GitHubIntegration | None:
-        doc = await self.collection.find_one(self._q())
-        if not doc:
-            return None
-        return GitHubIntegration(**serialize_from_document(doc))
-
-    async def upsert(self, integration: GitHubIntegration) -> GitHubIntegration:
-        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q(),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return GitHubIntegration(**serialize_from_document(result))
-
-    async def delete(self) -> bool:
-        result = await self.collection.delete_one(self._q())
-        return result.deleted_count > 0
+class MongoGitHubIntegrationRepository(
+    MongoSingletonStore[GitHubIntegration], GitHubIntegrationRepository
+):
+    model = GitHubIntegration
 
 
-class AutoStartRuleRepository(ABC):
-    """Abstract interface for AutoStartRule persistence."""
+class CalendarIntegrationRepository(Protocol):
+    async def get(self) -> CalendarIntegration | None: ...
+    async def upsert(self, integration: CalendarIntegration) -> CalendarIntegration: ...
+    async def delete(self) -> bool: ...
 
-    @abstractmethod
+
+class MongoCalendarIntegrationRepository(
+    MongoSingletonStore[CalendarIntegration], CalendarIntegrationRepository
+):
+    model = CalendarIntegration
+
+
+class FitbitIntegrationRepository(Protocol):
+    async def get(self) -> FitbitIntegration | None: ...
+    async def upsert(self, integration: FitbitIntegration) -> FitbitIntegration: ...
+    async def delete(self) -> bool: ...
+
+
+class MongoFitbitIntegrationRepository(
+    MongoSingletonStore[FitbitIntegration], FitbitIntegrationRepository
+):
+    model = FitbitIntegration
+
+
+class OuraIntegrationRepository(Protocol):
+    async def get(self) -> OuraIntegration | None: ...
+    async def upsert(self, integration: OuraIntegration) -> OuraIntegration: ...
+    async def delete(self) -> bool: ...
+
+
+class MongoOuraIntegrationRepository(
+    MongoSingletonStore[OuraIntegration], OuraIntegrationRepository
+):
+    model = OuraIntegration
+
+
+class AutoStartRuleRepository(Protocol):
     async def list_all(self) -> list[AutoStartRule]: ...
-
-    @abstractmethod
     async def list_by_type(self, rule_type: str) -> list[AutoStartRule]: ...
-
-    @abstractmethod
     async def create(self, rule: AutoStartRule) -> AutoStartRule: ...
-
-    @abstractmethod
     async def delete(self, rule_id: str) -> bool: ...
 
 
-class MongoAutoStartRuleRepository(MongoUserScoped, AutoStartRuleRepository):
-    """MongoDB implementation of AutoStartRuleRepository."""
+class MongoAutoStartRuleRepository(MongoStore[AutoStartRule], AutoStartRuleRepository):
+    model = AutoStartRule
 
     async def list_all(self) -> list[AutoStartRule]:
-        cursor = self.collection.find(self._q())
-        docs = await cursor.to_list(length=None)
-        return [AutoStartRule(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many()
 
     async def list_by_type(self, rule_type: str) -> list[AutoStartRule]:
-        cursor = self.collection.find(self._q({"type": rule_type, "enabled": True}))
-        docs = await cursor.to_list(length=None)
-        return [AutoStartRule(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many({"type": rule_type, "enabled": True})
 
     async def create(self, rule: AutoStartRule) -> AutoStartRule:
-        data = serialize_to_document(rule.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return AutoStartRule(**serialize_from_document({**data, "_id": result.inserted_id}))
+        return await self._insert(rule)
 
     async def delete(self, rule_id: str) -> bool:
-        result = await self.collection.delete_one(self._q({"_id": ObjectId(rule_id)}))
-        return result.deleted_count > 0
+        return await self._delete_one({"_id": ObjectId(rule_id)})
 
 
-class CalendarIntegrationRepository(ABC):
-    """Abstract interface for CalendarIntegration persistence."""
-
-    @abstractmethod
-    async def get(self) -> CalendarIntegration | None: ...
-
-    @abstractmethod
-    async def upsert(self, integration: CalendarIntegration) -> CalendarIntegration: ...
-
-    @abstractmethod
-    async def delete(self) -> bool: ...
-
-
-class MongoCalendarIntegrationRepository(MongoUserScoped, CalendarIntegrationRepository):
-    """MongoDB implementation of CalendarIntegrationRepository."""
-
-    async def get(self) -> CalendarIntegration | None:
-        doc = await self.collection.find_one(self._q())
-        if not doc:
-            return None
-        return CalendarIntegration(**serialize_from_document(doc))
-
-    async def upsert(self, integration: CalendarIntegration) -> CalendarIntegration:
-        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q(),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return CalendarIntegration(**serialize_from_document(result))
-
-    async def delete(self) -> bool:
-        result = await self.collection.delete_one(self._q())
-        return result.deleted_count > 0
-
-
-# Weekly Plan Repository
-
-
-class WeeklyPlanRepository(ABC):
-    """Abstract interface for WeeklyPlan persistence."""
-
-    @abstractmethod
+class WeeklyPlanRepository(Protocol):
     async def get_by_week(self, week_of: date) -> WeeklyPlan | None: ...
-
-    @abstractmethod
     async def upsert(self, plan: WeeklyPlan) -> WeeklyPlan: ...
 
 
-class MongoWeeklyPlanRepository(MongoUserScoped, WeeklyPlanRepository):
-    """MongoDB implementation of WeeklyPlanRepository."""
+class MongoWeeklyPlanRepository(MongoStore[WeeklyPlan], WeeklyPlanRepository):
+    model = WeeklyPlan
 
     async def get_by_week(self, week_of: date) -> WeeklyPlan | None:
-        doc = await self.collection.find_one(self._q({"week_of": week_of.isoformat()}))
-        if not doc:
-            return None
-        return WeeklyPlan(**serialize_from_document(doc))
+        return await self._find_one({"week_of": week_of.isoformat()})
 
     async def upsert(self, plan: WeeklyPlan) -> WeeklyPlan:
-        data = serialize_to_document(plan.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q({"week_of": plan.week_of.isoformat()}),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return WeeklyPlan(**serialize_from_document(result))
+        return await self._upsert(plan, {"week_of": plan.week_of.isoformat()})
 
 
-# Pairing Code Repository
-
-
-class PairingCodeRepository(ABC):
-    """Abstract interface for PairingCode persistence (not user-scoped)."""
-
-    @abstractmethod
+class PairingCodeRepository(Protocol):
     async def create(self, code: PairingCode) -> PairingCode: ...
-
-    @abstractmethod
     async def find_by_hash(self, code_hash: str) -> PairingCode | None: ...
-
-    @abstractmethod
     async def delete(self, code_id: str) -> bool: ...
 
 
 class MongoPairingCodeRepository(PairingCodeRepository):
-    """MongoDB implementation of PairingCodeRepository.
-
-    Not user-scoped: the exchange endpoint is public and looks up by code_hash.
-    """
+    """Not user-scoped: the exchange endpoint is public and looks up by hash."""
 
     def __init__(self, collection: AsyncCollection):
         self.collection = collection
@@ -770,33 +574,17 @@ class MongoPairingCodeRepository(PairingCodeRepository):
         return result.deleted_count > 0
 
 
-# Device Registration Repository
-
-
-class DeviceRegistrationRepository(ABC):
-    """Abstract interface for DeviceRegistration persistence (not user-scoped)."""
-
-    @abstractmethod
+class DeviceRegistrationRepository(Protocol):
     async def create(self, reg: DeviceRegistration) -> DeviceRegistration: ...
-
-    @abstractmethod
     async def get_by_device_id(self, device_id: str) -> DeviceRegistration | None: ...
-
-    @abstractmethod
     async def list_by_user(self, user_id: str) -> list[DeviceRegistration]: ...
-
-    @abstractmethod
     async def revoke(self, device_id: str, user_id: str) -> bool: ...
-
-    @abstractmethod
     async def update_last_seen(self, device_id: str) -> None: ...
 
 
 class MongoDeviceRegistrationRepository(DeviceRegistrationRepository):
-    """MongoDB implementation of DeviceRegistrationRepository.
-
-    Not user-scoped: device token validation looks up by device_id across all users.
-    """
+    """Not user-scoped: device token validation looks up by device_id first,
+    across all users, and only then checks who it belongs to."""
 
     def __init__(self, collection: AsyncCollection):
         self.collection = collection
@@ -831,16 +619,8 @@ class MongoDeviceRegistrationRepository(DeviceRegistrationRepository):
         )
 
 
-# Flow Window Repository
-
-
-class FlowWindowRepository(ABC):
-    """Abstract interface for FlowWindow persistence."""
-
-    @abstractmethod
+class FlowWindowRepository(Protocol):
     async def create(self, window: FlowWindow) -> FlowWindow: ...
-
-    @abstractmethod
     async def list_by_range(
         self,
         start: datetime,
@@ -853,14 +633,11 @@ class FlowWindowRepository(ABC):
     ) -> list[FlowWindow]: ...
 
 
-class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
-    """MongoDB implementation of FlowWindowRepository."""
+class MongoFlowWindowRepository(MongoStore[FlowWindow], FlowWindowRepository):
+    model = FlowWindow
 
     async def create(self, window: FlowWindow) -> FlowWindow:
-        data = serialize_to_document(window.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return FlowWindow(**serialize_from_document({**data, "_id": result.inserted_id}))
+        return await self._insert(window)
 
     async def list_by_range(
         self,
@@ -872,234 +649,92 @@ class MongoFlowWindowRepository(MongoUserScoped, FlowWindowRepository):
         bundle_id: str | None = None,
         dominant_category: str | None = None,
     ) -> list[FlowWindow]:
-        # Filters are AND-composed. project_id matches windows captured
-        # while a timer was running on that project; editor_repo matches
-        # windows where the VS Code heartbeat covered them; editor_language
-        # matches the language id reported by the heartbeat; bundle_id
-        # matches windows whose dominant frontmost app was that bundle;
-        # dominant_category matches the rolled-up category (e.g. "drift"
-        # for the distraction events the daemon's shield posts).
-        # All optional so the existing call sites keep working.
-        query: dict = {"window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
-        if project_id is not None:
-            query["active_project_id"] = project_id
-        if editor_repo is not None:
-            query["editor_repo"] = editor_repo
-        if editor_language is not None:
-            query["editor_language"] = editor_language
-        if bundle_id is not None:
-            query["dominant_bundle_id"] = bundle_id
-        if dominant_category is not None:
-            query["dominant_category"] = dominant_category
-        cursor = self.collection.find(self._q(query)).sort("window_start", 1)
-        docs = await cursor.to_list(length=None)
-        return [FlowWindow(**serialize_from_document(doc)) for doc in docs]
+        """Windows overlapping [start, end], narrowed by any filter given.
+
+        Filters are AND-composed and all optional. project_id matches windows
+        captured while a timer was running on that project; editor_repo and
+        editor_language match what the editor heartbeat reported; bundle_id
+        matches the dominant frontmost app; dominant_category matches the
+        rolled-up category, e.g. "drift" for the daemon shield's distractions.
+        """
+        extra: dict[str, Any] = {
+            "window_start": {"$gte": start.isoformat(), "$lte": end.isoformat()}
+        }
+        for field, value in (
+            ("active_project_id", project_id),
+            ("editor_repo", editor_repo),
+            ("editor_language", editor_language),
+            ("dominant_bundle_id", bundle_id),
+            ("dominant_category", dominant_category),
+        ):
+            if value is not None:
+                extra[field] = value
+        return await self._find_many(extra, sort=("window_start", 1))
 
 
-# Pending Suggestion Repository
-
-
-class PendingSuggestionRepository(ABC):
-    """Abstract interface for PendingSuggestion persistence."""
-
-    @abstractmethod
+class PendingSuggestionRepository(Protocol):
     async def create(self, suggestion: PendingSuggestion) -> PendingSuggestion: ...
-
-    @abstractmethod
     async def list_recent(self, since: datetime, limit: int = 20) -> list[PendingSuggestion]: ...
 
 
-class MongoPendingSuggestionRepository(MongoUserScoped, PendingSuggestionRepository):
-    """MongoDB implementation of PendingSuggestionRepository."""
+class MongoPendingSuggestionRepository(MongoStore[PendingSuggestion], PendingSuggestionRepository):
+    model = PendingSuggestion
 
     async def create(self, suggestion: PendingSuggestion) -> PendingSuggestion:
-        data = serialize_to_document(suggestion.model_dump(mode="json", exclude_none=True))
-        data["user_id"] = self.user_id
-        result = await self.collection.insert_one(data)
-        return PendingSuggestion(**serialize_from_document({**data, "_id": result.inserted_id}))
+        return await self._insert(suggestion)
 
     async def list_recent(self, since: datetime, limit: int = 20) -> list[PendingSuggestion]:
-        cursor = (
-            self.collection.find(self._q({"suggested_at": {"$gte": since.isoformat()}}))
-            .sort("suggested_at", -1)
-            .limit(limit)
+        return await self._find_many(
+            {"suggested_at": {"$gte": since.isoformat()}},
+            sort=("suggested_at", -1),
+            limit=limit,
         )
-        docs = await cursor.to_list(length=None)
-        return [PendingSuggestion(**serialize_from_document(doc)) for doc in docs]
 
 
-# Signal Summary Repository
-
-
-class SignalSummaryRepository(ABC):
-    """Abstract interface for SignalSummary persistence."""
-
-    @abstractmethod
+class SignalSummaryRepository(Protocol):
     async def upsert(self, summary: SignalSummary) -> SignalSummary: ...
-
-    @abstractmethod
     async def list_by_range(self, start: datetime, end: datetime) -> list[SignalSummary]: ...
-
-    @abstractmethod
     async def delete_all(self) -> int: ...
 
 
-class MongoSignalSummaryRepository(MongoUserScoped, SignalSummaryRepository):
-    """MongoDB implementation of SignalSummaryRepository."""
+class MongoSignalSummaryRepository(MongoStore[SignalSummary], SignalSummaryRepository):
+    model = SignalSummary
 
     async def upsert(self, summary: SignalSummary) -> SignalSummary:
-        data = serialize_to_document(summary.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        # Use the serialized hour value for the filter to avoid isoformat mismatch
-        # (e.g. "2026-04-18T14:00:00Z" vs "2026-04-18T14:00:00+00:00")
-        result = await self.collection.find_one_and_update(
-            self._q(
-                {
-                    "device_id": data["device_id"],
-                    "hour": data["hour"],
-                }
-            ),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return SignalSummary(**serialize_from_document(result))
+        # Filter on the serialized hour, not summary.hour: the two render
+        # differently ("...T14:00:00Z" vs "...T14:00:00+00:00") and a mismatch
+        # would insert a duplicate rather than update in place.
+        data = self._dump(summary)
+        return await self._upsert(summary, {"device_id": data["device_id"], "hour": data["hour"]})
 
     async def list_by_range(self, start: datetime, end: datetime) -> list[SignalSummary]:
-        cursor = self.collection.find(
-            self._q({"hour": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
-        ).sort("hour", 1)
-        docs = await cursor.to_list(length=None)
-        return [SignalSummary(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many(
+            {"hour": {"$gte": start.isoformat(), "$lte": end.isoformat()}},
+            sort=("hour", 1),
+        )
 
     async def delete_all(self) -> int:
-        result = await self.collection.delete_many(self._q())
-        return result.deleted_count
+        return await self._delete_all()
 
 
-# Biometric Day Repository
-
-
-class BiometricDayRepository(ABC):
-    """Abstract interface for BiometricDay persistence."""
-
-    @abstractmethod
+class BiometricDayRepository(Protocol):
     async def upsert(self, day: BiometricDay) -> BiometricDay: ...
-
-    @abstractmethod
     async def list_by_range(self, start: date, end: date) -> list[BiometricDay]: ...
-
-    @abstractmethod
     async def delete_all(self) -> int: ...
 
 
-class MongoBiometricDayRepository(MongoUserScoped, BiometricDayRepository):
-    """MongoDB implementation of BiometricDayRepository."""
+class MongoBiometricDayRepository(MongoStore[BiometricDay], BiometricDayRepository):
+    model = BiometricDay
 
     async def upsert(self, day: BiometricDay) -> BiometricDay:
-        data = serialize_to_document(day.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q({"date": data["date"], "source": data["source"]}),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return BiometricDay(**serialize_from_document(result))
+        data = self._dump(day)
+        return await self._upsert(day, {"date": data["date"], "source": data["source"]})
 
     async def list_by_range(self, start: date, end: date) -> list[BiometricDay]:
-        cursor = self.collection.find(
-            self._q({"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}})
-        ).sort("date", 1)
-        docs = await cursor.to_list(length=None)
-        return [BiometricDay(**serialize_from_document(doc)) for doc in docs]
+        return await self._find_many(
+            {"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}},
+            sort=("date", 1),
+        )
 
     async def delete_all(self) -> int:
-        result = await self.collection.delete_many(self._q())
-        return result.deleted_count
-
-
-# Fitbit Integration Repository
-
-
-class FitbitIntegrationRepository(ABC):
-    """Abstract interface for FitbitIntegration persistence."""
-
-    @abstractmethod
-    async def get(self) -> FitbitIntegration | None: ...
-
-    @abstractmethod
-    async def upsert(self, integration: FitbitIntegration) -> FitbitIntegration: ...
-
-    @abstractmethod
-    async def delete(self) -> bool: ...
-
-
-class MongoFitbitIntegrationRepository(MongoUserScoped, FitbitIntegrationRepository):
-    """MongoDB implementation of FitbitIntegrationRepository."""
-
-    async def get(self) -> FitbitIntegration | None:
-        doc = await self.collection.find_one(self._q())
-        if not doc:
-            return None
-        return FitbitIntegration(**serialize_from_document(doc))
-
-    async def upsert(self, integration: FitbitIntegration) -> FitbitIntegration:
-        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q(),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return FitbitIntegration(**serialize_from_document(result))
-
-    async def delete(self) -> bool:
-        result = await self.collection.delete_one(self._q())
-        return result.deleted_count > 0
-
-
-# Oura Integration Repository
-
-
-class OuraIntegrationRepository(ABC):
-    """Abstract interface for OuraIntegration persistence."""
-
-    @abstractmethod
-    async def get(self) -> OuraIntegration | None: ...
-
-    @abstractmethod
-    async def upsert(self, integration: OuraIntegration) -> OuraIntegration: ...
-
-    @abstractmethod
-    async def delete(self) -> bool: ...
-
-
-class MongoOuraIntegrationRepository(MongoUserScoped, OuraIntegrationRepository):
-    """MongoDB implementation of OuraIntegrationRepository."""
-
-    async def get(self) -> OuraIntegration | None:
-        doc = await self.collection.find_one(self._q())
-        if not doc:
-            return None
-        return OuraIntegration(**serialize_from_document(doc))
-
-    async def upsert(self, integration: OuraIntegration) -> OuraIntegration:
-        data = serialize_to_document(integration.model_dump(mode="json", exclude_none=True))
-        data.pop("_id", None)
-        data["user_id"] = self.user_id
-        result = await self.collection.find_one_and_update(
-            self._q(),
-            {"$set": data},
-            upsert=True,
-            return_document=True,
-        )
-        return OuraIntegration(**serialize_from_document(result))
-
-    async def delete(self) -> bool:
-        result = await self.collection.delete_one(self._q())
-        return result.deleted_count > 0
+        return await self._delete_all()

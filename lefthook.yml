@@ -47,6 +47,10 @@ pre-push:
     ui-api-types:
       root: ui/
       run: pnpm gen:types:check
+    # The bundle-id → app-name table is one JSON file rendered into Go, TS and
+    # Dart. Same shape as ui-api-types: fail if the committed output is stale.
+    app-labels:
+      run: python3 scripts/gen_app_labels.py --check
     # The daemon's tests cover the Go client, the cmd/beatsd dispatch
     # arms, the editor listener, the autotimer / shield logic, and
     # the collector scorer. Without this hook a Go-only regression

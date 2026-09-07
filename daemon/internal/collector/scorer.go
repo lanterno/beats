@@ -5,28 +5,22 @@ import (
 	"time"
 )
 
-// Default scoring parameters. ConfigureScoring overrides these at
-// daemon startup from the [scoring] section of daemon.toml — a stock
-// config file (or no [scoring] section) keeps these defaults.
+// Shipped scoring defaults, used whenever daemon.toml leaves a tunable at zero.
 //
-// The three weights compose the flow score: weighted sum of cadence,
-// coherence, and category-fit, minus an idle penalty. They sum to 1.0
-// in defaults; the final score clamps to [0,1] so a misconfigured
-// weights table that exceeds 1.0 just flattens at the top, and one
-// that sums below 1.0 leaves headroom unused. idleThresholdSec is
-// the per-sample idle gate (sample with IdleSeconds > threshold
-// counts as idle).
-var (
-	cadenceWeight    = 0.4
-	coherenceWeight  = 0.4
-	categoryWeight   = 0.2
-	idleThresholdSec = 30.0
+// The three weights compose the flow score: a weighted sum of cadence,
+// coherence and category-fit, minus an idle penalty. They sum to 1.0 here; the
+// final score clamps to [0,1], so a weights table exceeding 1.0 just flattens
+// at the top and one summing below leaves headroom unused. IdleThreshold is the
+// per-sample gate — a sample with IdleSeconds above it counts as idle.
+const (
+	defaultCadenceWeight    = 0.4
+	defaultCoherenceWeight  = 0.4
+	defaultCategoryWeight   = 0.2
+	defaultIdleThresholdSec = 30.0
 )
 
-// ScoringParams mirrors config.ScoringConfig but is package-local so
-// the collector doesn't depend on the config package (avoids an
-// import cycle if any test wants to drive the scorer with custom
-// weights — see scorer_test.go).
+// ScoringParams mirrors config.ScoringConfig but is package-local so the
+// collector does not depend on the config package.
 type ScoringParams struct {
 	CadenceWeight    float64
 	CoherenceWeight  float64
@@ -34,29 +28,52 @@ type ScoringParams struct {
 	IdleThresholdSec float64
 }
 
-// ConfigureScoring overrides the scoring tunables. Zero values are
-// ignored (treated as "keep the current default"). Call once at
-// daemon startup before Run; calling mid-stream is a race.
-func ConfigureScoring(p ScoringParams) {
+// Scorer turns samples into flow windows using one fixed set of tunables.
+//
+// These used to be package-level vars reconfigured at startup, which made the
+// weights process-global: two Scorers were impossible, and the doc comment had
+// to warn that reconfiguring mid-run was a race. Holding them on a value built
+// once removes both problems.
+type Scorer struct {
+	cadenceWeight    float64
+	coherenceWeight  float64
+	categoryWeight   float64
+	idleThresholdSec float64
+}
+
+// NewScorer builds a Scorer from the [scoring] section of daemon.toml. A zero
+// field means "keep the shipped default", so a config file without the section
+// — or with only some of it filled in — behaves exactly as before.
+func NewScorer(p ScoringParams) *Scorer {
+	s := &Scorer{
+		cadenceWeight:    defaultCadenceWeight,
+		coherenceWeight:  defaultCoherenceWeight,
+		categoryWeight:   defaultCategoryWeight,
+		idleThresholdSec: defaultIdleThresholdSec,
+	}
 	if p.CadenceWeight > 0 {
-		cadenceWeight = p.CadenceWeight
+		s.cadenceWeight = p.CadenceWeight
 	}
 	if p.CoherenceWeight > 0 {
-		coherenceWeight = p.CoherenceWeight
+		s.coherenceWeight = p.CoherenceWeight
 	}
 	if p.CategoryWeight > 0 {
-		categoryWeight = p.CategoryWeight
+		s.categoryWeight = p.CategoryWeight
 	}
 	if p.IdleThresholdSec > 0 {
-		idleThresholdSec = p.IdleThresholdSec
+		s.idleThresholdSec = p.IdleThresholdSec
 	}
+	return s
 }
+
+// DefaultScorer is the Scorer a stock daemon.toml produces.
+func DefaultScorer() *Scorer { return NewScorer(ScoringParams{}) }
 
 // ComputeFlowWindow computes a FlowWindow from a slice of samples.
 //
 // activeProjectID and projectCategory are empty if no timer is running.
 // When the event tap is unavailable (all EventCount == -1), cadence defaults to 0.5.
-func ComputeFlowWindow(
+func (sc *Scorer) ComputeFlowWindow(
 	samples []Sample,
 	start, end time.Time,
 	activeProjectID, projectCategory string,
@@ -70,7 +87,7 @@ func ComputeFlowWindow(
 	if len(samples) == 0 {
 		w.CadenceScore = 0.5
 		w.CoherenceScore = 0.5
-		w.FlowScore = clamp(cadenceWeight*0.5+coherenceWeight*0.5, 0, 1)
+		w.FlowScore = clamp(sc.cadenceWeight*0.5+sc.coherenceWeight*0.5, 0, 1)
 		return w
 	}
 
@@ -78,14 +95,14 @@ func ComputeFlowWindow(
 	w.CoherenceScore = computeCoherence(samples)
 	w.DominantBundleID, w.DominantCategory = computeDominant(samples)
 	w.CategoryFitScore = computeCategoryFit(w.DominantCategory, activeProjectID, projectCategory)
-	w.IdleFraction = computeIdleFraction(samples)
+	w.IdleFraction = sc.computeIdleFraction(samples)
 	w.ContextSwitches = computeContextSwitches(samples)
 
 	idlePenalty := math.Max(0, w.IdleFraction-0.2) * 1.25
 	w.FlowScore = clamp(
-		cadenceWeight*w.CadenceScore+
-			coherenceWeight*w.CoherenceScore+
-			categoryWeight*w.CategoryFitScore-
+		sc.cadenceWeight*w.CadenceScore+
+			sc.coherenceWeight*w.CoherenceScore+
+			sc.categoryWeight*w.CategoryFitScore-
 			idlePenalty,
 		0, 1,
 	)
@@ -208,13 +225,13 @@ func computeCategoryFit(dominantCategory, activeProjectID, projectCategory strin
 }
 
 // computeIdleFraction returns the fraction of samples where idle time exceeds the threshold.
-func computeIdleFraction(samples []Sample) float64 {
+func (sc *Scorer) computeIdleFraction(samples []Sample) float64 {
 	if len(samples) == 0 {
 		return 0.0
 	}
 	idle := 0
 	for _, s := range samples {
-		if s.IdleSeconds > idleThresholdSec {
+		if s.IdleSeconds > sc.idleThresholdSec {
 			idle++
 		}
 	}
