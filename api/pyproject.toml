@@ -4,6 +4,7 @@ version = "0.3.0"
 description = "A way to keep track of how I spend my time"
 authors = [{ name = "Ahmed Elghareeb", email = "a@elghareeb.space" }]
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
     "anthropic>=0.116.0",

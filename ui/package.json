@@ -1,6 +1,7 @@
 {
   "name": "fusion-starter",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=25.0.0"

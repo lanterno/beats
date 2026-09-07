@@ -215,4 +215,4 @@ home.space identity is the way an old account gets back in.
 
 ## License
 
-Private project.
+MIT — see [LICENSE](LICENSE).
