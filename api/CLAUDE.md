@@ -19,7 +19,9 @@ src/beats/
 │   ├── exceptions.py    DomainException hierarchy → unified envelope
 │   ├── services.py      TimerService, ProjectService, BeatService
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
-│   ├── intelligence.py  Productivity score, weekly digests, pattern detection
+│   ├── intelligence/    Productivity score, digests, patterns, planning, focus,
+│   │                    health — one module each, plus a thin IntelligenceService
+│   ├── ports.py         Protocols the domain asks persistence for (narrow by design)
 │   ├── calendar.py      Google Calendar OAuth + event fetching
 │   ├── github.py        GitHub OAuth + commit correlation
 │   ├── fitbit.py        Fitbit OAuth + biometric sync

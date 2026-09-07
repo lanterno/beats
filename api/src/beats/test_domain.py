@@ -13,6 +13,17 @@ from beats.domain.exceptions import (
     ProjectNotFound,
     TimerAlreadyRunning,
 )
+from beats.domain.intelligence import (
+    detect_chronotype,
+    detect_day_pattern,
+    detect_goal_pacing,
+    detect_peak_hours,
+    detect_session_trend,
+    detect_stale_projects,
+    find_peak_block,
+    focus_score_for_beat,
+    generate_observation,
+)
 from beats.domain.models import (
     Beat,
     BiometricDay,
@@ -1217,10 +1228,9 @@ class TestPatternDetectorsDay:
         return beats
 
     async def test_no_data_returns_no_card(self):
-        svc = self._service()
 
         today = datetime.now(UTC).date()
-        result = svc._detect_day_pattern([], today)
+        result = detect_day_pattern([], today)
         assert result == []
 
     async def test_low_overall_activity_returns_no_card(self):
@@ -1235,8 +1245,7 @@ class TestPatternDetectorsDay:
             hour=10
         )
         beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=5))]
-        svc = self._service()
-        result = svc._detect_day_pattern(beats, today)
+        result = detect_day_pattern(beats, today)
         assert result == []
 
     async def test_clear_power_day_returns_card(self):
@@ -1245,8 +1254,7 @@ class TestPatternDetectorsDay:
         today = datetime.now(UTC).date()
         # 4 hours every Tuesday for 8 weeks, nothing else.
         beats = self._seed_beats_on_weekday(target_dow=1, weeks_back=8, minutes_per_week=240)
-        svc = self._service()
-        cards = svc._detect_day_pattern(beats, today)
+        cards = detect_day_pattern(beats, today)
         assert len(cards) == 1
         card = cards[0]
         assert card.type == "day_pattern"
@@ -1283,8 +1291,7 @@ class TestPatternDetectorsDay:
                         end=s + timedelta(minutes=mins),
                     )
                 )
-        svc = self._service()
-        cards = svc._detect_day_pattern(beats, today)
+        cards = detect_day_pattern(beats, today)
         assert cards == []
 
     async def test_threshold_below_30min_absolute_skips(self):
@@ -1326,8 +1333,7 @@ class TestPatternDetectorsDay:
                 )
             )
 
-        svc = self._service()
-        cards = svc._detect_day_pattern(beats, today)
+        cards = detect_day_pattern(beats, today)
         # Either the overall_avg<10 gate or the abs<30 threshold
         # blocks. Pin: no card.
         assert cards == []
@@ -1343,8 +1349,7 @@ class TestPatternDetectorsPeakHours:
         return _intel_service()
 
     async def test_no_data_returns_no_card(self):
-        svc = self._service()
-        assert svc._detect_peak_hours([]) == []
+        assert detect_peak_hours([]) == []
 
     async def test_under_3_blocks_returns_no_card(self):
         """The detector requires at least 3 distinct populated blocks
@@ -1363,8 +1368,7 @@ class TestPatternDetectorsPeakHours:
         ]
         # Both beats fall in the same 10-12 block → only 1 distinct
         # block populated → guard fires.
-        svc = self._service()
-        assert svc._detect_peak_hours(beats) == []
+        assert detect_peak_hours(beats) == []
 
     async def test_clear_peak_block_returns_card_with_hour_range(self):
         """A block with > 2× the median session-minutes surfaces as a
@@ -1388,8 +1392,7 @@ class TestPatternDetectorsPeakHours:
             at(14, 10),  # 10 min block 7
             at(16, 5),  # 5 min block 8
         ]
-        svc = self._service()
-        cards = svc._detect_peak_hours(beats)
+        cards = detect_peak_hours(beats)
         assert len(cards) == 1
         card = cards[0]
         assert card.type == "time_pattern"
@@ -1415,8 +1418,7 @@ class TestPatternDetectorsPeakHours:
 
         # All blocks roughly equal — median ~30, max ~40 → ratio 1.33.
         beats = [at(8, 30), at(10, 40), at(14, 30), at(16, 25)]
-        svc = self._service()
-        assert svc._detect_peak_hours(beats) == []
+        assert detect_peak_hours(beats) == []
 
 
 class TestPatternDetectorsStaleProjects:
@@ -1428,21 +1430,18 @@ class TestPatternDetectorsStaleProjects:
         return _intel_service()
 
     async def test_no_projects_returns_no_card(self):
-        svc = self._service()
         today = datetime.now(UTC).date()
-        assert svc._detect_stale_projects([], [], today) == []
+        assert detect_stale_projects([], [], today) == []
 
     async def test_skips_projects_without_weekly_goal(self):
         today = datetime.now(UTC).date()
         projects = [_project("p1", "Casual", weekly_goal=None)]
-        svc = self._service()
-        assert svc._detect_stale_projects([], projects, today) == []
+        assert detect_stale_projects([], projects, today) == []
 
     async def test_skips_archived_even_with_goal(self):
         today = datetime.now(UTC).date()
         projects = [_project("p1", "Old", weekly_goal=5.0, archived=True)]
-        svc = self._service()
-        assert svc._detect_stale_projects([], projects, today) == []
+        assert detect_stale_projects([], projects, today) == []
 
     async def test_no_activity_ever_fires_card(self):
         """ZERO recorded sessions → fires with days_since=999 (the
@@ -1450,8 +1449,7 @@ class TestPatternDetectorsStaleProjects:
         never-tracked default doesn't mis-render in the UI."""
         today = datetime.now(UTC).date()
         projects = [_project("p1", "Untouched", weekly_goal=5.0)]
-        svc = self._service()
-        cards = svc._detect_stale_projects([], projects, today)
+        cards = detect_stale_projects([], projects, today)
         assert len(cards) == 1
         card = cards[0]
         assert card.type == "stale_project"
@@ -1467,8 +1465,7 @@ class TestPatternDetectorsStaleProjects:
         five_days_ago = today - timedelta(days=5)
         s = datetime.combine(five_days_ago, datetime.min.time(), tzinfo=UTC).replace(hour=10)
         beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=1))]
-        svc = self._service()
-        assert svc._detect_stale_projects(beats, projects, today) == []
+        assert detect_stale_projects(beats, projects, today) == []
 
     async def test_threshold_is_14_days_inclusive(self):
         """Threshold is `>= 14`. Pin the boundary so a refactor that
@@ -1476,14 +1473,13 @@ class TestPatternDetectorsStaleProjects:
         deliberate change."""
         today = datetime.now(UTC).date()
         projects = [_project("p1", "Borderline", weekly_goal=5.0)]
-        svc = self._service()
 
         # 13 days ago — fresh.
         s13 = datetime.combine(today - timedelta(days=13), datetime.min.time(), tzinfo=UTC).replace(
             hour=10
         )
         assert (
-            svc._detect_stale_projects(
+            detect_stale_projects(
                 [Beat(id="b1", project_id="p1", start=s13, end=s13 + timedelta(hours=1))],
                 projects,
                 today,
@@ -1495,7 +1491,7 @@ class TestPatternDetectorsStaleProjects:
         s14 = datetime.combine(today - timedelta(days=14), datetime.min.time(), tzinfo=UTC).replace(
             hour=10
         )
-        cards = svc._detect_stale_projects(
+        cards = detect_stale_projects(
             [Beat(id="b2", project_id="p1", start=s14, end=s14 + timedelta(hours=1))],
             projects,
             today,
@@ -1510,8 +1506,7 @@ class TestPatternDetectorsStaleProjects:
             _project("p2", "Beta", weekly_goal=3.0),
             _project("p3", "Gamma", weekly_goal=None),  # no goal → skipped
         ]
-        svc = self._service()
-        cards = svc._detect_stale_projects([], projects, today)
+        cards = detect_stale_projects([], projects, today)
         assert len(cards) == 2
 
 
@@ -1586,8 +1581,7 @@ class TestPatternDetectorsSessionTrend:
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
         )
-        svc = self._service()
-        assert svc._detect_session_trend(beats, today) == []
+        assert detect_session_trend(beats, today) == []
 
     async def test_too_few_prior_returns_no_card(self):
         from beats.domain.intelligence import _monday_of
@@ -1598,8 +1592,7 @@ class TestPatternDetectorsSessionTrend:
         beats += self._beats_in_range(
             this_monday - timedelta(days=10), this_monday - timedelta(days=8), 60
         )
-        svc = self._service()
-        assert svc._detect_session_trend(beats, today) == []
+        assert detect_session_trend(beats, today) == []
 
     async def test_change_below_30_percent_returns_no_card(self):
         from beats.domain.intelligence import _monday_of
@@ -1610,8 +1603,7 @@ class TestPatternDetectorsSessionTrend:
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 65
         )
-        svc = self._service()
-        assert svc._detect_session_trend(beats, today) == []
+        assert detect_session_trend(beats, today) == []
 
     async def test_significant_increase_fires_with_longer_direction(self):
         from beats.domain.intelligence import _monday_of
@@ -1622,8 +1614,7 @@ class TestPatternDetectorsSessionTrend:
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
         )
-        svc = self._service()
-        cards = svc._detect_session_trend(beats, today)
+        cards = detect_session_trend(beats, today)
         assert len(cards) == 1
         card = cards[0]
         assert card.type == "session_trend"
@@ -1640,8 +1631,7 @@ class TestPatternDetectorsSessionTrend:
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 60
         )
-        svc = self._service()
-        cards = svc._detect_session_trend(beats, today)
+        cards = detect_session_trend(beats, today)
         assert len(cards) == 1
         assert "shorter" in cards[0].title
         assert cards[0].data["change_pct"] < 0
@@ -1657,8 +1647,7 @@ class TestPatternDetectorsSessionTrend:
         beats += self._beats_in_range(
             this_monday - timedelta(weeks=4), this_monday - timedelta(days=1), 1
         )
-        svc = self._service()
-        assert svc._detect_session_trend(beats, today) == []
+        assert detect_session_trend(beats, today) == []
 
 
 class TestPatternDetectorsGoalPacing:
@@ -1678,23 +1667,16 @@ class TestPatternDetectorsGoalPacing:
         return _monday_of(base) + timedelta(days=4)
 
     async def test_no_projects_returns_no_card(self):
-        svc = self._service()
-        assert svc._detect_goal_pacing([], [], self._friday_after(datetime.now(UTC).date())) == []
+        assert detect_goal_pacing([], [], self._friday_after(datetime.now(UTC).date())) == []
 
     async def test_skips_archived_projects(self):
         archived = _project("p1", "Old", weekly_goal=5.0, archived=True)
-        svc = self._service()
-        result = svc._detect_goal_pacing(
-            [], [archived], self._friday_after(datetime.now(UTC).date())
-        )
+        result = detect_goal_pacing([], [archived], self._friday_after(datetime.now(UTC).date()))
         assert result == []
 
     async def test_skips_projects_without_goal(self):
         no_goal = _project("p1", "Casual", weekly_goal=None)
-        svc = self._service()
-        result = svc._detect_goal_pacing(
-            [], [no_goal], self._friday_after(datetime.now(UTC).date())
-        )
+        result = detect_goal_pacing([], [no_goal], self._friday_after(datetime.now(UTC).date()))
         assert result == []
 
     async def test_early_in_week_skips_card(self):
@@ -1705,8 +1687,7 @@ class TestPatternDetectorsGoalPacing:
         today = datetime.now(UTC).date()
         this_monday = _monday_of(today)
         projects = [_project("p1", "Alpha", weekly_goal=10.0)]
-        svc = self._service()
-        assert svc._detect_goal_pacing([], projects, this_monday) == []
+        assert detect_goal_pacing([], projects, this_monday) == []
 
     async def test_friday_with_low_progress_fires(self):
         """Friday + < 50% of goal tracked → card with remaining
@@ -1720,8 +1701,7 @@ class TestPatternDetectorsGoalPacing:
         # 1h tracked vs 10h goal → 10%, well under 50%.
         beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=1))]
         projects = [_project("p1", "Alpha", weekly_goal=10.0)]
-        svc = self._service()
-        cards = svc._detect_goal_pacing(beats, projects, friday)
+        cards = detect_goal_pacing(beats, projects, friday)
         assert len(cards) == 1
         card = cards[0]
         assert card.type == "goal_pacing"
@@ -1741,8 +1721,7 @@ class TestPatternDetectorsGoalPacing:
         s = datetime.combine(monday, datetime.min.time(), tzinfo=UTC).replace(hour=10)
         beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=6))]
         projects = [_project("p1", "Alpha", weekly_goal=10.0)]
-        svc = self._service()
-        assert svc._detect_goal_pacing(beats, projects, friday) == []
+        assert detect_goal_pacing(beats, projects, friday) == []
 
     async def test_goal_already_met_returns_no_card(self):
         """remaining ≤ 0 → no card. "X to go" makes no sense when
@@ -1755,8 +1734,7 @@ class TestPatternDetectorsGoalPacing:
         s = datetime.combine(monday, datetime.min.time(), tzinfo=UTC).replace(hour=10)
         beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=10))]
         projects = [_project("p1", "Alpha", weekly_goal=10.0)]
-        svc = self._service()
-        assert svc._detect_goal_pacing(beats, projects, friday) == []
+        assert detect_goal_pacing(beats, projects, friday) == []
 
 
 class TestGenerateWeeklyDigest:
@@ -1969,7 +1947,7 @@ class TestGenerateObservation:
         proj_minutes = {"p1": 120.0}
         prev = {}  # not in prev
         proj_map = self._projects("Alpha")
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes, prev, proj_map, day_minutes={}, total_hours=2.0, session_count=2
         )
         assert "started working on Alpha" in out
@@ -1984,7 +1962,7 @@ class TestGenerateObservation:
         prev = {}
         proj_map = self._projects("Alpha")
         # No day_minutes, falls through to fallback
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes, prev, proj_map, day_minutes={}, total_hours=0.5, session_count=1
         )
         assert "started" not in out
@@ -1995,7 +1973,7 @@ class TestGenerateObservation:
         proj_minutes = {"p1": 120.0}
         prev = {"p1": 60.0}
         proj_map = self._projects("Alpha")
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes, prev, proj_map, day_minutes={}, total_hours=2.0, session_count=2
         )
         assert "100% more time on Alpha" in out
@@ -2006,7 +1984,7 @@ class TestGenerateObservation:
         proj_minutes = {"p1": 60.0}
         prev = {"p1": 200.0}
         proj_map = self._projects("Alpha")
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes, prev, proj_map, day_minutes={}, total_hours=1.0, session_count=1
         )
         assert "70% less time on Alpha" in out
@@ -2020,7 +1998,7 @@ class TestGenerateObservation:
         prev = {"p1": 20.0}  # below the 30-minute floor
         proj_map = self._projects("Alpha")
         long_day = date(2026, 4, 29)
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes,
             prev,
             proj_map,
@@ -2039,7 +2017,7 @@ class TestGenerateObservation:
         proj_minutes = {"p1": 80.0}
         prev = {"p1": 60.0}
         proj_map = self._projects("Alpha")
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes, prev, proj_map, day_minutes={}, total_hours=1.3, session_count=1
         )
         assert "more time" not in out
@@ -2049,7 +2027,7 @@ class TestGenerateObservation:
         """No new/delta projects but day_minutes present → "Your
         most productive day was {Monday} with {X}h tracked"."""
         long_day = date(2026, 4, 27)  # Monday
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes={},
             prev_proj_minutes={},
             project_map={},
@@ -2063,7 +2041,7 @@ class TestGenerateObservation:
     async def test_terminal_fallback_when_nothing_to_say(self):
         """No projects, no days, but session_count>0 → "You tracked
         Xh across N sessions this week"."""
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes={},
             prev_proj_minutes={},
             project_map={},
@@ -2082,7 +2060,7 @@ class TestGenerateObservation:
         prev = {}
         proj_map = self._projects("Alpha")
         long_day = date(2026, 4, 27)
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes,
             prev,
             proj_map,
@@ -2100,7 +2078,7 @@ class TestGenerateObservation:
         None.name."""
         proj_minutes = {"ghost": 60.0}
         prev = {}
-        out = self._svc()._generate_observation(
+        out = generate_observation(
             proj_minutes,
             prev,
             project_map={},
@@ -2319,7 +2297,7 @@ class TestFindPeakBlock:
         """No beats → block 4 (8-10 AM). Pin so the default never
         becomes block 0 (midnight) — a midnight peak would mislabel
         every user's "you usually work at" sentence."""
-        assert self._svc()._find_peak_block([]) == 4
+        assert find_peak_block([]) == 4
 
     def test_picks_block_with_most_total_minutes(self):
         """Three beats: 30 min in block 4 (9 AM), 90 min in
@@ -2329,7 +2307,7 @@ class TestFindPeakBlock:
             self._beat_at(14, 90),
             self._beat_at(18, 30),
         ]
-        assert self._svc()._find_peak_block(beats) == 7
+        assert find_peak_block(beats) == 7
 
     def test_buckets_by_two_hour_window(self):
         """Beats at 8 AM and 9 AM both land in block 4 (hour//2);
@@ -2341,7 +2319,7 @@ class TestFindPeakBlock:
             self._beat_at(14, 45),  # block 7
         ]
         # Block 4: 60 min, block 7: 45 min → 4 wins
-        assert self._svc()._find_peak_block(beats) == 4
+        assert find_peak_block(beats) == 4
 
 
 class TestFocusScoreForBeat:
@@ -2359,11 +2337,10 @@ class TestFocusScoreForBeat:
 
     def test_length_buckets_pin_each_threshold(self):
         """Length component buckets: <10→5, <25→15, <45→25, <90→35, ≥90→40."""
-        svc = self._svc()
         cases = [(8, 5), (20, 15), (30, 25), (60, 35), (120, 40)]
         for mins, expected in cases:
             b = self._beat(9, mins)
-            r = svc._focus_score_for_beat(b, [b], 0, peak_block=4)
+            r = focus_score_for_beat(b, [b], 0, peak_block=4)
             assert r["components"]["length"] == expected, (
                 f"{mins}min should map to length={expected}"
             )
@@ -2371,19 +2348,19 @@ class TestFocusScoreForBeat:
     def test_peak_component_same_block_full_credit(self):
         """Beat in the user's peak 2-hour block → peak component=30."""
         b = self._beat(9, 60)  # 9 AM = block 4
-        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        r = focus_score_for_beat(b, [b], 0, peak_block=4)
         assert r["components"]["peak_hours"] == 30
 
     def test_peak_component_adjacent_block_partial(self):
         """One block away from peak → 20."""
         b = self._beat(11, 60)  # block 5; peak=4
-        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        r = focus_score_for_beat(b, [b], 0, peak_block=4)
         assert r["components"]["peak_hours"] == 20
 
     def test_peak_component_far_block_minimum(self):
         """Two or more blocks away from peak → 10."""
         b = self._beat(20, 60)  # block 10; peak=4
-        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        r = focus_score_for_beat(b, [b], 0, peak_block=4)
         assert r["components"]["peak_hours"] == 10
 
     def test_no_neighbors_no_fragmentation_penalty(self):
@@ -2391,7 +2368,7 @@ class TestFocusScoreForBeat:
         adjacent gap to check. Pin so a refactor doesn't apply
         the penalty unconditionally."""
         b = self._beat(9, 60)
-        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        r = focus_score_for_beat(b, [b], 0, peak_block=4)
         assert r["components"]["fragmentation"] == 30
 
     def test_fragmentation_penalty_when_close_to_prev(self):
@@ -2400,7 +2377,7 @@ class TestFocusScoreForBeat:
         prev = self._beat(9, 30, id_="prev")  # 9:00-9:30
         s = datetime(2026, 4, 1, 9, 33, tzinfo=UTC)
         cur = Beat(id="cur", project_id="p1", start=s, end=s + timedelta(minutes=20))
-        r = self._svc()._focus_score_for_beat(cur, [prev, cur], 1, peak_block=4)
+        r = focus_score_for_beat(cur, [prev, cur], 1, peak_block=4)
         assert r["components"]["fragmentation"] == 15  # 30 - 15
 
     def test_fragmentation_penalty_double_when_both_neighbors_close(self):
@@ -2413,7 +2390,7 @@ class TestFocusScoreForBeat:
         # cur ends 9:43. Next starts 9:46 → 3 min gap.
         nxt_s = datetime(2026, 4, 1, 9, 46, tzinfo=UTC)
         nxt = Beat(id="nxt", project_id="p1", start=nxt_s, end=nxt_s + timedelta(minutes=20))
-        r = self._svc()._focus_score_for_beat(cur, [prev, cur, nxt], 1, peak_block=4)
+        r = focus_score_for_beat(cur, [prev, cur, nxt], 1, peak_block=4)
         assert r["components"]["fragmentation"] == 0
 
     def test_no_penalty_when_gap_at_least_5min(self):
@@ -2421,7 +2398,7 @@ class TestFocusScoreForBeat:
         prev = self._beat(9, 30, id_="prev")  # ends 9:30
         cur_s = datetime(2026, 4, 1, 9, 35, tzinfo=UTC)  # exactly 5 min gap
         cur = Beat(id="cur", project_id="p1", start=cur_s, end=cur_s + timedelta(minutes=20))
-        r = self._svc()._focus_score_for_beat(cur, [prev, cur], 1, peak_block=4)
+        r = focus_score_for_beat(cur, [prev, cur], 1, peak_block=4)
         assert r["components"]["fragmentation"] == 30
 
     def test_total_score_sums_components(self):
@@ -2429,7 +2406,7 @@ class TestFocusScoreForBeat:
         minute beat in the peak block with no close neighbors hits
         the 100 ceiling: 40 + 30 + 30 = 100."""
         b = self._beat(9, 120)
-        r = self._svc()._focus_score_for_beat(b, [b], 0, peak_block=4)
+        r = focus_score_for_beat(b, [b], 0, peak_block=4)
         assert r["score"] == 100
 
 
@@ -5250,7 +5227,6 @@ class TestDetectChronotype:
     ranges would silently misclassify every user."""
 
     def test_empty_returns_no_card(self):
-        from beats.domain.intelligence import detect_chronotype
 
         assert detect_chronotype([]) == []
 
@@ -5258,7 +5234,6 @@ class TestDetectChronotype:
         """The detector requires ≥50 windows. Pin so a low-data
         user doesn't get a confident-looking but noisy chronotype
         label."""
-        from beats.domain.intelligence import detect_chronotype
 
         windows = [
             _flow_window(day=date(2026, 4, 1), hour=h, score=0.7) for h in range(24)
@@ -5269,7 +5244,6 @@ class TestDetectChronotype:
         """≥50 windows but only 3 distinct hours → no card. Pin
         the spread requirement so a user who only ever tracks in
         a 3-hour window doesn't get labeled."""
-        from beats.domain.intelligence import detect_chronotype
 
         windows = []
         for i in range(60):
@@ -5287,7 +5261,6 @@ class TestDetectChronotype:
         any(v>0) guard fires. Pin so a brand-new daemon user
         with no focused sessions yet doesn't get a chronotype
         card."""
-        from beats.domain.intelligence import detect_chronotype
 
         windows = [
             _flow_window(day=date(2026, 4, 1) + timedelta(days=d), hour=h, score=0.0)
@@ -5301,7 +5274,6 @@ class TestDetectChronotype:
         is "early". Pin the label, the title, and the peak_start/
         peak_end in data — the dashboard's chronotype card binds
         to those fields."""
-        from beats.domain.intelligence import detect_chronotype
 
         windows = []
         for d in range(14):
@@ -5322,7 +5294,6 @@ class TestDetectChronotype:
 
     def test_evening_peak_labels_evening_person(self):
         """Peak at 19-21 → "evening" label."""
-        from beats.domain.intelligence import detect_chronotype
 
         windows = []
         for d in range(14):
