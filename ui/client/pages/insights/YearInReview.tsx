@@ -214,12 +214,14 @@ export default function YearInReview() {
 				</div>
 				<div className="flex items-center gap-1">
 					<button
+						type="button"
 						onClick={() => navigate(`/insights/year/${year - 1}`)}
 						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
 					>
 						<ChevronLeft className="w-4 h-4" />
 					</button>
 					<button
+						type="button"
 						onClick={() => navigate(`/insights/year/${year + 1}`)}
 						disabled={isCurrentYear}
 						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-30"
@@ -413,6 +415,7 @@ export default function YearInReview() {
 					<div className="text-center pt-4 border-t border-border/20 space-y-3">
 						<p className="text-[10px] text-muted-foreground/30 tracking-[0.3em] uppercase">Beats</p>
 						<button
+							type="button"
 							onClick={handleCopy}
 							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
 						>

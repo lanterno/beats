@@ -49,6 +49,7 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
 			<div className="grid grid-cols-5 gap-1.5 mb-2">
 				{SWATCHES.map((c) => (
 					<button
+						type="button"
 						key={c}
 						onClick={() => commit(c)}
 						className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
@@ -71,6 +72,7 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
 					maxLength={7}
 				/>
 				<button
+					type="button"
 					onClick={() => {
 						if (/^#[0-9a-fA-F]{6}$/.test(hex)) commit(hex);
 					}}

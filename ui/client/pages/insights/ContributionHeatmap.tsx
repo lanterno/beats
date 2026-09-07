@@ -136,6 +136,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 			{/* Header */}
 			<div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40">
 				<button
+					type="button"
 					onClick={() => setYear((y) => y - 1)}
 					className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
 					aria-label="Previous year"
@@ -144,6 +145,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 				</button>
 				<span className="text-sm font-medium text-foreground min-w-[48px] text-center">{year}</span>
 				<button
+					type="button"
 					onClick={() => setYear((y) => Math.min(y + 1, currentYear))}
 					disabled={year >= currentYear}
 					className={cn(

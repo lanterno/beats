@@ -75,6 +75,7 @@ export function GoalOverridePopover({
 			{/* Has goal / No goal toggle */}
 			<div className="flex gap-1 mb-2">
 				<button
+					type="button"
 					onClick={() => setNoGoal(false)}
 					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
 						!noGoal
@@ -85,6 +86,7 @@ export function GoalOverridePopover({
 					Has goal
 				</button>
 				<button
+					type="button"
 					onClick={() => setNoGoal(true)}
 					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
 						noGoal
@@ -118,6 +120,7 @@ export function GoalOverridePopover({
 
 					<div className="flex gap-1 mb-2">
 						<button
+							type="button"
 							onClick={() => setGoalType("target")}
 							className={`flex-1 text-[10px] py-1 rounded transition-colors ${
 								goalType === "target"
@@ -128,6 +131,7 @@ export function GoalOverridePopover({
 							Target
 						</button>
 						<button
+							type="button"
 							onClick={() => setGoalType("cap")}
 							className={`flex-1 text-[10px] py-1 rounded transition-colors ${
 								goalType === "cap"
@@ -147,6 +151,7 @@ export function GoalOverridePopover({
 			    project-management revamp. */}
 			<div className="flex gap-1 mb-1">
 				<button
+					type="button"
 					onClick={() => setScope("week")}
 					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
 						scope === "week"
@@ -157,6 +162,7 @@ export function GoalOverridePopover({
 					This week only
 				</button>
 				<button
+					type="button"
 					onClick={() => setScope("permanent")}
 					title="Adds an override from this week forward. Prefer changing the project's default goal in Settings for routine adjustments."
 					className={`flex-1 text-[10px] py-1 rounded border transition-colors ${
@@ -176,6 +182,7 @@ export function GoalOverridePopover({
 
 			<div className="flex gap-1">
 				<button
+					type="button"
 					onClick={handleSave}
 					className="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 				>
@@ -183,6 +190,7 @@ export function GoalOverridePopover({
 				</button>
 				{hasExistingOverride && (
 					<button
+						type="button"
 						onClick={onRemove}
 						className="px-2 py-1 text-[10px] font-medium rounded bg-destructive/15 text-destructive hover:bg-destructive/25 transition-colors"
 					>

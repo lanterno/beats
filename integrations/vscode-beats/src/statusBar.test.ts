@@ -3,12 +3,7 @@
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import {
-	formatStatusBar,
-	formatUptime,
-	isStaleNoEmissions,
-	shortRepoTail,
-} from "./statusBar";
+import { formatStatusBar, formatUptime, isStaleNoEmissions, shortRepoTail } from "./statusBar";
 
 describe("formatStatusBar", () => {
 	it("offline: shows the slash icon when health is null", () => {
@@ -27,7 +22,9 @@ describe("formatStatusBar", () => {
 			ok: false,
 			version: "1.0.0",
 			uptimeSec: 3600,
-			editorCount: 1, windowsEmitted: 0, windowsDropped: 0,
+			editorCount: 1,
+			windowsEmitted: 0,
+			windowsDropped: 0,
 		});
 		assert.match(text, /\$\(circle-slash\)/);
 	});
@@ -37,7 +34,9 @@ describe("formatStatusBar", () => {
 			ok: true,
 			version: "v1.2.3",
 			uptimeSec: 3600,
-			editorCount: 1, windowsEmitted: 0, windowsDropped: 0,
+			editorCount: 1,
+			windowsEmitted: 0,
+			windowsDropped: 0,
 		});
 		assert.match(text, /\$\(zap\)/);
 		assert.match(tooltip, /connected/i);
@@ -51,7 +50,9 @@ describe("formatStatusBar", () => {
 			ok: true,
 			version: "dev",
 			uptimeSec: 60,
-			editorCount: 1, windowsEmitted: 0, windowsDropped: 0,
+			editorCount: 1,
+			windowsEmitted: 0,
+			windowsDropped: 0,
 		});
 		assert.match(single.tooltip, /1 editor /);
 
@@ -59,7 +60,9 @@ describe("formatStatusBar", () => {
 			ok: true,
 			version: "dev",
 			uptimeSec: 60,
-			editorCount: 2, windowsEmitted: 0, windowsDropped: 0,
+			editorCount: 2,
+			windowsEmitted: 0,
+			windowsDropped: 0,
 		});
 		assert.match(multiple.tooltip, /2 editors/);
 	});
@@ -72,14 +75,23 @@ describe("formatStatusBar", () => {
 			ok: true,
 			version: "",
 			uptimeSec: 60,
-			editorCount: 0, windowsEmitted: 0, windowsDropped: 0,
+			editorCount: 0,
+			windowsEmitted: 0,
+			windowsDropped: 0,
 		});
 		assert.match(tooltip, /\(dev\)/);
 	});
 
 	it("connected with summary: shows the avg score in the status text", () => {
 		const { text, tooltip } = formatStatusBar(
-			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1, windowsEmitted: 0, windowsDropped: 0 },
+			{
+				ok: true,
+				version: "v1.0.0",
+				uptimeSec: 60,
+				editorCount: 1,
+				windowsEmitted: 0,
+				windowsDropped: 0,
+			},
 			{ count: 23, avg: 0.67, peak: 0.91 },
 		);
 		// Bare "Beats 67" so it stays compact in the status bar.
@@ -95,7 +107,14 @@ describe("formatStatusBar", () => {
 		// shouldn't render "Beats 0" (reads as "you're at zero",
 		// false signal). Plain "Beats" matches the no-summary case.
 		const { text, tooltip } = formatStatusBar(
-			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1, windowsEmitted: 0, windowsDropped: 0 },
+			{
+				ok: true,
+				version: "v1.0.0",
+				uptimeSec: 60,
+				editorCount: 1,
+				windowsEmitted: 0,
+				windowsDropped: 0,
+			},
 			{ count: 0, avg: 0, peak: 0 },
 		);
 		assert.equal(text, "$(zap) Beats");
@@ -130,7 +149,14 @@ describe("formatStatusBar", () => {
 
 	it("connected with topRepo/topLanguage: surfaces them in the tooltip", () => {
 		const { tooltip } = formatStatusBar(
-			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1, windowsEmitted: 0, windowsDropped: 0 },
+			{
+				ok: true,
+				version: "v1.0.0",
+				uptimeSec: 60,
+				editorCount: 1,
+				windowsEmitted: 0,
+				windowsDropped: 0,
+			},
 			{
 				count: 23,
 				avg: 0.67,
@@ -148,7 +174,14 @@ describe("formatStatusBar", () => {
 		// no editor heartbeats covered the slice. The tooltip should
 		// skip that line rather than render "best on  · in".
 		const { tooltip } = formatStatusBar(
-			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1, windowsEmitted: 0, windowsDropped: 0 },
+			{
+				ok: true,
+				version: "v1.0.0",
+				uptimeSec: 60,
+				editorCount: 1,
+				windowsEmitted: 0,
+				windowsDropped: 0,
+			},
 			{ count: 23, avg: 0.67, peak: 0.91 },
 		);
 		assert.doesNotMatch(tooltip, /best on/);
@@ -160,11 +193,25 @@ describe("formatStatusBar", () => {
 		// failed). The status text and the no-summary case should be
 		// identical so a transient API blip doesn't reshape the bar.
 		const noFetch = formatStatusBar(
-			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1, windowsEmitted: 0, windowsDropped: 0 },
+			{
+				ok: true,
+				version: "v1.0.0",
+				uptimeSec: 60,
+				editorCount: 1,
+				windowsEmitted: 0,
+				windowsDropped: 0,
+			},
 			null,
 		);
 		const empty = formatStatusBar(
-			{ ok: true, version: "v1.0.0", uptimeSec: 60, editorCount: 1, windowsEmitted: 0, windowsDropped: 0 },
+			{
+				ok: true,
+				version: "v1.0.0",
+				uptimeSec: 60,
+				editorCount: 1,
+				windowsEmitted: 0,
+				windowsDropped: 0,
+			},
 			{ count: 0, avg: 0, peak: 0 },
 		);
 		assert.equal(noFetch.text, empty.text);

@@ -26,13 +26,56 @@ from beats.settings import settings
 
 logger = logging.getLogger(__name__)
 
-SONNET_INPUT_COST_PER_MTOK = 3.0
-SONNET_OUTPUT_COST_PER_MTOK = 15.0
-SONNET_CACHE_WRITE_PER_MTOK = 3.75
-SONNET_CACHE_READ_PER_MTOK = 0.30
-
 MAX_RETRIES = 3
 BASE_DELAY_S = 1.0
+
+
+@dataclass(frozen=True)
+class ModelPricing:
+    """USD per million tokens for one model.
+
+    ``input`` and ``output`` are published list prices. Cache rates follow
+    Anthropic's standard multipliers — a write costs 1.25x input, a read
+    0.10x — but are stored rather than derived so a model that prices its
+    cache differently can say so.
+    """
+
+    input: float
+    output: float
+    cache_write: float
+    cache_read: float
+
+    @classmethod
+    def standard(cls, input_rate: float, output_rate: float) -> ModelPricing:
+        return cls(input_rate, output_rate, input_rate * 1.25, input_rate * 0.10)
+
+
+MODEL_PRICING: dict[str, ModelPricing] = {
+    "claude-opus-5": ModelPricing.standard(5.0, 25.0),
+    "claude-opus-4-8": ModelPricing.standard(5.0, 25.0),
+    "claude-opus-4-7": ModelPricing.standard(5.0, 25.0),
+    "claude-sonnet-5": ModelPricing.standard(2.0, 10.0),
+    "claude-sonnet-4-6": ModelPricing.standard(3.0, 15.0),
+    "claude-haiku-4-5": ModelPricing.standard(1.0, 5.0),
+}
+
+# An unrecognised model bills at the most expensive rate in the table. The
+# budget ceiling is the reason: over-estimating a new model stops the coach
+# early and visibly, where under-estimating would let it spend past the cap
+# with nothing to show it had happened.
+UNKNOWN_MODEL_PRICING = ModelPricing.standard(5.0, 25.0)
+
+
+def pricing_for(model: str) -> ModelPricing:
+    """Resolve a model id to its rates, tolerating dated suffixes."""
+    exact = MODEL_PRICING.get(model)
+    if exact is not None:
+        return exact
+    for known, pricing in MODEL_PRICING.items():
+        if model.startswith(known):
+            return pricing
+    logger.warning("No pricing for model %s; billing at the highest known rate", model)
+    return UNKNOWN_MODEL_PRICING
 
 
 @dataclass
@@ -56,17 +99,25 @@ class CacheSpec:
 
 
 def _estimate_cost(
+    model: str,
     input_tokens: int,
     output_tokens: int,
     cache_creation: int,
     cache_read: int,
 ) -> float:
+    """Bill one call at the rates for the model that actually served it.
+
+    Always pass the model from the API response rather than the configured
+    one: they diverge whenever an alias resolves elsewhere, and the response
+    is what was charged.
+    """
+    rates = pricing_for(model)
     base_input = max(0, input_tokens - cache_creation - cache_read)
     return (
-        base_input * SONNET_INPUT_COST_PER_MTOK / 1_000_000
-        + output_tokens * SONNET_OUTPUT_COST_PER_MTOK / 1_000_000
-        + cache_creation * SONNET_CACHE_WRITE_PER_MTOK / 1_000_000
-        + cache_read * SONNET_CACHE_READ_PER_MTOK / 1_000_000
+        base_input * rates.input / 1_000_000
+        + output_tokens * rates.output / 1_000_000
+        + cache_creation * rates.cache_write / 1_000_000
+        + cache_read * rates.cache_read / 1_000_000
     )
 
 
@@ -115,7 +166,6 @@ async def complete(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     cache_spec: CacheSpec | None = None,
-    temperature: float = 0.4,
     max_tokens: int = 4096,
     purpose: str = "coach",
 ) -> GatewayResponse:
@@ -131,7 +181,6 @@ async def complete(
         "model": settings.coach_model,
         "system": system_blocks,
         "messages": cached_messages,
-        "temperature": temperature,
         "max_tokens": max_tokens,
     }
     if tools:
@@ -156,7 +205,9 @@ async def complete(
     usage = response.usage
     cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
     cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-    cost = _estimate_cost(usage.input_tokens, usage.output_tokens, cache_creation, cache_read)
+    cost = _estimate_cost(
+        response.model, usage.input_tokens, usage.output_tokens, cache_creation, cache_read
+    )
 
     result = GatewayResponse(
         content=list(response.content),
@@ -189,7 +240,6 @@ async def stream(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     cache_spec: CacheSpec | None = None,
-    temperature: float = 0.7,
     max_tokens: int = 4096,
     purpose: str = "chat",
 ) -> AsyncIterator[MessageStreamEvent]:
@@ -215,7 +265,6 @@ async def stream(
         "model": settings.coach_model,
         "system": system_blocks,
         "messages": cached_messages,
-        "temperature": temperature,
         "max_tokens": max_tokens,
     }
     if tools:
@@ -229,7 +278,9 @@ async def stream(
         usage = final.usage
         cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
         cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-        cost = _estimate_cost(usage.input_tokens, usage.output_tokens, cache_creation, cache_read)
+        cost = _estimate_cost(
+            final.model, usage.input_tokens, usage.output_tokens, cache_creation, cache_read
+        )
         await tracker.record(
             model=final.model,
             input_tokens=usage.input_tokens,

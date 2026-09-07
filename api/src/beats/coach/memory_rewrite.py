@@ -60,7 +60,6 @@ async def rewrite_coach_memory(user_id: str) -> str:
         system=system,
         messages=messages,
         cache_spec=spec,
-        temperature=0.3,
         max_tokens=2048,
         purpose="memory_rewrite",
     )

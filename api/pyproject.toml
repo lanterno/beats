@@ -50,9 +50,34 @@ line-length = 100
 src = ["src"]
 
 [tool.ruff.lint]
-# A focused, low-noise ruleset: errors (E), pyflakes (F), isort (I), bugbear (B), pyupgrade (UP)
-select = ["E", "F", "I", "B", "UP"]
-ignore = ["B008"]  # Allow function calls in defaults (FastAPI Query/Depends pattern)
+# Still a focused ruleset — every rule here was enabled against a clean tree, so
+# a violation means something new. Deliberately omitted: S (asserts in tests),
+# TC (import churn), TRY/EM (message style), ARG (fixture params are meant to be
+# unused), N818 (the domain's exceptions read better without an Error suffix),
+# and ERA — every one of its hits here was a prose comment that merely parsed
+# as code, and there is no commented-out code in the tree for it to catch.
+select = [
+    "E",      # pycodestyle
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # bugbear
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "C4",     # comprehensions
+    "PT",     # pytest style
+    "ASYNC",  # blocking calls in async functions
+    "LOG",    # logging misuse
+    "G",      # logging format — lazy %s over eager f-strings
+    "PTH",    # pathlib over os.path
+    "BLE",    # blind except — each one must be an explicit, noqa'd decision
+    "RUF",    # ruff's own
+]
+ignore = [
+    "B008",     # FastAPI's Query/Depends pattern is a call in a default
+    "RUF001",   # the prose here uses real typographic characters on purpose
+    "RUF002",
+    "RUF003",
+]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -61,10 +86,12 @@ line-ending = "lf"
 docstring-code-format = true
 
 [tool.ty.terminal]
-# ty 0.0.5x changed the default to exit non-zero when only warning-level
-# diagnostics exist. The rules below are intentionally demoted to warnings
-# (dynamic PyMongo/Pydantic types), so keep a clean check exit code as long
-# as there are no error-level diagnostics.
+# Still false, but no longer permanent. The count is down from 717 to 209 now
+# that the tests take the client as a fixture rather than a module global; what
+# remains is mostly the repository ABCs being handed duck-typed test fakes,
+# which clears when those ABCs become Protocols. `scripts/ty_budget.py` holds
+# the line at the current count in the meantime, so a new diagnostic fails CI
+# even though the existing ones do not.
 error-on-warning = false
 
 [tool.ty.rules]

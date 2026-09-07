@@ -370,6 +370,7 @@ export default function ProjectDetails() {
 				<div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
 					<div className="relative">
 						<button
+							type="button"
 							onClick={() => setColorPickerOpen((o) => !o)}
 							className="w-3 h-3 rounded-full shrink-0 hover:ring-2 hover:ring-accent/40 transition-all cursor-pointer"
 							style={{
@@ -600,6 +601,7 @@ export default function ProjectDetails() {
 										<>
 											<div className="relative flex flex-col items-end gap-0.5">
 												<button
+													type="button"
 													onClick={() =>
 														setOverridePopoverWeek(
 															overridePopoverWeek === row.weeksAgo ? null : row.weeksAgo,
@@ -684,6 +686,7 @@ export default function ProjectDetails() {
 
 						{/* Show more weeks */}
 						<button
+							type="button"
 							onClick={() => setWeekCount((c) => c + 5)}
 							className="w-full py-2 text-sm text-accent hover:bg-accent/5 transition-colors border-t border-border/40"
 						>
@@ -786,6 +789,7 @@ export default function ProjectDetails() {
 																{confirmDeleteId === session.id ? (
 																	<div className="flex items-center gap-1">
 																		<button
+																			type="button"
 																			onClick={() => handleDeleteSession(session.id)}
 																			disabled={deleteSessionMutation.isPending}
 																			className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-destructive/90 text-destructive-foreground hover:bg-destructive disabled:opacity-50 transition-colors"
@@ -793,6 +797,7 @@ export default function ProjectDetails() {
 																			Delete
 																		</button>
 																		<button
+																			type="button"
 																			onClick={() => setConfirmDeleteId(null)}
 																			className="px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
 																		>
@@ -802,6 +807,7 @@ export default function ProjectDetails() {
 																) : (
 																	<>
 																		<button
+																			type="button"
 																			onClick={() => setEditingSessionId(session.id)}
 																			className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-accent hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 																			aria-label="Edit session"
@@ -809,6 +815,7 @@ export default function ProjectDetails() {
 																			<Edit2 className="w-3.5 h-3.5" />
 																		</button>
 																		<button
+																			type="button"
 																			onClick={() => setConfirmDeleteId(session.id)}
 																			className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 																			aria-label="Delete session"
@@ -848,6 +855,7 @@ export default function ProjectDetails() {
 							{hasMore && (
 								<div className="border-t border-border/40">
 									<button
+										type="button"
 										onClick={() => setVisibleCount((c) => c + SESSIONS_PER_PAGE)}
 										className="w-full py-2.5 text-sm text-accent hover:bg-accent/5 transition-colors"
 									>

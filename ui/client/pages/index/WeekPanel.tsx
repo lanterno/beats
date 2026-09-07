@@ -37,6 +37,7 @@ export function WeekPanel() {
 			{/* Navigation row */}
 			<div className="flex items-center gap-2 px-3 py-2 border-b border-border/40">
 				<button
+					type="button"
 					onClick={() => setWeekOffset((w) => w - 1)}
 					className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
 					aria-label="Previous week"
@@ -59,6 +60,7 @@ export function WeekPanel() {
 				</div>
 
 				<button
+					type="button"
 					onClick={() => setWeekOffset((w) => Math.min(w + 1, 0))}
 					disabled={weekOffset >= 0}
 					className={cn(
@@ -74,6 +76,7 @@ export function WeekPanel() {
 
 				{weekOffset !== 0 && (
 					<button
+						type="button"
 						onClick={() => setWeekOffset(0)}
 						className="px-2 py-0.5 rounded-md text-xs text-accent hover:bg-accent/10 transition-colors"
 					>
@@ -90,6 +93,7 @@ export function WeekPanel() {
 
 					<div className="flex rounded-md border border-border overflow-hidden">
 						<button
+							type="button"
 							onClick={() => setView("daily")}
 							className={cn(
 								"p-1.5 transition-colors",
@@ -103,6 +107,7 @@ export function WeekPanel() {
 							<CalendarDays className="w-3.5 h-3.5" />
 						</button>
 						<button
+							type="button"
 							onClick={() => setView("projects")}
 							className={cn(
 								"p-1.5 transition-colors border-l border-border",

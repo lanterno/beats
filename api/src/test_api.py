@@ -3,28 +3,11 @@ Comprehensive API Tests for Beats Application
 Tests all endpoints: Projects, Beats, and Timer APIs
 """
 
+import contextlib
 import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from starlette.testclient import TestClient
-
-client: TestClient | None = None  # Set by fixture before tests run
-auth_headers: dict[str, str] = {}  # Set by fixture before each test class
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _provide_client(test_client):
-    """Inject the session-scoped test_client as the module-level 'client'."""
-    global client
-    client = test_client
-
-
-@pytest.fixture(autouse=True)
-def _setup_auth(auth_info):
-    """Populate module-level auth_headers from the auth_info fixture."""
-    global auth_headers
-    auth_headers = auth_info["headers"]
 
 
 @pytest.fixture(autouse=True)
@@ -41,27 +24,27 @@ def _reset_rate_limiter():
     from beats.api.routers.auth import limiter
 
     limiter.reset()
-    yield
+    return
 
 
 class TestProjectAPI:
     """Test suite for Project management endpoints"""
 
-    def test_projects_list_api(self):
+    def test_projects_list_api(self, client, auth_headers):
         """Test GET /api/projects/ - List all projects"""
         response = client.get("/api/projects/", headers=auth_headers)
         assert response.status_code == 200
         projects = response.json()
         assert isinstance(projects, list)
 
-    def test_projects_list_archived(self):
+    def test_projects_list_archived(self, client, auth_headers):
         """Test GET /api/projects/?archived=true - List archived projects"""
         response = client.get("/api/projects/?archived=true", headers=auth_headers)
         assert response.status_code == 200
         projects = response.json()
         assert isinstance(projects, list)
 
-    def test_projects_create_api(self):
+    def test_projects_create_api(self, client, auth_headers):
         """Test POST /api/projects/ - Create a new project"""
         projects_count = len(client.get("/api/projects/", headers=auth_headers).json())
 
@@ -79,7 +62,7 @@ class TestProjectAPI:
         assert "name" in project
         assert len(client.get("/api/projects/", headers=auth_headers).json()) == projects_count + 1
 
-    def test_projects_create_without_auth(self):
+    def test_projects_create_without_auth(self, client):
         """Test POST /api/projects/ without auth token - Should fail"""
         response = client.post(
             "/api/projects/",
@@ -87,7 +70,7 @@ class TestProjectAPI:
         )
         assert response.status_code == 401
 
-    def test_projects_list_include_populates_aggregations(self):
+    def test_projects_list_include_populates_aggregations(self, client, auth_headers):
         """P3.0 — when GET /api/projects/ is called with include=totals,
         this_week,last_tracked, each item in the response gains the
         aggregation fields populated (vs null when the flag is omitted).
@@ -138,8 +121,10 @@ class TestProjectAPI:
         ).json()
         rich = next(p for p in listing if p["id"] == pid)
         # 30 minutes logged → totals + this-week reflect that.
-        assert rich["total_minutes"] is not None and rich["total_minutes"] >= 30
-        assert rich["weekly_minutes"] is not None and rich["weekly_minutes"] >= 30
+        assert rich["total_minutes"] is not None
+        assert rich["total_minutes"] >= 30
+        assert rich["weekly_minutes"] is not None
+        assert rich["weekly_minutes"] >= 30
         # Goal trio populated.
         assert rich["effective_goal"] == 5.0
         assert rich["effective_goal_type"] == "target"
@@ -147,7 +132,9 @@ class TestProjectAPI:
         # last_tracked_at survives JSON round-trip as an ISO string.
         assert rich["last_tracked_at"] is not None
 
-    def test_projects_list_include_preserves_order_under_parallelization(self):
+    def test_projects_list_include_preserves_order_under_parallelization(
+        self, client, auth_headers
+    ):
         """FF.9 — list_projects fans out the per-project aggregations through
         asyncio.gather. Returned order MUST equal the order from
         service.list_projects, regardless of which aggregation finishes
@@ -173,7 +160,9 @@ class TestProjectAPI:
         # The service returns projects in creation order; the route preserves it.
         assert ours_in_listing == ids, (ours_in_listing, ids)
 
-    def test_projects_list_include_excludes_archived_projects_from_batch(self):
+    def test_projects_list_include_excludes_archived_projects_from_batch(
+        self, client, auth_headers
+    ):
         """FF.15 — the new batched path takes the IDs of the projects the
         route will RENDER, which is the result of service.list_projects(
         archived=archived). With the default archived=False, archived
@@ -227,9 +216,10 @@ class TestProjectAPI:
         ).json()
         archived_item = next((p for p in archived_listing if p["id"] == archived["id"]), None)
         assert archived_item is not None
-        assert archived_item["total_minutes"] is not None and archived_item["total_minutes"] >= 20
+        assert archived_item["total_minutes"] is not None
+        assert archived_item["total_minutes"] >= 20
 
-    def test_projects_list_no_include_skips_batch(self):
+    def test_projects_list_no_include_skips_batch(self, client, auth_headers):
         """FF.15 — when include is empty (or omitted), the route returns
         the slim shape WITHOUT issuing the batched beats find. The
         contract here is just: no aggregation fields populated, no error
@@ -250,7 +240,7 @@ class TestProjectAPI:
         for key in ("total_minutes", "weekly_minutes", "effective_goal", "last_tracked_at"):
             assert item[key] is None, (key, item[key])
 
-    def test_projects_list_include_subset(self):
+    def test_projects_list_include_subset(self, client, auth_headers):
         """Each include token is independent — requesting only 'totals'
         leaves the this_week/last_tracked slots null."""
         proj_resp = client.post(
@@ -269,7 +259,7 @@ class TestProjectAPI:
         assert match["weekly_minutes"] is None
         assert match["last_tracked_at"] is None
 
-    def test_project_response_carries_every_domain_field(self):
+    def test_project_response_carries_every_domain_field(self, client, auth_headers):
         """Regression guard: ProjectResponse used to declare 6 of 11
         fields and the list/create/update routes had no response_model,
         so the OpenAPI contract was silently widened. The route now
@@ -336,7 +326,7 @@ class TestProjectAPI:
         assert expected_keys.issubset(match.keys())
         assert match["github_repo"] == "lanterno/beats"
 
-    def test_projects_update_api(self):
+    def test_projects_update_api(self, client, auth_headers):
         """Test PUT /api/projects/ - Update existing project"""
         # Create a project first
         response = client.post(
@@ -362,7 +352,7 @@ class TestProjectAPI:
         assert "Updated-" in updated_project["name"]
         assert len(client.get("/api/projects/", headers=auth_headers).json()) == projects_count
 
-    def test_projects_archive(self):
+    def test_projects_archive(self, client, auth_headers):
         """Test POST /api/projects/{project_id}/archive - Archive a project"""
         # Create a project first
         response = client.post(
@@ -380,7 +370,7 @@ class TestProjectAPI:
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
-    def test_archive_unarchive_round_trip_preserves_every_field(self):
+    def test_archive_unarchive_round_trip_preserves_every_field(self, client, auth_headers):
         """Regression guard for the dedicated /unarchive endpoint added in
         P0.2 of the project-management revamp. Generic-update-based
         unarchive (PUT with archived=false) would silently wipe fields
@@ -445,7 +435,7 @@ class TestProjectAPI:
         ):
             assert match[key] == pre_archive[key], (key, match[key], pre_archive[key])
 
-    def test_project_today_time(self):
+    def test_project_today_time(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/today/ - Get today's time for project"""
         # Create project and beat for today
         project = client.post(
@@ -472,7 +462,7 @@ class TestProjectAPI:
         assert response.status_code == 200
         assert "duration" in response.json()
 
-    def test_project_week_time(self):
+    def test_project_week_time(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/week/ - Get current week time for project"""
         # Create project
         project = client.post(
@@ -498,7 +488,7 @@ class TestProjectAPI:
         for day in weekdays:
             assert day in week_data
 
-    def test_project_total_time(self):
+    def test_project_total_time(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/total/ - Get total time per month"""
         # Create project and beats
         project = client.post(
@@ -526,7 +516,7 @@ class TestProjectAPI:
         assert "durations_per_month" in data
         assert "warnings" in data
 
-    def test_project_summary(self):
+    def test_project_summary(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/summary/ - Get project summary"""
         # Create project and beats
         project = client.post(
@@ -549,7 +539,7 @@ class TestProjectAPI:
         assert response.status_code == 200
         assert isinstance(response.json(), dict)
 
-    def test_start_project_timer(self):
+    def test_start_project_timer(self, client, auth_headers):
         """Test POST /api/projects/{project_id}/start - Start project timer"""
         # Create project
         project = client.post(
@@ -578,7 +568,7 @@ class TestProjectAPI:
         assert beat["project_id"] == project["id"]
         assert beat["end"] is None
 
-    def test_stop_project_timer(self):
+    def test_stop_project_timer(self, client, auth_headers):
         """Test POST /api/projects/stop - Stop project timer"""
         # Create project and start timer
         project = client.post(
@@ -605,7 +595,7 @@ class TestProjectAPI:
         beat = response.json()
         assert beat["end"] is not None
 
-    def test_stop_timer_when_not_started(self):
+    def test_stop_timer_when_not_started(self, client, auth_headers):
         """Test POST /api/projects/stop when no timer is running - Should fail"""
         # Make sure no timer is running by trying to stop
         response = client.post(
@@ -616,7 +606,7 @@ class TestProjectAPI:
         # This might be 400 or 200 depending on state, just check it doesn't crash
         assert response.status_code in [200, 400]
 
-    def test_daily_average_returns_envelope_for_empty_project(self):
+    def test_daily_average_returns_envelope_for_empty_project(self, client, auth_headers):
         """GET /api/projects/{id}/daily-average returns the
         documented {avg_minutes, days_tracked} envelope. Pin the
         keys — the project-detail page binds to these directly,
@@ -632,7 +622,7 @@ class TestProjectAPI:
         body = resp.json()
         assert body == {"avg_minutes": 0, "days_tracked": 0}
 
-    def test_git_activity_returns_empty_when_no_repo(self):
+    def test_git_activity_returns_empty_when_no_repo(self, client, auth_headers):
         """GET /api/projects/{id}/git-activity returns [] when
         the project has no github_repo wired. Pin so a project
         without a GitHub link doesn't 500 the dashboard's
@@ -654,7 +644,7 @@ class TestProjectAPI:
 class TestGoalOverridesAPI:
     """Test suite for goal override endpoints."""
 
-    def _create_project(self, weekly_goal=20):
+    def _create_project(self, client, auth_headers, weekly_goal=20):
         resp = client.post(
             "/api/projects/",
             json={"name": f"goal-test-{time.time()}", "weekly_goal": weekly_goal},
@@ -663,9 +653,9 @@ class TestGoalOverridesAPI:
         assert resp.status_code == 201
         return resp.json()
 
-    def test_put_goal_overrides(self):
+    def test_put_goal_overrides(self, client, auth_headers):
         """Test PUT /api/projects/{id}/goal-overrides — add overrides."""
-        project = self._create_project()
+        project = self._create_project(client, auth_headers)
         resp = client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[
@@ -678,31 +668,31 @@ class TestGoalOverridesAPI:
         data = resp.json()
         assert len(data["goal_overrides"]) == 2
 
-    def test_goal_overrides_persist_on_project(self):
+    def test_goal_overrides_persist_on_project(self, client, auth_headers):
         """Overrides appear when listing projects."""
-        project = self._create_project()
+        project = self._create_project(client, auth_headers)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[{"week_of": "2026-04-06", "weekly_goal": 10}],
             headers=auth_headers,
         )
         projects = client.get("/api/projects/", headers=auth_headers).json()
-        found = [p for p in projects if p["id"] == project["id"]][0]
+        found = next(p for p in projects if p["id"] == project["id"])
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["weekly_goal"] == 10
 
-    def test_week_breakdown_includes_effective_goal(self):
+    def test_week_breakdown_includes_effective_goal(self, client, auth_headers):
         """GET /api/projects/{id}/week/ returns effective_goal."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["effective_goal"] == 20
         assert data["effective_goal_type"] == "target"
 
-    def test_week_breakdown_with_override(self):
+    def test_week_breakdown_with_override(self, client, auth_headers):
         """Effective goal reflects an active override."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         # Add a permanent override starting well in the past
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
@@ -713,30 +703,30 @@ class TestGoalOverridesAPI:
         data = resp.json()
         assert data["effective_goal"] == 35
 
-    def test_replace_overrides(self):
+    def test_replace_overrides(self, client, auth_headers):
         """PUT replaces all overrides, not appends."""
-        project = self._create_project()
+        project = self._create_project(client, auth_headers)
         url = f"/api/projects/{project['id']}/goal-overrides"
         client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=auth_headers)
         client.put(url, json=[{"week_of": "2026-04-13", "weekly_goal": 5}], headers=auth_headers)
         data = client.get("/api/projects/", headers=auth_headers).json()
-        found = [p for p in data if p["id"] == project["id"]][0]
+        found = next(p for p in data if p["id"] == project["id"])
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["week_of"] == "2026-04-13"
 
-    def test_clear_overrides(self):
+    def test_clear_overrides(self, client, auth_headers):
         """Sending empty list clears all overrides."""
-        project = self._create_project()
+        project = self._create_project(client, auth_headers)
         url = f"/api/projects/{project['id']}/goal-overrides"
         client.put(url, json=[{"week_of": "2026-04-06", "weekly_goal": 10}], headers=auth_headers)
         client.put(url, json=[], headers=auth_headers)
         data = client.get("/api/projects/", headers=auth_headers).json()
-        found = [p for p in data if p["id"] == project["id"]][0]
+        found = next(p for p in data if p["id"] == project["id"])
         assert len(found["goal_overrides"]) == 0
 
-    def test_one_off_null_override_clears_week(self):
+    def test_one_off_null_override_clears_week(self, client, auth_headers):
         """A one-off override with weekly_goal=null makes that week have no goal."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[{"week_of": "2020-01-06", "weekly_goal": None}],
@@ -747,14 +737,14 @@ class TestGoalOverridesAPI:
         # endpoint directly via the week_of Monday. The breakdown uses weeks_ago,
         # so we verify via project list instead.
         projects = client.get("/api/projects/", headers=auth_headers).json()
-        found = [p for p in projects if p["id"] == project["id"]][0]
+        found = next(p for p in projects if p["id"] == project["id"])
         overrides = found["goal_overrides"]
         assert len(overrides) == 1
         assert overrides[0]["weekly_goal"] is None
 
-    def test_permanent_null_override_clears_forward(self):
+    def test_permanent_null_override_clears_forward(self, client, auth_headers):
         """A permanent null override clears the goal from that Monday forward."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
@@ -764,9 +754,9 @@ class TestGoalOverridesAPI:
         assert resp.status_code == 200
         assert resp.json()["effective_goal"] is None
 
-    def test_week_breakdown_flags_override_in_effect(self):
+    def test_week_breakdown_flags_override_in_effect(self, client, auth_headers):
         """`effective_goal_overridden` is true when an override resolves for the week."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         # No override yet: flag should be false, goal = project default.
         resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
         body = resp.json()
@@ -786,13 +776,13 @@ class TestGoalOverridesAPI:
         assert body["effective_goal"] is None
         assert body["effective_goal_overridden"] is True
 
-    def test_week_breakdown_returns_canonical_week_start(self):
+    def test_week_breakdown_returns_canonical_week_start(self, client, auth_headers):
         """The breakdown returns the server's Monday, and an override keyed to
         that exact date resolves for the same week. This is the contract the UI
         relies on to avoid client/server week-boundary drift on overrides."""
         from datetime import date as _date
 
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
         week_start = resp.json()["week_start"]
         assert _date.fromisoformat(week_start).weekday() == 0  # is a Monday
@@ -809,9 +799,9 @@ class TestGoalOverridesAPI:
         assert body["effective_goal"] == 7
         assert body["effective_goal_overridden"] is True
 
-    def test_update_project_preserves_goal_overrides(self):
+    def test_update_project_preserves_goal_overrides(self, client, auth_headers):
         """Editing the project (e.g. color change) must not wipe overrides."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
             json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
@@ -830,14 +820,14 @@ class TestGoalOverridesAPI:
             headers=auth_headers,
         )
         listed = client.get("/api/projects/", headers=auth_headers).json()
-        found = [p for p in listed if p["id"] == project["id"]][0]
+        found = next(p for p in listed if p["id"] == project["id"])
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["weekly_goal"] is None
 
-    def test_null_override_does_not_affect_earlier_weeks(self):
+    def test_null_override_does_not_affect_earlier_weeks(self, client, auth_headers):
         """A permanent null override starting on a future Monday leaves earlier
         weeks with the project default goal."""
-        project = self._create_project(weekly_goal=20)
+        project = self._create_project(client, auth_headers, weekly_goal=20)
         # effective_from far in the future (next decade Monday)
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
@@ -851,7 +841,7 @@ class TestGoalOverridesAPI:
 class TestBeatsDirectAPI:
     """Test suite for Beat (time log) management endpoints"""
 
-    def test_create_api(self):
+    def test_create_api(self, client, auth_headers):
         """Test POST /api/beats/ - Create a new beat"""
         project = client.post(
             "/api/projects/",
@@ -876,14 +866,14 @@ class TestBeatsDirectAPI:
         assert "id" in beat
         assert beat["project_id"] == project["id"]
 
-    def test_list_api(self):
+    def test_list_api(self, client, auth_headers):
         """Test GET /api/beats/ - List all beats"""
         response = client.get("/api/beats/", headers=auth_headers)
         assert response.status_code == 200
         beats = response.json()
         assert isinstance(beats, list)
 
-    def test_list_api_with_project_filter(self):
+    def test_list_api_with_project_filter(self, client, auth_headers):
         """Test GET /api/beats/?project_id=X - Filter beats by project"""
         project = client.post(
             "/api/projects/",
@@ -921,7 +911,7 @@ class TestBeatsDirectAPI:
             if beat["project_id"] == project["id"]:
                 assert beat["project_id"] == project["id"]
 
-    def test_list_api_with_date_filter(self):
+    def test_list_api_with_date_filter(self, client, auth_headers):
         """Test GET /api/beats/?date_filter=X - Filter beats by date"""
         project = client.post(
             "/api/projects/",
@@ -948,7 +938,7 @@ class TestBeatsDirectAPI:
         beats = response.json()
         assert isinstance(beats, list)
 
-    def test_get_beat_by_id(self):
+    def test_get_beat_by_id(self, client, auth_headers):
         """Test GET /api/beats/{beat_id} - Retrieve specific beat"""
         project = client.post(
             "/api/projects/",
@@ -975,7 +965,7 @@ class TestBeatsDirectAPI:
         assert retrieved_beat["id"] == beat["id"]
         assert retrieved_beat["project_id"] == project["id"]
 
-    def test_update_api(self):
+    def test_update_api(self, client, auth_headers):
         """Test PUT /api/beats/ - Update existing beat"""
         project = client.post(
             "/api/projects/",
@@ -1007,7 +997,7 @@ class TestBeatsDirectAPI:
         end = response.json()["end"]
         assert end.startswith("2020-04-01T04:10:10")
 
-    def test_delete_beat(self):
+    def test_delete_beat(self, client, auth_headers):
         """Test DELETE /api/beats/{beat_id} - Delete a beat"""
         project = client.post(
             "/api/projects/",
@@ -1033,24 +1023,22 @@ class TestBeatsDirectAPI:
 class TestTimerAPI:
     """Test suite for Timer status endpoints"""
 
-    def test_timer_status_when_idle(self):
+    def test_timer_status_when_idle(self, client, auth_headers):
         """Test GET /api/timer/status - When no timer is running"""
-        # Try to ensure no timer is running
-        try:
+        # Best effort: there may be no timer to stop, which is the point.
+        with contextlib.suppress(Exception):
             client.post(
                 "/api/projects/stop",
                 json={"time": datetime.now(UTC).isoformat()},
                 headers=auth_headers,
             )
-        except Exception:
-            pass
 
         response = client.get("/api/timer/status", headers=auth_headers)
         assert response.status_code == 200
         status = response.json()
         assert "isBeating" in status
 
-    def test_timer_status_when_active(self):
+    def test_timer_status_when_active(self, client, auth_headers):
         """Test GET /api/timer/status - When timer is running"""
         # Create project and start timer
         project = client.post(
@@ -1091,24 +1079,24 @@ class TestCoachEndpoints:
     API in tests, we only test endpoints that don't require LLM calls (usage,
     brief retrieval, memory read) and verify auth/shape."""
 
-    def test_brief_today_returns_null_when_empty(self):
+    def test_brief_today_returns_null_when_empty(self, client, auth_headers):
         response = client.get("/api/coach/brief/today", headers=auth_headers)
         assert response.status_code == 200
         # No brief generated yet — should return null
         assert response.json() is None
 
-    def test_brief_history_returns_empty_list(self):
+    def test_brief_history_returns_empty_list(self, client, auth_headers):
         response = client.get("/api/coach/brief/history", headers=auth_headers)
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    def test_memory_returns_empty_content(self):
+    def test_memory_returns_empty_content(self, client, auth_headers):
         response = client.get("/api/coach/memory", headers=auth_headers)
         assert response.status_code == 200
         body = response.json()
         assert "content" in body
 
-    def test_usage_returns_shape(self):
+    def test_usage_returns_shape(self, client, auth_headers):
         response = client.get("/api/coach/usage", headers=auth_headers)
         assert response.status_code == 200
         body = response.json()
@@ -1118,7 +1106,7 @@ class TestCoachEndpoints:
         assert isinstance(body["days"], list)
         assert body["budget_usd"] > 0
 
-    def test_coach_endpoints_require_auth(self):
+    def test_coach_endpoints_require_auth(self, client):
         for path in [
             "/api/coach/brief/today",
             "/api/coach/brief/history",
@@ -1127,7 +1115,7 @@ class TestCoachEndpoints:
         ]:
             assert client.get(path).status_code == 401, f"{path} should require auth"
 
-    def test_chat_requires_auth(self):
+    def test_chat_requires_auth(self, client):
         response = client.post("/api/coach/chat", json={"message": "hello"})
         assert response.status_code == 401
 
@@ -1157,7 +1145,7 @@ class TestCoachRouterGapFill:
         ):
             db[coll].delete_many({})
         sync.close()
-        yield
+        return
 
     def _seed_message(
         self,
@@ -1229,12 +1217,12 @@ class TestCoachRouterGapFill:
 
     # ── /chat/history ────────────────────────────────────────────────
 
-    def test_chat_history_empty_returns_empty_list(self, auth_info):
+    def test_chat_history_empty_returns_empty_list(self, client, auth_info):
         resp = client.get("/api/coach/chat/history", headers=auth_info["headers"])
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_chat_history_returns_chronological_order(self, auth_info):
+    def test_chat_history_returns_chronological_order(self, client, auth_info):
         """Router fetches descending then reverses → chronological for
         the UI. Pin so a refactor that drops the .reverse() doesn't
         feed the chat UI history backwards."""
@@ -1251,7 +1239,7 @@ class TestCoachRouterGapFill:
         # Oldest first.
         assert contents == ["FIRST", "SECOND", "THIRD"]
 
-    def test_chat_history_filters_by_conversation_id(self, auth_info):
+    def test_chat_history_filters_by_conversation_id(self, client, auth_info):
         self._seed_message(auth_info, "c-1", "user", "in c1")
         self._seed_message(auth_info, "c-2", "user", "in c2")
 
@@ -1263,7 +1251,7 @@ class TestCoachRouterGapFill:
         contents = [m["content"] for m in resp.json()]
         assert contents == ["in c1"]
 
-    def test_chat_history_respects_limit(self, auth_info):
+    def test_chat_history_respects_limit(self, client, auth_info):
         for i in range(5):
             self._seed_message(auth_info, "c-1", "user", f"msg {i}", seconds_ago=100 - i)
 
@@ -1272,7 +1260,7 @@ class TestCoachRouterGapFill:
         body = resp.json()
         assert len(body) == 3
 
-    def test_chat_history_validates_limit_bounds(self, auth_info):
+    def test_chat_history_validates_limit_bounds(self, client, auth_info):
         # Router declares Query(default=50, ge=1, le=200).
         for q in ("?limit=0", "?limit=201"):
             resp = client.get(f"/api/coach/chat/history{q}", headers=auth_info["headers"])
@@ -1280,7 +1268,7 @@ class TestCoachRouterGapFill:
 
     # ── /usage ───────────────────────────────────────────────────────
 
-    def test_usage_aggregates_seeded_rows_by_day(self, auth_info):
+    def test_usage_aggregates_seeded_rows_by_day(self, client, auth_info):
         """The /usage endpoint groups llm_usage rows by day and sums.
         Pin: today's rows roll up; the response shape carries the
         budget alongside the daily breakdown."""
@@ -1303,13 +1291,15 @@ class TestCoachRouterGapFill:
             assert d["cost_usd"] > 0
             assert d["calls"] >= 1
 
-    def test_usage_validates_days_param(self, auth_info):
+    def test_usage_validates_days_param(self, client, auth_info):
         # ge=1, le=90.
         for q in ("?days=0", "?days=91"):
             resp = client.get(f"/api/coach/usage{q}", headers=auth_info["headers"])
             assert resp.status_code == 422
 
-    def test_memory_rewrite_budget_exceeded_uses_envelope_code(self, auth_info, monkeypatch):
+    def test_memory_rewrite_budget_exceeded_uses_envelope_code(
+        self, client, auth_info, monkeypatch
+    ):
         """Pin parity with /brief and /review: a BudgetExceeded on
         memory rewrite must surface as 429 + code=BUDGET_EXCEEDED,
         not the generic RATE_LIMITED. Without this, a client that
@@ -1366,7 +1356,7 @@ class TestCoachDeleteAndChatSse:
         ):
             db[coll].delete_many({})
         sync.close()
-        yield
+        return
 
     def _seed_all_coach_data(self, user_id: str):
         """Insert one row in each of the four coach collections
@@ -1424,7 +1414,7 @@ class TestCoachDeleteAndChatSse:
 
     # ---------------- DELETE /api/coach/memory ----------------
 
-    def test_delete_memory_wipes_only_this_users_memory(self, auth_info):
+    def test_delete_memory_wipes_only_this_users_memory(self, client, auth_info):
         """DELETE /memory drops the requesting user's coach memory
         but leaves OTHER users' memory intact. Pin the user-scoping
         — a regression here would let User A wipe User B's memory."""
@@ -1446,7 +1436,7 @@ class TestCoachDeleteAndChatSse:
 
     # ---------------- DELETE /api/coach/data ----------------
 
-    def test_delete_data_wipes_all_coach_collections_for_user(self, auth_info):
+    def test_delete_data_wipes_all_coach_collections_for_user(self, client, auth_info):
         """DELETE /data is the "factory reset" — it MUST wipe all
         four coach collections (memory + briefs + conversations +
         usage) for the requesting user. Pin all four so a refactor
@@ -1467,7 +1457,7 @@ class TestCoachDeleteAndChatSse:
         after = self._count_user_data(auth_info["user_id"])
         assert all(c == 0 for c in after.values()), after
 
-    def test_delete_data_does_not_touch_other_users(self, auth_info):
+    def test_delete_data_does_not_touch_other_users(self, client, auth_info):
         """Cross-user safety — DELETE /data scopes to user_id.
         Pin so a regression doesn't accidentally do an unscoped
         delete_many({}) and nuke every user's data on the deploy."""
@@ -1482,7 +1472,7 @@ class TestCoachDeleteAndChatSse:
         other_after = self._count_user_data("other-user")
         assert all(c == 1 for c in other_after.values()), other_after
 
-    def test_delete_endpoints_require_auth(self):
+    def test_delete_endpoints_require_auth(self, client):
         """Both destructive endpoints must reject unauthenticated
         requests. Pin the auth gate — an unauthenticated DELETE
         on these would be a catastrophic data-wipe primitive."""
@@ -1491,7 +1481,7 @@ class TestCoachDeleteAndChatSse:
 
     # ---------------- /api/coach/chat SSE ----------------
 
-    def test_chat_sse_streams_events(self, monkeypatch):
+    def test_chat_sse_streams_events(self, client, auth_headers, monkeypatch):
         """Happy path: handle_chat_turn yields events; the SSE
         generator wraps each in `data: <json>\\n\\n` and ends
         with `data: [DONE]\\n\\n`. Pin the framing — the UI's
@@ -1519,7 +1509,7 @@ class TestCoachDeleteAndChatSse:
         assert '"conversation_id": "c-abc"' in body
         assert body.rstrip().endswith("data: [DONE]")
 
-    def test_chat_sse_emits_budget_exceeded_envelope(self, monkeypatch):
+    def test_chat_sse_emits_budget_exceeded_envelope(self, client, auth_headers, monkeypatch):
         """When BudgetExceeded fires inside the stream, the SSE
         generator yields a typed error event with code=429. Pin
         so the UI's "monthly budget reached" toast triggers from
@@ -1551,7 +1541,9 @@ class TestCoachDeleteAndChatSse:
         assert "$10.00" in body
         assert body.rstrip().endswith("data: [DONE]")
 
-    def test_chat_sse_emits_generic_502_envelope_on_unexpected_failure(self, monkeypatch):
+    def test_chat_sse_emits_generic_502_envelope_on_unexpected_failure(
+        self, client, auth_headers, monkeypatch
+    ):
         """Any other exception inside the stream → a generic 502
         error event ("Coach is temporarily unavailable.") rather
         than letting the connection just close. Pin so the UI sees
@@ -1605,9 +1597,9 @@ class TestCoachBriefErrorPaths:
         db.daily_briefs.delete_many({})
         db.coach_memory.delete_many({})
         sync.close()
-        yield
+        return
 
-    def test_brief_today_returns_doc_when_exists(self, auth_info):
+    def test_brief_today_returns_doc_when_exists(self, client, auth_info):
         """GET /brief/today with a seeded brief → BriefResponse
         envelope. Pin so the dashboard can render the brief
         without a separate "no brief yet" empty state when one
@@ -1638,7 +1630,7 @@ class TestCoachBriefErrorPaths:
         assert body["date"] == today_iso
         assert body["body"] == "You logged 2 hours on Alpha already."
 
-    def test_brief_today_honors_tz_query_param(self, auth_info):
+    def test_brief_today_honors_tz_query_param(self, client, auth_info):
         """/brief/today resolves 'today' in the requested timezone. Seeding
         the brief under the Tokyo-local date and fetching with tz=Asia/Tokyo
         returns it — proving the generate and fetch sides agree on the
@@ -1664,7 +1656,7 @@ class TestCoachBriefErrorPaths:
         assert body["date"] == tokyo_today
         assert body["body"] == "Tokyo brief."
 
-    def test_brief_today_rejects_invalid_tz(self, auth_info):
+    def test_brief_today_rejects_invalid_tz(self, client, auth_info):
         """An unknown IANA timezone name is rejected with the unified 400
         envelope (code INVALID_TIMEZONE), same as the analytics endpoints."""
         resp = client.get("/api/coach/brief/today?tz=Not/AZone", headers=auth_info["headers"])
@@ -1673,7 +1665,9 @@ class TestCoachBriefErrorPaths:
         assert body["code"] == "INVALID_TIMEZONE"
         assert isinstance(body["detail"], str)
 
-    def test_brief_generate_budget_exceeded_returns_429_envelope(self, monkeypatch, auth_info):
+    def test_brief_generate_budget_exceeded_returns_429_envelope(
+        self, client, monkeypatch, auth_info
+    ):
         """POST /brief/generate when BudgetExceeded fires inside
         generate_brief → 429 with BUDGET_EXCEEDED code (NOT the
         generic RATE_LIMITED). Pin so the UI's "monthly LLM
@@ -1681,7 +1675,7 @@ class TestCoachBriefErrorPaths:
         from beats.api.routers import coach as coach_router
         from beats.coach.usage import BudgetExceeded
 
-        async def fake_generate_brief(*args, **kwargs):  # noqa: ARG001
+        async def fake_generate_brief(*args, **kwargs):
             raise BudgetExceeded(spent=12.50, limit=10.00)
 
         monkeypatch.setattr(coach_router, "generate_brief", fake_generate_brief)
@@ -1696,14 +1690,16 @@ class TestCoachBriefErrorPaths:
         assert "$12.50" in str(body)
         assert "$10.00" in str(body)
 
-    def test_brief_generate_generic_failure_returns_502_envelope(self, monkeypatch, auth_info):
+    def test_brief_generate_generic_failure_returns_502_envelope(
+        self, client, monkeypatch, auth_info
+    ):
         """Any other exception inside generate_brief → 502 with a
         SANITIZED message. Pin so the actual exception text
         ("anthropic exploded") doesn't leak to the user — only
         the canned "the coach is resting" string surfaces."""
         from beats.api.routers import coach as coach_router
 
-        async def fake_generate_brief(*args, **kwargs):  # noqa: ARG001
+        async def fake_generate_brief(*args, **kwargs):
             raise RuntimeError("anthropic exploded")
 
         monkeypatch.setattr(coach_router, "generate_brief", fake_generate_brief)
@@ -1715,7 +1711,7 @@ class TestCoachBriefErrorPaths:
         # Internal exception message MUST NOT leak
         assert "anthropic exploded" not in text
 
-    def test_brief_generate_invalid_date_returns_400_envelope(self, auth_info):
+    def test_brief_generate_invalid_date_returns_400_envelope(self, client, auth_info):
         """POST /brief/generate with a malformed date string → 400
         with INVALID_DATE code. Pin so a typo doesn't 500 the
         endpoint."""
@@ -1728,14 +1724,14 @@ class TestCoachBriefErrorPaths:
         body = resp.json()
         assert body["code"] == "INVALID_DATE"
 
-    def test_memory_rewrite_generic_failure_returns_502(self, monkeypatch, auth_info):
+    def test_memory_rewrite_generic_failure_returns_502(self, client, monkeypatch, auth_info):
         """Generic exception inside rewrite_coach_memory → 502.
         Pin so the rewrite endpoint doesn't expose internal error
         text. BudgetExceeded → 429 path is already covered by
         TestCoachRouterGapFill.test_memory_rewrite_budget_exceeded."""
         from beats.api.routers import coach as coach_router
 
-        async def fake_rewrite(*args, **kwargs):  # noqa: ARG001
+        async def fake_rewrite(*args, **kwargs):
             raise RuntimeError("memory rewrite blew up internally")
 
         monkeypatch.setattr(coach_router, "rewrite_coach_memory", fake_rewrite)
@@ -1754,7 +1750,7 @@ class TestAnalyticsRouterEndpoints:
     a session token + (where needed) seeded data so the route
     handlers actually run."""
 
-    def _create_project(self) -> str:
+    def _create_project(self, client, auth_headers) -> str:
         resp = client.post(
             "/api/projects/",
             json={"name": "Analytics Probe"},
@@ -1763,7 +1759,7 @@ class TestAnalyticsRouterEndpoints:
         assert resp.status_code == 201
         return resp.json()["id"]
 
-    def test_rhythm_returns_48_slots_for_session_token(self):
+    def test_rhythm_returns_48_slots_for_session_token(self, client, auth_headers):
         """GET /api/analytics/rhythm returns 48 half-hour slots
         (one for every 30-minute window in a day). Pin so the
         chart never renders holes — even on an empty account
@@ -1776,7 +1772,7 @@ class TestAnalyticsRouterEndpoints:
         assert {s["slot"] for s in slots} == set(range(48))
         assert all("minutes" in s for s in slots)
 
-    def test_gaps_returns_list_for_session_token(self):
+    def test_gaps_returns_list_for_session_token(self, client, auth_headers):
         """GET /api/analytics/gaps returns a list (possibly empty
         for a no-data day). Pin the array shape — the dashboard's
         Untracked Gaps panel iterates directly on the response."""
@@ -1785,12 +1781,12 @@ class TestAnalyticsRouterEndpoints:
         body = resp.json()
         assert isinstance(body, list)
 
-    def test_tags_returns_sorted_unique_tags_from_user_beats(self):
+    def test_tags_returns_sorted_unique_tags_from_user_beats(self, client, auth_headers):
         """GET /api/analytics/tags surfaces every unique tag across
         the user's beats, sorted alphabetically. Tags are auto-derived
         from the daemon's flow-window signals (repo + editor language)
         when a timer stops — the app takes no manual tag input."""
-        project_id = self._create_project()
+        project_id = self._create_project(client, auth_headers)
 
         # Seed daemon flow windows inside the session's range. The stop
         # handler auto-tags the beat from these (repo basename + language).
@@ -1840,7 +1836,7 @@ class TestAnalyticsTimezone:
     is rejected with the unified 400 envelope. The UTC default keeps the
     historical (no-tz) behavior."""
 
-    def _seed_late_evening_beat(self) -> None:
+    def _seed_late_evening_beat(self, client, auth_headers) -> None:
         """Create one completed 30-min beat at 2026-01-01T23:30Z."""
         resp = client.post(
             "/api/projects/",
@@ -1860,7 +1856,7 @@ class TestAnalyticsTimezone:
             headers=auth_headers,
         )
 
-    def _heatmap_dates(self, params: str = "") -> set[str]:
+    def _heatmap_dates(self, client, auth_headers, params: str = "") -> set[str]:
         url = "/api/analytics/heatmap?year=2026"
         if params:
             url += f"&{params}"
@@ -1868,24 +1864,24 @@ class TestAnalyticsTimezone:
         assert resp.status_code == 200
         return {d["date"] for d in resp.json()}
 
-    def test_no_tz_buckets_to_utc_day(self):
-        self._seed_late_evening_beat()
+    def test_no_tz_buckets_to_utc_day(self, client, auth_headers):
+        self._seed_late_evening_beat(client, auth_headers)
         # 23:30Z stays on 2026-01-01 with the UTC default.
-        assert "2026-01-01" in self._heatmap_dates()
+        assert "2026-01-01" in self._heatmap_dates(client, auth_headers)
 
-    def test_negative_offset_keeps_same_local_day(self):
-        self._seed_late_evening_beat()
+    def test_negative_offset_keeps_same_local_day(self, client, auth_headers):
+        self._seed_late_evening_beat(client, auth_headers)
         # 23:30Z = 18:30 EST → still 2026-01-01 in New York.
-        assert "2026-01-01" in self._heatmap_dates("tz=America/New_York")
+        assert "2026-01-01" in self._heatmap_dates(client, auth_headers, "tz=America/New_York")
 
-    def test_positive_offset_rolls_to_next_local_day(self):
-        self._seed_late_evening_beat()
+    def test_positive_offset_rolls_to_next_local_day(self, client, auth_headers):
+        self._seed_late_evening_beat(client, auth_headers)
         # 23:30Z = 08:30 JST next day → 2026-01-02 in Tokyo.
-        dates = self._heatmap_dates("tz=Asia/Tokyo")
+        dates = self._heatmap_dates(client, auth_headers, "tz=Asia/Tokyo")
         assert "2026-01-02" in dates
         assert "2026-01-01" not in dates
 
-    def test_invalid_timezone_returns_400_envelope(self):
+    def test_invalid_timezone_returns_400_envelope(self, client, auth_headers):
         resp = client.get(
             "/api/analytics/heatmap?year=2026&tz=Not/AZone",
             headers=auth_headers,
@@ -1900,7 +1896,7 @@ class TestErrorEnvelope:
     """Every HTTP error from the API now flows through the unified envelope:
     {detail: str, code: str, fields?: list}."""
 
-    def test_404_uses_envelope(self):
+    def test_404_uses_envelope(self, client, auth_headers):
         # Valid ObjectId shape but no such record.
         resp = client.get("/api/beats/507f1f77bcf86cd799439011", headers=auth_headers)
         assert resp.status_code == 404
@@ -1908,7 +1904,7 @@ class TestErrorEnvelope:
         assert isinstance(body.get("detail"), str)
         assert body["code"] == "NOT_FOUND"
 
-    def test_validation_error_lists_fields(self):
+    def test_validation_error_lists_fields(self, client, auth_headers):
         # Missing required field "project_id" on a beat create.
         resp = client.post("/api/beats/", json={}, headers=auth_headers)
         assert resp.status_code == 422
@@ -1919,16 +1915,18 @@ class TestErrorEnvelope:
         assert any(f.get("path", "").endswith("project_id") for f in body["fields"]), body["fields"]
         # Each field has the keys clients can rely on.
         for f in body["fields"]:
-            assert "path" in f and "message" in f and "type" in f
+            assert "path" in f
+            assert "message" in f
+            assert "type" in f
 
-    def test_missing_auth_envelope(self):
+    def test_missing_auth_envelope(self, client):
         resp = client.get("/api/projects/")
         assert resp.status_code == 401
         body = resp.json()
         assert body["code"] == "MISSING_TOKEN"
         assert "Authentication" in body["detail"]
 
-    def test_validation_error_strips_loc_prefix_from_field_path(self):
+    def test_validation_error_strips_loc_prefix_from_field_path(self, client, auth_headers):
         # FastAPI tags each validation loc with body / query / path so a
         # raw `loc` is ("body", "project_id"). The handler strips that
         # prefix so consumers see the natural field name. Locked in
@@ -1942,7 +1940,7 @@ class TestErrorEnvelope:
             assert not path.startswith("body."), f"expected loc prefix stripped, got {path!r}"
             assert not path.startswith("query."), f"expected loc prefix stripped, got {path!r}"
 
-    def test_validation_singular_summary(self):
+    def test_validation_singular_summary(self, client, auth_headers):
         # Detail summary differs in singular vs plural ("Validation
         # failed for one field" vs "Validation failed for N fields").
         # Easier on the eyes than "1 fields".
@@ -1967,7 +1965,7 @@ class TestErrorEnvelope:
             # documents both branches even if only one fires today.
             assert body["detail"] == f"Validation failed for {len(body['fields'])} fields"
 
-    def test_router_can_override_default_code_with_dict_detail(self):
+    def test_router_can_override_default_code_with_dict_detail(self, client, auth_headers):
         # The errors.py handler honors `detail={"code": ..., "message": ...}`
         # so routers can issue more-specific machine codes than the status-
         # default. Coach uses this for INVALID_DATE on bad date input
@@ -1982,7 +1980,7 @@ class TestErrorEnvelope:
         assert body["code"] == "INVALID_DATE", body
         assert "not-a-date" in body["detail"]
 
-    def test_domain_exception_uses_envelope(self):
+    def test_domain_exception_uses_envelope(self, client, auth_headers):
         # NoActiveTimer is the canonical 400 DomainException — raised
         # when stopping a timer that isn't running. Locks in that the
         # @app.exception_handler(DomainException) handler in server.py
@@ -1999,20 +1997,10 @@ class TestErrorEnvelope:
         assert "No timer" in body["detail"]
 
 
-class TestMiscellaneousEndpoints:
-    """Test suite for miscellaneous endpoints"""
-
-    def test_ding_endpoint(self):
-        """Test POST /talk/ding - Simple ping endpoint (public)"""
-        response = client.post("/talk/ding")
-        assert response.status_code == 200
-        assert response.json() == {"message": "dong"}
-
-
 class TestIdempotentReplay:
     """Timer start/stop must be idempotent under retries keyed by X-Client-Id."""
 
-    def _create_project(self) -> str:
+    def _create_project(self, client, auth_headers) -> str:
         res = client.post(
             "/api/projects/",
             json={"name": "Idempotency Probe", "description": "test"},
@@ -2021,9 +2009,9 @@ class TestIdempotentReplay:
         assert res.status_code == 201, res.text
         return res.json()["id"]
 
-    def test_repeated_start_with_same_client_id_is_replayed(self):
+    def test_repeated_start_with_same_client_id_is_replayed(self, client, auth_headers):
         """Second POST with same X-Client-Id returns the cached response + replay flag."""
-        project_id = self._create_project()
+        project_id = self._create_project(client, auth_headers)
         headers = {**auth_headers, "X-Client-Id": "test-client-start-1"}
         first = client.post(
             f"/api/projects/{project_id}/start",
@@ -2050,9 +2038,9 @@ class TestIdempotentReplay:
             headers=auth_headers,
         )
 
-    def test_different_client_id_is_not_replayed(self):
+    def test_different_client_id_is_not_replayed(self, client, auth_headers):
         """A fresh client id is treated as a new write and not served from cache."""
-        project_id = self._create_project()
+        project_id = self._create_project(client, auth_headers)
         start_a = client.post(
             f"/api/projects/{project_id}/start",
             json={"time": "2026-04-16T11:00:00Z"},
@@ -2081,7 +2069,7 @@ class TestIdempotentReplay:
             headers=auth_headers,
         )
 
-    def test_failed_mutation_is_not_cached_for_replay(self):
+    def test_failed_mutation_is_not_cached_for_replay(self, client, auth_headers):
         """A 4xx response on a guarded path MUST NOT be cached in
         mutation_log — the user must be able to fix and retry
         with the same client id. Pin the non-2xx skip branch
@@ -2091,7 +2079,7 @@ class TestIdempotentReplay:
         Idempotency middleware ONLY covers /api/projects/{id}/start
         and /stop (per IDEMPOTENT_PATH_SUFFIXES) — so we trigger
         the failure on /start with a malformed body."""
-        project_id = self._create_project()
+        project_id = self._create_project(client, auth_headers)
         headers = {**auth_headers, "X-Client-Id": "test-failed-mutation-start"}
 
         # First call: malformed body (missing required `time` field
@@ -2128,7 +2116,7 @@ class TestIdempotentReplay:
 class TestSignedSqliteExport:
     """The signed SQLite export must round-trip cleanly and reject tampering."""
 
-    def _create_project(self, name: str) -> str:
+    def _create_project(self, client, auth_headers, name: str) -> str:
         res = client.post(
             "/api/projects/",
             json={"name": name, "description": "export probe"},
@@ -2137,14 +2125,14 @@ class TestSignedSqliteExport:
         assert res.status_code == 201, res.text
         return res.json()["id"]
 
-    def test_export_roundtrip(self):
+    def test_export_roundtrip(self, client, auth_headers):
         """Export produces a signed zip; re-importing it is accepted."""
         import io
         import zipfile
 
         # Seed some data so counts are non-zero.
-        self._create_project("Export Roundtrip A")
-        self._create_project("Export Roundtrip B")
+        self._create_project(client, auth_headers, "Export Roundtrip A")
+        self._create_project(client, auth_headers, "Export Roundtrip B")
 
         res = client.get("/api/export/sqlite", headers=auth_headers)
         assert res.status_code == 200, res.text
@@ -2170,25 +2158,27 @@ class TestSignedSqliteExport:
         assert body["version"] == "sqlite-1"
         assert body["imported"]["projects"] >= 2
 
-    def test_import_rejects_tampered_manifest(self):
+    def test_import_rejects_tampered_manifest(self, client, auth_headers):
         """Flipping a byte in the manifest must trip the signature check."""
         import io
         import zipfile
 
-        self._create_project("Tamper Probe")
+        self._create_project(client, auth_headers, "Tamper Probe")
         res = client.get("/api/export/sqlite", headers=auth_headers)
         assert res.status_code == 200
 
         # Build a new zip with a mutated manifest but the original signature.
         bad_zip = io.BytesIO()
-        with zipfile.ZipFile(io.BytesIO(res.content)) as src:
-            with zipfile.ZipFile(bad_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
-                for name in src.namelist():
-                    data = src.read(name)
-                    if name == "manifest.json":
-                        # Replace the version string — changes canonical bytes.
-                        data = data.replace(b'"sqlite-1"', b'"sqlite-evil"')
-                    dst.writestr(name, data)
+        with (
+            zipfile.ZipFile(io.BytesIO(res.content)) as src,
+            zipfile.ZipFile(bad_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst,
+        ):
+            for name in src.namelist():
+                data = src.read(name)
+                if name == "manifest.json":
+                    # Replace the version string — changes canonical bytes.
+                    data = data.replace(b'"sqlite-1"', b'"sqlite-evil"')
+                dst.writestr(name, data)
 
         imported = client.post(
             "/api/export/sqlite/import",
@@ -2198,24 +2188,26 @@ class TestSignedSqliteExport:
         assert imported.status_code == 400
         assert "signature" in imported.text.lower()
 
-    def test_import_rejects_swapped_sqlite_payload(self):
+    def test_import_rejects_swapped_sqlite_payload(self, client, auth_headers):
         """Swapping the SQLite body (manifest + signature untouched) is rejected
         by the sha256 check even though the Ed25519 signature is intact."""
         import io
         import zipfile
 
-        self._create_project("Swap Probe")
+        self._create_project(client, auth_headers, "Swap Probe")
         res = client.get("/api/export/sqlite", headers=auth_headers)
         assert res.status_code == 200
 
         bad_zip = io.BytesIO()
-        with zipfile.ZipFile(io.BytesIO(res.content)) as src:
-            with zipfile.ZipFile(bad_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst:
-                for name in src.namelist():
-                    data = src.read(name)
-                    if name == "data.sqlite":
-                        data = data + b"\x00"  # extra byte breaks sha256
-                    dst.writestr(name, data)
+        with (
+            zipfile.ZipFile(io.BytesIO(res.content)) as src,
+            zipfile.ZipFile(bad_zip, "w", compression=zipfile.ZIP_DEFLATED) as dst,
+        ):
+            for name in src.namelist():
+                data = src.read(name)
+                if name == "data.sqlite":
+                    data = data + b"\x00"  # extra byte breaks sha256
+                dst.writestr(name, data)
 
         imported = client.post(
             "/api/export/sqlite/import",
@@ -2233,7 +2225,7 @@ class TestCsvAndJsonExport:
     user's Settings → Export panel and the cross-deploy migration
     path."""
 
-    def _create_project(self, name: str) -> str:
+    def _create_project(self, client, auth_headers, name: str) -> str:
         res = client.post(
             "/api/projects/",
             json={"name": name, "description": "csv probe"},
@@ -2242,7 +2234,7 @@ class TestCsvAndJsonExport:
         assert res.status_code == 201, res.text
         return res.json()["id"]
 
-    def test_csv_sessions_export_empty(self):
+    def test_csv_sessions_export_empty(self, client, auth_headers):
         """No completed beats → CSV with header row only. Pin the
         7-column header so a refactor doesn't silently rename a
         column the user's spreadsheets bind to."""
@@ -2257,12 +2249,12 @@ class TestCsvAndJsonExport:
         first_line = resp.text.splitlines()[0]
         assert first_line == "date,project,start,end,duration_minutes,note,tags"
 
-    def test_csv_sessions_export_with_data(self):
+    def test_csv_sessions_export_with_data(self, client, auth_headers):
         """A completed beat renders one row with the project name
         resolved (not the project_id) and tags joined with `;`.
         Pin both — users' downstream spreadsheets parse on those
         specific separators."""
-        project_id = self._create_project("CSV Probe")
+        project_id = self._create_project(client, auth_headers, "CSV Probe")
         # Start + stop a timer to create a completed beat
         client.post(
             f"/api/projects/{project_id}/start",
@@ -2285,12 +2277,12 @@ class TestCsvAndJsonExport:
         # 30-minute duration
         assert ",30," in data_row
 
-    def test_csv_sessions_export_filters_by_project(self):
+    def test_csv_sessions_export_filters_by_project(self, client, auth_headers):
         """`?project_id=X` scopes the export to one project. Pin so
         a regression doesn't leak other projects' rows when the
         user clicks "Export this project"."""
-        a_id = self._create_project("CSV Filter A")
-        b_id = self._create_project("CSV Filter B")
+        a_id = self._create_project(client, auth_headers, "CSV Filter A")
+        b_id = self._create_project(client, auth_headers, "CSV Filter B")
         for pid in (a_id, b_id):
             client.post(
                 f"/api/projects/{pid}/start",
@@ -2312,11 +2304,11 @@ class TestCsvAndJsonExport:
         assert "CSV Filter A" in resp.text
         assert "CSV Filter B" not in resp.text
 
-    def test_full_json_export_shape(self):
+    def test_full_json_export_shape(self, client, auth_headers):
         """GET /api/export/full returns a JSON envelope with the
         top-level keys the import endpoint reads back. Pin so
         the export → reimport round trip can't drift."""
-        self._create_project("JSON Probe")
+        self._create_project(client, auth_headers, "JSON Probe")
         resp = client.get("/api/export/full", headers=auth_headers)
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("application/json")
@@ -2333,12 +2325,12 @@ class TestCsvAndJsonExport:
         # (the signed SQLite export uses "sqlite-1")
         assert body["version"] == "1.0"
 
-    def test_full_json_round_trip(self):
+    def test_full_json_round_trip(self, client, auth_headers):
         """Export → Import round-trip: posting the exported JSON
         back to /api/export/import upserts the rows by ID. Pin so
         a user can move data between deploys (the doc-stated use
         case for this pair of endpoints)."""
-        self._create_project("Round Trip")
+        self._create_project(client, auth_headers, "Round Trip")
         export = client.get("/api/export/full", headers=auth_headers)
         assert export.status_code == 200
 
@@ -2353,7 +2345,7 @@ class TestCsvAndJsonExport:
         assert body["status"] == "ok"
         assert body["imported"]["projects"] >= 1
 
-    def test_sqlite_import_rejects_non_zip_blob(self):
+    def test_sqlite_import_rejects_non_zip_blob(self, client, auth_headers):
         """POST /api/export/sqlite/import with a non-zip file →
         400 "not a zip". Pin the user-facing envelope so a malformed
         upload doesn't 500 the import flow."""
@@ -2365,7 +2357,7 @@ class TestCsvAndJsonExport:
         assert resp.status_code == 400
         assert "not a zip" in resp.text.lower()
 
-    def test_sqlite_import_rejects_zip_missing_entries(self):
+    def test_sqlite_import_rejects_zip_missing_entries(self, client, auth_headers):
         """A zip without manifest.json / data.sqlite / manifest.sig →
         400 "missing entries". Pin so a bundle from another tool
         can't be silently imported."""
@@ -2384,13 +2376,13 @@ class TestCsvAndJsonExport:
         assert resp.status_code == 400
         assert "missing entries" in resp.text.lower()
 
-    def test_full_json_round_trip_with_projects_and_beats(self):
+    def test_full_json_round_trip_with_projects_and_beats(self, client, auth_headers):
         """Existing round-trip seeds only projects. Pin that beats
         round-trip too — those are separate import branches and a
         regression in either would silently lose user data on
         cross-deploy migrations."""
         # Seed: project + beat
-        project_id = self._create_project("Full Round Trip")
+        project_id = self._create_project(client, auth_headers, "Full Round Trip")
         client.post(
             f"/api/projects/{project_id}/start",
             json={"time": "2026-04-01T09:00:00Z"},
@@ -2421,13 +2413,13 @@ class TestCsvAndJsonExport:
         assert imp["projects"] >= 1
         assert imp["beats"] >= 1
 
-    def test_sqlite_round_trip_with_projects_and_beats(self):
+    def test_sqlite_round_trip_with_projects_and_beats(self, client, auth_headers):
         """Same as the JSON round-trip test, but for the signed
         SQLite bundle. The SQLite import has its own branches — pin
         so a regression in the sqlite3.execute(SELECT data FROM ...)
         loop on either table doesn't silently drop user data on
         import."""
-        project_id = self._create_project("SQLite Round Trip")
+        project_id = self._create_project(client, auth_headers, "SQLite Round Trip")
         client.post(
             f"/api/projects/{project_id}/start",
             json={"time": "2026-04-02T09:00:00Z"},
@@ -2455,7 +2447,7 @@ class TestCsvAndJsonExport:
 class TestIntelligenceInbox:
     """Smoke tests for the aggregated Intelligence Inbox endpoint."""
 
-    def test_inbox_returns_ok_shape_for_empty_user(self):
+    def test_inbox_returns_ok_shape_for_empty_user(self, client, auth_headers):
         """GET /api/intelligence/inbox returns the expected envelope for a fresh user."""
         response = client.get("/api/intelligence/inbox", headers=auth_headers)
         assert response.status_code == 200
@@ -2470,12 +2462,12 @@ class TestIntelligenceInbox:
             assert item["kind"] in {"pattern", "suggestion", "project_health"}
             assert item["severity"] in {"high", "medium", "low"}
 
-    def test_inbox_requires_auth(self):
+    def test_inbox_requires_auth(self, client):
         """GET /api/intelligence/inbox rejects unauthenticated requests."""
         response = client.get("/api/intelligence/inbox")
         assert response.status_code == 401
 
-    def test_inbox_renders_suggestion_items_with_seeded_project(self):
+    def test_inbox_renders_suggestion_items_with_seeded_project(self, client, auth_headers):
         """A project with a weekly_goal and no recent activity →
         suggest_daily_plan emits a suggestion → inbox includes a
         `kind: "suggestion"` item with the documented shape:
@@ -2506,7 +2498,7 @@ class TestIntelligenceInbox:
         assert "project_id" in s["data"]
         assert "suggested_minutes" in s["data"]
 
-    def test_inbox_renders_project_health_alerts(self):
+    def test_inbox_renders_project_health_alerts(self, client, auth_headers):
         """A project with a weekly_goal AND no activity in ≥14
         days → get_project_health emits an alert → inbox renders
         a `kind: "project_health"` item. Pin the alerted-projects-
@@ -2564,24 +2556,24 @@ class TestIntelligenceInbox:
 class TestAuthenticationMiddleware:
     """Test suite for authentication middleware"""
 
-    def test_all_requests_require_auth(self):
+    def test_all_requests_require_auth(self, client):
         """Test that all requests (including GET) require authentication"""
         response = client.get("/api/projects/")
         assert response.status_code == 401
 
-    def test_post_requests_require_auth(self):
+    def test_post_requests_require_auth(self, client):
         """Test POST requests require authentication"""
         response = client.post("/api/projects/", json={"name": "test", "description": "test"})
         assert response.status_code == 401
 
-    def test_put_requests_require_auth(self):
+    def test_put_requests_require_auth(self, client):
         """Test PUT requests require authentication"""
         response = client.put(
             "/api/projects/", json={"id": "test", "name": "test", "description": "test"}
         )
         assert response.status_code == 401
 
-    def test_invalid_bearer_token(self):
+    def test_invalid_bearer_token(self, client):
         """Test invalid Bearer token is rejected"""
         response = client.get(
             "/api/projects/",
@@ -2592,15 +2584,12 @@ class TestAuthenticationMiddleware:
         assert "Invalid or expired" in body["detail"]
         assert body["code"] == "INVALID_TOKEN"
 
-    def test_public_endpoints_no_auth(self):
+    def test_public_endpoints_no_auth(self, client):
         """Test public endpoints don't require auth"""
         response = client.get("/health")
         assert response.status_code == 200
 
-        response = client.post("/talk/ding")
-        assert response.status_code == 200
-
-    def test_auth_endpoints_no_auth(self):
+    def test_auth_endpoints_no_auth(self, client):
         """Test auth endpoints are accessible without auth (no 401)"""
         response = client.get("/api/auth/login/options")
         # 200 if credentials exist, 400 if no credentials — either way, not 401
@@ -2617,7 +2606,7 @@ class TestLogoutAndTokenRevocation:
         sm = SessionManager(settings.jwt_secret)
         return sm.create_session_token(user_id, email)
 
-    def test_logout_revokes_token(self, auth_info):
+    def test_logout_revokes_token(self, client, auth_info):
         """POST /api/account/logout revokes the token so it can't be used again."""
         token = self._make_token(auth_info["user_id"])
         headers = {"Authorization": f"Bearer {token}"}
@@ -2632,12 +2621,12 @@ class TestLogoutAndTokenRevocation:
         # Token is now rejected
         assert client.get("/api/projects/", headers=headers).status_code == 401
 
-    def test_logout_without_token_requires_auth(self):
+    def test_logout_without_token_requires_auth(self, client):
         """POST /api/account/logout without a token returns 401."""
         response = client.post("/api/account/logout")
         assert response.status_code == 401
 
-    def test_other_tokens_unaffected_by_logout(self, auth_info):
+    def test_other_tokens_unaffected_by_logout(self, client, auth_info):
         """Revoking one token doesn't affect other tokens for the same user."""
         token_a = self._make_token(auth_info["user_id"])
         token_b = self._make_token(auth_info["user_id"])
@@ -2695,7 +2684,7 @@ class TestAccountAPI:
         )
         sync.close()
         _session_manager._revoked_tokens.clear()
-        yield
+        return
 
     def _seed_credential(self, user_id: str, credential_id: str, device_name: str = "Test") -> None:
         """Insert a credential row directly to skip the WebAuthn ceremony.
@@ -2720,7 +2709,7 @@ class TestAccountAPI:
         )
         sync_client.close()
 
-    def test_me_returns_current_user(self, auth_info):
+    def test_me_returns_current_user(self, client, auth_info):
         resp = client.get("/api/account/me", headers=auth_info["headers"])
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -2733,7 +2722,7 @@ class TestAccountAPI:
         assert body["sso"]["did"] is None
         assert set(body) == {"email", "display_name", "sso"}
 
-    def test_me_404_when_user_deleted_under_token(self, auth_info):
+    def test_me_404_when_user_deleted_under_token(self, client, auth_info):
         """Token still validates JWT-wise but the user row is gone — 404
         rather than 200-with-empty. Locks in the behavior that lets a
         deleted-account flow surface meaningfully on the client."""
@@ -2752,35 +2741,36 @@ class TestAccountAPI:
         assert resp.status_code == 404
         assert resp.json()["code"] == "NOT_FOUND"
 
-    def test_refresh_issues_a_new_working_token(self, auth_info):
+    def test_refresh_issues_a_new_working_token(self, client, auth_info):
         resp = client.post("/api/account/refresh", headers=auth_info["headers"])
         assert resp.status_code == 200, resp.text
         new_token = resp.json()["token"]
-        assert new_token and new_token != auth_info["headers"]["Authorization"].split(" ", 1)[1]
+        assert new_token
+        assert new_token != auth_info["headers"]["Authorization"].split(" ", 1)[1]
 
         # The new token actually works on a protected endpoint.
         new_headers = {"Authorization": f"Bearer {new_token}"}
         assert client.get("/api/projects/", headers=new_headers).status_code == 200
 
-    def test_refresh_without_bearer_returns_401(self):
+    def test_refresh_without_bearer_returns_401(self, client):
         resp = client.post("/api/account/refresh")
         # The auth middleware fires before the handler — MISSING_TOKEN, not
         # the handler's "Bearer token required". Either way it's a 401.
         assert resp.status_code == 401
 
-    def test_refresh_with_invalid_token_returns_401(self):
+    def test_refresh_with_invalid_token_returns_401(self, client):
         resp = client.post(
             "/api/account/refresh",
             headers={"Authorization": "Bearer not-a-jwt"},
         )
         assert resp.status_code == 401
 
-    def test_credentials_list_empty_for_fresh_user(self, auth_info):
+    def test_credentials_list_empty_for_fresh_user(self, client, auth_info):
         resp = client.get("/api/account/credentials", headers=auth_info["headers"])
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_credentials_list_returns_seeded_creds(self, auth_info):
+    def test_credentials_list_returns_seeded_creds(self, client, auth_info):
         self._seed_credential(auth_info["user_id"], "cred-A", "Mac")
         self._seed_credential(auth_info["user_id"], "cred-B", "iPhone")
 
@@ -2792,7 +2782,7 @@ class TestAccountAPI:
         names = sorted(c["device_name"] for c in body)
         assert names == ["Mac", "iPhone"]
 
-    def test_delete_credential_removes_non_last(self, auth_info):
+    def test_delete_credential_removes_non_last(self, client, auth_info):
         self._seed_credential(auth_info["user_id"], "cred-keep")
         self._seed_credential(auth_info["user_id"], "cred-doomed")
 
@@ -2806,7 +2796,7 @@ class TestAccountAPI:
         listing = client.get("/api/account/credentials", headers=auth_info["headers"]).json()
         assert [c["id"] for c in listing] == ["cred-keep"]
 
-    def test_delete_last_credential_blocked(self, auth_info):
+    def test_delete_last_credential_blocked(self, client, auth_info):
         """Locks in the "must keep at least one passkey" guard. Without
         this, a user could nuke their last credential and lock themselves
         out — the very scenario auth.py's orphan-retry doesn't recover
@@ -2821,7 +2811,7 @@ class TestAccountAPI:
         assert resp.status_code == 400, resp.text
         assert "only passkey" in resp.json()["detail"].lower()
 
-    def test_delete_nonexistent_credential_returns_404(self, auth_info):
+    def test_delete_nonexistent_credential_returns_404(self, client, auth_info):
         # Seed two so the keep-at-least-one guard (count <= 1) doesn't
         # short-circuit our 404 path. delete_credential checks the count
         # before checking existence — a single seeded credential plus a
@@ -2836,7 +2826,7 @@ class TestAccountAPI:
         )
         assert resp.status_code == 404
 
-    def test_account_endpoints_require_auth(self):
+    def test_account_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/account/me"),
             ("POST", "/api/account/refresh"),
@@ -2874,7 +2864,7 @@ class TestIntelligenceAPI:
         db.projects.delete_many({})
         db.timeLogs.delete_many({})
         sync.close()
-        yield
+        return
 
     def _seed_insights(self, auth_info, insights: list[dict], dismissed: list[str] | None = None):
         """Insert a UserInsights row directly. Faster than driving
@@ -2903,7 +2893,7 @@ class TestIntelligenceAPI:
 
     # ── Score (smoke) ────────────────────────────────────────────────
 
-    def test_score_returns_envelope_with_no_data(self):
+    def test_score_returns_envelope_with_no_data(self, client, auth_headers):
         """Empty data: the route still returns a valid response shape
         — locks in that the IntelligenceService doesn't divide-by-zero
         on a fresh account. Concrete value expectations belong to
@@ -2915,7 +2905,7 @@ class TestIntelligenceAPI:
         assert "components" in body
         assert isinstance(body["score"], int)
 
-    def test_score_history_validates_weeks_range(self):
+    def test_score_history_validates_weeks_range(self, client, auth_headers):
         # weeks must be 1..52 per the route's Query(ge=1, le=52).
         resp = client.get("/api/intelligence/score/history?weeks=0", headers=auth_headers)
         assert resp.status_code == 422
@@ -2927,12 +2917,12 @@ class TestIntelligenceAPI:
 
     # ── Digests ──────────────────────────────────────────────────────
 
-    def test_digests_list_empty_initially(self):
+    def test_digests_list_empty_initially(self, client, auth_headers):
         resp = client.get("/api/intelligence/digests", headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_get_digest_404_when_missing(self):
+    def test_get_digest_404_when_missing(self, client, auth_headers):
         resp = client.get("/api/intelligence/digests/2026-01-05", headers=auth_headers)
         assert resp.status_code == 404
         body = resp.json()
@@ -2941,14 +2931,14 @@ class TestIntelligenceAPI:
 
     # ── Patterns + dismiss state machine ──────────────────────────────
 
-    def test_patterns_returns_empty_when_no_user_insights_yet(self):
+    def test_patterns_returns_empty_when_no_user_insights_yet(self, client, auth_headers):
         resp = client.get("/api/intelligence/patterns", headers=auth_headers)
         assert resp.status_code == 200
         body = resp.json()
         assert body["insights"] == []
         assert body["generated_at"]
 
-    def test_patterns_filters_dismissed(self, auth_info):
+    def test_patterns_filters_dismissed(self, client, auth_headers, auth_info):
         """The cached UserInsights document holds both `insights` and
         `dismissed_ids`. /patterns returns insights minus the
         dismissed — locks in this filter, which is the whole reason
@@ -2968,7 +2958,7 @@ class TestIntelligenceAPI:
         ids = [i["id"] for i in resp.json()["insights"]]
         assert ids == ["i1", "i3"]
 
-    def test_dismiss_pattern_persists_across_requests(self, auth_info):
+    def test_dismiss_pattern_persists_across_requests(self, client, auth_headers, auth_info):
         """POST /patterns/{id}/dismiss adds to dismissed_ids. The
         insight no longer appears on subsequent /patterns reads.
         Locks in the contract end-to-end (route → repo → next read)."""
@@ -2991,7 +2981,7 @@ class TestIntelligenceAPI:
         ]
         assert ids == ["i-keep"]
 
-    def test_refresh_preserves_dismissed_ids(self, auth_info):
+    def test_refresh_preserves_dismissed_ids(self, client, auth_headers, auth_info):
         """When refresh recomputes patterns, the previously-dismissed
         ids must carry through — otherwise dismissing was pointless
         (the same pattern would re-surface every refresh). Note the
@@ -3025,7 +3015,7 @@ class TestIntelligenceAPI:
 
     # ── Inbox (the aggregator) ───────────────────────────────────────
 
-    def test_inbox_sorts_by_severity_high_first(self, auth_info):
+    def test_inbox_sorts_by_severity_high_first(self, client, auth_headers, auth_info):
         """Inbox aggregates patterns + suggestions + project-health and
         sorts high → medium → low. Pattern severity is mapped from
         priority via _pattern_severity (priority<=1 → high, ==2 →
@@ -3052,7 +3042,7 @@ class TestIntelligenceAPI:
         assert [it["title"] for it in pattern_items] == ["High", "Med", "Low"]
         assert [it["severity"] for it in pattern_items] == ["high", "medium", "low"]
 
-    def test_inbox_honors_dismissed_patterns(self, auth_info):
+    def test_inbox_honors_dismissed_patterns(self, client, auth_headers, auth_info):
         self._seed_insights(
             auth_info,
             insights=[
@@ -3066,12 +3056,12 @@ class TestIntelligenceAPI:
         pattern_titles = [it["title"] for it in items if it["kind"] == "pattern"]
         assert pattern_titles == ["Shown"]
 
-    def _inbox_items(self):
+    def _inbox_items(self, client, auth_headers):
         resp = client.get("/api/intelligence/inbox", headers=auth_headers)
         assert resp.status_code == 200, resp.text
         return resp.json()["items"]
 
-    def test_inbox_honors_dismissed_suggestions(self, auth_info):
+    def test_inbox_honors_dismissed_suggestions(self, client, auth_headers, auth_info):
         """A dismissed suggestion stays gone across reloads. Regression for
         the bug where the inbox only honored dismissals for patterns, so
         suggestions reappeared on every load. Also exercises the upsert path:
@@ -3083,17 +3073,19 @@ class TestIntelligenceAPI:
         )
         assert resp.status_code == 201, resp.text
 
-        suggestions = [it for it in self._inbox_items() if it["kind"] == "suggestion"]
+        suggestions = [
+            it for it in self._inbox_items(client, auth_headers) if it["kind"] == "suggestion"
+        ]
         assert suggestions, "expected a suggestion item to dismiss"
         item_id = suggestions[0]["id"]
 
         d = client.post(f"/api/intelligence/inbox/{item_id}/dismiss", headers=auth_headers)
         assert d.status_code == 204, d.text
 
-        after = self._inbox_items()
+        after = self._inbox_items(client, auth_headers)
         assert all(it["id"] != item_id for it in after), "dismissed suggestion reappeared"
 
-    def test_inbox_honors_dismissed_project_health(self, auth_info):
+    def test_inbox_honors_dismissed_project_health(self, client, auth_headers, auth_info):
         """A dismissed project-health alert stays gone across reloads."""
         from datetime import UTC, datetime, timedelta
 
@@ -3122,17 +3114,19 @@ class TestIntelligenceAPI:
         )
         sync.close()
 
-        health = [it for it in self._inbox_items() if it["kind"] == "project_health"]
+        health = [
+            it for it in self._inbox_items(client, auth_headers) if it["kind"] == "project_health"
+        ]
         assert health, "expected a project_health item to dismiss"
         item_id = next(it["id"] for it in health if it["id"] == f"project_health:{project_id}")
 
         d = client.post(f"/api/intelligence/inbox/{item_id}/dismiss", headers=auth_headers)
         assert d.status_code == 204, d.text
 
-        after = self._inbox_items()
+        after = self._inbox_items(client, auth_headers)
         assert all(it["id"] != item_id for it in after), "dismissed health alert reappeared"
 
-    def test_inbox_dismiss_one_kind_does_not_hide_another(self, auth_info):
+    def test_inbox_dismiss_one_kind_does_not_hide_another(self, client, auth_headers, auth_info):
         """Dismissing a suggestion must not hide a pattern (cross-kind
         isolation — they share one dismissed_ids set)."""
         self._seed_insights(
@@ -3145,17 +3139,19 @@ class TestIntelligenceAPI:
             headers=auth_headers,
         )
 
-        items = self._inbox_items()
+        items = self._inbox_items(client, auth_headers)
         sugg = next(it["id"] for it in items if it["kind"] == "suggestion")
         assert any(it["title"] == "Keep" for it in items)
 
         client.post(f"/api/intelligence/inbox/{sugg}/dismiss", headers=auth_headers)
 
-        after = self._inbox_items()
+        after = self._inbox_items(client, auth_headers)
         assert all(it["id"] != sugg for it in after), "suggestion not dismissed"
         assert any(it["title"] == "Keep" for it in after), "pattern wrongly hidden"
 
-    def test_inbox_dismiss_persists_and_creates_doc_when_absent(self, auth_info):
+    def test_inbox_dismiss_persists_and_creates_doc_when_absent(
+        self, client, auth_headers, auth_info
+    ):
         """Dismissing creates the UserInsights doc when none exists (upsert)
         and the dismissal survives across two consecutive reads."""
         import os
@@ -3167,7 +3163,9 @@ class TestIntelligenceAPI:
             json={"name": "Upsert Probe", "weekly_goal": 5.0},
             headers=auth_headers,
         )
-        sugg = next(it["id"] for it in self._inbox_items() if it["kind"] == "suggestion")
+        sugg = next(
+            it["id"] for it in self._inbox_items(client, auth_headers) if it["kind"] == "suggestion"
+        )
         client.post(f"/api/intelligence/inbox/{sugg}/dismiss", headers=auth_headers)
 
         sync = MongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
@@ -3178,12 +3176,12 @@ class TestIntelligenceAPI:
         assert sugg in doc["dismissed_ids"]
 
         # Two consecutive reads both omit it — proves it's not a per-request fluke.
-        assert all(it["id"] != sugg for it in self._inbox_items())
-        assert all(it["id"] != sugg for it in self._inbox_items())
+        assert all(it["id"] != sugg for it in self._inbox_items(client, auth_headers))
+        assert all(it["id"] != sugg for it in self._inbox_items(client, auth_headers))
 
     # ── Auth ──────────────────────────────────────────────────────────
 
-    def test_endpoints_require_auth(self):
+    def test_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/intelligence/score"),
             ("GET", "/api/intelligence/score/history"),
@@ -3206,7 +3204,7 @@ class TestIntelligenceAPI:
     # logic itself is covered in test_domain.py; here we just want
     # the route handlers to actually run.
 
-    def test_generate_digest_default_week_returns_envelope(self):
+    def test_generate_digest_default_week_returns_envelope(self, client, auth_headers):
         """POST /digests/generate without ?week_of= computes for the
         previous week. Pin the response shape (week_of, total_hours,
         session_count, project_breakdown) so the dashboard can bind
@@ -3225,7 +3223,7 @@ class TestIntelligenceAPI:
         # days back), so week_of is in the past
         assert body["week_of"] < datetime.now(UTC).date().isoformat()
 
-    def test_suggestions_returns_list_for_empty_user(self):
+    def test_suggestions_returns_list_for_empty_user(self, client, auth_headers):
         """GET /suggestions on a user with no projects → []. Pin so
         a fresh account doesn't 500 on the dashboard's Daily Plan
         widget."""
@@ -3233,7 +3231,7 @@ class TestIntelligenceAPI:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_suggestions_accepts_date_query_param(self):
+    def test_suggestions_accepts_date_query_param(self, client, auth_headers):
         """The optional ?date=YYYY-MM-DD param overrides today.
         Pin the alias — Pydantic uses `date` as the query param
         name (alias of `target_date`)."""
@@ -3244,7 +3242,7 @@ class TestIntelligenceAPI:
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
-    def test_focus_scores_returns_list_for_empty_user(self):
+    def test_focus_scores_returns_list_for_empty_user(self, client, auth_headers):
         """GET /focus-scores on a no-data day → []. Pin the empty-day
         contract — the UI's Focus Quality chart binds to the array
         and would crash on a dict."""
@@ -3252,7 +3250,7 @@ class TestIntelligenceAPI:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_project_health_returns_list_for_empty_user(self):
+    def test_project_health_returns_list_for_empty_user(self, client, auth_headers):
         """GET /project-health with no projects → []. Pin the empty
         contract for first-run users."""
         resp = client.get("/api/intelligence/project-health", headers=auth_headers)
@@ -3283,20 +3281,20 @@ class TestAutoStartAPI:
         # leftover active beat.
         db.timeLogs.delete_many({})
         sync.close()
-        yield
+        return
 
-    def _create_project(self, name: str = "AutoStart Test") -> str:
+    def _create_project(self, client, auth_headers, name: str = "AutoStart Test") -> str:
         resp = client.post("/api/projects/", json={"name": name}, headers=auth_headers)
         assert resp.status_code == 201, resp.text
         return resp.json()["id"]
 
-    def test_list_rules_empty_initially(self):
+    def test_list_rules_empty_initially(self, client, auth_headers):
         resp = client.get("/api/auto-start/", headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_create_then_list_rule(self):
-        pid = self._create_project()
+    def test_create_then_list_rule(self, client, auth_headers):
+        pid = self._create_project(client, auth_headers)
         resp = client.post(
             "/api/auto-start/",
             json={
@@ -3317,8 +3315,8 @@ class TestAutoStartAPI:
         assert len(listing) == 1
         assert listing[0]["id"] == created["id"]
 
-    def test_delete_rule(self):
-        pid = self._create_project()
+    def test_delete_rule(self, client, auth_headers):
+        pid = self._create_project(client, auth_headers)
         created = client.post(
             "/api/auto-start/",
             json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "x/y"}},
@@ -3331,8 +3329,8 @@ class TestAutoStartAPI:
 
         assert client.get("/api/auto-start/", headers=auth_headers).json() == []
 
-    def test_trigger_starts_timer_for_matching_repo(self):
-        pid = self._create_project("Webhook Match")
+    def test_trigger_starts_timer_for_matching_repo(self, client, auth_headers):
+        pid = self._create_project(client, auth_headers, "Webhook Match")
         client.post(
             "/api/auto-start/",
             json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "me/mine"}},
@@ -3350,8 +3348,8 @@ class TestAutoStartAPI:
         assert body["project_id"] == pid
         assert body["beat_id"]
 
-    def test_trigger_no_match_returns_started_false(self):
-        pid = self._create_project()
+    def test_trigger_no_match_returns_started_false(self, client, auth_headers):
+        pid = self._create_project(client, auth_headers)
         client.post(
             "/api/auto-start/",
             json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "me/mine"}},
@@ -3368,7 +3366,7 @@ class TestAutoStartAPI:
         assert body["started"] is False
         assert "No matching rule" in body["reason"]
 
-    def test_trigger_with_no_rules_returns_started_false(self):
+    def test_trigger_with_no_rules_returns_started_false(self, client, auth_headers):
         resp = client.post(
             "/api/auto-start/trigger",
             json={"repository": "me/mine"},
@@ -3377,12 +3375,12 @@ class TestAutoStartAPI:
         assert resp.status_code == 200
         assert resp.json()["started"] is False
 
-    def test_trigger_only_matches_webhook_type_rules(self):
+    def test_trigger_only_matches_webhook_type_rules(self, client, auth_headers):
         """A 'schedule'-type rule whose config happens to contain a
         repo key must NOT fire from a webhook trigger — schedule
         rules are owned by the daemon's cron path, not this endpoint.
         Locks in the list_by_type('webhook_trigger') filter."""
-        pid = self._create_project()
+        pid = self._create_project(client, auth_headers)
         client.post(
             "/api/auto-start/",
             json={
@@ -3401,12 +3399,12 @@ class TestAutoStartAPI:
         assert resp.status_code == 200
         assert resp.json()["started"] is False
 
-    def test_trigger_swallows_already_running_into_started_false(self):
+    def test_trigger_swallows_already_running_into_started_false(self, client, auth_headers):
         """If the timer is already running, TimerService raises
         TimerAlreadyRunning. The route catches all exceptions and
         returns started=false with the reason — a webhook firing
         twice (e.g. GitHub retry) shouldn't 500 the handler."""
-        pid = self._create_project("Already Running Project")
+        pid = self._create_project(client, auth_headers, "Already Running Project")
         client.post(
             "/api/auto-start/",
             json={"type": "webhook_trigger", "project_id": pid, "config": {"repo": "me/mine"}},
@@ -3430,7 +3428,7 @@ class TestAutoStartAPI:
         assert body["started"] is False
         assert body["reason"]
 
-    def test_endpoints_require_auth(self):
+    def test_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/auto-start/"),
             ("POST", "/api/auto-start/"),
@@ -3465,16 +3463,16 @@ class TestWebhooksAPI:
         # Drain any in-flight dispatches from a previous test so this
         # test's assertions about set membership aren't polluted.
         _pending_dispatches.clear()
-        yield
+        return
 
     # ── CRUD ──────────────────────────────────────────────────────────
 
-    def test_list_webhooks_empty_initially(self):
+    def test_list_webhooks_empty_initially(self, client, auth_headers):
         resp = client.get("/api/webhooks/", headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_create_then_list_webhook(self):
+    def test_create_then_list_webhook(self, client, auth_headers):
         resp = client.post(
             "/api/webhooks/",
             json={
@@ -3494,7 +3492,7 @@ class TestWebhooksAPI:
         assert len(listing) == 1
         assert listing[0]["id"] == created["id"]
 
-    def test_create_uses_default_events_when_omitted(self):
+    def test_create_uses_default_events_when_omitted(self, client, auth_headers):
         # Default in CreateWebhookRequest is ["timer.start", "timer.stop"]
         # — locks the contract so a future change to the default is a
         # deliberate API break.
@@ -3506,7 +3504,7 @@ class TestWebhooksAPI:
         assert resp.status_code == 201
         assert resp.json()["events"] == ["timer.start", "timer.stop"]
 
-    def test_delete_webhook(self):
+    def test_delete_webhook(self, client, auth_headers):
         created = client.post(
             "/api/webhooks/",
             json={"url": "https://doomed.test/hook"},
@@ -3521,7 +3519,7 @@ class TestWebhooksAPI:
 
     # ── Daily summary dispatch ────────────────────────────────────────
 
-    def test_daily_summary_returns_payload_shape(self):
+    def test_daily_summary_returns_payload_shape(self, client, auth_headers):
         """Even with no beats and no subscribed webhooks, the endpoint
         produces the canonical payload shape that subscribers can rely
         on. Pins the schema."""
@@ -3543,7 +3541,7 @@ class TestWebhooksAPI:
         assert body["session_count"] == 0
         assert body["project_breakdown"] == []
 
-    def test_daily_summary_dispatch_pins_task_against_gc(self, monkeypatch):
+    def test_daily_summary_dispatch_pins_task_against_gc(self, client, auth_headers, monkeypatch):
         """The asyncio GC race fix: dispatch_webhook_event creates
         background tasks via asyncio.create_task and *must* hold a
         strong reference to each so the GC doesn't reap them
@@ -3615,7 +3613,7 @@ class TestWebhooksAPI:
 
     # ── Auth ──────────────────────────────────────────────────────────
 
-    def test_webhook_endpoints_require_auth(self):
+    def test_webhook_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/webhooks/"),
             ("POST", "/api/webhooks/"),
@@ -3646,11 +3644,11 @@ class TestPlanningAPI:
         for coll in ("weekly_plans",):
             db[coll].delete_many({})
         sync.close()
-        yield
+        return
 
     # ── Weekly plans ──────────────────────────────────────────────────
 
-    def test_get_weekly_plan_default_is_current_monday_empty_budgets(self):
+    def test_get_weekly_plan_default_is_current_monday_empty_budgets(self, client, auth_headers):
         from datetime import date, timedelta
 
         resp = client.get("/api/plans/weekly", headers=auth_headers)
@@ -3660,7 +3658,7 @@ class TestPlanningAPI:
         assert body["week_of"] == expected_monday
         assert body["budgets"] == []
 
-    def test_put_weekly_plan_then_get_round_trips(self):
+    def test_put_weekly_plan_then_get_round_trips(self, client, auth_headers):
         resp = client.put(
             "/api/plans/weekly",
             json={
@@ -3686,7 +3684,7 @@ class TestPlanningAPI:
             "p-beta": 6.0,
         }
 
-    def test_put_weekly_plan_upserts(self):
+    def test_put_weekly_plan_upserts(self, client, auth_headers):
         # First write
         client.put(
             "/api/plans/weekly",
@@ -3705,7 +3703,7 @@ class TestPlanningAPI:
 
     # ── Auth ──────────────────────────────────────────────────────────
 
-    def test_planning_endpoints_require_auth(self):
+    def test_planning_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/plans/weekly"),
             ("PUT", "/api/plans/weekly"),
@@ -3746,7 +3744,7 @@ class TestRegisterStartOrphanRetry:
     otherwise be locked out forever.
     """
 
-    def test_orphan_user_can_retry_register_start(self):
+    def test_orphan_user_can_retry_register_start(self, client):
         """register/start for an existing email with zero credentials reuses
         the user instead of returning 409."""
         import os
@@ -3802,7 +3800,7 @@ class TestAuthRouterErrorPaths:
 
         _session_manager._challenges.clear()
         _session_manager._pending_registrations.clear()
-        yield
+        return
 
     def _db(self):
         import os
@@ -3814,7 +3812,7 @@ class TestAuthRouterErrorPaths:
         sync_client = MongoClient(dsn)
         return sync_client, sync_client[db_name]
 
-    def test_register_start_existing_email_with_credentials_returns_409(self):
+    def test_register_start_existing_email_with_credentials_returns_409(self, client):
         """A user row with at least one credential → 409 on
         register/start (the email is "really registered"). Pin the
         409 vs the 200 orphan-retry path (test_orphan_user_can_retry_register_start
@@ -3844,7 +3842,7 @@ class TestAuthRouterErrorPaths:
         assert resp.status_code == 409
         assert "already registered" in resp.json()["detail"].lower()
 
-    def test_register_verify_without_pending_returns_400(self):
+    def test_register_verify_without_pending_returns_400(self, client):
         """POST /register/verify before /register/start was called
         → 400 "No pending registration found". Pin the user-facing
         envelope so an attacker who skips the challenge step gets
@@ -3864,7 +3862,7 @@ class TestAuthRouterErrorPaths:
         assert resp.status_code == 400
         assert "No pending registration" in resp.json()["detail"]
 
-    def test_login_verify_with_invalid_credential_returns_401(self):
+    def test_login_verify_with_invalid_credential_returns_401(self, client):
         """POST /login/verify without a pending challenge / with an
         unknown credential → 401. Pin the 401 envelope (ValueError
         from WebAuthnManager.verify_authentication maps to
@@ -3882,7 +3880,7 @@ class TestAuthRouterErrorPaths:
         )
         assert resp.status_code == 401
 
-    def test_login_options_returns_options_dict(self):
+    def test_login_options_returns_options_dict(self, client):
         """GET /login/options returns a dict with rpId + challenge +
         empty allowCredentials. Pin the empty allowCredentials list
         so a regression doesn't start leaking registered credential
@@ -3895,7 +3893,7 @@ class TestAuthRouterErrorPaths:
         assert opts["allowCredentials"] == []
         assert "rpId" in opts
 
-    def test_register_start_brand_new_email_creates_user(self):
+    def test_register_start_brand_new_email_creates_user(self, client):
         """POST /register/start with an email that has NO user row →
         creates a new user (the `else` branch at line 133) and
         returns its id. Pin both: 200 status AND a fresh user_id
@@ -3920,7 +3918,7 @@ class TestAuthRouterErrorPaths:
         assert db.users.count_documents({"email": email}) == 1
         sync_client.close()
 
-    def test_register_verify_value_error_returns_400_envelope(self, monkeypatch):
+    def test_register_verify_value_error_returns_400_envelope(self, client, monkeypatch):
         """When a pending registration challenge exists AND the user
         is found, but webauthn.verify_registration raises ValueError
         (malformed credential / signature mismatch), the response is
@@ -3951,7 +3949,7 @@ class TestAuthRouterErrorPaths:
 
         # Make verify_registration raise ValueError — this is the
         # branch that catches malformed credentials / sig mismatches
-        async def fake_verify_registration(*args, **kwargs):  # noqa: ARG001
+        async def fake_verify_registration(*args, **kwargs):
             raise ValueError("malformed credential blob")
 
         # Patch through the WebAuthnDep — find the actual instance
@@ -3981,7 +3979,7 @@ class TestAuthRouterErrorPaths:
 class TestRateLimiting:
     """Test that auth endpoints are rate-limited."""
 
-    def test_login_options_rate_limited(self):
+    def test_login_options_rate_limited(self, client):
         """GET /api/auth/login/options is rate-limited after repeated requests."""
         for _ in range(10):
             client.get("/api/auth/login/options")
@@ -3989,7 +3987,7 @@ class TestRateLimiting:
         response = client.get("/api/auth/login/options")
         assert response.status_code == 429
 
-    def test_pair_exchange_rate_limited(self):
+    def test_pair_exchange_rate_limited(self, client):
         """POST /api/device/pair/exchange is rate-limited.
 
         Endpoint is unauthenticated and accepts a 6-char base32 pairing
@@ -4044,7 +4042,7 @@ class TestMultiUserIsolation:
         sync_client.close()
         return ids
 
-    def test_projects_isolated_between_users(self):
+    def test_projects_isolated_between_users(self, client):
         """Projects created by one user are not visible to another."""
         user1_id, user2_id = self._seed_users("user1@test.com", "user2@test.com")
         h1 = self._make_headers(user1_id, "user1@test.com")
@@ -4066,7 +4064,7 @@ class TestMultiUserIsolation:
         projects_u2 = client.get("/api/projects/", headers=h2).json()
         assert not any(p["name"] == "user1-project" for p in projects_u2)
 
-    def test_flow_windows_isolated_between_users(self):
+    def test_flow_windows_isolated_between_users(self, client):
         """Flow windows posted by one user's daemon don't leak to another.
 
         This is the safety net for the signals pipeline — a regression in
@@ -4143,12 +4141,12 @@ class TestMultiUserIsolation:
 class TestDevicePairingAPI:
     """Test suite for daemon device pairing and device token auth."""
 
-    def test_generate_pair_code_requires_auth(self):
+    def test_generate_pair_code_requires_auth(self, client):
         """POST /api/device/pair/code without token returns 401."""
         resp = client.post("/api/device/pair/code")
         assert resp.status_code == 401
 
-    def test_generate_pair_code_success(self):
+    def test_generate_pair_code_success(self, client, auth_headers):
         """POST /api/device/pair/code returns a 6-char code."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         assert resp.status_code == 200
@@ -4156,7 +4154,7 @@ class TestDevicePairingAPI:
         assert len(data["code"]) == 6
         assert data["expires_in_seconds"] == 300
 
-    def test_exchange_code_success(self):
+    def test_exchange_code_success(self, client, auth_headers):
         """Full pairing flow: generate code, exchange for device token."""
         # Generate code
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4172,7 +4170,7 @@ class TestDevicePairingAPI:
         assert "device_token" in data
         assert "device_id" in data
 
-    def test_exchange_code_invalid(self):
+    def test_exchange_code_invalid(self, client):
         """Exchange with bad code returns 404."""
         resp = client.post(
             "/api/device/pair/exchange",
@@ -4180,7 +4178,7 @@ class TestDevicePairingAPI:
         )
         assert resp.status_code == 404
 
-    def test_exchange_code_one_time_use(self):
+    def test_exchange_code_one_time_use(self, client, auth_headers):
         """Same code can only be exchanged once."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
@@ -4193,7 +4191,7 @@ class TestDevicePairingAPI:
         resp = client.post("/api/device/pair/exchange", json={"code": code})
         assert resp.status_code == 404
 
-    def test_device_token_allows_heartbeat(self):
+    def test_device_token_allows_heartbeat(self, client, auth_headers):
         """Device token can POST to /api/device/heartbeat."""
         # Pair a device
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4210,7 +4208,7 @@ class TestDevicePairingAPI:
         )
         assert resp.status_code == 200
 
-    def test_device_token_blocked_on_non_allowed_endpoints(self):
+    def test_device_token_blocked_on_non_allowed_endpoints(self, client, auth_headers):
         """Device token is rejected on endpoints not in DEVICE_ALLOWED_PREFIXES."""
         # Pair a device
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4223,7 +4221,7 @@ class TestDevicePairingAPI:
         resp = client.get("/api/analytics/rhythm", headers=device_headers)
         assert resp.status_code == 403
 
-    def test_device_token_allowed_on_analytics_heatmap(self):
+    def test_device_token_allowed_on_analytics_heatmap(self, client, auth_headers):
         """Device tokens can read the heatmap (companion timer-screen totals)."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
@@ -4234,7 +4232,7 @@ class TestDevicePairingAPI:
         resp = client.get("/api/analytics/heatmap", headers=device_headers)
         assert resp.status_code == 200
 
-    def test_device_token_allowed_on_analytics_tags(self):
+    def test_device_token_allowed_on_analytics_tags(self, client, auth_headers):
         """Device tokens can read /api/analytics/tags — the companion surfaces
         the auto-derived tag list (repo/language) in its analytics views."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4246,7 +4244,7 @@ class TestDevicePairingAPI:
         resp = client.get("/api/analytics/tags", headers=device_headers)
         assert resp.status_code == 200
 
-    def test_device_token_allowed_on_beats(self):
+    def test_device_token_allowed_on_beats(self, client, auth_headers):
         """Device tokens can read /api/beats — the companion lists recent
         sessions after a timer stops (no manual note/tags edit anymore)."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4258,7 +4256,7 @@ class TestDevicePairingAPI:
         resp = client.get("/api/beats/", headers=device_headers)
         assert resp.status_code == 200
 
-    def test_list_registrations(self):
+    def test_list_registrations(self, client, auth_headers):
         """GET /api/device/registrations lists paired devices."""
         # Pair a device
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4277,7 +4275,7 @@ class TestDevicePairingAPI:
         matched = next(r for r in regs if r["device_id"] == device_id)
         assert matched["device_name"] == "my-mac"
 
-    def test_revoke_device(self):
+    def test_revoke_device(self, client, auth_headers):
         """DELETE /api/device/registrations/{device_id} revokes the device."""
         # Pair a device
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4306,7 +4304,7 @@ class TestDevicePairingAPI:
         assert "revoked" in body["detail"]
         assert body["code"] == "DEVICE_REVOKED"
 
-    def test_revoked_device_not_in_list(self):
+    def test_revoked_device_not_in_list(self, client, auth_headers):
         """Revoked devices don't appear in the registrations list."""
         # Pair and revoke
         resp = client.post("/api/device/pair/code", headers=auth_headers)
@@ -4319,7 +4317,7 @@ class TestDevicePairingAPI:
         resp = client.get("/api/device/registrations", headers=auth_headers)
         assert not any(r["device_id"] == device_id for r in resp.json())
 
-    def test_device_status_shape_is_what_the_wall_clock_reads(self):
+    def test_device_status_shape_is_what_the_wall_clock_reads(self, client, auth_headers):
         """GET /api/device/status returns the field shape the ESP32 wall
         clock parser expects. Pinned because a contract drift on this
         endpoint is what silently broke the firmware (commit 3e7c507):
@@ -4352,7 +4350,8 @@ class TestDevicePairingAPI:
         assert isinstance(body["theme_accent_rgb"], list), body
         assert len(body["theme_accent_rgb"]) == 3, body["theme_accent_rgb"]
         for component in body["theme_accent_rgb"]:
-            assert isinstance(component, int) and 0 <= component <= 255, component
+            assert isinstance(component, int), component
+            assert 0 <= component <= 255, component
 
         # When clocked_in is True, project_color_rgb / elapsed_minutes
         # / project_name / project_id are also present. Default fresh-
@@ -4364,7 +4363,7 @@ class TestDevicePairingAPI:
         assert body["daily_total_minutes"] == 0
         assert body["energy_level"] == 0
 
-    def test_device_favorites_shape_is_what_the_wall_clock_reads(self):
+    def test_device_favorites_shape_is_what_the_wall_clock_reads(self, client, auth_headers):
         """GET /api/device/favorites returns each project with the
         color_rgb field shape the firmware now reads (was
         silently parsing a 'color' hex string that doesn't exist).
@@ -4389,16 +4388,18 @@ class TestDevicePairingAPI:
         assert isinstance(favorites, list)
         assert len(favorites) >= 1
         for fav in favorites:
-            assert "id" in fav and "name" in fav, fav
+            assert "id" in fav, fav
+            assert "name" in fav, fav
             # color_rgb is the int[3] the wall-clock's rgbFromArray reads.
             # NOT "color" (the previously-misnamed hex-string key).
             assert "color_rgb" in fav, fav
             assert "color" not in fav, (
                 f"unexpected legacy 'color' key — wall-clock reads color_rgb: {fav}"
             )
-            assert isinstance(fav["color_rgb"], list) and len(fav["color_rgb"]) == 3
+            assert isinstance(fav["color_rgb"], list)
+            assert len(fav["color_rgb"]) == 3
 
-    def test_device_weekly_returns_seven_days_oldest_first(self):
+    def test_device_weekly_returns_seven_days_oldest_first(self, client, auth_headers):
         """GET /api/device/weekly returns last 7 days of minute totals
         — the wall-clock parses these directly into its weekly bar
         display. Ordering is oldest → newest so the firmware can render
@@ -4430,7 +4431,7 @@ class TestDevicePairingAPI:
             assert isinstance(entry["minutes"], int)
             assert entry["minutes"] >= 0
 
-    def test_device_heartbeat_persists_telemetry_for_get(self):
+    def test_device_heartbeat_persists_telemetry_for_get(self, client, auth_headers):
         """POST /api/device/heartbeat with telemetry stores the values;
         GET /api/device/heartbeat returns them. Locks in the round-trip
         the wall-clock's heartbeat tick (commit 45307e5) relies on for
@@ -4469,7 +4470,7 @@ class TestDevicePairingAPI:
 class TestSignalsAPI:
     """Test suite for signals (flow windows + signal summaries) endpoints."""
 
-    def _pair_device(self):
+    def _pair_device(self, client, auth_headers):
         """Helper: pair a device and return (device_token, device_headers)."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
@@ -4477,7 +4478,7 @@ class TestSignalsAPI:
         data = resp.json()
         return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}
 
-    def test_suggest_timer_matches_editor_repo_against_autostart_repos(self):
+    def test_suggest_timer_matches_editor_repo_against_autostart_repos(self, client, auth_headers):
         """The /suggest-timer endpoint disambiguates same-category
         projects by matching the daemon's editor_repo against each
         project's autostart_repos. Without this, two "coding"
@@ -4509,7 +4510,7 @@ class TestSignalsAPI:
             headers=auth_headers,
         )
 
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         resp = client.post(
             "/api/signals/suggest-timer",
             json={
@@ -4536,7 +4537,9 @@ class TestSignalsAPI:
         # Make sure A wasn't picked accidentally.
         assert body["project_id"] != proj_a
 
-    def test_suggest_timer_falls_back_to_category_when_no_editor_repo_match(self):
+    def test_suggest_timer_falls_back_to_category_when_no_editor_repo_match(
+        self, client, auth_headers
+    ):
         """When the editor_repo doesn't match any project's
         autostart_repos (or is empty), fall back to category match.
         Locks in the second-priority path.
@@ -4548,7 +4551,7 @@ class TestSignalsAPI:
         )
         proj_id = resp.json()["id"]
 
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         # Send a window with no editor_repo at all.
         resp = client.post(
             "/api/signals/suggest-timer",
@@ -4570,7 +4573,9 @@ class TestSignalsAPI:
         assert body["should_suggest"] is True
         assert body["project_id"] == proj_id
 
-    def test_suggest_timer_persists_pending_suggestion_for_companion_poll(self):
+    def test_suggest_timer_persists_pending_suggestion_for_companion_poll(
+        self, client, auth_headers
+    ):
         """A positive `/suggest-timer` response also writes a
         PendingSuggestion so the companion's notification poller can
         pick it up later via `GET /api/signals/pending-suggestions`.
@@ -4595,7 +4600,7 @@ class TestSignalsAPI:
             headers=auth_headers,
         )
 
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         before = client.get("/api/signals/pending-suggestions", headers=device_headers).json()[
             "suggestions"
         ]
@@ -4640,12 +4645,12 @@ class TestSignalsAPI:
             ts = ts.replace(tzinfo=UTC)
         assert (datetime.now(UTC) - ts) < timedelta(minutes=1)
 
-    def test_suggest_timer_does_not_persist_when_no_match(self):
+    def test_suggest_timer_does_not_persist_when_no_match(self, client, auth_headers):
         """`should_suggest=False` responses must NOT leave a pending
         suggestion behind. Otherwise the companion poller would fire a
         notification for a project the API explicitly didn't suggest.
         """
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         before = client.get("/api/signals/pending-suggestions", headers=device_headers).json()[
             "suggestions"
         ]
@@ -4674,7 +4679,7 @@ class TestSignalsAPI:
         new_ids = {s["id"] for s in resp.json()["suggestions"]} - before_ids
         assert new_ids == set(), new_ids
 
-    def test_pending_suggestions_explicit_since_window(self):
+    def test_pending_suggestions_explicit_since_window(self, client, auth_headers):
         """Explicit `since` filters out suggestions older than the cutoff.
         The default `since` (last 30 min) follows the same parameter, so
         this covers both code paths that matter for the companion poller's
@@ -4688,7 +4693,7 @@ class TestSignalsAPI:
         )
         assert resp.status_code == 201
 
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         client.post(
             "/api/signals/suggest-timer",
             json={
@@ -4725,12 +4730,12 @@ class TestSignalsAPI:
         names_future = {s["project_name"] for s in resp.json()["suggestions"]}
         assert "Since Window Test" not in names_future
 
-    def test_pending_suggestions_requires_auth(self):
+    def test_pending_suggestions_requires_auth(self, client):
         """No token → 401, same as every other read endpoint."""
         resp = client.get("/api/signals/pending-suggestions")
         assert resp.status_code == 401
 
-    def test_create_project_with_category_persists(self):
+    def test_create_project_with_category_persists(self, client, auth_headers):
         """Regression guard: the create handler used to ignore the
         \`category\` field — the schema accepted it but the route never
         forwarded it to the domain Project, so a freshly-created
@@ -4756,7 +4761,7 @@ class TestSignalsAPI:
         match = next(p for p in resp.json() if p["id"] == body["id"])
         assert match["category"] == "coding"
 
-    def test_update_project_persists_autostart_repos(self):
+    def test_update_project_persists_autostart_repos(self, client, auth_headers):
         """update_project also used to drop autostart_repos on the
         floor — the schema accepted them but the domain Project was
         built without them, so the daemon's auto-timer-by-repo rules
@@ -4781,7 +4786,7 @@ class TestSignalsAPI:
         body = resp.json()
         assert body["autostart_repos"] == ["/Users/me/code/example", "/Users/me/code/other"]
 
-    def test_update_project_rejects_invalid_goal_type_with_422(self):
+    def test_update_project_rejects_invalid_goal_type_with_422(self, client, auth_headers):
         """goal_type is a GoalType StrEnum at the schema layer, so an
         invalid string ("dangerous") fails request validation with a
         clean 422 + envelope `{detail, code, fields}` instead of
@@ -4809,7 +4814,7 @@ class TestSignalsAPI:
         paths = [f["path"] for f in body["fields"]]
         assert "goal_type" in paths
 
-    def test_update_project_accepts_valid_goal_types(self):
+    def test_update_project_accepts_valid_goal_types(self, client, auth_headers):
         """target and cap both round-trip cleanly."""
         resp = client.post(
             "/api/projects/",
@@ -4826,13 +4831,13 @@ class TestSignalsAPI:
             assert resp.status_code == 200, f"goal_type={valid} should be valid: {resp.text}"
             assert resp.json()["goal_type"] == valid
 
-    def test_timer_context_no_active_timer(self):
+    def test_timer_context_no_active_timer(self, client, auth_headers):
         """GET /api/signals/timer-context returns timer_running=false
         with empty project fields when no timer is running. The daemon's
         pollTimerContext goroutine reads this every 30s; the shield uses
         the boolean to gate drift detection (no drift when no timer).
         """
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         resp = client.get("/api/signals/timer-context", headers=device_headers)
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -4843,7 +4848,7 @@ class TestSignalsAPI:
         assert "project_id" in body
         assert "project_category" in body
 
-    def test_timer_context_with_active_timer_carries_category(self):
+    def test_timer_context_with_active_timer_carries_category(self, client, auth_headers):
         """When a timer IS running, the response includes the project's
         category so the daemon's flow-score computation can compute
         category_fit (whether the dominant app matches the project's
@@ -4864,7 +4869,7 @@ class TestSignalsAPI:
         )
         assert resp.status_code == 200, resp.text
 
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         resp = client.get("/api/signals/timer-context", headers=device_headers)
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -4872,7 +4877,7 @@ class TestSignalsAPI:
         assert body["project_id"] == project_id
         assert body["project_category"] == "coding"
 
-    def test_post_drift_event_records_flow_window_with_drift_category(self):
+    def test_post_drift_event_records_flow_window_with_drift_category(self, client, auth_headers):
         """POST /api/signals/drift records a FlowWindow with category=drift.
 
         The daemon's distraction shield POSTs to this endpoint when
@@ -4882,7 +4887,7 @@ class TestSignalsAPI:
         test to catch a regression. Locks in the behavior the daemon
         relies on: 201 + an id, and the resulting record reads back
         with category="drift" so the UI's history view can filter."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         started_at = now - timedelta(seconds=45)
         resp = client.post(
@@ -4923,7 +4928,7 @@ class TestSignalsAPI:
         elapsed = (window_end - window_start).total_seconds()
         assert 44.5 <= elapsed <= 45.5, f"expected ≈45s window, got {elapsed}s"
 
-    def test_post_drift_event_requires_auth(self):
+    def test_post_drift_event_requires_auth(self, client):
         """A drift event with no auth gets 401 — same as every
         other write endpoint."""
         resp = client.post(
@@ -4936,11 +4941,11 @@ class TestSignalsAPI:
         )
         assert resp.status_code == 401
 
-    def test_post_drift_event_validates_required_fields(self):
+    def test_post_drift_event_validates_required_fields(self, client, auth_headers):
         """Missing required fields (started_at / duration_seconds /
         bundle_id) trip the unified 422 envelope, same shape the
         daemon's describeErrorBody knows how to surface."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         resp = client.post(
             "/api/signals/drift",
             json={},  # missing all three required fields
@@ -4954,13 +4959,13 @@ class TestSignalsAPI:
         paths = {f["path"] for f in body["fields"]}
         assert {"started_at", "duration_seconds", "bundle_id"}.issubset(paths), paths
 
-    def test_recent_drift_returns_drift_events_only(self):
+    def test_recent_drift_returns_drift_events_only(self, client, auth_headers):
         """GET /api/signals/recent-drift returns just the drift category
         windows (not arbitrary flow windows), each carrying the round-
         tripped started_at / duration_seconds / bundle_id the daemon
         originally posted. The companion poller relies on this shape to
         fire the local notification + dedupe by id."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         # Two drift events with bundle ids unique to this test (the
         # surrounding TestSignalsAPI class creates other drifts in
@@ -5031,12 +5036,12 @@ class TestSignalsAPI:
         for e in ours:
             assert e["id"]
 
-    def test_recent_drift_default_since_is_30_minutes(self):
+    def test_recent_drift_default_since_is_30_minutes(self, client, auth_headers):
         """When the companion calls without `since`, the endpoint defaults
         to the last 30 minutes — long enough that a couple of missed poll
         ticks (5 min apart) don't drop a notification, short enough that
         the response stays small for an active drifter."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         # One recent (15 min ago) — should appear; one old (45 min ago)
         # — should NOT appear under the default window. Bundle ids are
@@ -5070,10 +5075,10 @@ class TestSignalsAPI:
         }
         assert ours == {"com.defaultsince.recent"}
 
-    def test_recent_drift_respects_limit(self):
+    def test_recent_drift_respects_limit(self, client, auth_headers):
         """Limit caps the response so a runaway day of distractions
         doesn't return a multi-MB payload to a polling phone."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         # Pin `since` to 5 seconds ago so prior tests' drifts stay out
         # of the slice; the loop posts 5 events within that window.
@@ -5096,14 +5101,14 @@ class TestSignalsAPI:
         assert resp.status_code == 200
         assert len(resp.json()["events"]) == 2
 
-    def test_recent_drift_requires_auth(self):
+    def test_recent_drift_requires_auth(self, client):
         """No token → 401, same as every other read endpoint."""
         resp = client.get("/api/signals/recent-drift")
         assert resp.status_code == 401
 
-    def test_post_flow_window_with_device_token(self):
+    def test_post_flow_window_with_device_token(self, client, auth_headers):
         """Device token can POST a flow window."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         resp = client.post(
             "/api/signals/flow-windows",
@@ -5124,9 +5129,9 @@ class TestSignalsAPI:
         assert resp.status_code == 201
         assert "id" in resp.json()
 
-    def test_flow_window_round_trips_editor_context(self):
+    def test_flow_window_round_trips_editor_context(self, client, auth_headers):
         """Editor heartbeat fields (repo, branch, language) round-trip."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         client.post(
             "/api/signals/flow-windows",
@@ -5161,10 +5166,10 @@ class TestSignalsAPI:
         assert match["editor_branch"] == "main"
         assert match["editor_language"] == "go"
 
-    def test_flow_windows_filter_by_project_id(self):
+    def test_flow_windows_filter_by_project_id(self, client, auth_headers):
         """GET /api/signals/flow-windows?project_id=X returns only windows
         whose active_project_id matches."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         # Two windows tagged with different project ids.
         for pid, score in [("proj-A", 0.4), ("proj-B", 0.81)]:
@@ -5200,10 +5205,10 @@ class TestSignalsAPI:
         assert all(w["active_project_id"] == "proj-B" for w in windows)
         assert any(w["flow_score"] == 0.81 for w in windows)
 
-    def test_flow_windows_filter_by_editor_repo(self):
+    def test_flow_windows_filter_by_editor_repo(self, client, auth_headers):
         """GET /api/signals/flow-windows?editor_repo=… narrows to that
         workspace path, used by future per-repo UI views."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         for repo_path, score in [
             ("/Users/me/code/alpha", 0.55),
@@ -5240,10 +5245,10 @@ class TestSignalsAPI:
         assert all(w["editor_repo"] == "/Users/me/code/beta" for w in windows)
         assert any(w["flow_score"] == 0.77 for w in windows)
 
-    def test_flow_windows_filter_by_editor_language(self):
+    def test_flow_windows_filter_by_editor_language(self, client, auth_headers):
         """GET /api/signals/flow-windows?editor_language=… narrows to that
         language id, used for click-to-filter on FlowByLanguage."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         for lang, score in [("go", 0.61), ("typescript", 0.83)]:
             client.post(
@@ -5277,11 +5282,11 @@ class TestSignalsAPI:
         assert all(w["editor_language"] == "typescript" for w in windows)
         assert any(w["flow_score"] == 0.83 for w in windows)
 
-    def test_flow_windows_summary_aggregates_and_picks_top_buckets(self):
+    def test_flow_windows_summary_aggregates_and_picks_top_buckets(self, client, auth_headers):
         """GET /api/signals/flow-windows/summary returns avg/peak/count
         plus the top bucket on each grouping axis in a single round-trip,
         honoring the same filter params as the JSON endpoint."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         # Use a bundle id no other test in the class POSTs, then filter by
         # it so prior windows in the shared class state can't leak in.
@@ -5336,10 +5341,10 @@ class TestSignalsAPI:
         assert body["top_bundle"]["key"] == marker_bundle
         assert body["top_bundle"]["count"] == 3
 
-    def test_flow_windows_summary_empty_slice_returns_zeros(self):
+    def test_flow_windows_summary_empty_slice_returns_zeros(self, client, auth_headers):
         """No windows in the range → zero/None response, not 404 — callers
         can render an empty state without parsing an error."""
-        self._pair_device()
+        self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         resp = client.get(
             "/api/signals/flow-windows/summary",
@@ -5359,12 +5364,12 @@ class TestSignalsAPI:
         assert body["top_language"] is None
         assert body["top_bundle"] is None
 
-    def test_flow_windows_summary_respects_filter(self):
+    def test_flow_windows_summary_respects_filter(self, client, auth_headers):
         """The summary honors the language filter — same slice the user
         sees in the chip-row download is what the summary endpoint
         aggregates. Uses a unique marker repo to avoid pollution from
         other tests in this shared-state class."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         marker_repo = "/Users/me/code/summary-filter-marker"
         for lang, score in [("haskell", 0.9), ("scala", 0.4), ("scala", 0.5)]:
@@ -5434,11 +5439,11 @@ class TestSignalsAPI:
         end = datetime(2026, 4, 2, 1, 45, 0, tzinfo=plus2)
         assert _csv_filename_for_range(start, end) == "beats_flow_windows_20260401.csv"
 
-    def test_flow_windows_csv_export_respects_filter(self):
+    def test_flow_windows_csv_export_respects_filter(self, client, auth_headers):
         """GET /api/signals/flow-windows.csv streams a CSV that honors
         the same filter params as the JSON endpoint, so the "Download"
         button on Insights returns exactly the visible slice."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         for lang, score in [("go", 0.74), ("typescript", 0.55)]:
             client.post(
@@ -5488,10 +5493,10 @@ class TestSignalsAPI:
         start_day = (now - timedelta(hours=1)).astimezone(UTC).strftime("%Y%m%d")
         assert f"beats_flow_windows_{start_day}" in cd, cd
 
-    def test_flow_windows_filter_by_bundle_id(self):
+    def test_flow_windows_filter_by_bundle_id(self, client, auth_headers):
         """GET /api/signals/flow-windows?bundle_id=… narrows to that
         macOS bundle id, used for click-to-filter on FlowByApp."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         for bundle, score in [
             ("com.microsoft.VSCode", 0.82),
@@ -5527,9 +5532,9 @@ class TestSignalsAPI:
         assert all(w["dominant_bundle_id"] == "com.microsoft.VSCode" for w in windows)
         assert any(w["flow_score"] == 0.82 for w in windows)
 
-    def test_flow_window_without_editor_context_still_validates(self):
+    def test_flow_window_without_editor_context_still_validates(self, client, auth_headers):
         """Older daemons that don't send editor_* fields are still accepted."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         resp = client.post(
             "/api/signals/flow-windows",
@@ -5548,9 +5553,9 @@ class TestSignalsAPI:
         )
         assert resp.status_code == 201
 
-    def test_read_flow_windows_with_session_token(self):
+    def test_read_flow_windows_with_session_token(self, client, auth_headers):
         """Session token can read flow windows posted by the device."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
 
         # Post a window
@@ -5584,9 +5589,9 @@ class TestSignalsAPI:
         assert len(windows) >= 1
         assert any(w["flow_score"] == 0.8 for w in windows)
 
-    def test_post_signal_summary(self):
+    def test_post_signal_summary(self, client, auth_headers):
         """Device token can POST signal summaries."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
 
         resp = client.post(
@@ -5602,9 +5607,9 @@ class TestSignalsAPI:
         assert resp.status_code == 200
         assert "id" in resp.json()
 
-    def test_read_signal_summaries(self):
+    def test_read_signal_summaries(self, client, auth_headers):
         """Session token can read signal summaries."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
 
         # Post a summary
@@ -5632,9 +5637,9 @@ class TestSignalsAPI:
         summaries = resp.json()
         assert len(summaries) >= 1
 
-    def test_summary_upsert(self):
+    def test_summary_upsert(self, client, auth_headers):
         """Posting the same hour twice upserts (updates, not duplicates)."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
 
         # First post
@@ -5663,9 +5668,9 @@ class TestSignalsAPI:
         matching = [s for s in summaries if s["total_samples"] == 20]
         assert len(matching) == 1
 
-    def test_delete_all_signals(self):
+    def test_delete_all_signals(self, client, auth_headers):
         """DELETE /api/signals/all removes all summaries."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
 
         client.post(
@@ -5678,15 +5683,15 @@ class TestSignalsAPI:
         assert resp.status_code == 200
         assert resp.json()["deleted_summaries"] >= 1
 
-    def test_device_token_blocked_on_non_allowed_paths(self):
+    def test_device_token_blocked_on_non_allowed_paths(self, client, auth_headers):
         """Device token cannot access endpoints outside DEVICE_ALLOWED_PREFIXES."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         resp = client.get("/api/analytics/rhythm", headers=device_headers)
         assert resp.status_code == 403
 
-    def test_flow_window_validation(self):
+    def test_flow_window_validation(self, client, auth_headers):
         """Flow score values are validated to [0, 1]."""
-        _, device_headers = self._pair_device()
+        _, device_headers = self._pair_device(client, auth_headers)
         now = datetime.now(UTC)
         resp = client.post(
             "/api/signals/flow-windows",
@@ -5707,16 +5712,16 @@ class TestSignalsAPI:
 class TestBiometricsAPI:
     """Test suite for biometrics endpoints."""
 
-    def _pair_device(self):
+    def _pair_device(self, client, auth_headers):
         """Helper: pair a device and return device_headers."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})
         return {"Authorization": f"Bearer {resp.json()['device_token']}"}
 
-    def test_post_biometric_day(self):
+    def test_post_biometric_day(self, client, auth_headers):
         """POST biometric data with device token."""
-        device_headers = self._pair_device()
+        device_headers = self._pair_device(client, auth_headers)
         resp = client.post(
             "/api/biometrics/daily",
             json={
@@ -5733,7 +5738,7 @@ class TestBiometricsAPI:
         assert resp.status_code == 200
         assert "id" in resp.json()
 
-    def test_post_biometric_day_session_token(self):
+    def test_post_biometric_day_session_token(self, client, auth_headers):
         """POST biometric data also works with session token."""
         resp = client.post(
             "/api/biometrics/daily",
@@ -5747,7 +5752,7 @@ class TestBiometricsAPI:
         )
         assert resp.status_code == 200
 
-    def test_read_biometrics(self):
+    def test_read_biometrics(self, client, auth_headers):
         """GET biometrics by date range."""
         # Post some data first
         client.post(
@@ -5765,7 +5770,7 @@ class TestBiometricsAPI:
         days = resp.json()
         assert len(days) >= 1
 
-    def test_biometric_upsert(self):
+    def test_biometric_upsert(self, client, auth_headers):
         """Same (date, source) twice updates, not duplicates."""
         client.post(
             "/api/biometrics/daily",
@@ -5788,7 +5793,7 @@ class TestBiometricsAPI:
         assert len(fitbit_days) == 1
         assert fitbit_days[0]["steps"] == 9000
 
-    def test_delete_biometrics(self):
+    def test_delete_biometrics(self, client, auth_headers):
         """DELETE removes all biometric data."""
         client.post(
             "/api/biometrics/daily",
@@ -5799,13 +5804,13 @@ class TestBiometricsAPI:
         assert resp.status_code == 200
         assert resp.json()["deleted"] >= 1
 
-    def test_fitbit_status_disconnected(self):
+    def test_fitbit_status_disconnected(self, client, auth_headers):
         """GET /api/fitbit/status returns disconnected by default."""
         resp = client.get("/api/fitbit/status", headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json()["connected"] is False
 
-    def test_oura_status_disconnected(self):
+    def test_oura_status_disconnected(self, client, auth_headers):
         """GET /api/oura/status returns disconnected by default."""
         resp = client.get("/api/oura/status", headers=auth_headers)
         assert resp.status_code == 200
@@ -5858,7 +5863,7 @@ class TestOAuthIntegrationRouters:
 
     # -------- /api/calendar --------
 
-    def test_calendar_auth_url_returns_google_consent_url(self, auth_info):
+    def test_calendar_auth_url_returns_google_consent_url(self, client, auth_info):
         """GET /api/calendar/auth-url returns the Google OAuth URL.
         Pin so a regression doesn't silently change the URL host
         or strip required params."""
@@ -5870,7 +5875,7 @@ class TestOAuthIntegrationRouters:
         assert "access_type=offline" in url
         assert "prompt=consent" in url
 
-    def test_calendar_status_connected_when_integration_exists(self, auth_info):
+    def test_calendar_status_connected_when_integration_exists(self, client, auth_info):
         """GET /api/calendar/status with a connected integration →
         connected: True, provider: 'google'. Pin the response
         shape — the UI's Settings → Integrations panel binds
@@ -5892,7 +5897,7 @@ class TestOAuthIntegrationRouters:
         assert body["connected"] is True
         assert body["provider"] == "google"
 
-    def test_calendar_status_disconnected_when_no_doc(self, auth_info):
+    def test_calendar_status_disconnected_when_no_doc(self, client, auth_info):
         """GET /api/calendar/status with no integration → connected:
         False, provider: None. Pin so the UI can render the
         "Connect Calendar" button on first load."""
@@ -5902,7 +5907,7 @@ class TestOAuthIntegrationRouters:
         assert body["connected"] is False
         assert body["provider"] is None
 
-    def test_calendar_events_empty_when_not_connected(self, auth_info):
+    def test_calendar_events_empty_when_not_connected(self, client, auth_info):
         """GET /api/calendar/events without an integration → []
         (not 500, not "connection required" error). Pin so the
         coach's day context falls through gracefully when the
@@ -5911,7 +5916,7 @@ class TestOAuthIntegrationRouters:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_calendar_disconnect_returns_false_when_not_connected(self, auth_info):
+    def test_calendar_disconnect_returns_false_when_not_connected(self, client, auth_info):
         """DELETE /api/calendar/disconnect without an integration →
         disconnected: False (idempotent). Pin so a "disconnect"
         button click on an already-disconnected account doesn't
@@ -5922,14 +5927,14 @@ class TestOAuthIntegrationRouters:
 
     # -------- /api/github --------
 
-    def test_github_auth_url_returns_github_consent_url(self, auth_info):
+    def test_github_auth_url_returns_github_consent_url(self, client, auth_info):
         """GET /api/github/auth-url returns the GitHub OAuth URL."""
         resp = client.get("/api/github/auth-url", headers=auth_info["headers"])
         assert resp.status_code == 200
         url = resp.json()["url"]
         assert url.startswith("https://github.com/login/oauth/authorize?")
 
-    def test_github_status_connected_when_integration_exists(self, auth_info):
+    def test_github_status_connected_when_integration_exists(self, client, auth_info):
         """Status reports github_username when connected. Pin so
         the UI can show "Connected as @ahmed" rather than a
         generic "Connected" label. The key is `github_username`
@@ -5950,14 +5955,14 @@ class TestOAuthIntegrationRouters:
         assert body["connected"] is True
         assert body["github_username"] == "ahmed"
 
-    def test_github_status_disconnected_when_no_doc(self, auth_info):
+    def test_github_status_disconnected_when_no_doc(self, client, auth_info):
         resp = client.get("/api/github/status", headers=auth_info["headers"])
         assert resp.status_code == 200
         body = resp.json()
         assert body["connected"] is False
         assert body["github_username"] is None
 
-    def test_github_disconnect_returns_true_when_connected(self, auth_info):
+    def test_github_disconnect_returns_true_when_connected(self, client, auth_info):
         """DELETE /api/github/disconnect with a connected integration
         → disconnected:True and the doc is gone. Pin so the
         Settings → Integrations panel's "Disconnect" button reflects
@@ -5983,13 +5988,13 @@ class TestOAuthIntegrationRouters:
 
     # -------- /api/fitbit --------
 
-    def test_fitbit_auth_url_returns_fitbit_consent_url(self, auth_info):
+    def test_fitbit_auth_url_returns_fitbit_consent_url(self, client, auth_info):
         resp = client.get("/api/fitbit/auth-url", headers=auth_info["headers"])
         assert resp.status_code == 200
         url = resp.json()["url"]
         assert url.startswith("https://www.fitbit.com/oauth2/authorize?")
 
-    def test_fitbit_status_connected_reports_user_id(self, auth_info):
+    def test_fitbit_status_connected_reports_user_id(self, client, auth_info):
         """GET /api/fitbit/status with a connected integration →
         connected:True, fitbit_user_id from the doc. Pin the
         snake_case key (NOT camelCase) so the iOS companion's
@@ -6014,7 +6019,7 @@ class TestOAuthIntegrationRouters:
         assert body["connected"] is True
         assert body["fitbit_user_id"] == "fb-user-99"
 
-    def test_fitbit_disconnect_returns_true_when_connected(self, auth_info):
+    def test_fitbit_disconnect_returns_true_when_connected(self, client, auth_info):
         """DELETE /api/fitbit/disconnect with an existing integration
         → disconnected:True (and the row is gone). Pin so the
         Settings → Integrations panel's "Disconnect" button reflects
@@ -6039,7 +6044,7 @@ class TestOAuthIntegrationRouters:
 
     # -------- /api/oura --------
 
-    def test_oura_status_connected_reports_user_id(self, auth_info):
+    def test_oura_status_connected_reports_user_id(self, client, auth_info):
         """GET /api/oura/status with a connected integration →
         connected:True, oura_user_id. Same shape pattern as Fitbit."""
         sync_client, db = self._db()
@@ -6058,7 +6063,7 @@ class TestOAuthIntegrationRouters:
         assert body["connected"] is True
         assert body["oura_user_id"] == "oura-user-7"
 
-    def test_oura_disconnect_returns_false_when_not_connected(self, auth_info):
+    def test_oura_disconnect_returns_false_when_not_connected(self, client, auth_info):
         """DELETE /api/oura/disconnect without an integration →
         disconnected: False. Same idempotent contract as
         calendar/disconnect."""
@@ -6068,14 +6073,14 @@ class TestOAuthIntegrationRouters:
 
     # -------- Auth wall — unauthenticated requests rejected --------
 
-    def test_calendar_auth_url_requires_auth(self):
+    def test_calendar_auth_url_requires_auth(self, client):
         """GET /api/calendar/auth-url without a token → 401.
         Pin the auth gate so an unauthenticated caller can't
         even discover the OAuth flow start URL."""
         resp = client.get("/api/calendar/auth-url")
         assert resp.status_code == 401
 
-    def test_oura_status_requires_auth(self):
+    def test_oura_status_requires_auth(self, client):
         resp = client.get("/api/oura/status")
         assert resp.status_code == 401
 
@@ -6173,7 +6178,7 @@ class TestSSOAPI:
 
     # -------- config --------
 
-    def test_config_reports_enabled_and_derives_the_issuer_url(self):
+    def test_config_reports_enabled_and_derives_the_issuer_url(self, client):
         """The login URL is derived from the request Host, so one build
         works on home.space, nip.io and the WAN name alike."""
         resp = client.get("/api/auth/sso/config", headers={"Host": "beats.home.space"})
@@ -6183,20 +6188,20 @@ class TestSSOAPI:
         assert body["login_url"] == "http://auth.home.space"
         assert body["session_present"] is False
 
-    def test_config_derives_the_issuer_url_on_nip_io(self):
+    def test_config_derives_the_issuer_url_on_nip_io(self, client):
         resp = client.get(
             "/api/auth/sso/config", headers={"Host": "beats.192.168.1.112.nip.io:8080"}
         )
         assert resp.json()["login_url"] == "http://auth.192.168.1.112.nip.io:8080"
 
-    def test_config_has_no_login_url_on_a_bare_localhost(self):
+    def test_config_has_no_login_url_on_a_bare_localhost(self, client):
         """`localhost:7999` has no sibling to point at. Reported as empty
         rather than guessed, so the UI hides the button instead of
         offering a link that 404s."""
         resp = client.get("/api/auth/sso/config", headers={"Host": "localhost:7999"})
         assert resp.json()["login_url"] == ""
 
-    def test_config_reports_a_present_cookie(self):
+    def test_config_reports_a_present_cookie(self, client):
         resp = client.get(
             "/api/auth/sso/config",
             headers={"Host": "beats.home.space"},
@@ -6204,12 +6209,12 @@ class TestSSOAPI:
         )
         assert resp.json()["session_present"] is True
 
-    def test_config_is_public(self):
+    def test_config_is_public(self, client):
         """Called by the login screen before any token exists."""
         resp = client.get("/api/auth/sso/config")
         assert resp.status_code == 200
 
-    def test_config_reports_disabled_without_erroring(self, monkeypatch):
+    def test_config_reports_disabled_without_erroring(self, client, monkeypatch):
         from beats.settings import settings
 
         monkeypatch.setattr(settings, "sso_enabled", False)
@@ -6220,12 +6225,12 @@ class TestSSOAPI:
 
     # -------- sign-in --------
 
-    def test_session_without_a_cookie_is_401(self):
+    def test_session_without_a_cookie_is_401(self, client):
         resp = client.post("/api/auth/sso/session")
         assert resp.status_code == 401
         assert resp.json()["code"] == "SSO_NO_SESSION"
 
-    def test_session_provisions_an_account_for_an_owner(self):
+    def test_session_provisions_an_account_for_an_owner(self, client):
         resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "valid-token"})
         assert resp.status_code == 200
         body = resp.json()
@@ -6242,26 +6247,26 @@ class TestSSOAPI:
         assert me.json()["sso"]["linked"] is True
         assert me.json()["sso"]["did"] == self.DID
 
-    def test_second_sign_in_reuses_the_same_account(self):
+    def test_second_sign_in_reuses_the_same_account(self, client):
         first = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
         assert first.json()["created"] is True
         second = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
         assert second.status_code == 200
         assert second.json()["created"] is False
 
-    def test_guest_cannot_provision_an_account(self):
+    def test_guest_cannot_provision_an_account(self, client):
         self.roles = ["guest"]
         resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
         assert resp.status_code == 403
         assert resp.json()["code"] == "SSO_PROVISION_FORBIDDEN"
 
-    def test_revoked_device_is_rejected(self):
+    def test_revoked_device_is_rejected(self, client):
         self.issuer_status = 401
         resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
         assert resp.status_code == 401
         assert resp.json()["code"] == "SSO_INVALID_SESSION"
 
-    def test_unreachable_issuer_reports_503_not_401(self):
+    def test_unreachable_issuer_reports_503_not_401(self, client):
         """Never tell a user their identity is invalid when we could not
         look. 503 is retryable; 401 sends them into a re-login that
         cannot help."""
@@ -6270,7 +6275,7 @@ class TestSSOAPI:
         assert resp.status_code == 503
         assert resp.json()["code"] == "SSO_UNAVAILABLE"
 
-    def test_session_is_503_when_sso_is_disabled(self, monkeypatch):
+    def test_session_is_503_when_sso_is_disabled(self, client, monkeypatch):
         from beats.settings import settings
 
         monkeypatch.setattr(settings, "sso_enabled", False)
@@ -6280,7 +6285,7 @@ class TestSSOAPI:
 
     # -------- linking --------
 
-    def test_link_attaches_the_identity_to_the_signed_in_account(self, auth_info):
+    def test_link_attaches_the_identity_to_the_signed_in_account(self, client, auth_info):
         """The case this integration was built for: an existing beats
         account gains a home.space identity without changing anything
         else about it."""
@@ -6305,18 +6310,18 @@ class TestSSOAPI:
         )
         assert me.json()["email"] == "test@example.com"
 
-    def test_link_requires_an_authenticated_beats_session(self):
+    def test_link_requires_an_authenticated_beats_session(self, client):
         """Linking from an unauthenticated SSO arrival is the account
         takeover shape. It is not offered."""
         resp = client.post("/api/account/sso/link", cookies={"Home-Session": "t"})
         assert resp.status_code == 401
 
-    def test_link_requires_a_home_session_cookie(self, auth_info):
+    def test_link_requires_a_home_session_cookie(self, client, auth_info):
         resp = client.post("/api/account/sso/link", headers=auth_info["headers"])
         assert resp.status_code == 401
         assert resp.json()["code"] == "SSO_NO_SESSION"
 
-    def test_link_refuses_an_identity_owned_by_another_account(self, auth_info):
+    def test_link_refuses_an_identity_owned_by_another_account(self, client, auth_info):
         # Provision a separate account holding the DID first.
         client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
 
@@ -6328,7 +6333,7 @@ class TestSSOAPI:
         assert resp.status_code == 409
         assert resp.json()["code"] == "SSO_ALREADY_LINKED"
 
-    def test_unlink_refuses_when_no_passkey_remains(self, auth_info):
+    def test_unlink_refuses_when_no_passkey_remains(self, client, auth_info):
         """The account would have no way back in — the same rule
         `delete_credential` applies to the last passkey."""
         client.post(
@@ -6340,7 +6345,7 @@ class TestSSOAPI:
         assert resp.status_code == 409
         assert resp.json()["code"] == "SSO_LAST_CREDENTIAL"
 
-    def test_unlink_succeeds_when_a_passkey_remains(self, auth_info):
+    def test_unlink_succeeds_when_a_passkey_remains(self, client, auth_info):
         import os
 
         from pymongo import MongoClient
@@ -6368,14 +6373,14 @@ class TestSSOAPI:
         assert resp.status_code == 200
         assert resp.json()["sso"]["linked"] is False
 
-    def test_unlink_when_not_linked_is_404(self, auth_info):
+    def test_unlink_when_not_linked_is_404(self, client, auth_info):
         resp = client.delete("/api/account/sso/link", headers=auth_info["headers"])
         assert resp.status_code == 404
         assert resp.json()["code"] == "SSO_NOT_LINKED"
 
     # -------- refresh re-checks the issuer --------
 
-    def test_refresh_of_an_sso_session_survives_while_the_identity_is_valid(self):
+    def test_refresh_of_an_sso_session_survives_while_the_identity_is_valid(self, client):
         signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
         token = signed_in.json()["token"]
 
@@ -6387,7 +6392,7 @@ class TestSSOAPI:
         assert resp.status_code == 200
         assert resp.json()["token"]
 
-    def test_refresh_ends_the_session_once_the_device_is_revoked(self):
+    def test_refresh_ends_the_session_once_the_device_is_revoked(self, client):
         """The point of carrying the `sso` claim: without this check a
         revoked device keeps renewing its beats session forever."""
         signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
@@ -6402,7 +6407,7 @@ class TestSSOAPI:
         assert resp.status_code == 401
         assert resp.json()["code"] == "SSO_SESSION_REVOKED"
 
-    def test_refresh_ends_the_session_when_the_home_cookie_is_gone(self):
+    def test_refresh_ends_the_session_when_the_home_cookie_is_gone(self, client):
         """Logging out at auth.home.space logs you out of beats too."""
         signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
         token = signed_in.json()["token"]
@@ -6411,14 +6416,14 @@ class TestSSOAPI:
         assert resp.status_code == 401
         assert resp.json()["code"] == "SSO_SESSION_ENDED"
 
-    def test_refresh_of_a_passkey_session_is_untouched_by_sso(self, auth_info):
+    def test_refresh_of_a_passkey_session_is_untouched_by_sso(self, client, auth_info):
         """Beats' own login must be completely unaffected — no cookie,
         no issuer, no re-check."""
         resp = client.post("/api/account/refresh", headers=auth_info["headers"])
         assert resp.status_code == 200
         assert resp.json()["token"]
 
-    def test_refresh_extends_the_session_when_the_issuer_is_unreachable(self):
+    def test_refresh_extends_the_session_when_the_issuer_is_unreachable(self, client):
         """An outage must not log everyone out — that is the coupling
         this whole design avoids."""
         signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
@@ -6434,7 +6439,7 @@ class TestSSOAPI:
 
     # -------- beats' own login is unchanged --------
 
-    def test_own_registration_still_works_with_sso_enabled(self):
+    def test_own_registration_still_works_with_sso_enabled(self, client):
         """Either door. Turning SSO on must not close the other one."""
         resp = client.post(
             "/api/auth/register/start",
@@ -6443,6 +6448,6 @@ class TestSSOAPI:
         assert resp.status_code == 200
         assert "options" in resp.json()
 
-    def test_login_options_still_public_with_sso_enabled(self):
+    def test_login_options_still_public_with_sso_enabled(self, client):
         resp = client.get("/api/auth/login/options")
         assert resp.status_code in (200, 400)

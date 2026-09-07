@@ -19,6 +19,10 @@ jobs:
       - run: uv run ruff check src/
       - run: uv run ruff format --check src/
       - run: uv run ty check src/
+      # `error-on-warning` is still off (see pyproject.toml), so ty cannot fail
+      # this job on its own. The budget check does: it fails when the count
+      # grows, which is the property that actually matters.
+      - run: uv run python scripts/ty_budget.py
 
   test:
     name: Test

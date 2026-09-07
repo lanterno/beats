@@ -73,7 +73,7 @@ async def trigger_auto_start(
                     "project_id": rule.project_id,
                     "beat_id": beat.id,
                 }
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 return {"started": False, "reason": str(e)}
 
     return {"started": False, "reason": "No matching rule found"}

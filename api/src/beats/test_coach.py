@@ -13,6 +13,7 @@ modules underneath.
 
 import os
 from datetime import UTC, date, datetime, timedelta
+from typing import ClassVar
 
 import pytest
 from pymongo import AsyncMongoClient
@@ -23,14 +24,13 @@ from beats.coach import context as context_module
 from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import tools as tools_module
 from beats.coach.gateway import (
-    SONNET_CACHE_READ_PER_MTOK,
-    SONNET_CACHE_WRITE_PER_MTOK,
-    SONNET_INPUT_COST_PER_MTOK,
-    SONNET_OUTPUT_COST_PER_MTOK,
+    MODEL_PRICING,
+    UNKNOWN_MODEL_PRICING,
     CacheSpec,
     GatewayResponse,
     _apply_cache_control,
     _estimate_cost,
+    pricing_for,
 )
 from beats.coach.memory import MemoryStore
 from beats.coach.repos import (
@@ -637,6 +637,13 @@ class TestGetAndListBriefs:
         assert a_briefs[0]["body"] == "A's brief"
 
 
+# Every case below prices against Sonnet 4.6 ($3 / $15 / $3.75 / $0.30 per
+# Mtok) so the arithmetic stays readable; TestModelPricing covers the fact
+# that the rates now vary by model.
+SONNET_46 = "claude-sonnet-4-6"
+_S46 = MODEL_PRICING[SONNET_46]
+
+
 class TestEstimateCost:
     """The deterministic cost math the gateway uses to bill users.
     Wrong here = wrong dashboard + wrong budget enforcement.
@@ -647,30 +654,30 @@ class TestEstimateCost:
     """
 
     def test_zero_tokens_zero_cost(self):
-        assert _estimate_cost(0, 0, 0, 0) == 0.0
+        assert _estimate_cost(SONNET_46, 0, 0, 0, 0) == 0.0
 
     def test_pure_input_no_cache_uses_input_rate(self):
         # 1M input tokens, no output, no cache → 1 × $3 = $3
-        assert _estimate_cost(1_000_000, 0, 0, 0) == 3.0
+        assert _estimate_cost(SONNET_46, 1_000_000, 0, 0, 0) == 3.0
 
     def test_pure_output_uses_output_rate(self):
         # 1M output tokens → 1 × $15 = $15
-        assert _estimate_cost(0, 1_000_000, 0, 0) == 15.0
+        assert _estimate_cost(SONNET_46, 0, 1_000_000, 0, 0) == 15.0
 
     def test_input_minus_cache_is_billed_at_input_rate(self):
         """If 1M input tokens were ALL cache reads, only the cache-read
         rate applies — the "base input" billed at $3/Mtok is zero.
-        Locks the subtraction at line 64; without it a refactor that
-        bills cache_read AS input would charge $3 + $0.30 instead of
-        just $0.30 — a 10× over-bill on heavy-cache calls."""
+        Locks the subtraction; without it a refactor that bills
+        cache_read AS input would charge $3 + $0.30 instead of just
+        $0.30 — a 10× over-bill on heavy-cache calls."""
         # 1M cache reads, no other input
-        cost = _estimate_cost(1_000_000, 0, 0, 1_000_000)
+        cost = _estimate_cost(SONNET_46, 1_000_000, 0, 0, 1_000_000)
         # base_input = 1M - 0 - 1M = 0, so only the cache-read rate.
         assert cost == pytest.approx(0.30, rel=1e-9)
 
     def test_input_minus_cache_with_cache_creation(self):
         """Same logic for cache writes — they're a separate line item."""
-        cost = _estimate_cost(1_000_000, 0, 1_000_000, 0)
+        cost = _estimate_cost(SONNET_46, 1_000_000, 0, 1_000_000, 0)
         # base_input = 0, cache_creation = 1M × $3.75 = $3.75
         assert cost == pytest.approx(3.75, rel=1e-9)
 
@@ -680,18 +687,18 @@ class TestEstimateCost:
         output. Computes the line-by-line bill so a refactor that
         merges any of the rates is caught."""
         cost = _estimate_cost(
+            SONNET_46,
             input_tokens=5_000,
             output_tokens=1_000,
             cache_creation=1_000,
             cache_read=2_000,
         )
         # base_input = 5000 - 1000 - 2000 = 2000
-        # 2000 * 3 / 1M + 1000 * 15 / 1M + 1000 * 3.75 / 1M + 2000 * 0.30 / 1M
         expected = (
-            2000 * SONNET_INPUT_COST_PER_MTOK / 1_000_000
-            + 1000 * SONNET_OUTPUT_COST_PER_MTOK / 1_000_000
-            + 1000 * SONNET_CACHE_WRITE_PER_MTOK / 1_000_000
-            + 2000 * SONNET_CACHE_READ_PER_MTOK / 1_000_000
+            2000 * _S46.input / 1_000_000
+            + 1000 * _S46.output / 1_000_000
+            + 1000 * _S46.cache_write / 1_000_000
+            + 2000 * _S46.cache_read / 1_000_000
         )
         assert cost == pytest.approx(expected, rel=1e-9)
 
@@ -704,14 +711,55 @@ class TestEstimateCost:
         bill — under-collecting in a way the dashboard wouldn't
         catch."""
         cost = _estimate_cost(
+            SONNET_46,
             input_tokens=9_000,
             output_tokens=0,
             cache_creation=0,
             cache_read=10_000,  # exceeds input
         )
         # max(0, 9000 - 0 - 10000) = 0, so just cache_read at $0.30/M
-        expected = 10_000 * SONNET_CACHE_READ_PER_MTOK / 1_000_000
+        expected = 10_000 * _S46.cache_read / 1_000_000
         assert cost == pytest.approx(expected, rel=1e-9)
+
+
+class TestModelPricing:
+    """Rates are per-model. The gateway used to hardcode Sonnet 4.6's
+    prices and apply them to whatever COACH_MODEL named, so pointing the
+    coach at Opus under-reported every row by 40% — and the monthly budget
+    ceiling under-counted with it."""
+
+    def test_opus_costs_more_than_sonnet_for_identical_usage(self):
+        """The regression this class exists for: same tokens, different
+        model, different bill."""
+        args = (1_000_000, 1_000_000, 0, 0)
+        sonnet = _estimate_cost("claude-sonnet-5", *args)
+        opus = _estimate_cost("claude-opus-5", *args)
+        assert sonnet == pytest.approx(2.0 + 10.0)
+        assert opus == pytest.approx(5.0 + 25.0)
+
+    def test_configured_default_model_is_priced(self):
+        """The default in settings must be a model we can bill, or every
+        call silently falls back to the unknown-model rate."""
+        from beats.settings import settings
+
+        assert pricing_for(settings.coach_model) is MODEL_PRICING[settings.coach_model]
+
+    def test_dated_suffix_resolves_to_base_model(self):
+        """A response naming a dated snapshot bills at its base rate."""
+        assert pricing_for("claude-sonnet-5-20260101") is MODEL_PRICING["claude-sonnet-5"]
+
+    def test_unknown_model_bills_at_the_highest_known_rate(self):
+        """Fail expensive, not cheap: over-estimating stops the coach at
+        the budget ceiling, under-estimating spends past it unnoticed."""
+        pricing = pricing_for("claude-something-unreleased")
+        assert pricing is UNKNOWN_MODEL_PRICING
+        assert pricing.input >= max(p.input for p in MODEL_PRICING.values())
+        assert pricing.output >= max(p.output for p in MODEL_PRICING.values())
+
+    def test_cache_rates_follow_the_standard_multipliers(self):
+        for name, pricing in MODEL_PRICING.items():
+            assert pricing.cache_write == pytest.approx(pricing.input * 1.25), name
+            assert pricing.cache_read == pytest.approx(pricing.input * 0.10), name
 
 
 class TestApplyCacheControl:
@@ -1410,16 +1458,21 @@ class TestRewriteCoachMemory:
         assert captured["kwargs"]["purpose"] == "memory_rewrite"
         assert captured["kwargs"]["user_id"] == "user-99"
 
-    async def test_uses_low_temperature_for_consistency(self, patch_complete):
-        """Memory rewrites should be more conservative than chat
-        (temperature=0.3 vs 0.7). Pin so a refactor that drops the
-        kwargs to defaults doesn't make memory rewrites stylistically
-        unstable across weeks."""
+    async def test_caps_output_tokens(self, patch_complete):
+        """Memory rewrites get a tighter output cap than chat (2048 vs
+        4096). Pin so a refactor that drops the kwargs to defaults
+        doesn't quietly widen the per-rewrite cost.
+
+        This test also used to pin temperature=0.3. Sampling parameters
+        were removed from the API on every current-generation model —
+        they now return HTTP 400 — so the gateway no longer sends one.
+        `output_config.effort` is the replacement lever if the coach ever
+        needs to trade thoroughness for cost per call site."""
         factory, captured = patch_complete
         await factory()
 
         await memory_rewrite_module.rewrite_coach_memory("user-1")
-        assert captured["kwargs"]["temperature"] == 0.3
+        assert "temperature" not in captured["kwargs"]
         assert captured["kwargs"]["max_tokens"] == 2048
 
     async def test_includes_recent_data_summary_in_prompt(self, patch_complete, monkeypatch):
@@ -1866,7 +1919,7 @@ class TestBuildCoachMessages:
         monkeypatch.setattr(context_module, "build_day_context", fake_day_ctx)
 
     async def test_returns_system_messages_and_spec(self, patched_context):
-        system, messages, spec = await context_module.build_coach_messages(
+        system, _messages, spec = await context_module.build_coach_messages(
             "user-1", "what should I do today?"
         )
         # System is the persona string.
@@ -2455,6 +2508,58 @@ class TestGatewayCacheControlIntegration:
         assert doc["cache_creation_input_tokens"] == 400
         assert doc["cache_read_input_tokens"] == 800
 
+    async def test_complete_does_not_send_temperature(self, fake_client):
+        """Sampling parameters were removed from the API on every
+        current-generation model — Sonnet 5, Opus 5, Opus 4.7/4.8 all
+        return HTTP 400 for `temperature`. The gateway used to pass one
+        unconditionally, so the coach would have broken outright the
+        moment COACH_MODEL moved off Sonnet 4.6."""
+        from beats.coach.gateway import complete
+
+        await complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+
+        kwargs = fake_client["create_kwargs"]
+        assert "temperature" not in kwargs
+        assert "top_p" not in kwargs
+        assert "top_k" not in kwargs
+
+    async def test_cost_uses_the_responses_model_not_the_configured_one(
+        self, fake_client, monkeypatch
+    ):
+        """The fake answers as claude-opus-4-7 ($5/$25) while settings
+        name a Sonnet ($2/$10). The persisted row must be billed at the
+        rate of the model that actually served the call — the gateway
+        used to bill every model at a hardcoded Sonnet 4.6 rate, which
+        under-reported Opus traffic by ~40% and quietly let the monthly
+        budget ceiling overshoot."""
+        from beats.coach.gateway import _estimate_cost, complete
+        from beats.settings import settings
+
+        monkeypatch.setattr(settings, "coach_model", "claude-sonnet-5")
+
+        await complete(
+            user_id="user-1",
+            system="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="chat",
+        )
+
+        doc = await Database.get_db()[LLM_USAGE_COLLECTION].find_one({"user_id": "user-1"})
+        assert doc is not None
+        assert doc["model"] == "claude-opus-4-7"
+        # usage on the fake: 1500 input, 80 output, 400 write, 800 read
+        assert doc["cost_usd"] == pytest.approx(
+            _estimate_cost("claude-opus-4-7", 1500, 80, 400, 800)
+        )
+        assert doc["cost_usd"] != pytest.approx(
+            _estimate_cost("claude-sonnet-5", 1500, 80, 400, 800)
+        )
+
     async def test_gateway_response_carries_cache_fields_to_caller(self, fake_client):
         """The GatewayResponse the caller receives carries the cache
         fields. brief.py and review.py persist these into the
@@ -2781,7 +2886,7 @@ class TestBuildDayContext:
             }
         )
 
-        async def fake_fetch_events(self, start, end):  # noqa: ARG001
+        async def fake_fetch_events(self, start, end):
             return [
                 {
                     "summary": "Standup",
@@ -2829,7 +2934,7 @@ class TestBuildDayContext:
             }
         )
 
-        async def fake_fetch_events(self, start, end):  # noqa: ARG001
+        async def fake_fetch_events(self, start, end):
             raise RuntimeError("calendar quota exhausted")
 
         monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
@@ -2874,7 +2979,7 @@ class TestGatewayRetryAndMissingKey:
             cache_read_input_tokens = 0
 
         class _FakeMessage:
-            content = [_TB(type="text", text="ok", citations=None)]
+            content: ClassVar = [_TB(type="text", text="ok", citations=None)]
             model = "claude-opus-4-7"
             usage = _FakeUsage()
             stop_reason = "end_turn"

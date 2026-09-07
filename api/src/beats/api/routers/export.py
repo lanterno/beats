@@ -10,6 +10,7 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from anyio import to_thread
 from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
@@ -158,6 +159,25 @@ async def export_sqlite(
     )
 
 
+def _read_bundle_rows(payload: bytes) -> tuple[list[dict], list[dict]]:
+    """Pull the projects and beats out of an export bundle.
+
+    Entirely synchronous — the temp-file write, `sqlite3.connect` and every
+    cursor step block the thread they run on. Kept in one function so the
+    caller can hand the whole thing to a worker and leave the event loop free.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".sqlite") as tmp:
+        Path(tmp.name).write_bytes(payload)
+        conn = sqlite3.connect(tmp.name)
+        conn.row_factory = sqlite3.Row
+        try:
+            projects = [json.loads(r["data"]) for r in conn.execute("SELECT data FROM projects")]
+            beats = [json.loads(r["data"]) for r in conn.execute("SELECT data FROM beats")]
+        finally:
+            conn.close()
+    return projects, beats
+
+
 @router.post("/sqlite/import")
 async def import_sqlite(
     user_id: CurrentUserId,
@@ -209,28 +229,21 @@ async def import_sqlite(
     if manifest.get("sqlite_sha256") != actual_sha:
         raise HTTPException(status_code=400, detail="sqlite payload does not match manifest")
 
-    # At this point the bundle is authentic. Read rows out of SQLite and
-    # upsert through the same repos used by the JSON import path.
+    # At this point the bundle is authentic. Upsert through the same repos the
+    # JSON import path uses.
+    projects, beats = await to_thread.run_sync(_read_bundle_rows, sqlite_bytes)
+
     counts = {"projects": 0, "beats": 0}
-    with tempfile.NamedTemporaryFile(suffix=".sqlite") as tmp:
-        Path(tmp.name).write_bytes(sqlite_bytes)
-        conn = sqlite3.connect(tmp.name)
-        conn.row_factory = sqlite3.Row
-        try:
-            for row in conn.execute("SELECT data FROM projects"):
-                proj = json.loads(row["data"])
-                for k in _COMPUTED_FIELDS:
-                    proj.pop(k, None)
-                await project_service.project_repo.upsert(proj)
-                counts["projects"] += 1
-            for row in conn.execute("SELECT data FROM beats"):
-                beat = json.loads(row["data"])
-                for k in _COMPUTED_FIELDS:
-                    beat.pop(k, None)
-                await beat_service.beat_repo.upsert(beat)
-                counts["beats"] += 1
-        finally:
-            conn.close()
+    for proj in projects:
+        for k in _COMPUTED_FIELDS:
+            proj.pop(k, None)
+        await project_service.project_repo.upsert(proj)
+        counts["projects"] += 1
+    for beat in beats:
+        for k in _COMPUTED_FIELDS:
+            beat.pop(k, None)
+        await beat_service.beat_repo.upsert(beat)
+        counts["beats"] += 1
 
     return {"status": "ok", "imported": counts, "version": manifest.get("version")}
 

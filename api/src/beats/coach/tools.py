@@ -159,7 +159,7 @@ async def _handle_get_productivity_score(ctx: _ToolContext, _tool_input: dict) -
             f"  Goals: {c['goals']}\n"
             f"  Quality: {c['quality']}"
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Could not compute score: {exc}"
 
 
@@ -173,7 +173,7 @@ async def _handle_get_patterns(ctx: _ToolContext, _tool_input: dict) -> str:
         for p in patterns[:10]:
             lines.append(f"**{p.title}** ({p.type})\n  {p.body}")
         return "\n\n".join(lines)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Pattern detection failed: {exc}"
 
 

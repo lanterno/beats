@@ -84,9 +84,7 @@ export function formatStatusBar(
 	// has something concrete to investigate — without it the status
 	// bar reads "connected" while silently producing no data.
 	if (isStaleNoEmissions(health)) {
-		tooltipLines.push(
-			"⚠ no flow windows emitted in this session — check Accessibility permission",
-		);
+		tooltipLines.push("⚠ no flow windows emitted in this session — check Accessibility permission");
 	}
 	// Surface a dropped count only when non-zero. Distinct from the
 	// stale-no-emissions diagnostic above: dropped windows mean the
@@ -102,9 +100,7 @@ export function formatStatusBar(
 		const avg = Math.round(summary.avg * 100);
 		const peak = Math.round(summary.peak * 100);
 		text = `$(zap) Beats ${avg}`;
-		tooltipLines.push(
-			`Today: avg ${avg}/100 · peak ${peak}/100 · ${summary.count} windows`,
-		);
+		tooltipLines.push(`Today: avg ${avg}/100 · peak ${peak}/100 · ${summary.count} windows`);
 		// Best-axis line — same info the home FlowHeadline shows, in
 		// the editor that's producing the heartbeats. Omitted cleanly
 		// when no editor context covered the slice (the tooltip would

@@ -20,7 +20,7 @@ jobs:
           package_json_file: ui/package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 25
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
       # uv is needed by gen:types:check, which dumps the OpenAPI spec from the API.
@@ -37,34 +37,3 @@ jobs:
           JWT_SECRET: ci_openapi_dump_placeholder_secret_0123456789
       - run: pnpm test
       - run: pnpm build
-
-  deploy:
-    name: Deploy to Firebase Hosting
-    needs: quality
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ui
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: ui/package.json
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-        env:
-          VITE_API_URL: https://api.lifepete.com
-          VITE_GIT_SHA: ${{ github.sha }}
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: beats-476914
-          entryPoint: ui

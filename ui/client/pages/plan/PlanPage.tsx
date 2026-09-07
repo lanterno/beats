@@ -116,6 +116,7 @@ export default function PlanPage() {
 								Total: {formatDuration(totalHours * 60)}
 							</span>
 							<button
+								type="button"
 								onClick={handleSave}
 								className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 							>

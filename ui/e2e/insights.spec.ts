@@ -21,9 +21,7 @@ test.describe("Insights", () => {
 	test("monthly summary stats render", async ({ page }) => {
 		await page.goto("/insights");
 		// The page should show monthly stats like hours, sessions, or active days
-		const statsArea = page
-			.locator("text=/hours|sessions|active days|This Month/i")
-			.first();
+		const statsArea = page.locator("text=/hours|sessions|active days|This Month/i").first();
 		await expect(statsArea).toBeVisible({ timeout: 10_000 });
 	});
 

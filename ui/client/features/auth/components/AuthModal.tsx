@@ -284,6 +284,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 			<div className="relative w-full max-w-md mx-6 bg-card border border-border rounded-lg p-8 shadow-soft animate-in fade-in zoom-in-95 duration-200">
 				{/* Close button */}
 				<button
+					type="button"
 					onClick={onClose}
 					disabled={isProcessing}
 					className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
@@ -432,6 +433,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 						<div className="mt-8 pt-6 border-t border-border">
 							{mode === "login" && (
 								<button
+									type="button"
 									className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
 									onClick={() => setMode("register-email")}
 									disabled={isProcessing}
@@ -441,6 +443,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 							)}
 							{(mode === "register-email" || mode === "register-passkey") && (
 								<button
+									type="button"
 									className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
 									onClick={() => {
 										setMode("login");

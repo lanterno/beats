@@ -182,12 +182,14 @@ export default function MonthlyRetrospective() {
 				</div>
 				<div className="flex items-center gap-1">
 					<button
+						type="button"
 						onClick={() => navigate(`/insights/month/${prevMonth}`)}
 						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
 					>
 						<ChevronLeft className="w-4 h-4" />
 					</button>
 					<button
+						type="button"
 						onClick={() => navigate(`/insights/month/${nextMonth}`)}
 						disabled={isCurrentMonth}
 						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-30"
@@ -330,6 +332,7 @@ export default function MonthlyRetrospective() {
 					{/* Copy summary button */}
 					<div className="flex justify-end">
 						<button
+							type="button"
 							onClick={handleCopy}
 							className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
 						>

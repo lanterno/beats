@@ -58,7 +58,8 @@ class TestSessionManagerSessionTokens:
         b = sm.create_session_token("user-1")
         pa = sm.validate_session_token(a)
         pb = sm.validate_session_token(b)
-        assert pa is not None and pb is not None
+        assert pa is not None
+        assert pb is not None
         assert pa["jti"] != pb["jti"]
 
     def test_validate_returns_none_for_expired_token(self):
@@ -536,7 +537,7 @@ class TestWebAuthnRegistrationVerificationGuards:
             credential_public_key = b"\x05\x06\x07\x08"
             sign_count = 0
 
-        def fake_verify(*, credential, **_kwargs):  # noqa: ARG001
+        def fake_verify(*, credential, **_kwargs):
             return _FakeVerification()
 
         monkeypatch.setattr(webauthn_module, "verify_registration_response", fake_verify)
@@ -555,7 +556,8 @@ class TestWebAuthnRegistrationVerificationGuards:
 
         # Response shape pinned: verified + token
         assert result["verified"] is True
-        assert isinstance(result["token"], str) and result["token"]
+        assert isinstance(result["token"], str)
+        assert result["token"]
 
         # Credential persisted via save_credential
         creds = await storage.get_credentials("user-1")
@@ -576,7 +578,7 @@ class TestWebAuthnRegistrationVerificationGuards:
         400 path stays reachable from the real py_webauthn library."""
         from beats.auth import webauthn as webauthn_module
 
-        def fake_verify_raises(*, credential, **_kwargs):  # noqa: ARG001
+        def fake_verify_raises(*, credential, **_kwargs):
             raise RuntimeError("origin mismatch")
 
         monkeypatch.setattr(webauthn_module, "verify_registration_response", fake_verify_raises)
@@ -671,7 +673,7 @@ class TestWebAuthnAuthenticationVerificationGuards:
         class _FakeAuth:
             new_sign_count = 42
 
-        def fake_verify(*, credential, **_kwargs):  # noqa: ARG001
+        def fake_verify(*, credential, **_kwargs):
             return _FakeAuth()
 
         monkeypatch.setattr(webauthn_module, "verify_authentication_response", fake_verify)
@@ -702,7 +704,8 @@ class TestWebAuthnAuthenticationVerificationGuards:
         # Response shape pinned
         assert result["verified"] is True
         assert result["user_id"] == "user-99"
-        assert isinstance(result["token"], str) and result["token"]
+        assert isinstance(result["token"], str)
+        assert result["token"]
 
         # sign_count was advanced from 10 → 42
         cred = await storage.get_credential_by_id("cred-1")
@@ -725,7 +728,7 @@ class TestWebAuthnAuthenticationVerificationGuards:
         from beats.auth import webauthn as webauthn_module
         from beats.auth.storage import StoredCredential
 
-        def fake_verify_raises(*, credential, **_kwargs):  # noqa: ARG001
+        def fake_verify_raises(*, credential, **_kwargs):
             raise RuntimeError("sign-count rollback detected")
 
         monkeypatch.setattr(webauthn_module, "verify_authentication_response", fake_verify_raises)

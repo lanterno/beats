@@ -119,6 +119,7 @@ export function ProductivityScore() {
 			</h2>
 
 			<button
+				type="button"
 				onClick={() => setExpanded(!expanded)}
 				className="w-full rounded-lg border border-border/80 bg-card shadow-soft px-4 py-3 text-left transition-colors hover:bg-secondary/20"
 			>

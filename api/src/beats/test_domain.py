@@ -685,12 +685,8 @@ class TestAnalyticsDailyRhythm:
         from datetime import datetime, timedelta
 
         today = date.today()
-        if today.day == 1:
-            # Edge: on the 1st, last month's data is the only data.
-            # Skip this branch by using a beat from the same day.
-            target = today
-        else:
-            target = (today.replace(day=1)) - timedelta(days=1)
+        # On the 1st there is no previous-month day to reach back to, so use today.
+        target = today if today.day == 1 else today.replace(day=1) - timedelta(days=1)
         old = datetime.combine(target, datetime.min.time(), tzinfo=_UTC).replace(hour=9)
         beats = [
             Beat(
@@ -4583,7 +4579,7 @@ class TestGitHubFetchCommitCounts:
 
         _patch_httpx_callable(
             monkeypatch,
-            lambda *a, **kw: (_ for _ in ()).throw(  # noqa
+            lambda *a, **kw: (_ for _ in ()).throw(
                 RuntimeError("HTTP should not be called without integration")
             ),
         )
@@ -4600,7 +4596,7 @@ class TestGitHubFetchCommitCounts:
 
         _patch_httpx_callable(
             monkeypatch,
-            lambda *a, **kw: (_ for _ in ()).throw(  # noqa
+            lambda *a, **kw: (_ for _ in ()).throw(
                 RuntimeError("HTTP should not be called for empty token")
             ),
         )

@@ -61,6 +61,12 @@ pre-push:
     daemon-vet:
       root: daemon/
       run: go vet ./...
+    # Same reasoning as daemon-vet, one level up: staticcheck finds unused
+    # results, impossible assertions and deprecated stdlib calls that vet
+    # passes over. The tree is clean under it today, so any hit is new.
+    daemon-staticcheck:
+      root: daemon/
+      run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
     # The companion has 110+ unit/widget tests covering api_client
     # (request shape + error envelope parsing), tag parsing, recent
     # projects, notification dedupe, repo-path display, the pairing

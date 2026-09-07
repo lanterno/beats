@@ -155,6 +155,7 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 								const isActive = isActiveProject(project.id);
 								return (
 									<button
+										type="button"
 										key={project.id}
 										onClick={() => navigate(`/project/${project.id}`)}
 										className={cn(

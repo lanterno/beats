@@ -62,18 +62,20 @@ class SessionManager:
 
         stored = self._challenges.get(challenge)
         if stored is None:
-            logger.warning(f"Challenge not found: {challenge[:20]}...")
+            logger.warning("Challenge not found: %s...", challenge[:20])
             return False
 
         if stored.challenge_type != challenge_type:
             logger.warning(
-                f"Challenge type mismatch: expected {challenge_type}, got {stored.challenge_type}"
+                "Challenge type mismatch: expected %s, got %s",
+                challenge_type,
+                stored.challenge_type,
             )
             return False
 
         # Challenge is valid, consume it (one-time use)
         del self._challenges[challenge]
-        logger.debug(f"Validated and consumed challenge: {challenge[:20]}...")
+        logger.debug("Validated and consumed challenge: %s...", challenge[:20])
         return True
 
     def store_challenge(self, challenge: bytes, challenge_type: str = "authentication") -> str:
@@ -88,7 +90,7 @@ class SessionManager:
             challenge_type=challenge_type,
         )
 
-        logger.debug(f"Stored {challenge_type} challenge: {challenge_b64[:20]}...")
+        logger.debug("Stored %s challenge: %s...", challenge_type, challenge_b64[:20])
         return challenge_b64
 
     def get_stored_challenge(self, challenge_type: str) -> bytes | None:
@@ -117,7 +119,7 @@ class SessionManager:
             self._pending_registrations.pop(key, None)
 
         if expired:
-            logger.debug(f"Cleaned up {len(expired)} expired challenges")
+            logger.debug("Cleaned up %d expired challenges", len(expired))
 
     def store_pending_registration(self, challenge: bytes, user_id: str) -> None:
         """Store user_id for a pending registration challenge."""
@@ -157,7 +159,7 @@ class SessionManager:
             payload["sso"] = sso_subject
 
         token = jwt.encode(payload, self._jwt_secret, algorithm="HS256")
-        logger.info(f"Created session token for user: {user_id}")
+        logger.info("Created session token for user: %s", user_id)
         return token
 
     def create_device_token(self, user_id: str, device_id: str) -> str:
@@ -171,7 +173,7 @@ class SessionManager:
             "device_id": device_id,
         }
         token = jwt.encode(payload, self._jwt_secret, algorithm="HS256")
-        logger.info(f"Created device token for user: {user_id}, device: {device_id}")
+        logger.info("Created device token for user: %s, device: %s", user_id, device_id)
         return token
 
     def validate_device_token(self, token: str) -> dict | None:
@@ -187,7 +189,7 @@ class SessionManager:
                 return None
             return payload
         except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid device token: {e}")
+            logger.warning("Invalid device token: %s", e)
             return None
 
     def validate_session_token(self, token: str) -> dict | None:
@@ -210,7 +212,7 @@ class SessionManager:
             logger.debug("Session token expired")
             return None
         except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid session token: {e}")
+            logger.warning("Invalid session token: %s", e)
             return None
 
     def refresh_token(self, token: str) -> str | None:

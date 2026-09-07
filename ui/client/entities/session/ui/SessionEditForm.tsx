@@ -87,6 +87,7 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 			)}
 			<div className="flex gap-2 pt-1">
 				<button
+					type="button"
 					onClick={handleSave}
 					disabled={!validRange}
 					className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-base font-medium bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-40 transition-colors duration-150"
@@ -95,6 +96,7 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 					Save
 				</button>
 				<button
+					type="button"
 					onClick={onCancel}
 					className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-base font-medium border border-border text-foreground hover:bg-secondary/60 transition-colors duration-150"
 				>

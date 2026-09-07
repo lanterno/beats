@@ -186,7 +186,7 @@ class _PairingScreenState extends State<PairingScreen> {
                       TextField(
                         controller: _apiUrlController,
                         style: BeatsType.bodyMedium,
-                        decoration: _inputDecoration('https://api.lifepete.com'),
+                        decoration: _inputDecoration('https://beats.home.space'),
                       ),
                     ],
                   ),
@@ -208,7 +208,7 @@ class _PairingScreenState extends State<PairingScreen> {
                       TextField(
                         controller: _webUrlController,
                         style: BeatsType.bodyMedium,
-                        decoration: _inputDecoration('https://app.lifepete.com'),
+                        decoration: _inputDecoration('https://beats.home.space'),
                       ),
                     ],
                   ),

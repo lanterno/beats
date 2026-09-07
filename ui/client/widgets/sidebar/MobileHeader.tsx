@@ -59,6 +59,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 			<header className="lg:hidden sticky top-0 z-50 h-12 border-b border-border bg-sidebar/95 backdrop-blur-sm flex items-center justify-between px-4">
 				<div className="flex items-center gap-3">
 					<button
+						type="button"
 						onClick={() => setDrawerOpen(true)}
 						className="p-1 text-sidebar-foreground hover:text-accent transition-colors"
 					>
@@ -146,6 +147,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 									<Settings className="w-4 h-4" />
 								</Link>
 								<button
+									type="button"
 									onClick={closeDrawer}
 									className="p-1 text-muted-foreground hover:text-foreground transition-colors"
 								>
@@ -166,6 +168,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 							<div className="px-4 py-3 border-t border-sidebar-border">
 								<div className="flex items-center gap-2">
 									<button
+										type="button"
 										onClick={install}
 										className="flex-1 flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-primary transition-colors"
 									>
@@ -173,6 +176,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 										Install Beats
 									</button>
 									<button
+										type="button"
 										onClick={dismissInstall}
 										className="p-0.5 text-sidebar-foreground/30 hover:text-sidebar-foreground/60 transition-colors"
 									>
@@ -192,6 +196,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 									{user?.email}
 								</span>
 								<button
+									type="button"
 									onClick={handleLogout}
 									className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
 									title="Sign out"

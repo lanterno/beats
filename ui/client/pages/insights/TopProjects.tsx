@@ -50,6 +50,7 @@ export function TopProjects({ tag }: { tag?: string }) {
 				<div className="flex rounded-md border border-border overflow-hidden">
 					{(["week", "month", "year", "all"] as Period[]).map((p) => (
 						<button
+							type="button"
 							key={p}
 							onClick={() => setPeriod(p)}
 							className={cn(
@@ -81,6 +82,7 @@ export function TopProjects({ tag }: { tag?: string }) {
 
 							return (
 								<button
+									type="button"
 									key={item.projectId}
 									onClick={() => navigate(`/project/${item.projectId}`)}
 									className="w-full flex items-center gap-2.5 hover:bg-secondary/30 -mx-1.5 px-1.5 py-0.5 rounded transition-colors"

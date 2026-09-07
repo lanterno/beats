@@ -97,7 +97,7 @@ class MongoCredentialStorage:
                 "device_name": device_name,
             }
         )
-        logger.info(f"Saved new credential for user {user_id}: {credential_id[:20]}...")
+        logger.info("Saved new credential for user %s: %s...", user_id, credential_id[:20])
         return credential
 
     async def update_sign_count(self, credential_id: str, new_sign_count: int) -> bool:
@@ -107,7 +107,7 @@ class MongoCredentialStorage:
             {"$set": {"sign_count": new_sign_count}},
         )
         if result.modified_count > 0:
-            logger.debug(f"Updated sign count for {credential_id[:20]}... to {new_sign_count}")
+            logger.debug("Updated sign count for %s... to %d", credential_id[:20], new_sign_count)
             return True
         return False
 
@@ -117,7 +117,7 @@ class MongoCredentialStorage:
             {"credential_id": credential_id, "user_id": user_id}
         )
         if result.deleted_count > 0:
-            logger.info(f"Deleted credential: {credential_id[:20]}...")
+            logger.info("Deleted credential: %s...", credential_id[:20])
             return True
         return False
 

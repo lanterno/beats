@@ -126,7 +126,7 @@ class CalendarService:
                             "all_day": "date" in event_start and "dateTime" not in event_start,
                         }
                     )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.warning("Failed to fetch events from calendar %s", cal_id)
 
         return events

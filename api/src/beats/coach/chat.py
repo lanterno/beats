@@ -118,7 +118,6 @@ async def handle_chat_turn(
             messages=all_messages,
             tools=TOOL_SCHEMAS,
             cache_spec=spec,
-            temperature=0.7,
             max_tokens=4096,
             purpose="chat",
         )
@@ -185,7 +184,7 @@ async def handle_chat_turn(
                 result_text = await execute_tool(
                     user_id, tb["name"], tb["input"], repos=repos, projects=projects
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 result_text = f"Error: {exc}"
 
             yield {

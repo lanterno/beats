@@ -3,6 +3,8 @@
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -42,8 +44,13 @@ from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 
 logger = logging.getLogger(__name__)
 
+try:
+    API_VERSION = package_version("beats")
+except PackageNotFoundError:  # running from a source tree without an install
+    API_VERSION = "0.0.0+unknown"
+
 # Paths that never require authentication
-PUBLIC_PREFIXES = ("/api/auth", "/health", "/talk/ding", "/api/device/pair/exchange")
+PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange")
 
 # Paths that device tokens (daemon) are allowed to access
 DEVICE_ALLOWED_PREFIXES = (
@@ -91,17 +98,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 app = FastAPI(
     title="Beats API",
     description="A time tracking application",
-    version="0.5.0",
+    version=API_VERSION,
     lifespan=lifespan,
 )
 
-# CORS origins
+# The deployed stack serves the SPA and this API from one origin, so these are
+# only for local development against a separately served UI.
 origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://localhost:8080",
-    "https://lifepete.com",
-    "https://api.lifepete.com",
 ]
 
 # The home.space deployment serves the SPA and this API from ONE origin
@@ -255,18 +261,6 @@ app.add_middleware(AuthenticationMiddleware)
 async def health_check():
     """Health check endpoint for Docker and monitoring."""
     return {"status": "healthy", "service": "beats-api"}
-
-
-@app.get("/talk/ding")
-async def ding_get():
-    """Test endpoint."""
-    return {"message": "dong"}
-
-
-@app.post("/talk/ding")
-async def ding_post():
-    """Test endpoint."""
-    return {"message": "dong"}
 
 
 # CORS middleware - should be last (wraps all other middleware)

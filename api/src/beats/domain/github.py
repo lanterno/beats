@@ -65,7 +65,7 @@ class GitHubService:
                 )
                 user_resp.raise_for_status()
                 username = user_resp.json().get("login", "")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.warning("Failed to fetch GitHub user info")
 
         integration = GitHubIntegration(
@@ -122,7 +122,7 @@ class GitHubService:
                     if len(items) < 100:
                         break
                     page += 1
-                except Exception:
+                except Exception:  # noqa: BLE001
                     logger.warning("Failed to fetch commits from %s", repo_name)
                     break
 

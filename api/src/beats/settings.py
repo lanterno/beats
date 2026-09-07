@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -11,19 +10,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # short shared secret can mint arbitrary session tokens for any user.
 JWT_SECRET_MIN_BYTES = 32
 
-# Get the api/ directory (parent of src/beats/)
 _api_dir = Path(__file__).resolve().parent.parent.parent
 
-# Use .env.test if running tests, else .env
-_env_file_name = (
-    ".env.test"
-    if (
-        any("pytest" in arg or "test" in arg for arg in sys.argv)
-        or os.getenv("BEATS_TEST_ENV") == "1"
-    )
-    else ".env"
-)
-_env_file = _api_dir / _env_file_name
+# Which env file to load, named explicitly. conftest.py points this at
+# .env.test before any test module imports this one. It used to be inferred by
+# scanning sys.argv for the substring "test", which meant any argument that
+# happened to contain it — a path, a module name, a --latest flag — silently
+# swung the whole application onto test configuration.
+_env_file = _api_dir / os.getenv("BEATS_ENV_FILE", ".env")
 
 
 class Settings(BaseSettings):
@@ -147,7 +141,10 @@ class Settings(BaseSettings):
 
     # AI Coach (Stage 2)
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
-    coach_model: str = Field(default="claude-sonnet-4-6", validation_alias="COACH_MODEL")
+    # Current-generation Sonnet: newer and cheaper than the 4-6 it replaces
+    # ($2/$10 per Mtok against $3/$15). Set COACH_MODEL=claude-opus-5 for the
+    # stronger model at $5/$25 — gateway.MODEL_PRICING bills either correctly.
+    coach_model: str = Field(default="claude-sonnet-5", validation_alias="COACH_MODEL")
     coach_monthly_budget_usd: float = Field(
         default=10.0, validation_alias="COACH_MONTHLY_BUDGET_USD"
     )

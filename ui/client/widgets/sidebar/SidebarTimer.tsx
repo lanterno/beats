@@ -145,6 +145,7 @@ export function SidebarTimer({
 			{isRunning ? (
 				<div className="space-y-2">
 					<button
+						type="button"
 						onClick={handleStop}
 						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
 					>
@@ -154,6 +155,7 @@ export function SidebarTimer({
 
 					<div className="flex items-center gap-1">
 						<button
+							type="button"
 							onClick={() => {
 								setShowStopTimeInput(!showStopTimeInput);
 								if (!showStopTimeInput && !customStopTime) {
@@ -189,6 +191,7 @@ export function SidebarTimer({
 			) : (
 				<div className="space-y-2">
 					<button
+						type="button"
 						onClick={handleStart}
 						disabled={!selectedProjectId}
 						className={cn(
@@ -205,6 +208,7 @@ export function SidebarTimer({
 					{selectedProjectId && (
 						<div className="flex items-center gap-1">
 							<button
+								type="button"
 								onClick={() => {
 									setShowStartTimeInput(!showStartTimeInput);
 									if (!showStartTimeInput && !customStartTime) {

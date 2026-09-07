@@ -27,13 +27,11 @@
 
     /* Path mapping */
     "paths": {
-      "@/*": ["./client/*"],
-      "@shared/*": ["./shared/*"]
+      "@/*": ["./client/*"]
     }
   },
   "include": [
     "client/**/*",
-    "shared/**/*",
     "vite.config.ts",
     "vitest.setup.ts"
   ],

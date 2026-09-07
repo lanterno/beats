@@ -166,15 +166,14 @@ class Project(BaseModel):
             if o.week_of == week_monday:
                 return o.weekly_goal, o.goal_type or self.goal_type
 
-        # 2. Permanent override (latest effective_from <= week_monday)
-        best: GoalOverride | None = None
-        for o in self.goal_overrides:
-            if o.effective_from is not None and o.effective_from <= week_monday:
-                if best is None or best.effective_from is None:
-                    best = o
-                elif o.effective_from > best.effective_from:
-                    best = o
-        if best is not None:
+        # 2. Permanent override — the latest one that has taken effect by then
+        in_effect = [
+            o
+            for o in self.goal_overrides
+            if o.effective_from is not None and o.effective_from <= week_monday
+        ]
+        if in_effect:
+            best = max(in_effect, key=lambda o: o.effective_from)
             return best.weekly_goal, best.goal_type or self.goal_type
 
         # 3. Default

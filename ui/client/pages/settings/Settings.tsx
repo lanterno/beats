@@ -124,6 +124,7 @@ export default function Settings() {
 					<div className="flex flex-wrap gap-2">
 						{THEMES.map((t) => (
 							<button
+								type="button"
 								key={t.id}
 								onClick={() => setTheme(t.id)}
 								className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
@@ -157,6 +158,7 @@ export default function Settings() {
 					<div className="flex flex-wrap gap-2">
 						{COLOR_MODES.map((m) => (
 							<button
+								type="button"
 								key={m.id}
 								onClick={() => setMode(m.id)}
 								className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
@@ -183,6 +185,7 @@ export default function Settings() {
 					<div className="flex flex-wrap gap-2">
 						{DENSITIES.map((d) => (
 							<button
+								type="button"
 								key={d.id}
 								onClick={() => setDensity(d.id)}
 								className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
@@ -217,6 +220,7 @@ export default function Settings() {
 								</p>
 								<div className="flex flex-wrap gap-2 mt-3">
 									<button
+										type="button"
 										onClick={() => handleExportCSV()}
 										className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 									>
@@ -224,6 +228,7 @@ export default function Settings() {
 									</button>
 									{activeProjects.map((p) => (
 										<button
+											type="button"
 											key={p.id}
 											onClick={() => handleExportCSV(p.id)}
 											className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
@@ -246,6 +251,7 @@ export default function Settings() {
 									Complete dump of all projects and sessions. Re-importable for disaster recovery.
 								</p>
 								<button
+									type="button"
 									onClick={handleExportJSON}
 									className="mt-3 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 								>
@@ -421,6 +427,7 @@ function PasskeysSection() {
 					<div className="flex items-center gap-2">
 						<p className="text-xs text-destructive">Failed to load passkeys.</p>
 						<button
+							type="button"
 							onClick={loadCredentials}
 							className="text-xs text-accent hover:text-accent/80 transition-colors"
 						>
@@ -445,6 +452,7 @@ function PasskeysSection() {
 								</span>
 								{credentials.length > 1 && (
 									<button
+										type="button"
 										onClick={() => handleDelete(cred.id)}
 										disabled={deleting === cred.id}
 										className="p-1 text-muted-foreground/40 hover:text-destructive transition-colors shrink-0 disabled:opacity-40"
@@ -556,6 +564,7 @@ function HomeIdentitySection() {
 						</div>
 						<p className="text-[10px] text-muted-foreground/60 font-mono break-all">{link.did}</p>
 						<button
+							type="button"
 							onClick={handleUnlink}
 							disabled={busy}
 							className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
@@ -565,6 +574,7 @@ function HomeIdentitySection() {
 					</>
 				) : (
 					<button
+						type="button"
 						onClick={handleLink}
 						disabled={busy}
 						className="text-xs text-accent hover:text-accent/80 transition-colors disabled:opacity-40"
@@ -654,6 +664,7 @@ function WebhooksSection() {
 									{wh.events.join(", ")}
 								</span>
 								<button
+									type="button"
 									onClick={() => handleDelete(wh.id)}
 									className="p-1 text-muted-foreground/40 hover:text-destructive transition-colors shrink-0"
 								>
@@ -674,6 +685,7 @@ function WebhooksSection() {
 						className="flex-1 text-xs bg-secondary/50 border border-border rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-accent font-mono"
 					/>
 					<button
+						type="button"
 						onClick={handleAdd}
 						disabled={!newUrl.trim() || adding}
 						className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground disabled:opacity-40 hover:bg-accent/85 transition-colors"
@@ -731,6 +743,7 @@ function CalendarSection() {
 					<div className="flex items-center gap-3">
 						<span className="text-xs text-accent font-medium">Connected</span>
 						<button
+							type="button"
 							onClick={handleDisconnect}
 							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
 						>
@@ -739,6 +752,7 @@ function CalendarSection() {
 					</div>
 				) : (
 					<button
+						type="button"
 						onClick={handleConnect}
 						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 					>
@@ -810,6 +824,7 @@ function GitHubSection() {
 							Connected as {status.github_username}
 						</span>
 						<button
+							type="button"
 							onClick={handleDisconnect}
 							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
 						>
@@ -818,6 +833,7 @@ function GitHubSection() {
 					</div>
 				) : (
 					<button
+						type="button"
 						onClick={handleConnect}
 						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
 					>

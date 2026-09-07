@@ -138,6 +138,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 				<div className="space-y-2">
 					<div className="flex gap-2">
 						<button
+							type="button"
 							onClick={handleStart}
 							disabled={!selectedProjectId || isRunning}
 							className={cn(
@@ -152,6 +153,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 						</button>
 
 						<button
+							type="button"
 							onClick={handleStop}
 							disabled={!isRunning}
 							className={cn(
@@ -168,6 +170,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 
 					{selectedProjectId && !isRunning && (
 						<button
+							type="button"
 							onClick={() => setShowStartTimeInput(!showStartTimeInput)}
 							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors duration-150"
 						>
@@ -178,6 +181,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 
 					{isRunning && (
 						<button
+							type="button"
 							onClick={() => setShowStopTimeInput(!showStopTimeInput)}
 							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors duration-150"
 						>

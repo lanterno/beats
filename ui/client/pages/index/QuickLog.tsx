@@ -59,6 +59,7 @@ export function QuickLog() {
 	if (!open) {
 		return (
 			<button
+				type="button"
 				onClick={() => setOpen(true)}
 				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-accent transition-colors"
 				title="Log a past session"
@@ -77,6 +78,7 @@ export function QuickLog() {
 			<div className="flex items-center justify-between">
 				<span className="text-xs font-medium text-foreground">Log a session</span>
 				<button
+					type="button"
 					onClick={() => setOpen(false)}
 					className="p-0.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
 				>
@@ -120,6 +122,7 @@ export function QuickLog() {
 			)}
 
 			<button
+				type="button"
 				onClick={handleSave}
 				disabled={!projectId || !validRange || saving}
 				className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-accent text-accent-foreground disabled:opacity-40 hover:bg-accent/85 transition-colors"

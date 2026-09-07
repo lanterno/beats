@@ -52,6 +52,7 @@ function SessionRow({
 		<div className="group w-full flex flex-col px-3 py-1.5 hover:bg-secondary/30 rounded-md transition-colors">
 			<div className="flex items-center gap-2">
 				<button
+					type="button"
 					onClick={() => navigate(`/project/${projectId}`)}
 					className="flex items-center gap-2 flex-1 min-w-0 text-left"
 				>
@@ -86,6 +87,7 @@ function SessionRow({
 					(confirming ? (
 						<div className="flex items-center gap-1 shrink-0">
 							<button
+								type="button"
 								onClick={() => onDelete(session.id)}
 								disabled={deleting}
 								className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-destructive/90 text-destructive-foreground hover:bg-destructive disabled:opacity-50 transition-colors"
@@ -93,6 +95,7 @@ function SessionRow({
 								Delete
 							</button>
 							<button
+								type="button"
 								onClick={() => setConfirming(false)}
 								className="px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
 							>
@@ -101,6 +104,7 @@ function SessionRow({
 						</div>
 					) : (
 						<button
+							type="button"
 							onClick={() => setConfirming(true)}
 							aria-label="Delete session"
 							className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all shrink-0"
@@ -187,6 +191,7 @@ function SessionGroup({
 	return (
 		<div>
 			<button
+				type="button"
 				onClick={() => setOpen(!open)}
 				className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary/20 rounded-md transition-colors"
 			>

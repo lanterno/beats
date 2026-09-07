@@ -6,6 +6,37 @@ from pymongo.asynchronous.database import AsyncDatabase
 from beats.settings import settings
 
 
+async def ensure_indexes(db: AsyncDatabase) -> None:
+    """Create every index the application relies on.
+
+    Takes the database explicitly rather than reading the ``Database``
+    singleton so the test suite can build the same index set once per
+    run without standing up a second connection manager.
+    """
+    await db.users.create_index("email", unique=True)
+    # One home.space identity maps to exactly one beats account. Partial
+    # rather than plain-unique because most users have no link at all, and
+    # a plain unique index would let only ONE of them hold a null subject.
+    await db.users.create_index(
+        [("sso_issuer", 1), ("sso_subject", 1)],
+        unique=True,
+        partialFilterExpression={"sso_subject": {"$type": "string"}},
+    )
+    await db.credentials.create_index("credential_id", unique=True)
+    await db.credentials.create_index("user_id")
+    await db.pairing_codes.create_index("expires_at", expireAfterSeconds=0)
+    await db.pairing_codes.create_index("code_hash", unique=True)
+    await db.device_registrations.create_index("device_id", unique=True)
+    await db.device_registrations.create_index("user_id")
+    await db.flow_windows.create_index([("user_id", 1), ("window_start", -1)])
+    await db.signal_summaries.create_index(
+        [("user_id", 1), ("device_id", 1), ("hour", 1)], unique=True
+    )
+    await db.biometric_days.create_index([("user_id", 1), ("date", 1), ("source", 1)], unique=True)
+    await db.fitbit_integrations.create_index("user_id", unique=True)
+    await db.oura_integrations.create_index("user_id", unique=True)
+
+
 class Database:
     """Async MongoDB connection manager.
 
@@ -28,7 +59,7 @@ class Database:
         db_name = db_name or settings.db_name
         cls.client = AsyncMongoClient(dsn)
         cls.db = cls.client[db_name]
-        await cls._ensure_indexes()
+        await ensure_indexes(cls.db)
 
     @classmethod
     async def disconnect(cls) -> None:
@@ -37,39 +68,6 @@ class Database:
             await cls.client.close()
             cls.client = None
             cls.db = None
-
-    @classmethod
-    async def _ensure_indexes(cls) -> None:
-        """Create required indexes if they don't already exist."""
-        if cls.db is None:
-            return
-        await cls.db.users.create_index("email", unique=True)
-        # One home.space identity maps to exactly one beats account. Partial
-        # rather than plain-unique because most users have no link at all, and
-        # a plain unique index would let only ONE of them hold a null subject.
-        await cls.db.users.create_index(
-            [("sso_issuer", 1), ("sso_subject", 1)],
-            unique=True,
-            partialFilterExpression={"sso_subject": {"$type": "string"}},
-        )
-        await cls.db.credentials.create_index("credential_id", unique=True)
-        await cls.db.credentials.create_index("user_id")
-        # Device pairing indexes
-        await cls.db.pairing_codes.create_index("expires_at", expireAfterSeconds=0)
-        await cls.db.pairing_codes.create_index("code_hash", unique=True)
-        await cls.db.device_registrations.create_index("device_id", unique=True)
-        await cls.db.device_registrations.create_index("user_id")
-        # Flow windows and signal summaries
-        await cls.db.flow_windows.create_index([("user_id", 1), ("window_start", -1)])
-        await cls.db.signal_summaries.create_index(
-            [("user_id", 1), ("device_id", 1), ("hour", 1)], unique=True
-        )
-        # Biometrics
-        await cls.db.biometric_days.create_index(
-            [("user_id", 1), ("date", 1), ("source", 1)], unique=True
-        )
-        await cls.db.fitbit_integrations.create_index("user_id", unique=True)
-        await cls.db.oura_integrations.create_index("user_id", unique=True)
 
     @classmethod
     def get_db(cls) -> AsyncDatabase:

@@ -39,7 +39,6 @@ async def generate_brief(
         system=system,
         messages=messages,
         cache_spec=spec,
-        temperature=0.4,
         max_tokens=1024,
         purpose="brief",
     )

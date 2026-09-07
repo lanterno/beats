@@ -3,7 +3,13 @@
 	"files": {
 		"includes": [
 			"**/client/**",
+			"**/e2e/**",
+			"vite.config.ts",
+			"vitest.config.ts",
+			"vitest.setup.ts",
+			"playwright.config.ts",
 			"!**/*.css",
+			"!**/dist",
 			"!**/client/shared/api/generated.ts",
 			"!**/client/shared/api/openapi.json"
 		]
@@ -17,7 +23,16 @@
 		"rules": {
 			"recommended": true,
 			"a11y": {
-				"recommended": false
+				"recommended": true,
+				"noAutofocus": "off",
+				"noNoninteractiveElementToInteractiveRole": "off",
+				"noSvgWithoutTitle": "warn",
+				"noLabelWithoutControl": "warn",
+				"useSemanticElements": "warn",
+				"useKeyWithClickEvents": "warn",
+				"noStaticElementInteractions": "warn",
+				"useAriaPropsSupportedByRole": "warn",
+				"useFocusableInteractive": "warn"
 			},
 			"suspicious": {
 				"noArrayIndexKey": "off"

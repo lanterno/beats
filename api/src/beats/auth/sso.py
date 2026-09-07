@@ -209,7 +209,7 @@ class HomeSSOVerifier:
         for key_dict in keys:
             try:
                 signing_key = jwt.PyJWK.from_dict(key_dict).key
-            except Exception as e:  # malformed entry — skip, try the next
+            except Exception as e:  # malformed entry — skip, try the next  # noqa: BLE001
                 last_error = e
                 continue
             try:

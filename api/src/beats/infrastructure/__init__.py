@@ -9,9 +9,9 @@ from .repositories import (
 )
 
 __all__ = [
-    "Database",
     "BeatRepository",
+    "Database",
     "MongoBeatRepository",
-    "ProjectRepository",
     "MongoProjectRepository",
+    "ProjectRepository",
 ]

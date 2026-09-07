@@ -26,6 +26,7 @@ export function SessionCard({ session, onEdit }: SessionCardProps) {
 					{session.duration > 0 ? formatDuration(session.duration) : "—"}
 				</span>
 				<button
+					type="button"
 					onClick={() => onEdit(session)}
 					className="p-1.5 rounded-md text-muted-foreground/70 hover:text-accent hover:bg-accent/5 transition-colors duration-150 focus:opacity-100 focus:outline-hidden"
 					aria-label="Edit session"

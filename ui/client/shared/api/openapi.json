@@ -3040,7 +3040,7 @@
   "info": {
     "description": "A time tracking application",
     "title": "Beats API",
-    "version": "0.5.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7940,38 +7940,6 @@
           }
         },
         "summary": "Health Check"
-      }
-    },
-    "/talk/ding": {
-      "get": {
-        "description": "Test endpoint.",
-        "operationId": "ding_get_talk_ding_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Ding Get"
-      },
-      "post": {
-        "description": "Test endpoint.",
-        "operationId": "ding_post_talk_ding_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Ding Post"
       }
     }
   }

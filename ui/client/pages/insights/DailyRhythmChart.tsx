@@ -44,6 +44,7 @@ export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
 				<div className="flex rounded-md border border-border overflow-hidden">
 					{(["week", "month", "all"] as Period[]).map((p) => (
 						<button
+							type="button"
 							key={p}
 							onClick={() => setPeriod(p)}
 							className={cn(

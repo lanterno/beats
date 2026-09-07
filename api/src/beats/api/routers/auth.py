@@ -136,7 +136,7 @@ async def register_start(
         options = await webauthn.get_registration_options(user)
         return RegisterStartResponse(options=options, user_id=user.id or "")
     except Exception as e:
-        logger.error(f"Failed to generate registration options: {e}")
+        logger.error("Failed to generate registration options: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
@@ -178,7 +178,7 @@ async def verify_registration(
             token=result["token"],
         )
     except ValueError as e:
-        logger.warning(f"Registration verification failed: {e}")
+        logger.warning("Registration verification failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -214,7 +214,7 @@ async def verify_login(
             token=result["token"],
         )
     except ValueError as e:
-        logger.warning(f"Login verification failed: {e}")
+        logger.warning("Login verification failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),

@@ -47,16 +47,26 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Two test files cover different layers:
+Five test files cover different layers (791 tests, ~25s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; ~190 tests.
-- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; ~65 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 284 tests.
+- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 280 tests.
+- **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 130 tests.
+- **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.
+- **`src/beats/test_sso.py`** — home.space SSO with a scripted issuer (`httpx.MockTransport`) and real Ed25519 tokens; 35 tests.
 
 Harness:
 
 - `conftest.py` starts a `MongoDbContainer` via testcontainers, sets `DB_DSN`/`DB_NAME` env vars
 - The `test_client` fixture creates `TestClient(app)` inside a `with` block (triggers lifespan)
-- `clean_db` fixture drops all collections between test classes; per-test cleanup goes in autouse fixtures inside each test class (see `TestAccountAPI._reset_account_state` for the pattern)
+- The `mongo` fixture is one session-scoped `MongoClient` shared by every fixture below it
+- `_indexes` builds the index set once per session by calling the production
+  `ensure_indexes()` directly, so the harness cannot drift from what the app creates
+- `clean_db` empties collections between test classes with `delete_many({})` rather than
+  dropping them — a drop takes the collection's indexes with it, and rebuilding the full
+  index set per class is what used to exhaust mongod's file descriptors and crash it
+  mid-run. Per-test cleanup goes in autouse fixtures inside each test class (see
+  `TestAccountAPI._reset_account_state` for the pattern)
 - An autouse `_reset_rate_limiter` fixture clears the slowapi store before every test so rate-limit-exhausting tests don't bleed into the rest of the suite
 - Coverage threshold: 65% (`--cov-fail-under=65`)
 - Set `BEATS_TEST_ENV=1` to skip testcontainers (uses whatever `DB_DSN` is configured)
@@ -65,7 +75,7 @@ Harness:
 
 - `Database` is a singleton; `connect()` is called in the FastAPI lifespan, not at import time
 - Settings use pydantic-settings: env vars override `.env` file values
-- Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/talk/ding`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min)
+- Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min)
 - Device tokens (daemon, wall-clock) are a separate JWT type; the auth middleware allows them only on paths in `DEVICE_ALLOWED_PREFIXES` (see `src/server.py`). Adding a new daemon-reachable path means appending to that tuple.
 - Error envelope: every non-2xx response carries `{detail, code, fields?}`. Routers can override the auto-mapped code by raising `HTTPException(detail={"code": "X", "message": "..."})` — see `coach.py` and `auth.py` for examples.
 - Multi-user: Each user's data is scoped via `user_id` field on all collections. Repos accept `user_id` in constructor.

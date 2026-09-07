@@ -49,5 +49,5 @@ def verify(public_bytes: bytes, payload: bytes, signature: bytes) -> None:
         key.verify(signature, payload)
     except InvalidSignature as exc:
         raise SignatureMismatch("export signature does not verify") from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise SignatureMismatch(f"export signature malformed: {exc}") from exc

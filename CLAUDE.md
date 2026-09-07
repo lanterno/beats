@@ -51,11 +51,11 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo)
+- `pytest src/` (API, with testcontainers Mongo — ~25s for 791 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
-- `go test ./...` + `go vet ./...` (daemon)
+- `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
-- `npm test` (VS Code extension)
+- `npm test` (VS Code extension — biome + tsc + node --test)
 
 Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`](lefthook.yml).
 
@@ -74,14 +74,31 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | Daemon test            | daemon/                       | `go test ./...`                  |
 | Daemon format          | daemon/                       | `gofmt -w .`                     |
 | Daemon vet             | daemon/                       | `go vet ./...`                   |
+| Daemon staticcheck     | daemon/                       | `go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...` |
 | Companion analyze      | companion/                    | `flutter analyze`                |
 | Companion test         | companion/                    | `flutter test`                   |
+| VS Code extension lint | integrations/vscode-beats/    | `npm run lint`                   |
 | VS Code extension test | integrations/vscode-beats/    | `npm test`                       |
 
 ## Testing Strategy
 
-- **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest`.
-  Set `BEATS_TEST_ENV=1` to skip testcontainers (e.g., in Docker Compose or CI with service containers).
+- **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
+  the full 791-test suite takes about 25 seconds.
+  Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
+  already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
+  container; locally it is the fallback when Docker is unavailable):
+
+  ```bash
+  docker run -d --name beats-test-mongo -p 27018:27017 mongo:8
+  BEATS_TEST_ENV=1 DB_DSN=mongodb://localhost:27018 DB_NAME=beats_test \
+    uv run --group dev pytest src/
+  ```
+
+  The suite shares one Mongo connection and one index build across the whole
+  run; `clean_db` empties collections between test classes rather than dropping
+  them, so indexes (including TTL indexes the app creates at startup) survive.
+  Dropping and rebuilding them per class is what previously exhausted mongod's
+  file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
 - **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env). The `.ts` files cover pure helpers in `shared/lib/`; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
@@ -91,9 +108,17 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 
 ## Conventions
 
-- Python: Ruff for linting/formatting, ty for type checking, line length 100
-- TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100
-- Go: gofmt + `go vet`; tests use stdlib `testing` only (no testify). Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
+- Python: Ruff for linting/formatting, ty for type checking, line length 100.
+  The ruff select list in `api/pyproject.toml` documents what each group is for
+  and, just as usefully, which groups are deliberately left out. `ty` cannot fail
+  CI on its own yet (`error-on-warning = false`); `api/scripts/ty_budget.py` holds
+  the diagnostic count at its current ceiling so a new one still does.
+- TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100.
+  Biome covers `client/`, `e2e/` and the root config files, and the VS Code
+  extension has its own config. Accessibility rules are on; seven of them run at
+  `warn` because their remaining sites need per-component decisions rather than a
+  blanket fix (see `ui/biome.json` for which and why).
+- Go: gofmt + `go vet` + `staticcheck`; tests use stdlib `testing` only (no testify). Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
 - Dart: `flutter analyze` (no extra linter config); tests use `flutter_test` package.
 - API auth: JWT Bearer token for all endpoints. Two ways to obtain one — beats'
   own WebAuthn passkey login, or a home.space SSO exchange. After the exchange the

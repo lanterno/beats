@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from bson import ObjectId
+from bson.errors import InvalidId
 from pymongo.asynchronous.collection import AsyncCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
@@ -323,11 +324,15 @@ class MongoProjectRepository(MongoUserScoped, ProjectRepository):
         return Project(**serialize_from_document(doc))
 
     async def exists(self, project_id: str) -> bool:
+        # A malformed id is a "no such project", not an error. Anything else —
+        # a dropped connection, an auth failure — must surface rather than be
+        # reported to the caller as a missing project.
         try:
-            doc = await self.collection.find_one(self._q({"_id": ObjectId(project_id)}))
-            return doc is not None
-        except Exception:
+            oid = ObjectId(project_id)
+        except InvalidId:
             return False
+        doc = await self.collection.find_one(self._q({"_id": oid}))
+        return doc is not None
 
     async def create(self, project: Project) -> Project:
         data = serialize_to_document(project.model_dump(mode="json", exclude_none=True))

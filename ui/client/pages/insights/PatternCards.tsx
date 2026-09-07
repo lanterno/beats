@@ -30,6 +30,7 @@ export function PatternCards() {
 					Patterns
 				</h2>
 				<button
+					type="button"
 					onClick={() => refreshMutation.mutate()}
 					disabled={refreshMutation.isPending}
 					className={cn(
@@ -56,6 +57,7 @@ export function PatternCards() {
 							className="rounded-lg border border-border/80 bg-card shadow-soft px-4 py-3 group relative"
 						>
 							<button
+								type="button"
 								onClick={() => dismissMutation.mutate(card.id)}
 								className="absolute top-2 right-2 p-1 rounded text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
 							>

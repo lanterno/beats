@@ -136,7 +136,7 @@ async def dispatch_webhook_event(
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 await client.post(url, json=body)
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.warning("Webhook delivery failed for %s to %s", event, url)
 
     # Detach delivery so the request that triggered the dispatch

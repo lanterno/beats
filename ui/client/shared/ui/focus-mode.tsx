@@ -75,6 +75,7 @@ export function FocusMode({
 			{/* Top controls */}
 			<div className="absolute top-4 right-4 flex items-center gap-2">
 				<button
+					type="button"
 					onClick={toggleFullscreen}
 					className="p-2 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
 					title="Toggle fullscreen"
@@ -86,6 +87,7 @@ export function FocusMode({
 					)}
 				</button>
 				<button
+					type="button"
 					onClick={onClose}
 					className="px-3 py-1.5 rounded-md text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
 				>
@@ -118,6 +120,7 @@ export function FocusMode({
 
 			{/* Stop button */}
 			<button
+				type="button"
 				onClick={onStop}
 				className="mt-12 flex items-center gap-2.5 px-8 py-3 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
 			>

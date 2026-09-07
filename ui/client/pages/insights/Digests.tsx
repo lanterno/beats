@@ -24,6 +24,7 @@ function DigestCard({ digest }: { digest: WeeklyDigest }) {
 	return (
 		<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
 			<button
+				type="button"
 				onClick={() => setExpanded(!expanded)}
 				className="w-full px-4 py-3 text-left hover:bg-secondary/20 transition-colors"
 			>
@@ -132,6 +133,7 @@ export default function Digests() {
 			<div className="flex items-center justify-between">
 				<h1 className="font-heading text-xl text-foreground">Weekly Digests</h1>
 				<button
+					type="button"
 					onClick={() => generateMutation.mutate(undefined)}
 					disabled={generateMutation.isPending}
 					className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-accent text-accent-foreground hover:bg-accent/85 disabled:opacity-50 transition-colors"

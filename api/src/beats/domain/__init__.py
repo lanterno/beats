@@ -14,13 +14,13 @@ from .models import Beat, Project
 __all__ = [
     # Models
     "Beat",
-    "Project",
+    "BeatNotFound",
     # Exceptions
     "DomainException",
-    "BeatNotFound",
     "InvalidEndTime",
     "NoActiveTimer",
     "NoObjectMatched",
+    "Project",
     "ProjectNotFound",
     "TimerAlreadyRunning",
 ]

@@ -173,7 +173,7 @@ class WebAuthnManager:
             }
 
         except Exception as e:
-            logger.error(f"Registration verification failed: {e}")
+            logger.error("Registration verification failed: %s", e)
             raise ValueError(f"Registration verification failed: {e}") from e
 
     async def get_authentication_options(self) -> dict[str, Any]:
@@ -252,7 +252,7 @@ class WebAuthnManager:
             }
 
         except Exception as e:
-            logger.error(f"Authentication verification failed: {e}")
+            logger.error("Authentication verification failed: %s", e)
             raise ValueError(f"Authentication verification failed: {e}") from e
 
     async def is_registered(self) -> bool:

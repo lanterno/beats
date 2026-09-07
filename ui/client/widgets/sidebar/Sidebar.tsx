@@ -131,6 +131,7 @@ export function Sidebar(props: SidebarProps) {
 				<div className="px-4 py-3 border-t border-sidebar-border">
 					<div className="flex items-center gap-2">
 						<button
+							type="button"
 							onClick={install}
 							className="flex-1 flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-primary transition-colors"
 						>
@@ -138,6 +139,7 @@ export function Sidebar(props: SidebarProps) {
 							Install Beats
 						</button>
 						<button
+							type="button"
 							onClick={dismissInstall}
 							className="p-0.5 text-sidebar-foreground/30 hover:text-sidebar-foreground/60 transition-colors"
 						>
@@ -157,6 +159,7 @@ export function Sidebar(props: SidebarProps) {
 						{user?.email}
 					</span>
 					<button
+						type="button"
 						onClick={handleLogout}
 						className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
 						title="Sign out"
