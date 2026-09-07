@@ -44,6 +44,7 @@ import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
+import { computeMondayIsoList } from "./weekIso";
 
 const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = [
@@ -56,23 +57,6 @@ const WEEKDAYS = [
 	"Sunday",
 ] as const;
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
-
-/** Local Monday (ISO YYYY-MM-DD) `weeksAgo` weeks back, noon-anchored to
- *  dodge DST/UTC edge cases on the day boundary. Pure date math so it's
- *  safe to call above the hook. */
-function getMondayIsoFor(weeksAgo: number): string {
-	const d = new Date();
-	d.setHours(12, 0, 0, 0);
-	d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - weeksAgo * 7);
-	const yyyy = d.getFullYear();
-	const mm = String(d.getMonth() + 1).padStart(2, "0");
-	const dd = String(d.getDate()).padStart(2, "0");
-	return `${yyyy}-${mm}-${dd}`;
-}
-
-function computeMondayIsoList(weekCount: number): string[] {
-	return Array.from({ length: weekCount }, (_, i) => getMondayIsoFor(i));
-}
 
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
