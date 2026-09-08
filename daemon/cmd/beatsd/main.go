@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -553,13 +554,10 @@ func shortRepo(p string) string {
 	return p
 }
 
+// lastSlash reports the index of the final path separator, either kind, so a
+// Windows path shortens the same way a POSIX one does.
 func lastSlash(s string) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == '/' || s[i] == '\\' {
-			return i
-		}
-	}
-	return -1
+	return strings.LastIndexAny(s, `/\`)
 }
 
 // maskToken returns a 6-char prefix of the device token, suitable
@@ -674,7 +672,7 @@ func levenshtein(a, b string) int {
 			if ra[i-1] == rb[j-1] {
 				cost = 0
 			}
-			curr[j] = minInt(
+			curr[j] = min(
 				prev[j]+1,      // deletion
 				curr[j-1]+1,    // insertion
 				prev[j-1]+cost, // substitution
@@ -683,17 +681,6 @@ func levenshtein(a, b string) int {
 		prev, curr = curr, prev
 	}
 	return prev[len(rb)]
-}
-
-func minInt(a, b, c int) int {
-	m := a
-	if b < m {
-		m = b
-	}
-	if c < m {
-		m = c
-	}
-	return m
 }
 
 // printUsage writes the help text to stderr — used by error paths
