@@ -3,7 +3,7 @@
  * Compact header, week history table, and paginated session list.
  */
 
-import { ChevronLeft, Clock, Edit2, List, Settings, Trash2 } from "lucide-react";
+import { ChevronLeft, Clock, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
@@ -18,10 +18,8 @@ import {
 	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "@/entities/project";
-import type { Session } from "@/entities/session";
 import {
 	calculateDailySummary,
-	SessionEditForm,
 	useDeleteSession,
 	useSessions,
 	useUpdateSession,
@@ -29,24 +27,21 @@ import {
 import { describeError } from "@/shared/api";
 import {
 	cn,
-	formatDate,
-	formatDuration,
-	formatTime,
 	getWeekNumberLabel,
 	parseTimedeltaToMinutes,
 	parseUtcIso,
 	startOfDay,
 } from "@/shared/lib";
-import { ColorPicker, EmptyState, GoalRing } from "@/shared/ui";
+import { ColorPicker, GoalRing } from "@/shared/ui";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
 import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
+import { ProjectSessionList } from "./ProjectSessionList";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
 import { computeMondayIsoList } from "./weekIso";
 
-const SESSIONS_PER_PAGE = 20;
 const WEEKDAYS = [
 	"Monday",
 	"Tuesday",
@@ -60,9 +55,6 @@ const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
-	const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-	const [visibleCount, setVisibleCount] = useState(SESSIONS_PER_PAGE);
 	const [weekCount, setWeekCount] = useState(5);
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
@@ -106,7 +98,6 @@ export default function ProjectDetails() {
 	// belongs in the deps even though Biome can't infer that it's read.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: projectId is the reset trigger, not a body dependency
 	useEffect(() => {
-		setVisibleCount(SESSIONS_PER_PAGE);
 		setWeekCount(5);
 		hasSetInitialExpand.current = false;
 	}, [projectId]);
@@ -127,7 +118,6 @@ export default function ProjectDetails() {
 				endTime,
 				projectId: projectIdForSession,
 			});
-			setEditingSessionId(null);
 			toast.success("Session updated");
 			refetchSessions();
 		} catch {
@@ -138,7 +128,6 @@ export default function ProjectDetails() {
 	const handleDeleteSession = async (sessionId: string) => {
 		try {
 			await deleteSessionMutation.mutateAsync(sessionId);
-			setConfirmDeleteId(null);
 			toast.success("Session deleted");
 			refetchSessions();
 		} catch (err) {
@@ -177,38 +166,6 @@ export default function ProjectDetails() {
 
 	const sortedSessions = [...sessionList].sort(
 		(a, b) => parseUtcIso(b.startTime).getTime() - parseUtcIso(a.startTime).getTime(),
-	);
-
-	// P4.0: when a week label is clicked, scope the displayed sessions to
-	// that Mon..Sun window. Resets visibleCount so the user lands on the
-	// start of the scoped window rather than mid-pagination.
-	const scopedSessions =
-		scopedWeeksAgo === null
-			? sortedSessions
-			: (() => {
-					const monday = new Date();
-					monday.setHours(0, 0, 0, 0);
-					monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) - scopedWeeksAgo * 7);
-					const nextMonday = new Date(monday);
-					nextMonday.setDate(nextMonday.getDate() + 7);
-					return sortedSessions.filter((s) => {
-						const t = parseUtcIso(s.startTime);
-						return t >= monday && t < nextMonday;
-					});
-				})();
-
-	const visibleSessions = scopedSessions.slice(0, visibleCount);
-	const hasMore = visibleCount < scopedSessions.length;
-
-	// Group visible sessions by date
-	const sessionsByDate = visibleSessions.reduce(
-		(acc, session) => {
-			const date = formatDate(session.startTime);
-			if (!acc[date]) acc[date] = [];
-			acc[date].push(session);
-			return acc;
-		},
-		{} as Record<string, Session[]>,
 	);
 
 	// Build week history rows: current week + past weeks
@@ -679,183 +636,19 @@ export default function ProjectDetails() {
 					</div>
 				</section>
 
-				{/* Sessions */}
-				<section className="mt-6" aria-labelledby="sessions-heading">
-					<div className="flex flex-wrap items-center gap-2 mb-3">
-						<h2
-							id="sessions-heading"
-							className="flex items-center gap-2 text-foreground font-medium text-sm"
-						>
-							<List className="w-3.5 h-3.5 text-accent/75" />
-							Sessions
-							{sessionList.length > 0 && (
-								<span className="text-xs text-muted-foreground font-normal">
-									({scopedSessions.length}
-									{scopedWeeksAgo !== null && ` of ${sessionList.length}`})
-								</span>
-							)}
-						</h2>
-						{scopedWeeksAgo !== null && (
-							<button
-								type="button"
-								onClick={() => setScopedWeeksAgo(null)}
-								className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-accent hover:bg-accent/20 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
-							>
-								Scoped to {allWeekRows.find((r) => r.weeksAgo === scopedWeeksAgo)?.label ?? "week"}
-								<span aria-hidden="true">×</span>
-							</button>
-						)}
-					</div>
-
-					{Object.entries(sessionsByDate).length === 0 ? (
-						<div className="rounded-lg border border-dashed border-border">
-							<EmptyState
-								variant="clock"
-								message="No sessions yet. Start the timer to begin tracking."
-							/>
-						</div>
-					) : (
-						<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
-							<div className="py-1">
-								{Object.entries(sessionsByDate).map(([date, dateSessions]) => {
-									const dayTotalMinutes = dateSessions.reduce(
-										(sum, s) => sum + (s.duration || 0),
-										0,
-									);
-									return (
-										<div key={date}>
-											{/* Date separator */}
-											<div className="px-3 py-1 mt-2 first:mt-0">
-												<span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-													{date}
-												</span>
-												<span className="text-[10px] text-muted-foreground/60 ml-1.5">
-													— {dateSessions.length} session
-													{dateSessions.length !== 1 ? "s" : ""}
-													{dayTotalMinutes > 0 && (
-														<span className="tabular-nums">
-															, {formatDuration(dayTotalMinutes)}
-														</span>
-													)}
-												</span>
-											</div>
-
-											{/* Session rows */}
-											{dateSessions.map((session) => (
-												<div key={session.id}>
-													{editingSessionId === session.id ? (
-														<div className="px-2 py-1">
-															<SessionEditForm
-																session={session}
-																projects={(allProjects || []).map((p) => ({
-																	id: p.id,
-																	name: p.name,
-																}))}
-																onSave={handleSaveEdit}
-																onCancel={() => setEditingSessionId(null)}
-															/>
-														</div>
-													) : (
-														<div className="px-3 py-1.5 hover:bg-secondary/30 transition-colors group">
-															<div className="flex items-center gap-3">
-																<span className="text-sm tabular-nums text-foreground">
-																	{formatTime(session.startTime)} → {formatTime(session.endTime)}
-																</span>
-																<span
-																	className={`text-sm font-medium tabular-nums ml-auto ${
-																		session.duration > 0
-																			? "text-accent"
-																			: "text-muted-foreground/60"
-																	}`}
-																>
-																	{session.duration > 0 ? formatDuration(session.duration) : "—"}
-																</span>
-																{confirmDeleteId === session.id ? (
-																	<div className="flex items-center gap-1">
-																		<button
-																			type="button"
-																			onClick={() => handleDeleteSession(session.id)}
-																			disabled={deleteSessionMutation.isPending}
-																			className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-destructive/90 text-destructive-foreground hover:bg-destructive disabled:opacity-50 transition-colors"
-																		>
-																			Delete
-																		</button>
-																		<button
-																			type="button"
-																			onClick={() => setConfirmDeleteId(null)}
-																			className="px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-																		>
-																			Cancel
-																		</button>
-																	</div>
-																) : (
-																	<>
-																		<button
-																			type="button"
-																			onClick={() => setEditingSessionId(session.id)}
-																			className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-accent hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
-																			aria-label="Edit session"
-																		>
-																			<Edit2 className="w-3.5 h-3.5" />
-																		</button>
-																		<button
-																			type="button"
-																			onClick={() => setConfirmDeleteId(session.id)}
-																			className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
-																			aria-label="Delete session"
-																		>
-																			<Trash2 className="w-3.5 h-3.5" />
-																		</button>
-																	</>
-																)}
-															</div>
-															{(session.note || session.tags.length > 0) && (
-																<div className="flex items-center gap-1.5 mt-0.5">
-																	{session.note && (
-																		<span className="text-[11px] text-muted-foreground/60 truncate">
-																			{session.note}
-																		</span>
-																	)}
-																	{session.tags.map((tag) => (
-																		<span
-																			key={tag}
-																			className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent/70"
-																		>
-																			{tag}
-																		</span>
-																	))}
-																</div>
-															)}
-														</div>
-													)}
-												</div>
-											))}
-										</div>
-									);
-								})}
-							</div>
-
-							{/* Load more */}
-							{hasMore && (
-								<div className="border-t border-border/40">
-									<button
-										type="button"
-										onClick={() => setVisibleCount((c) => c + SESSIONS_PER_PAGE)}
-										className="w-full py-2.5 text-sm text-accent hover:bg-accent/5 transition-colors"
-									>
-										{/* FF.12: scope to scopedSessions, not sortedSessions —
-										    when the user has clicked a week label the visible
-										    list is scoped to that week's Mon..Sun range, so the
-										    count must reflect what THIS click will actually
-										    reveal. */}
-										Show {Math.min(SESSIONS_PER_PAGE, scopedSessions.length - visibleCount)} more
-										sessions...
-									</button>
-								</div>
-							)}
-						</div>
-					)}
-				</section>
+				<ProjectSessionList
+					// Keyed so navigating to another project remounts the list and
+					// resets its pagination, which the page used to do by hand.
+					key={projectId}
+					sessions={sortedSessions}
+					allProjects={allProjects || []}
+					scopedWeeksAgo={scopedWeeksAgo}
+					scopeLabel={allWeekRows.find((r) => r.weeksAgo === scopedWeeksAgo)?.label ?? "week"}
+					onClearScope={() => setScopedWeeksAgo(null)}
+					onSave={handleSaveEdit}
+					onDelete={handleDeleteSession}
+					isDeleting={deleteSessionMutation.isPending}
+				/>
 
 				<ProjectDangerZone
 					projectId={project.id}
