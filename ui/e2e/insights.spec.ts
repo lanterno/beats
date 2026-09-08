@@ -8,14 +8,22 @@ test.describe("Insights", () => {
 
 	test("contribution heatmap renders", async ({ page }) => {
 		await page.goto("/insights");
-		await expect(page.locator("text=Contribution")).toBeVisible({ timeout: 10_000 });
+		// The heatmap has no heading of its own; its year controls and the
+		// less/more legend are what identify it on the page.
+		await expect(page.getByRole("button", { name: "Previous year" })).toBeVisible({
+			timeout: 10_000,
+		});
+		await expect(page.getByText("Less", { exact: true })).toBeVisible();
+		await expect(page.getByText("More", { exact: true })).toBeVisible();
 	});
 
-	test("project filter dropdown is present", async ({ page }) => {
+	test("tag filter is present", async ({ page }) => {
 		await page.goto("/insights");
-		// The page should have a project filter or "All Projects" option
-		const filter = page.locator("select, [role='combobox'], text=/All Projects|Filter/i").first();
+		// The filter is a <select> that only renders once at least one session
+		// carries a tag — which is why the suite seeds one.
+		const filter = page.getByRole("combobox").first();
 		await expect(filter).toBeVisible({ timeout: 10_000 });
+		await expect(filter).toContainText("All Tags");
 	});
 
 	test("monthly summary stats render", async ({ page }) => {
@@ -33,7 +41,9 @@ test.describe("Insights", () => {
 
 	test("navigates to digests page", async ({ page }) => {
 		await page.goto("/insights/digests");
-		await expect(page.locator("text=/Digest|digest/")).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole("heading", { name: /digests?/i }).first()).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test("weekly card section renders", async ({ page }) => {

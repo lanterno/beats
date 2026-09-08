@@ -51,7 +51,10 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
   pure helpers in `shared/lib/`; `.tsx` files cover React components and
   hooks via `@testing-library/react`. Both globs are wired in
   `vitest.config.ts`.
-- E2E tests: `e2e/` (Playwright, Chromium only, auto-starts dev server).
+- E2E tests: `e2e/` (Playwright, Chromium only, auto-starts dev server). Needs a
+  running API and Mongo; `e2e/auth.setup.ts` mints and plants a session because
+  every page under test is behind `ProtectedRoute`. See the repo-root CLAUDE.md
+  for the exact commands.
 - Mocking pattern: see `client/features/auth/components/AuthModal.test.tsx`
   for the canonical setup — vi.mock the API module, the auth store, and
   `useNavigate`; render under `MemoryRouter`; assert on visible DOM via

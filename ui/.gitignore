@@ -25,3 +25,6 @@ dist-ssr
 
 .config/
 .env
+e2e/.auth/
+test-results/
+playwright-report/

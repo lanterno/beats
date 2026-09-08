@@ -15,12 +15,14 @@ test.describe("Beats App", () => {
 
 	test("navigates to insights page", async ({ page }) => {
 		await page.goto("/insights");
-		await expect(page.locator("text=Contribution")).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole("heading", { name: "Insights", exact: true })).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test("navigates to settings page", async ({ page }) => {
 		await page.goto("/settings");
-		await expect(page.locator("text=Settings")).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 	});
 
 	test("project detail page loads", async ({ page }) => {

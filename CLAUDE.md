@@ -103,7 +103,20 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
 - **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env). The `.ts` files cover pure helpers in `shared/lib/`; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
-- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only).
+- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only). They need the API on
+  :7999 and a MongoDB behind it; the dev server starts itself. A `setup` project
+  mints a session with `api/scripts/e2e_session.py` and plants it in
+  localStorage — every page under test sits behind `ProtectedRoute`, and the
+  passkey ceremony that normally issues a session cannot run headless. The same
+  script seeds a project and three tagged sessions, because several assertions
+  are about UI that only exists once there is data.
+
+  ```bash
+  docker run -d --name beats-dev-mongo -p 27019:27017 mongo:8
+  cd api && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<32+ bytes> \
+    uv run uvicorn --app-dir src server:app --port 7999 &
+  cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
+  ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test). Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
 - **Bundle-label parity** is structural, not tested: `shared/app-labels.json` is the

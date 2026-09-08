@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Settings", () => {
 	test("page renders with title", async ({ page }) => {
 		await page.goto("/settings");
-		await expect(page.locator("text=Settings")).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 	});
 
 	test("theme selector shows all themes", async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe("Settings", () => {
 
 	test("data export section is present", async ({ page }) => {
 		await page.goto("/settings");
-		await expect(page.locator("text=Data Export")).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Data Export" })).toBeVisible();
 		await expect(page.locator("text=Sessions CSV")).toBeVisible();
 		await expect(page.locator("text=Full JSON Backup")).toBeVisible();
 	});
@@ -61,8 +61,8 @@ test.describe("Settings", () => {
 
 	test("developer section shows API info", async ({ page }) => {
 		await page.goto("/settings");
-		await expect(page.locator("text=Developer")).toBeVisible();
-		await expect(page.locator("text=API Base URL")).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Developer" })).toBeVisible();
+		await expect(page.getByText("API Base URL")).toBeVisible();
 	});
 
 	test("theme persists after navigation", async ({ page }) => {
