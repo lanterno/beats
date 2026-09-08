@@ -105,6 +105,20 @@ def _indexes():
     asyncio.run(build())
 
 
+@pytest.fixture(autouse=True)
+def _clear_device_cache():
+    """Device revocation verdicts are cached process-wide for 30s.
+
+    Without this, a device paired in one test could still read as allowed in
+    the next after the collections were emptied underneath it.
+    """
+    from beats.auth import device_access
+
+    device_access.clear()
+    yield
+    device_access.clear()
+
+
 @pytest.fixture(scope="class", autouse=True)
 def clean_db(mongo, _indexes):
     """Empty every collection before each test class.

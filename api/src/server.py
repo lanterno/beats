@@ -38,6 +38,7 @@ from beats.api.routers.signals import router as signals_router
 from beats.api.routers.sso import router as sso_router
 from beats.api.routers.timer import router as timer_router
 from beats.api.routers.webhooks import router as webhooks_router
+from beats.auth import device_access
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
@@ -153,11 +154,18 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             if device_payload is not None:
                 device_id = device_payload["device_id"]
 
-                # Verify device is not revoked
-                db = Database.get_db()
-                repo = MongoDeviceRegistrationRepository(db.device_registrations)
-                reg = await repo.get_by_device_id(device_id)
-                if not reg or reg.revoked:
+                # Verify device is not revoked. Cached briefly: the wall clock
+                # polls every 10s, and re-reading the flag each time was a Mongo
+                # round-trip per poll. Revoking clears the entry, so this only
+                # delays a revocation made directly in the database.
+                allowed = device_access.get(device_id)
+                if allowed is None:
+                    db = Database.get_db()
+                    repo = MongoDeviceRegistrationRepository(db.device_registrations)
+                    reg = await repo.get_by_device_id(device_id)
+                    allowed = reg is not None and not reg.revoked
+                    device_access.remember(device_id, allowed=allowed)
+                if not allowed:
                     return error_envelope(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Device token has been revoked",

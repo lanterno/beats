@@ -18,6 +18,7 @@ from beats.api.dependencies import (
     TimerServiceDep,
 )
 from beats.api.routers.auth import get_session_manager, limiter
+from beats.auth import device_access
 from beats.domain.models import DeviceRegistration, PairingCode
 
 router = APIRouter(prefix="/api/device", tags=["device"])
@@ -323,6 +324,9 @@ async def revoke_registration(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Device registration not found",
         )
+    # Drop the cached verdict so the next request from this device is refused
+    # now rather than when the entry would have expired.
+    device_access.forget(device_id)
 
 
 async def _get_daily_total_minutes(beat_service: BeatServiceDep) -> int:

@@ -9,13 +9,11 @@ import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
-import type { GoalOverride } from "@/entities/project";
 import {
 	LoadingSpinner,
 	useProject,
 	useProjects,
 	useProjectWeeks,
-	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "@/entities/project";
 import {
@@ -25,21 +23,15 @@ import {
 	useUpdateSession,
 } from "@/entities/session";
 import { describeError } from "@/shared/api";
-import {
-	cn,
-	getWeekNumberLabel,
-	parseTimedeltaToMinutes,
-	parseUtcIso,
-	startOfDay,
-} from "@/shared/lib";
+import { getWeekNumberLabel, parseTimedeltaToMinutes, parseUtcIso, startOfDay } from "@/shared/lib";
 import { ColorPicker, GoalRing } from "@/shared/ui";
-import { GoalOverridePopover } from "./GoalOverridePopover";
 import { ProjectDangerZone } from "./ProjectDangerZone";
 import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
 import { ProjectSessionList } from "./ProjectSessionList";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
+import { ProjectWeekHistory } from "./ProjectWeekHistory";
 import { computeMondayIsoList } from "./weekIso";
 
 const WEEKDAYS = [
@@ -51,7 +43,6 @@ const WEEKDAYS = [
 	"Saturday",
 	"Sunday",
 ] as const;
-const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
@@ -79,8 +70,6 @@ export default function ProjectDetails() {
 	const updateSessionMutation = useUpdateSession();
 	const deleteSessionMutation = useDeleteSession();
 	const updateProjectMutation = useUpdateProject();
-	const updateGoalOverridesMutation = useUpdateGoalOverrides();
-	const [overridePopoverWeek, setOverridePopoverWeek] = useState<number | null>(null);
 
 	// P4.1: planned hours per week for this project. Hook must sit above the
 	// loading/not-found early return; Monday list is derived from weekCount
@@ -230,69 +219,6 @@ export default function ProjectDetails() {
 		allWeekRows.some((r) => r.effectiveGoal != null);
 
 	// Save/remove goal override handlers
-	const handleSaveOverride = (
-		mondayIso: string,
-		values: {
-			weeklyGoal: number | null;
-			goalType: "target" | "cap";
-			scope: "week" | "permanent";
-		},
-	) => {
-		const overrides = [...(project.goalOverrides || [])];
-
-		if (values.scope === "week") {
-			// Remove any existing one-off for this week
-			const filtered = overrides.filter((o) => o.weekOf !== mondayIso);
-			filtered.push({
-				weekOf: mondayIso,
-				weeklyGoal: values.weeklyGoal,
-				goalType: values.goalType,
-			});
-			saveOverrides(filtered);
-		} else {
-			// Permanent: remove any existing permanent with the same effective_from
-			const filtered = overrides.filter((o) => o.effectiveFrom !== mondayIso);
-			filtered.push({
-				effectiveFrom: mondayIso,
-				weeklyGoal: values.weeklyGoal,
-				goalType: values.goalType,
-			});
-			saveOverrides(filtered);
-		}
-	};
-
-	const handleRemoveOverride = (mondayIso: string) => {
-		const overrides = (project.goalOverrides || []).filter(
-			(o) => o.weekOf !== mondayIso && o.effectiveFrom !== mondayIso,
-		);
-		saveOverrides(overrides);
-	};
-
-	const saveOverrides = (overrides: GoalOverride[]) => {
-		updateGoalOverridesMutation.mutate(
-			{
-				projectId: project.id,
-				overrides: overrides.map((o) => ({
-					week_of: o.weekOf ?? null,
-					effective_from: o.effectiveFrom ?? null,
-					weekly_goal: o.weeklyGoal,
-					goal_type: o.goalType ?? null,
-				})),
-			},
-			{
-				onSuccess: () => {
-					setOverridePopoverWeek(null);
-					toast.success("Goal override saved");
-				},
-				onError: (err) => toast.error(describeError(err, "Failed to save override")),
-			},
-		);
-	};
-
-	const findDirectOverride = (mondayIso: string): GoalOverride | undefined =>
-		(project.goalOverrides || []).find(
-			(o) => o.weekOf === mondayIso || o.effectiveFrom === mondayIso,
-		);
 
 	return (
 		<div>
@@ -436,205 +362,20 @@ export default function ProjectDetails() {
 				    not the session list. */}
 				<ProjectStats sessions={sessionList} lastTrackedAt={project.lastTrackedAt} />
 
-				{/* Week History Table */}
-				<section className="mt-6" aria-label="Week history">
-					<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
-						{/* Header */}
-						<div
-							className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_56px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_56px_64px]"} px-3 py-2 border-b border-border/60`}
-						>
-							<div />
-							{WEEKDAY_SHORT.map((d, i) => (
-								<div
-									key={d}
-									className={`text-center text-[10px] uppercase tracking-widest ${
-										i === todayDayIndex ? "text-accent font-semibold" : "text-muted-foreground"
-									}`}
-								>
-									{d}
-								</div>
-							))}
-							<div
-								className="text-right text-[10px] uppercase tracking-widest text-muted-foreground"
-								title="Planned hours for this project this week"
-							>
-								Planned
-							</div>
-							<div
-								className="text-right text-[10px] uppercase tracking-widest text-muted-foreground"
-								title="Commits to the linked GitHub repo this week"
-							>
-								Commits
-							</div>
-							<div className="text-right text-[10px] uppercase tracking-widest text-muted-foreground">
-								Total
-							</div>
-							{hasAnyGoal && (
-								<div className="text-right text-[10px] uppercase tracking-widest text-muted-foreground">
-									+/-
-								</div>
-							)}
-						</div>
-
-						{/* Week rows */}
-						{allWeekRows.map((row, rowIdx) => {
-							const rowHours = row.total / 60;
-							const rowGoal = row.effectiveGoal;
-							const rowGoalType = row.effectiveGoalType;
-							const goalMet = rowGoal ? rowHours >= rowGoal : false;
-							const goalPctRow = rowGoal ? Math.min((rowHours / rowGoal) * 100, 100) : 0;
-							const directOverride = findDirectOverride(row.mondayIso);
-							const hasDirectOverride = directOverride !== undefined;
-							const directOverrideIsNull = hasDirectOverride && directOverride?.weeklyGoal == null;
-							// Trust the server-resolved flag. It covers both one-off and
-							// permanent overrides (including weeks past an effective_from).
-							const isOverridden = row.effectiveGoalOverridden;
-
-							return (
-								<div
-									key={row.label}
-									className={`grid ${hasAnyGoal ? "grid-cols-[72px_repeat(7,1fr)_64px_56px_100px_56px]" : "grid-cols-[72px_repeat(7,1fr)_64px_56px_64px]"} px-3 py-1.5 border-b border-border/20 last:border-b-0 ${
-										rowIdx === 0 ? "bg-secondary/10" : "hover:bg-secondary/10"
-									}`}
-								>
-									<button
-										type="button"
-										onClick={() =>
-											setScopedWeeksAgo((current) =>
-												current === row.weeksAgo ? null : row.weeksAgo,
-											)
-										}
-										aria-pressed={scopedWeeksAgo === row.weeksAgo}
-										title={
-											scopedWeeksAgo === row.weeksAgo
-												? "Click to clear the sessions scope"
-												: "Click to scope the sessions list to this week"
-										}
-										className={cn(
-											"text-xs truncate pr-1 text-left rounded transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
-											scopedWeeksAgo === row.weeksAgo
-												? "text-accent font-medium"
-												: "text-muted-foreground hover:text-foreground",
-										)}
-									>
-										{row.label}
-									</button>
-									{row.days.map((mins, i) => (
-										<div
-											key={i}
-											className={`text-center text-xs tabular-nums ${
-												mins > 0
-													? rowIdx === 0 && i === todayDayIndex
-														? "text-accent font-medium"
-														: "text-foreground"
-													: "text-muted-foreground/30"
-											}`}
-										>
-											{mins > 0 ? `${(mins / 60).toFixed(1)}` : "—"}
-										</div>
-									))}
-									<PlannedCell hours={plannedByMonday.get(row.mondayIso)} />
-									<CommitsCell
-										count={commitsByMonday.get(row.mondayIso)}
-										hasRepo={!!project.githubRepo}
-									/>
-									{hasAnyGoal ? (
-										<>
-											<div className="relative flex flex-col items-end gap-0.5">
-												<button
-													type="button"
-													onClick={() =>
-														setOverridePopoverWeek(
-															overridePopoverWeek === row.weeksAgo ? null : row.weeksAgo,
-														)
-													}
-													className={`text-sm font-medium tabular-nums cursor-pointer hover:underline decoration-dotted underline-offset-2 ${
-														rowGoal != null
-															? goalMet
-																? "text-green-400"
-																: "text-accent"
-															: isOverridden
-																? "text-muted-foreground"
-																: "text-muted-foreground/50"
-													} ${isOverridden ? "italic" : ""}`}
-													title={
-														isOverridden
-															? "Goal override active — click to edit"
-															: "Click to set goal override"
-													}
-												>
-													{rowGoal != null
-														? row.total > 0
-															? `${rowHours.toFixed(1)}/${rowGoal}h`
-															: `—/${rowGoal}h`
-														: isOverridden
-															? "No goal"
-															: row.total > 0
-																? `${rowHours.toFixed(1)}h`
-																: "—"}
-												</button>
-												{row.total > 0 && rowGoal != null && (
-													<div className="w-full h-1 rounded-full bg-muted/40 overflow-hidden">
-														<div
-															className={`h-full rounded-full transition-all ${
-																rowGoalType === "cap"
-																	? goalPctRow >= 90
-																		? "bg-red-400"
-																		: "bg-accent/70"
-																	: goalMet
-																		? "bg-green-400"
-																		: "bg-accent/70"
-															}`}
-															style={{ width: `${goalPctRow}%` }}
-														/>
-													</div>
-												)}
-												{overridePopoverWeek === row.weeksAgo && (
-													<GoalOverridePopover
-														currentGoal={rowGoal ?? project.weeklyGoal ?? null}
-														currentGoalType={rowGoalType}
-														hasExistingOverride={hasDirectOverride}
-														existingOverrideIsNull={directOverrideIsNull}
-														onSave={(values) => handleSaveOverride(row.mondayIso, values)}
-														onRemove={() => {
-															handleRemoveOverride(row.mondayIso);
-															setOverridePopoverWeek(null);
-															toast.success("Override removed");
-														}}
-														onClose={() => setOverridePopoverWeek(null)}
-													/>
-												)}
-											</div>
-											<div className="text-right text-xs tabular-nums self-center">
-												{row.total > 0 && rowGoal != null ? (
-													<span className={goalMet ? "text-green-400" : "text-red-400"}>
-														{goalMet ? "+" : ""}
-														{(rowHours - rowGoal).toFixed(1)}h
-													</span>
-												) : (
-													<span className="text-muted-foreground/30">—</span>
-												)}
-											</div>
-										</>
-									) : (
-										<div className="text-right text-sm font-medium tabular-nums text-accent">
-											{row.total > 0 ? `${rowHours.toFixed(1)}h` : "—"}
-										</div>
-									)}
-								</div>
-							);
-						})}
-
-						{/* Show more weeks */}
-						<button
-							type="button"
-							onClick={() => setWeekCount((c) => c + 5)}
-							className="w-full py-2 text-sm text-accent hover:bg-accent/5 transition-colors border-t border-border/40"
-						>
-							Show 5 more weeks...
-						</button>
-					</div>
-				</section>
+				<ProjectWeekHistory
+					rows={allWeekRows}
+					hasAnyGoal={hasAnyGoal}
+					todayDayIndex={todayDayIndex}
+					plannedByMonday={plannedByMonday}
+					commitsByMonday={commitsByMonday}
+					hasGitHubRepo={Boolean(project.githubRepo)}
+					projectId={project.id}
+					weeklyGoal={project.weeklyGoal}
+					goalOverrides={project.goalOverrides || []}
+					scopedWeeksAgo={scopedWeeksAgo}
+					onScopeWeek={setScopedWeeksAgo}
+					onShowMoreWeeks={() => setWeekCount((c) => c + 5)}
+				/>
 
 				<ProjectSessionList
 					// Keyed so navigating to another project remounts the list and
@@ -673,23 +414,6 @@ export default function ProjectDetails() {
  * - 0          → "0h"     (plan explicitly set this project to zero)
  * - n          → "n.nh"
  */
-function PlannedCell({ hours }: { hours: number | undefined }) {
-	if (hours === undefined) {
-		return (
-			<div
-				className="text-right text-xs tabular-nums text-muted-foreground/30"
-				title="No plan entry for this week"
-			>
-				—
-			</div>
-		);
-	}
-	return (
-		<div className="text-right text-xs tabular-nums text-muted-foreground" title="Planned hours">
-			{hours.toFixed(1)}h
-		</div>
-	);
-}
 
 /**
  * Commits cell for the week-history table (P4.4).
@@ -703,34 +427,3 @@ function PlannedCell({ hours }: { hours: number | undefined }) {
  * The Map from useProjectGitActivityByWeek seeds every visible Monday with 0
  * up-front, so an empty repo period reads "0" rather than the no-repo "—".
  */
-function CommitsCell({ count, hasRepo }: { count: number | undefined; hasRepo: boolean }) {
-	if (!hasRepo) {
-		return (
-			<div
-				className="text-right text-xs tabular-nums text-muted-foreground/30"
-				title="Link a GitHub repo to see weekly commit counts here"
-			>
-				—
-			</div>
-		);
-	}
-	const n = count ?? 0;
-	if (n === 0) {
-		return (
-			<div
-				className="text-right text-xs tabular-nums text-muted-foreground/40"
-				title="No commits this week"
-			>
-				0
-			</div>
-		);
-	}
-	return (
-		<div
-			className="text-right text-xs tabular-nums text-muted-foreground"
-			title={`${n} commits this week`}
-		>
-			{n}
-		</div>
-	);
-}
