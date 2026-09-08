@@ -22,7 +22,6 @@ from pymongo.asynchronous.collection import AsyncCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
 from beats.domain.models import (
-    AutoStartRule,
     Beat,
     BiometricDay,
     CalendarIntegration,
@@ -504,29 +503,6 @@ class MongoOuraIntegrationRepository(
     MongoSingletonStore[OuraIntegration], OuraIntegrationRepository
 ):
     model = OuraIntegration
-
-
-class AutoStartRuleRepository(Protocol):
-    async def list_all(self) -> list[AutoStartRule]: ...
-    async def list_by_type(self, rule_type: str) -> list[AutoStartRule]: ...
-    async def create(self, rule: AutoStartRule) -> AutoStartRule: ...
-    async def delete(self, rule_id: str) -> bool: ...
-
-
-class MongoAutoStartRuleRepository(MongoStore[AutoStartRule], AutoStartRuleRepository):
-    model = AutoStartRule
-
-    async def list_all(self) -> list[AutoStartRule]:
-        return await self._find_many()
-
-    async def list_by_type(self, rule_type: str) -> list[AutoStartRule]:
-        return await self._find_many({"type": rule_type, "enabled": True})
-
-    async def create(self, rule: AutoStartRule) -> AutoStartRule:
-        return await self._insert(rule)
-
-    async def delete(self, rule_id: str) -> bool:
-        return await self._delete_one({"_id": ObjectId(rule_id)})
 
 
 class WeeklyPlanRepository(Protocol):

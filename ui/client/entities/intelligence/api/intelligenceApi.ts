@@ -10,7 +10,6 @@ import type {
 	ProjectHealth,
 	Schemas,
 	ScoreHistoryItem,
-	Suggestion,
 	WeeklyDigest,
 } from "@/shared/api";
 
@@ -26,7 +25,6 @@ import {
 	parseApiResponse,
 	post,
 	ScoreHistorySchema,
-	SuggestionListSchema,
 	WeeklyDigestListSchema,
 	WeeklyDigestSchema,
 } from "@/shared/api";
@@ -53,11 +51,6 @@ export async function fetchScoreHistory(weeks = 8): Promise<ScoreHistoryItem[]> 
 export async function fetchDigests(limit = 12): Promise<WeeklyDigest[]> {
 	const data = await get<unknown>(`/api/intelligence/digests?limit=${limit}`);
 	return parseApiResponse(WeeklyDigestListSchema, data);
-}
-
-export async function fetchDigest(weekOf: string): Promise<WeeklyDigest> {
-	const data = await get<unknown>(`/api/intelligence/digests/${weekOf}`);
-	return parseApiResponse(WeeklyDigestSchema, data);
 }
 
 export async function generateDigest(weekOf?: string): Promise<WeeklyDigest> {
@@ -88,15 +81,6 @@ export async function dismissPattern(insightId: string): Promise<void> {
 // inbox id; persists server-side so it stays gone across reloads and devices.
 export async function dismissInboxItem(itemId: string): Promise<void> {
 	await post<void>(`/api/intelligence/inbox/${itemId}/dismiss`, {});
-}
-
-export async function fetchSuggestions(date?: string): Promise<Suggestion[]> {
-	const tz = encodeURIComponent(browserTimeZone());
-	const url = date
-		? `/api/intelligence/suggestions?date=${date}&tz=${tz}`
-		: `/api/intelligence/suggestions?tz=${tz}`;
-	const data = await get<unknown>(url);
-	return parseApiResponse(SuggestionListSchema, data);
 }
 
 export async function fetchFocusScores(date?: string): Promise<FocusScore[]> {

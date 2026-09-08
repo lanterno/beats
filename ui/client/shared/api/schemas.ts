@@ -226,17 +226,6 @@ export const PatternsResponseSchema = z.object({
 
 export type PatternsResponse = z.infer<typeof PatternsResponseSchema>;
 
-export const SuggestionSchema = z.object({
-	project_id: z.string(),
-	project_name: z.string(),
-	suggested_minutes: z.number(),
-	reasoning: z.string(),
-});
-
-export type Suggestion = z.infer<typeof SuggestionSchema>;
-
-export const SuggestionListSchema = z.array(SuggestionSchema);
-
 export const FocusScoreSchema = z.object({
 	beat_id: z.string(),
 	score: z.number(),
@@ -263,17 +252,6 @@ export const ProjectHealthSchema = z.object({
 export type ProjectHealth = z.infer<typeof ProjectHealthSchema>;
 
 export const ProjectHealthListSchema = z.array(ProjectHealthSchema);
-
-export const CalendarEventSchema = z.object({
-	summary: z.string(),
-	start: z.string(),
-	end: z.string(),
-	all_day: z.boolean(),
-});
-
-export type CalendarEvent = z.infer<typeof CalendarEventSchema>;
-
-export const CalendarEventListSchema = z.array(CalendarEventSchema);
 
 export const CalendarStatusSchema = z.object({
 	connected: z.boolean(),
@@ -320,18 +298,4 @@ export const ApiBeatListSchema = z.array(ApiBeatSchema);
  */
 export function parseApiResponse<T>(schema: z.ZodSchema<T>, data: unknown): T {
 	return schema.parse(data);
-}
-
-/**
- * Safely parse API response, returning result object instead of throwing
- */
-export function safeParseApiResponse<T>(
-	schema: z.ZodSchema<T>,
-	data: unknown,
-): { success: true; data: T } | { success: false; error: z.ZodError } {
-	const result = schema.safeParse(data);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, error: result.error };
 }

@@ -248,20 +248,6 @@
         "title": "Body_import_full_json_api_export_import_post",
         "type": "object"
       },
-      "Body_import_sqlite_api_export_sqlite_import_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_import_sqlite_api_export_sqlite_import_post",
-        "type": "object"
-      },
       "BriefResponse": {
         "properties": {
           "body": {
@@ -369,30 +355,6 @@
           "message"
         ],
         "title": "ChatRequest",
-        "type": "object"
-      },
-      "CreateAutoStartRuleRequest": {
-        "properties": {
-          "config": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Config",
-            "type": "object"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "type",
-          "project_id"
-        ],
-        "title": "CreateAutoStartRuleRequest",
         "type": "object"
       },
       "CreateBeatRequest": {
@@ -2881,18 +2843,6 @@
         "title": "WebhookResponse",
         "type": "object"
       },
-      "WebhookTriggerPayload": {
-        "description": "Payload from an external webhook (e.g. GitHub push).",
-        "properties": {
-          "repository": {
-            "default": "",
-            "title": "Repository",
-            "type": "string"
-          }
-        },
-        "title": "WebhookTriggerPayload",
-        "type": "object"
-      },
       "WeeklyDigestResponse": {
         "description": "Response schema for a weekly digest.",
         "properties": {
@@ -3679,145 +3629,6 @@
         "summary": "Create Sso Session",
         "tags": [
           "sso"
-        ]
-      }
-    },
-    "/api/auto-start/": {
-      "get": {
-        "description": "List all auto-start rules.",
-        "operationId": "list_rules_api_auto_start__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Rules",
-        "tags": [
-          "auto-start"
-        ]
-      },
-      "post": {
-        "description": "Create a new auto-start rule.",
-        "operationId": "create_rule_api_auto_start__post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateAutoStartRuleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Rule",
-        "tags": [
-          "auto-start"
-        ]
-      }
-    },
-    "/api/auto-start/trigger": {
-      "post": {
-        "description": "Receive an external webhook and start the timer if a matching rule exists.\n\nCall this from GitHub webhook, Zapier, etc. with {\"repository\": \"owner/repo\"}.",
-        "operationId": "trigger_auto_start_api_auto_start_trigger_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WebhookTriggerPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Trigger Auto Start",
-        "tags": [
-          "auto-start"
-        ]
-      }
-    },
-    "/api/auto-start/{rule_id}": {
-      "delete": {
-        "description": "Delete an auto-start rule.",
-        "operationId": "delete_rule_api_auto_start__rule_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "rule_id",
-            "required": true,
-            "schema": {
-              "title": "Rule Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Rule",
-        "tags": [
-          "auto-start"
         ]
       }
     },
@@ -5134,66 +4945,6 @@
           }
         },
         "summary": "Import Full Json",
-        "tags": [
-          "export"
-        ]
-      }
-    },
-    "/api/export/sqlite": {
-      "get": {
-        "description": "Export a signed SQLite snapshot as a `.zip` bundle.\n\nBundle contents:\n    - data.sqlite       \u2014 normalized, queryable snapshot\n    - manifest.json     \u2014 version, counts, sha256(data.sqlite)\n    - manifest.sig      \u2014 Ed25519 signature over the canonical manifest\n    - public_key.bin    \u2014 raw 32-byte Ed25519 public key for verification\n\nThe private key lives only in Mongo and is never served \u2014 the public key\nships with the bundle so a user can run the verify path entirely offline.",
-        "operationId": "export_sqlite_api_export_sqlite_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Export Sqlite",
-        "tags": [
-          "export"
-        ]
-      }
-    },
-    "/api/export/sqlite/import": {
-      "post": {
-        "description": "Import a previously signed SQLite bundle. The signature is verified\nagainst the signing user's stored public key before any mutation runs \u2014\na tampered bundle never reaches the writers.\n\nCross-account restores are rejected: the bundle must be signed by THIS\nuser. Sharing exports between accounts is out of scope for v1.",
-        "operationId": "import_sqlite_api_export_sqlite_import_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_import_sqlite_api_export_sqlite_import_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Import Sqlite",
         "tags": [
           "export"
         ]
@@ -7837,48 +7588,6 @@
           }
         },
         "summary": "Create Webhook",
-        "tags": [
-          "webhooks"
-        ]
-      }
-    },
-    "/api/webhooks/daily-summary/trigger": {
-      "post": {
-        "description": "Trigger a daily summary webhook for a given date (defaults to today).",
-        "operationId": "trigger_daily_summary_api_webhooks_daily_summary_trigger_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "target_date",
-            "required": false,
-            "schema": {
-              "format": "date",
-              "title": "Target Date",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Trigger Daily Summary",
         "tags": [
           "webhooks"
         ]

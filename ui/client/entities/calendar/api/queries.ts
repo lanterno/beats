@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CalendarEvent, CalendarStatus } from "@/shared/api";
-import {
-	connectCalendar,
-	disconnectCalendar,
-	fetchCalendarEvents,
-	fetchCalendarStatus,
-} from "./calendarApi";
+import type { CalendarStatus } from "@/shared/api";
+import { connectCalendar, disconnectCalendar, fetchCalendarStatus } from "./calendarApi";
 
 export const calendarKeys = {
 	all: ["calendar"] as const,
@@ -17,16 +12,6 @@ export function useCalendarStatus() {
 	return useQuery<CalendarStatus>({
 		queryKey: calendarKeys.status(),
 		queryFn: fetchCalendarStatus,
-		staleTime: 60_000,
-	});
-}
-
-export function useCalendarEvents(start: string, end: string) {
-	const { data: status } = useCalendarStatus();
-	return useQuery<CalendarEvent[]>({
-		queryKey: calendarKeys.events(start, end),
-		queryFn: () => fetchCalendarEvents(start, end),
-		enabled: !!status?.connected,
 		staleTime: 60_000,
 	});
 }

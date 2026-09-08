@@ -83,7 +83,7 @@ export async function listPending(): Promise<PendingMutation[]> {
 	});
 }
 
-export async function removeMutation(id: number): Promise<void> {
+async function removeMutation(id: number): Promise<void> {
 	const db = await openDb();
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(STORE_NAME, "readwrite");
@@ -93,7 +93,7 @@ export async function removeMutation(id: number): Promise<void> {
 	});
 }
 
-export async function markAttempt(id: number, error?: string): Promise<void> {
+async function markAttempt(id: number, error?: string): Promise<void> {
 	const db = await openDb();
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(STORE_NAME, "readwrite");

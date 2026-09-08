@@ -241,21 +241,6 @@ export function useWeeklySessionsByProject(
 	});
 }
 
-export function useRecentSessions(limit = 10) {
-	const { data: allBeats } = useAllBeats();
-	return useQuery({
-		queryKey: [...sessionKeys.all, "recent", limit],
-		queryFn: (): Session[] => {
-			const sessions = (allBeats ?? []).filter((beat) => beat.start && beat.end).map(toSession);
-			return sessions
-				.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-				.slice(0, limit);
-		},
-		enabled: !!allBeats,
-		staleTime: 30_000,
-	});
-}
-
 /**
  * Hook to fetch today's sessions across all projects, sorted chronologically
  */

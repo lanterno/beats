@@ -214,7 +214,7 @@ identity service. `just sso-doctor` from the repo root diagnoses it.
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
 | `/api/intelligence` | Digests, score, patterns, suggestions, focus scores, inbox |
 | `/api/plans` | Weekly plans (structured per-project hour targets) |
-| `/api/webhooks` | Webhook CRUD, daily summary trigger |
+| `/api/webhooks` | Webhook CRUD |
 | `/api/coach` | Brief generation, streaming chat, usage, memory |
 | `/api/biometrics` | Daily health data from companion app / HealthKit / Health Connect |
 | `/api/calendar` | Google Calendar OAuth + events |
@@ -222,7 +222,6 @@ identity service. `just sso-doctor` from the repo root diagnoses it.
 | `/api/fitbit` | Fitbit OAuth + status |
 | `/api/oura` | Oura personal-access-token connection + status |
 | `/api/signals` | Daemon-emitted flow windows and signal summaries |
-| `/api/auto-start` | Auto-start rules + webhook trigger |
 | `/api/device` | Wall clock status, favorites, weekly bars, heartbeat, pairing |
 | `/api/export` | CSV/JSON export and import |
 | `/api/account` | User account management (me, refresh, credentials, logout, home.space link) |

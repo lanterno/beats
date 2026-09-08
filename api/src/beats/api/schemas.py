@@ -81,19 +81,6 @@ class UpdateBeatRequest(BaseModel):
     end: datetime | None = None
 
 
-class BeatResponse(BaseModel):
-    """Response schema for a beat."""
-
-    id: str
-    project_id: str
-    start: datetime
-    end: datetime | None = None
-    duration: str
-    is_active: bool
-    note: str | None = None
-    tags: list[str] = Field(default_factory=list)
-
-
 class GoalOverrideResponse(BaseModel):
     """Response schema for a goal override (mirrors the request shape)."""
 
@@ -159,23 +146,6 @@ class DurationResponse(BaseModel):
     """Response schema for duration queries."""
 
     duration: str
-
-
-class WeekBreakdownResponse(BaseModel):
-    """Response schema for weekly breakdown."""
-
-    Monday: str | list | None = None
-    Tuesday: str | list | None = None
-    Wednesday: str | list | None = None
-    Thursday: str | list | None = None
-    Friday: str | list | None = None
-    Saturday: str | list | None = None
-    Sunday: str | list | None = None
-    total_hours: float
-    week_start: str | None = None
-    effective_goal: float | None = None
-    effective_goal_type: str | None = None
-    effective_goal_overridden: bool = False
 
 
 class MonthlyTotalsResponse(BaseModel):

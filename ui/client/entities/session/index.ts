@@ -30,7 +30,6 @@ export {
 	useLastWeekTotal,
 	useProjectBreakdown,
 	useRecentDrift,
-	useRecentSessions,
 	useSessions,
 	useStreaks,
 	useThisWeekSessions,
@@ -47,7 +46,7 @@ export type {
 	ProjectOption,
 	Session,
 } from "./model";
-export { calculateDuration, toApiBeat, toSession } from "./model";
+export { toApiBeat, toSession } from "./model";
 
 // UI layer
-export { DailySummaryGrid, SessionCard, SessionEditForm } from "./ui";
+export { SessionEditForm } from "./ui";

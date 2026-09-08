@@ -14,7 +14,6 @@ export {
 	useArchivedProjects,
 	useArchiveProject,
 	useCreateProject,
-	useInvalidateProjects,
 	useProject,
 	useProjects,
 	useProjectWeeks,

@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import type { TimerStatus } from "@/shared/api";
-import { get, parseApiResponse, post, TimerStatusSchema } from "@/shared/api";
+import { get, parseApiResponse, TimerStatusSchema } from "@/shared/api";
 
 const DailyAverageSchema = z.object({
 	avg_minutes: z.number(),
@@ -15,14 +15,6 @@ const DailyAverageSchema = z.object({
 export async function fetchTimerStatus(): Promise<TimerStatus> {
 	const data = await get<unknown>("/api/timer/status");
 	return parseApiResponse(TimerStatusSchema, data);
-}
-
-export async function startTimerApi(projectId: string, startTime: string): Promise<void> {
-	await post<void>(`/api/projects/${projectId}/start`, { time: startTime });
-}
-
-export async function stopTimerApi(stopTime: string): Promise<void> {
-	await post<void>("/api/projects/stop", { time: stopTime });
 }
 
 /**

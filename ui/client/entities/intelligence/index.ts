@@ -11,6 +11,5 @@ export {
 	useProjectHealth,
 	useRefreshPatterns,
 	useScoreHistory,
-	useSuggestions,
 } from "./api";
 export type { InboxItem, InboxResponse } from "./api/intelligenceApi";

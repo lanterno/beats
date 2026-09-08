@@ -16,7 +16,6 @@ from beats.domain.oura import OuraService
 from beats.domain.services import BeatService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
-    AutoStartRuleRepository,
     BeatRepository,
     BiometricDayRepository,
     CalendarIntegrationRepository,
@@ -25,7 +24,6 @@ from beats.infrastructure.repositories import (
     FlowWindowRepository,
     GitHubIntegrationRepository,
     InsightsRepository,
-    MongoAutoStartRuleRepository,
     MongoBeatRepository,
     MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
@@ -229,12 +227,6 @@ def get_github_service(
 
 
 GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]
-
-
-get_auto_start_rule_repository = _user_scoped(MongoAutoStartRuleRepository, "auto_start_rules")
-
-
-AutoStartRuleRepoDep = Annotated[AutoStartRuleRepository, Depends(get_auto_start_rule_repository)]
 
 
 get_weekly_plan_repository = _user_scoped(MongoWeeklyPlanRepository, "weekly_plans")

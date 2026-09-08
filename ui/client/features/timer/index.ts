@@ -9,7 +9,7 @@
  */
 
 // API layer
-export { fetchTimerStatus, startTimerApi, stopTimerApi } from "./api";
+export { fetchTimerStatus } from "./api";
 // Model layer
 export type { TimerState, TimerStatus } from "./model";
 export { useTimer } from "./model";

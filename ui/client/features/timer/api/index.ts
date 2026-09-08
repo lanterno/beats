@@ -1,1 +1,1 @@
-export { fetchDailyAverage, fetchTimerStatus, startTimerApi, stopTimerApi } from "./timerApi";
+export { fetchDailyAverage, fetchTimerStatus } from "./timerApi";

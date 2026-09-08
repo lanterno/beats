@@ -31,9 +31,3 @@ export function toApiBeat(session: Session): ApiBeat {
 		tags: session.tags ?? [],
 	};
 }
-
-export function calculateDuration(startTime: string, endTime: string): number {
-	const start = new Date(startTime);
-	const end = new Date(endTime);
-	return Math.max(0, (end.getTime() - start.getTime()) / 1000 / 60);
-}

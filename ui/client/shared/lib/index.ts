@@ -24,7 +24,7 @@ export {
 	parseTimedeltaToMinutes,
 } from "./format";
 // Fuzzy matching (command palette)
-export { fuzzyRank, score as fuzzyScore } from "./fuzzyMatch";
+export { fuzzyRank } from "./fuzzyMatch";
 // Offline mutation queue
 export {
 	drainPending,
@@ -35,7 +35,6 @@ export {
 } from "./mutationQueue";
 // Hooks
 export { type CommandContext, useCommandActions } from "./useCommandActions";
-export { useCountUp } from "./useCountUp";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";

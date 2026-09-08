@@ -15,7 +15,6 @@ export {
 	useLastWeekTotal,
 	useProjectBreakdown,
 	useRecentDrift,
-	useRecentSessions,
 	useSessions,
 	useStreaks,
 	useThisWeekSessions,

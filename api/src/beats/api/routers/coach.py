@@ -70,13 +70,6 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
 
 
-class ChatMessageResponse(BaseModel):
-    role: str
-    content: str
-    tool_calls: list[dict] | None = None
-    created_at: datetime
-
-
 class MemoryResponse(BaseModel):
     content: str | None = None
     updated_at: datetime | None = None

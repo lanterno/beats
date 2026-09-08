@@ -14,7 +14,6 @@ import {
 	fetchProductivityScore,
 	fetchProjectHealth,
 	fetchScoreHistory,
-	fetchSuggestions,
 	generateDigest,
 	refreshPatterns,
 } from "./intelligenceApi";
@@ -137,14 +136,6 @@ export function useDismissInboxItem() {
 				queryClient.invalidateQueries({ queryKey: intelligenceKeys.projectHealth() });
 			}
 		},
-	});
-}
-
-export function useSuggestions(date?: string) {
-	return useQuery({
-		queryKey: intelligenceKeys.suggestions(date),
-		queryFn: () => fetchSuggestions(date),
-		staleTime: 5 * 60_000, // 5 minutes
 	});
 }
 

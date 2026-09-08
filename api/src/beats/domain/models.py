@@ -236,19 +236,6 @@ class WeeklyPlan(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class AutoStartRule(BaseModel):
-    """A rule for auto-starting the timer based on webhooks or schedules."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str | None = None
-    type: str  # "webhook_trigger" or "schedule"
-    project_id: str
-    config: dict = Field(default_factory=dict)  # repo name for webhook, cron for schedule
-    enabled: bool = True
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
 class PairingCode(BaseModel):
     """A short-lived pairing code for daemon-to-API authentication.
 

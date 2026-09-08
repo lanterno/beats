@@ -348,72 +348,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auto-start/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Rules
-         * @description List all auto-start rules.
-         */
-        get: operations["list_rules_api_auto_start__get"];
-        put?: never;
-        /**
-         * Create Rule
-         * @description Create a new auto-start rule.
-         */
-        post: operations["create_rule_api_auto_start__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auto-start/trigger": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger Auto Start
-         * @description Receive an external webhook and start the timer if a matching rule exists.
-         *
-         *     Call this from GitHub webhook, Zapier, etc. with {"repository": "owner/repo"}.
-         */
-        post: operations["trigger_auto_start_api_auto_start_trigger_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auto-start/{rule_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Rule
-         * @description Delete an auto-start rule.
-         */
-        delete: operations["delete_rule_api_auto_start__rule_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/beats/": {
         parameters: {
             query?: never;
@@ -1017,60 +951,6 @@ export interface paths {
          * @description Import a full JSON backup. Upserts by ID — safe to re-import.
          */
         post: operations["import_full_json_api_export_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/export/sqlite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Sqlite
-         * @description Export a signed SQLite snapshot as a `.zip` bundle.
-         *
-         *     Bundle contents:
-         *         - data.sqlite       — normalized, queryable snapshot
-         *         - manifest.json     — version, counts, sha256(data.sqlite)
-         *         - manifest.sig      — Ed25519 signature over the canonical manifest
-         *         - public_key.bin    — raw 32-byte Ed25519 public key for verification
-         *
-         *     The private key lives only in Mongo and is never served — the public key
-         *     ships with the bundle so a user can run the verify path entirely offline.
-         */
-        get: operations["export_sqlite_api_export_sqlite_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/export/sqlite/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Sqlite
-         * @description Import a previously signed SQLite bundle. The signature is verified
-         *     against the signing user's stored public key before any mutation runs —
-         *     a tampered bundle never reaches the writers.
-         *
-         *     Cross-account restores are rejected: the bundle must be signed by THIS
-         *     user. Sharing exports between accounts is out of scope for v1.
-         */
-        post: operations["import_sqlite_api_export_sqlite_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2163,26 +2043,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/webhooks/daily-summary/trigger": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger Daily Summary
-         * @description Trigger a daily summary webhook for a given date (defaults to today).
-         */
-        post: operations["trigger_daily_summary_api_webhooks_daily_summary_trigger_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/webhooks/{webhook_id}": {
         parameters: {
             query?: never;
@@ -2295,11 +2155,6 @@ export interface components {
             /** File */
             file: string;
         };
-        /** Body_import_sqlite_api_export_sqlite_import_post */
-        Body_import_sqlite_api_export_sqlite_import_post: {
-            /** File */
-            file: string;
-        };
         /** BriefResponse */
         BriefResponse: {
             /** Body */
@@ -2325,20 +2180,6 @@ export interface components {
             conversation_id?: string | null;
             /** Message */
             message: string;
-        };
-        /** CreateAutoStartRuleRequest */
-        CreateAutoStartRuleRequest: {
-            /**
-             * Config
-             * @default {}
-             */
-            config: {
-                [key: string]: unknown;
-            };
-            /** Project Id */
-            project_id: string;
-            /** Type */
-            type: string;
         };
         /**
          * CreateBeatRequest
@@ -3335,17 +3176,6 @@ export interface components {
             url: string;
         };
         /**
-         * WebhookTriggerPayload
-         * @description Payload from an external webhook (e.g. GitHub push).
-         */
-        WebhookTriggerPayload: {
-            /**
-             * Repository
-             * @default
-             */
-            repository: string;
-        };
-        /**
          * WeeklyDigestResponse
          * @description Response schema for a weekly digest.
          */
@@ -3849,123 +3679,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSOSessionResponse"];
-                };
-            };
-        };
-    };
-    list_rules_api_auto_start__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    create_rule_api_auto_start__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAutoStartRuleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    trigger_auto_start_api_auto_start_trigger_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WebhookTriggerPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_rule_api_auto_start__rule_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                rule_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4939,59 +4652,6 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_import_full_json_api_export_import_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_sqlite_api_export_sqlite_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    import_sqlite_api_export_sqlite_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_sqlite_api_export_sqlite_import_post"];
             };
         };
         responses: {
@@ -6745,37 +6405,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebhookResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    trigger_daily_summary_api_webhooks_daily_summary_trigger_post: {
-        parameters: {
-            query?: {
-                target_date?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

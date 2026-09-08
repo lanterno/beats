@@ -250,17 +250,3 @@ export function useUpdateGoalOverrides() {
 		},
 	});
 }
-
-/**
- * Hook to invalidate project queries (useful after mutations)
- */
-export function useInvalidateProjects() {
-	const queryClient = useQueryClient();
-
-	return {
-		invalidateAll: () => queryClient.invalidateQueries({ queryKey: projectKeys.all }),
-		invalidateList: () => queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
-		invalidateProject: (id: string) =>
-			queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) }),
-	};
-}

@@ -1,5 +1,5 @@
 // Mappers
-export { calculateDuration, toApiBeat, toSession } from "./mappers";
+export { toApiBeat, toSession } from "./mappers";
 // Types
 export type {
 	DayProjectBreakdown,

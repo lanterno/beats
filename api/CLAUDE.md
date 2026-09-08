@@ -26,15 +26,12 @@ src/beats/
 │   ├── github.py        GitHub OAuth + commit correlation
 │   ├── fitbit.py        Fitbit OAuth + biometric sync
 │   ├── oura.py          Oura PAT + biometric sync
-│   ├── export_sqlite.py Encrypted SQLite export bundle
-│   ├── export_signing.py Signing/verification for export bundles
 │   └── utils.py         Date helpers (week-of, ISO conversion)
 ├── coach/        AI coach — streaming chat, brief generation, memory
 │   ├── chat.py, gateway.py, context.py, tools.py, memory.py, …
 ├── infrastructure/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
-│   ├── repositories.py  Abstract + MongoDB repo implementations
-│   └── export_key_repo.py  Per-user export-bundle signing keys
+│   └── repositories.py  Abstract + MongoDB repo implementations
 ├── settings.py   pydantic-settings (reads .env / env vars)
 ├── auth/         WebAuthn + JWT session management
 └── server.py     FastAPI app + lifespan (in src/, not src/beats/)
@@ -49,13 +46,15 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Five test files cover different layers (791 tests, ~25s for the full run):
+Seven test files cover different layers (775 tests, ~25s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 284 tests.
-- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 280 tests.
-- **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 130 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 266 tests.
+- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 261 tests.
+- **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 137 tests.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.
 - **`src/beats/test_sso.py`** — home.space SSO with a scripted issuer (`httpx.MockTransport`) and real Ed25519 tokens; 35 tests.
+- **`src/beats/test_middleware.py`** — idempotency middleware, no DB; 8 tests.
+- **`src/beats/test_device_access.py`** — the device-verdict cache; 6 tests.
 
 Harness:
 

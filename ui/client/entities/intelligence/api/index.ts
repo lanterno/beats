@@ -1,7 +1,6 @@
 // Low-level API functions
 export {
 	fetchProductivityScore,
-	fetchSuggestions,
 	generateDigest,
 } from "./intelligenceApi";
 // TanStack Query hooks
@@ -18,5 +17,4 @@ export {
 	useProjectHealth,
 	useRefreshPatterns,
 	useScoreHistory,
-	useSuggestions,
 } from "./queries";

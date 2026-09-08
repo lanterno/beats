@@ -12,19 +12,8 @@ export { EmptyState } from "./empty-state";
 export { FocusMode } from "./focus-mode";
 export { GoalRing } from "./goal-ring";
 export { Progress } from "./progress";
-export { Reveal } from "./reveal";
 export { Toaster } from "./sonner";
 export { SyncStatus } from "./sync-status";
-export {
-	Table,
-	TableBody,
-	TableCaption,
-	TableCell,
-	TableFooter,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "./table";
 export {
 	Tooltip,
 	TooltipContent,
