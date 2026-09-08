@@ -14,10 +14,11 @@ every fake either implemented twelve or lied about its type.
 there is nothing to register.
 """
 
-from datetime import date
+import builtins
+from datetime import date, datetime
 from typing import Protocol
 
-from beats.domain.models import Beat, Project
+from beats.domain.models import Beat, FlowWindow, Project
 
 
 class CompletedBeatReader(Protocol):
@@ -36,4 +37,12 @@ class RangeBeatReader(Protocol):
 class ProjectLister(Protocol):
     """Read access to the project list."""
 
-    async def list(self, archived: bool = False) -> list[Project]: ...
+    # builtins.list because this class defines a method called `list`, which
+    # would otherwise shadow the builtin in the annotation.
+    async def list(self, archived: bool = False) -> builtins.list[Project]: ...
+
+
+class FlowWindowReader(Protocol):
+    """Flow windows over a time range."""
+
+    async def list_by_range(self, start: datetime, end: datetime) -> list[FlowWindow]: ...

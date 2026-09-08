@@ -38,6 +38,7 @@ from beats.coach.repos import (
     COACH_MEMORY_COLLECTION,
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
+    CoachRepos,
     fmt_minutes,
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker
@@ -1279,7 +1280,7 @@ class TestRecentDataSummary:
     @pytest.fixture
     def patch_repos(self, monkeypatch):
         """Returns a setter that monkeypatches build_repos to return
-        the supplied _FakeCoachRepos instance."""
+        the supplied CoachRepos instance."""
 
         def setter(repos):
             async def fake_build_repos(_user_id):
@@ -1293,7 +1294,7 @@ class TestRecentDataSummary:
         """No beats → output still renders the section header with the
         documented empty-state line. Pin so the LLM gets a stable
         structure even on a first-week user."""
-        patch_repos(_FakeCoachRepos())
+        patch_repos(_fake_coach_repos())
         out = await memory_rewrite_module._recent_data_summary("user-1")
         assert "## Last 7 days of sessions" in out
         assert "(No sessions in the last 7 days)" in out
@@ -1309,7 +1310,7 @@ class TestRecentDataSummary:
         )
         recent_iso = recent_iso[:19]  # strip tz suffix for the helper
         beats = [_completed_beat(recent_iso, 45, project_id="p1")]
-        repos = _FakeCoachRepos(
+        repos = _fake_coach_repos(
             projects=[_project("p1", "Alpha")],
             beats=beats,
         )
@@ -1331,7 +1332,7 @@ class TestRecentDataSummary:
             .isoformat()[:19]
         )
         beats = [_completed_beat(old_iso, 60, project_id="p1")]
-        repos = _FakeCoachRepos(
+        repos = _fake_coach_repos(
             projects=[_project("p1", "Alpha")],
             beats=beats,
         )
@@ -1352,7 +1353,7 @@ class TestRecentDataSummary:
             .isoformat()[:19]
         )
         beats = [_completed_beat(recent_iso, 45, project_id="ghost")]
-        repos = _FakeCoachRepos(
+        repos = _fake_coach_repos(
             projects=[],  # project map is empty
             beats=beats,
         )
@@ -1558,15 +1559,20 @@ class _FakeProjectRepoForTools:
 
 
 class _FakeBeatRepoForTools:
-    """Returns a fixed list of beats — both list_all_completed and the
-    other methods AnalyticsService might invoke (we don't expect those
-    here since IntelligenceService is stubbed)."""
+    """A fixed list of beats, satisfying CompletedBeatReader.
+
+    `list_completed_in_range` is here for the contract rather than the tests —
+    the coach reaches it only through IntelligenceService, which these tests
+    stub out."""
 
     def __init__(self, beats):
         self._beats = beats
 
     async def list_all_completed(self):
         return [b for b in self._beats if b.end is not None]
+
+    async def list_completed_in_range(self, start, end):
+        return [b for b in self._beats if b.end is not None and start <= b.start.date() <= end]
 
 
 class _FakeFlowRepoForCoach:
@@ -1579,14 +1585,17 @@ class _FakeFlowRepoForCoach:
         return [w for w in self._windows if start <= w.window_start <= end]
 
 
-class _FakeCoachRepos:
-    """Mirrors the CoachRepos dataclass shape for tests."""
+def _fake_coach_repos(*, projects=None, beats=None, flow_windows=None) -> CoachRepos:
+    """The real CoachRepos, holding in-memory repositories.
 
-    def __init__(self, *, projects=None, beats=None, flow_windows=None):
-        self.project = _FakeProjectRepoForTools(projects or [])
-        self.beat = _FakeBeatRepoForTools(beats or [])
-        self.digest = None  # not used by tools.py
-        self.flow = _FakeFlowRepoForCoach(flow_windows or [])
+    It used to be a look-alike class, which meant nothing checked that the
+    fakes matched what the coach asks for. Now the dataclass is protocol-typed,
+    so this is both the real thing and a type error if a fake drifts."""
+    return CoachRepos(
+        project=_FakeProjectRepoForTools(projects or []),
+        beat=_FakeBeatRepoForTools(beats or []),
+        flow=_FakeFlowRepoForCoach(flow_windows or []),
+    )
 
 
 def _project(id_: str, name: str, *, weekly_goal=None, goal_type="target", archived=False):
@@ -1629,7 +1638,7 @@ class TestToolsDispatch:
         must NOT raise — the chat loop's exception handler would turn
         a raise into an "Error: ..." tool_result, but a string
         return is more graceful (the LLM can recover)."""
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         result = await tools_module.execute_tool(
             "user-1",
             "non_existent_tool",
@@ -1647,7 +1656,7 @@ class TestToolsDispatch:
             _project("p1", "Alpha", weekly_goal=10, goal_type="target"),
             _project("p2", "Beta"),
         ]
-        repos = _FakeCoachRepos(projects=projects)
+        repos = _fake_coach_repos(projects=projects)
         result = await tools_module.execute_tool(
             "user-1", "get_projects", {}, repos=repos, projects=projects
         )
@@ -1664,7 +1673,7 @@ class TestToolsDispatch:
             _project("p1", "Active"),
             _project("p2", "Stale", archived=True),
         ]
-        repos = _FakeCoachRepos(projects=projects)
+        repos = _fake_coach_repos(projects=projects)
         result = await tools_module.execute_tool(
             "user-1", "get_projects", {}, repos=repos, projects=projects
         )
@@ -1676,7 +1685,7 @@ class TestToolsDispatch:
             _project("p1", "Active"),
             _project("p2", "Stale", archived=True),
         ]
-        repos = _FakeCoachRepos(projects=projects)
+        repos = _fake_coach_repos(projects=projects)
         result = await tools_module.execute_tool(
             "user-1",
             "get_projects",
@@ -1689,7 +1698,7 @@ class TestToolsDispatch:
         assert "archived" in result
 
     async def test_get_projects_empty_returns_friendly_text(self):
-        repos = _FakeCoachRepos(projects=[])
+        repos = _fake_coach_repos(projects=[])
         result = await tools_module.execute_tool(
             "user-1", "get_projects", {}, repos=repos, projects=[]
         )
@@ -1705,7 +1714,7 @@ class TestToolsDispatch:
 
         projects = [_project("p1", "Alpha")]
         beats = [_completed_beat(recent_iso[:-6], 60, "p1", note="planning")]
-        repos = _FakeCoachRepos(projects=projects, beats=beats)
+        repos = _fake_coach_repos(projects=projects, beats=beats)
 
         result = await tools_module.execute_tool(
             "user-1", "get_beats", {}, repos=repos, projects=projects
@@ -1725,7 +1734,7 @@ class TestToolsDispatch:
             _completed_beat(f"{today_str}T09:00:00", 30, "p1"),
             _completed_beat(f"{today_str}T10:00:00", 45, "p2"),
         ]
-        repos = _FakeCoachRepos(projects=projects, beats=beats)
+        repos = _fake_coach_repos(projects=projects, beats=beats)
 
         result = await tools_module.execute_tool(
             "user-1",
@@ -1739,7 +1748,7 @@ class TestToolsDispatch:
         assert "1 sessions" in result
 
     async def test_get_beats_empty_returns_friendly_text(self):
-        repos = _FakeCoachRepos(projects=[], beats=[])
+        repos = _fake_coach_repos(projects=[], beats=[])
         result = await tools_module.execute_tool(
             "user-1", "get_beats", {}, repos=repos, projects=[]
         )
@@ -1763,7 +1772,7 @@ class TestToolsDispatch:
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
 
         projects = [_project("p1", "Alpha")]
-        repos = _FakeCoachRepos(projects=projects)
+        repos = _fake_coach_repos(projects=projects)
         result = await tools_module.execute_tool(
             "user-1", "get_productivity_score", {}, repos=repos, projects=projects
         )
@@ -1785,7 +1794,7 @@ class TestToolsDispatch:
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", boom)
 
         projects = [_project("p1", "Alpha")]
-        repos = _FakeCoachRepos(projects=projects)
+        repos = _fake_coach_repos(projects=projects)
         result = await tools_module.execute_tool(
             "user-1", "get_productivity_score", {}, repos=repos, projects=projects
         )
@@ -1807,7 +1816,7 @@ class TestToolsDispatch:
             ]
 
         monkeypatch.setattr(IntelligenceService, "detect_patterns", fake_detect)
-        repos = _FakeCoachRepos(projects=[])
+        repos = _fake_coach_repos(projects=[])
         result = await tools_module.execute_tool(
             "user-1", "get_patterns", {}, repos=repos, projects=[]
         )
@@ -1822,7 +1831,7 @@ class TestToolsDispatch:
             return []
 
         monkeypatch.setattr(IntelligenceService, "detect_patterns", fake_detect)
-        repos = _FakeCoachRepos(projects=[])
+        repos = _fake_coach_repos(projects=[])
         result = await tools_module.execute_tool(
             "user-1", "get_patterns", {}, repos=repos, projects=[]
         )
@@ -1836,7 +1845,7 @@ class TestToolsDispatch:
             _completed_beat("2026-05-01T09:00:00", 30, "p1", note="auth refactor planning"),
             _completed_beat("2026-05-02T09:00:00", 45, "p1", note="meeting prep"),
         ]
-        repos = _FakeCoachRepos(projects=projects, beats=beats)
+        repos = _fake_coach_repos(projects=projects, beats=beats)
 
         result = await tools_module.execute_tool(
             "user-1", "search_beats", {"query": "REFACTOR"}, repos=repos, projects=projects
@@ -1851,7 +1860,7 @@ class TestToolsDispatch:
             _completed_beat("2026-05-01T09:00:00", 30, "p1", tags=["focus", "deep-work"]),
             _completed_beat("2026-05-02T09:00:00", 45, "p1", tags=["meeting"]),
         ]
-        repos = _FakeCoachRepos(projects=projects, beats=beats)
+        repos = _fake_coach_repos(projects=projects, beats=beats)
 
         result = await tools_module.execute_tool(
             "user-1", "search_beats", {"query": "deep"}, repos=repos, projects=projects
@@ -1860,7 +1869,7 @@ class TestToolsDispatch:
         assert "2026-05-02" not in result
 
     async def test_search_beats_empty_query_short_circuits(self):
-        repos = _FakeCoachRepos(projects=[], beats=[])
+        repos = _fake_coach_repos(projects=[], beats=[])
         result = await tools_module.execute_tool(
             "user-1", "search_beats", {"query": ""}, repos=repos, projects=[]
         )
@@ -1869,7 +1878,7 @@ class TestToolsDispatch:
     async def test_search_beats_no_matches_returns_query_in_message(self):
         projects = [_project("p1", "Alpha")]
         beats = [_completed_beat("2026-05-01T09:00:00", 30, "p1", note="something")]
-        repos = _FakeCoachRepos(projects=projects, beats=beats)
+        repos = _fake_coach_repos(projects=projects, beats=beats)
         result = await tools_module.execute_tool(
             "user-1", "search_beats", {"query": "nonsense"}, repos=repos, projects=projects
         )
@@ -1905,7 +1914,7 @@ class TestBuildCoachMessages:
         we can drive the composition without real Mongo data."""
 
         async def fake_build_repos(_user_id):
-            return _FakeCoachRepos()
+            return _fake_coach_repos()
 
         async def fake_user_ctx(_user_id, _repos):
             return "USER_CTX_BLOCK"
@@ -1992,7 +2001,7 @@ class TestBuildCoachMessages:
         captured = {}
 
         async def fake_build_repos(_user_id):
-            return _FakeCoachRepos()
+            return _fake_coach_repos()
 
         async def fake_user_ctx(_user_id, _repos):
             return "USER"
@@ -2044,7 +2053,7 @@ class TestBuildUserContext:
 
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
 
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha", weekly_goal=10)])
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha", weekly_goal=10)])
         result = await context_module.build_user_context("user-1", repos)
 
         # Expected sections in order.
@@ -2076,7 +2085,7 @@ class TestBuildUserContext:
 
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", boom)
 
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha")])
         result = await context_module.build_user_context("user-1", repos)
         assert "Productivity score: unavailable" in result
 
@@ -2113,7 +2122,7 @@ class TestBuildUserContext:
                 editor_language="Python",
             ),
         ]
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")], flow_windows=windows)
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha")], flow_windows=windows)
         result = await context_module.build_user_context("user-1", repos)
         assert "### Flow (30 days, from ambient signals)" in result
         assert "repo beats" in result
@@ -2138,7 +2147,7 @@ class TestBuildUserContext:
 
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
 
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha")])
         result = await context_module.build_user_context("user-1", repos)
         assert "(No coach memory yet" in result
 
@@ -2169,7 +2178,7 @@ class TestBuildUserContext:
         finally:
             await client.close()
 
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")])
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha")])
         result = await context_module.build_user_context("user-1", repos)
         assert "User ships at night." in result
 
@@ -2189,7 +2198,7 @@ class TestBuildUserContext:
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
 
         # Project with no weekly_goal.
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha", weekly_goal=None)])
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha", weekly_goal=None)])
         result = await context_module.build_user_context("user-1", repos)
         assert "(No goals set)" in result
 
@@ -2652,7 +2661,7 @@ class TestBuildDayContext:
         coach turn on a first-day account doesn't crash on missing
         keys."""
         target = datetime.now(UTC).date()
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert f"## Today: {target.isoformat()}" in out
         assert "### Yesterday's sessions" in out
@@ -2678,7 +2687,7 @@ class TestBuildDayContext:
             start=s,
             end=s + timedelta(minutes=45),
         )
-        repos = _FakeCoachRepos(
+        repos = _fake_coach_repos(
             projects=[_project("p1", "Alpha")],
             beats=[beat],
         )
@@ -2700,7 +2709,7 @@ class TestBuildDayContext:
 
         s = datetime(2026, 1, 1, 23, 30, tzinfo=UTC)
         beat = Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=30))
-        repos = _FakeCoachRepos(projects=[_project("p1", "Alpha")], beats=[beat])
+        repos = _fake_coach_repos(projects=[_project("p1", "Alpha")], beats=[beat])
 
         tokyo = await context_module.build_day_context(
             "user-1", repos, target_date=date_type(2026, 1, 2), tz=ZoneInfo("Asia/Tokyo")
@@ -2729,7 +2738,7 @@ class TestBuildDayContext:
             start=s,
             end=s + timedelta(minutes=60),
         )
-        repos = _FakeCoachRepos(
+        repos = _fake_coach_repos(
             projects=[_project("p1", "Alpha")],
             beats=[beat],
         )
@@ -2754,7 +2763,7 @@ class TestBuildDayContext:
             end=s + timedelta(minutes=30),
             note="deep work",
         )
-        repos = _FakeCoachRepos(
+        repos = _fake_coach_repos(
             projects=[_project("p1", "Alpha")],
             beats=[beat],
         )
@@ -2781,7 +2790,7 @@ class TestBuildDayContext:
                 "created_at": datetime.now(UTC),
             }
         )
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "### Last night's biometrics" in out
         # 480 min / 60 = 8.0h
@@ -2809,7 +2818,7 @@ class TestBuildDayContext:
                 "created_at": datetime.now(UTC),
             }
         )
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "### Last night's biometrics" not in out
 
@@ -2829,7 +2838,7 @@ class TestBuildDayContext:
                 "created_at": datetime.now(UTC),
             }
         )
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "Sleep: 7.0h" in out
         # No efficiency suffix
@@ -2853,7 +2862,7 @@ class TestBuildDayContext:
             start=s,
             end=s + timedelta(minutes=30),
         )
-        repos = _FakeCoachRepos(projects=[], beats=[beat])
+        repos = _fake_coach_repos(projects=[], beats=[beat])
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "11:00 — ? (30m)" in out
 
@@ -2904,7 +2913,7 @@ class TestBuildDayContext:
         monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
 
         target = date(2026, 4, 1)
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         assert "### Calendar today" in out
         # Timed event: HH:MM–HH:MM extracted from RFC3339
@@ -2939,7 +2948,7 @@ class TestBuildDayContext:
         monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
 
         target = date(2026, 4, 1)
-        repos = _FakeCoachRepos()
+        repos = _fake_coach_repos()
         out = await context_module.build_day_context("user-1", repos, target_date=target)
         # Calendar header is omitted (fetch threw, except branch hit)
         assert "### Calendar today" not in out

@@ -11,6 +11,7 @@ user_id filter, and the conversion between documents and Pydantic models.
 hold exactly one document per user.
 """
 
+import builtins
 from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol
 
@@ -195,13 +196,13 @@ class BeatRepository(Protocol):
     async def delete(self, beat_id: str) -> bool: ...
     async def list(
         self, project_id: str | None = None, date_filter: date | None = None
-    ) -> list[Beat]: ...
-    async def list_by_project(self, project_id: str) -> list[Beat]: ...
+    ) -> builtins.list[Beat]: ...
+    async def list_by_project(self, project_id: str) -> builtins.list[Beat]: ...
     async def list_grouped_by_project_ids(
-        self, project_ids: list[str]
-    ) -> dict[str, list[Beat]]: ...
-    async def list_all_completed(self) -> list[Beat]: ...
-    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]: ...
+        self, project_ids: builtins.list[str]
+    ) -> dict[str, builtins.list[Beat]]: ...
+    async def list_all_completed(self) -> builtins.list[Beat]: ...
+    async def list_completed_in_range(self, start: date, end: date) -> builtins.list[Beat]: ...
     async def upsert(self, data: dict) -> None: ...
 
 
@@ -212,7 +213,7 @@ class ProjectRepository(Protocol):
     async def exists(self, project_id: str) -> bool: ...
     async def create(self, project: Project) -> Project: ...
     async def update(self, project: Project) -> Project: ...
-    async def list(self, archived: bool = False) -> list[Project]: ...
+    async def list(self, archived: bool = False) -> builtins.list[Project]: ...
     async def upsert(self, data: dict) -> None: ...
 
 
@@ -250,7 +251,7 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
         self,
         project_id: str | None = None,
         date_filter: date | None = None,
-    ) -> list[Beat]:
+    ) -> builtins.list[Beat]:
         extra: dict[str, Any] = {}
         if project_id:
             extra["project_id"] = project_id
@@ -261,10 +262,12 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
             }
         return await self._find_many(extra)
 
-    async def list_by_project(self, project_id: str) -> list[Beat]:
+    async def list_by_project(self, project_id: str) -> builtins.list[Beat]:
         return await self._find_many({"project_id": project_id})
 
-    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
+    async def list_grouped_by_project_ids(
+        self, project_ids: builtins.list[str]
+    ) -> dict[str, builtins.list[Beat]]:
         """Fetch every beat for the given projects in one round-trip, bucketed.
 
         Lets list_projects collapse an N×3 fan-out into a single query whose
@@ -276,17 +279,17 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
         if not project_ids:
             return {}
         beats = await self._find_many({"project_id": {"$in": project_ids}})
-        buckets: dict[str, list[Beat]] = {pid: [] for pid in project_ids}
+        buckets: dict[str, builtins.list[Beat]] = {pid: [] for pid in project_ids}
         for beat in beats:
             # setdefault rather than [] in case Mongo returns a project_id we
             # did not ask for — shouldn't happen under $in, but it is cheap.
             buckets.setdefault(beat.project_id, []).append(beat)
         return buckets
 
-    async def list_all_completed(self) -> list[Beat]:
+    async def list_all_completed(self) -> builtins.list[Beat]:
         return await self._find_many({"end": {"$ne": None}})
 
-    async def list_completed_in_range(self, start: date, end: date) -> list[Beat]:
+    async def list_completed_in_range(self, start: date, end: date) -> builtins.list[Beat]:
         return await self._find_many(
             {
                 "start": {
@@ -328,7 +331,7 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
     async def update(self, project: Project) -> Project:
         return await self._replace(project.id, project)
 
-    async def list(self, archived: bool = False) -> list[Project]:
+    async def list(self, archived: bool = False) -> builtins.list[Project]:
         return await self._find_many({"archived": archived})
 
     async def upsert(self, data: dict) -> None:
