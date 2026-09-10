@@ -8,7 +8,7 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import AuthModal from "@/features/auth/components/AuthModal";
+import { AuthModal } from "@/features/auth";
 import { Button } from "@/shared/ui";
 import "./HomePage.css";
 

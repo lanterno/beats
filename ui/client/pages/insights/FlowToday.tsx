@@ -8,7 +8,7 @@
  */
 import { useMemo, useState } from "react";
 import { useFlowWindows, useFlowWindowsLastDays } from "@/entities/session";
-import { flowBaseline, shortRepoPath, summarizeFlow } from "@/shared/lib/flowAggregation";
+import { flowBaseline, shortRepoPath, summarizeFlow } from "@/shared/lib";
 
 const SPARK_W = 480;
 const SPARK_H = 64;

@@ -7,7 +7,7 @@
  */
 import { useMemo } from "react";
 import { useFlowWindowsLastDays } from "@/entities/session";
-import { aggregateFlowByDay } from "@/shared/lib/flowAggregation";
+import { aggregateFlowByDay } from "@/shared/lib";
 
 const DAYS = 7;
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

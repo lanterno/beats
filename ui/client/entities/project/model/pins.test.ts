@@ -1,10 +1,15 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { provideSession } from "@/shared/session";
 import { clearPins, isPinned, readPins, togglePin, usePinnedProjects } from "./pins";
 
-vi.mock("@/features/auth", () => ({
-	useAuth: () => ({ user: { email: "alice@example.com" } }),
-}));
+provideSession({
+	getToken: () => "stub",
+	getUserKey: () => "alice@example.com",
+	subscribe: () => () => {},
+	clear: () => {},
+	signOut: async () => {},
+});
 
 const USER = "alice@example.com";
 

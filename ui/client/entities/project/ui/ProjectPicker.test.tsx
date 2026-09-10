@@ -2,17 +2,17 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectWithDuration } from "@/entities/project";
+import { provideSession } from "@/shared/session";
 import { readPickerRecents } from "../model/pickerRecents";
 import { ProjectPicker } from "./ProjectPicker";
 
-vi.mock("@/features/auth", () => ({
-	useAuth: () => ({
-		user: { email: "alice@example.com" },
-		isAuthenticated: true,
-		isLoading: false,
-		token: "stub",
-	}),
-}));
+provideSession({
+	getToken: () => "stub",
+	getUserKey: () => "alice@example.com",
+	subscribe: () => () => {},
+	clear: () => {},
+	signOut: async () => {},
+});
 
 function project(overrides: Partial<ProjectWithDuration>): ProjectWithDuration {
 	return {

@@ -13,8 +13,7 @@
  * skip the affordance there to keep the page quiet.)
  */
 import { useState } from "react";
-import { downloadFile } from "@/shared/lib/downloadFile";
-import { shortRepoPath } from "@/shared/lib/flowAggregation";
+import { downloadFile, shortRepoPath } from "@/shared/lib";
 
 export interface FlowFilterChipsProps {
 	repo?: string;

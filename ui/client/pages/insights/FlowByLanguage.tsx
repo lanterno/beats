@@ -12,7 +12,7 @@
  */
 import { useMemo } from "react";
 import { useFlowWindows } from "@/entities/session";
-import { aggregateFlowBy } from "@/shared/lib/flowAggregation";
+import { aggregateFlowBy } from "@/shared/lib";
 
 // Tiny mapping from VS Code language ids to nicer display labels. Anything
 // not listed falls through unchanged — the language id is itself usually

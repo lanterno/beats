@@ -7,11 +7,11 @@
  * caller side — this helper just throws so callers can decide whether
  * to swallow / reroute.
  */
-import { getSessionToken } from "@/features/auth/stores/authStore";
 import { config } from "@/shared/config";
+import { sessionToken } from "@/shared/session";
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
-	const token = getSessionToken();
+	const token = sessionToken();
 	const res = await fetch(`${config.apiBaseUrl}${path}`, {
 		headers: token ? { Authorization: `Bearer ${token}` } : {},
 	});

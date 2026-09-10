@@ -17,8 +17,9 @@ import {
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { ProjectWithDuration } from "@/entities/project";
-import { clearSessionToken, logout, useAuth } from "@/features/auth";
+import { useAuth } from "@/features/auth";
 import { cn, formatSecondsToTime, parseUtcIso, useInstallPrompt } from "@/shared/lib";
+import { signOut } from "@/shared/session";
 import { AnimatedDigits, SyncStatus } from "@/shared/ui";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
@@ -49,8 +50,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 
 	const handleLogout = async () => {
 		closeDrawer();
-		await logout().catch(() => {});
-		clearSessionToken();
+		await signOut();
 		navigate("/");
 	};
 

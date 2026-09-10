@@ -8,7 +8,8 @@ Feature-Sliced Design (FSD):
 
 ```
 client/
-├── app/           App.tsx (router + providers) + Layout.tsx (authenticated shell)
+├── app/           App.tsx (router + providers), Layout.tsx (authenticated
+│                  shell), session.ts (wires auth into the session port)
 ├── pages/         Route-level components — homepage, index, insights, coach,
 │                  plan, project-details, settings, not-found
 ├── widgets/       Cross-page composite UI — sidebar (desktop) + mobile header
@@ -16,13 +17,29 @@ client/
 ├── entities/      Business objects — project, session, planning, coach,
 │                  intelligence, calendar, github
 ├── shared/        No business logic — api client, lib helpers, ui primitives,
-│                  config
+│                  config, session port
 └── main.tsx       Entry point
 ```
 
 Layer rules: `app/` can import from anything; `pages/` from widgets/features/
 entities/shared; `widgets/` from features/entities/shared; `features/` from
 entities/shared; `entities/` from shared only; `shared/` from nothing.
+
+Each slice is reached through its `index.ts` barrel, never by importing a file
+inside it. That is what makes a slice's internals free to move, and it is why a
+dead export is worth deleting rather than leaving: the barrel is the only thing
+that says what the slice offers, so anything listed there reads as supported.
+
+The rules bind in one direction, so the awkward case is a lower layer needing
+something only a feature has: the API client must attach a bearer token, and
+per-account browser storage needs a key identifying the account. Both live in
+`features/auth`. Rather than let `shared/` reach up for them, `shared/session`
+declares the port it wants — `getToken`, `getUserKey`, `subscribe`, `clear`,
+`signOut` — and `app/session.ts` hands it the auth feature's implementation
+before the first render. Callers get `sessionToken()`, `useSessionUserKey()`,
+`endSession()` and `signOut()`; a test wires a stub with `provideSession()`
+instead of mocking the module. Until it is wired the port answers as a
+signed-out visitor, which is what a caller reaching it that early would be.
 
 ## Running
 

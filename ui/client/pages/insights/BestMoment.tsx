@@ -10,7 +10,7 @@ import { useMemo } from "react";
 import { useProjects } from "@/entities/project";
 import { useFlowWindowsLastDays } from "@/entities/session";
 import type { FlowWindow } from "@/shared/api";
-import { shortRepoPath } from "@/shared/lib/flowAggregation";
+import { shortRepoPath } from "@/shared/lib";
 
 const MIN_PEAK = 0.7; // below this, we don't celebrate
 

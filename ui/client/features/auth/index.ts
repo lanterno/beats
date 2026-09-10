@@ -36,10 +36,12 @@ export type { UserInfo as UserState } from "./stores/authStore";
 // Store
 export {
 	clearSessionToken,
+	getAuthUserKey,
 	getSessionToken,
 	initializeAuth,
 	isAuthenticated,
 	setSessionToken,
 	setUser,
+	subscribeToAuth,
 	useAuth,
 } from "./stores/authStore";

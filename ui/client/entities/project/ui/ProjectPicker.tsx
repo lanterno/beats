@@ -21,8 +21,8 @@
 
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/features/auth";
 import { cn, formatDuration } from "@/shared/lib";
+import { useSessionUserKey } from "@/shared/session";
 import type { ProjectWithDuration } from "../model";
 import {
 	filterAndRankProjects,
@@ -82,8 +82,7 @@ export function ProjectPicker({
 	const containerRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLUListElement>(null);
-	const { user } = useAuth();
-	const userKey = user?.email ?? null;
+	const userKey = useSessionUserKey();
 
 	// Read recents only when the picker opens — avoids re-reading on every
 	// keystroke and keeps the closed picker side-effect-free.

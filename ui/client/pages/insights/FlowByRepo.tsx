@@ -9,7 +9,7 @@
  */
 import { useMemo } from "react";
 import { useFlowWindows } from "@/entities/session";
-import { aggregateFlowByRepo, shortRepoPath } from "@/shared/lib/flowAggregation";
+import { aggregateFlowByRepo, shortRepoPath } from "@/shared/lib";
 
 interface Props {
 	projectId?: string;

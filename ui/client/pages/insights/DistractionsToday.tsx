@@ -7,8 +7,7 @@
  */
 import { useMemo } from "react";
 import { useRecentDrift } from "@/entities/session";
-import { formatDuration } from "@/shared/lib";
-import { shortBundleLabel } from "@/shared/lib/bundleLabel";
+import { formatDuration, shortBundleLabel } from "@/shared/lib";
 
 function startOfTodayIso(): string {
 	const now = new Date();

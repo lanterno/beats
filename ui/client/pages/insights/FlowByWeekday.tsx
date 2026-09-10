@@ -13,7 +13,7 @@
  */
 import { useMemo } from "react";
 import { useFlowWindowsLastDays } from "@/entities/session";
-import { aggregateFlowByWeekday } from "@/shared/lib/flowAggregation";
+import { aggregateFlowByWeekday } from "@/shared/lib";
 
 const DAYS = 28;
 const MIN_WINDOWS_TO_RENDER = 50; // ~50 minutes across 4 weeks — below that, weekday means are noise

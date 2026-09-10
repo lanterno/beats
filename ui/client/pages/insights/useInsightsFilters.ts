@@ -10,7 +10,7 @@
  * cleaner with a single state hook than five.
  */
 import { useCallback, useEffect } from "react";
-import { useUrlParam } from "@/shared/lib/useUrlParam";
+import { useUrlParam } from "@/shared/lib";
 
 export interface InsightsFilters {
 	selectedProjectId: string | undefined;

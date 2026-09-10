@@ -16,8 +16,9 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
 import type { ProjectWithDuration } from "@/entities/project";
-import { clearSessionToken, logout, useAuth } from "@/features/auth";
+import { useAuth } from "@/features/auth";
 import { cn, useInstallPrompt } from "@/shared/lib";
+import { signOut } from "@/shared/session";
 import { SyncStatus } from "@/shared/ui";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
@@ -36,8 +37,7 @@ export function Sidebar(props: SidebarProps) {
 	const { user } = useAuth();
 
 	const handleLogout = async () => {
-		await logout().catch(() => {});
-		clearSessionToken();
+		await signOut();
 		navigate("/");
 	};
 

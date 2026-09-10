@@ -6,8 +6,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getSessionToken } from "@/features/auth/stores/authStore";
 import { config } from "@/shared/config";
+import { sessionToken } from "@/shared/session";
 import { type ChatHistoryMessage, type ChatSSEEvent, fetchChatHistory } from "./api/coachApi";
 
 // The shared resolver, not a second copy of it. The copy that used to live
@@ -114,7 +114,7 @@ export function useCoachChat() {
 			const controller = new AbortController();
 			abortRef.current = controller;
 
-			const token = getSessionToken();
+			const token = sessionToken();
 			const body = JSON.stringify({
 				message: text,
 				conversation_id: state.conversationId,

@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/features/auth";
+import { useSessionUserKey } from "@/shared/session";
 
 const KEY_PREFIX = "beats:project-pins:v1";
 const EVENT_NAME = "beats:pins-changed";
@@ -76,8 +76,7 @@ export function usePinnedProjects(): {
 	toggle: (projectId: string) => void;
 	isPinned: (projectId: string) => boolean;
 } {
-	const { user } = useAuth();
-	const userKey = user?.email ?? null;
+	const userKey = useSessionUserKey();
 	const [pins, setPins] = useState<Set<string>>(() => readPins(userKey));
 
 	useEffect(() => {

@@ -14,8 +14,7 @@
  */
 import { useMemo } from "react";
 import { useFlowWindows } from "@/entities/session";
-import { shortBundleLabel } from "@/shared/lib/bundleLabel";
-import { aggregateFlowBy } from "@/shared/lib/flowAggregation";
+import { aggregateFlowBy, shortBundleLabel } from "@/shared/lib";
 
 interface Props {
 	projectId?: string;

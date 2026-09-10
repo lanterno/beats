@@ -18,10 +18,9 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
-import { getSessionToken } from "@/features/auth/stores/authStore";
 import { config } from "@/shared/config";
-import { COLOR_MODES, DENSITIES, THEMES, useTheme } from "@/shared/lib";
-import { downloadFile } from "@/shared/lib/downloadFile";
+import { COLOR_MODES, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
+import { sessionToken } from "@/shared/session";
 import { CalendarSection } from "./CalendarSection";
 import { CoachUsage } from "./CoachUsage";
 import { CodeBlock } from "./CodeBlock";
@@ -71,7 +70,7 @@ export default function Settings() {
 		try {
 			const formData = new FormData();
 			formData.append("file", file);
-			const token = getSessionToken();
+			const token = sessionToken();
 			const res = await fetch(`${apiBase}/api/export/import`, {
 				method: "POST",
 				headers: token ? { Authorization: `Bearer ${token}` } : {},

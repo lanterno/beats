@@ -225,6 +225,18 @@ function getSnapshot(): AuthState {
 }
 
 /**
+ * The two accessors the app layer hands to `shared/session`, so the lower
+ * layers can scope browser storage per account without importing this feature.
+ */
+export function subscribeToAuth(callback: () => void): () => void {
+	return subscribe(callback);
+}
+
+export function getAuthUserKey(): string | null {
+	return state.user?.email ?? null;
+}
+
+/**
  * React hook to access auth state.
  * Re-renders when auth state changes.
  */

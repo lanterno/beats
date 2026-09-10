@@ -11,7 +11,7 @@
  */
 import { useMemo } from "react";
 import { useFlowWindowsLastDays } from "@/entities/session";
-import { aggregateFlowByHour } from "@/shared/lib/flowAggregation";
+import { aggregateFlowByHour } from "@/shared/lib";
 
 const DAYS = 7;
 const MIN_WINDOWS_TO_RENDER = 12; // about 12 minutes of data — below that, bars are noise

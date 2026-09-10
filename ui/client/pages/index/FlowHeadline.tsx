@@ -15,7 +15,7 @@
  */
 import { Link, useNavigate } from "react-router";
 import { useFlowWindowsSummary } from "@/entities/session";
-import { shortBundleLabel } from "@/shared/lib/bundleLabel";
+import { shortBundleLabel } from "@/shared/lib";
 
 interface YesterdayRange {
 	start: string;

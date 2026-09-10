@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { type NavigateFunction, useNavigate } from "react-router";
-import { clearSessionToken, logout } from "@/features/auth";
+import { signOut } from "@/shared/session";
 import type { CommandItem } from "@/shared/ui";
 import {
 	type ColorMode,
@@ -225,12 +225,7 @@ function buildItems(
 		keywords: ["logout", "signout", "exit"],
 		icon: <LogOut className="w-4 h-4" />,
 		action: () => {
-			logout()
-				.catch(() => {})
-				.finally(() => {
-					clearSessionToken();
-					window.location.replace("/");
-				});
+			void signOut().then(() => window.location.replace("/"));
 		},
 	});
 

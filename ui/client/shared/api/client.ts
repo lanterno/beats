@@ -4,7 +4,7 @@
  * Mirrors the backend's exception handling pattern.
  */
 
-import { getSessionToken } from "@/features/auth/stores/authStore";
+import { endSession, sessionToken } from "@/shared/session";
 import { config } from "../config";
 import {
 	enqueueMutation,
@@ -107,12 +107,12 @@ function appendFieldDetails(detail: string, fields: ApiErrorField[]): string {
  * Uses JWT Bearer token from WebAuthn session.
  */
 function getAuthHeaders(): Record<string, string> {
-	const sessionToken = getSessionToken();
+	const token = sessionToken();
 
-	if (sessionToken) {
+	if (token) {
 		return {
 			"Content-Type": "application/json",
-			Authorization: `Bearer ${sessionToken}`,
+			Authorization: `Bearer ${token}`,
 		};
 	}
 
@@ -125,11 +125,11 @@ function getAuthHeaders(): Record<string, string> {
  * Get headers for read-only requests (auth required for all endpoints)
  */
 function getReadHeaders(): Record<string, string> {
-	const sessionToken = getSessionToken();
+	const token = sessionToken();
 	const headers: Record<string, string> = { Accept: "application/json" };
 
-	if (sessionToken) {
-		headers.Authorization = `Bearer ${sessionToken}`;
+	if (token) {
+		headers.Authorization = `Bearer ${token}`;
 	}
 
 	return headers;
@@ -158,8 +158,7 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	if (!response.ok) {
 		// Handle expired/invalid session tokens
 		if (response.status === 401) {
-			const { clearSessionToken } = await import("@/features/auth/stores/authStore");
-			clearSessionToken();
+			endSession();
 			window.location.replace("/");
 		}
 
