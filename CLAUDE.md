@@ -53,7 +53,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~25s for 791 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~25s for 775 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -85,7 +85,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 791-test suite takes about 25 seconds.
+  the full 775-test suite takes about 25 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):

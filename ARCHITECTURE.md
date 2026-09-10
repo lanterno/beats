@@ -38,16 +38,26 @@ api/src/
 └── beats/
     ├── settings.py              # Pydantic Settings (env-based config)
     ├── domain/
-    │   ├── models.py            # Beat, Project, Intention, DailyNote, Webhook
+    │   ├── models.py            # Beat, Project, WeeklyPlan, Webhook, …
     │   ├── services.py          # BeatService, ProjectService, TimerService
-    │   ├── analytics.py         # AnalyticsService (heatmap, rhythm)
+    │   ├── analytics.py         # AnalyticsService (heatmap, rhythm, gaps)
+    │   ├── intelligence/        # Score, digests, patterns, planning, focus, health
+    │   ├── ports.py             # The narrow persistence protocols the domain asks for
+    │   ├── flow.py              # Flow-window scoring shared with the daemon
+    │   ├── calendar.py          # Google Calendar OAuth + events
+    │   ├── github.py            # GitHub OAuth + commit correlation
+    │   ├── fitbit.py            # Fitbit OAuth + biometric sync
+    │   ├── oura.py              # Oura PAT + biometric sync
     │   └── utils.py             # Timezone normalization
+    ├── coach/                   # AI coach: chat, gateway, context, tools, memory
     ├── infrastructure/
     │   ├── database.py          # PyMongo async client singleton (connect/disconnect)
     │   └── repositories.py      # Abstract repos + Mongo implementations
     ├── auth/
     │   ├── session.py           # JWT session management
-    │   └── storage.py           # WebAuthn credential storage
+    │   ├── storage.py           # WebAuthn credential storage
+    │   ├── device_access.py     # Cached device-revocation verdicts
+    │   └── sso.py               # home.space cookie verification
     └── api/
         ├── dependencies.py      # FastAPI Depends() wiring
         ├── schemas.py           # Request/response Pydantic models
@@ -56,13 +66,22 @@ api/src/
             ├── beats.py         # Session CRUD, filtering
             ├── timer.py         # Timer status
             ├── analytics.py     # Heatmap, rhythm, tags
-            ├── intentions.py    # Daily planning
-            ├── daily_notes.py   # End-of-day reflections
+            ├── intelligence.py  # Digests, score, patterns, focus, inbox
+            ├── planning.py      # Weekly plans
+            ├── coach.py         # Brief generation, streaming chat, usage
+            ├── signals.py       # Daemon flow windows and summaries
+            ├── biometrics.py    # Daily health data
             ├── webhooks.py      # Webhook CRUD + dispatch
             ├── export.py        # JSON backup/restore, CSV export
-            ├── device.py        # Wall clock status + favorites
-            └── auth.py          # WebAuthn registration/login
+            ├── device.py        # Wall clock status + favorites + pairing
+            ├── account.py       # me, refresh, credentials, logout
+            ├── auth.py          # WebAuthn registration/login
+            └── sso.py           # home.space config + session exchange
 ```
+
+`calendar.py`, `github.py`, `fitbit.py` and `oura.py` each have a router of the
+same name, omitted above; they follow one shape — OAuth (or a PAT) in, cached
+data out.
 
 ### Domain Layer
 
@@ -70,8 +89,7 @@ Pure business logic with no framework dependencies.
 
 - **Beat** — A single time tracking session with start/end timestamps, project reference, optional note and tags. Computed properties: `duration` (timedelta), `day` (date).
 - **Project** — A named time category with optional weekly goal (target or cap), color, and archive flag.
-- **Intention** — A daily plan item: "2h on project X today."
-- **DailyNote** — An end-of-day text reflection with optional mood (1-5).
+- **WeeklyPlan** — Per-project hour targets for one week.
 - **Webhook** — A registered URL to receive `timer.start` / `timer.stop` events.
 
 Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions.
@@ -79,7 +97,11 @@ Services orchestrate domain logic: `TimerService` enforces single-active-timer, 
 ### Infrastructure Layer
 
 - **Database** — Singleton async MongoDB connection via PyMongo's async client. Connected during FastAPI lifespan startup, disconnected on shutdown. Accepts `dsn` and `db_name` parameters for test override.
-- **Repositories** — Abstract base classes (`BeatRepository`, `ProjectRepository`, etc.) with MongoDB implementations. All async. Handles ObjectId serialization.
+- **Repositories** — `Protocol`s (`BeatRepository`, `ProjectRepository`, …) with
+  MongoDB implementations that inherit them for a nominal check, while test fakes
+  satisfy them structurally. All async. `MongoStore` holds the CRUD shared by most
+  of them, including ObjectId serialization. Domain services depend on the narrower
+  ports in `domain/ports.py` instead, so the dependency points inward.
 
 ### Dependency Injection
 

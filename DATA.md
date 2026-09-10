@@ -27,17 +27,17 @@ No passwords are stored — Beats does not have a password login path.
 - **Projects**: name, color, tags, archive flag
 - **Beats (sessions)**: start, end, project id, source (manual / daemon / editor), tags, notes
 - **Timer state**: the currently-running beat per user
-- **Intentions**: daily and recurring intentions, completion state
-- **Daily notes**: end-of-day mood, energy, free-text note
-- **Plans**: weekly plans, reviews, streaks
-- **Webhooks**: target URLs and delivery history
-- **Auto-start rules**: editor/repo patterns that trigger a beat
+- **Plans**: weekly plans — a per-project hour target for a given week
+- **Webhooks**: target URLs and which timer events they subscribe to. Deliveries
+  are fire-and-forget; no delivery log is kept.
 
 ### Intelligence and coach
 
 - **Signals**: flow windows and summaries emitted by the daemon
 - **Focus scores**: per-day scores derived from signals
 - **Inbox items**: surfaced patterns and suggestions
+- **Weekly digests**: the generated summary of a week — hours, session count,
+  top project, and the observation written alongside them
 - **Coach memory**: long-running facts the coach has been told to remember
 - **Coach chat history**: every prompt and reply, with timestamps
 

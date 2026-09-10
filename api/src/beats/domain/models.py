@@ -426,7 +426,9 @@ class SignalSummary(TzNormalizedModel):
 class Webhook(TzNormalizedModel):
     """A registered webhook URL that receives timer events.
 
-    Events: timer.start, timer.stop, daily.summary
+    Events: timer.start, timer.stop — both dispatched from the timer routes
+    in `api/routers/projects.py`. `events` is not validated against that set,
+    so a row can name an event nothing emits; it simply never fires.
     """
 
     model_config = ConfigDict(populate_by_name=True)
