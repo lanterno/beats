@@ -55,6 +55,11 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 - **Path alias**: `@/` → `client/`
 - **API**: Connects to `VITE_API_URL` (default `http://localhost:7999`)
 - **Data fetching**: TanStack Query v5 with Zod v4 validation
+- **API schema**: `pnpm gen:types` dumps the OpenAPI document straight from the
+  FastAPI app (no server needed) and regenerates `shared/api/generated.ts`;
+  `gen:types:check` fails on drift. The API's own `/docs` sits behind the auth
+  middleware and a browser tab carries no bearer token, so it is not reachable
+  from the SPA — read `shared/api/openapi.json` instead.
 - **Linting**: Biome (replaces ESLint+Prettier) — tabs, line width 100. Covers
   `client/`, `e2e/` and the root config files; accessibility rules are on, with
   seven at `warn` pending per-component decisions (see `biome.json`).

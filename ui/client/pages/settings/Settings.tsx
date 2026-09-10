@@ -5,7 +5,6 @@
 
 import {
 	Download,
-	ExternalLink,
 	FileJson,
 	FileSpreadsheet,
 	Moon,
@@ -327,17 +326,6 @@ export default function Settings() {
 								code={`curl -X POST ${apiBase}/api/export/import -F "file=@backup.json"`}
 							/>
 						</div>
-					</div>
-					<div className="p-4">
-						<a
-							href={`${apiBase}/docs`}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors"
-						>
-							<ExternalLink className="w-3.5 h-3.5" />
-							Open API docs (Swagger)
-						</a>
 					</div>
 				</div>
 			</section>
