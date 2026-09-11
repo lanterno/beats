@@ -22,36 +22,13 @@ left to ship, see `companion-roadmap.md`.
 
 ### File layout
 
-```
-companion/
-├── lib/
-│   ├── main.dart
-│   ├── screens/
-│   │   ├── pairing_screen.dart            ✅ code entry + Scan QR button on iOS/Android
-│   │   ├── qr_pairing_screen.dart         ✅ mobile_scanner camera flow; auto-pairs on first valid QR
-│   │   ├── home_screen.dart               ✅ status + integrations + brutalist Settings
-│   │   ├── timer_screen.dart              ✅ stats row, picker, post-stop note sheet
-│   │   ├── flow_screen.dart               ✅ ring, sweep gradient, tap-to-inspect timeline
-│   │   ├── coach_screen.dart              ✅ sunrise card, review editor, mood sparkline
-│   │   ├── intentions_screen.dart         ✅ progress, quick-add, confetti
-│   │   └── health_screen.dart             ✅ 7-day biometric dashboard (reads from API)
-│   ├── services/
-│   │   ├── api_client.dart                ✅
-│   │   ├── secure_store.dart              ✅ SecureStore interface (FlutterSecureStore + MemorySecureStore for tests)
-│   │   ├── token_storage.dart             ✅ token in secure storage, URLs in shared_preferences, one-shot migration
-│   │   ├── qr_pairing.dart                ✅ pure parser: JSON / beats:// / plain code
-│   │   ├── notifications.dart             ✅ flutter_local_notifications wrapper, action-button support
-│   │   ├── notification_poller.dart       ✅ brief / review / drift / auto-timer poll loop
-│   │   └── tray_service.dart              ✅ desktop menu-bar timer
-│   └── theme/                             ✅ palette, typography, embers, grain overlay, confetti
-├── android/
-│   └── app/src/main/AndroidManifest.xml   ✅ POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, CAMERA shipped
-├── ios/
-│   └── Runner/Info.plist                  ✅ NSCameraUsageDescription shipped
-├── macos/   windows/   linux/             ✅ build targets exist
-├── pubspec.yaml
-└── README.md
-```
+Not duplicated here — it drifted. `companion/README.md` carries the current
+architecture, and `ls companion/lib/screens companion/lib/services` beats both.
+
+What is worth knowing from outside the directory: one screen per top-level tab,
+a flat `services/` layer that the screens call directly (no state-management
+package — plain `setState` plus service callbacks), and `theme/` holding the
+palette, typography and the ambient effects.
 
 ### Key features
 

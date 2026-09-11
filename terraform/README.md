@@ -2,7 +2,15 @@
 
 This Terraform configuration deploys:
 - **Backend API**: FastAPI application on Cloud Run (accessible at `api.lifepete.com`)
-- **Frontend UI**: React static site on Cloud Storage with Load Balancer + Cloud CDN (accessible at `lifepete.com`)
+- **DNS**: the Cloudflare records for both hostnames
+
+It does **not** deploy the frontend. The SPA at `lifepete.com` is served by
+Firebase Hosting and shipped by `.github/workflows/ui.yml` — see
+[UI Deployment](#ui-deployment).
+
+This is one of two live deployments; the other, `home.space`, uses
+`compose.home.yml` and no cloud infrastructure at all. The repo-root
+`CLAUDE.md` covers both.
 
 ## File Structure
 
@@ -35,9 +43,9 @@ single trigger this stack defines (`${var.api_service_name}-build` in
 [`cloudbuild.tf`](cloudbuild.tf)) builds the API Docker image, pushes it
 to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run.
 
-The UI is **not** built by Cloud Build — it ships from a separate
-`pnpm build` + `./deploy.sh` flow that uploads the static bundle to GCS
-(see "UI Deployment" below). So there's only one repo to connect.
+The UI is **not** built by Cloud Build — it ships from GitHub Actions to
+Firebase Hosting (see "UI Deployment" below). So there's only one repo to
+connect.
 
 1. **Go to Cloud Build Triggers in the GCP Console:**
    - [Cloud Build Triggers](https://console.cloud.google.com/cloud-build/triggers?project=beats-476914)
@@ -145,43 +153,28 @@ gcloud builds log $BUILD_ID --project=beats-476914 --stream
 
 ## UI Deployment
 
-The UI is deployed as a static site to Google Cloud Storage with Cloud CDN.
+**Terraform does not deploy the UI.** It owns the API on Cloud Run and the
+DNS records; the SPA is served by **Firebase Hosting**, configured in
+`ui/firebase.json` and `ui/.firebaserc` (project `beats-476914`).
 
-### Initial Setup
+Deployment is automatic: the `deploy` job in `.github/workflows/ui.yml` runs
+on every push to `main` that touches `ui/**`, builds with
+`VITE_API_URL=https://api.lifepete.com`, and publishes to the `live` channel
+using the `FIREBASE_SERVICE_ACCOUNT` secret. There is nothing to run by hand.
 
-1. **Deploy Terraform infrastructure:**
-   ```bash
-   cd terraform
-   terraform init
-   terraform plan
-   terraform apply
-   ```
+To publish from a workstation in an emergency:
 
-2. **Get the Load Balancer IP:**
-   ```bash
-   terraform output ui_ip_address
-   ```
-
-3. **Configure DNS:**
-   - Create an A record for `lifepete.com` pointing to the IP from step 2
-   - SSL certificate will be automatically provisioned (takes 10-60 minutes)
-
-4. **Deploy UI files:**
-   ```bash
-   cd ../ui
-   pnpm run build:client
-   export UI_BUCKET_NAME=$(cd ../terraform && terraform output -raw ui_bucket_name)
-   ./deploy.sh
-   ```
-
-### Updating the UI
-
-After making changes to the UI:
 ```bash
 cd ui
-pnpm run build:client
-./deploy.sh
+VITE_API_URL=https://api.lifepete.com pnpm build
+npx firebase-tools deploy --only hosting
 ```
+
+> This section previously described a Cloud Storage bucket behind a Load
+> Balancer with Cloud CDN, driven by `ui/deploy.sh` and the `ui_bucket_name`
+> / `ui_ip_address` outputs. That stack was replaced by Firebase Hosting and
+> none of those things exist any more — the script, both outputs, and the
+> `build:client` npm script are all gone.
 
 ### DNS Configuration
 

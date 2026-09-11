@@ -102,8 +102,8 @@ The Flutter app and VS Code extension are shipped in this repo:
 | Document | What it covers |
 |----------|---------------|
 | [Companion Roadmap](docs/companion-roadmap.md) | What's left for the companion — native widgets, Apple Watch, server push |
-| [Pete macOS Roadmap](docs/pete-macos-roadmap.md) | The Mac-only ambition — floating now-bar, Focus auto-engage, Spotlight + Shortcuts, Live Activities, Apple Intelligence |
-| [Flutter Companion](docs/flutter-companion.md) | File-by-file companion architecture, API contract, and the remaining HealthKit / Health Connect / background-sync work |
+| [Pete macOS Roadmap](docs/pete-macos-roadmap.md) | The Mac-only ambition — dock badge, Focus auto-engage, Spotlight + Shortcuts, Live Activities, Apple Intelligence. All of it needs a Mac; none is built. |
+| [Flutter Companion](docs/flutter-companion.md) | Companion design notes, API contract, and the remaining HealthKit / Health Connect / background-sync work (blocked on real devices) |
 | [Homebrew Tap](docs/homebrew-tap.md) | One-time tap-repo bootstrap to publish `brew install <user>/beats/beatsd` (formula + release workflow already live) |
 
 ## Testing
@@ -197,8 +197,8 @@ home.space identity is the way an old account gets back in.
 
 - Start/stop timer per project with weekly goals (targets and caps)
 - Contribution heatmap, daily rhythm chart, streak tracking
-- Session notes, freeform tags, session timeline
-- Daily intentions and end-of-day reflections
+- Session timeline with notes and tags, the tags derived server-side from
+  daemon flow signals rather than typed by hand
 - Monthly retrospectives and year-in-review
 - Full JSON backup/restore, CSV export, webhooks
 - Five dark themes, three density levels

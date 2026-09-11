@@ -179,7 +179,7 @@ import { useProjects } from "@/entities/project/api/queries";
 
 Unit tests live next to the source (`*.test.ts` / `*.test.tsx`). E2E tests live under `e2e/`.
 
-Currently 31 test files, 324 unit tests covering: shared/lib helpers, shared/ui primitives, entity hooks, page-level smoke tests, and the auth + timer + Layout flows.
+Currently 58 test files, 475 unit tests covering: shared/lib helpers, shared/ui primitives, entity hooks, page-level smoke tests, and the auth + timer + Layout flows. The 30 Playwright specs under `e2e/` are run against a real API and Mongo.
 
 E2E (Playwright, Chromium-only) auto-starts the dev server.
 

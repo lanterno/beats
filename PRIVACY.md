@@ -32,7 +32,15 @@ You can disconnect any integration at any time. Disconnecting revokes the token 
 
 ## The coach
 
-The coach feature sends prompts to the [Anthropic Claude API](https://www.anthropic.com/) to generate briefs, weekly reviews, and chat replies. Those prompts include the beats, intentions, and notes you have asked the coach to consider. Anthropic processes that data under their terms; Beats does not send it anywhere else.
+The coach feature sends prompts to the [Anthropic Claude API](https://www.anthropic.com/) to generate briefs, weekly reviews, and chat replies. What the prompt carries is assembled in `api/src/beats/coach/context.py`, and it is more than the timer data:
+
+- your sessions — project name, start time, duration, and the session note if there is one
+- 30-day aggregates, plus anything stored in coach memory
+- **calendar event titles and times for the day**, if Google Calendar is connected
+- last night's biometrics — sleep, HRV, resting heart rate, readiness — if a health source is connected
+- flow signals from the daemon, including the repository and language you spent most time in
+
+Anthropic processes that data under their terms; Beats does not send it anywhere else.
 
 If you do not want any data leaving the Beats database, do not use the coach.
 

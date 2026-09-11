@@ -29,7 +29,7 @@ flutter run -d macos        # desktop dev run
 flutter run -d <device>     # mobile
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (110+)
+flutter test                # widget + unit tests (159)
 ```
 
 ## Architecture

@@ -60,9 +60,10 @@ storage-sync behavior — can't be done in headless CI.
 
 ### Offline support (not yet built)
 
-- SQLite local cache for projects, recent beats, intentions
-- Mutation queue (mirrors the web's IndexedDB queue): start/stop /
-  intention changes queued when offline, replayed on reconnect
+- SQLite local cache for projects and recent beats
+- Mutation queue (mirrors the web's IndexedDB queue in
+  `ui/client/shared/lib/mutationQueue.ts`): start/stop and beat edits
+  queued when offline, replayed on reconnect
 - Timer runs locally when offline — syncs the beat on reconnect
 
 ### Auth model
@@ -72,5 +73,6 @@ storage-sync behavior — can't be done in headless CI.
   `flutter_secure_storage` — see `flutter-companion.md` for the
   migration story and the `SecureStore` interface
 - All API calls send `Authorization: Bearer <device_token>`
-- `DEVICE_ALLOWED_PREFIXES` covers timer, projects, coach, intentions,
-  daily-notes, signals, biometrics — append as new endpoints land
+- `DEVICE_ALLOWED_PREFIXES` (in `api/src/server.py`) covers the device
+  endpoints, signals, `biometrics/daily`, timer, projects, beats,
+  `coach/brief` and `analytics/heatmap` — append as new endpoints land

@@ -145,7 +145,11 @@ ui/client/
 ├── entities/       # Domain data layers
 │   ├── session/    # Beat/session API, queries, types
 │   ├── project/    # Project API, queries, types
-│   └── planning/   # Intentions, daily notes
+│   ├── planning/   # Weekly plans (planned hours per project)
+│   ├── intelligence/ # Digests, score, patterns, focus, inbox
+│   ├── coach/      # Chat + brief
+│   ├── calendar/   # Google Calendar connection
+│   └── github/     # GitHub connection
 └── shared/         # Reusable utilities
     ├── api/        # HTTP client (fetch wrapper)
     ├── lib/        # formatDuration, parseUtcIso, etc.
@@ -226,8 +230,11 @@ When `BEATS_TEST_ENV=1` (set by the compose test profile), testcontainers is ski
 **Key files:**
 
 - `api/src/conftest.py` — Container lifecycle hooks + fixtures
-- `api/src/test_api.py` — 28 integration tests (projects, beats, timer, auth)
-- `api/src/beats/test_domain.py` — 16 unit tests (models, exceptions)
+- `api/src/test_api.py` — 266 integration tests, one class per router
+- `api/src/beats/test_domain.py` — 261 unit tests (models, validation, analytics)
+
+Counts drift; the repo-root `CLAUDE.md` carries the current per-file
+breakdown, and `pytest` is the authority over both.
 - `api/.env.test` — Fallback test config (overridden by testcontainers env vars)
 
 ### Prerequisites

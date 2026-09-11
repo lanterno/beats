@@ -10,9 +10,18 @@ See `CLAUDE.md` for the architecture, runtime, and testing conventions, and the 
 
 ## Infrastructure
 
-API, Artifact Registry, and the MongoDB Atlas M0 cluster all live in
-`europe-west1` (Belgium) on GCP — already intra-region, so API↔DB
-latency is ~2 ms.
+The API runs in **two** live deployments — see the repo-root `CLAUDE.md`
+before changing anything either one depends on:
+
+- **home.space** — `compose.home.yml`, behind one nginx that also serves
+  the SPA. Same origin, so CORS is not involved.
+- **lifepete.com** — Cloud Run at `api.lifepete.com`, with the SPA on
+  Firebase Hosting at `lifepete.com`. Two origins, joined by CORS; both
+  are listed in `origins` in `src/server.py`.
+
+For the Cloud Run deployment, the API, Artifact Registry and the MongoDB
+Atlas cluster all live in `europe-west1` (Belgium) — already
+intra-region, so API↔DB latency is ~2 ms.
 
 Local dev uses the `db` service in `compose.yml` (`mongo:8`, isolated
 from prod). Tests use `testcontainers` (ephemeral). Atlas only sees
@@ -42,4 +51,4 @@ MongoDB hosted in the cloud.
 
 ### Deployment
 
-Pushes to `main` trigger Google Cloud Build, which builds the Docker image, pushes it to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run.
+Pushes to `main` trigger Google Cloud Build, which builds the Docker image, pushes it to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run. The SPA half of that deployment ships separately, from the `deploy` job in `.github/workflows/ui.yml` — so the two can skew, and an older SPA against a newer API is a real state to reason about.
