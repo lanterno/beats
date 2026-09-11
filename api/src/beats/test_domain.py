@@ -903,7 +903,7 @@ class _FakeProjectRepo:
     def __init__(self, projects: builtins.list):
         self._projects = projects
 
-    async def list(self, archived: bool = False) -> list:
+    async def list(self, archived: bool = False) -> builtins.list:
         return [p for p in self._projects if p.archived == archived]
 
 
@@ -2895,8 +2895,10 @@ class TestTimerServiceStart:
         with pytest.raises(TimerAlreadyRunning) as exc:
             await svc.start_timer("p2")
         # The exception carries the conflicting project's name so
-        # the UI can render "Already tracking Alpha".
-        assert "Alpha" in str(exc.value) or exc.value.project_name == "Alpha"
+        # the UI can render "Already tracking Alpha" — in the message and
+        # in `detail`, which is what reaches the client in the error envelope.
+        assert "Alpha" in str(exc.value)
+        assert exc.value.detail["project_name"] == "Alpha"
 
 
 class TestTimerServiceStop:
