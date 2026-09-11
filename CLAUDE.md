@@ -125,6 +125,65 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   `--check` fails CI and pre-push when it is stale.
 - **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
 
+### What to test, and what not to
+
+A test earns its place by failing when something is **broken**. A test that
+fails when something is merely **different** costs more than it returns: it has
+to be edited as part of every deliberate change, and once people are used to
+editing tests to make them pass, the ones that matter stop being read.
+
+**Worth testing**
+
+- **Logic with interesting inputs.** Week math, flow aggregation, fuzzy
+  ranking, goal resolution, bundle labels. Boundaries, empty sets, DST,
+  timezone conversion, the off-by-one. These are where bugs actually live, and
+  they need no fixture beyond the arguments.
+- **The HTTP contract.** `test_api.py` drives real routes against real Mongo:
+  status codes, the error envelope, auth boundaries, what a route accepts and
+  returns. A client on the other end depends on those; a refactor must not move
+  them silently.
+- **Bugs that happened, pinned where they broke.** The asyncio GC race that
+  reaped in-flight webhook dispatches, the idempotency replay, the device-token
+  path. Each is a test because the failure was real, subtle, and would look
+  like nothing from the outside.
+- **Rules implemented more than once.** Bundle labels and status-bar formatting
+  exist in Go, TypeScript and Dart. Parity assertions in each language are what
+  keep three implementations of one rule honest.
+- **Contracts between layers.** That a service refuses what the domain forbids,
+  that a port's implementations agree. The narrow protocols in
+  `domain/ports.py` exist so this is cheap.
+
+**Not worth testing**
+
+- **Configuration, by restating it.** A test asserting that the CORS allowlist
+  contains the origins the CORS allowlist contains proves nothing: it passes
+  until someone edits the list, then fails precisely because they meant to. It
+  cannot catch the real failure — *forgetting a deployment exists* — because
+  that judgment happens before the edit. Config is protected by a comment
+  saying who breaks when it changes (see `origins` in `src/server.py`), and by
+  checking the deployment, not by a unit test that mirrors the value.
+- **The framework.** Starlette's CORS middleware, FastAPI's request validation,
+  Pydantic enforcing its own field types, TanStack Query caching. Upstream
+  tests these. Test what *we* do with it.
+- **Whatever a mock was just told to return.** `AuthModal.test.tsx` mocks
+  `@simplewebauthn/browser` wholesale — correctly, since the real ceremony
+  needs an authenticator — but that means those tests say nothing about the
+  WebAuthn library. Know which half of a mocked test is real, and don't count
+  the other half as coverage. When the mocked dependency is upgraded, read its
+  signatures; the green suite is not evidence.
+- **Getters, wiring, and re-exports.** That a barrel re-exports a symbol, that
+  a constructor assigns its arguments, that a dataclass holds fields.
+- **Private helpers, directly.** Test them through the public path that uses
+  them. A test bound to a private name is a refactor tax.
+- **Coverage for its own sake.** The 65% floor is a floor, not a target.
+  Reaching for a number produces exactly the tests above.
+
+**When something breaks in production, ask what would have caught it** before
+adding a test. Sometimes it is a test. Sometimes it is a type, a narrower port,
+a comment on the line that looked dead, or a smoke check against the running
+deployment — and a test written in the shape of the bug would have caught
+nothing.
+
 ## Conventions
 
 - Python: Ruff for linting/formatting, ty for type checking, line length 100.

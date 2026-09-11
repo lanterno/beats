@@ -72,6 +72,10 @@ Harness:
 - Coverage threshold: 65% (`--cov-fail-under=65`)
 - Set `BEATS_TEST_ENV=1` to skip testcontainers (uses whatever `DB_DSN` is configured)
 
+Before adding a test, see **What to test, and what not to** in the repo-root
+`CLAUDE.md` — in particular that configuration, framework behaviour, and
+whatever a mock was told to return are not worth pinning.
+
 ## Key Patterns
 
 - `Database` is a singleton; `connect()` is called in the FastAPI lifespan, not at import time

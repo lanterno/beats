@@ -84,6 +84,10 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
   TimerManager.test.tsx mirror this shape for hook-heavy and child-component-
   heavy components respectively.
 
+Before adding a test, see **What to test, and what not to** in the repo-root
+`CLAUDE.md` — in particular that configuration, framework behaviour, and
+whatever a mock was told to return are not worth pinning.
+
 ## Linting
 
 ```bash
