@@ -16,7 +16,7 @@ from beats.api.dependencies import (
     SignalSummaryRepoDep,
     TimerServiceDep,
 )
-from beats.domain.models import FlowWindow, PendingSuggestion, SignalSummary
+from beats.domain.models import FlowWindow, PendingSuggestion, Project, SignalSummary
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
 
@@ -479,22 +479,25 @@ async def suggest_timer(
 
     projects = await project_service.project_repo.list(archived=False)
 
-    async def _persist_and_return(p: object, editor_repo: str | None) -> AutoTimerSuggestion:
-        # `p` is a Project here; typed loosely so the `_persist_and_return`
-        # signature stays the same for both match paths below without
-        # importing Project just for an annotation.
+    async def _persist_and_return(p: Project, editor_repo: str | None) -> AutoTimerSuggestion:
+        if p.id is None:
+            # `id` is Optional on the pydantic model — the standard post-Mongo
+            # shape — and always populated for a row that came back from the
+            # repo. Treat the impossible None as "no match" rather than letting
+            # PendingSuggestion fail validation and 500 the request.
+            return AutoTimerSuggestion(should_suggest=False)
         await pending_repo.create(
             PendingSuggestion(
-                project_id=p.id,  # type: ignore[attr-defined]
-                project_name=p.name,  # type: ignore[attr-defined]
+                project_id=p.id,
+                project_name=p.name,
                 dominant_category=body.dominant_category,
                 editor_repo=editor_repo,
             )
         )
         return AutoTimerSuggestion(
             should_suggest=True,
-            project_id=p.id,  # type: ignore[attr-defined]
-            project_name=p.name,  # type: ignore[attr-defined]
+            project_id=p.id,
+            project_name=p.name,
         )
 
     # 1. Try the most-specific match: editor_repo in autostart_repos.

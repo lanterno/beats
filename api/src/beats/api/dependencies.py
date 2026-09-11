@@ -202,6 +202,8 @@ def get_calendar_service(
 
 
 # Type aliases for cleaner dependency injection in routes
+BeatRepoDep = Annotated[BeatRepository, Depends(get_beat_repository)]
+ProjectRepoDep = Annotated[ProjectRepository, Depends(get_project_repository)]
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]

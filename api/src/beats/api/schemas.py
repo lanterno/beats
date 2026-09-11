@@ -5,7 +5,7 @@ from datetime import date as date_type
 
 from pydantic import BaseModel, Field
 
-from beats.domain.models import GoalType
+from beats.domain.models import GoalType, ProjectBreakdownEntry
 
 
 class RecordTimeRequest(BaseModel):
@@ -203,7 +203,7 @@ class WeeklyDigestResponse(BaseModel):
     longest_day_hours: float = 0
     best_streak: int = 0
     observation: str = ""
-    project_breakdown: list[dict] = Field(default_factory=list)
+    project_breakdown: list[ProjectBreakdownEntry] = Field(default_factory=list)
     productivity_score: int = 0
 
 

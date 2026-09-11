@@ -7,6 +7,8 @@ import time
 import jwt
 import pytest
 
+from beats.auth.storage import StoredCredential
+
 # SessionManager — JWT tokens, WebAuthn challenges, revocation
 
 JWT_SECRET = "test-secret-do-not-use-in-prod-this-is-a-fixed-string-32+bytes"
@@ -306,7 +308,7 @@ class _FakeCredentialStorage:
     surface — the methods WebAuthnManager calls."""
 
     def __init__(self):
-        self._creds: list[tuple[str, object]] = []
+        self._creds: list[tuple[str, StoredCredential]] = []
 
     async def is_registered(self, user_id: str | None = None) -> bool:
         if user_id:
@@ -337,8 +339,6 @@ class _FakeCredentialStorage:
     async def save_credential(
         self, user_id, credential_id, public_key, sign_count, device_name=None
     ):
-        from beats.auth.storage import StoredCredential
-
         cred = StoredCredential(
             credential_id=credential_id,
             public_key=public_key,
@@ -360,8 +360,6 @@ class _FakeCredentialStorage:
         return sum(1 for uid, _ in self._creds if uid == user_id)
 
     async def update_sign_count(self, credential_id, new_sign_count) -> bool:
-        from beats.auth.storage import StoredCredential
-
         for i, (uid, c) in enumerate(self._creds):
             if c.credential_id == credential_id:
                 self._creds[i] = (
@@ -632,8 +630,6 @@ class TestWebAuthnAuthenticationVerificationGuards:
         """A credential that exists but isn't mapped to a user
         (orphaned data) → ValueError "No user found". Pin so a
         partial DB state doesn't auth the wrong user."""
-        from beats.auth.storage import StoredCredential
-
         storage = _FakeCredentialStorage()
         # Insert orphaned credential directly — empty user_id
         storage._creds.append(
@@ -662,7 +658,6 @@ class TestWebAuthnAuthenticationVerificationGuards:
         Pin the sign_count-update side effect — without it, the
         WebAuthn replay-attack prevention is silently broken."""
         from beats.auth import webauthn as webauthn_module
-        from beats.auth.storage import StoredCredential
         from beats.domain.models import User
 
         class _FakeAuth:
@@ -721,7 +716,6 @@ class TestWebAuthnAuthenticationVerificationGuards:
         → 401 path stays reachable from the real py_webauthn
         library."""
         from beats.auth import webauthn as webauthn_module
-        from beats.auth.storage import StoredCredential
 
         def fake_verify_raises(*, credential, **_kwargs):
             raise RuntimeError("sign-count rollback detected")

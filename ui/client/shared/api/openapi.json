@@ -1763,6 +1763,30 @@
         "title": "ProductivityScoreResponse",
         "type": "object"
       },
+      "ProjectBreakdownEntry": {
+        "description": "One project's share of a week, as a digest reports it.\n\nTyped rather than a bare dict because it crosses the wire: it is what\nthe UI's digest list renders, and an untyped `list[dict]` publishes an\nOpenAPI `array of object` with no properties, which leaves every client\ncasting the rows back into a shape by hand.",
+        "properties": {
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "name",
+          "hours"
+        ],
+        "title": "ProjectBreakdownEntry",
+        "type": "object"
+      },
       "ProjectHealthResponse": {
         "description": "Response schema for project health metrics.",
         "properties": {
@@ -2899,8 +2923,7 @@
           },
           "project_breakdown": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ProjectBreakdownEntry"
             },
             "title": "Project Breakdown",
             "type": "array"

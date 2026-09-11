@@ -1,7 +1,7 @@
 """WebAuthn registration and authentication logic."""
 
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 from webauthn import (
     generate_authentication_options,
@@ -18,13 +18,45 @@ from webauthn.helpers.structs import (
 )
 
 from beats.auth.session import SessionManager
-from beats.auth.storage import MongoCredentialStorage
+from beats.auth.storage import StoredCredential
 from beats.domain.models import User
-from beats.infrastructure.repositories import UserRepository
 
 logger = logging.getLogger(__name__)
 
 MAX_CREDENTIALS_PER_USER = 10
+
+
+class CredentialStore(Protocol):
+    """Credential persistence, declared where it is consumed.
+
+    `MongoCredentialStorage` satisfies this structurally; so does the test
+    suite's in-memory fake, which is the point — depending on the concrete
+    Mongo class meant the fake had to claim a type it was not.
+    """
+
+    async def is_registered(self, user_id: str | None = None) -> bool: ...
+    async def get_credentials(self, user_id: str | None = None) -> list[StoredCredential]: ...
+    async def get_credential_ids(self, user_id: str | None = None) -> list[str]: ...
+    async def get_credential_by_id(self, credential_id: str) -> StoredCredential | None: ...
+    async def get_user_id_for_credential(self, credential_id: str) -> str | None: ...
+    async def save_credential(
+        self,
+        user_id: str,
+        credential_id: str,
+        public_key: str,
+        sign_count: int,
+        device_name: str | None = None,
+    ) -> StoredCredential: ...
+    async def update_sign_count(self, credential_id: str, new_sign_count: int) -> bool: ...
+    async def delete_credential(self, credential_id: str, user_id: str) -> bool: ...
+    async def count_credentials(self, user_id: str) -> int: ...
+
+
+class UserReader(Protocol):
+    """The one user lookup WebAuthn does — resolving the account a
+    ceremony belongs to."""
+
+    async def get_by_id(self, user_id: str) -> User | None: ...
 
 
 class WebAuthnManager:
@@ -35,9 +67,9 @@ class WebAuthnManager:
         rp_id: str,
         rp_name: str,
         origin: str,
-        credential_storage: MongoCredentialStorage,
+        credential_storage: CredentialStore,
         session_manager: SessionManager,
-        user_repo: UserRepository,
+        user_repo: UserReader,
     ):
         self.rp_id = rp_id
         self.rp_name = rp_name

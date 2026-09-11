@@ -8,34 +8,28 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
-from beats.api.dependencies import (
-    BeatServiceDep,
-    ProjectServiceDep,
-)
+from beats.api.dependencies import BeatRepoDep, ProjectRepoDep
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
+# Present on the model but derived from start/end, so they are not part of a
+# backup and must not be fed back in on import.
 _COMPUTED_FIELDS = ("is_active", "duration", "day")
-EXPORT_VERSION = "sqlite-1"
-ZIP_SQLITE_NAME = "data.sqlite"
-ZIP_MANIFEST_NAME = "manifest.json"
-ZIP_SIGNATURE_NAME = "manifest.sig"
-ZIP_PUBKEY_NAME = "public_key.bin"
 
 
 @router.get("/csv/sessions")
 async def export_sessions_csv(
-    beat_service: BeatServiceDep,
-    project_service: ProjectServiceDep,
+    beat_repo: BeatRepoDep,
+    project_repo: ProjectRepoDep,
     project_id: str | None = Query(default=None),
 ):
     """Export sessions as CSV."""
     if project_id:
-        beats = await beat_service.beat_repo.list_by_project(project_id)
+        beats = await beat_repo.list_by_project(project_id)
     else:
-        beats = await beat_service.beat_repo.list_all_completed()
+        beats = await beat_repo.list_all_completed()
 
-    projects = await project_service.project_repo.list()
+    projects = await project_repo.list()
     project_map = {p.id: p.name for p in projects}
 
     output = io.StringIO()
@@ -69,12 +63,12 @@ async def export_sessions_csv(
 
 @router.get("/full")
 async def export_full_json(
-    beat_service: BeatServiceDep,
-    project_service: ProjectServiceDep,
+    beat_repo: BeatRepoDep,
+    project_repo: ProjectRepoDep,
 ):
     """Export everything as JSON for backup."""
-    beats = await beat_service.beat_repo.list()
-    projects = await project_service.project_repo.list()
+    beats = await beat_repo.list()
+    projects = await project_repo.list()
     data = {
         "exported_at": datetime.now(UTC).isoformat(),
         "version": "1.0",
@@ -94,8 +88,8 @@ async def export_full_json(
 @router.post("/import")
 async def import_full_json(
     file: UploadFile,
-    beat_service: BeatServiceDep,
-    project_service: ProjectServiceDep,
+    beat_repo: BeatRepoDep,
+    project_repo: ProjectRepoDep,
 ):
     """Import a full JSON backup. Upserts by ID — safe to re-import."""
     content = await file.read()
@@ -106,13 +100,13 @@ async def import_full_json(
     for proj in data.get("projects", []):
         for k in _COMPUTED_FIELDS:
             proj.pop(k, None)
-        await project_service.project_repo.upsert(proj)
+        await project_repo.upsert(proj)
         counts["projects"] += 1
 
     for beat in data.get("beats", []):
         for k in _COMPUTED_FIELDS:
             beat.pop(k, None)
-        await beat_service.beat_repo.upsert(beat)
+        await beat_repo.upsert(beat)
         counts["beats"] += 1
 
     return {"status": "ok", "imported": counts}

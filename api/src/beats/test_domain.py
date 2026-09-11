@@ -1,6 +1,8 @@
 """Tests for domain models and services."""
 
+import builtins
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -248,13 +250,13 @@ class TestGoalOverrideValidation:
 class TestGoalOverrideResolution:
     """Tests for Project.effective_goal() resolution logic."""
 
-    def _project(self, **kwargs: object) -> Project:
-        defaults: dict[str, object] = {
+    def _project(self, **kwargs: Any) -> Project:
+        defaults: dict[str, Any] = {
             "name": "Test",
             "weekly_goal": 20,
             "goal_type": GoalType.TARGET,
         }
-        return Project(**{**defaults, **kwargs})  # type: ignore[arg-type]
+        return Project(**{**defaults, **kwargs})
 
     def test_no_overrides_returns_default(self):
         p = self._project()
@@ -898,7 +900,7 @@ class _FakeIntelBeatRepo(_FakeBeatRepo):
 class _FakeProjectRepo:
     """Returns a fixed project list, optionally filtered by archived."""
 
-    def __init__(self, projects: list):
+    def __init__(self, projects: builtins.list):
         self._projects = projects
 
     async def list(self, archived: bool = False) -> list:
@@ -1814,7 +1816,7 @@ class TestGenerateWeeklyDigest:
 
         digest = await svc.generate_weekly_digest(monday)
 
-        names = [row["name"] for row in digest.project_breakdown]
+        names = [row.name for row in digest.project_breakdown]
         assert names == ["Beta", "Gamma", "Alpha"]
         assert digest.top_project_id == "p2"
         assert digest.top_project_name == "Beta"
@@ -1918,7 +1920,7 @@ class TestGenerateWeeklyDigest:
         digest = await svc.generate_weekly_digest(monday)
 
         assert digest.top_project_name == "Unknown"
-        assert digest.project_breakdown[0]["name"] == "Unknown"
+        assert digest.project_breakdown[0].name == "Unknown"
 
 
 class TestGenerateObservation:
@@ -2578,7 +2580,7 @@ class _FakeBeatRepoForServices:
     list_by_project, get_by_id with the same contract the real repo
     exposes (raising NoObjectMatched where applicable)."""
 
-    def __init__(self, beats: list[Beat] | None = None):
+    def __init__(self, beats: builtins.list[Beat] | None = None):
         self._beats: list[Beat] = list(beats or [])
         self._counter = 1
 
@@ -2629,7 +2631,7 @@ class _FakeBeatRepoForServices:
 
     async def list(
         self, project_id: str | None = None, date_filter: date | None = None
-    ) -> list[Beat]:
+    ) -> builtins.list[Beat]:
         out = list(self._beats)
         if project_id is not None:
             out = [b for b in out if b.project_id == project_id]
@@ -2637,10 +2639,12 @@ class _FakeBeatRepoForServices:
             out = [b for b in out if b.start.date() == date_filter]
         return out
 
-    async def list_by_project(self, project_id: str) -> list[Beat]:
+    async def list_by_project(self, project_id: str) -> builtins.list[Beat]:
         return [b for b in self._beats if b.project_id == project_id]
 
-    async def list_grouped_by_project_ids(self, project_ids: list[str]) -> dict[str, list[Beat]]:
+    async def list_grouped_by_project_ids(
+        self, project_ids: builtins.list[str]
+    ) -> dict[str, builtins.list[Beat]]:
         # Mirror the real repo: every requested id is present in the result
         # (empty list when no beats), and unsolicited project_ids are not.
         buckets: dict[str, list[Beat]] = {pid: [] for pid in project_ids}
@@ -2654,7 +2658,7 @@ class _FakeBeatRepoForServices:
 class _FakeProjectRepoForServices:
     """In-memory ProjectRepository fake."""
 
-    def __init__(self, projects: list[Project] | None = None):
+    def __init__(self, projects: builtins.list[Project] | None = None):
         self._projects: list[Project] = list(projects or [])
         self._counter = 1
 
@@ -2685,7 +2689,7 @@ class _FakeProjectRepoForServices:
 
         raise NoObjectMatched()
 
-    async def list(self, archived: bool = False) -> list[Project]:
+    async def list(self, archived: bool = False) -> builtins.list[Project]:
         return [p for p in self._projects if p.archived == archived]
 
 
@@ -3473,14 +3477,22 @@ class TestProjectServiceBeatsBatchHelpers:
 # Oura Service — personal access token + daily biometric fetch
 
 
+# What the integration fakes hand back as a decoded body.
+type JSONPayload = dict[str, Any] | builtins.list[Any]
+
+
 class _FakeHTTPResponse:
-    """Minimal stand-in for httpx.Response used by integration tests."""
+    """Minimal stand-in for httpx.Response used by integration tests.
 
-    def __init__(self, status_code: int, json_data: dict | None = None):
+    The payload is a dict or a list because the real APIs return both —
+    GitHub's commit and PR endpoints answer with arrays.
+    """
+
+    def __init__(self, status_code: int, json_data: JSONPayload | None = None):
         self.status_code = status_code
-        self._json = json_data or {}
+        self._json: JSONPayload = json_data if json_data is not None else {}
 
-    def json(self) -> dict:
+    def json(self) -> JSONPayload:
         return self._json
 
 

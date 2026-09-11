@@ -2764,6 +2764,23 @@ export interface components {
             score: number;
         };
         /**
+         * ProjectBreakdownEntry
+         * @description One project's share of a week, as a digest reports it.
+         *
+         *     Typed rather than a bare dict because it crosses the wire: it is what
+         *     the UI's digest list renders, and an untyped `list[dict]` publishes an
+         *     OpenAPI `array of object` with no properties, which leaves every client
+         *     casting the rows back into a shape by hand.
+         */
+        ProjectBreakdownEntry: {
+            /** Hours */
+            hours: number;
+            /** Name */
+            name: string;
+            /** Project Id */
+            project_id: string;
+        };
+        /**
          * ProjectHealthResponse
          * @description Response schema for project health metrics.
          */
@@ -3212,9 +3229,7 @@ export interface components {
              */
             productivity_score: number;
             /** Project Breakdown */
-            project_breakdown?: {
-                [key: string]: unknown;
-            }[];
+            project_breakdown?: components["schemas"]["ProjectBreakdownEntry"][];
             /** Session Count */
             session_count: number;
             /**

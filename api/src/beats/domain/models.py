@@ -180,6 +180,20 @@ class Project(BaseModel):
         return self.weekly_goal, self.goal_type
 
 
+class ProjectBreakdownEntry(BaseModel):
+    """One project's share of a week, as a digest reports it.
+
+    Typed rather than a bare dict because it crosses the wire: it is what
+    the UI's digest list renders, and an untyped `list[dict]` publishes an
+    OpenAPI `array of object` with no properties, which leaves every client
+    casting the rows back into a shape by hand.
+    """
+
+    project_id: str
+    name: str
+    hours: float
+
+
 class WeeklyDigest(TzNormalizedModel):
     """A generated weekly summary with insights and productivity score."""
 
@@ -199,7 +213,7 @@ class WeeklyDigest(TzNormalizedModel):
     longest_day_hours: float = 0
     best_streak: int = 0
     observation: str = ""
-    project_breakdown: list[dict] = Field(default_factory=list)
+    project_breakdown: list[ProjectBreakdownEntry] = Field(default_factory=list)
     productivity_score: int = 0
 
 

@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
-from beats.domain.models import WeeklyDigest
+from beats.domain.models import ProjectBreakdownEntry, WeeklyDigest
 from beats.domain.ports import ProjectLister, RangeBeatReader
 from beats.domain.utils import local_date
 
@@ -43,11 +43,11 @@ async def generate_weekly_digest(
     for pid, mins in sorted(proj_minutes.items(), key=lambda x: -x[1]):
         p = project_map.get(pid)
         breakdown.append(
-            {
-                "project_id": pid,
-                "name": p.name if p else "Unknown",
-                "hours": round(mins / 60, 2),
-            }
+            ProjectBreakdownEntry(
+                project_id=pid,
+                name=p.name if p else "Unknown",
+                hours=round(mins / 60, 2),
+            )
         )
 
     # Top project
@@ -125,9 +125,9 @@ async def generate_weekly_digest(
         total_hours=round(total_hours, 2),
         session_count=session_count,
         active_days=active_days,
-        top_project_id=top["project_id"] if top else None,
-        top_project_name=top["name"] if top else None,
-        top_project_hours=top["hours"] if top else 0,
+        top_project_id=top.project_id if top else None,
+        top_project_name=top.name if top else None,
+        top_project_hours=top.hours if top else 0,
         vs_last_week_pct=vs_last_week_pct,
         longest_day=longest_day,
         longest_day_hours=round(longest_day_hours, 2),

@@ -106,16 +106,12 @@ function DigestCard({ digest }: { digest: WeeklyDigest }) {
 
 					{digest.project_breakdown.length > 0 && (
 						<div className="space-y-1 pt-2">
-							{(digest.project_breakdown as Array<{ name?: string; hours?: number }>).map(
-								(p, i) => (
-									<div key={i} className="flex items-center gap-2 text-xs">
-										<span className="text-foreground flex-1 truncate">{p.name ?? "Unknown"}</span>
-										<span className="tabular-nums text-muted-foreground">
-											{(p.hours ?? 0).toFixed(1)}h
-										</span>
-									</div>
-								),
-							)}
+							{digest.project_breakdown.map((p) => (
+								<div key={p.project_id} className="flex items-center gap-2 text-xs">
+									<span className="text-foreground flex-1 truncate">{p.name}</span>
+									<span className="tabular-nums text-muted-foreground">{p.hours.toFixed(1)}h</span>
+								</div>
+							))}
 						</div>
 					)}
 				</div>

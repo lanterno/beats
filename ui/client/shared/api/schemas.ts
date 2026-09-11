@@ -185,6 +185,14 @@ export type ScoreHistoryItem = z.infer<typeof ScoreHistoryItemSchema>;
 
 export const ScoreHistorySchema = z.array(ScoreHistoryItemSchema);
 
+export const ProjectBreakdownEntrySchema = z.object({
+	project_id: z.string(),
+	name: z.string(),
+	hours: z.number(),
+});
+
+export type ProjectBreakdownEntry = z.infer<typeof ProjectBreakdownEntrySchema>;
+
 export const WeeklyDigestSchema = z.object({
 	id: z.string().nullable().optional(),
 	week_of: z.string(),
@@ -200,7 +208,7 @@ export const WeeklyDigestSchema = z.object({
 	longest_day_hours: z.number().default(0),
 	best_streak: z.number().default(0),
 	observation: z.string().default(""),
-	project_breakdown: z.array(z.record(z.string(), z.unknown())).default([]),
+	project_breakdown: z.array(ProjectBreakdownEntrySchema).default([]),
 	productivity_score: z.number().default(0),
 });
 

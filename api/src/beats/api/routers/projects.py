@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Query
 
 from beats.api.dependencies import (
+    BeatRepoDep,
     GitHubServiceDep,
     ProjectServiceDep,
     TimerServiceDep,
@@ -34,6 +35,10 @@ router = APIRouter(
 @router.get("/", response_model=list[ProjectsListItemResponse])
 async def list_projects(
     service: ProjectServiceDep,
+    # The grouped read below is wider than what ProjectService itself needs, so
+    # it comes from the repository directly rather than reaching through the
+    # service for a method the service does not use.
+    beat_repo: BeatRepoDep,
     archived: bool = False,
     include: str | None = Query(
         default=None,
@@ -77,7 +82,7 @@ async def list_projects(
         return [p.model_dump(mode="json") for p in projects]
 
     project_ids = [p.id for p in projects if p.id]
-    beats_by_pid = await service.beat_repo.list_grouped_by_project_ids(project_ids)
+    beats_by_pid = await beat_repo.list_grouped_by_project_ids(project_ids)
 
     def aggregate_one(p: Project) -> dict:
         item = p.model_dump(mode="json")

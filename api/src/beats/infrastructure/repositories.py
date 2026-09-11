@@ -18,6 +18,7 @@ from typing import Any, Literal, Protocol
 from bson import ObjectId
 from bson.errors import InvalidId
 from pydantic import BaseModel
+from pymongo import ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
@@ -137,8 +138,13 @@ class MongoStore[ModelT: BaseModel]:
             self._q(extra),
             {"$set": data},
             upsert=True,
-            return_document=True,
+            return_document=ReturnDocument.AFTER,
         )
+        if result is None:
+            # upsert=True plus AFTER means the document exists by the time the
+            # driver returns, so this cannot happen; raise rather than hand a
+            # None to _load and fail somewhere less obvious.
+            raise RuntimeError(f"upsert of {self.model.__name__} returned no document")
         return self._load(result)
 
     async def _delete_one(self, extra: dict[str, Any] | None = None) -> bool:

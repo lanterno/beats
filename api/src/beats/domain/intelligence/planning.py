@@ -22,7 +22,10 @@ async def suggest_daily_plan(
 
     beats = await _beats_covering(beat_repo, target_date - timedelta(weeks=8), target_date)
     projects = await project_repo.list(archived=False)
-    project_map = {p.id: p for p in projects}
+    # Keyed by a non-None id: `Project.id` is Optional on the model (the
+    # standard post-Mongo shape) but populated for every row the repo
+    # returns, and the day-of-week buckets below index by that key.
+    project_map = {p.id: p for p in projects if p.id}
 
     # Day-of-week averages per project
     dow_minutes: dict[str, list[float]] = defaultdict(list)

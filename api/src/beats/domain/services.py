@@ -11,12 +11,15 @@ from beats.domain.exceptions import (
     TimerAlreadyRunning,
 )
 from beats.domain.models import Beat, Project
-from beats.domain.utils import normalize_tz
-from beats.infrastructure.repositories import (
-    BeatRepository,
-    FlowWindowRepository,
-    ProjectRepository,
+from beats.domain.ports import (
+    BeatStore,
+    FlowWindowReader,
+    ProjectBeatReader,
+    ProjectStore,
+    TimerBeatStore,
+    TimerProjectReader,
 )
+from beats.domain.utils import normalize_tz
 
 # Cap on auto-derived tags per session — enough to capture the repos + languages
 # a focused session touches without turning the tag cloud into noise.
@@ -24,7 +27,7 @@ _MAX_FLOW_TAGS = 6
 
 
 async def derive_flow_tags(
-    flow_repo: FlowWindowRepository, start: datetime, end: datetime | None
+    flow_repo: FlowWindowReader, start: datetime, end: datetime | None
 ) -> list[str]:
     """Derive session tags from the ambient daemon's flow-window signals.
 
@@ -68,9 +71,9 @@ class TimerService:
 
     def __init__(
         self,
-        beat_repo: BeatRepository,
-        project_repo: ProjectRepository,
-        flow_repo: FlowWindowRepository | None = None,
+        beat_repo: TimerBeatStore,
+        project_repo: TimerProjectReader,
+        flow_repo: FlowWindowReader | None = None,
     ):
         self.beat_repo = beat_repo
         self.project_repo = project_repo
@@ -176,7 +179,7 @@ class TimerService:
 class BeatService:
     """Service for managing beat CRUD operations."""
 
-    def __init__(self, beat_repo: BeatRepository, flow_repo: FlowWindowRepository | None = None):
+    def __init__(self, beat_repo: BeatStore, flow_repo: FlowWindowReader | None = None):
         self.beat_repo = beat_repo
         self.flow_repo = flow_repo
 
@@ -228,7 +231,7 @@ class BeatService:
 class ProjectService:
     """Service for managing project operations and analytics."""
 
-    def __init__(self, project_repo: ProjectRepository, beat_repo: BeatRepository):
+    def __init__(self, project_repo: ProjectStore, beat_repo: ProjectBeatReader):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
 
