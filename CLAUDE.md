@@ -118,7 +118,13 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
-- **Companion tests** are in `companion/test/` (flutter_test). Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Companion tests** are in `companion/test/` (flutter_test) — 159 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+  The SDK lives at `~/development/flutter` (stable), on `PATH` via `~/.zshrc`
+  and symlinked into `~/.local/bin` so the lefthook gates — which run under a
+  non-interactive `sh` that reads neither — can find it. `flutter doctor`
+  reports the Android, Chrome and Linux-desktop toolchains as missing; that is
+  expected and does not affect `analyze` or `test`, which is all the hooks run.
+  Building the companion for a real target needs those installed.
 - **Bundle-label parity** is structural, not tested: `shared/app-labels.json` is the
   single source and `scripts/gen_app_labels.py` renders it into the Go, TypeScript
   and Dart tables. Edit the JSON, run the script, commit the output;

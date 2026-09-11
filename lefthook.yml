@@ -71,7 +71,7 @@ pre-push:
     daemon-staticcheck:
       root: daemon/
       run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
-    # The companion has 110+ unit/widget tests covering api_client
+    # The companion has 159 unit/widget tests covering api_client
     # (request shape + error envelope parsing), tag parsing, recent
     # projects, notification dedupe, repo-path display, the pairing
     # widget, bundle labels, and insights URL building. Without this
