@@ -102,12 +102,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The deployed stack serves the SPA and this API from one origin, so these are
-# only for local development against a separately served UI.
+# The home.space stack serves the SPA and this API from one origin, so it needs
+# nothing here. These are for the two cases that are genuinely cross-origin:
+# local development against a separately served UI, and the Cloud Run / Firebase
+# deployment behind lifepete.com, which is split across two origins by design.
+# That deployment is still live — dropping its origins here breaks its SPA
+# without breaking anything a test or a local run would notice.
 origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://localhost:8080",
+    "https://lifepete.com",
+    "https://api.lifepete.com",
 ]
 
 # The home.space deployment serves the SPA and this API from ONE origin

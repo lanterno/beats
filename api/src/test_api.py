@@ -5644,6 +5644,63 @@ class TestOAuthIntegrationRouters:
 # home.space SSO — the second front door
 
 
+class TestCORS:
+    """The origins the API answers preflight for.
+
+    These exist only for the genuinely cross-origin deployments — local dev
+    against a separately served UI, and the Cloud Run / Firebase split behind
+    lifepete.com. The home.space stack is single-origin and needs none of it,
+    which is exactly why an entry here is easy to delete by mistake: nothing
+    else in the suite, and nothing about running locally, notices when one goes
+    missing. The SPA on the other end just starts failing in a browser.
+    """
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "https://lifepete.com",
+            "https://api.lifepete.com",
+            "http://localhost:8080",
+        ],
+    )
+    def test_preflight_allows_listed_origin(self, client, origin):
+        resp = client.options(
+            "/api/projects/",
+            headers={"Origin": origin, "Access-Control-Request-Method": "GET"},
+        )
+        assert resp.status_code == 200, f"{origin} preflight was rejected"
+        assert resp.headers.get("access-control-allow-origin") == origin
+        assert resp.headers.get("access-control-allow-credentials") == "true"
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "https://beats.home.space",
+            "https://beats.home.elghareeb.space",
+            "https://beats.192.168.1.10.nip.io",
+        ],
+    )
+    def test_preflight_allows_home_origins_by_regex(self, client, origin):
+        """The home names are matched by HOME_ORIGIN_REGEX rather than listed."""
+        resp = client.options(
+            "/api/projects/",
+            headers={"Origin": origin, "Access-Control-Request-Method": "GET"},
+        )
+        assert resp.status_code == 200, f"{origin} preflight was rejected"
+        assert resp.headers.get("access-control-allow-origin") == origin
+
+    def test_preflight_refuses_unknown_origin(self, client):
+        """The allowlist is an allowlist — an arbitrary site gets no ACAO header."""
+        resp = client.options(
+            "/api/projects/",
+            headers={
+                "Origin": "https://not-beats.example.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert resp.headers.get("access-control-allow-origin") is None
+
+
 class TestSSOAPI:
     """/api/auth/sso/* and /api/account/sso/link.
 
