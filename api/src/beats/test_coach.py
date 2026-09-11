@@ -2997,14 +2997,16 @@ class TestGatewayRetryAndMissingKey:
     @staticmethod
     def _make_api_error(status_code: int):
         """Build an anthropic.APIStatusError with the given code.
-        The SDK requires a real httpx.Response (not a duck-typed
-        stub) so we construct one. The gateway only branches on
-        exc.status_code so the body is irrelevant."""
+        The SDK requires a real response object (not a duck-typed stub) so we
+        construct one. It must come from `httpx2` — the SDK moved its HTTP
+        layer there in 1.0, and an `httpx.Response` is a different class to it.
+        The gateway only branches on exc.status_code, so the body is
+        irrelevant."""
         import anthropic
-        import httpx
+        import httpx2
 
-        request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-        response = httpx.Response(status_code=status_code, request=request)
+        request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+        response = httpx2.Response(status_code=status_code, request=request)
         return anthropic.APIStatusError(
             message=f"err-{status_code}",
             response=response,

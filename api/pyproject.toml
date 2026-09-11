@@ -7,7 +7,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
-    "anthropic>=0.116.0",
+    "anthropic>=1.5.0",
     "dnspython>=2.8.0",
     "fastapi>=0.139.0",
     "pydantic>=2.13.4",
@@ -24,6 +24,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    # Imported directly by test_coach.py, which builds a real response object to
+    # hand to anthropic.APIStatusError. It arrives transitively with anthropic
+    # 1.x, but a direct import should be declared.
+    "httpx2>=2.0",
     "ipython>=9.13.0",
     "ruff>=0.15.20",
     "pytest>=9.0.3",
