@@ -2,10 +2,10 @@
 
 The project cannot set `error-on-warning = true` yet, but what is left is now
 friction between ty and the frameworks rather than anything wrong in the code:
-pydantic-settings filling required fields from the environment, Starlette's
-deliberately wide exception-handler signature, and a union the Anthropic SDK
-yields. Until those resolve upstream this keeps the count from drifting upward
-— a new diagnostic fails CI even though the existing ones don't.
+Starlette's deliberately wide exception-handler signature, httpx's strict
+constructor, and a union the Anthropic SDK yields. Until those resolve upstream
+this keeps the count from drifting upward — a new diagnostic fails CI even
+though the existing ones don't.
 
 Lower BUDGET whenever the real number drops. It is a ceiling, not a target.
 """
@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 
-BUDGET = 18
+BUDGET = 8
 
 
 def main() -> int:

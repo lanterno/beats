@@ -70,8 +70,8 @@ The **system prompt** (~2k tokens of `COACH_PERSONA`) and the **30-day user-cont
 
 ```python
 CacheSpec(
-    system_cached=True,           # system prompt → 1 marker
-    cached_turn_indices=[0],      # message[0] (the user-context block) → 1 marker
+    system_cached=True,  # system prompt → 1 marker
+    cached_turn_indices=[0],  # message[0] (the user-context block) → 1 marker
 )
 ```
 

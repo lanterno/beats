@@ -1,7 +1,7 @@
 {
   "name": "beats-vscode",
   "displayName": "Beats",
-  "description": "Workspace heartbeats for the Beats time-tracking daemon \u2014 improves Flow Score accuracy by telling the daemon which git repo you're editing.",
+  "description": "Workspace heartbeats for the Beats time-tracking daemon — improves Flow Score accuracy by telling the daemon which git repo you're editing.",
   "version": "0.7.0",
   "publisher": "lanterno",
   "license": "MIT",
@@ -80,7 +80,7 @@
     "@types/node": "^25.9.1",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.9.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "undici": ">=7.29.0 <8",

@@ -79,7 +79,7 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
             f"goals={score_data['components']['goals']}, "
             f"quality={score_data['components']['quality']})"
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("Productivity score unavailable", exc_info=True)
         score_line = "Productivity score: unavailable"
 
@@ -102,7 +102,7 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
             if fs.top_language:
                 parts.append(f"top language {fs.top_language}")
             flow_lines = ["", "### Flow (30 days, from ambient signals)", "  " + ", ".join(parts)]
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("Flow rollup unavailable for user context", exc_info=True)
 
     # Coach memory
@@ -210,7 +210,7 @@ async def build_day_context(
                     calendar_lines.append(f"  all-day {summary}")
                 else:
                     calendar_lines.append(f"  {start_t}–{end_t} {summary}")
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("Calendar fetch failed for day context", exc_info=True)
 
     lines = [
@@ -248,7 +248,7 @@ async def build_day_context(
                 bio_lines.append(f"  Readiness: {bio_doc['readiness_score']}/100")
             if len(bio_lines) > 1:
                 lines += ["", "### Last night's biometrics", *bio_lines]
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("Biometric fetch failed for day context", exc_info=True)
 
     # Today's flow signals from the ambient daemon (best-effort). Converts the
@@ -268,7 +268,7 @@ async def build_day_context(
             if fs.top_language:
                 flow_lines.append(f"  Dominant language: {fs.top_language}")
             lines += ["", "### Flow today (ambient signals)", *flow_lines]
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("Flow fetch failed for day context", exc_info=True)
 
     return "\n".join(lines)
