@@ -42,7 +42,7 @@ RUN if grep -rq "localhost:7999" dist/spa/assets/; then \
       exit 1; \
     fi
 
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 
 COPY --from=build /app/dist/spa /usr/share/nginx/html
 COPY nginx.home.conf /etc/nginx/conf.d/default.conf
