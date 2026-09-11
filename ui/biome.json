@@ -10,6 +10,7 @@
 			"playwright.config.ts",
 			"!**/*.css",
 			"!**/dist",
+			"!**/e2e/.auth",
 			"!**/client/shared/api/generated.ts",
 			"!**/client/shared/api/openapi.json"
 		]

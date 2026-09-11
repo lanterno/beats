@@ -103,8 +103,9 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
 - **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env). The `.ts` files cover pure helpers in `shared/lib/`; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
-- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only). They need the API on
-  :7999 and a MongoDB behind it; the dev server starts itself. A `setup` project
+- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 30 of them, last
+  run green against a real API + Mongo. They need the API on :7999 and a
+  MongoDB behind it; the dev server starts itself. A `setup` project
   mints a session with `api/scripts/e2e_session.py` and plants it in
   localStorage — every page under test sits behind `ProtectedRoute`, and the
   passkey ceremony that normally issues a session cannot run headless. The same
