@@ -4293,7 +4293,7 @@ class TestSignalsAPI:
 
     def test_create_project_with_category_persists(self, client, auth_headers):
         """Regression guard: the create handler used to ignore the
-        \`category\` field — the schema accepted it but the route never
+        `category` field — the schema accepted it but the route never
         forwarded it to the domain Project, so a freshly-created
         project's category was always None until a separate PUT.
         That broke the daemon's flow-score category_fit silently

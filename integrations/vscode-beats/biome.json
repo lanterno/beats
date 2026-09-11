@@ -1,7 +1,7 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
 	"files": {
-		"includes": ["src/**", "!**/out/**", "!**/node_modules/**"]
+		"includes": ["src/**", "!**/out", "!**/node_modules"]
 	},
 	"formatter": {
 		"indentStyle": "tab",
@@ -10,7 +10,7 @@
 	},
 	"linter": {
 		"rules": {
-			"recommended": true
+			"preset": "recommended"
 		}
 	}
 }

@@ -53,7 +53,7 @@ export function formatStatusBar(
 	health: HealthSummary | null,
 	summary: FlowSummary | null = null,
 ): StatusBarText {
-	if (!health || !health.ok) {
+	if (!health?.ok) {
 		return {
 			text: "$(circle-slash) Beats",
 			tooltip:

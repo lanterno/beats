@@ -219,9 +219,26 @@ nothing.
 
 ## Infrastructure
 
-Beats now runs on the **home network**, in the `home.space` stack at
-`/home/green/lab/home`. `terraform/` and `cloudbuild.yaml` describe the previous
-Google Cloud deployment and are kept for reference — they are not what runs.
+**Two deployments are live.** Read that before deleting anything that looks
+like it belongs to only one of them.
+
+- **home.space** (`compose.home.yml`) on the home network, at
+  `/home/green/lab/home` — the primary. SPA and API behind one nginx, **one
+  origin**, one published port.
+- **lifepete.com** on Google Cloud — API on Cloud Run (shipped by
+  `cloudbuild.yaml` + `terraform/`), SPA on Firebase Hosting (shipped by the
+  `deploy` job in `.github/workflows/ui.yml`). **Two origins**,
+  `lifepete.com` and `api.lifepete.com`, joined by CORS.
+
+The second one is the trap, because nothing you run locally resembles it. The
+home stack is same-origin, so CORS is never exercised in development or in the
+test suite, and the entries in `origins` (`api/src/server.py`) that keep
+lifepete.com working read as dead config from inside the repo. They are not:
+removing them breaks that site in a browser with every test still green. The
+same goes for the Firebase `deploy` job and `ui/firebase.json`.
+
+A change that touches origins, hosts, auth cookies, or either deploy pipeline
+has to be considered against **both** topologies.
 
 ### Home deployment (current)
 
@@ -256,7 +273,19 @@ it. In this repo:
 Off by default (`BEATS_SSO_ENABLED`), so nothing changes for a deployment without an
 identity service. `just sso-doctor` from the repo root diagnoses it.
 
-### Google Cloud (previous)
+### Google Cloud — lifepete.com (also live)
+
+Split across two origins, unlike the home stack: the SPA on Firebase Hosting at
+`lifepete.com`, the API on Cloud Run at `api.lifepete.com`. Both are listed in
+`origins` in `api/src/server.py`, and the SPA is built with
+`VITE_API_URL=https://api.lifepete.com` — the opposite of `ui/Dockerfile`, which
+builds with an empty `VITE_API_URL` because the home stack is same-origin.
+
+The two halves ship independently: the SPA on every push to `main` that touches
+`ui/**` (the `deploy` job in `.github/workflows/ui.yml`, needing the
+`FIREBASE_SERVICE_ACCOUNT` secret), the API via Cloud Build. They can therefore
+skew — an old SPA against a newer API is a real state to reason about when
+changing anything both ends share.
 
 - **Deploy**: Terraform owns all Cloud Run config. Cloud Build builds the image and runs `terraform apply`.
 - **State**: GCS backend (`beats-476914-terraform-state`), shared by local and CI.
