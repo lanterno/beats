@@ -193,6 +193,9 @@ export const WeekBreakdownSchema = z.object({
 	effective_goal: z.number().nullable().optional(),
 	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
 	effective_goal_overridden: z.boolean().optional().default(false),
+	// On a day job the contract governs: what the week expects after holidays
+	// and absences — the week card's figure. Null elsewhere.
+	contract_expected: z.number().nullable().optional(),
 });
 
 export type WeekBreakdown = z.infer<typeof WeekBreakdownSchema>;

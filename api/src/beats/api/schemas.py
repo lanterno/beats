@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from datetime import date as date_type
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from beats.domain.models import AbsenceType, Contract, GoalType, ProjectBreakdownEntry, ProjectKind
 
@@ -213,6 +213,47 @@ class DurationResponse(BaseModel):
     """Response schema for duration queries."""
 
     duration: str
+
+
+class WeekBreakdownLogResponse(BaseModel):
+    """One completed session of a day, when `display_each_log_duration` is set."""
+
+    id: str | None
+    start: str
+    end: str | None
+    duration: str
+
+
+class WeekBreakdownResponse(BaseModel):
+    """GET /{id}/week/: the week's tracked time by day and in total, its
+    Monday, and the goal resolved for it.
+
+    Each day is the time tracked as a duration string (`"2:30:00"`), or —
+    with `display_each_log_duration` — that day's completed sessions.
+    `effective_goal` is the goal as `Project.effective_goal` resolves it for
+    the week: on a day job the contract governs, the term's plain hours.
+    `contract_expected` is what the contract expects of that week after
+    holidays and absences — the week card's figure, which the history row
+    shows in place of the nominal hours — on a day job with a contract; None
+    elsewhere, and under the null rule (a term of 0 hours, a week before the
+    first term).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    monday: str | list[WeekBreakdownLogResponse] = Field(alias="Monday")
+    tuesday: str | list[WeekBreakdownLogResponse] = Field(alias="Tuesday")
+    wednesday: str | list[WeekBreakdownLogResponse] = Field(alias="Wednesday")
+    thursday: str | list[WeekBreakdownLogResponse] = Field(alias="Thursday")
+    friday: str | list[WeekBreakdownLogResponse] = Field(alias="Friday")
+    saturday: str | list[WeekBreakdownLogResponse] = Field(alias="Saturday")
+    sunday: str | list[WeekBreakdownLogResponse] = Field(alias="Sunday")
+    total_hours: float
+    week_start: date_type
+    effective_goal: float | None = None
+    effective_goal_type: GoalType | None = None
+    effective_goal_overridden: bool = False
+    contract_expected: float | None = None
 
 
 class MonthlyTotalsResponse(BaseModel):

@@ -8,6 +8,8 @@ For the catalogue of every field stored, see [DATA.md](./DATA.md).
 
 Beats is a self-tracking system. It records what you work on, for how long, and (optionally) how you felt while doing it. It is not a productivity app sold to employers, and there is no analytics product built on top of your data.
 
+If you mark a project as a day job, Beats also stores its contract — the hours owed each week as a percentage of a full-time basis, the dates those terms changed, an opening balance — the employer's holiday region as two ISO codes, and the days you were absent (vacation, sick or other, whole or half). From those it works out what the week expects of you and a running overtime balance.
+
 ## Who can see your data
 
 - **You.** Through the web app, the daemon, the editor extension, the companion app, and the export endpoint.
@@ -35,6 +37,7 @@ You can disconnect any integration at any time. Disconnecting revokes the token 
 The coach feature sends prompts to the [Anthropic Claude API](https://www.anthropic.com/) to generate briefs, weekly reviews, and chat replies. What the prompt carries is assembled in `api/src/beats/coach/context.py`, and it is more than the timer data:
 
 - your sessions — project name, start time, duration, and the session note if there is one
+- your projects' weekly goals — on a day job, that is the contract's weekly hours and where they come from (the percentage of a part-time term, `full-time`, or just `contract` for custom hours), in one line (`Acme: 33.6h/week (contract, 80%)`). Absences, the holiday region and the overtime balance are not sent.
 - 30-day aggregates, plus anything stored in coach memory
 - **calendar event titles and times for the day**, if Google Calendar is connected
 - last night's biometrics — sleep, HRV, resting heart rate, readiness — if a health source is connected
@@ -46,7 +49,7 @@ If you do not want any data leaving the Beats database, do not use the coach.
 
 ## Export and deletion
 
-- **Export**: anytime, via `/api/export` (CSV or JSON). The whole dataset, not a curated subset.
+- **Export**: anytime, via `/api/export` — your projects (contract included) and sessions, as JSON or CSV. Absences, plans, webhooks, signals, biometrics and coach history are not in it yet.
 - **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user. I will reply to confirm.
 
 ## Changes

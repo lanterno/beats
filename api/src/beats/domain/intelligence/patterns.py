@@ -6,19 +6,24 @@ tested directly rather than through a service that only exists to hold repos.
 
 import uuid
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
-from beats.domain.models import Beat, FlowWindow, InsightCard
-from beats.domain.ports import ProjectLister, RangeBeatReader
+from beats.domain.models import Beat, FlowWindow, InsightCard, Project
+from beats.domain.ports import ProjectLister, RangeBeatReader, WeekExpectationReader
 from beats.domain.utils import local_date, local_dt
 
 from ._support import UTC_TZ, _beats_covering, _format_hours, _monday_of
+from .goals import WeekGoal, nominal_week_goals, week_goals
 
 
 async def detect_patterns(
-    beat_repo: RangeBeatReader, project_repo: ProjectLister, tz: ZoneInfo = UTC_TZ
+    beat_repo: RangeBeatReader,
+    project_repo: ProjectLister,
+    tz: ZoneInfo = UTC_TZ,
+    contracts: WeekExpectationReader | None = None,
 ) -> list[InsightCard]:
     """Detect non-obvious patterns in the user's data."""
     today = datetime.now(tz).date()
@@ -26,12 +31,13 @@ async def detect_patterns(
 
     beats = await _beats_covering(beat_repo, today - timedelta(days=60), today)
     projects = await project_repo.list(archived=False)
+    goals = await week_goals(projects, _monday_of(today), contracts)
 
     insights.extend(detect_day_pattern(beats, today, tz))
     insights.extend(detect_peak_hours(beats, tz))
-    insights.extend(detect_stale_projects(beats, projects, today, tz))
+    insights.extend(detect_stale_projects(beats, projects, today, tz, goals))
     insights.extend(detect_session_trend(beats, today, tz))
-    insights.extend(detect_goal_pacing(beats, projects, today, tz))
+    insights.extend(detect_goal_pacing(beats, projects, today, tz, goals))
 
     insights.sort(key=lambda x: -x.priority)
     return insights
@@ -110,9 +116,20 @@ def detect_peak_hours(beats: list[Beat], tz: ZoneInfo = UTC_TZ) -> list[InsightC
 
 
 def detect_stale_projects(
-    beats: list[Beat], projects: list, today: date, tz: ZoneInfo = UTC_TZ
+    beats: list[Beat],
+    projects: list[Project],
+    today: date,
+    tz: ZoneInfo = UTC_TZ,
+    goals: Mapping[str, WeekGoal] | None = None,
 ) -> list[InsightCard]:
-    """Alert on projects with goals but no recent activity."""
+    """Alert on projects with goals but no recent activity.
+
+    `goals` is what each project's week asks for (`week_goals`): on a day job
+    the contract governs, the week's expectation after holidays and absences,
+    so the figure quoted is the week card's — and a week the contract expects
+    nothing of, every day a holiday or an absence, is no week to need
+    attention. Left out, the nominal goals.
+    """
     last_beat: dict[str, date] = {}
     for b in beats:
         pid = b.project_id
@@ -120,27 +137,32 @@ def detect_stale_projects(
         if pid not in last_beat or d > last_beat[pid]:
             last_beat[pid] = d
 
-    # The goal standing this week — the contract's on a day job it governs,
-    # else the personal goal as overridden — since that is the figure the
-    # card quotes back.
     monday = _monday_of(today)
+    if goals is None:
+        goals = nominal_week_goals(projects, monday)
     results = []
     for p in projects:
         if p.archived:
             continue
-        goal, _ = p.effective_goal(monday)
-        if not goal:
+        week_goal = goals.get(p.id or "")
+        if week_goal is None or not week_goal.hours:
             continue
+        goal = week_goal.hours
         last = last_beat.get(p.id or "")
         if last is None or (today - last).days >= 14:
             days = (today - last).days if last else 999
+            gap = f"You haven't tracked time on {p.name} in {days} days, but "
+            body = (
+                gap + f"your contract still expects {goal}h of it this week."
+                if week_goal.source == "contract"
+                else gap + f"it still has a weekly goal of {goal}h."
+            )
             results.append(
                 InsightCard(
                     id=str(uuid.uuid4()),
                     type="stale_project",
                     title=f"{p.name} needs attention",
-                    body=f"You haven't tracked time on {p.name} in {days} days, "
-                    f"but it still has a weekly goal of {goal}h.",
+                    body=body,
                     data={"project_id": p.id, "days_since": days},
                     priority=4,
                 )
@@ -186,13 +208,24 @@ def detect_session_trend(
 
 
 def detect_goal_pacing(
-    beats: list[Beat], projects: list, today: date, tz: ZoneInfo = UTC_TZ
+    beats: list[Beat],
+    projects: list[Project],
+    today: date,
+    tz: ZoneInfo = UTC_TZ,
+    goals: Mapping[str, WeekGoal] | None = None,
 ) -> list[InsightCard]:
-    """Warn about weekly goals that need attention."""
+    """Warn about weekly goals that need attention.
+
+    `goals` is what each project's week asks for (`week_goals`): on a day job
+    the contract governs, the week's expectation after holidays and absences,
+    so the hours "to go" are the week card's. Left out, the nominal goals.
+    """
     monday = _monday_of(today)
     days_left = 7 - (today - monday).days
     if days_left <= 0:
         return []
+    if goals is None:
+        goals = nominal_week_goals(projects, monday)
 
     week_beats = [b for b in beats if local_date(b.start, tz) >= monday]
     project_hours: dict[str, float] = defaultdict(float)
@@ -203,22 +236,27 @@ def detect_goal_pacing(
     for p in projects:
         if p.archived:
             continue
-        goal, goal_type = p.effective_goal(monday)
-        if not goal or goal_type != "target":
+        week_goal = goals.get(p.id or "")
+        if week_goal is None or not week_goal.hours or week_goal.goal_type != "target":
             continue
+        goal = week_goal.hours
         tracked = project_hours.get(p.id or "", 0)
         remaining = goal - tracked
         if remaining > 0 and tracked < goal * 0.5 and days_left <= 3:
+            left = f"{days_left} day{'s' if days_left > 1 else ''} left"
+            body = (
+                f"You need {remaining:.1f}h more on {p.name} this week under "
+                f"your contract — {left}."
+                if week_goal.source == "contract"
+                else f"You need {remaining:.1f}h more on {p.name} to hit "
+                f"your {goal}h weekly goal — {left}."
+            )
             results.append(
                 InsightCard(
                     id=str(uuid.uuid4()),
                     type="goal_pacing",
                     title=f"{p.name}: {remaining:.1f}h to go",
-                    body=(
-                        f"You need {remaining:.1f}h more on {p.name} to hit "
-                        f"your {goal}h weekly goal — {days_left} "
-                        f"day{'s' if days_left > 1 else ''} left."
-                    ),
+                    body=body,
                     data={
                         "project_id": p.id,
                         "remaining": round(remaining, 1),

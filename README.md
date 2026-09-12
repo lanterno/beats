@@ -197,6 +197,8 @@ home.space identity is the way an old account gets back in.
 ## Features
 
 - Start/stop timer per project with weekly goals (targets and caps)
+- Day-job contracts: a project kind, hours as a percentage of a full-time basis, the
+  region's public holidays, absences, and a running overtime balance
 - Contribution heatmap, daily rhythm chart, streak tracking
 - Session timeline with notes and tags, the tags derived server-side from
   daemon flow signals rather than typed by hand

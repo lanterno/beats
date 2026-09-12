@@ -108,6 +108,11 @@ export interface WeekBreakdownResult {
 	effectiveGoalType?: "target" | "cap";
 	/** True iff a goal override resolves for this week (regardless of value) */
 	effectiveGoalOverridden: boolean;
+	/**
+	 * What the contract expects of this week after holidays and absences, on a
+	 * day job it governs — the week card's figure; undefined elsewhere.
+	 */
+	contractExpected: number | undefined;
 }
 
 export async function fetchProjectWeek(
@@ -140,6 +145,7 @@ export async function fetchProjectWeek(
 		effectiveGoal: parsed.effective_goal === undefined ? undefined : parsed.effective_goal,
 		effectiveGoalType: parsed.effective_goal_type ?? undefined,
 		effectiveGoalOverridden: parsed.effective_goal_overridden,
+		contractExpected: parsed.contract_expected ?? undefined,
 	};
 }
 

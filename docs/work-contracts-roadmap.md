@@ -18,6 +18,32 @@ genuinely undecided.
 
 ---
 
+## Status
+
+Phases 1–5 are on `main`, one commit each:
+
+| Phase | Commit |
+|---|---|
+| 1 — Domain | `60b48e0` contract domain — terms, expected hours, balance, absences |
+| 2 — Migration | `aea473b` migrate target goals into contracts at startup |
+| 3 — HTTP contract | `68c3cc4` contract, week, holidays and absence routes |
+| 4 — UI: form, contract, absences | `2e9d1cc` project kind, contract form, contract history, absences |
+| 5 — UI: the week | `4d319d6` the contract is the goal — week card, balance, and every reader |
+
+Phase 6 is this pass over the docs: `CLAUDE.md`, `api/CLAUDE.md`,
+`DATA.md`, `PRIVACY.md`, `README.md` and the two companion notes.
+
+A polish pass runs beside it and is not on `main` yet: an adjusted
+`contract_expected` on the per-week breakdown (`GET /api/projects/{id}/week/`),
+the Inbox suggestion, 0-hour weeks, and an E2E spec. The Phase 5 notes below
+describe `main` as of `4d319d6`; the polish pass's commit message is the
+record of what it changed in them.
+
+The follow-ups at the end were re-checked against the code on 2026-09-12 and
+none has been built since. The coach one has moved a step, and says how.
+
+---
+
 ## Decisions
 
 1. **The day-job project is the contract.** No separate entity. A user
@@ -334,6 +360,15 @@ Decisions made while building it:
   after `ended_on`). `balance` is null on the same rule for today. Hours
   are rounded to two decimals on the wire; `remaining` goes negative once
   the week is over.
+  *Polish, after Phase 5:* a term of 0 hours is on the null side of that
+  line. It governs the week (`Project.goal_term`) but expects nothing of
+  it by nature, and `effective_goal` already reads it as no goal; the week
+  route reporting `expected: 0` for it put "Expected 0.0 h" on the card
+  and "12.0/0.0h" in the header. `_owes` now asks for a term that owes
+  more than 0 hours, so a week whose every weekday is under a 0-hour term
+  has `expected: null`, and `balance` is null while today's term is one. A
+  week mixing a 0-hour term with a real one owes the real days. The card
+  says "A term of 0 hours: no weekly expectation."
 - **Worked hours are bucketed by the local date each beat started on**, in
   the request timezone (`tz`, default UTC): a beat crossing midnight
   belongs whole to the day it began. A running timer counts up to now.
@@ -478,10 +513,18 @@ The reason for all of the above.
     rule for showing the personal goal, since it also counts a contract
     that has not started; on those weeks the header shows no goal at all,
     as the week's `expected` is null.
+    *Polish, after Phase 5:* the week a contract starts on a Tuesday to
+    Friday is not governed — its Monday is before the term — but carries a
+    `contract_expected` for its few days, and the row follows the card
+    there: contract-set, no override offered. The API would honour one on
+    that week's personal goal, which nothing on the page shows.
   - **An absence write invalidates the contract weeks and the list**,
     not `projectKeys.all`: holidays and the week history do not move
     with an absence. The list's cached detail copy is left as it is —
     nothing on the project page reads the contract fields from it.
+    *Polish, after Phase 5:* the history row now reads `contract_expected`
+    from the `/week/` breakdown, so the week history is invalidated too;
+    the holidays still are not.
   - **Balance wording.** `describeBalance` rounds to the decimal shown
     before judging the sign, so −0.04 h reads "even", not "−0.0 h owed";
     the index chip's short form follows the same rule. A negative
@@ -515,9 +558,9 @@ The reason for all of the above.
     sabbatical — and `effective_goal` reports `None`, as the override it
     came from did (Decision 10): the history column reads "No goal", the
     score, the insights and the coach see no goal, and the clearing pass
-    still clears the personal goal under it. The week route is untouched:
-    such a week's `expected` is 0 by circumstance, and the balance runs
-    on.
+    still clears the personal goal under it. The week route first reported
+    such a week's `expected` as 0; the polish pass made it null too, and
+    the balance with it — see Phase 3's null rule.
   - **Weeks before the first term have no goal** once the personal goal
     is cleared. For a migrated day job those are the weeks before its
     first beat, where the old default applied to no work; the contract has
@@ -532,6 +575,31 @@ The reason for all of the above.
     history row's `32h` under the card's `25.6 h` — and that is this
     decision, not a defect. A term changing mid-week is the next Monday's
     goal; the week is one figure and its Monday decides.
+    *Polish, after Phase 5:* that contradiction was the one thing the user
+    saw, on one screen, and Friday's number is the whole point. The *goal*
+    stays nominal — `effective_goal`, the score, the health rail, the
+    coach — but every reader that quotes a *figure beside the card* now
+    reads the adjusted expectation through one narrow port,
+    `WeekExpectationReader`, which `ContractService.expected_for_week`
+    implements (one absence read and one calendar build, over the week
+    alone; an unknown region costs the figure, not the reader, as the
+    index does). The `/week/` breakdown carries `contract_expected` on a
+    day job with a contract — null elsewhere and under the null rule —
+    typed on `WeekBreakdownResponse` so it reaches the generated types, and
+    the history row shows it in place of the nominal hours, titled
+    "expected this week after holidays and absences". `suggest_daily_plan`,
+    `detect_goal_pacing` and `detect_stale_projects` are pure functions
+    taking a per-project `WeekGoal` map (`intelligence/goals.py` builds it:
+    the contract's adjusted expectation on a governed week, `effective_goal`
+    on every other project). A governed line reads "You need 25.6h more
+    this week under your contract" — a contract is not "hit" — and the
+    stale card says what the contract still expects of the week, so the
+    Inbox quotes one figure; a week it expects nothing of raises no card.
+    The coach builds
+    the intelligence service without the port and never asks for a
+    remaining figure. `week_expectation` in `services.py` is the one
+    function the card, the row and the readers go through, so they agree
+    to the decimal by construction rather than by test.
   - **`ended_on` is not consulted**, as `term_on` does not and as the
     UI's `isTimeBasedOn` does not: the last term stays the goal after the
     contract ends, so no personal goal reappears that the form cannot
@@ -567,14 +635,28 @@ The reason for all of the above.
 
 ### Phase 6 — Docs and gates
 
-- `CLAUDE.md`: the routes table, the `holidays` dependency, the
-  migration note ("a project without `kind` is migrated at startup").
-- `DATA.md`: the new fields and the absences collection.
-- `PRIVACY.md`: contract terms and absences are stored; the coach
-  context does **not** send them (decide explicitly; if it later
-  should, say so there).
-- `docs/flutter-companion.md`: note that the companion is unaware of
-  contracts.
+- `CLAUDE.md`: the routes table, the `holidays` dependency, the two
+  startup passes ("a project without `kind` is migrated at startup"),
+  the request-timezone bucketing; `api/CLAUDE.md`: the module tree and
+  the test list.
+- `DATA.md`: the new fields and the absences collection; the export
+  section now says what `/api/export` carries — projects with their
+  contract, and sessions — since absences are not in it.
+- `PRIVACY.md`: contract terms, region and absences are stored. Decided:
+  the coach context sends the contract's weekly hours and percentage as
+  the project's goal, in the one line Phase 5 built
+  (`Acme: 33.6h/week (contract, 80%)`), and does **not** send absences,
+  the holiday region or the balance. Written there; if that changes, it
+  changes there first.
+- `README.md`: the feature line and the design-notes row.
+- `docs/flutter-companion.md`, `docs/companion-roadmap.md`: the companion
+  is unaware of contracts and reads none of the routes; the device-prefix
+  note matches `DEVICE_ALLOWED_PREFIXES`.
+- `ui/e2e/contracts.spec.ts`: a day job created through the form (part
+  time, 80% of 40, CH/ZH), its week card with an expectation and a
+  balance, a vacation booked in the absence calendar taking 6.4 h off the
+  expectation and given back on removal. One project per run, named by
+  the clock, so the database it leaves behind decides nothing.
 
 ---
 
@@ -594,7 +676,10 @@ The reason for all of the above.
 - **Employer-specific holidays** — per-contract add/remove on top of
   the region (Dec 24/31, bridge days).
 - **Coach awareness** — the brief knowing you are 6 h over and it is
-  Thursday. A privacy decision as much as a feature.
+  Thursday. The coach already gets the contract's weekly hours as the
+  goal (Phase 5); the balance, absences and holidays it does not see. A
+  privacy decision as much as a feature — `PRIVACY.md` is where it is
+  recorded.
 
 ## Open
 

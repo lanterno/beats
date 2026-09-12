@@ -21,6 +21,7 @@ src/beats/
 │   ├── contracts.py     Work-contract arithmetic: term in force, expected hours, balance
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
+│   ├── flow.py          Pure aggregation over the daemon's flow windows, for the coach
 │   ├── intelligence/    Productivity score, digests, patterns, planning, focus,
 │   │                    health — one module each, plus a thin IntelligenceService
 │   ├── ports.py         Protocols the domain asks persistence for (narrow by design)
@@ -33,7 +34,8 @@ src/beats/
 │   ├── chat.py, gateway.py, context.py, tools.py, memory.py, …
 ├── infrastructure/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
-│   ├── migrations.py    Startup pass: a project without `kind` gets one (and a contract)
+│   ├── migrations.py    Startup passes: a project without `kind` gets one (a day job its
+│   │                    contract too); a day job whose term governs loses `weekly_goal`
 │   └── repositories.py  Abstract + MongoDB repo implementations
 ├── settings.py   pydantic-settings (reads .env / env vars)
 ├── auth/         WebAuthn + JWT session management
@@ -49,12 +51,12 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Nine test files cover different layers (849 tests, ~30s for the full run):
+Nine test files cover different layers (866 tests, ~30s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 293 tests.
-- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 266 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 295 tests.
+- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, plus one round trip through the absence repository; 27 tests.
-- **`src/beats/test_migration.py`** — the startup pass that gives every project a `kind` and derives a day job's contract from its goal history; 15 tests.
+- **`src/beats/test_migration.py`** — the two startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, and the one that then clears the personal goal the contract replaced; 19 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 137 tests.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.
 - **`src/beats/test_sso.py`** — home.space SSO with a scripted issuer (`httpx.MockTransport`) and real Ed25519 tokens; 35 tests.

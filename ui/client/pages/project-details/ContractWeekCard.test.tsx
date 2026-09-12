@@ -27,6 +27,10 @@ const OBJECTIVE: Contract = {
 	terms: [{ effectiveFrom: "2000-01-03", scheduleType: "objective" }],
 	openingBalanceHours: 0,
 };
+const ZERO_HOURS: Contract = {
+	terms: [{ effectiveFrom: "2000-01-03", scheduleType: "custom", weeklyHours: 0 }],
+	openingBalanceHours: 0,
+};
 
 const DATES = [
 	"2026-04-06",
@@ -142,6 +146,21 @@ describe("ContractWeekCard", () => {
 		expect(screen.queryByText("Expected")).not.toBeInTheDocument();
 		expect(screen.queryByText(/Balance/)).not.toBeInTheDocument();
 		expect(screen.getByText(/objective-based term/)).toBeInTheDocument();
+	});
+
+	it("says a term of 0 hours expects nothing, in its own words", () => {
+		// The API answers the same nulls as for an objective term; the term on
+		// the week's Monday is what tells the two apart.
+		useContractWeekMock.mockReturnValue(
+			loaded(week({ expected: undefined, remaining: undefined, balance: undefined, worked: 2 })),
+		);
+
+		render(<ContractWeekCard projectId="p1" contract={ZERO_HOURS} personalGoal={null} />);
+
+		expect(stat("Worked")).toBe("2.0 h");
+		expect(screen.getByText("A term of 0 hours: no weekly expectation.")).toBeInTheDocument();
+		expect(screen.queryByText(/objective-based term/)).not.toBeInTheDocument();
+		expect(screen.queryByText("Expected")).not.toBeInTheDocument();
 	});
 
 	it("asks for the previous week's Monday when stepping back, and keeps the balance as of today", async () => {

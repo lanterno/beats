@@ -153,14 +153,6 @@ def get_beat_service(
     return BeatService(beat_repo=beat_repo, flow_repo=flow_repo)
 
 
-def get_project_service(
-    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
-    beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
-) -> ProjectService:
-    """Get the project service with injected repositories."""
-    return ProjectService(project_repo=project_repo, beat_repo=beat_repo)
-
-
 get_absence_repository = _user_scoped(MongoAbsenceRepository, "absences")
 
 
@@ -172,6 +164,19 @@ def get_contract_service(
     """Get the contract service with injected repositories."""
     return ContractService(
         project_repo=project_repo, beat_repo=beat_repo, absence_repo=absence_repo
+    )
+
+
+def get_project_service(
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    contract_service: Annotated[ContractService, Depends(get_contract_service)],
+) -> ProjectService:
+    """Get the project service with injected repositories. The contract
+    service is its `WeekExpectationReader`: the week breakdown asks it what
+    a governed week expects, and nothing more."""
+    return ProjectService(
+        project_repo=project_repo, beat_repo=beat_repo, contracts=contract_service
     )
 
 
@@ -194,11 +199,15 @@ get_insights_repository = _user_scoped(MongoInsightsRepository, "insights")
 def get_intelligence_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    contract_service: Annotated[ContractService, Depends(get_contract_service)],
 ) -> IntelligenceService:
-    """Get the intelligence service with injected repositories."""
+    """Get the intelligence service with injected repositories. The contract
+    service is what makes the planning line and the pattern cards quote a
+    governed day job's adjusted week, not its nominal term."""
     return IntelligenceService(
         beat_repo=beat_repo,
         project_repo=project_repo,
+        contracts=contract_service,
     )
 
 

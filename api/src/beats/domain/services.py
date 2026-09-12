@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from beats.domain.contracts import absences_by_day, balance, expected_on, term_on
+from beats.domain.contracts import absences_by_day, balance, expected_hours, expected_on, term_on
 from beats.domain.exceptions import (
     AbsenceNotFound,
     InvalidEndTime,
@@ -39,6 +39,7 @@ from beats.domain.ports import (
     ProjectStore,
     TimerBeatStore,
     TimerProjectReader,
+    WeekExpectationReader,
 )
 from beats.domain.utils import local_date, normalize_tz
 
@@ -279,11 +280,24 @@ def _check_contract(project: Project) -> None:
 
 
 class ProjectService:
-    """Service for managing project operations and analytics."""
+    """Service for managing project operations and analytics.
 
-    def __init__(self, project_repo: ProjectStore, beat_repo: ProjectBeatReader):
+    `contracts` is the one read this service makes of a contract: what a
+    day job's week expects after holidays and absences, so the week
+    breakdown can carry that figure beside the nominal goal. Through the
+    narrow port rather than `ContractService` itself, so this service cannot
+    quietly start writing absences.
+    """
+
+    def __init__(
+        self,
+        project_repo: ProjectStore,
+        beat_repo: ProjectBeatReader,
+        contracts: WeekExpectationReader | None = None,
+    ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
+        self.contracts = contracts
 
     async def create_project(self, project: Project) -> Project:
         """Create a new project."""
@@ -378,13 +392,25 @@ class ProjectService:
             include_log_details: If True, include individual log entries.
 
         Returns:
-            Dict with time per day and total hours.
+            Dict with time per day and total hours — and `contract_expected`,
+            what the contract expects of the week after holidays and
+            absences on a day job it governs, None elsewhere. `effective_goal`
+            stays the term's nominal hours (the readers' decision); this is
+            the one figure beside it, so the history row can agree with the
+            week card to the decimal.
         """
         beats = await self.beat_repo.list_by_project(project_id)
         project = await self.project_repo.get_by_id(project_id)
-        return self._week_breakdown_from_beats(
+        result = self._week_breakdown_from_beats(
             beats, project, weeks_ago=weeks_ago, include_log_details=include_log_details
         )
+        monday = date.fromisoformat(result["week_start"])
+        result["contract_expected"] = (
+            await self.contracts.expected_for_week(project, monday)
+            if self.contracts is not None
+            else None
+        )
+        return result
 
     @staticmethod
     def _week_breakdown_from_beats(
@@ -535,13 +561,38 @@ def worked_by_local_day(beats: Iterable[Beat], tz: ZoneInfo) -> dict[date, float
 
 
 def _owes(term: ContractTerm | None) -> bool:
-    """Whether a term is time-based: before the first term and under an
-    objective term there is no expectation to report, only work."""
-    return term is not None and term.is_time_based
+    """Whether a term sets an expectation: time-based, and for more than 0
+    hours. Before the first term and under an objective term there is no
+    expectation to report, only work. A term of 0 hours — a sabbatical, or
+    the migration's reading of an override that said "no goal from here" —
+    governs the week, so the personal goal does not resurface under it, but
+    expects nothing of it by nature: null, as `Project.effective_goal`
+    already reads it, not a 0 the header would show as "12.0/0.0h"."""
+    return term is not None and bool(term.hours_per_week)
 
 
 def _hours(value: float) -> float:
     return round(value, 2)
+
+
+def week_expectation(
+    contract: Contract, absences: Iterable[Absence], holidays: set[date], week_of: date
+) -> float | None:
+    """Hours the contract expects of the week starting `week_of`, after its
+    holidays and absences — the week route's `expected`, on its own.
+
+    None under the null rule: no weekday of the week has a term that sets an
+    expectation (before the first term, an objective term, a term of 0
+    hours). Weekdays only, since Saturday and Sunday owe nothing under any
+    term and so say nothing about whether the week has one. 0 is distinct: a
+    week the contract owed nothing by circumstance — every weekday a holiday
+    or an absence, or after `ended_on`.
+    """
+    weekdays = (week_of + timedelta(days=offset) for offset in range(5))
+    if not any(_owes(term_on(contract, day)) for day in weekdays):
+        return None
+    sunday = week_of + timedelta(days=6)
+    return _hours(expected_hours(contract, absences, holidays, week_of, sunday))
 
 
 class ContractService:
@@ -627,6 +678,38 @@ class ContractService:
                 logger.warning("project %s: contract region unknown, week skipped", project.id)
         return weeks
 
+    async def expected_for_week(self, project: Project, week_of: date) -> float | None:
+        """What the contract expects of the week starting `week_of` — the week
+        route's `expected` on its own, for the readers that quote a figure
+        beside it: the `/week/` breakdown's history row, the Inbox's planning
+        line, the pacing card. None on anything but a day job with a
+        contract, and under the null rule (`week_expectation`).
+
+        One absence read and one calendar build, over the week alone — the
+        balance is not wanted here, so nothing before the week is. A region
+        the calendar library has stopped knowing costs the figure, not the
+        reader: logged and None, as the index does.
+        """
+        if not (project.id and project.kind is ProjectKind.DAY_JOB and project.contract):
+            return None
+        contract = project.contract
+        end = week_of + timedelta(days=6)
+        absences = await self.absence_repo.list_by_project(project.id, week_of, end)
+        holidays: set[date] = set()
+        if contract.holiday_country is not None:
+            try:
+                holidays = set(
+                    named_holidays_between(
+                        contract.holiday_country, contract.holiday_subdivision, week_of, end
+                    )
+                )
+            except UnknownHolidayRegion:
+                logger.warning(
+                    "project %s: contract region unknown, expectation skipped", project.id
+                )
+                return None
+        return week_expectation(contract, absences, holidays, week_of)
+
     @staticmethod
     def _assemble(
         contract: Contract,
@@ -661,11 +744,10 @@ class ContractService:
                     ),
                 )
             )
-        # Weekdays only: Saturday and Sunday owe nothing under any term, so
-        # they say nothing about whether the week has an expectation.
-        owes = any(_owes(term_on(contract, day.date)) for day in days[:5])
-        expected = _hours(expected_raw) if owes else None
-        remaining = _hours(expected_raw - worked_raw) if owes else None
+        # The same function every other reader of the figure goes through,
+        # so the card, the history row and the planning line cannot drift.
+        expected = week_expectation(contract, absences, holiday_days, week_of)
+        remaining = _hours(expected_raw - worked_raw) if expected is not None else None
         running = (
             _hours(balance(contract, absences, holiday_days, worked, today))
             if _owes(term_on(contract, today))

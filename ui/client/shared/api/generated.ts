@@ -1861,7 +1861,10 @@ export interface paths {
         };
         /**
          * Current Week Time For Project
-         * @description Get time breakdown for a week.
+         * @description Get time breakdown for a week: hours per day, the total, the week's
+         *     Monday, the effective goal as resolved for it, and `contract_expected` —
+         *     what the contract expects of the week after holidays and absences on a
+         *     day job it governs (the week card's figure), null elsewhere.
          */
         get: operations["current_week_time_for_project_api_projects__project_id__week__get"];
         put?: never;
@@ -3598,6 +3601,68 @@ export interface components {
             id: string;
             /** Url */
             url: string;
+        };
+        /**
+         * WeekBreakdownLogResponse
+         * @description One completed session of a day, when `display_each_log_duration` is set.
+         */
+        WeekBreakdownLogResponse: {
+            /** Duration */
+            duration: string;
+            /** End */
+            end: string | null;
+            /** Id */
+            id: string | null;
+            /** Start */
+            start: string;
+        };
+        /**
+         * WeekBreakdownResponse
+         * @description GET /{id}/week/: the week's tracked time by day and in total, its
+         *     Monday, and the goal resolved for it.
+         *
+         *     Each day is the time tracked as a duration string (`"2:30:00"`), or —
+         *     with `display_each_log_duration` — that day's completed sessions.
+         *     `effective_goal` is the goal as `Project.effective_goal` resolves it for
+         *     the week: on a day job the contract governs, the term's plain hours.
+         *     `contract_expected` is what the contract expects of that week after
+         *     holidays and absences — the week card's figure, which the history row
+         *     shows in place of the nominal hours — on a day job with a contract; None
+         *     elsewhere, and under the null rule (a term of 0 hours, a week before the
+         *     first term).
+         */
+        WeekBreakdownResponse: {
+            /** Friday */
+            Friday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Monday */
+            Monday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Saturday */
+            Saturday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Sunday */
+            Sunday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Thursday */
+            Thursday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Tuesday */
+            Tuesday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Wednesday */
+            Wednesday: string | components["schemas"]["WeekBreakdownLogResponse"][];
+            /** Contract Expected */
+            contract_expected?: number | null;
+            /** Effective Goal */
+            effective_goal?: number | null;
+            /**
+             * Effective Goal Overridden
+             * @default false
+             */
+            effective_goal_overridden: boolean;
+            effective_goal_type?: components["schemas"]["GoalType"] | null;
+            /** Total Hours */
+            total_hours: number;
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
         };
         /**
          * WeeklyDigestResponse
@@ -6638,7 +6703,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WeekBreakdownResponse"];
                 };
             };
             /** @description Not found */

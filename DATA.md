@@ -24,7 +24,18 @@ No passwords are stored — Beats does not have a password login path.
 
 ### Work data
 
-- **Projects**: name, color, tags, archive flag
+- **Projects**: name, description, colour, category, archive flag, GitHub repo, the local
+  repo paths that auto-start the timer, the personal weekly goal (`weekly_goal`,
+  `goal_type`, `goal_overrides`), and a `kind` — `day_job`, `freelance` or
+  `side_project`. A day job may also carry a **contract**: `terms[]`, each with
+  `effective_from`, `schedule_type`, `full_time_hours`, `percentage`, `weekly_hours` and
+  a `note`; `holiday_country` and `holiday_subdivision` (ISO codes — the holidays are
+  derived from them on request, no calendar is stored); `opening_balance_hours`;
+  `ended_on`. On a day job whose contract governs the week, `weekly_goal` is cleared at
+  startup: the contract is the goal.
+- **Absences**: one document per day off on a day-job project — `user_id`, `project_id`,
+  `date`, `half_day`, `type` (`vacation`, `sick`, `other`), `note`. Unique on
+  `(user_id, project_id, date)`, so a second absence on a day replaces the first.
 - **Beats (sessions)**: start, end, project id, source (manual / daemon / editor), tags, notes
 - **Timer state**: the currently-running beat per user
 - **Plans**: weekly plans — a per-project hour target for a given week
@@ -67,7 +78,7 @@ Beats does not auto-delete anything. Beats, notes, coach history, and biometrics
 
 ## Export
 
-`/api/export` returns the full dataset for the authenticated user as CSV or JSON. There is no curated subset and no extra fields hidden behind a paid tier.
+`/api/export` returns the authenticated user's projects — contract included — and sessions: `/full` as JSON, `/csv/sessions` as a CSV of the completed sessions alone. Nothing is held back behind a tier, but nothing else is in it yet either: absences, plans, webhooks, signals, biometrics and coach history stay in the database until deleted.
 
 ## Deletion
 

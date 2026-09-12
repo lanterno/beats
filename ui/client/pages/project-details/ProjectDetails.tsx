@@ -236,6 +236,7 @@ export default function ProjectDetails() {
 		effectiveGoalType: (week0Data?.effectiveGoalType ?? headerGoalType) as "target" | "cap",
 		effectiveGoalOverridden: week0Data?.effectiveGoalOverridden ?? false,
 		contractGoverned: contractGovernsWeek(project, week0Data?.weekStart ?? getMondayIso(0)),
+		contractExpected: week0Data?.contractExpected,
 	};
 
 	const pastWeekRows = weekList
@@ -260,13 +261,16 @@ export default function ProjectDetails() {
 			// The API ignores overrides on a week the contract governs
 			// (Project.goal_term); the table must not offer to set one there.
 			contractGoverned: contractGovernsWeek(project, week.weekStart ?? getMondayIso(week.weeksAgo)),
+			// The week's expectation after holidays and absences, so the row
+			// agrees with the week card above it rather than showing the term.
+			contractExpected: week.contractExpected,
 		}));
 
 	const allWeekRows = [currentWeekRow, ...pastWeekRows];
 	const hasAnyGoal =
 		project.weeklyGoal != null ||
 		(project.goalOverrides || []).length > 0 ||
-		allWeekRows.some((r) => r.effectiveGoal != null);
+		allWeekRows.some((r) => r.effectiveGoal != null || r.contractExpected != null);
 
 	// Save/remove goal override handlers
 

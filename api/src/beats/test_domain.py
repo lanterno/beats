@@ -17,6 +17,7 @@ from beats.domain.exceptions import (
     UnknownHolidayRegion,
 )
 from beats.domain.intelligence import (
+    WeekGoal,
     detect_chronotype,
     detect_day_pattern,
     detect_goal_pacing,
@@ -26,6 +27,7 @@ from beats.domain.intelligence import (
     find_peak_block,
     focus_score_for_beat,
     generate_observation,
+    suggest_daily_plan,
 )
 from beats.domain.models import (
     Absence,
@@ -996,10 +998,25 @@ class _FakeProjectRepo:
         return [p for p in self._projects if p.archived == archived]
 
 
+class _FakeWeekExpectationReader:
+    """A `WeekExpectationReader` answering a fixed figure per project id —
+    what the contract expects of the week after holidays and absences — and
+    recording what it was asked."""
+
+    def __init__(self, expected: dict[str, float | None]):
+        self._expected = expected
+        self.asked: list[tuple[str | None, date]] = []
+
+    async def expected_for_week(self, project: Project, week_of: date) -> float | None:
+        self.asked.append((project.id, week_of))
+        return self._expected.get(project.id or "")
+
+
 def _intel_service(
     *,
     beats: list | None = None,
     projects: list | None = None,
+    contracts: _FakeWeekExpectationReader | None = None,
 ):
     """Build an IntelligenceService with fakes for every repo."""
     from beats.domain.intelligence import IntelligenceService
@@ -1007,6 +1024,7 @@ def _intel_service(
     return IntelligenceService(
         beat_repo=_FakeIntelBeatRepo(beats or []),
         project_repo=_FakeProjectRepo(projects or []),
+        contracts=contracts,
     )
 
 
@@ -1590,6 +1608,24 @@ class TestPatternDetectorsStaleProjects:
         assert len(cards) == 1
         assert cards[0].data["days_since"] == 14
 
+    async def test_governed_project_quotes_the_contracts_expectation(self):
+        """On a day job the contract governs, the map carries what the week
+        expects after holidays and absences, and the card quotes that — the
+        figure the pacing card beside it in the Inbox quotes too. A week the
+        contract expects nothing of, every day a holiday or an absence, is no
+        week to need attention."""
+        today = datetime.now(UTC).date()
+        expects = {"p1": WeekGoal(hours=32.0, goal_type=GoalType.TARGET, source="contract")}
+        cards = detect_stale_projects([], [_day_job("p1")], today, goals=expects)
+        assert len(cards) == 1
+        assert cards[0].body == (
+            "You haven't tracked time on Day job in 999 days, "
+            "but your contract still expects 32.0h of it this week."
+        )
+
+        off = {"p1": WeekGoal(hours=0.0, goal_type=GoalType.TARGET, source="contract")}
+        assert detect_stale_projects([], [_day_job("p1")], today, goals=off) == []
+
     async def test_one_card_per_stale_project(self):
         today = datetime.now(UTC).date()
         projects = [
@@ -1801,6 +1837,26 @@ class TestPatternDetectorsGoalPacing:
         assert card.priority == 4
         assert card.data["days_left"] == 3
         assert card.data["remaining"] == 9.0
+
+    async def test_governed_project_paces_against_the_contracts_expectation(self):
+        """On a day job the contract governs, the map carries what the week
+        expects after holidays and absences — 32 h with a day of vacation
+        booked against a 40 h term — and the hours to go are counted from it,
+        so the card agrees with the week card beside it in the Inbox."""
+        from beats.domain.intelligence import _monday_of
+
+        friday = self._friday_after(datetime.now(UTC).date())
+        s = datetime.combine(_monday_of(friday), datetime.min.time(), tzinfo=UTC).replace(hour=10)
+        beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(hours=1))]
+        goals = {"p1": WeekGoal(hours=32.0, goal_type=GoalType.TARGET, source="contract")}
+
+        cards = detect_goal_pacing(beats, [_day_job("p1")], friday, goals=goals)
+
+        assert len(cards) == 1
+        assert cards[0].data["remaining"] == 31.0
+        assert cards[0].body == (
+            "You need 31.0h more on Day job this week under your contract — 3 days left."
+        )
 
     async def test_friday_with_high_progress_skips(self):
         """≥ 50% progress by Friday → no nag."""
@@ -2228,6 +2284,38 @@ class TestSuggestDailyPlan:
         # avg=0 falls into the else branch → suggested_minutes = 60,
         # capped by remaining (10h = 600m), so stays at 60.
         assert result[0]["suggested_minutes"] == 60
+
+    def test_governed_project_counts_remaining_against_the_contracts_expectation(self):
+        """On a day job the contract governs, the map carries what the week
+        expects after holidays and absences — 25.6 h with a day of vacation
+        booked against a 32 h term — and the line says so. The nominal 32
+        would contradict the week card beside it in the Inbox. The map is the
+        caller's: the function reads no contract and no repository itself."""
+        term = ContractTerm(
+            effective_from=date(2026, 1, 5), schedule_type=ScheduleType.CUSTOM, weekly_hours=32
+        )
+        day_job = Project(
+            id="p1", name="Acme", kind=ProjectKind.DAY_JOB, contract=Contract(terms=[term])
+        )
+        goals = {"p1": WeekGoal(hours=25.6, goal_type=GoalType.TARGET, source="contract")}
+
+        result = suggest_daily_plan([], [day_job], self.FRIDAY, goals=goals)
+
+        assert [r["project_id"] for r in result] == ["p1"]
+        assert result[0]["reasoning"] == "You need 25.6h more this week under your contract"
+
+    async def test_service_reads_a_governed_weeks_expectation_through_the_contract_reader(self):
+        """The service hands the map to the pure function, and the map is
+        what asks the contract reader: a day job under a 40 h term is
+        suggested against the 32 h the reader answers for the week's Monday
+        — a day of vacation booked — not the term's 40."""
+        reader = _FakeWeekExpectationReader({"p1": 32.0})
+        svc = _intel_service(projects=[_day_job("p1")], contracts=reader)
+
+        result = await svc.suggest_daily_plan(self.FRIDAY)
+
+        assert reader.asked == [("p1", self.FRIDAY - timedelta(days=4))]
+        assert result[0]["reasoning"] == "You need 32.0h more this week under your contract"
 
     async def test_met_goal_not_recommended(self):
         """Goal met (remaining ≤ 0) means unmet_weight=0; without
@@ -3333,6 +3421,26 @@ class _FakeAbsenceRepo:
         return len(self._absences) < before
 
 
+class TestWeekExpectation:
+    """`week_expectation` is the one function the week card, the history row
+    and the Inbox readers go through. Its null rule reads the week's weekdays
+    alone: Saturday and Sunday owe nothing under any term, so a term in force
+    on them says nothing about whether the week has an expectation."""
+
+    def test_a_term_starting_on_saturday_leaves_its_week_before_the_contract(self):
+        from beats.domain.services import week_expectation
+
+        saturday = date(2026, 3, 7)
+        term = ContractTerm(
+            effective_from=saturday, schedule_type=ScheduleType.FULL_TIME, full_time_hours=40
+        )
+        contract = Contract(terms=[term])
+
+        # Before the contract — the card says so — not "Expected 0.0 h".
+        assert week_expectation(contract, [], set(), date(2026, 3, 2)) is None
+        assert week_expectation(contract, [], set(), date(2026, 3, 9)) == 40
+
+
 class TestContractServiceIndex:
     """`weeks_for` is the project index's read, and holds the one policy the
     HTTP suite cannot reach: `check_region` keeps a region the library
@@ -3622,6 +3730,9 @@ class TestProjectServiceBeatsBatchHelpers:
         svc = _project_service(projects=[project], beats=beats)
         via_public = await svc.get_week_breakdown("p1")
         via_helper = ProjectService._week_breakdown_from_beats(beats, project, weeks_ago=0)
+        # `contract_expected` is the one key the public method adds on top of
+        # the helper; the index takes that figure from `weeks_for` instead.
+        assert via_public.pop("contract_expected") is None
         assert via_helper == via_public
         # effective_goal_overridden carried through both paths.
         assert "effective_goal_overridden" in via_helper

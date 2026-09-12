@@ -1098,6 +1098,58 @@ class TestContractWeekAPI:
         assert [d["expected"] for d in week["days"]] == [8, 8, 4, 4, 4, 0, 0]
         assert week["expected"] == 28
 
+    def test_week_breakdown_carries_the_adjusted_expectation_beside_the_nominal_goal(
+        self, client, auth_headers
+    ):
+        # The history row and the week card sit on one screen. The row must
+        # read what the week expects after holidays and absences — the card's
+        # figure — while `effective_goal` stays the term's nominal hours, which
+        # is what the score and the coach want (the readers' decision).
+        project = _day_job(client, auth_headers)
+        today = date.today()
+        wednesday = today - timedelta(days=today.weekday()) + timedelta(days=2)
+        resp = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": wednesday.isoformat(), "type": "vacation"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        resp = client.get(f"/api/projects/{project['id']}/week/", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        breakdown = resp.json()
+        assert breakdown["contract_expected"] == 32
+        assert breakdown["effective_goal"] == 40
+        # And it is the week route's own figure for that Monday, to the decimal.
+        week = self._week(client, auth_headers, project["id"], week_of=breakdown["week_start"])
+        assert week["expected"] == breakdown["contract_expected"]
+
+        # A project the contract does not govern carries no such figure.
+        side = _create_project(client, auth_headers, weekly_goal=5)
+        resp = client.get(f"/api/projects/{side['id']}/week/", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["contract_expected"] is None
+
+    def test_zero_hour_term_week_has_no_expectation(self, client, auth_headers):
+        # A term of 0 hours governs — the personal goal must not resurface
+        # under a sabbatical — but expects nothing by nature: null, as
+        # `effective_goal` already reads it, not "Expected 0.0 h" on the card
+        # and "12.0/0.0h" in the header. The balance is null on the same rule.
+        project = _day_job(
+            client,
+            auth_headers,
+            terms=[
+                {"effective_from": CONTRACT_START, "schedule_type": "custom", "weekly_hours": 0}
+            ],
+        )
+        _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 120)
+
+        week = self._week(client, auth_headers, project["id"])
+
+        assert (week["expected"], week["remaining"], week["balance"]) == (None, None, None)
+        assert week["worked"] == 2
+        assert all(d["expected"] == 0 for d in week["days"])
+
     def test_absence_round_trip_reduces_expected(self, client, auth_headers):
         project = _day_job(client, auth_headers)
         resp = client.post(

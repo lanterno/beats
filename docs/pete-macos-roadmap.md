@@ -77,9 +77,9 @@ Keyboard ≫ menu.
   a timer for the Linear project; `pete stop` stops; `pete note <text>`
   appends. Single binary entry: `pete-cli`, talks to the running
   app over a Unix socket so there's no double network round-trip.
-- **Shortcuts.app actions** — expose the full timer + intentions API
-  as `AppIntent`s: *Start Timer*, *Stop Timer*, *Get Current Project*,
-  *Add Intention*, *Get Today Total*. Now any user can wire Pete into
+- **Shortcuts.app actions** — expose the timer API as `AppIntent`s:
+  *Start Timer*, *Stop Timer*, *Get Current Project*, *Get Today Total*.
+  Now any user can wire Pete into
   Stream Deck, Keyboard Maestro, or a homemade NFC tag on the desk.
 - **Services menu** — selected text in any app → *Services › Pete ›
   Start timer with project name…* prefills the picker. Selected URL →
@@ -161,8 +161,8 @@ Things that sound cool but don't earn their keep yet.
   signal would Pete take from it?
 - **Sherlocking risk** — if Apple ships a first-party Time Tracker in a
   future Health/Productivity bundle, half of this becomes redundant.
-  Build the things that depend on Beats data (flow score, coach,
-  intentions) first; the timer-as-timer features second.
+  Build the things that depend on Beats data (flow score, coach)
+  first; the timer-as-timer features second.
 
 ---
 

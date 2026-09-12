@@ -74,5 +74,11 @@ storage-sync behavior — can't be done in headless CI.
   migration story and the `SecureStore` interface
 - All API calls send `Authorization: Bearer <device_token>`
 - `DEVICE_ALLOWED_PREFIXES` (in `api/src/server.py`) covers the device
-  endpoints, signals, `biometrics/daily`, timer, projects, beats,
-  `coach/brief` and `analytics/heatmap` — append as new endpoints land
+  endpoints (`status`, `heartbeat`, `favorites`, `weekly`), `signals`,
+  `biometrics/daily`, `timer`, `projects`, `beats`, `coach/brief`,
+  `analytics/heatmap` and `analytics/tags` — append as new endpoints land.
+  The match is by prefix, so `/api/projects` already admits the contract
+  routes under `/api/projects/{id}/…` (contract, week, holidays, absences);
+  `/api/meta`, the holiday-region list, is not in the tuple. The companion
+  is unaware of contracts and reads none of those routes — a week card in
+  the tray is a follow-up in `work-contracts-roadmap.md`

@@ -3429,6 +3429,211 @@
         "title": "WebhookResponse",
         "type": "object"
       },
+      "WeekBreakdownLogResponse": {
+        "description": "One completed session of a day, when `display_each_log_duration` is set.",
+        "properties": {
+          "duration": {
+            "title": "Duration",
+            "type": "string"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "start",
+          "end",
+          "duration"
+        ],
+        "title": "WeekBreakdownLogResponse",
+        "type": "object"
+      },
+      "WeekBreakdownResponse": {
+        "description": "GET /{id}/week/: the week's tracked time by day and in total, its\nMonday, and the goal resolved for it.\n\nEach day is the time tracked as a duration string (`\"2:30:00\"`), or \u2014\nwith `display_each_log_duration` \u2014 that day's completed sessions.\n`effective_goal` is the goal as `Project.effective_goal` resolves it for\nthe week: on a day job the contract governs, the term's plain hours.\n`contract_expected` is what the contract expects of that week after\nholidays and absences \u2014 the week card's figure, which the history row\nshows in place of the nominal hours \u2014 on a day job with a contract; None\nelsewhere, and under the null rule (a term of 0 hours, a week before the\nfirst term).",
+        "properties": {
+          "Friday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Friday"
+          },
+          "Monday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Monday"
+          },
+          "Saturday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Saturday"
+          },
+          "Sunday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Sunday"
+          },
+          "Thursday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Thursday"
+          },
+          "Tuesday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Tuesday"
+          },
+          "Wednesday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekBreakdownLogResponse"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Wednesday"
+          },
+          "contract_expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Expected"
+          },
+          "effective_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Goal"
+          },
+          "effective_goal_overridden": {
+            "default": false,
+            "title": "Effective Goal Overridden",
+            "type": "boolean"
+          },
+          "effective_goal_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_hours": {
+            "title": "Total Hours",
+            "type": "number"
+          },
+          "week_start": {
+            "format": "date",
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+          "total_hours",
+          "week_start"
+        ],
+        "title": "WeekBreakdownResponse",
+        "type": "object"
+      },
       "WeeklyDigestResponse": {
         "description": "Response schema for a weekly digest.",
         "properties": {
@@ -7749,7 +7954,7 @@
     },
     "/api/projects/{project_id}/week/": {
       "get": {
-        "description": "Get time breakdown for a week.",
+        "description": "Get time breakdown for a week: hours per day, the total, the week's\nMonday, the effective goal as resolved for it, and `contract_expected` \u2014\nwhat the contract expects of the week after holidays and absences on a\nday job it governs (the week card's figure), null elsewhere.",
         "operationId": "current_week_time_for_project_api_projects__project_id__week__get",
         "parameters": [
           {
@@ -7786,7 +7991,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WeekBreakdownResponse"
+                }
               }
             },
             "description": "Successful Response"

@@ -157,4 +157,10 @@ export interface WeekHours {
 	effectiveGoalType?: "target" | "cap";
 	/** True iff a goal override resolves for this week */
 	effectiveGoalOverridden?: boolean;
+	/**
+	 * What the contract expects of this week after holidays and absences, on
+	 * a day job it governs — the week card's figure. Undefined elsewhere, and
+	 * on a week the contract expects nothing of by nature (a term of 0 hours).
+	 */
+	contractExpected?: number;
 }

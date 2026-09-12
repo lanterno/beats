@@ -79,6 +79,7 @@ vi.mock("@/entities/github", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import ProjectDetails from "./ProjectDetails";
+import { getMondayIsoFor } from "./weekIso";
 
 const PROJECT = {
 	id: "p1",
@@ -104,6 +105,15 @@ function session(id: string, startIso: string, minutes: number) {
 		note: "",
 		tags: [],
 	};
+}
+
+/** `days` after an ISO date, as ISO. */
+function isoDaysAfter(iso: string, days: number): string {
+	const d = new Date(`${iso}T12:00:00`);
+	d.setDate(d.getDate() + days);
+	const mm = String(d.getMonth() + 1).padStart(2, "0");
+	const dd = String(d.getDate()).padStart(2, "0");
+	return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 function renderPage() {
@@ -285,6 +295,110 @@ describe("ProjectDetails", () => {
 		const history = screen.getByRole("region", { name: /week history/i });
 		expect(within(history).getByText("—/32h").closest("button")).toBeNull();
 		expect(within(history).getByText("8.0/32h").closest("button")).toBeNull();
+		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
+	});
+
+	it("shows a governed week's expectation after holidays and absences in the history row", async () => {
+		hooks.useProject.mockReturnValue({
+			data: {
+				...PROJECT,
+				kind: "day_job",
+				weeklyGoal: undefined,
+				contract: {
+					terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
+					holidayCountry: "CH",
+					openingBalanceHours: 0,
+				},
+			},
+			isLoading: false,
+			error: null,
+		});
+		// The /week/ route reports the term's nominal 32 as the goal and, beside
+		// it, what the week expects once a day of vacation (this week) and a
+		// holiday (last week) are off. The row must show the latter: it is the
+		// figure the week card above it shows.
+		hooks.useProjectWeeks.mockReturnValue({
+			data: [
+				{
+					weeksAgo: 0,
+					hours: 0,
+					dailyDurations: {},
+					effectiveGoal: 32,
+					effectiveGoalType: "target",
+					effectiveGoalOverridden: false,
+					contractExpected: 25.6,
+				},
+				{
+					weeksAgo: 1,
+					weekStart: "2026-08-31",
+					hours: 8,
+					dailyDurations: {},
+					effectiveGoal: 32,
+					effectiveGoalType: "target",
+					effectiveGoalOverridden: false,
+					contractExpected: 24,
+				},
+			],
+		});
+		renderPage();
+
+		const history = await screen.findByRole("region", { name: /week history/i });
+		expect(within(history).getByText("—/25.6h")).toHaveAttribute(
+			"title",
+			expect.stringMatching(/after holidays and absences/),
+		);
+		expect(within(history).getByText("8.0/24h")).toBeInTheDocument();
+		expect(within(history).getByText("-16.0h")).toBeInTheDocument();
+		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
+	});
+
+	it("shows the week a contract starts mid-week as the contract's, with no override to offer", async () => {
+		// The first term takes effect on this week's Wednesday. The API resolves
+		// the week's goal on the personal path — its Monday is before the term —
+		// and there is none; beside it, `contract_expected` is what the three
+		// days expect, which is the week card's figure. The row follows the
+		// card: contract-set, and no override to offer.
+		const monday = getMondayIsoFor(0);
+		hooks.useProject.mockReturnValue({
+			data: {
+				...PROJECT,
+				kind: "day_job",
+				weeklyGoal: undefined,
+				contract: {
+					terms: [
+						{ effectiveFrom: isoDaysAfter(monday, 2), scheduleType: "custom", weeklyHours: 32 },
+					],
+					holidayCountry: "CH",
+					openingBalanceHours: 0,
+				},
+			},
+			isLoading: false,
+			error: null,
+		});
+		hooks.useProjectWeeks.mockReturnValue({
+			data: [
+				{
+					weeksAgo: 0,
+					weekStart: monday,
+					hours: 0,
+					dailyDurations: {},
+					effectiveGoal: null,
+					effectiveGoalOverridden: false,
+					contractExpected: 19.2,
+				},
+			],
+		});
+		hooks.useContractWeek.mockReturnValue({
+			data: { weekOf: monday, expected: 19.2, worked: 0, remaining: 19.2, balance: 0, days: [] },
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		const history = await screen.findByRole("region", { name: /week history/i });
+		const goal = within(history).getByText("—/19.2h");
+		expect(goal).toHaveAttribute("title", expect.stringMatching(/after holidays and absences/));
+		expect(goal.closest("button")).toBeNull();
 		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
 	});
 });

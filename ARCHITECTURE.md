@@ -38,12 +38,14 @@ api/src/
 └── beats/
     ├── settings.py              # Pydantic Settings (env-based config)
     ├── domain/
-    │   ├── models.py            # Beat, Project, WeeklyPlan, Webhook, …
-    │   ├── services.py          # BeatService, ProjectService, TimerService
+    │   ├── models.py            # Beat, Project (kind, Contract), Absence, WeeklyPlan, Webhook, …
+    │   ├── services.py          # BeatService, ProjectService, TimerService, ContractService
+    │   ├── contracts.py         # Work-contract arithmetic: term in force, expected hours, balance
+    │   ├── holidays.py          # The only importer of the `holidays` package: calendars, regions
     │   ├── analytics.py         # AnalyticsService (heatmap, rhythm, gaps)
     │   ├── intelligence/        # Score, digests, patterns, planning, focus, health
     │   ├── ports.py             # The narrow persistence protocols the domain asks for
-    │   ├── flow.py              # Flow-window scoring shared with the daemon
+    │   ├── flow.py              # Pure aggregation over the daemon's flow windows, for the coach
     │   ├── calendar.py          # Google Calendar OAuth + events
     │   ├── github.py            # GitHub OAuth + commit correlation
     │   ├── fitbit.py            # Fitbit OAuth + biometric sync
@@ -52,6 +54,8 @@ api/src/
     ├── coach/                   # AI coach: chat, gateway, context, tools, memory
     ├── infrastructure/
     │   ├── database.py          # PyMongo async client singleton (connect/disconnect)
+    │   ├── migrations.py        # Startup passes: `kind` on every project (a day job's
+    │   │                        # contract too), then the personal goal cleared under it
     │   └── repositories.py      # Abstract repos + Mongo implementations
     ├── auth/
     │   ├── session.py           # JWT session management
@@ -62,7 +66,8 @@ api/src/
         ├── dependencies.py      # FastAPI Depends() wiring
         ├── schemas.py           # Request/response Pydantic models
         └── routers/
-            ├── projects.py      # CRUD, timer start/stop, stats
+            ├── projects.py      # CRUD, timer start/stop, stats, contract, week, holidays
+            ├── absences.py      # Absences under /api/projects/{id}
             ├── beats.py         # Session CRUD, filtering
             ├── timer.py         # Timer status
             ├── analytics.py     # Heatmap, rhythm, tags
@@ -74,6 +79,7 @@ api/src/
             ├── webhooks.py      # Webhook CRUD + dispatch
             ├── export.py        # JSON backup/restore, CSV export
             ├── device.py        # Wall clock status + favorites + pairing
+            ├── meta.py          # Holiday-region list
             ├── account.py       # me, refresh, credentials, logout
             ├── auth.py          # WebAuthn registration/login
             └── sso.py           # home.space config + session exchange
@@ -88,11 +94,12 @@ data out.
 Pure business logic with no framework dependencies.
 
 - **Beat** — A single time tracking session with start/end timestamps, project reference, optional note and tags. Computed properties: `duration` (timedelta), `day` (date).
-- **Project** — A named time category with optional weekly goal (target or cap), color, and archive flag.
+- **Project** — A named time category with a `kind` (day job, freelance, side project), optional weekly goal (target or cap), color, and archive flag. A day job may carry a **Contract**: dated terms (full-time, part-time as a percentage of a basis, custom hours, or objective), the employer's holiday region, an opening balance and an `ended_on`. On a week a time-based term governs, the contract is the goal.
+- **Absence** — One day off (vacation, sick or other; whole or half) on a day-job project. Reduces what the contract expects of that day.
 - **WeeklyPlan** — Per-project hour targets for one week.
 - **Webhook** — A registered URL to receive `timer.start` / `timer.stop` events.
 
-Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions.
+Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions, `ContractService` reads a day job's week and running balance against its contract, holidays and absences.
 
 ### Infrastructure Layer
 

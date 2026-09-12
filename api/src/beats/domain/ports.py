@@ -110,3 +110,14 @@ class AbsenceStore(Protocol):
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
+
+
+class WeekExpectationReader(Protocol):
+    """What a reader that quotes a week's figure needs of the contract: the
+    hours it expects of that week after holidays and absences, or None when
+    it expects nothing by nature (`ContractService.expected_for_week`). The
+    week breakdown and the Inbox's readers — the planning line, the pacing
+    card, the stale-project card — read this and nothing else of a
+    contract."""
+
+    async def expected_for_week(self, project: Project, week_of: date) -> float | None: ...

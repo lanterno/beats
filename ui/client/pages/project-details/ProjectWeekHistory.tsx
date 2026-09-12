@@ -25,6 +25,13 @@ export interface WeekRow {
 	 * in the contract history panel.
 	 */
 	contractGoverned: boolean;
+	/**
+	 * What the contract expects of this week after holidays and absences —
+	 * the week card's figure, which the row shows in place of the nominal
+	 * hours so the two agree on one screen. Undefined off a day job, and on a
+	 * week the contract expects nothing of by nature.
+	 */
+	contractExpected?: number;
 }
 
 interface ProjectWeekHistoryProps {
@@ -175,7 +182,18 @@ export function ProjectWeekHistory({
 				{/* Week rows */}
 				{rows.map((row, rowIdx) => {
 					const rowHours = row.total / 60;
-					const rowGoal = row.effectiveGoal;
+					// The contract's adjusted figure wins over the nominal goal the API
+					// resolves for the week, and is rounded to the decimal the card
+					// shows so the two read the same. A week the contract does not
+					// govern can still carry one — its first term starting on a Tuesday
+					// to Friday — and the row follows the card there too: contract-set,
+					// no override offered, though the API would honour one on that
+					// week's personal goal, which nothing on this screen shows.
+					const byContract = row.contractGoverned || row.contractExpected != null;
+					const rowGoal =
+						row.contractExpected != null
+							? Number(row.contractExpected.toFixed(1))
+							: row.effectiveGoal;
 					const rowGoalType = row.effectiveGoalType;
 					const goalMet = rowGoal ? rowHours >= rowGoal : false;
 					const goalPctRow = rowGoal ? Math.min((rowHours / rowGoal) * 100, 100) : 0;
@@ -188,7 +206,7 @@ export function ProjectWeekHistory({
 					// A null goal is "No goal" when something said so — an override, or
 					// a contract term of 0 hours (a sabbatical) — and "—" when nothing
 					// sets one at all.
-					const saysNoGoal = isOverridden || row.contractGoverned;
+					const saysNoGoal = isOverridden || byContract;
 					const goalText =
 						rowGoal != null
 							? row.total > 0
@@ -254,10 +272,14 @@ export function ProjectWeekHistory({
 							{hasAnyGoal ? (
 								<>
 									<div className="relative flex flex-col items-end gap-0.5">
-										{row.contractGoverned ? (
+										{byContract ? (
 											<span
 												className={`text-sm font-medium tabular-nums ${goalClass}`}
-												title="Set by the contract: its weekly hours before holidays and absences — change its terms in the contract history"
+												title={
+													row.contractExpected != null
+														? "Set by the contract: the hours expected this week after holidays and absences — change its terms in the contract history"
+														: "Set by the contract: its weekly hours before holidays and absences — change its terms in the contract history"
+												}
 											>
 												{goalText}
 											</span>
@@ -295,7 +317,7 @@ export function ProjectWeekHistory({
 												/>
 											</div>
 										)}
-										{!row.contractGoverned && overridePopoverWeek === row.weeksAgo && (
+										{!byContract && overridePopoverWeek === row.weeksAgo && (
 											<GoalOverridePopover
 												currentGoal={rowGoal ?? weeklyGoal ?? null}
 												currentGoalType={rowGoalType}

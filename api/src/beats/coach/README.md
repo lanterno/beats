@@ -123,7 +123,7 @@ The chat coach can call five tools via Anthropic's tool-use API. Each is a small
 
 | Name | Purpose |
 |------|---------|
-| `get_projects` | Active project list with weekly goals (or full list if `include_archived`) |
+| `get_projects` | Active project list with weekly goals — on a day job the contract governs, its hours and their origin (`contract, 80%`) — or the full list if `include_archived` |
 | `get_beats` | Sessions in a date range (default last 7 days), optionally filtered by project name |
 | `get_productivity_score` | Score 0-100 with consistency / goals / quality components |
 | `get_patterns` | Detected patterns (day patterns, peak hours, stale projects, session trends) |

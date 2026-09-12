@@ -80,6 +80,14 @@ endpoints are wired in `api_client.dart` and live on the API:
 - `GET /api/signals/pending-suggestions` — pending auto-timer
   suggestions for the notification poller
 
+The companion knows nothing of project kinds or contracts. It lists
+projects, so `kind` and `contract` arrive in that response and are
+ignored (the contract figures in `this_week` come only with
+`include=this_week`, which it never asks for), and it reads none of the
+contract, week, holiday or absence routes under `/api/projects/{id}/…` —
+reachable with its device token all the same; see `companion-roadmap.md`
+§ Auth model.
+
 ### Already-installed dependencies
 
 `http`, `shared_preferences`, `flutter_secure_storage`, `mobile_scanner`,

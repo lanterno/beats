@@ -26,6 +26,7 @@ from beats.api.schemas import (
     ProjectsListItemResponse,
     RecordTimeRequest,
     UpdateProjectRequest,
+    WeekBreakdownResponse,
 )
 from beats.domain.holidays import Holiday
 from beats.domain.models import Contract, ContractWeek, GoalOverride, Project, ProjectKind
@@ -321,14 +322,17 @@ async def today_time_for_project(project_id: str, service: ProjectServiceDep) ->
     return DurationResponse(duration=str(duration))
 
 
-@router.get("/{project_id}/week/")
+@router.get("/{project_id}/week/", response_model=WeekBreakdownResponse)
 async def current_week_time_for_project(
     project_id: str,
     service: ProjectServiceDep,
     weeks_ago: int = 0,
     display_each_log_duration: bool = False,
 ):
-    """Get time breakdown for a week."""
+    """Get time breakdown for a week: hours per day, the total, the week's
+    Monday, the effective goal as resolved for it, and `contract_expected` —
+    what the contract expects of the week after holidays and absences on a
+    day job it governs (the week card's figure), null elsewhere."""
     return await service.get_week_breakdown(
         project_id=project_id,
         weeks_ago=weeks_ago,

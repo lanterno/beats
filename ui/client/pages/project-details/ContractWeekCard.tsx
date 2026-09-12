@@ -7,10 +7,10 @@
  *
  * The balance is as of today whichever week is shown — it is one figure,
  * not a per-week one, and the API sends it whenever today's term owes
- * hours — so the line says so and sits under every week alike. A week no
- * time-based term governs (an objective term, a week before the contract)
- * has no expectation of its own: it shows the hours worked and the personal
- * goal if there is one, which is what the API resolves for such a week.
+ * hours — so the line says so and sits under every week alike. A week with
+ * no expectation by nature (an objective term, a term of 0 hours, a week
+ * before the contract) shows the hours worked and the personal goal if
+ * there is one, which is what the API resolves for such a week.
  */
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -21,6 +21,7 @@ import type {
 	Contract,
 	ContractDay,
 	ContractDayAbsence,
+	ContractTerm,
 	ContractWeek,
 } from "@/entities/project";
 import { balanceTone, describeBalance, termOn, useContractWeek } from "@/entities/project";
@@ -153,7 +154,7 @@ export function ContractWeekCard({
 						<UngovernedWeek
 							week={week}
 							personalGoal={personalGoal}
-							started={termOn(contract, weekOf) !== undefined}
+							term={termOn(contract, weekOf)}
 						/>
 					) : (
 						<GovernedWeek week={week} expected={week.expected} />
@@ -224,11 +225,12 @@ function GovernedWeek({ week, expected }: { week: ContractWeek; expected: number
 function UngovernedWeek({
 	week,
 	personalGoal,
-	started,
+	term,
 }: {
 	week: ContractWeek;
 	personalGoal: number | null;
-	started: boolean;
+	/** The term in force on the week's Monday; undefined before the contract starts. */
+	term: ContractTerm | undefined;
 }) {
 	return (
 		<>
@@ -238,9 +240,11 @@ function UngovernedWeek({
 			</dl>
 			{personalGoal != null && <ProgressBar worked={week.worked} expected={personalGoal} />}
 			<p className="mt-2 text-[11px] text-muted-foreground">
-				{started
-					? "An objective-based term: no weekly expectation."
-					: "Before the contract starts: nothing is expected yet."}
+				{term === undefined
+					? "Before the contract starts: nothing is expected yet."
+					: term.scheduleType === "objective"
+						? "An objective-based term: no weekly expectation."
+						: "A term of 0 hours: no weekly expectation."}
 			</p>
 		</>
 	);

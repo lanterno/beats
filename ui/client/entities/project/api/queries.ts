@@ -150,6 +150,7 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 						effectiveGoal,
 						effectiveGoalType,
 						effectiveGoalOverridden,
+						contractExpected,
 					} = await fetchProjectWeek(projectId, weeksAgo);
 					return {
 						weeksAgo,
@@ -159,6 +160,7 @@ export function useProjectWeeks(projectId: string | undefined, weekCount: number
 						effectiveGoal,
 						effectiveGoalType,
 						effectiveGoalOverridden,
+						contractExpected,
 					};
 				}),
 			);

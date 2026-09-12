@@ -1,27 +1,38 @@
 """Smart daily plan — what to work on today, from what the last weeks looked like."""
 
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
-from beats.domain.ports import ProjectLister, RangeBeatReader
+from beats.domain.models import Beat, Project
 from beats.domain.utils import local_date
 
-from ._support import UTC_TZ, _beats_covering, _format_hours, _monday_of
+from ._support import UTC_TZ, _format_hours, _monday_of
+from .goals import WeekGoal, nominal_week_goals
 
 
-async def suggest_daily_plan(
-    beat_repo: RangeBeatReader,
-    project_repo: ProjectLister,
+def suggest_daily_plan(
+    beats: list[Beat],
+    projects: list[Project],
     target_date: date,
     tz: ZoneInfo = UTC_TZ,
+    goals: Mapping[str, WeekGoal] | None = None,
 ) -> list[dict]:
-    """Suggest up to 3 projects and durations to focus on today."""
+    """Suggest up to 3 projects and durations to focus on today.
+
+    Pure: `beats` are the completed beats of the eight weeks up to
+    `target_date` (`_beats_covering`), and `goals` is what each project's
+    week asks for (`week_goals`) — on a day job the contract governs, the
+    week's expectation after holidays and absences, so the remaining hours
+    quoted here are the week card's, not the nominal term's. Left out, the
+    nominal goals are used.
+    """
     dow = target_date.weekday()
     monday = _monday_of(target_date)
+    if goals is None:
+        goals = nominal_week_goals(projects, monday)
 
-    beats = await _beats_covering(beat_repo, target_date - timedelta(weeks=8), target_date)
-    projects = await project_repo.list(archived=False)
     # Keyed by a non-None id: `Project.id` is Optional on the model (the
     # standard post-Mongo shape) but populated for every row the repo
     # returns, and the day-of-week buckets below index by that key.
@@ -73,14 +84,19 @@ async def suggest_daily_plan(
         avg = day_avgs.get(pid, 0)
 
         # Unmet goal weight
-        goal, _ = p.effective_goal(monday)
+        week_goal = goals.get(pid)
+        goal = week_goal.hours if week_goal is not None else None
         unmet_weight = 0.0
         remaining_reason = ""
         if goal and goal > 0:
             remaining = goal - week_hours.get(pid, 0)
             if remaining > 0:
                 unmet_weight = min(remaining / goal, 1.0)
-                remaining_reason = f"You need {remaining:.1f}h more to hit your weekly goal"
+                remaining_reason = (
+                    f"You need {remaining:.1f}h more this week under your contract"
+                    if week_goal is not None and week_goal.source == "contract"
+                    else f"You need {remaining:.1f}h more to hit your weekly goal"
+                )
 
         recency = 1.0 if pid in yesterday_projects else 0.0
 
