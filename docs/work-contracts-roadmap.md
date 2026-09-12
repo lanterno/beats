@@ -215,36 +215,63 @@ field; a migrated document has one, so it is idempotent by
 construction. Lazy defaults are *not* used here because terms derived
 from overrides must be stored once and then owned by the user.
 
+**Phases 1 and 2 deploy together.** From Phase 1 on the repository
+writes the model's default `kind` (`side_project`) on every save, so a
+target project saved under Phase 1 alone would look migrated to this
+pass and keep its goal with no contract. The `PUT /api/projects` route
+must carry `kind` and `contract` from the stored project, as it already
+carries `goal_overrides`, or the first ordinary edit undoes the pass.
+
 Rules, applied per project:
 
-1. No `weekly_goal` → `side_project`.
+1. No `weekly_goal`, or one that is zero or negative → `side_project`.
 2. `weekly_goal` set and `goal_type == cap` → `side_project`, goal kept
    (a cap is a limiter, not a contract).
 3. `weekly_goal` set and `goal_type == target` → `day_job`:
-   - the base term: `effective_from` = the project's earliest beat's
-     date, or `created_at` if it has none; `custom`;
+   - the base term: `effective_from` = the date of the project's
+     earliest beat, running or not, or — `Project` has no `created_at`
+     — the ObjectId's date if it has none; `custom`;
      `weekly_hours = weekly_goal`.
    - every `effective_from` override becomes a term on that date:
      `weekly_goal` → `custom` with those hours; `weekly_goal is None`
      → `custom` with `weekly_hours = 0` (no expectation from here;
-     "sabbatical" reads the same way).
+     "sabbatical" reads the same way). An override dated on or before
+     the base date was already in force then, so it *replaces* the base
+     term's hours instead of adding a term — the latest such override
+     wins, as it did under `effective_goal` — and the project's own
+     `weekly_goal` appears in no term, having applied only to weeks
+     before the first beat. An override typed `cap` becomes a term at
+     its hours all the same; its date is logged, since a limit has
+     become an obligation.
    - `week_of` overrides are one-week deviations, not contract
-     changes. They are left on `goal_overrides` untouched and stop
-     applying, because the week card for a day job reads the contract.
-     Their count and weeks are logged so the user can be told.
-   - `weekly_goal` is **cleared** on the project (the contract owns it
-     now); `goal_overrides` is left as is.
+     changes. They are left on `goal_overrides` untouched; the contract
+     does not know them. Their weeks are logged so the user can be told.
+   - `weekly_goal` and `goal_overrides` are **left as they are**. Nothing
+     reads the contract until Phases 3 and 5, and a push deploys, so
+     clearing the goal here would blank the week card, the score, the
+     coach and the patterns for every day job until then. Leaving it
+     also makes the pass additive: a rollback, or the old revision still
+     serving during a Cloud Run rollout, shows the goal it always did,
+     and a document it rewrites without `kind` is migrated again to the
+     same contract. Clearing the personal goal on day jobs is Phase 5's,
+     once the week card reads the contract.
    - no region, no opening balance. The UI's "complete your contract"
      nudge covers both.
 
 Overrides are sorted by date and coalesced when consecutive terms have
-the same hours. Log one line per migrated project with what it became.
+the same hours. Log one line per migrated project — id only, no name —
+with what it became. A document the pass cannot read is logged, left
+without a `kind` so the next boot retries, and does not stop startup.
 
 **Tests** (`test_migration.py`): a target project with two
 `effective_from` overrides (one to a new number, one to `None`) becomes
 three terms in order; a cap project stays a side project; a project
 with a `week_of` override only gets one term and the override is left in
-place; re-running the migration changes nothing.
+place; re-running the migration changes nothing; a document the pass
+cannot read is skipped and the rest migrated; and, Monday by Monday from
+the first beat, `term_on` says what `effective_goal` said — Decision 10
+as an assertion. `test_api.py`: a PUT on a migrated day job keeps its
+`kind` and `contract`.
 
 ### Phase 3 — HTTP contract `[api]`
 
@@ -310,6 +337,11 @@ The reason for all of the above.
 - **Week history**: `ProjectWeekHistory` reads expected from the
   contract for day jobs so past weeks show the term that applied then,
   not today's.
+- **Clear the personal goal on day jobs** `[api]`. Phase 2 left
+  `weekly_goal` in place because nothing read the contract yet. Once the
+  week card does, a second startup pass unsets it on every `day_job`
+  with a contract, and the API-side readers (`scoring`, `patterns`, the
+  coach context) take the contract's hours instead.
 - `pnpm gen:types` after the API lands; the drift check is on pre-push.
 
 ### Phase 6 — Docs and gates

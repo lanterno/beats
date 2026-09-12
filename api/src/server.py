@@ -40,6 +40,7 @@ from beats.api.routers.webhooks import router as webhooks_router
 from beats.auth import device_access
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.database import Database
+from beats.infrastructure.migrations import migrate_project_kinds
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Connecting to database...")
     await Database.connect()
     logger.info("Database connected.")
+    # A project without `kind` predates contracts; stamp it once, here, so
+    # the terms derived from its overrides are stored and then owned by the
+    # user rather than recomputed on every read.
+    await migrate_project_kinds(Database.get_db())
     await ensure_mutation_log_indexes()
     yield
     # Shutdown: Disconnect from database

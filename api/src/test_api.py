@@ -824,6 +824,37 @@ class TestGoalOverridesAPI:
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["weekly_goal"] is None
 
+    def test_update_project_preserves_kind_and_contract(self, client, auth_headers, mongo):
+        """The same edit must not undo the startup migration: `kind` and
+        `contract` are not on the wire yet, so a PUT that rebuilt the project
+        from the request alone would replace a migrated day job with a side
+        project and no contract. Planted and read back in the collection,
+        since that is the only place they exist until the contract routes."""
+        from bson import ObjectId
+
+        project = self._create_project(client, auth_headers, weekly_goal=20)
+        oid = ObjectId(project["id"])
+        terms = [{"effective_from": "2026-01-05", "schedule_type": "custom", "weekly_hours": 20.0}]
+        mongo.projects.update_one(
+            {"_id": oid}, {"$set": {"kind": "day_job", "contract": {"terms": terms}}}
+        )
+
+        resp = client.put(
+            "/api/projects/",
+            json={
+                "id": project["id"],
+                "name": project["name"],
+                "color": "#abcdef",
+                "weekly_goal": 20,
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        doc = mongo.projects.find_one({"_id": oid})
+        assert doc["kind"] == "day_job"
+        assert doc["contract"]["terms"] == terms
+
     def test_null_override_does_not_affect_earlier_weeks(self, client, auth_headers):
         """A permanent null override starting on a future Monday leaves earlier
         weeks with the project default goal."""
