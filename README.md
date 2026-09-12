@@ -101,6 +101,7 @@ The Flutter app and VS Code extension are shipped in this repo:
 
 | Document | What it covers |
 |----------|---------------|
+| [Work Contracts Roadmap](docs/work-contracts-roadmap.md) | Day-job projects with a contract — percentage of a full-time basis, regional holidays, absences, and a running overtime balance; the decisions, the arithmetic, and the phases |
 | [Companion Roadmap](docs/companion-roadmap.md) | What's left for the companion — native widgets, Apple Watch, server push |
 | [Pete macOS Roadmap](docs/pete-macos-roadmap.md) | The Mac-only ambition — dock badge, Focus auto-engage, Spotlight + Shortcuts, Live Activities, Apple Intelligence. All of it needs a Mac; none is built. |
 | [Flutter Companion](docs/flutter-companion.md) | Companion design notes, API contract, and the remaining HealthKit / Health Connect / background-sync work (blocked on real devices) |
