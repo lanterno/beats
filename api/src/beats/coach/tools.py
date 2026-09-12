@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from beats.coach.repos import CoachRepos, build_repos, fmt_minutes
+from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
@@ -111,9 +111,19 @@ class _ToolContext:
 async def _handle_get_projects(ctx: _ToolContext, tool_input: dict) -> str:
     include_archived = tool_input.get("include_archived", False)
     filtered = ctx.projects if include_archived else [p for p in ctx.projects if not p.archived]
+    today = datetime.now(UTC).date()
+    monday = today - timedelta(days=today.weekday())
     lines = []
     for p in filtered:
-        goal = f" (goal: {p.weekly_goal}h/wk {p.goal_type})" if p.weekly_goal else ""
+        term = p.goal_term(monday)
+        if term is not None:
+            # A governing term of 0 hours is no goal, and hides the personal one.
+            hours, _ = p.effective_goal(monday)
+            goal = f" (goal: {hours:g}h/wk, {fmt_contract_goal(term)})" if hours else ""
+        elif p.weekly_goal:
+            goal = f" (goal: {p.weekly_goal}h/wk {p.goal_type})"
+        else:
+            goal = ""
         status = " [archived]" if p.archived else ""
         lines.append(f"- {p.name}{goal}{status}")
     return "\n".join(lines) if lines else "No projects found."

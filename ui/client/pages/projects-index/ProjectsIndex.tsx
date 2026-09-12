@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
+	BalanceChip,
 	extractCategories,
 	filterAndRankProjects,
 	NewProjectDialog,
@@ -25,6 +26,7 @@ import {
 	useProjects,
 	useUnarchiveProject,
 	visibleProjects,
+	weekGoalView,
 } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { cn, formatDuration } from "@/shared/lib";
@@ -440,7 +442,8 @@ function ProjectsTable({
 					    the page's uppercase + letter-spacing-0.14em treatment + py-2 px-3
 					    button padding. */}
 					{!archivedView && <col style={{ width: "128px" }} />}
-					{!archivedView && <col style={{ width: "112px" }} />}
+					{/* This week: "28.5/40h" and, on a day job, its balance chip. */}
+					{!archivedView && <col style={{ width: "136px" }} />}
 					<col style={{ width: "128px" }} />
 					{archivedView && <col style={{ width: "96px" }} />}
 				</colgroup>
@@ -665,25 +668,32 @@ function ProjectsCardList({
 }
 
 function WeeklyProgress({ project }: { project: ProjectWithDuration }) {
-	const goal = project.effectiveGoalOverridden
-		? (project.effectiveGoal ?? null)
-		: (project.effectiveGoal ?? project.weeklyGoal ?? null);
-	if (project.weeklyMinutes === 0 && goal == null) {
-		return <span className="text-muted-foreground/40">—</span>;
+	// The contract's figures on a day job it governs, the personal goal's
+	// on everything else — the same rule the dashboard's pulse list reads.
+	const week = weekGoalView(project);
+	const balance =
+		week.balance !== null ? <BalanceChip hours={week.balance} className="ml-1.5" /> : null;
+	if (week.hours === 0 && !week.goal) {
+		// Nothing worked against nothing asked — a week of holidays, or after
+		// the contract ended — still carries the balance, as the pulse list's
+		// row does.
+		return <span className="text-muted-foreground/40 whitespace-nowrap">—{balance}</span>;
 	}
-	const actualHours = project.weeklyMinutes / 60;
-	if (goal == null) {
+	if (!week.goal) {
 		return (
-			<span className="text-foreground tabular-nums">{formatDuration(project.weeklyMinutes)}</span>
+			<span className="text-foreground tabular-nums whitespace-nowrap">
+				{formatDuration(week.hours * 60)}
+				{balance}
+			</span>
 		);
 	}
-	const pct = Math.min(100, Math.round((actualHours / goal) * 100));
+	const pct = Math.min(100, Math.round((week.hours / week.goal) * 100));
 	return (
 		<span
-			className="tabular-nums text-foreground"
-			title={`${actualHours.toFixed(1)}h of ${goal}h (${pct}%)`}
+			className="tabular-nums text-foreground whitespace-nowrap"
+			title={`${week.hours.toFixed(1)}h of ${week.goal}h (${pct}%)`}
 		>
-			{actualHours.toFixed(1)}/{goal}h
+			{week.hours.toFixed(1)}/{week.goal}h{balance}
 		</span>
 	);
 }

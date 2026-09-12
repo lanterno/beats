@@ -401,6 +401,89 @@ class TestGoalOverrideResolution:
         assert goal == 25
 
 
+class TestContractGoal:
+    """`Project.effective_goal` on a day job with a contract: the contract's term is
+    the goal on the weeks it governs, and the personal goal is untouched on the rest."""
+
+    START = date(2026, 3, 2)  # a Monday
+
+    def _day_job(self, *terms: ContractTerm, kind: ProjectKind = ProjectKind.DAY_JOB) -> Project:
+        return Project(
+            name="Acme",
+            kind=kind,
+            contract=Contract(terms=list(terms)),
+            # A personal goal, and overrides on both shapes, that all say otherwise.
+            weekly_goal=20,
+            goal_type=GoalType.CAP,
+            goal_overrides=[
+                GoalOverride(week_of=self.START, weekly_goal=10),
+                GoalOverride(effective_from=self.START - timedelta(weeks=8), weekly_goal=15),
+            ],
+        )
+
+    @staticmethod
+    def _part_time(effective_from: date) -> ContractTerm:
+        return ContractTerm(
+            effective_from=effective_from,
+            schedule_type=ScheduleType.PART_TIME,
+            full_time_hours=42,
+            percentage=0.8,
+        )
+
+    def test_time_based_term_is_the_goal_and_the_personal_goal_is_not_read(self):
+        term = self._part_time(self.START - timedelta(weeks=4))
+        p = self._day_job(term)
+        assert p.effective_goal(self.START) == (pytest.approx(33.6), GoalType.TARGET)
+        assert p.goal_term(self.START) == term
+
+    def test_objective_term_leaves_the_personal_goal(self):
+        p = self._day_job(
+            ContractTerm(
+                effective_from=self.START - timedelta(weeks=4),
+                schedule_type=ScheduleType.OBJECTIVE,
+            )
+        )
+        assert p.effective_goal(self.START) == (10, GoalType.CAP)
+        assert p.goal_term(self.START) is None
+
+    def test_before_the_first_term_the_personal_goal_applies(self):
+        p = self._day_job(self._part_time(self.START + timedelta(days=7)))
+        assert p.effective_goal(self.START) == (10, GoalType.CAP)
+        assert p.goal_term(self.START) is None
+
+    def test_a_term_changing_midweek_takes_over_the_following_monday(self):
+        wednesday = self.START + timedelta(days=2)
+        p = self._day_job(
+            self._part_time(self.START - timedelta(weeks=4)),
+            ContractTerm(
+                effective_from=wednesday,
+                schedule_type=ScheduleType.FULL_TIME,
+                full_time_hours=42,
+            ),
+        )
+        assert p.effective_goal(self.START)[0] == pytest.approx(33.6)
+        assert p.effective_goal(self.START + timedelta(weeks=1))[0] == 42
+
+    def test_a_contract_on_any_other_kind_is_not_read(self):
+        p = self._day_job(
+            self._part_time(self.START - timedelta(weeks=4)), kind=ProjectKind.FREELANCE
+        )
+        assert p.effective_goal(self.START) == (10, GoalType.CAP)
+
+    def test_a_term_of_no_hours_governs_the_week_and_sets_no_goal(self):
+        """The migration's reading of an override that said "no goal from here":
+        the personal goal must not resurface under it, and the week has no goal
+        — not a goal of 0 h — as it had under the override (Decision 10)."""
+        sabbatical = ContractTerm(
+            effective_from=self.START - timedelta(weeks=4),
+            schedule_type=ScheduleType.CUSTOM,
+            weekly_hours=0,
+        )
+        p = self._day_job(self._part_time(self.START - timedelta(weeks=8)), sabbatical)
+        assert p.goal_term(self.START) == sabbatical
+        assert p.effective_goal(self.START) == (None, GoalType.TARGET)
+
+
 class TestBiometricDayModel:
     """BiometricDay aggregates one day of biometrics from one source.
 

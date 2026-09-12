@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from beats.domain.models import ContractTerm, ScheduleType
 from beats.domain.ports import CompletedBeatReader, FlowWindowReader, ProjectLister
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
@@ -44,6 +45,18 @@ class CoachRepos:
 def fmt_minutes(minutes: float) -> str:
     h, m = divmod(int(minutes), 60)
     return f"{h}h {m}m" if h > 0 else f"{m}m"
+
+
+def fmt_contract_goal(term: ContractTerm) -> str:
+    """A time-based term as the coach names a goal's origin, in one breath:
+    "contract, 80%" for part-time, "contract, full-time", or just "contract"
+    for a custom term, whose hours say all there is. The hours themselves are
+    the caller's to print — the two coach surfaces lay them out differently."""
+    if term.schedule_type is ScheduleType.PART_TIME and term.percentage is not None:
+        return f"contract, {term.percentage:.0%}"
+    if term.schedule_type is ScheduleType.FULL_TIME:
+        return "contract, full-time"
+    return "contract"
 
 
 async def build_repos(user_id: str) -> CoachRepos:

@@ -5,11 +5,28 @@ from datetime import date, datetime, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
-from beats.domain.models import Beat
+from beats.domain.models import Beat, Project
 from beats.domain.ports import ProjectLister, RangeBeatReader
 from beats.domain.utils import local_date
 
 from ._support import UTC_TZ, _beats_covering, _monday_of, _rescale_score
+
+NEUTRAL_GOAL_SCORE = 13
+
+
+def _goal_score(projects: list[Project], project_hours: dict[str, float], monday: date) -> int:
+    """The goal component (0-25) for one week: mean progress towards each
+    project's goal for that week, or the neutral 13 when no project's week has
+    one — a project whose only goal is a contract that has not started, or an
+    override saying "no goal", counts as none that week."""
+    progresses = []
+    for p in projects:
+        goal, _ = p.effective_goal(monday)
+        if goal and goal > 0:
+            progresses.append(min(project_hours.get(p.id or "", 0) / goal, 1.0))
+    if not progresses:
+        return NEUTRAL_GOAL_SCORE
+    return round(sum(progresses) / len(progresses) * 25)
 
 
 async def compute_productivity_score(
@@ -34,24 +51,14 @@ async def compute_productivity_score(
     weekdays_tracked = sum(1 for d in weekdays if d in tracked_dates)
     consistency = round(weekdays_tracked / max(len(weekdays), 1) * 25)
 
-    # 2. Goal progress (0-25)
-    goal_projects = [p for p in projects if p.weekly_goal]
-    if goal_projects:
-        # Sum hours per project this week
-        week_beats = [b for b in beats if local_date(b.start, tz) >= week_start]
-        project_hours: dict[str, float] = defaultdict(float)
-        for b in week_beats:
-            project_hours[b.project_id] += b.duration.total_seconds() / 3600
-
-        progresses = []
-        for p in goal_projects:
-            goal, _ = p.effective_goal(week_start)
-            if goal and goal > 0:
-                progress = min(project_hours.get(p.id or "", 0) / goal, 1.0)
-                progresses.append(progress)
-        goal_score = round((sum(progresses) / len(progresses) * 25) if progresses else 12.5)
-    else:
-        goal_score = 13  # neutral
+    # 2. Goal progress (0-25): mean progress over the projects whose week has
+    # a goal (`effective_goal` — the contract's on a day job it governs, the
+    # personal goal elsewhere); neutral when no project's week has one.
+    week_beats = [b for b in beats if local_date(b.start, tz) >= week_start]
+    project_hours: dict[str, float] = defaultdict(float)
+    for b in week_beats:
+        project_hours[b.project_id] += b.duration.total_seconds() / 3600
+    goal_score = _goal_score(projects, project_hours, week_start)
 
     # 3. Session quality (0-25)
     durations = [b.duration.total_seconds() / 60 for b in beats]
@@ -109,7 +116,6 @@ async def compute_productivity_score_history(
     range_start = current_monday - timedelta(weeks=weeks)
     all_beats = await beat_repo.list_completed_in_range(range_start, today)
     projects = await project_repo.list(archived=False)
-    goal_projects = [p for p in projects if p.weekly_goal]
 
     for w in range(weeks, 0, -1):
         monday = current_monday - timedelta(weeks=w)
@@ -125,15 +131,7 @@ async def compute_productivity_score_history(
         project_hours: dict[str, float] = defaultdict(float)
         for b in week_beats:
             project_hours[b.project_id] += b.duration.total_seconds() / 3600
-        if goal_projects:
-            progresses = []
-            for p in goal_projects:
-                goal, _ = p.effective_goal(monday)
-                if goal and goal > 0:
-                    progresses.append(min(project_hours.get(p.id or "", 0) / goal, 1.0))
-            goal_s = round((sum(progresses) / len(progresses) * 25) if progresses else 12.5)
-        else:
-            goal_s = 13
+        goal_s = _goal_score(projects, project_hours, monday)
 
         durs = [b.duration.total_seconds() / 60 for b in week_beats]
         if durs:

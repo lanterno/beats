@@ -2,6 +2,7 @@
 export {
 	archiveProject,
 	createProject,
+	fetchContractWeek,
 	fetchHolidayRegions,
 	fetchProjectHolidays,
 	fetchProjects,
@@ -17,6 +18,7 @@ export {
 	projectKeys,
 	useArchivedProjects,
 	useArchiveProject,
+	useContractWeek,
 	useCreateProject,
 	useHolidayRegions,
 	useProject,

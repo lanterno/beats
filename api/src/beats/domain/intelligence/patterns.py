@@ -120,9 +120,16 @@ def detect_stale_projects(
         if pid not in last_beat or d > last_beat[pid]:
             last_beat[pid] = d
 
+    # The goal standing this week — the contract's on a day job it governs,
+    # else the personal goal as overridden — since that is the figure the
+    # card quotes back.
+    monday = _monday_of(today)
     results = []
     for p in projects:
-        if p.archived or not p.weekly_goal:
+        if p.archived:
+            continue
+        goal, _ = p.effective_goal(monday)
+        if not goal:
             continue
         last = last_beat.get(p.id or "")
         if last is None or (today - last).days >= 14:
@@ -133,7 +140,7 @@ def detect_stale_projects(
                     type="stale_project",
                     title=f"{p.name} needs attention",
                     body=f"You haven't tracked time on {p.name} in {days} days, "
-                    f"but it still has a weekly goal of {p.weekly_goal}h.",
+                    f"but it still has a weekly goal of {goal}h.",
                     data={"project_id": p.id, "days_since": days},
                     priority=4,
                 )

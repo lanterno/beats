@@ -20,8 +20,7 @@ export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
 // `ProjectKind`, `ScheduleType`, `ContractTerm`, `Contract`, `AbsenceType`,
 // `Holiday` and `Region` schemas field for field; the validators behind
 // them (which numbers a schedule type needs, terms in order) are the API's,
-// and a 422 names the offending path in `fields`. The week against the
-// contract arrives with the card that reads it (Phase 5).
+// and a 422 names the offending path in `fields`.
 
 export const ProjectKindSchema = z.enum(["day_job", "freelance", "side_project"]);
 export type ApiProjectKind = z.infer<typeof ProjectKindSchema>;
@@ -62,6 +61,39 @@ export const ApiAbsenceSchema = z.object({
 
 export type ApiAbsence = z.infer<typeof ApiAbsenceSchema>;
 export const ApiAbsenceListSchema = z.array(ApiAbsenceSchema);
+
+// One week of a day job against its contract (GET /contract/week). `expected`,
+// `remaining` and `balance` are null — not 0 — when no time-based term is in
+// force (an objective term, a week before the contract); 0 is a week the
+// contract owed nothing by circumstance. `balance` is as of today whatever
+// week is asked for.
+
+export const DayAbsenceSchema = z.object({
+	type: AbsenceTypeSchema,
+	half_day: z.boolean(),
+	note: z.string().nullable().optional(),
+});
+
+export const ContractDaySchema = z.object({
+	date: z.string(), // YYYY-MM-DD
+	expected: z.number(),
+	worked: z.number(),
+	holiday: z.string().nullable().optional(),
+	absence: DayAbsenceSchema.nullable().optional(),
+});
+
+export type ApiContractDay = z.infer<typeof ContractDaySchema>;
+
+export const ContractWeekSchema = z.object({
+	week_of: z.string(), // the Monday, YYYY-MM-DD
+	expected: z.number().nullable(),
+	worked: z.number(),
+	remaining: z.number().nullable(),
+	balance: z.number().nullable(),
+	days: z.array(ContractDaySchema),
+});
+
+export type ApiContractWeek = z.infer<typeof ContractWeekSchema>;
 
 export const HolidaySchema = z.object({
 	date: z.string(), // YYYY-MM-DD
@@ -116,6 +148,13 @@ export const ApiProjectListItemSchema = ApiProjectSchema.extend({
 	effective_goal: z.number().nullable().optional(),
 	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
 	effective_goal_overridden: z.boolean().nullable().optional(),
+	// The current week against the contract, on a day job that has one; what
+	// GET /contract/week reports, so the index can show it without a fan-out.
+	// Null elsewhere, and all but contract_worked null under an objective term.
+	contract_expected: z.number().nullable().optional(),
+	contract_worked: z.number().nullable().optional(),
+	contract_remaining: z.number().nullable().optional(),
+	balance: z.number().nullable().optional(),
 	last_tracked_at: z.string().nullable().optional(),
 });
 

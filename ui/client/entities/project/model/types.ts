@@ -46,6 +46,41 @@ export interface Contract {
 	endedOn?: string;
 }
 
+/** An absence as the week route reports it on a day: what kind, and whether half of it. */
+export interface ContractDayAbsence {
+	type: "vacation" | "sick" | "other";
+	halfDay: boolean;
+	note?: string;
+}
+
+/** One day of a week against the contract. */
+export interface ContractDay {
+	date: string; // YYYY-MM-DD
+	/** Hours the contract owed on this day, after its holiday or absence; 0 on a weekend. */
+	expected: number;
+	/** Hours worked, by the local day each beat started on. */
+	worked: number;
+	holiday?: string; // the holiday's name
+	absence?: ContractDayAbsence;
+}
+
+/**
+ * One week of a day job against its contract. `expected`, `remaining` and
+ * `balance` are undefined — not 0 — when no time-based term is in force
+ * (an objective term, a week before the contract); 0 means the contract
+ * owed nothing by circumstance. `balance` is as of today whatever week
+ * this is.
+ */
+export interface ContractWeek {
+	weekOf: string; // the Monday, YYYY-MM-DD
+	expected?: number;
+	worked: number;
+	remaining?: number;
+	balance?: number;
+	/** Monday to Sunday, in order. */
+	days: ContractDay[];
+}
+
 /** One public holiday of the contract's region. */
 export interface Holiday {
 	date: string; // YYYY-MM-DD
@@ -87,6 +122,17 @@ export interface ProjectWithDuration extends Project {
 	effectiveGoalType?: "target" | "cap";
 	/** True iff a goal override resolves for the current week */
 	effectiveGoalOverridden?: boolean;
+	/**
+	 * The current week against the contract, on a day job that has one
+	 * (see ContractWeek for what undefined means). `contractWorked` is the
+	 * contract's figure — every beat by local day, a running timer included —
+	 * where `weeklyMinutes` is the personal goal's: completed beats by UTC day.
+	 */
+	contractExpected?: number;
+	contractWorked?: number;
+	contractRemaining?: number;
+	/** Running balance against the contract as of today: over if positive, owed if negative. */
+	balance?: number;
 	/** ISO timestamp of the project's most recent beat — drives the
 	 *  /projects index page's "last tracked" column (P3.0). */
 	lastTrackedAt?: string;

@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
-from beats.coach.repos import CoachRepos, build_repos, fmt_minutes
+from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
 from beats.domain.flow import summarize_flow
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.utils import local_date, local_dt
@@ -83,10 +83,18 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         logger.debug("Productivity score unavailable", exc_info=True)
         score_line = "Productivity score: unavailable"
 
-    # Goals
+    # Goals — this week's: the contract's hours on a day job it governs, the
+    # personal goal elsewhere. One line either way.
+    monday = now.date() - timedelta(days=now.weekday())
     goals = []
     for p in active:
-        if p.weekly_goal:
+        term = p.goal_term(monday)
+        if term is not None:
+            # A governing term of 0 hours is no goal, and hides the personal one.
+            goal, _ = p.effective_goal(monday)
+            if goal:
+                goals.append(f"  {p.name}: {goal:g}h/week ({fmt_contract_goal(term)})")
+        elif p.weekly_goal:
             goals.append(f"  {p.name}: {p.weekly_goal}h/week ({p.goal_type})")
 
     # 30-day flow rollup from the ambient daemon (best-effort — the coach

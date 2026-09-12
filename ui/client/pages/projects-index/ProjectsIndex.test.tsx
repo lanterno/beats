@@ -117,6 +117,41 @@ describe("ProjectsIndex", () => {
 		expect(rows[0]).toHaveTextContent("Alpha");
 	});
 
+	it("shows a day job's week against the contract with its balance, sign first", () => {
+		useProjectsMock.mockReturnValue({
+			data: [
+				project({
+					id: "job",
+					name: "Job",
+					kind: "day_job",
+					weeklyMinutes: 0,
+					contractExpected: 32,
+					contractWorked: 12.5,
+					balance: -2,
+				}),
+				// A week the contract asked nothing of (holidays, or after it
+				// ended) with nothing worked still shows what is owed.
+				project({
+					id: "off",
+					name: "Off",
+					kind: "day_job",
+					weeklyMinutes: 0,
+					contractExpected: 0,
+					contractWorked: 0,
+					balance: 4.5,
+				}),
+			],
+			isLoading: false,
+		});
+		renderPage();
+		const table = screen.getByRole("table");
+		const job = within(table).getByRole("row", { name: /Job/ });
+		expect(job).toHaveTextContent("12.5/32h");
+		expect(job).toHaveTextContent("Balance against the contract: −2.0 h");
+		const off = within(table).getByRole("row", { name: /Off/ });
+		expect(off).toHaveTextContent("+4.5 h");
+	});
+
 	it("shows the no-projects zero-state when there are none", () => {
 		useProjectsMock.mockReturnValue({ data: [], isLoading: false });
 		renderPage();

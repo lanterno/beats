@@ -57,6 +57,27 @@ export function termOn(contract: Contract, isoDate: string): ContractTerm | unde
 }
 
 /**
+ * Whether the contract, not the personal goal, is a week's goal: the project
+ * is a day job whose term in force on the week's Monday is time-based. This
+ * is the API's `Project.goal_term` rule, and it decides what the API ignores
+ * on such a week — the personal goal and every override — so the UI must not
+ * offer to edit them there. Before the first term, under an objective term,
+ * without a contract and on every other kind, the personal goal applies.
+ *
+ * Not the same question as `isTimeBasedOn`, which also counts a contract
+ * that has not started yet, so a form can hide the goal a contract being
+ * set up will replace.
+ */
+export function contractGovernsWeek(
+	project: { kind: string; contract?: Contract },
+	mondayIso: string,
+): boolean {
+	if (project.kind !== "day_job" || !project.contract) return false;
+	const term = termOn(project.contract, mondayIso);
+	return term !== undefined && isTimeBased(term.scheduleType);
+}
+
+/**
  * The term the UI should describe as "the contract" on a day: the one in
  * force, or — before the contract has started — the first one to come.
  */
@@ -92,6 +113,40 @@ export function fromPercent(percent: number): number {
 
 function formatHours(hours: number): string {
 	return `${Math.round(hours * 100) / 100} h`;
+}
+
+/** Which way a balance leans, judged on the figure as shown (one decimal). */
+export type BalanceTone = "over" | "owed" | "even";
+
+/** A balance rounded to the decimal it is shown at, so tone and text agree at ±0.04. */
+function roundedBalance(hours: number): number {
+	return Number(hours.toFixed(1));
+}
+
+export function balanceTone(hours: number): BalanceTone {
+	const rounded = roundedBalance(hours);
+	if (rounded > 0) return "over";
+	if (rounded < 0) return "owed";
+	return "even";
+}
+
+/**
+ * A balance with its sign made unmistakable: "+4.5 h over", "−2.0 h owed"
+ * or "even" — never a bare signed number, whose minus is easy to miss.
+ */
+export function describeBalance(hours: number): string {
+	const tone = balanceTone(hours);
+	if (tone === "even") return "even";
+	const magnitude = Math.abs(roundedBalance(hours)).toFixed(1);
+	return tone === "over" ? `+${magnitude} h over` : `−${magnitude} h owed`;
+}
+
+/** The short form for a chip: "+4.5 h", "−2.0 h", or "even". */
+export function formatSignedHours(hours: number): string {
+	const tone = balanceTone(hours);
+	if (tone === "even") return "even";
+	const magnitude = Math.abs(roundedBalance(hours)).toFixed(1);
+	return tone === "over" ? `+${magnitude} h` : `−${magnitude} h`;
 }
 
 /**

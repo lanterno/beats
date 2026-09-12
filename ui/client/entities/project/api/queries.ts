@@ -4,11 +4,12 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/api";
-import type { ProjectWithDuration, WeekHours } from "../model";
+import type { ContractWeek, ProjectWithDuration, WeekHours } from "../model";
 import { toProject } from "../model";
 import {
 	archiveProject,
 	createProject,
+	fetchContractWeek,
 	fetchHolidayRegions,
 	fetchProjectHolidays,
 	fetchProjects,
@@ -28,6 +29,10 @@ export const projectKeys = {
 	week: (id: string, weeksAgo: number) => [...projectKeys.all, "week", id, weeksAgo] as const,
 	weeks: (id: string) => [...projectKeys.all, "weeks", id] as const,
 	holidays: (id: string, year: number) => [...projectKeys.all, "holidays", id, year] as const,
+	/** Every week of one project against its contract — what an absence write invalidates. */
+	contractWeeks: (id: string) => [...projectKeys.all, "contract-week", id] as const,
+	contractWeek: (id: string, weekOf: string | undefined) =>
+		[...projectKeys.contractWeeks(id), weekOf ?? "current"] as const,
 };
 
 /** The holiday-region list changes only with a release of the API's calendar library. */
@@ -48,6 +53,11 @@ function toProjectWithDuration(item: ApiProjectListItem): ProjectWithDuration {
 		effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
 		effectiveGoalType: item.effective_goal_type ?? undefined,
 		effectiveGoalOverridden: item.effective_goal_overridden ?? false,
+		// Null on the wire means no contract governs the week; see ContractWeek.
+		contractExpected: item.contract_expected ?? undefined,
+		contractWorked: item.contract_worked ?? undefined,
+		contractRemaining: item.contract_remaining ?? undefined,
+		balance: item.balance ?? undefined,
 		lastTrackedAt: item.last_tracked_at ?? undefined,
 	};
 }
@@ -255,6 +265,28 @@ export function useUpdateContract() {
 			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},
+	});
+}
+
+/**
+ * One week of a day job against its contract; `weekOf` undefined is the
+ * current week. Only meaningful on a day job with a contract — pass
+ * `enabled: false` elsewhere rather than let the API answer 409. Invalidated
+ * by every project write (`projectKeys.all`), by absence writes through
+ * `projectKeys.contractWeeks`, and by timer and session writes, since
+ * `worked` moves with them.
+ */
+export function useContractWeek(
+	projectId: string | undefined,
+	weekOf?: string,
+	options: { enabled?: boolean } = {},
+) {
+	return useQuery({
+		queryKey: projectKeys.contractWeek(projectId || "", weekOf),
+		queryFn: (): Promise<ContractWeek> => fetchContractWeek(projectId as string, weekOf),
+		enabled: !!projectId && (options.enabled ?? true),
+		// A running timer moves `worked`; fresh for as long as the list is.
+		staleTime: 30_000,
 	});
 }
 

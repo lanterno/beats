@@ -18,6 +18,13 @@ export interface WeekRow {
 	effectiveGoal: number | null;
 	effectiveGoalType: "target" | "cap";
 	effectiveGoalOverridden: boolean;
+	/**
+	 * The contract sets this week's goal (its term's nominal hours, which the
+	 * API reports as the effective goal), and reads no override on it: the
+	 * figure is shown, and the override popover is not offered — terms change
+	 * in the contract history panel.
+	 */
+	contractGoverned: boolean;
 }
 
 interface ProjectWeekHistoryProps {
@@ -178,6 +185,28 @@ export function ProjectWeekHistory({
 					// Trust the server-resolved flag. It covers both one-off and
 					// permanent overrides (including weeks past an effective_from).
 					const isOverridden = row.effectiveGoalOverridden;
+					// A null goal is "No goal" when something said so — an override, or
+					// a contract term of 0 hours (a sabbatical) — and "—" when nothing
+					// sets one at all.
+					const saysNoGoal = isOverridden || row.contractGoverned;
+					const goalText =
+						rowGoal != null
+							? row.total > 0
+								? `${rowHours.toFixed(1)}/${rowGoal}h`
+								: `—/${rowGoal}h`
+							: saysNoGoal
+								? "No goal"
+								: row.total > 0
+									? `${rowHours.toFixed(1)}h`
+									: "—";
+					const goalClass =
+						rowGoal != null
+							? goalMet
+								? "text-green-400"
+								: "text-accent"
+							: saysNoGoal
+								? "text-muted-foreground"
+								: "text-muted-foreground/50";
 
 					return (
 						<div
@@ -225,38 +254,31 @@ export function ProjectWeekHistory({
 							{hasAnyGoal ? (
 								<>
 									<div className="relative flex flex-col items-end gap-0.5">
-										<button
-											type="button"
-											onClick={() =>
-												setOverridePopoverWeek(
-													overridePopoverWeek === row.weeksAgo ? null : row.weeksAgo,
-												)
-											}
-											className={`text-sm font-medium tabular-nums cursor-pointer hover:underline decoration-dotted underline-offset-2 ${
-												rowGoal != null
-													? goalMet
-														? "text-green-400"
-														: "text-accent"
-													: isOverridden
-														? "text-muted-foreground"
-														: "text-muted-foreground/50"
-											} ${isOverridden ? "italic" : ""}`}
-											title={
-												isOverridden
-													? "Goal override active — click to edit"
-													: "Click to set goal override"
-											}
-										>
-											{rowGoal != null
-												? row.total > 0
-													? `${rowHours.toFixed(1)}/${rowGoal}h`
-													: `—/${rowGoal}h`
-												: isOverridden
-													? "No goal"
-													: row.total > 0
-														? `${rowHours.toFixed(1)}h`
-														: "—"}
-										</button>
+										{row.contractGoverned ? (
+											<span
+												className={`text-sm font-medium tabular-nums ${goalClass}`}
+												title="Set by the contract: its weekly hours before holidays and absences — change its terms in the contract history"
+											>
+												{goalText}
+											</span>
+										) : (
+											<button
+												type="button"
+												onClick={() =>
+													setOverridePopoverWeek(
+														overridePopoverWeek === row.weeksAgo ? null : row.weeksAgo,
+													)
+												}
+												className={`text-sm font-medium tabular-nums cursor-pointer hover:underline decoration-dotted underline-offset-2 ${goalClass} ${isOverridden ? "italic" : ""}`}
+												title={
+													isOverridden
+														? "Goal override active — click to edit"
+														: "Click to set goal override"
+												}
+											>
+												{goalText}
+											</button>
+										)}
 										{row.total > 0 && rowGoal != null && (
 											<div className="w-full h-1 rounded-full bg-muted/40 overflow-hidden">
 												<div
@@ -273,7 +295,7 @@ export function ProjectWeekHistory({
 												/>
 											</div>
 										)}
-										{overridePopoverWeek === row.weeksAgo && (
+										{!row.contractGoverned && overridePopoverWeek === row.weeksAgo && (
 											<GoalOverridePopover
 												currentGoal={rowGoal ?? weeklyGoal ?? null}
 												currentGoalType={rowGoalType}

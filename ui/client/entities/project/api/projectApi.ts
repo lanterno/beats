@@ -13,6 +13,7 @@ import type {
 import {
 	ApiProjectListSchema,
 	ApiProjectSchema,
+	ContractWeekSchema,
 	get,
 	HolidayListSchema,
 	ProjectTotalSchema,
@@ -23,7 +24,8 @@ import {
 	WeekBreakdownSchema,
 } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
-import type { Holiday, HolidayRegion } from "../model";
+import type { ContractWeek, Holiday, HolidayRegion } from "../model";
+import { toContractWeek } from "../model";
 
 /**
  * Per-project aggregations the backend can fold into the list response when
@@ -43,6 +45,9 @@ export async function fetchProjects(
 	const params = new URLSearchParams();
 	if (options.include && options.include.length > 0) {
 		params.set("include", options.include.join(","));
+		// `this_week` buckets the contract's worked hours by local day and
+		// picks the current week in this timezone.
+		params.set("tz", browserTimeZone());
 	}
 	if (options.archived) {
 		// Backend treats absent as false; only send the flag when needed so
@@ -174,6 +179,19 @@ export async function updateContract(
 ): Promise<ApiProject> {
 	const data = await put<unknown>(`/api/projects/${projectId}/contract`, contract);
 	return parseApiResponse(ApiProjectSchema, data);
+}
+
+/**
+ * One week of a day job against its contract. `weekOf` is the week's Monday;
+ * left out, the API takes the current week in the browser's timezone. 409 on
+ * a project that is not a day job (NOT_A_DAY_JOB) or has no contract yet
+ * (NO_CONTRACT); 422 on a `weekOf` that is not a Monday.
+ */
+export async function fetchContractWeek(projectId: string, weekOf?: string): Promise<ContractWeek> {
+	const params = new URLSearchParams({ tz: browserTimeZone() });
+	if (weekOf) params.set("week_of", weekOf);
+	const data = await get<unknown>(`/api/projects/${projectId}/contract/week?${params.toString()}`);
+	return toContractWeek(parseApiResponse(ContractWeekSchema, data));
 }
 
 /** The contract region's public holidays for a year; empty without a region. */

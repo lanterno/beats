@@ -1,10 +1,14 @@
-"""Startup migration: stamp `kind` on every project, and turn a target goal into a contract.
+"""Startup migrations: stamp `kind` on every project, turn a target goal into a
+contract, and then clear the personal goal where the contract has replaced it.
 
-Runs once per boot from `lifespan`, over every user's projects at once — it is
-a task of the deployment, not of a request, so it works on the raw collection
-rather than through a user-scoped repository. A document without a `kind`
-field is unmigrated; a migrated one has it, so the pass is idempotent by
-construction and a second boot finds nothing to do.
+Two passes, run in that order once per boot from `lifespan`, over every user's
+projects at once — a task of the deployment, not of a request, so they work on
+the raw collection rather than through a user-scoped repository. Each is
+idempotent by construction: the first acts on documents without a `kind` field
+and stamps one, the second on day jobs that still carry a `weekly_goal` and
+unsets it, so a second boot finds nothing to do for either.
+
+The first pass, `migrate_project_kinds`:
 
 That test only holds if nothing else writes `kind` first. Since the domain
 model gained the field, the repository writes its default (`side_project`) on
@@ -23,14 +27,13 @@ The rules are the roadmap's (docs/work-contracts-roadmap.md, Phase 2):
    `effective_from` overrides.
 
 The pass is additive: it sets `kind` and, for a day job, `contract`, and
-touches nothing else. `weekly_goal` and `goal_overrides` stay exactly as they
-were. Until the week card and the API's goal readers take the contract, the
-personal goal is still what the user sees, and it must keep saying what it
-said the day before. Leaving it also makes the pass safe to roll back and
-safe under a rollout: a build without the model that rewrites a migrated
-document drops `kind` and `contract`, and the next boot on this build derives
-the same contract from the same fields. Clearing `weekly_goal` on day jobs is
-the step after the readers switch, as its own pass.
+touches nothing else — `weekly_goal` and `goal_overrides` stay exactly as they
+were. That kept the goal readable by the readers of the day, and made the pass
+safe to roll back and safe under a rollout: a build without the model that
+rewrites a migrated document drops `kind` and `contract`, and the next boot on
+this build derives the same contract from the same fields. Clearing the goal
+is the second pass, `clear_personal_goal_on_day_jobs`, added once every reader
+took the contract (Phase 5); its own reasoning is on the function.
 
 What the roadmap leaves open, decided here:
 
@@ -94,7 +97,14 @@ from typing import Any
 from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
 
-from beats.domain.models import Contract, ContractTerm, GoalType, ProjectKind, ScheduleType
+from beats.domain.models import (
+    Contract,
+    ContractTerm,
+    GoalType,
+    Project,
+    ProjectKind,
+    ScheduleType,
+)
 from beats.domain.utils import normalize_tz
 
 logger = logging.getLogger(__name__)
@@ -177,6 +187,117 @@ async def migrate_project_kinds(db: AsyncDatabase) -> MigrationReport:
         report.side_project,
         report.day_job,
         report.skipped,
+    )
+    return report
+
+
+@dataclass
+class ClearReport:
+    """What the clearing pass did: how many goals it unset, how many documents
+    it could not read, and a line per project it touched or skipped."""
+
+    cleared: int = 0
+    skipped: int = 0
+    lines: list[str] = field(default_factory=list)
+
+
+async def clear_personal_goal_on_day_jobs(
+    db: AsyncDatabase, today: date | None = None
+) -> ClearReport:
+    """Unset `weekly_goal` on every day job whose contract sets the goal today.
+
+    A day job the first pass migrated carries both its old personal goal and a
+    contract whose terms encode the same history; a day job set up since may
+    carry both as well. Every reader now resolves the goal through
+    `Project.effective_goal`, which takes the contract on a day job whose term
+    in force on the week's Monday is time-based and never reads `weekly_goal`
+    there, so on those projects the field is dead data that a rollback would
+    show — hence this pass. The predicate is `Project.goal_term` for today's
+    UTC date (there is no request timezone at startup; the day's skew at a
+    term boundary costs nothing, since the next boot looks again): a day job
+    under an objective term, before its contract starts, or without a contract
+    keeps its personal goal, because that is what its readers show.
+
+    `goal_overrides` are left in place. An `effective_from` override is dead
+    for the same reason the goal is; a `week_of` override is the user's note
+    on a week ("holiday", "conference"), and the overrides panel still lists
+    them, so they stay theirs to keep or delete.
+
+    This is the pass the roadmap said would not be additive, and it is the
+    first that is not. Under a rollback to a revision between Phase 1 and this
+    one, or an old revision still serving during a rollout, the projects
+    cleared here are read by the personal goal's path with nothing but their
+    overrides left: the readers that gated on `weekly_goal` — the score, the
+    stale-project card, the coach's goals — go quiet, while the week card,
+    pacing, planning and health show whatever an `effective_from` override in
+    force says (the case for every migrated day job that had one) and "—"
+    where there is none. Readers disagreeing, then, rather than no goal
+    anywhere, until roll-forward, when the readers take the contract again
+    and nothing is lost, because the number the goal had is in the
+    contract's terms (Decision 10). What is lost for good is narrower: a
+    document a revision *without the model* (before Phase 1) rewrites drops
+    `kind` and `contract`, and with no `weekly_goal` left the first pass then
+    migrates it as a side project with no contract. That is a rollback across
+    four deployed phases, and the terms the user edited since Phase 4 could
+    not be re-derived from the goal anyway; it is accepted, and this note is
+    what says so.
+
+    Writes are a `$unset` filtered on the document still being a day job with
+    the personal goal this pass read, so a request that rewrites the project
+    in the meantime — clearing the goal or setting another — is not
+    clobbered. A contract this code cannot read is logged with the
+    project's id and left alone, and startup goes on.
+    """
+    report = ClearReport()
+    today = today if today is not None else datetime.now(UTC).date()
+    docs = await db.projects.find(
+        {
+            "kind": ProjectKind.DAY_JOB.value,
+            "contract": {"$ne": None},
+            "weekly_goal": {"$ne": None},
+        }
+    ).to_list(length=None)
+    if not docs:
+        logger.debug("personal goals on day jobs: nothing to clear")
+        return report
+
+    for doc in docs:
+        project_id = doc["_id"]
+        label = f"project {project_id} (user {doc.get('user_id')})"
+        try:
+            project = Project(
+                name="", kind=ProjectKind.DAY_JOB, contract=Contract.model_validate(doc["contract"])
+            )
+            term = project.goal_term(today)
+        except Exception as exc:  # noqa: BLE001 — one document must not stop the boot
+            report.skipped += 1
+            report.lines.append(f"{label}: skipped — {exc}")
+            logger.error("%s: contract unreadable, personal goal left in place: %s", label, exc)
+            continue
+        if term is None:
+            continue  # objective today, or not started: the personal goal still applies
+
+        result = await db.projects.update_one(
+            {
+                "_id": project_id,
+                "kind": ProjectKind.DAY_JOB.value,
+                "weekly_goal": doc["weekly_goal"],
+            },
+            {"$unset": {"weekly_goal": ""}},
+        )
+        if result.modified_count == 0:
+            report.lines.append(f"{label}: changed under the pass, left alone")
+            continue
+        report.cleared += 1
+        summary = (
+            f"personal goal {doc['weekly_goal']!r} cleared; the contract owes "
+            f"{term.hours_per_week:g} h/week from {term.effective_from}"
+        )
+        report.lines.append(f"{label}: {summary}")
+        logger.info("%s: %s", label, summary)
+
+    logger.info(
+        "personal goals on day jobs: %d cleared, %d skipped", report.cleared, report.skipped
     )
     return report
 

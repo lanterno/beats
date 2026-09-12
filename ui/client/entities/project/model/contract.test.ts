@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	balanceTone,
+	describeBalance,
 	describeTerm,
+	formatSignedHours,
 	fromPercent,
 	isTimeBasedOn,
 	termHoursPerDay,
@@ -89,5 +92,28 @@ describe("isTimeBasedOn", () => {
 		expect(isTimeBasedOn(contract, "2026-02-01")).toBe(true);
 		expect(isTimeBasedOn(contract, "2026-04-01")).toBe(false);
 		expect(isTimeBasedOn(undefined, "2026-02-01")).toBe(false);
+	});
+});
+
+describe("balance wording", () => {
+	it("says the sign in words on both surfaces, and judges it at the decimal shown", () => {
+		expect([balanceTone(4.5), describeBalance(4.5), formatSignedHours(4.5)]).toEqual([
+			"over",
+			"+4.5 h over",
+			"+4.5 h",
+		]);
+		expect([balanceTone(-2), describeBalance(-2), formatSignedHours(-2)]).toEqual([
+			"owed",
+			"−2.0 h owed",
+			"−2.0 h",
+		]);
+		// −0.04 h rounds to the 0.0 shown, so it is even — never "−0.0 h owed".
+		for (const hours of [-0.04, 0, 0.04]) {
+			expect([balanceTone(hours), describeBalance(hours), formatSignedHours(hours)]).toEqual([
+				"even",
+				"even",
+				"even",
+			]);
+		}
 	});
 });

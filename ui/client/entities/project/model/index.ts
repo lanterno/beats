@@ -2,8 +2,13 @@
 export { assignColor, PROJECT_COLORS } from "./colors";
 // Contract arithmetic + labels
 export {
+	type BalanceTone,
+	balanceTone,
+	contractGovernsWeek,
+	describeBalance,
 	describeTerm,
 	displayTermOn,
+	formatSignedHours,
 	fromPercent,
 	isTimeBased,
 	isTimeBasedOn,
@@ -30,7 +35,7 @@ export {
 	validateTerm,
 } from "./contractForm";
 // Mappers
-export { toApiContract, toContract, toProject } from "./mappers";
+export { toApiContract, toContract, toContractWeek, toProject } from "./mappers";
 // Picker recents (user-scoped localStorage)
 export { clearPickerRecents, readPickerRecents, recordPickerRecent } from "./pickerRecents";
 // Project pins (user-scoped localStorage + custom-event sync)
@@ -49,7 +54,10 @@ export {
 // Types
 export type {
 	Contract,
+	ContractDay,
+	ContractDayAbsence,
 	ContractTerm,
+	ContractWeek,
 	DailySummary,
 	GoalOverride,
 	Holiday,
@@ -60,3 +68,5 @@ export type {
 	ScheduleType,
 	WeekHours,
 } from "./types";
+// This-week figures for a list row: contract or personal goal
+export { type WeekGoalView, weekGoalView } from "./weekGoal";

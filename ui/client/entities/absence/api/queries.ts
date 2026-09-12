@@ -2,6 +2,7 @@
  * Absence TanStack Query Hooks
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { projectKeys } from "@/entities/project";
 import type { Absence } from "../model";
 import {
 	type AbsenceInput,
@@ -29,14 +30,22 @@ export function useAbsences(projectId: string | undefined, range: AbsenceRange) 
 }
 
 /**
- * An absence changes what the contract expects of the week; once something
- * reads that (Phase 5's week card), a write must invalidate it too. Today
- * only the calendar reads absences.
+ * An absence changes what the contract expects of the week, so a write
+ * invalidates what reads that beside the calendar: the project's weeks
+ * against the contract (the week card) and the project list, whose
+ * `this_week` include carries the same figures for the index. The list's
+ * detail copy (`useProject`) is not refetched — nothing on the project page
+ * reads the contract fields from it — and the holidays and week history do
+ * not move with an absence.
  */
 function useInvalidateAfterAbsenceWrite() {
 	const queryClient = useQueryClient();
 	return (projectId: string) =>
-		queryClient.invalidateQueries({ queryKey: absenceKeys.project(projectId) });
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: absenceKeys.project(projectId) }),
+			queryClient.invalidateQueries({ queryKey: projectKeys.contractWeeks(projectId) }),
+			queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
+		]);
 }
 
 export function useRecordAbsence() {

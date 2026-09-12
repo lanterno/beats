@@ -19,6 +19,7 @@ const { hooks } = vi.hoisted(() => ({
 		useProjects: vi.fn(),
 		useSessions: vi.fn(),
 		useProjectWeeks: vi.fn(),
+		useContractWeek: vi.fn(),
 		useProjectPlannedByWeek: vi.fn(),
 		useProjectGitActivityByWeek: vi.fn(),
 	},
@@ -37,6 +38,7 @@ vi.mock("@/entities/project", async () => {
 		useProject: () => hooks.useProject(),
 		useProjects: () => hooks.useProjects(),
 		useProjectWeeks: () => hooks.useProjectWeeks(),
+		useContractWeek: () => hooks.useContractWeek(),
 		useUpdateProject: () => idle,
 		useUpdateGoalOverrides: () => idle,
 		useUpdateContract: () => idle,
@@ -125,6 +127,7 @@ beforeEach(() => {
 	hooks.useProjects.mockReturnValue({ data: [PROJECT] });
 	hooks.useSessions.mockReturnValue({ data: [], refetch: vi.fn() });
 	hooks.useProjectWeeks.mockReturnValue({ data: [] });
+	hooks.useContractWeek.mockReturnValue({ data: undefined, isLoading: false, error: null });
 	// Both hooks hand back a Map keyed by Monday ISO, not a plain object.
 	hooks.useProjectPlannedByWeek.mockReturnValue({ byMondayIso: new Map() });
 	hooks.useProjectGitActivityByWeek.mockReturnValue({ byMondayIso: new Map() });
@@ -213,6 +216,75 @@ describe("ProjectDetails", () => {
 		expect(screen.queryByText(/Complete your contract/)).not.toBeInTheDocument();
 		expect(screen.queryByRole("region", { name: /Contract history/i })).not.toBeInTheDocument();
 		expect(screen.queryByRole("region", { name: /Absences/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: /against the contract/i })).not.toBeInTheDocument();
 		expect(screen.getByTitle("Edit weekly goal")).toBeInTheDocument();
+		// The personal goal's week can be overridden from the table.
+		const history = screen.getByRole("region", { name: /week history/i });
+		expect(within(history).getAllByTitle(/goal override/).length).toBeGreaterThan(0);
+	});
+
+	it("reads the header from the contract week and offers no goal override on a week the contract governs", async () => {
+		hooks.useProject.mockReturnValue({
+			data: {
+				...PROJECT,
+				kind: "day_job",
+				// The API clears the personal goal on such a project; the contract is the goal.
+				weeklyGoal: undefined,
+				contract: {
+					terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
+					holidayCountry: "CH",
+					openingBalanceHours: 0,
+				},
+			},
+			isLoading: false,
+			error: null,
+		});
+		// The week route reports the term's nominal hours as the effective goal,
+		// for the current week and for a past one the same term governed.
+		hooks.useProjectWeeks.mockReturnValue({
+			data: [
+				{
+					weeksAgo: 0,
+					hours: 0,
+					dailyDurations: {},
+					effectiveGoal: 32,
+					effectiveGoalType: "target",
+					effectiveGoalOverridden: false,
+				},
+				{
+					weeksAgo: 1,
+					weekStart: "2026-08-31",
+					hours: 8,
+					dailyDurations: {},
+					effectiveGoal: 32,
+					effectiveGoalType: "target",
+					effectiveGoalOverridden: false,
+				},
+			],
+		});
+		// The contract week reports the expectation adjusted for a holiday.
+		hooks.useContractWeek.mockReturnValue({
+			data: {
+				weekOf: "2026-09-07",
+				expected: 25.6,
+				worked: 12,
+				remaining: 13.6,
+				balance: 3,
+				days: [],
+			},
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		expect(await screen.findByTitle("This week against the contract")).toHaveTextContent(
+			"12.0/25.6h",
+		);
+		expect(screen.getByRole("region", { name: /against the contract/i })).toBeInTheDocument();
+
+		const history = screen.getByRole("region", { name: /week history/i });
+		expect(within(history).getByText("—/32h").closest("button")).toBeNull();
+		expect(within(history).getByText("8.0/32h").closest("button")).toBeNull();
+		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
 	});
 });

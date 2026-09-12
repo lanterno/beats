@@ -1,10 +1,11 @@
-"""The startup migration that gives every project a `kind`.
+"""The startup migrations: the one that gives every project a `kind`, and the one
+that then clears the personal goal where the contract has replaced it.
 
 Documents are seeded raw through the synchronous test client and read back
-raw, because what is under test is the on-disk shape: which fields the pass
-sets and which it leaves exactly as they were. Two tests read the result back
-through `MongoProjectRepository`, since the migration writes the contract by
-hand and the repository must agree with it.
+raw, because what is under test is the on-disk shape: which fields each pass
+sets or unsets and which it leaves exactly as they were. Two tests read the
+result back through `MongoProjectRepository`, since the migration writes the
+contract by hand and the repository must agree with it.
 """
 
 import os
@@ -17,7 +18,10 @@ from pymongo import AsyncMongoClient
 
 from beats.domain.contracts import term_on
 from beats.domain.models import ProjectKind
-from beats.infrastructure.migrations import migrate_project_kinds
+from beats.infrastructure.migrations import (
+    clear_personal_goal_on_day_jobs,
+    migrate_project_kinds,
+)
 from beats.infrastructure.repositories import MongoProjectRepository
 
 USER = "user-1"
@@ -81,7 +85,7 @@ class TestMigrateProjectKinds:
         doc = mongo.projects.find_one({"_id": pid})
         assert doc["kind"] == "day_job"
         assert _terms(doc) == [("2026-01-13", 20.0), ("2026-03-02", 30.0), ("2026-06-01", 0.0)]
-        # The personal goal is left as it was: nothing reads the contract yet.
+        # The personal goal is left as it was: clearing it is the second pass's.
         assert doc["weekly_goal"] == 20
         assert doc["goal_overrides"] == overrides
         assert doc["color"] == "#123456"
@@ -295,3 +299,94 @@ class TestMigrateProjectKinds:
         assert (report.day_job, report.skipped) == (1, 1)
         assert "kind" not in mongo.projects.find_one({"_id": bad})
         assert mongo.projects.find_one({"_id": good})["kind"] == "day_job"
+
+
+TODAY = date(2026, 9, 12)
+
+
+def _contract(*terms: dict[str, Any]) -> dict[str, Any]:
+    return {"terms": list(terms)}
+
+
+def _custom(effective_from: str, weekly_hours: float) -> dict[str, Any]:
+    return {
+        "effective_from": effective_from,
+        "schedule_type": "custom",
+        "weekly_hours": weekly_hours,
+    }
+
+
+class TestClearPersonalGoalOnDayJobs:
+    async def test_clears_where_the_contract_sets_the_goal_and_nowhere_else(self, db, mongo):
+        overrides = [{"week_of": "2026-04-06", "weekly_goal": 10, "note": "conference"}]
+        governed = _seed_project(
+            mongo,
+            kind="day_job",
+            weekly_goal=20,
+            goal_overrides=overrides,
+            contract=_contract(_custom("2026-01-05", 20), _custom("2026-06-01", 30)),
+        )
+        objective = _seed_project(
+            mongo,
+            kind="day_job",
+            weekly_goal=20,
+            contract=_contract({"effective_from": "2026-01-05", "schedule_type": "objective"}),
+        )
+        not_started = _seed_project(
+            mongo, kind="day_job", weekly_goal=20, contract=_contract(_custom("2026-10-05", 40))
+        )
+        no_contract = _seed_project(mongo, kind="day_job", weekly_goal=20)
+        side = _seed_project(mongo, kind="side_project", weekly_goal=20, goal_type="target")
+
+        report = await clear_personal_goal_on_day_jobs(db, today=TODAY)
+
+        assert (report.cleared, report.skipped) == (1, 0)
+        doc = mongo.projects.find_one({"_id": governed})
+        assert "weekly_goal" not in doc
+        # The overrides are the user's notes on weeks; the panel still lists them.
+        assert doc["goal_overrides"] == overrides
+        assert doc["contract"]["terms"][1]["weekly_hours"] == 30
+        for untouched in (objective, not_started, no_contract, side):
+            assert mongo.projects.find_one({"_id": untouched})["weekly_goal"] == 20
+
+    async def test_rerun_is_a_no_op(self, db, mongo):
+        _seed_project(
+            mongo, kind="day_job", weekly_goal=20, contract=_contract(_custom("2026-01-05", 20))
+        )
+        _seed_project(mongo, kind="day_job", weekly_goal=20)
+        await clear_personal_goal_on_day_jobs(db, today=TODAY)
+        before = list(mongo.projects.find().sort("_id"))
+
+        report = await clear_personal_goal_on_day_jobs(db, today=TODAY)
+
+        assert (report.cleared, report.skipped) == (0, 0)
+        assert list(mongo.projects.find().sort("_id")) == before
+
+    async def test_a_contract_the_pass_cannot_read_is_skipped_and_the_rest_cleared(self, db, mongo):
+        bad = _seed_project(mongo, kind="day_job", weekly_goal=20, contract={"terms": []})
+        good = _seed_project(
+            mongo, kind="day_job", weekly_goal=20, contract=_contract(_custom("2026-01-05", 20))
+        )
+
+        report = await clear_personal_goal_on_day_jobs(db, today=TODAY)
+
+        assert (report.cleared, report.skipped) == (1, 1)
+        assert mongo.projects.find_one({"_id": bad})["weekly_goal"] == 20
+        assert "weekly_goal" not in mongo.projects.find_one({"_id": good})
+
+    async def test_both_passes_in_one_boot_leave_a_contract_and_no_goal(self, db, mongo):
+        """The order `lifespan` runs them in: a target goal becomes the contract,
+        and the same boot then drops the goal the contract was derived from."""
+        pid = _seed_project(
+            mongo, _id=_created(date(2026, 1, 5)), weekly_goal=20, goal_type="target"
+        )
+
+        await migrate_project_kinds(db)
+        await clear_personal_goal_on_day_jobs(db, today=TODAY)
+
+        doc = mongo.projects.find_one({"_id": pid})
+        assert doc["kind"] == "day_job"
+        assert _terms(doc) == [("2026-01-05", 20.0)]
+        assert "weekly_goal" not in doc
+        project = await MongoProjectRepository(db.projects, USER).get_by_id(str(pid))
+        assert project.effective_goal(date(2026, 9, 7)) == (20.0, project.goal_type)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ApiProject } from "@/shared/api";
-import { toApiProject, toProject } from "./mappers";
+import type { ApiContractWeek, ApiProject } from "@/shared/api";
+import { toApiProject, toContractWeek, toProject } from "./mappers";
 
 describe("Project mapper round-trip", () => {
 	it("preserves the previously-invisible fields across toProject → toApiProject", () => {
@@ -102,5 +102,54 @@ describe("Project mapper round-trip", () => {
 		const stray = toProject({ ...fromWire, kind: "side_project" });
 		expect(stray.contract).toBeUndefined();
 		expect(toApiProject(stray).contract).toBeNull();
+	});
+});
+
+describe("toContractWeek", () => {
+	it("keeps the wire's null as no expectation, not 0, and drops the nulls on a day", () => {
+		// An objective week: the API says null for expected, remaining and
+		// balance, which the card must read as "none" — read as 0 it would
+		// show "Expected 0.0 h" and the header "12.0/0.0h".
+		const fromWire: ApiContractWeek = {
+			week_of: "2026-04-06",
+			expected: null,
+			worked: 12,
+			remaining: null,
+			balance: null,
+			days: [
+				{ date: "2026-04-06", expected: 0, worked: 4, holiday: null, absence: null },
+				{
+					date: "2026-04-07",
+					expected: 0,
+					worked: 0,
+					absence: { type: "sick", half_day: true, note: null },
+				},
+				{ date: "2026-04-08", expected: 0, worked: 8, holiday: "Easter Monday" },
+			],
+		};
+		expect(toContractWeek(fromWire)).toEqual({
+			weekOf: "2026-04-06",
+			expected: undefined,
+			worked: 12,
+			remaining: undefined,
+			balance: undefined,
+			days: [
+				{ date: "2026-04-06", expected: 0, worked: 4, holiday: undefined, absence: undefined },
+				{
+					date: "2026-04-07",
+					expected: 0,
+					worked: 0,
+					holiday: undefined,
+					absence: { type: "sick", halfDay: true, note: undefined },
+				},
+				{
+					date: "2026-04-08",
+					expected: 0,
+					worked: 8,
+					holiday: "Easter Monday",
+					absence: undefined,
+				},
+			],
+		});
 	});
 });

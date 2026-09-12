@@ -42,10 +42,25 @@ from beats.api.routers.webhooks import router as webhooks_router
 from beats.auth import device_access
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.database import Database
-from beats.infrastructure.migrations import migrate_project_kinds
+from beats.infrastructure.migrations import (
+    clear_personal_goal_on_day_jobs,
+    migrate_project_kinds,
+)
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 
 logger = logging.getLogger(__name__)
+
+# uvicorn's default logging config covers only its own loggers and leaves the
+# root logger without a handler, so without this the app's INFO lines — the
+# startup migrations' audit trail among them — reach nothing and are dropped
+# (Python's last-resort handler passes WARNING and up). The root handler sits
+# at WARNING to keep third-party INFO chatter (httpx logs every request) out;
+# the app's own loggers are opened at INFO. `basicConfig` does nothing when
+# a handler is already installed — pytest's capture, a `--log-config` — so
+# those keep their setup.
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+for _app_logger in ("beats", __name__):
+    logging.getLogger(_app_logger).setLevel(logging.INFO)
 
 try:
     API_VERSION = package_version("beats")
@@ -92,8 +107,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Database connected.")
     # A project without `kind` predates contracts; stamp it once, here, so
     # the terms derived from its overrides are stored and then owned by the
-    # user rather than recomputed on every read.
+    # user rather than recomputed on every read. Then — in this order, since
+    # the contract is derived from the goal — drop the personal goal on the
+    # day jobs whose contract every reader now takes instead.
     await migrate_project_kinds(Database.get_db())
+    await clear_personal_goal_on_day_jobs(Database.get_db())
     await ensure_mutation_log_indexes()
     yield
     # Shutdown: Disconnect from database

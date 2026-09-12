@@ -8,11 +8,13 @@ import { Layers, Plus, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import {
+	BalanceChip,
 	NewProjectDialog,
 	sortProjectsForList,
 	usePinnedProjects,
 	useProjects,
 	visibleProjects,
+	weekGoalView,
 } from "@/entities/project";
 import { useAllBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
@@ -150,15 +152,10 @@ export function ProjectPulseList() {
 							0;
 						const todayHours = todayMinutes / 60;
 						const isInactive = project.weeklyMinutes === 0;
-						// Honor "no goal" overrides: when overridden=true and goal is null,
-						// don't fall back to project.weeklyGoal — the user explicitly opted out.
-						const dashGoal = project.effectiveGoalOverridden
-							? (project.effectiveGoal ?? null)
-							: (project.effectiveGoal ?? project.weeklyGoal ?? null);
-						const dashGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
-						const goalPct = dashGoal
-							? Math.min((project.weeklyMinutes / 60 / dashGoal) * 100, 100)
-							: null;
+						// The contract's expected and worked on a day job it governs, with
+						// the running balance; the personal goal's figures on everything else.
+						const week = weekGoalView(project);
+						const goalPct = week.goal ? Math.min((week.hours / week.goal) * 100, 100) : null;
 
 						const pinned = isPinned(project.id);
 						return (
@@ -198,9 +195,10 @@ export function ProjectPulseList() {
 											percent={goalPct}
 											size={22}
 											strokeWidth={2.5}
-											isCap={dashGoalType === "cap"}
+											isCap={week.goalType === "cap"}
 										/>
 									)}
+									{week.balance !== null && <BalanceChip hours={week.balance} />}
 								</button>
 								<button
 									type="button"

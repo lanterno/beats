@@ -1218,11 +1218,24 @@ class TestContractWeekAPI:
         assert week["expected"] == 40 - 8 * off
 
     def test_this_week_include_carries_contract_fields_for_day_jobs(self, client, auth_headers):
-        day_job = _day_job(client, auth_headers)
-        objective = _day_job(
+        # Both day jobs also carry a personal goal, and the governed one an
+        # override on this very week; on the wire the contract must win.
+        day_job = _create_project(
+            client, auth_headers, kind="day_job", weekly_goal=5, contract={"terms": FULL_TIME}
+        )
+        this_monday = date.today() - timedelta(days=date.today().weekday())
+        resp = client.put(
+            f"/api/projects/{day_job['id']}/goal-overrides",
+            json=[{"week_of": this_monday.isoformat(), "weekly_goal": 3}],
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        objective = _create_project(
             client,
             auth_headers,
-            terms=[{"effective_from": CONTRACT_START, "schedule_type": "objective"}],
+            kind="day_job",
+            weekly_goal=5,
+            contract={"terms": [{"effective_from": CONTRACT_START, "schedule_type": "objective"}]},
         )
         side = _create_project(client, auth_headers, weekly_goal=5)
 
@@ -1231,6 +1244,12 @@ class TestContractWeekAPI:
 
         mine = by_id[day_job["id"]]
         assert mine["contract_expected"] == 40
+        # The effective goal trio is the contract's too: its nominal hours, a
+        # target, and no override in effect however many are stored.
+        assert (mine["effective_goal"], mine["effective_goal_type"]) == (40, "target")
+        assert mine["effective_goal_overridden"] is False
+        # Under an objective term the personal goal is the goal, as always.
+        assert by_id[objective["id"]]["effective_goal"] == 5
         assert isinstance(mine["balance"], float)
         # The trio is the contract's own and adds up among itself; it does not
         # share `weekly_minutes`' bucketing (see ProjectsListItemResponse).

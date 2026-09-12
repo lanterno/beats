@@ -10,9 +10,11 @@ import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
 import {
+	contractGovernsWeek,
 	isTimeBasedOn,
 	LoadingSpinner,
 	type ProjectFormAutoFocusField,
+	useContractWeek,
 	useProject,
 	useProjects,
 	useProjectWeeks,
@@ -36,6 +38,7 @@ import { ColorPicker, GoalRing } from "@/shared/ui";
 import { AbsenceCalendar } from "./AbsenceCalendar";
 import { ContractHistoryPanel } from "./ContractHistoryPanel";
 import { ContractNudge } from "./ContractNudge";
+import { ContractWeekCard } from "./ContractWeekCard";
 import { ProjectDangerZone } from "./ProjectDangerZone";
 import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
@@ -43,7 +46,7 @@ import { ProjectSessionList } from "./ProjectSessionList";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { ProjectStats } from "./ProjectStats";
 import { ProjectWeekHistory } from "./ProjectWeekHistory";
-import { computeMondayIsoList } from "./weekIso";
+import { computeMondayIsoList, getMondayIsoFor } from "./weekIso";
 
 const WEEKDAYS = [
 	"Monday",
@@ -69,6 +72,8 @@ export default function ProjectDetails() {
 	// "Change contract…" in the settings form lands on the history panel's
 	// own button: terms are edited there, not in the form.
 	const changeContractButtonRef = useRef<HTMLButtonElement>(null);
+	// The header's contract figure brings the reader to the week card.
+	const weekCardRef = useRef<HTMLElement>(null);
 
 	const openSettings = (field: ProjectFormAutoFocusField) => {
 		setSettingsFocus(field);
@@ -84,6 +89,15 @@ export default function ProjectDetails() {
 
 	const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
 	const { data: allProjects } = useProjects();
+	// A time-based day job's goal is its contract, which the settings form
+	// edits in its own section and has no goal field for: the header reads
+	// this week against the contract instead, and offers no way to a personal
+	// goal the form would not show. Same rule as the form's, so they agree.
+	const contractIsGoal = project?.kind === "day_job" && isTimeBasedOn(project.contract, todayIso());
+	const thisMonday = getMondayIsoFor(0);
+	const { data: contractWeek } = useContractWeek(projectId, thisMonday, {
+		enabled: contractIsGoal,
+	});
 	const { data: sessions, refetch: refetchSessions } = useSessions(projectId);
 	const { data: hoursPerWeek } = useProjectWeeks(projectId, weekCount);
 	const updateSessionMutation = useUpdateSession();
@@ -171,11 +185,19 @@ export default function ProjectDetails() {
 		: (project.effectiveGoal ?? project.weeklyGoal ?? null);
 	const headerGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
 	const goalPct = headerGoal ? Math.min((weeklyHours / headerGoal) * 100, 100) : null;
-	// A time-based day job's goal is its contract, which the settings form
-	// edits in its own section and has no goal field for; the header's way
-	// to the personal goal would be a dead end there. Its week card is Phase 5.
-	const personalGoalApplies =
-		project.kind !== "day_job" || !isTimeBasedOn(project.contract, todayIso());
+	const personalGoalApplies = !contractIsGoal;
+	// The ring's share of the contract's week; none when nothing is expected
+	// (a week of holidays), where a figure alone says more than a full ring.
+	const contractPct =
+		contractWeek?.expected !== undefined && contractWeek.expected > 0
+			? Math.min((contractWeek.worked / contractWeek.expected) * 100, 100)
+			: null;
+
+	const scrollToWeekCard = () => {
+		const card = weekCardRef.current;
+		card?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+		card?.focus({ preventScroll: true });
+	};
 
 	const sortedSessions = [...sessionList].sort(
 		(a, b) => parseUtcIso(b.startTime).getTime() - parseUtcIso(a.startTime).getTime(),
@@ -213,6 +235,7 @@ export default function ProjectDetails() {
 		effectiveGoal: week0Data ? (week0Data.effectiveGoal ?? null) : headerGoal,
 		effectiveGoalType: (week0Data?.effectiveGoalType ?? headerGoalType) as "target" | "cap",
 		effectiveGoalOverridden: week0Data?.effectiveGoalOverridden ?? false,
+		contractGoverned: contractGovernsWeek(project, week0Data?.weekStart ?? getMondayIso(0)),
 	};
 
 	const pastWeekRows = weekList
@@ -234,6 +257,9 @@ export default function ProjectDetails() {
 				| "target"
 				| "cap",
 			effectiveGoalOverridden: week.effectiveGoalOverridden ?? false,
+			// The API ignores overrides on a week the contract governs
+			// (Project.goal_term); the table must not offer to set one there.
+			contractGoverned: contractGovernsWeek(project, week.weekStart ?? getMondayIso(week.weeksAgo)),
 		}));
 
 	const allWeekRows = [currentWeekRow, ...pastWeekRows];
@@ -330,7 +356,23 @@ export default function ProjectDetails() {
 						onConnectGitHub={() => navigate("/settings#github")}
 					/>
 					<div className="ml-auto shrink-0 flex items-center gap-4">
-						{!personalGoalApplies ? null : goalPct !== null ? (
+						{!personalGoalApplies ? (
+							contractWeek?.expected !== undefined ? (
+								<button
+									type="button"
+									onClick={scrollToWeekCard}
+									title="This week against the contract"
+									className="hidden sm:flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+								>
+									{contractPct !== null && (
+										<GoalRing percent={contractPct} size={28} strokeWidth={3} />
+									)}
+									<span className="text-xs tabular-nums text-muted-foreground">
+										{contractWeek.worked.toFixed(1)}/{contractWeek.expected.toFixed(1)}h
+									</span>
+								</button>
+							) : null
+						) : goalPct !== null ? (
 							<button
 								type="button"
 								onClick={() => openSettings("weeklyGoal")}
@@ -388,6 +430,17 @@ export default function ProjectDetails() {
 				    not the session list. */}
 				<ProjectStats sessions={sessionList} lastTrackedAt={project.lastTrackedAt} />
 
+				{/* The week against the contract — expected, worked, remaining, the
+				    weekdays and the running balance — on a day job that has one. */}
+				{project.kind === "day_job" && project.contract && (
+					<ContractWeekCard
+						ref={weekCardRef}
+						projectId={project.id}
+						contract={project.contract}
+						personalGoal={headerGoal}
+					/>
+				)}
+
 				<ProjectWeekHistory
 					rows={allWeekRows}
 					hasAnyGoal={hasAnyGoal}
@@ -404,7 +457,7 @@ export default function ProjectDetails() {
 				/>
 
 				{/* Work contracts: the terms over time and the absence calendar,
-				    on a day job only. The week card against the contract is Phase 5. */}
+				    on a day job only. */}
 				{project.kind === "day_job" && (
 					<div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
 						<ContractHistoryPanel

@@ -33,14 +33,11 @@ def term_on(contract: Contract, day: date) -> ContractTerm | None:
     """The term in force on `day`: the latest whose `effective_from` is not after it.
 
     None before the first term. `ended_on` is not consulted here — a term is
-    still the term that applied, it just stops owing anything.
+    still the term that applied, it just stops owing anything. The lookup
+    itself lives on `Contract`, where `Project.effective_goal` can reach it
+    without importing this module; this is the arithmetic's name for it.
     """
-    current: ContractTerm | None = None
-    for term in contract.terms:  # the validator keeps these ascending
-        if term.effective_from > day:
-            break
-        current = term
-    return current
+    return contract.term_on(day)
 
 
 def absences_by_day(absences: Iterable[Absence]) -> dict[date, Absence]:

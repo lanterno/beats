@@ -2,9 +2,23 @@
  * Project Mappers
  * Convert between API types and domain types.
  */
-import type { ApiContract, ApiContractTerm, ApiGoalOverride, ApiProject } from "@/shared/api";
+import type {
+	ApiContract,
+	ApiContractDay,
+	ApiContractTerm,
+	ApiContractWeek,
+	ApiGoalOverride,
+	ApiProject,
+} from "@/shared/api";
 import { assignColor } from "./colors";
-import type { Contract, ContractTerm, GoalOverride, Project } from "./types";
+import type {
+	Contract,
+	ContractDay,
+	ContractTerm,
+	ContractWeek,
+	GoalOverride,
+	Project,
+} from "./types";
 
 export function toProject(apiProject: ApiProject): Project {
 	const id = apiProject.id || "";
@@ -88,6 +102,34 @@ export function toApiContract(contract: Contract): ApiContract {
 		holiday_subdivision: contract.holidaySubdivision ?? null,
 		opening_balance_hours: contract.openingBalanceHours,
 		ended_on: contract.endedOn ?? null,
+	};
+}
+
+function toContractDay(api: ApiContractDay): ContractDay {
+	return {
+		date: api.date,
+		expected: api.expected,
+		worked: api.worked,
+		holiday: api.holiday ?? undefined,
+		absence: api.absence
+			? {
+					type: api.absence.type,
+					halfDay: api.absence.half_day,
+					note: api.absence.note ?? undefined,
+				}
+			: undefined,
+	};
+}
+
+/** The wire's nulls become undefined; the meaning (no expectation, not 0) is kept. */
+export function toContractWeek(api: ApiContractWeek): ContractWeek {
+	return {
+		weekOf: api.week_of,
+		expected: api.expected ?? undefined,
+		worked: api.worked,
+		remaining: api.remaining ?? undefined,
+		balance: api.balance ?? undefined,
+		days: api.days.map(toContractDay),
 	};
 }
 

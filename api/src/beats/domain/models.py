@@ -203,6 +203,11 @@ class ContractTerm(BaseModel):
         weekly = self.hours_per_week
         return None if weekly is None else weekly / WORKDAYS_PER_WEEK
 
+    @property
+    def is_time_based(self) -> bool:
+        """Whether the term owes hours at all — false only for an objective term."""
+        return self.hours_per_week is not None
+
 
 class Contract(BaseModel):
     """A day job's terms as they changed over time, plus what frames them.
@@ -247,6 +252,19 @@ class Contract(BaseModel):
     def starts_on(self) -> date_type:
         """The first day anything is expected: the first term's `effective_from`."""
         return self.terms[0].effective_from
+
+    def term_on(self, day: date_type) -> ContractTerm | None:
+        """The term in force on `day`: the latest whose `effective_from` is not after it.
+
+        None before the first term. `ended_on` is not consulted — a term is
+        still the term that applied, it just stops owing anything.
+        """
+        current: ContractTerm | None = None
+        for term in self.terms:  # the validator keeps these ascending
+            if term.effective_from > day:
+                break
+            current = term
+        return current
 
 
 class AbsenceType(StrEnum):
@@ -382,11 +400,45 @@ class Project(BaseModel):
     kind: ProjectKind = ProjectKind.SIDE_PROJECT
     contract: Contract | None = None  # only meaningful when kind == day_job
 
+    def goal_term(self, week_monday: date_type) -> ContractTerm | None:
+        """The contract term that governs this week's goal, or None when the personal goal does.
+
+        The contract sets the goal on a day job whose term in force on the
+        week's Monday is time-based; that term's `hours_per_week` is what the
+        week owes, nominally. A term of 0 hours — the migration's reading of
+        an override that said "no goal from here", or a custom term typed as
+        0 — governs too, so the personal goal does not resurface under it,
+        and `effective_goal` reports it as no goal at all. Before the first
+        term, under an objective term, on a day job without a contract, and
+        on every other kind, the personal goal applies. A term changing
+        mid-week takes over the following Monday: the week is one figure, and
+        its Monday decides.
+
+        `ended_on` is not consulted, as `Contract.term_on` does not: the last
+        term stays the goal after the contract ends, and the UI hides the
+        personal goal on the same rule, so no goal reappears that the form
+        cannot show. Archiving is what takes a finished job out of the readers.
+        """
+        if self.kind is not ProjectKind.DAY_JOB or self.contract is None:
+            return None
+        term = self.contract.term_on(week_monday)
+        return term if term is not None and term.is_time_based else None
+
     def effective_goal(self, week_monday: date_type) -> tuple[float | None, GoalType]:
         """Resolve the effective goal for a given week (identified by its Monday).
 
-        Precedence: one-off week_of > latest effective_from <= week_monday > project default.
+        A contract that governs the week (`goal_term`) is the goal — its plain
+        weekly hours, not adjusted for holidays or absences (the week route
+        reports the adjusted expectation), always a target, and the personal
+        goal and its overrides are not read at all. A governing term of 0
+        hours is no goal (None), as the "no goal" override it was migrated
+        from was, not a goal of nothing. Otherwise the precedence is one-off
+        week_of > latest effective_from <= week_monday > project default.
         """
+        term = self.goal_term(week_monday)
+        if term is not None:
+            return term.hours_per_week or None, GoalType.TARGET
+
         # 1. One-off override
         for o in self.goal_overrides:
             if o.week_of == week_monday:

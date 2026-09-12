@@ -93,11 +93,12 @@ class Project(BaseModel):
     contract: Contract | None = None  # only meaningful when kind == day_job
 ```
 
-`weekly_goal` / `goal_type` / `goal_overrides` are untouched. They are
-the *personal* goal and keep applying to side projects, freelance work,
-and objective-based day jobs. For a time-based day job the contract is
-the goal; the form hides the personal one and the week card does not
-show it.
+`weekly_goal` / `goal_type` / `goal_overrides` are untouched as fields.
+They are the *personal* goal and keep applying to side projects,
+freelance work, and objective-based day jobs. For a time-based day job
+the contract is the goal: `Project.effective_goal` reads the term
+instead (Phase 5), the form hides the personal one and the week card
+does not show it.
 
 ### `Absence` (new collection)
 
@@ -446,15 +447,122 @@ The reason for all of the above.
   worked hours), and the running **balance** with its sign made
   unmistakable (+4.5 h over · −2.0 h owed).
 - **Objective-based**: worked hours and the personal goal if set, no
-  balance.
+  balance of its own.
 - **Week history**: `ProjectWeekHistory` reads expected from the
   contract for day jobs so past weeks show the term that applied then,
   not today's.
+- Decided while building the UI:
+  - **The list drives the index; the week route drives the page.**
+    `weekGoalView` (`entities/project`) reads `contract_expected`,
+    `contract_worked` and `balance` on a day job whose `contract_expected`
+    is not null, and the personal goal's path everywhere else —
+    `weekly_minutes` against `effective_goal`, a "no goal" override
+    honoured — so an objective day job and every other kind read as
+    before. The project page's header and its week card share one
+    `GET /contract/week` query for the current Monday; the card's
+    prev/next navigation asks for other Mondays, and its balance line
+    says "as of today" because the API's balance is one figure whatever
+    week is asked for — it is sent whenever today's term owes hours, so
+    the card shows it under an objective week and a week before the
+    contract too. The header's figure is the adjusted `expected`; the
+    week-history column stays the nominal `effective_goal` the `/week/`
+    route reports per week, as decided above, and its title says so,
+    since the two figures sit on one screen. This settles the
+    question left open below of whether the index shows the balance: it
+    does, as a small chip beside the week's ring, since the sign is what
+    a glance at the index is for.
+  - **A governed week offers no override.** `contractGovernsWeek`
+    mirrors `Project.goal_term` — day job, term in force on the Monday,
+    time-based — and the history table shows such a week's goal as text
+    with no popover. `isTimeBasedOn` stays the header's and the form's
+    rule for showing the personal goal, since it also counts a contract
+    that has not started; on those weeks the header shows no goal at all,
+    as the week's `expected` is null.
+  - **An absence write invalidates the contract weeks and the list**,
+    not `projectKeys.all`: holidays and the week history do not move
+    with an absence. The list's cached detail copy is left as it is —
+    nothing on the project page reads the contract fields from it.
+  - **Balance wording.** `describeBalance` rounds to the decimal shown
+    before judging the sign, so −0.04 h reads "even", not "−0.0 h owed";
+    the index chip's short form follows the same rule. A negative
+    `remaining` is labelled "Over this week". Weekend work is not in the
+    five-cell strip but is in `worked`, and the card says so when there
+    is any.
 - **Clear the personal goal on day jobs** `[api]`. Phase 2 left
-  `weekly_goal` in place because nothing read the contract yet. Once the
-  week card does, a second startup pass unsets it on every `day_job`
-  with a contract, and the API-side readers (`scoring`, `patterns`, the
-  coach context) take the contract's hours instead.
+  `weekly_goal` in place because nothing read the contract yet. Now every
+  reader does, through one method, and a second startup pass unsets it.
+  Decided while building it:
+  - **One source of truth.** `Project.effective_goal(week_monday)` takes
+    the contract on a day job whose term in force on that Monday is
+    time-based (`Project.goal_term`; `term_on` now lives on `Contract`,
+    so `models.py` needs nothing from `contracts.py`), and then does not
+    read `weekly_goal` or `goal_overrides` at all —
+    `effective_goal_overridden` is false on such a week. An objective
+    term, a Monday before the first term, a day job without a contract,
+    and every other kind keep the personal goal with its overrides. Every
+    reader that resolved a week's goal — the week breakdown and the
+    `this_week` include, `scoring`, `patterns`, `planning`, `health`, the
+    coach context and its `get_projects` tool — follows from that; the
+    ones that tested `weekly_goal` for "has a goal" now ask the week's
+    effective goal, and the score's goal component is one neutral value
+    (13) whenever no project's week has a goal — a contract that has not
+    started included. The coach prints the contract's hours in one line:
+    `Acme: 33.6h/week (contract, 80%)`.
+  - **A term of 0 hours governs but sets no goal.** Phase 2 makes one
+    from an `effective_from` override that said "no goal from here", and
+    the form can store a custom term as 0. Such a term is time-based, so
+    it governs the week — the personal goal must not resurface under a
+    sabbatical — and `effective_goal` reports `None`, as the override it
+    came from did (Decision 10): the history column reads "No goal", the
+    score, the insights and the coach see no goal, and the clearing pass
+    still clears the personal goal under it. The week route is untouched:
+    such a week's `expected` is 0 by circumstance, and the balance runs
+    on.
+  - **Weeks before the first term have no goal** once the personal goal
+    is cleared. For a migrated day job those are the weeks before its
+    first beat, where the old default applied to no work; the contract has
+    no term to give back for them, and none is invented.
+  - **Nominal, not adjusted.** The goal is the term's plain
+    `hours_per_week`, before holidays and absences: the score, the
+    pacing insight, the Inbox's planning line and the coach want what
+    the week owes by contract, and the week route already reports the
+    adjusted expectation beside it. On a week with an absence the two
+    therefore differ by the absence on one screen — "You need 32.0h
+    more" in the Inbox beside a ring against 25.6 on the index, the
+    history row's `32h` under the card's `25.6 h` — and that is this
+    decision, not a defect. A term changing mid-week is the next Monday's
+    goal; the week is one figure and its Monday decides.
+  - **`ended_on` is not consulted**, as `term_on` does not and as the
+    UI's `isTimeBasedOn` does not: the last term stays the goal after the
+    contract ends, so no personal goal reappears that the form cannot
+    show. Archiving is what takes a finished job out of the readers.
+  - **The clearing pass** (`clear_personal_goal_on_day_jobs`, after
+    `migrate_project_kinds` in `lifespan`, since the contract is derived
+    from the goal) `$unset`s `weekly_goal` on every `day_job` whose
+    contract sets the goal on today's UTC date — the same predicate the
+    readers use — and logs each by id (`server.py` configures logging for
+    that: uvicorn's default config covers only its own loggers, and the
+    app's INFO lines otherwise reach no handler). A day job under an
+    objective term,
+    before its contract starts, or without a contract keeps its goal,
+    because its readers still show it. Idempotent: the next boot finds no
+    day job with both. `goal_overrides` are left in place: an
+    `effective_from` override is dead for the same reason the goal is,
+    but a `week_of` override is the user's note on a week and the panel
+    still lists them, so they stay theirs to keep or delete.
+  - **Rollback.** This is the first pass that is not additive. A
+    revision between Phase 1 and this one reads the cleared projects by
+    the personal goal's path with only their overrides left: the readers
+    that gated on `weekly_goal` (the score, the stale card, the coach) go
+    quiet, while the week card, pacing, planning and health show an
+    `effective_from` override in force — every migrated day job that had
+    one — and "—" where there is none. Readers disagreeing, not "—"
+    everywhere, until roll-forward; nothing is lost, the number is in the
+    contract's terms (Decision 10). A revision *without the model*
+    that rewrites such a document drops `kind` and `contract`, and with no
+    `weekly_goal` left the first pass then migrates it as a side project:
+    a rollback across four deployed phases, accepted and written down on
+    the function.
 - `pnpm gen:types` after the API lands; the drift check is on pre-push.
 
 ### Phase 6 — Docs and gates
@@ -493,5 +601,3 @@ The reason for all of the above.
 - Whether `hours_per_day` should be configurable for contracts on a
   4-day full-time week (some Belgian and Dutch employers). Decision 3
   says no; revisit if a user asks.
-- Whether the index shows the balance or only the week. Start with the
-  week; the balance is one tap away on the project.

@@ -75,7 +75,13 @@ async def derive_flow_tags(
 
 
 def _has_override_for_week(project: Project, week_monday: date) -> bool:
-    """Return True iff a goal override resolves for the given week."""
+    """Return True iff a goal override resolves for the given week.
+
+    False on a week the contract governs: `effective_goal` does not read the
+    overrides there, so none is in effect however many are stored.
+    """
+    if project.goal_term(week_monday) is not None:
+        return False
     for o in project.goal_overrides:
         if o.week_of == week_monday:
             return True
@@ -531,7 +537,7 @@ def worked_by_local_day(beats: Iterable[Beat], tz: ZoneInfo) -> dict[date, float
 def _owes(term: ContractTerm | None) -> bool:
     """Whether a term is time-based: before the first term and under an
     objective term there is no expectation to report, only work."""
-    return term is not None and term.hours_per_week is not None
+    return term is not None and term.is_time_based
 
 
 def _hours(value: float) -> float:
