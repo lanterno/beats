@@ -23,6 +23,7 @@ import {
 	put,
 	RhythmSlotListSchema,
 } from "@/shared/api";
+import { browserTimeZone } from "@/shared/lib";
 
 export async function fetchBeats(projectId?: string): Promise<ApiBeat[]> {
 	const url = projectId ? `/api/beats/?project_id=${projectId}` : "/api/beats/";
@@ -37,13 +38,6 @@ export async function updateBeat(beat: ApiBeat): Promise<void> {
 export async function deleteBeat(beatId: string): Promise<void> {
 	await del<{ deleted: boolean }>(`/api/beats/${beatId}`);
 }
-
-/**
- * The browser's IANA timezone (e.g. "America/New_York"). Sent to tz-aware
- * analytics/intelligence endpoints so day/hour bucketing happens on the
- * user's local calendar rather than UTC.
- */
-const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
  * Fetch heatmap data for a given year, optionally filtered by project and/or tag

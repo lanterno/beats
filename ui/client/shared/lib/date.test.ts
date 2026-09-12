@@ -5,9 +5,41 @@ import {
 	getDayName,
 	getISOWeek,
 	getWeekRange,
+	parseIsoDate,
 	parseUtcIso,
+	todayIso,
+	toIsoDate,
 	toLocalDatetimeLocalString,
 } from "./date";
+
+describe("date-only round trip (toIsoDate / parseIsoDate / todayIso)", () => {
+	it("names the local calendar day, not the UTC one", () => {
+		// 23:30 local on the 5th is already the 6th in UTC east of Greenwich
+		// (and still the 5th to its west); the local day is the one meant.
+		expect(toIsoDate(new Date(2026, 4, 5, 23, 30))).toBe("2026-05-05");
+		expect(toIsoDate(new Date(2026, 0, 1, 0, 0))).toBe("2026-01-01");
+		expect(todayIso()).toBe(toIsoDate(new Date()));
+	});
+
+	it("parses to local noon, so a day's arithmetic clears a DST change", () => {
+		// The last Sunday of March is the spring change across Europe.
+		const sunday = parseIsoDate("2026-03-29") as Date;
+		expect(sunday.getHours()).toBe(12);
+		const monday = new Date(sunday);
+		monday.setDate(monday.getDate() + 1);
+		expect(toIsoDate(monday)).toBe("2026-03-30");
+	});
+
+	it("inverts toIsoDate, and refuses anything but 'YYYY-MM-DD'", () => {
+		for (const iso of ["2026-01-01", "2026-02-28", "2026-12-31"]) {
+			expect(toIsoDate(parseIsoDate(iso) as Date)).toBe(iso);
+		}
+		expect(parseIsoDate("2026-05-25T10:30:00Z")).toBeNull();
+		expect(parseIsoDate("2026/05/25")).toBeNull();
+		expect(parseIsoDate("")).toBeNull();
+		expect(parseIsoDate(undefined)).toBeNull();
+	});
+});
 
 describe("parseUtcIso", () => {
 	it("parses ISO string with Z suffix", () => {

@@ -26,6 +26,8 @@ export interface AdvancedFieldsProps {
 	/** When the parent form opens with focus targeting an Advanced field
 	 *  (only 'githubRepo' for now), autofocus that input on mount. */
 	autoFocusField?: "githubRepo";
+	/** A refused save's messages for these fields, shown beside their inputs. */
+	errors?: { category?: string; githubRepo?: string; autostartRepos?: string };
 }
 
 // Loose owner/repo match: word chars, dots, hyphens, exactly one slash.
@@ -57,9 +59,10 @@ export function AdvancedFields({
 	categorySuggestions,
 	githubConnected,
 	autoFocusField,
+	errors = {},
 }: AdvancedFieldsProps) {
 	const catListId = useId();
-	const repoInvalid = !isValidGithubRepo(values.githubRepo);
+	const repoInvalid = Boolean(errors.githubRepo) || !isValidGithubRepo(values.githubRepo);
 
 	const suggestions = useMemo(
 		() => [...new Set(categorySuggestions ?? [])].sort((a, b) => a.localeCompare(b)),
@@ -123,6 +126,8 @@ export function AdvancedFields({
 					onChange={(e) => set("category", e.target.value)}
 					list={catListId}
 					placeholder="coding, design, writing…"
+					aria-invalid={errors.category ? true : undefined}
+					aria-describedby={errors.category ? "project-form-category-error" : undefined}
 					className={inputCls}
 				/>
 				<datalist id={catListId}>
@@ -130,9 +135,15 @@ export function AdvancedFields({
 						<option key={s} value={s} />
 					))}
 				</datalist>
-				<p className="text-[11px] text-muted-foreground/60 mt-1">
-					Used by the daemon's flow-score category-fit matcher.
-				</p>
+				{errors.category ? (
+					<p id="project-form-category-error" className="text-[11px] text-destructive mt-1">
+						{errors.category}
+					</p>
+				) : (
+					<p className="text-[11px] text-muted-foreground/60 mt-1">
+						Used by the daemon's flow-score category-fit matcher.
+					</p>
+				)}
 			</div>
 
 			<div>
@@ -164,7 +175,11 @@ export function AdvancedFields({
 						role="alert"
 						className="text-[11px] text-destructive mt-1"
 					>
-						Use the <code>owner/repo</code> format (e.g. <code>lanterno/beats</code>).
+						{errors.githubRepo ?? (
+							<>
+								Use the <code>owner/repo</code> format (e.g. <code>lanterno/beats</code>).
+							</>
+						)}
 					</p>
 				)}
 				{!repoInvalid && githubConnected === false && (
@@ -185,7 +200,12 @@ export function AdvancedFields({
 					Local repo paths the daemon auto-starts a timer for.
 				</p>
 				{/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here. */}
-				<div className="space-y-1.5" role="group" aria-labelledby="project-form-autostart-label">
+				<div
+					className="space-y-1.5"
+					role="group"
+					aria-labelledby="project-form-autostart-label"
+					aria-describedby={errors.autostartRepos ? "project-form-autostart-error" : undefined}
+				>
 					{values.autostartRepos.map((repo, i) => (
 						<div key={autostartIds[i] ?? `tail-${i}`} className="flex items-center gap-2">
 							<input
@@ -214,6 +234,11 @@ export function AdvancedFields({
 						{values.autostartRepos.length === 0 ? "Add a path" : "Add another"}
 					</button>
 				</div>
+				{errors.autostartRepos && (
+					<p id="project-form-autostart-error" className="text-[11px] text-destructive mt-1">
+						{errors.autostartRepos}
+					</p>
+				)}
 			</div>
 		</div>
 	);

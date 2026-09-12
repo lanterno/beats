@@ -3,15 +3,18 @@
  * Data fetching with caching, deduplication, and automatic refetching.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ApiGoalOverride } from "@/shared/api";
+import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/api";
 import type { ProjectWithDuration, WeekHours } from "../model";
 import { toProject } from "../model";
 import {
 	archiveProject,
 	createProject,
+	fetchHolidayRegions,
+	fetchProjectHolidays,
 	fetchProjects,
 	fetchProjectWeek,
 	unarchiveProject,
+	updateContract,
 	updateGoalOverrides,
 	updateProject,
 } from "./projectApi";
@@ -24,7 +27,30 @@ export const projectKeys = {
 	total: (id: string) => [...projectKeys.all, "total", id] as const,
 	week: (id: string, weeksAgo: number) => [...projectKeys.all, "week", id, weeksAgo] as const,
 	weeks: (id: string) => [...projectKeys.all, "weeks", id] as const,
+	holidays: (id: string, year: number) => [...projectKeys.all, "holidays", id, year] as const,
 };
+
+/** The holiday-region list changes only with a release of the API's calendar library. */
+export const holidayRegionKeys = {
+	all: ["meta", "holiday-regions"] as const,
+};
+
+/** One list item, with the aggregations the list endpoint folded in. */
+function toProjectWithDuration(item: ApiProjectListItem): ProjectWithDuration {
+	const project = toProject(item);
+	return {
+		...project,
+		totalMinutes: item.total_minutes ?? 0,
+		// Round so downstream tabular-nums chips don't show 60.000000001h.
+		weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
+		// Preserve null vs undefined: null = override sets "no goal" for
+		// this week; undefined = field absent (e.g. older response).
+		effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
+		effectiveGoalType: item.effective_goal_type ?? undefined,
+		effectiveGoalOverridden: item.effective_goal_overridden ?? false,
+		lastTrackedAt: item.last_tracked_at ?? undefined,
+	};
+}
 
 /**
  * Hook to fetch all projects augmented with totals + this-week + last-tracked.
@@ -42,21 +68,7 @@ export function useProjects() {
 				include: ["totals", "this_week", "last_tracked"],
 			});
 
-			return items.map((item) => {
-				const project = toProject(item);
-				return {
-					...project,
-					totalMinutes: item.total_minutes ?? 0,
-					// Round so downstream tabular-nums chips don't show 60.000000001h.
-					weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
-					// Preserve null vs undefined: null = override sets "no goal" for
-					// this week; undefined = field absent (e.g. older response).
-					effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
-					effectiveGoalType: item.effective_goal_type ?? undefined,
-					effectiveGoalOverridden: item.effective_goal_overridden ?? false,
-					lastTrackedAt: item.last_tracked_at ?? undefined,
-				};
-			});
+			return items.map(toProjectWithDuration);
 		},
 		staleTime: 30_000, // Consider fresh for 30 seconds
 	});
@@ -77,18 +89,7 @@ export function useArchivedProjects() {
 				archived: true,
 				include: ["totals", "this_week", "last_tracked"],
 			});
-			return items.map((item) => {
-				const project = toProject(item);
-				return {
-					...project,
-					totalMinutes: item.total_minutes ?? 0,
-					weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
-					effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
-					effectiveGoalType: item.effective_goal_type ?? undefined,
-					effectiveGoalOverridden: item.effective_goal_overridden ?? false,
-					lastTrackedAt: item.last_tracked_at ?? undefined,
-				};
-			});
+			return items.map(toProjectWithDuration);
 		},
 		staleTime: 30_000,
 	});
@@ -114,18 +115,7 @@ export function useProject(projectId: string | undefined) {
 				include: ["totals", "this_week", "last_tracked"],
 			});
 			const item = items.find((p) => p.id === projectId);
-			if (!item) return null;
-
-			const project = toProject(item);
-			return {
-				...project,
-				totalMinutes: item.total_minutes ?? 0,
-				weeklyMinutes: Math.round(item.weekly_minutes ?? 0),
-				effectiveGoal: item.effective_goal === undefined ? undefined : item.effective_goal,
-				effectiveGoalType: item.effective_goal_type ?? undefined,
-				effectiveGoalOverridden: item.effective_goal_overridden ?? false,
-				lastTrackedAt: item.last_tracked_at ?? undefined,
-			};
+			return item ? toProjectWithDuration(item) : null;
 		},
 		enabled: !!projectId,
 	});
@@ -248,5 +238,44 @@ export function useUpdateGoalOverrides() {
 			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},
+	});
+}
+
+/**
+ * Replace a day job's contract as one object. Refetches the list first for
+ * the same reason useUpdateProject does; `projectKeys.all` then also takes
+ * the holidays with it (a region may have changed).
+ */
+export function useUpdateContract() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ projectId, contract }: { projectId: string; contract: ApiContract }) =>
+			updateContract(projectId, contract),
+		onSuccess: async () => {
+			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+		},
+	});
+}
+
+/** The contract region's holidays for one year, for the absence calendar. */
+export function useProjectHolidays(projectId: string | undefined, year: number) {
+	return useQuery({
+		queryKey: projectKeys.holidays(projectId || "", year),
+		queryFn: () => fetchProjectHolidays(projectId as string, year),
+		enabled: !!projectId,
+		// Changes only with the region, and a contract write invalidates it.
+		staleTime: 60 * 60_000,
+	});
+}
+
+/** Every country and subdivision the calendar knows, for the region picker. */
+export function useHolidayRegions() {
+	return useQuery({
+		queryKey: holidayRegionKeys.all,
+		queryFn: fetchHolidayRegions,
+		// Static for the life of the API process; the route says max-age=86400 too.
+		staleTime: 24 * 60 * 60_000,
+		gcTime: 24 * 60 * 60_000,
 	});
 }

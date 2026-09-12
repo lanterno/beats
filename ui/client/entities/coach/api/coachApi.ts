@@ -4,6 +4,7 @@
 
 import type { Schemas } from "@/shared/api";
 import { del, get, post } from "@/shared/api";
+import { browserTimeZone } from "@/shared/lib";
 
 export type BriefResponse = Schemas["BriefResponse"];
 export type UsageSummaryResponse = Schemas["UsageSummaryResponse"];
@@ -11,7 +12,6 @@ export type UsageSummaryResponse = Schemas["UsageSummaryResponse"];
 // The coach's "today" (brief/review) is bucketed by the user's local
 // calendar day server-side; send the browser timezone so a brief/review
 // generated and fetched near midnight resolve to the same local day.
-const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export async function fetchTodayBrief(): Promise<BriefResponse | null> {
 	return get<BriefResponse | null>(

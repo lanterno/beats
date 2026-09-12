@@ -86,6 +86,24 @@ export function describeError(err: unknown, fallback: string): string {
 }
 
 /**
+ * The per-field messages of a 422, keyed by their dot-joined path
+ * ("contract.terms.0.percentage"), so a form can pin each one next to
+ * the right input. Empty for anything that is not an ApiError with
+ * `fields`; a path the API reports twice keeps its first message.
+ */
+export function apiFieldErrors(err: unknown): Record<string, string> {
+	const out: Record<string, string> = {};
+	if (!(err instanceof ApiError) || !err.fields) return out;
+	for (const f of err.fields) {
+		const path = (f.path ?? "").trim();
+		const message = (f.message ?? "").trim();
+		if (!message || out[path] !== undefined) continue;
+		out[path] = message;
+	}
+	return out;
+}
+
+/**
  * Render a 422-style fields array as a human suffix appended to the
  * envelope's `detail`. Skips empty paths/messages defensively so a
  * malformed entry doesn't produce "name (), email ()" garbage.

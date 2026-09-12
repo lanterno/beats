@@ -4,6 +4,7 @@ export { shortBundleLabel } from "./bundleLabel";
 export { cn } from "./cn";
 // Date utilities
 export {
+	browserTimeZone,
 	formatDate,
 	formatDateOnly,
 	formatDateShort,
@@ -13,8 +14,11 @@ export {
 	getMondayOfWeeksAgo,
 	getWeekNumberLabel,
 	getWeekRange,
+	parseIsoDate,
 	parseUtcIso,
 	startOfDay,
+	todayIso,
+	toIsoDate,
 	toLocalDatetimeLocalString,
 } from "./date";
 // Authenticated file download

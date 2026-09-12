@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
 import {
+	isTimeBasedOn,
 	LoadingSpinner,
+	type ProjectFormAutoFocusField,
 	useProject,
 	useProjects,
 	useProjectWeeks,
@@ -23,8 +25,17 @@ import {
 	useUpdateSession,
 } from "@/entities/session";
 import { describeError } from "@/shared/api";
-import { getWeekNumberLabel, parseTimedeltaToMinutes, parseUtcIso, startOfDay } from "@/shared/lib";
+import {
+	getWeekNumberLabel,
+	parseTimedeltaToMinutes,
+	parseUtcIso,
+	startOfDay,
+	todayIso,
+} from "@/shared/lib";
 import { ColorPicker, GoalRing } from "@/shared/ui";
+import { AbsenceCalendar } from "./AbsenceCalendar";
+import { ContractHistoryPanel } from "./ContractHistoryPanel";
+import { ContractNudge } from "./ContractNudge";
 import { ProjectDangerZone } from "./ProjectDangerZone";
 import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
 import { ProjectHealthRail } from "./ProjectHealthRail";
@@ -49,18 +60,26 @@ export default function ProjectDetails() {
 	const [weekCount, setWeekCount] = useState(5);
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
-	const [settingsFocus, setSettingsFocus] = useState<
-		"name" | "description" | "weeklyGoal" | "githubRepo"
-	>("name");
+	const [settingsFocus, setSettingsFocus] = useState<ProjectFormAutoFocusField>("name");
 	const navigate = useNavigate();
 	// P4.0: click a week label in the history table to scope the sessions
 	// list below to that week's Mon..Sun range. null = no scope.
 	const [scopedWeeksAgo, setScopedWeeksAgo] = useState<number | null>(null);
 	const hasSetInitialExpand = useRef(false);
+	// "Change contract…" in the settings form lands on the history panel's
+	// own button: terms are edited there, not in the form.
+	const changeContractButtonRef = useRef<HTMLButtonElement>(null);
 
-	const openSettings = (field: "name" | "description" | "weeklyGoal" | "githubRepo") => {
+	const openSettings = (field: ProjectFormAutoFocusField) => {
 		setSettingsFocus(field);
 		setSettingsOpen(true);
+	};
+
+	// Called by the drawer once it has closed and released focus.
+	const handleChangeContract = () => {
+		const button = changeContractButtonRef.current;
+		button?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+		button?.focus();
 	};
 
 	const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
@@ -152,6 +171,11 @@ export default function ProjectDetails() {
 		: (project.effectiveGoal ?? project.weeklyGoal ?? null);
 	const headerGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
 	const goalPct = headerGoal ? Math.min((weeklyHours / headerGoal) * 100, 100) : null;
+	// A time-based day job's goal is its contract, which the settings form
+	// edits in its own section and has no goal field for; the header's way
+	// to the personal goal would be a dead end there. Its week card is Phase 5.
+	const personalGoalApplies =
+		project.kind !== "day_job" || !isTimeBasedOn(project.contract, todayIso());
 
 	const sortedSessions = [...sessionList].sort(
 		(a, b) => parseUtcIso(b.startTime).getTime() - parseUtcIso(a.startTime).getTime(),
@@ -306,7 +330,7 @@ export default function ProjectDetails() {
 						onConnectGitHub={() => navigate("/settings#github")}
 					/>
 					<div className="ml-auto shrink-0 flex items-center gap-4">
-						{goalPct !== null ? (
+						{!personalGoalApplies ? null : goalPct !== null ? (
 							<button
 								type="button"
 								onClick={() => openSettings("weeklyGoal")}
@@ -349,6 +373,8 @@ export default function ProjectDetails() {
 			</header>
 
 			<main className="max-w-5xl mx-auto px-6 pb-24">
+				<ContractNudge project={project} onOpenSettings={() => openSettings("holidayCountry")} />
+
 				{/* Project Health rail (P4.3) — alerts + recency + goal trend +
 				    today's average focus. */}
 				<ProjectHealthRail
@@ -377,6 +403,19 @@ export default function ProjectDetails() {
 					onShowMoreWeeks={() => setWeekCount((c) => c + 5)}
 				/>
 
+				{/* Work contracts: the terms over time and the absence calendar,
+				    on a day job only. The week card against the contract is Phase 5. */}
+				{project.kind === "day_job" && (
+					<div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+						<ContractHistoryPanel
+							project={project}
+							onOpenSettings={() => openSettings("scheduleType")}
+							changeButtonRef={changeContractButtonRef}
+						/>
+						{project.contract && <AbsenceCalendar projectId={project.id} />}
+					</div>
+				)}
+
 				<ProjectSessionList
 					// Keyed so navigating to another project remounts the list and
 					// resets its pagination, which the page used to do by hand.
@@ -403,6 +442,7 @@ export default function ProjectDetails() {
 				open={settingsOpen}
 				onClose={() => setSettingsOpen(false)}
 				autoFocusField={settingsFocus}
+				onChangeContract={project.contract ? handleChangeContract : undefined}
 			/>
 		</div>
 	);

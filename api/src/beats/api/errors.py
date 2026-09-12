@@ -83,6 +83,16 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
     )
 
 
+_PYDANTIC_MESSAGE_PREFIXES = ("Value error, ", "Assertion failed, ")
+
+
+def _validator_message(msg: str) -> str:
+    for prefix in _PYDANTIC_MESSAGE_PREFIXES:
+        if msg.startswith(prefix):
+            return msg[len(prefix) :]
+    return msg
+
+
 async def validation_exception_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -94,6 +104,11 @@ async def validation_exception_handler(
     route whose body is one bare object (``PUT /api/projects/{id}/contract``)
     reports that object's own model-level validators there, where the same
     object nested in a larger body would be named (``contract``).
+
+    The message is the validator's own sentence. Pydantic prefixes what a
+    ``ValueError`` raised in a validator says with its kind — "Value error,
+    a contract needs at least one term" — and clients show the message as
+    is, beside the input or in a toast, so the prefix comes off here.
     """
     fields: list[dict[str, Any]] = []
     for err in exc.errors():
@@ -101,7 +116,7 @@ async def validation_exception_handler(
         fields.append(
             {
                 "path": ".".join(str(p) for p in loc),
-                "message": err.get("msg", ""),
+                "message": _validator_message(err.get("msg", "")),
                 "type": err.get("type", ""),
             }
         )

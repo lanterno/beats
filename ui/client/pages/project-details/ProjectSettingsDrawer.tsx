@@ -7,15 +7,27 @@
  * editable field) with a real settings flow.
  * P1.2b: passes category suggestions + GitHub connection state into the
  * form's Advanced disclosure.
+ * Work contracts: passes the project's contract so the form edits its
+ * frame (region, opening balance, end date) and carries the terms through;
+ * "Change contract…" hands over to the history panel on the page. A day
+ * job still without a contract opens with the contract switch off — a
+ * rename must not demand one — unless the page asked for the contract
+ * section, as its "Add contract" does.
  */
 
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useGitHubStatus } from "@/entities/github";
 import {
+	contractFrameDefaults,
 	extractCategories,
+	isInlineFormError,
 	type Project,
 	ProjectForm,
+	type ProjectFormAutoFocusField,
 	type ProjectFormValues,
+	projectWriteFromForm,
+	useHolidayRegions,
 	useProjects,
 	useUpdateProject,
 } from "@/entities/project";
@@ -28,7 +40,9 @@ interface ProjectSettingsDrawerProps {
 	open: boolean;
 	onClose: () => void;
 	/** Which field to focus when the drawer opens — used by inline-clickable header. */
-	autoFocusField?: "name" | "description" | "weeklyGoal" | "githubRepo";
+	autoFocusField?: ProjectFormAutoFocusField;
+	/** Where "Change contract…" goes: the contract history panel on the page. */
+	onChangeContract?: () => void;
 }
 
 export function ProjectSettingsDrawer({
@@ -36,12 +50,19 @@ export function ProjectSettingsDrawer({
 	open,
 	onClose,
 	autoFocusField,
+	onChangeContract,
 }: ProjectSettingsDrawerProps) {
 	const updateProject = useUpdateProject();
 	const { data: projects } = useProjects();
 	const { data: githubStatus } = useGitHubStatus();
+	const { data: holidayRegions } = useHolidayRegions();
+	const [submitError, setSubmitError] = useState<unknown>(null);
+	// "Change contract…" closes the drawer and lands on the history panel.
+	// The hand-over waits for the dialog's own focus return, which would
+	// otherwise put focus back on the settings button a moment later.
+	const changeContractRequested = useRef(false);
 
-	const initialValues: ProjectFormValues = {
+	const initialValues: Partial<ProjectFormValues> = {
 		name: project.name,
 		description: project.description ?? "",
 		color: project.color,
@@ -50,9 +71,13 @@ export function ProjectSettingsDrawer({
 		category: project.category ?? "",
 		githubRepo: project.githubRepo ?? "",
 		autostartRepos: project.autostartRepos ?? [],
+		kind: project.kind,
+		addContract: project.contract !== undefined || autoFocusField === "scheduleType",
+		contract: contractFrameDefaults(project.contract),
 	};
 
 	const handleSubmit = (values: ProjectFormValues) => {
+		setSubmitError(null);
 		updateProject.mutate(
 			{
 				id: project.id,
@@ -65,33 +90,64 @@ export function ProjectSettingsDrawer({
 				github_repo: values.githubRepo || null,
 				category: values.category || null,
 				autostart_repos: values.autostartRepos,
+				// `contract` is present only on a day job: leaving it out is what
+				// makes the API clear it when the kind changes (a stale one sent
+				// with another kind is a 409).
+				...projectWriteFromForm(values, project.contract),
 			},
 			{
 				onSuccess: () => {
 					toast.success("Project updated");
 					onClose();
 				},
-				onError: (err) => toast.error(describeError(err, "Failed to update project")),
+				onError: (err) => {
+					setSubmitError(err);
+					if (!isInlineFormError(err)) toast.error(describeError(err, "Failed to update project"));
+				},
 			},
 		);
+	};
+
+	const handleClose = () => {
+		setSubmitError(null);
+		onClose();
+	};
+
+	const handleChangeContract = () => {
+		changeContractRequested.current = true;
+		handleClose();
 	};
 
 	return (
 		<Dialog
 			open={open}
-			onClose={onClose}
+			onClose={handleClose}
 			title={`Edit ${project.name}`}
-			description="Update identity, weekly goal, and integrations."
+			description={
+				project.kind === "day_job"
+					? "Update identity, contract, and integrations."
+					: "Update identity, weekly goal, and integrations."
+			}
+			onCloseAutoFocus={(event) => {
+				if (!changeContractRequested.current) return;
+				changeContractRequested.current = false;
+				event.preventDefault();
+				onChangeContract?.();
+			}}
 		>
 			<ProjectForm
 				initialValues={initialValues}
 				submitting={updateProject.isPending}
 				submitLabel="Save changes"
 				onSubmit={handleSubmit}
-				onCancel={onClose}
+				onCancel={handleClose}
 				autoFocusField={autoFocusField}
 				categorySuggestions={extractCategories(projects)}
 				githubConnected={githubStatus?.connected}
+				existingContract={project.contract}
+				onChangeContract={onChangeContract ? handleChangeContract : undefined}
+				holidayRegions={holidayRegions}
+				submitError={submitError}
 			/>
 
 			<div className="mt-5">

@@ -139,7 +139,10 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
         description=request.description,
         color=request.color,
         weekly_goal=request.weekly_goal,
+        goal_type=request.goal_type,
+        github_repo=request.github_repo,
         category=request.category,
+        autostart_repos=request.autostart_repos,
         kind=request.kind,
         contract=request.contract,
     )

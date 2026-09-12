@@ -29,12 +29,7 @@ import {
 	WeeklyDigestSchema,
 } from "@/shared/api";
 
-/**
- * The browser's IANA timezone (e.g. "America/New_York"). Sent to tz-aware
- * intelligence endpoints so productivity/today/week bucketing follows the
- * user's local calendar rather than UTC.
- */
-const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+import { browserTimeZone } from "@/shared/lib";
 
 export async function fetchProductivityScore(): Promise<ProductivityScore> {
 	const tz = encodeURIComponent(browserTimeZone());

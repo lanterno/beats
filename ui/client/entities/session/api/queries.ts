@@ -362,7 +362,11 @@ export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
  * call sites that just want "today's flow" can pass nothing.
  */
 export function useFlowWindowsSummary(start?: string, end?: string, filter: FlowFilter = {}) {
+	// To the minute: with the exact instant in the key, every render made a
+	// new query whose result re-rendered — a fetch loop as fast as the round
+	// trip. A minute-old "now" is still today's flow.
 	const now = new Date();
+	now.setSeconds(0, 0);
 	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 	const effectiveStart = start ?? todayStart;
 	const effectiveEnd = end ?? now.toISOString();

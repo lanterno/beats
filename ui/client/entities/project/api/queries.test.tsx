@@ -46,6 +46,7 @@ function apiProject(weeklyGoal: number): ApiProject {
 		goal_type: "target",
 		goal_overrides: [],
 		autostart_repos: [],
+		kind: "side_project",
 	};
 }
 

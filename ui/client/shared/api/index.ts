@@ -1,7 +1,9 @@
 // API client and error handling
 export {
 	ApiError,
+	type ApiErrorField,
 	apiClient,
+	apiFieldErrors,
 	apiMutate,
 	del,
 	describeError,
@@ -16,9 +18,13 @@ export {
 export type { Paths, Schemas } from "./schema";
 // Re-export types
 export type {
+	ApiAbsence,
 	ApiBeat,
+	ApiContract,
+	ApiContractTerm,
 	ApiGoalOverride,
 	ApiProject,
+	ApiProjectKind,
 	ApiProjectListItem,
 	CalendarStatus,
 	FlowTopBucket,
@@ -43,12 +49,17 @@ export type {
 } from "./schemas";
 // Zod schemas for validation
 export {
+	AbsenceTypeSchema,
+	ApiAbsenceListSchema,
+	ApiAbsenceSchema,
 	ApiBeatListSchema,
 	ApiBeatSchema,
 	ApiProjectListItemSchema,
 	ApiProjectListSchema,
 	ApiProjectSchema,
 	CalendarStatusSchema,
+	ContractSchema,
+	ContractTermSchema,
 	FlowTopBucketSchema,
 	FlowWindowListSchema,
 	FlowWindowSchema,
@@ -58,13 +69,19 @@ export {
 	GitCommitActivitySchema,
 	GitHubStatusSchema,
 	HeatmapDayListSchema,
+	HolidayListSchema,
+	HolidaySchema,
 	PatternsResponseSchema,
 	ProductivityScoreSchema,
 	ProjectBreakdownEntrySchema,
 	ProjectHealthListSchema,
+	ProjectKindSchema,
 	ProjectTotalSchema,
 	parseApiResponse,
+	RegionListSchema,
+	RegionSchema,
 	RhythmSlotListSchema,
+	ScheduleTypeSchema,
 	ScoreHistorySchema,
 	TimerStatusSchema,
 	WeekBreakdownSchema,

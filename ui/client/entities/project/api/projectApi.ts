@@ -3,17 +3,27 @@
  * Low-level API calls for projects.
  */
 
-import type { ApiGoalOverride, ApiProject, ApiProjectListItem } from "@/shared/api";
+import type {
+	ApiContract,
+	ApiGoalOverride,
+	ApiProject,
+	ApiProjectKind,
+	ApiProjectListItem,
+} from "@/shared/api";
 import {
 	ApiProjectListSchema,
 	ApiProjectSchema,
 	get,
+	HolidayListSchema,
 	ProjectTotalSchema,
 	parseApiResponse,
 	post,
 	put,
+	RegionListSchema,
 	WeekBreakdownSchema,
 } from "@/shared/api";
+import { browserTimeZone } from "@/shared/lib";
+import type { Holiday, HolidayRegion } from "../model";
 
 /**
  * Per-project aggregations the backend can fold into the list response when
@@ -54,9 +64,13 @@ export async function createProject(input: {
 	description?: string | null;
 	color?: string | null;
 	weekly_goal?: number | null;
+	goal_type?: "target" | "cap";
 	category?: string | null;
 	github_repo?: string | null;
 	autostart_repos?: string[];
+	kind?: ApiProjectKind;
+	/** Only with kind "day_job"; a contract on any other kind is a 409. */
+	contract?: ApiContract | null;
 }): Promise<ApiProject> {
 	const data = await post<unknown>("/api/projects/", input);
 	return parseApiResponse(ApiProjectSchema, data);
@@ -124,6 +138,13 @@ export async function fetchProjectWeek(
 	};
 }
 
+/**
+ * Wholesale replace of a project. `kind` and `contract` are the two fields
+ * the API reads by presence: leave either out and the stored value stays;
+ * `contract: null` clears it. A PUT that moves a day job to another kind
+ * must leave `contract` out — the API clears it with the kind, and refuses
+ * a contract sent alongside any other kind (409 NOT_A_DAY_JOB).
+ */
 export async function updateProject(project: {
 	id: string;
 	name: string;
@@ -135,9 +156,37 @@ export async function updateProject(project: {
 	github_repo?: string | null;
 	category?: string | null;
 	autostart_repos?: string[];
+	kind?: ApiProjectKind;
+	contract?: ApiContract | null;
 }): Promise<ApiProject> {
 	const data = await put<unknown>("/api/projects/", project);
 	return parseApiResponse(ApiProjectSchema, data);
+}
+
+/**
+ * Replace a day job's whole contract — terms, region, opening balance and
+ * end date — as one object, the way goal-overrides are replaced. 409 on a
+ * project that is not a day job; 400 on a region the calendar does not know.
+ */
+export async function updateContract(
+	projectId: string,
+	contract: ApiContract,
+): Promise<ApiProject> {
+	const data = await put<unknown>(`/api/projects/${projectId}/contract`, contract);
+	return parseApiResponse(ApiProjectSchema, data);
+}
+
+/** The contract region's public holidays for a year; empty without a region. */
+export async function fetchProjectHolidays(projectId: string, year: number): Promise<Holiday[]> {
+	const tz = encodeURIComponent(browserTimeZone());
+	const data = await get<unknown>(`/api/projects/${projectId}/holidays?year=${year}&tz=${tz}`);
+	return parseApiResponse(HolidayListSchema, data);
+}
+
+/** Every country the holiday calendar knows, with its subdivisions, for the region picker. */
+export async function fetchHolidayRegions(): Promise<HolidayRegion[]> {
+	const data = await get<unknown>("/api/meta/holiday-regions");
+	return parseApiResponse(RegionListSchema, data);
 }
 
 export async function updateGoalOverrides(

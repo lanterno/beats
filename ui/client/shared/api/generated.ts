@@ -2511,8 +2511,17 @@ export interface components {
         /**
          * CreateProjectRequest
          * @description Request body for creating a project.
+         *
+         *     Accepts every field UpdateProjectRequest does, bar `id` and `archived`.
+         *     A field settable only on update leaves a freshly created project at its
+         *     default until a separate PUT the create form has no way to make: the
+         *     daemon's flow-score category_fit silently could not match work to a new
+         *     project until `category` was added here, and a GitHub repo, autostart
+         *     path or goal type typed at creation was dropped the same way.
          */
         CreateProjectRequest: {
+            /** Autostart Repos */
+            autostart_repos?: string[];
             /** Category */
             category?: string | null;
             /** Color */
@@ -2520,6 +2529,10 @@ export interface components {
             contract?: components["schemas"]["Contract"] | null;
             /** Description */
             description?: string | null;
+            /** Github Repo */
+            github_repo?: string | null;
+            /** @default target */
+            goal_type: components["schemas"]["GoalType"];
             /** @default side_project */
             kind: components["schemas"]["ProjectKind"];
             /** Name */

@@ -59,6 +59,46 @@ export function formatDateOnly(yyyyMmDd: string | null | undefined, fallback = "
 }
 
 /**
+ * The browser's IANA timezone (e.g. "Europe/Zurich"). Sent as `tz=` to every
+ * route that buckets by local day, so the API's calendar is the user's.
+ */
+export function browserTimeZone(): string {
+	return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
+ * The local calendar day a Date falls on, as 'YYYY-MM-DD' — the inverse of
+ * parseIsoDate. For fields the API treats as date-only (an effective_from,
+ * an absence date): toISOString() would name the UTC day instead, which is
+ * yesterday for an evening user east of Greenwich.
+ */
+export function toIsoDate(d: Date): string {
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+}
+
+/** Today's local calendar day as 'YYYY-MM-DD'. */
+export function todayIso(): string {
+	return toIsoDate(new Date());
+}
+
+/**
+ * Parse a bare 'YYYY-MM-DD' as local noon of that day, so adding days or
+ * months to the result never lands on the wrong side of a DST change.
+ * null when the string is not a 'YYYY-MM-DD'.
+ */
+export function parseIsoDate(yyyyMmDd: string | null | undefined): Date | null {
+	if (!yyyyMmDd || typeof yyyyMmDd !== "string") return null;
+	const m = yyyyMmDd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (!m) return null;
+	const [, y, mo, d] = m;
+	const date = new Date(Number(y), Number(mo) - 1, Number(d), 12, 0, 0, 0);
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
  * Format a time for display in the user's local timezone (e.g., "02:30 PM")
  */
 export function formatTime(dateString: string): string {

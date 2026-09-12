@@ -39,6 +39,19 @@ vi.mock("@/entities/project", async () => {
 		useProjectWeeks: () => hooks.useProjectWeeks(),
 		useUpdateProject: () => idle,
 		useUpdateGoalOverrides: () => idle,
+		useUpdateContract: () => idle,
+		useHolidayRegions: () => ({ data: [] }),
+		useProjectHolidays: () => ({ data: [] }),
+	};
+});
+
+vi.mock("@/entities/absence", () => {
+	const idle = { mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false };
+	return {
+		useAbsences: () => ({ data: [], error: null }),
+		useRecordAbsence: () => idle,
+		useRemoveAbsence: () => idle,
+		ABSENCE_TYPE_LABELS: { vacation: "Vacation", sick: "Sick", other: "Other" },
 	};
 });
 
@@ -73,6 +86,7 @@ const PROJECT = {
 	archived: false,
 	goalOverrides: [],
 	autostartRepos: [],
+	kind: "side_project",
 	totalMinutes: 600,
 	weeklyGoal: 10,
 };
@@ -168,5 +182,37 @@ describe("ProjectDetails", () => {
 		renderPage();
 		const sessions = await screen.findByRole("region", { name: /sessions/i });
 		expect(within(sessions).queryAllByRole("button", { name: /^edit$/i })).toHaveLength(0);
+	});
+
+	it("shows the contract surfaces on a day job, and the region nudge until a region is set", async () => {
+		hooks.useProject.mockReturnValue({
+			data: {
+				...PROJECT,
+				kind: "day_job",
+				contract: {
+					terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
+					openingBalanceHours: 0,
+				},
+			},
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+		expect(await screen.findByText(/Complete your contract/)).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: /Contract history/i })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: /Absences/i })).toBeInTheDocument();
+		// A custom term owes hours, so the contract is the goal: the header
+		// offers no way to a personal goal the settings form would not show.
+		expect(screen.queryByTitle("Edit weekly goal")).not.toBeInTheDocument();
+		expect(screen.queryByText("+ Set weekly goal")).not.toBeInTheDocument();
+	});
+
+	it("keeps the contract surfaces off a side project", async () => {
+		renderPage();
+		await screen.findAllByText("Alpha");
+		expect(screen.queryByText(/Complete your contract/)).not.toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: /Contract history/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: /Absences/i })).not.toBeInTheDocument();
+		expect(screen.getByTitle("Edit weekly goal")).toBeInTheDocument();
 	});
 });

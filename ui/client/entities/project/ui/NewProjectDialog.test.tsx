@@ -10,6 +10,7 @@ const useProjectsMock = vi.fn(() => ({ data: [] }));
 vi.mock("../api", () => ({
 	useCreateProject: () => ({ mutateAsync, isPending: false }),
 	useProjects: () => useProjectsMock(),
+	useHolidayRegions: () => ({ data: [] }),
 }));
 
 vi.mock("@/entities/github", () => ({
@@ -30,6 +31,7 @@ const CREATED: ApiProject = {
 	goal_type: "target",
 	goal_overrides: [],
 	autostart_repos: [],
+	kind: "side_project",
 };
 
 describe("NewProjectDialog (P1.3 — ProjectForm-hosted)", () => {
@@ -57,6 +59,7 @@ describe("NewProjectDialog (P1.3 — ProjectForm-hosted)", () => {
 
 		await userEvent.type(screen.getByLabelText("Name"), "  Alpha  ");
 		await userEvent.type(screen.getByLabelText(/Weekly goal/), "10");
+		await userEvent.click(screen.getByRole("radio", { name: /Cap/ }));
 
 		await userEvent.click(screen.getByRole("button", { name: "Create project" }));
 
@@ -66,12 +69,16 @@ describe("NewProjectDialog (P1.3 — ProjectForm-hosted)", () => {
 			expect.objectContaining({
 				name: "Alpha",
 				weekly_goal: 10,
+				goal_type: "cap",
 				description: null,
 				category: null,
 				github_repo: null,
 				autostart_repos: [],
+				kind: "side_project",
 			}),
 		);
+		// No contract on a side project — the API refuses one on any other kind.
+		expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("contract");
 		expect(onClose).toHaveBeenCalled();
 		expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "new-1", name: "Alpha" }));
 	});

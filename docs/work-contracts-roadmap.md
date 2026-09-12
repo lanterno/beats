@@ -405,19 +405,28 @@ default.
 
 ### Phase 4 — UI: form, contract, absences `[ui]`
 
-FSD placement: `entities/project` gains the types, mappers, queries and
-a `ContractTermsEditor`; `entities/absence` is new; the pages compose.
+FSD placement: `entities/project` gains the types, mappers and queries
+this phase's surfaces read, and a `ContractTermsEditor`; the week query
+and the list's this-week figures arrive with the card that reads them
+(Phase 5), not ahead of it. `entities/absence` is new; the pages compose.
 
 - **Project form / settings drawer**: a `kind` selector. Choosing
   `day_job` reveals the contract section: schedule type, full-time
   hours, percentage (or weekly hours for custom), region picker
   (country → subdivision), opening balance. Choosing `objective` hides
   the numbers and shows the personal goal instead. Time-based day jobs
-  hide the personal goal field.
+  hide the personal goal field, and the project header's way to it.
+  A day job may exist without a contract ("leave first, contract later":
+  the API allows it and the migration produces it), so the first term
+  sits behind a "Set up the contract now" switch — on when the kind is
+  chosen in the form, off when the settings drawer opens on a day job
+  that has none, so a rename does not demand a contract.
 - **Contract history panel** on the project page, modelled on
   `OverrideManagementPanel`: a list of terms with dates, and a "Change
   contract from…" action that appends a term. Editing a past term is
-  allowed (people fix dates); deleting the only term is not.
+  allowed (people fix dates); deleting the only term is not. On a day
+  job without a contract the panel offers "Add contract", which opens
+  the settings drawer on the contract section with the switch on.
 - **Absences**: a month grid on the project page with holidays
   pre-marked from `/holidays`, click a weekday to add vacation / sick /
   other, half-day toggle, click again to remove.

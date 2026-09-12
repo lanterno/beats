@@ -24,6 +24,7 @@ function project(overrides: Project["goalOverrides"]): Project {
 		archived: false,
 		autostartRepos: [],
 		goalOverrides: overrides,
+		kind: "side_project",
 	} as Project;
 }
 

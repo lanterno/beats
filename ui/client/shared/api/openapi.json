@@ -708,8 +708,15 @@
         "type": "object"
       },
       "CreateProjectRequest": {
-        "description": "Request body for creating a project.",
+        "description": "Request body for creating a project.\n\nAccepts every field UpdateProjectRequest does, bar `id` and `archived`.\nA field settable only on update leaves a freshly created project at its\ndefault until a separate PUT the create form has no way to make: the\ndaemon's flow-score category_fit silently could not match work to a new\nproject until `category` was added here, and a GitHub repo, autostart\npath or goal type typed at creation was dropped the same way.",
         "properties": {
+          "autostart_repos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Autostart Repos",
+            "type": "array"
+          },
           "category": {
             "anyOf": [
               {
@@ -752,6 +759,21 @@
               }
             ],
             "title": "Description"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "goal_type": {
+            "$ref": "#/components/schemas/GoalType",
+            "default": "target"
           },
           "kind": {
             "$ref": "#/components/schemas/ProjectKind",

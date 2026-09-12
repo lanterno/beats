@@ -15,18 +15,24 @@ class RecordTimeRequest(BaseModel):
 
 
 class CreateProjectRequest(BaseModel):
-    """Request body for creating a project."""
+    """Request body for creating a project.
+
+    Accepts every field UpdateProjectRequest does, bar `id` and `archived`.
+    A field settable only on update leaves a freshly created project at its
+    default until a separate PUT the create form has no way to make: the
+    daemon's flow-score category_fit silently could not match work to a new
+    project until `category` was added here, and a GitHub repo, autostart
+    path or goal type typed at creation was dropped the same way.
+    """
 
     name: str
     description: str | None = None
     color: str | None = None
     weekly_goal: float | None = None  # Weekly goal in hours
-    # category is settable on update — without exposing it here too,
-    # a freshly-created project's category stays None until the user
-    # makes a separate PUT, and the daemon's flow-score category_fit
-    # silently can't match work to the project. Brought to parity with
-    # UpdateProjectRequest.
+    goal_type: GoalType = GoalType.TARGET
+    github_repo: str | None = None  # "owner/repo"
     category: str | None = None  # Activity category for flow score matching
+    autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths
     kind: ProjectKind = ProjectKind.SIDE_PROJECT
     # The domain Contract itself, so its validators are the request's: a bad
     # term is a 422 whose `fields` name the term (`contract.terms.1`). Only

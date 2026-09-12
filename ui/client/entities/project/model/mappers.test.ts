@@ -19,6 +19,7 @@ describe("Project mapper round-trip", () => {
 			github_repo: "lanterno/beats",
 			category: "coding",
 			autostart_repos: ["/Users/me/code/beats"],
+			kind: "side_project",
 		};
 
 		const domain = toProject(fromWire);
@@ -40,6 +41,7 @@ describe("Project mapper round-trip", () => {
 			goal_type: "target",
 			goal_overrides: [],
 			autostart_repos: [],
+			kind: "side_project",
 		};
 		const domain = toProject(fromWire);
 		expect(domain.githubRepo).toBeUndefined();
@@ -50,5 +52,55 @@ describe("Project mapper round-trip", () => {
 		expect(backToWire.github_repo).toBeNull();
 		expect(backToWire.category).toBeNull();
 		expect(backToWire.autostart_repos).toEqual([]);
+	});
+
+	it("carries a day job's contract both ways, and none on any other kind", () => {
+		const fromWire: ApiProject = {
+			id: "p3",
+			name: "Employer",
+			archived: false,
+			goal_type: "target",
+			goal_overrides: [],
+			autostart_repos: [],
+			kind: "day_job",
+			contract: {
+				terms: [
+					{
+						effective_from: "2026-01-05",
+						schedule_type: "part_time",
+						full_time_hours: 42,
+						percentage: 0.8,
+						weekly_hours: null,
+						note: null,
+					},
+				],
+				holiday_country: "CH",
+				holiday_subdivision: "ZH",
+				opening_balance_hours: 4.5,
+				ended_on: null,
+			},
+		};
+		const domain = toProject(fromWire);
+		expect(domain.kind).toBe("day_job");
+		expect(domain.contract).toEqual({
+			terms: [
+				{
+					effectiveFrom: "2026-01-05",
+					scheduleType: "part_time",
+					fullTimeHours: 42,
+					percentage: 0.8,
+				},
+			],
+			holidayCountry: "CH",
+			holidaySubdivision: "ZH",
+			openingBalanceHours: 4.5,
+		});
+		expect(toApiProject(domain).contract).toEqual(fromWire.contract);
+
+		// The wire never carries a contract on a side project; should one
+		// arrive, reading it would let the UI show a contract the API ignores.
+		const stray = toProject({ ...fromWire, kind: "side_project" });
+		expect(stray.contract).toBeUndefined();
+		expect(toApiProject(stray).contract).toBeNull();
 	});
 });

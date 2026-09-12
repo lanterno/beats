@@ -898,7 +898,10 @@ class TestContractAPI:
         body = resp.json()
         assert body["code"] == "VALIDATION_ERROR"
         assert [f["path"] for f in body["fields"]] == ["contract.terms.0"]
-        assert "weekly_hours" in body["fields"][0]["message"]
+        message = body["fields"][0]["message"]
+        assert "weekly_hours" in message
+        # The UI shows this sentence as is; Pydantic's "Value error, " comes off.
+        assert not message.startswith("Value error")
 
     def test_put_without_contract_keeps_the_stored_one(self, client, auth_headers):
         # An older client that does not know `kind` or `contract` edits the
@@ -4785,31 +4788,34 @@ class TestSignalsAPI:
         resp = client.get("/api/signals/pending-suggestions")
         assert resp.status_code == 401
 
-    def test_create_project_with_category_persists(self, client, auth_headers):
-        """Regression guard: the create handler used to ignore the
-        `category` field — the schema accepted it but the route never
-        forwarded it to the domain Project, so a freshly-created
-        project's category was always None until a separate PUT.
-        That broke the daemon's flow-score category_fit silently
-        for new projects.
-
-        The fix lives at api/src/beats/api/routers/projects.py
-        (create_project + update_project both forward category +
-        autostart_repos now). Test asserts the round-trip.
+    def test_create_project_persists_every_settable_field(self, client, auth_headers):
+        """Regression guard: create used to accept fewer fields than update.
+        First the route never forwarded `category` to the domain Project, so
+        the daemon's flow-score category_fit silently never matched a new
+        project; then the schema itself lacked goal_type, github_repo and
+        autostart_repos, so whatever the create form sent for them was
+        dropped (pydantic ignores extras) until a separate PUT. Round-trip
+        all of them through POST and the list.
         """
+        sent = {
+            "category": "coding",
+            "goal_type": "cap",
+            "github_repo": "lanterno/beats",
+            "autostart_repos": ["/Users/me/code/beats"],
+        }
         resp = client.post(
             "/api/projects/",
-            json={"name": "Drift Test Coding", "category": "coding"},
+            json={"name": "Drift Test Coding", **sent},
             headers=auth_headers,
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()
-        assert body["category"] == "coding", body
+        assert {k: body[k] for k in sent} == sent, body
 
-        # Read back via list + by-id to confirm persistence.
+        # Read back via the list to confirm persistence.
         resp = client.get("/api/projects/", headers=auth_headers)
         match = next(p for p in resp.json() if p["id"] == body["id"])
-        assert match["category"] == "coding"
+        assert {k: match[k] for k in sent} == sent
 
     def test_update_project_persists_autostart_repos(self, client, auth_headers):
         """update_project also used to drop autostart_repos on the

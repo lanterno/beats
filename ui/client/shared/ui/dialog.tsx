@@ -22,6 +22,12 @@ export interface DialogProps {
 	children: React.ReactNode;
 	/** Constrain content width on >= sm. Defaults to "max-w-lg". */
 	contentClassName?: string;
+	/**
+	 * Fires when the dialog has closed and is about to return focus to its
+	 * trigger. `preventDefault()` on the event and focus something else
+	 * instead — for a close that hands over to a control on the page.
+	 */
+	onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -35,6 +41,7 @@ export function Dialog({
 	description,
 	children,
 	contentClassName,
+	onCloseAutoFocus,
 }: DialogProps) {
 	return (
 		<DialogPrimitive.Root
@@ -52,6 +59,7 @@ export function Dialog({
 					)}
 				/>
 				<DialogPrimitive.Content
+					onCloseAutoFocus={onCloseAutoFocus}
 					className={cn(
 						"fixed z-[71] bg-card text-foreground shadow-card",
 						// Mobile: bottom-sheet, full-width, rounded top corners only.

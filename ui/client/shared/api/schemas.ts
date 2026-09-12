@@ -16,6 +16,73 @@ export const GoalOverrideSchema = z.object({
 
 export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
 
+// Work contracts (docs/work-contracts-roadmap.md). These mirror the API's
+// `ProjectKind`, `ScheduleType`, `ContractTerm`, `Contract`, `AbsenceType`,
+// `Holiday` and `Region` schemas field for field; the validators behind
+// them (which numbers a schedule type needs, terms in order) are the API's,
+// and a 422 names the offending path in `fields`. The week against the
+// contract arrives with the card that reads it (Phase 5).
+
+export const ProjectKindSchema = z.enum(["day_job", "freelance", "side_project"]);
+export type ApiProjectKind = z.infer<typeof ProjectKindSchema>;
+
+export const ScheduleTypeSchema = z.enum(["full_time", "part_time", "custom", "objective"]);
+
+export const ContractTermSchema = z.object({
+	effective_from: z.string(), // YYYY-MM-DD
+	schedule_type: ScheduleTypeSchema,
+	full_time_hours: z.number().nullable().optional(),
+	percentage: z.number().nullable().optional(), // fraction in (0, 1]
+	weekly_hours: z.number().nullable().optional(),
+	note: z.string().nullable().optional(),
+});
+
+export type ApiContractTerm = z.infer<typeof ContractTermSchema>;
+
+export const ContractSchema = z.object({
+	terms: z.array(ContractTermSchema),
+	holiday_country: z.string().nullable().optional(),
+	holiday_subdivision: z.string().nullable().optional(),
+	opening_balance_hours: z.number().optional().default(0),
+	ended_on: z.string().nullable().optional(),
+});
+
+export type ApiContract = z.infer<typeof ContractSchema>;
+
+export const AbsenceTypeSchema = z.enum(["vacation", "sick", "other"]);
+
+export const ApiAbsenceSchema = z.object({
+	id: z.string(),
+	project_id: z.string(),
+	date: z.string(), // YYYY-MM-DD
+	half_day: z.boolean().optional().default(false),
+	type: AbsenceTypeSchema,
+	note: z.string().nullable().optional(),
+});
+
+export type ApiAbsence = z.infer<typeof ApiAbsenceSchema>;
+export const ApiAbsenceListSchema = z.array(ApiAbsenceSchema);
+
+export const HolidaySchema = z.object({
+	date: z.string(), // YYYY-MM-DD
+	name: z.string(),
+});
+
+export const HolidayListSchema = z.array(HolidaySchema);
+
+export const SubdivisionSchema = z.object({
+	code: z.string(),
+	name: z.string(),
+});
+
+export const RegionSchema = z.object({
+	code: z.string(), // ISO 3166-1 alpha-2
+	name: z.string(),
+	subdivisions: z.array(SubdivisionSchema),
+});
+
+export const RegionListSchema = z.array(RegionSchema);
+
 export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),
@@ -30,6 +97,9 @@ export const ApiProjectSchema = z.object({
 	github_repo: z.string().nullable().optional(),
 	category: z.string().nullable().optional(),
 	autostart_repos: z.array(z.string()).optional().default([]),
+	// A contract is read only on a day job; on any other kind it is null.
+	kind: ProjectKindSchema.optional().default("side_project"),
+	contract: ContractSchema.nullable().optional(),
 });
 
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
