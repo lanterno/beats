@@ -150,12 +150,14 @@ worked(range)   = Σ beat duration on this project, by local day
 
 ```
 balance(today) = opening_balance_hours
-               + worked(start .. now)
+               + worked(start .. min(now, ended_on))
                - expected(start .. yesterday)
 ```
 
 Today's expectation is charged tomorrow, so the balance does not read
 −6 h every morning. `start` is the first term's `effective_from`.
+`ended_on` freezes both sides: nothing is expected after it, and time
+tracked on the project after it does not count as overtime either.
 
 **Day boundaries** use the request timezone the API already resolves
 (`TimezoneDep`). The holiday *region* is the employer's, which may be a
@@ -177,9 +179,13 @@ Pure code, no HTTP, no Mongo beyond the new repository.
 - `domain/models.py`: `ProjectKind`, `ScheduleType`, `ContractTerm`,
   `Contract`, `AbsenceType`, `Absence`. Validators: terms non-empty and
   strictly increasing by `effective_from`; `percentage` in `(0, 1]`;
-  `full_time` forces `percentage = 1`; `custom` requires `weekly_hours`;
-  `objective` allows none of the numbers; `holiday_subdivision` needs
-  `holiday_country`; both must be codes the library recognises.
+  `full_time` forces `percentage = 1`; `part_time` needs it below 1;
+  `custom` requires `weekly_hours`; `objective` allows none of the
+  numbers; `holiday_subdivision` needs `holiday_country`. That both are
+  codes the library recognises is checked by `ProjectService` when a
+  contract is written, not by the model: the model is re-validated on
+  every read, and a code a library upgrade stops knowing must make one
+  contract un-editable, not the user's whole project list unreadable.
 - `domain/contracts.py`: `term_on(contract, day)`,
   `expected_hours(contract, absences, holidays, start, end)`,
   `balance(...)`. Takes holidays as a `set[date]` so the function is
@@ -193,7 +199,8 @@ Pure code, no HTTP, no Mongo beyond the new repository.
   and the `(user, project, date)` unique index in the startup index
   build.
 
-**Tests** (`domain/test_contracts.py`) — the interesting inputs only:
+**Tests** (`test_contracts.py`, beside `test_domain.py`) — the interesting
+inputs only:
 holiday on a Saturday; substitute Monday for a Sunday holiday in `GB`;
 half day; two terms changing on a Wednesday; contract starting on a
 Thursday; `ended_on` mid-week; objective term contributes zero; balance

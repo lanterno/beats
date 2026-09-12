@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from enum import StrEnum
+from itertools import pairwise
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -92,6 +93,189 @@ class GoalOverride(BaseModel):
         return self
 
 
+class ProjectKind(StrEnum):
+    """What a project is to the person tracking it. A contract is read only on a day job."""
+
+    DAY_JOB = "day_job"
+    FREELANCE = "freelance"
+    SIDE_PROJECT = "side_project"
+
+
+class ScheduleType(StrEnum):
+    """How a contract term states the hours it owes."""
+
+    FULL_TIME = "full_time"  # percentage fixed at 1.0
+    PART_TIME = "part_time"  # percentage < 1.0
+    CUSTOM = "custom"  # weekly_hours given directly
+    OBJECTIVE = "objective"  # no expectation, no balance
+
+
+# A week owes hours_per_week; a day off owes a fifth of it less. There is no
+# working pattern (decision 3): we never ask which weekdays are worked.
+WORKDAYS_PER_WEEK = 5
+
+
+class ContractTerm(BaseModel):
+    """One stretch of a contract, from `effective_from` until the next term takes over.
+
+    A time-based term (full_time / part_time) owes `full_time_hours × percentage`
+    a week — a percentage needs its basis, since 80% of 42 is not 80% of 40. A
+    custom term states `weekly_hours` outright. An objective term owes nothing
+    and carries no numbers at all. Hence the rules:
+
+    - `percentage` lies in (0, 1]; a full_time term is 1 — filled in when
+      omitted, rejected when it says otherwise — and a part_time term is
+      less than 1, or it would be full-time under another name.
+    - `weekly_hours` is required for custom and must be left out for the
+      time-based types, where it is derived (`hours_per_week`).
+    - `full_time_hours` and `percentage` belong to the time-based types only.
+
+    `effective_from` may be any day of the week: a contract that changes on a
+    Wednesday charges Monday and Tuesday at the old rate.
+    """
+
+    effective_from: date_type
+    schedule_type: ScheduleType
+    # Finite only: a NaN here would ride through hours_per_day into every
+    # expectation and the balance, and compare as neither over nor under.
+    full_time_hours: float | None = Field(default=None, allow_inf_nan=False)
+    percentage: float | None = Field(default=None, allow_inf_nan=False)
+    weekly_hours: float | None = Field(default=None, allow_inf_nan=False)
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_hours_for_schedule(self) -> ContractTerm:
+        if self.full_time_hours is not None and self.full_time_hours <= 0:
+            msg = "full_time_hours must be positive"
+            raise ValueError(msg)
+        if self.percentage is not None and not 0 < self.percentage <= 1:
+            msg = "percentage must be in (0, 1]"
+            raise ValueError(msg)
+        if self.weekly_hours is not None and self.weekly_hours < 0:
+            msg = "weekly_hours must not be negative"
+            raise ValueError(msg)
+
+        schedule = self.schedule_type
+        if schedule is ScheduleType.OBJECTIVE:
+            if (self.full_time_hours, self.percentage, self.weekly_hours) != (None, None, None):
+                msg = "an objective term carries no hours"
+                raise ValueError(msg)
+        elif schedule is ScheduleType.CUSTOM:
+            if self.weekly_hours is None:
+                msg = "a custom term requires weekly_hours"
+                raise ValueError(msg)
+            if self.full_time_hours is not None or self.percentage is not None:
+                msg = "a custom term states weekly_hours directly, not a basis and percentage"
+                raise ValueError(msg)
+        else:
+            if self.full_time_hours is None:
+                msg = f"a {schedule} term requires full_time_hours"
+                raise ValueError(msg)
+            if self.weekly_hours is not None:
+                msg = f"weekly_hours is derived for a {schedule} term"
+                raise ValueError(msg)
+            if schedule is ScheduleType.FULL_TIME:
+                if self.percentage is None:
+                    self.percentage = 1.0
+                elif self.percentage != 1:
+                    msg = "a full_time term is 100%; use part_time for less"
+                    raise ValueError(msg)
+            elif self.percentage is None:
+                msg = "a part_time term requires percentage"
+                raise ValueError(msg)
+            elif self.percentage == 1:
+                msg = "a part_time term is less than 100%; use full_time for a full week"
+                raise ValueError(msg)
+        return self
+
+    @property
+    def hours_per_week(self) -> float | None:
+        """Hours the week owes under this term; None for an objective term."""
+        if self.schedule_type is ScheduleType.CUSTOM:
+            return self.weekly_hours
+        if self.full_time_hours is None or self.percentage is None:
+            return None  # objective; the validator leaves no other way here
+        return self.full_time_hours * self.percentage
+
+    @property
+    def hours_per_day(self) -> float | None:
+        """What one weekday owes, and what a day off costs."""
+        weekly = self.hours_per_week
+        return None if weekly is None else weekly / WORKDAYS_PER_WEEK
+
+
+class Contract(BaseModel):
+    """A day job's terms as they changed over time, plus what frames them.
+
+    `terms` is the history — part-time, then 80%, then full-time — kept in
+    order of `effective_from` with no two starting on the same day, because
+    the day decides which term applies. The region names the employer's
+    public holidays: `holiday_subdivision` only means something inside a
+    `holiday_country`. Both must be codes the holidays library knows, but
+    that is checked where a contract is written (`ProjectService`), not
+    here: this model is re-validated on every read, and the set of codes the
+    library knows moves with its version — a code it stops recognising must
+    make one contract un-editable, not every project of the user unreadable.
+    `opening_balance_hours` is what was banked (or owed) before Beats started
+    counting; `ended_on` freezes the balance from that day on.
+    """
+
+    terms: list[ContractTerm]
+    holiday_country: str | None = None  # ISO 3166-1 alpha-2, e.g. "CH"
+    holiday_subdivision: str | None = None  # ISO 3166-2 part, e.g. "ZH"
+    opening_balance_hours: float = Field(default=0, allow_inf_nan=False)
+    ended_on: date_type | None = None
+
+    @model_validator(mode="after")
+    def validate_terms(self) -> Contract:
+        if not self.terms:
+            msg = "a contract needs at least one term"
+            raise ValueError(msg)
+        for earlier, later in pairwise(self.terms):
+            if later.effective_from <= earlier.effective_from:
+                msg = "terms must be in ascending order of effective_from, with no two on one day"
+                raise ValueError(msg)
+        if self.ended_on is not None and self.ended_on < self.terms[0].effective_from:
+            msg = "ended_on is before the first term starts"
+            raise ValueError(msg)
+        if self.holiday_subdivision is not None and self.holiday_country is None:
+            msg = "holiday_subdivision needs a holiday_country"
+            raise ValueError(msg)
+        return self
+
+    @property
+    def starts_on(self) -> date_type:
+        """The first day anything is expected: the first term's `effective_from`."""
+        return self.terms[0].effective_from
+
+
+class AbsenceType(StrEnum):
+    """Why a day was not worked. For the record and the calendar's colour only —
+    the arithmetic treats all three the same."""
+
+    VACATION = "vacation"
+    SICK = "sick"
+    OTHER = "other"
+
+
+class Absence(BaseModel):
+    """A day, or half of one, the contract does not expect work on.
+
+    One per (project, date): a second absence on the same day replaces the
+    first rather than stacking. Weekends and holidays already cost nothing,
+    so an absence recorded on one changes nothing.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    project_id: str
+    date: date_type
+    half_day: bool = False
+    type: AbsenceType
+    note: str | None = None
+
+
 class Beat(TzNormalizedModel):
     """A time tracking entry (heartbeat) for a project.
 
@@ -155,6 +339,8 @@ class Project(BaseModel):
     github_repo: str | None = None  # GitHub repo in "owner/repo" format
     category: str | None = None  # Activity category: coding, design, writing, etc.
     autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths for auto-timer
+    kind: ProjectKind = ProjectKind.SIDE_PROJECT
+    contract: Contract | None = None  # only meaningful when kind == day_job
 
     def effective_goal(self, week_monday: date_type) -> tuple[float | None, GoalType]:
         """Resolve the effective goal for a given week (identified by its Monday).

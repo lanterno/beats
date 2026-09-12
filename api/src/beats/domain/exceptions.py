@@ -66,6 +66,16 @@ class ProjectNotFound(DomainException):
             super().__init__()
 
 
+class UnknownHolidayRegion(DomainException):
+    """Raised when a contract names a holiday region the calendar library does not know."""
+
+    message = "Unknown holiday region"
+
+    def __init__(self, country: str, subdivision: str | None):
+        where = country if subdivision is None else f"{country} / {subdivision}"
+        super().__init__(f"Unknown holiday region: {where}")
+
+
 # Beat-related exceptions
 class BeatNotFound(DomainException):
     """Raised when a beat cannot be found by ID."""

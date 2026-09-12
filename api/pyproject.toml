@@ -20,6 +20,7 @@ dependencies = [
     "webauthn>=3.0.0",
     "python-multipart>=0.0.29",
     "slowapi>=0.1.10",
+    "holidays>=0.104",
 ]
 
 [dependency-groups]

@@ -23,6 +23,7 @@ from pymongo.asynchronous.collection import AsyncCollection
 
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
 from beats.domain.models import (
+    Absence,
     Beat,
     BiometricDay,
     CalendarIntegration,
@@ -723,3 +724,42 @@ class MongoBiometricDayRepository(MongoStore[BiometricDay], BiometricDayReposito
 
     async def delete_all(self) -> int:
         return await self._delete_all()
+
+
+class AbsenceRepository(Protocol):
+    async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
+    async def upsert(self, absence: Absence) -> Absence: ...
+    async def delete(self, absence_id: str) -> bool: ...
+
+
+class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
+    model = Absence
+
+    async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]:
+        return await self._find_many(
+            {
+                "project_id": project_id,
+                "date": {"$gte": start.isoformat(), "$lte": end.isoformat()},
+            },
+            sort=("date", 1),
+        )
+
+    async def upsert(self, absence: Absence) -> Absence:
+        # A replace rather than the shared `$set` merge: the document IS the
+        # absence, and posting a sick day over a vacation that carried a note
+        # must not keep the note. The (user, project, date) unique index makes
+        # this filter the document's identity.
+        data = self._dump(absence)
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_replace(
+            self._q({"project_id": data["project_id"], "date": data["date"]}),
+            data,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if result is None:
+            raise RuntimeError("upsert of Absence returned no document")
+        return self._load(result)
+
+    async def delete(self, absence_id: str) -> bool:
+        return await self._delete_one({"_id": ObjectId(absence_id)})

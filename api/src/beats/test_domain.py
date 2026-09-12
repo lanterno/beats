@@ -14,6 +14,7 @@ from beats.domain.exceptions import (
     NoActiveTimer,
     ProjectNotFound,
     TimerAlreadyRunning,
+    UnknownHolidayRegion,
 )
 from beats.domain.intelligence import (
     detect_chronotype,
@@ -29,9 +30,13 @@ from beats.domain.intelligence import (
 from beats.domain.models import (
     Beat,
     BiometricDay,
+    Contract,
+    ContractTerm,
     GoalOverride,
     GoalType,
     Project,
+    ProjectKind,
+    ScheduleType,
 )
 from beats.domain.utils import local_date, local_dt
 
@@ -3118,10 +3123,46 @@ def _project_service(*, projects: list[Project] | None = None, beats: list[Beat]
     )
 
 
+def _day_job(id_: str | None = None, **region) -> Project:
+    """A day job on one full-time term, with the given holiday region."""
+    term = ContractTerm(
+        effective_from=date(2026, 1, 5), schedule_type=ScheduleType.FULL_TIME, full_time_hours=40
+    )
+    contract = Contract(terms=[term], **region)
+    return Project(id=id_, name="Day job", kind=ProjectKind.DAY_JOB, contract=contract)
+
+
 class TestProjectServiceCrud:
     """ProjectService.create/update/archive/list_projects. Mostly a
     pass-through to ProjectRepository, but archive_project carries
-    the load-then-mutate-then-save pattern that needs pinning."""
+    the load-then-mutate-then-save pattern that needs pinning, and
+    the writes are where a contract's holiday region is checked — on
+    purpose not in the model, which is re-validated on every read."""
+
+    async def test_create_accepts_a_known_holiday_region(self):
+        svc = _project_service()
+        created = await svc.create_project(
+            _day_job(holiday_country="GB", holiday_subdivision="ENG")
+        )
+        assert created.contract is not None
+        assert created.contract.holiday_subdivision == "ENG"
+
+    @pytest.mark.parametrize(
+        ("country", "subdivision"),
+        [("XX", None), ("CH", "XX")],
+        ids=["unknown country", "unknown subdivision"],
+    )
+    async def test_create_refuses_an_unknown_holiday_region(self, country, subdivision):
+        svc = _project_service()
+        with pytest.raises(UnknownHolidayRegion):
+            await svc.create_project(
+                _day_job(holiday_country=country, holiday_subdivision=subdivision)
+            )
+
+    async def test_update_refuses_an_unknown_holiday_region(self):
+        svc = _project_service(projects=[_day_job("p1", holiday_country="GB")])
+        with pytest.raises(UnknownHolidayRegion):
+            await svc.update_project(_day_job("p1", holiday_country="XX"))
 
     async def test_create_round_trips(self):
         svc = _project_service()

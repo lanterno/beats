@@ -18,7 +18,7 @@ import builtins
 from datetime import date, datetime
 from typing import Protocol
 
-from beats.domain.models import Beat, FlowWindow, Project
+from beats.domain.models import Absence, Beat, FlowWindow, Project
 
 
 class CompletedBeatReader(Protocol):
@@ -92,3 +92,13 @@ class ProjectBeatReader(Protocol):
     """One project's beats. All `ProjectService` asks of beat storage."""
 
     async def list_by_project(self, project_id: str) -> list[Beat]: ...
+
+
+class AbsenceStore(Protocol):
+    """Absences on one project: the range read the arithmetic needs, and the
+    two writes a calendar makes. Upsert is keyed on (project, date) — a
+    second absence on a day replaces the first."""
+
+    async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
+    async def upsert(self, absence: Absence) -> Absence: ...
+    async def delete(self, absence_id: str) -> bool: ...

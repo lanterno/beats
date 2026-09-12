@@ -10,6 +10,7 @@ from beats.domain.exceptions import (
     ProjectNotFound,
     TimerAlreadyRunning,
 )
+from beats.domain.holidays import check_region
 from beats.domain.models import Beat, Project
 from beats.domain.ports import (
     BeatStore,
@@ -228,6 +229,19 @@ class BeatService:
         return await self.beat_repo.list(project_id=project_id, date_filter=date_filter)
 
 
+def _check_contract_region(project: Project) -> None:
+    """Refuse a contract whose holiday region the calendar library does not know.
+
+    Deliberately not a validator on `Contract`: the model is re-validated on
+    every read, and which codes the library knows moves with its version. A
+    code it stops recognising must make one contract un-editable until it is
+    fixed, not every project of the user unreadable.
+    """
+    contract = project.contract
+    if contract is not None and contract.holiday_country is not None:
+        check_region(contract.holiday_country, contract.holiday_subdivision)
+
+
 class ProjectService:
     """Service for managing project operations and analytics."""
 
@@ -237,10 +251,12 @@ class ProjectService:
 
     async def create_project(self, project: Project) -> Project:
         """Create a new project."""
+        _check_contract_region(project)
         return await self.project_repo.create(project)
 
     async def update_project(self, project: Project) -> Project:
         """Update an existing project."""
+        _check_contract_region(project)
         return await self.project_repo.update(project)
 
     async def archive_project(self, project_id: str) -> Project:

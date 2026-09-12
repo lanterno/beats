@@ -92,11 +92,15 @@ class GoalOverrideResponse(BaseModel):
 
 
 class ProjectResponse(BaseModel):
-    """Canonical response shape for a project — mirrors every field of the
-    domain Project. Previously declared only 6 of 11 fields; list/update
-    routes returned `model_dump()` with no response_model declared, so the
-    OpenAPI contract was silently widened. Now precise so generated clients
-    see the full shape.
+    """Canonical response shape for a project — every field of the domain
+    Project the API exposes. Previously declared only 6 of 11 fields;
+    list/update routes returned `model_dump()` with no response_model
+    declared, so the OpenAPI contract was silently widened. Now precise so
+    generated clients see the full shape.
+
+    `kind` and `contract` exist on the domain Project but are not exposed
+    yet; the contract routes add them, together with the UI types that read
+    them.
     """
 
     id: str
