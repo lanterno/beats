@@ -332,6 +332,72 @@ class ContractWeek(BaseModel):
     remaining: float | None
     balance: float | None
     days: list[ContractDay]
+    # The proof under the balance, so a reader can check the sum:
+    # `balance_opening + balance_worked - balance_expected_through` is
+    # `balance` to the cent (each term is rounded on its own). Always on the
+    # wire, and null exactly when `balance` is — required like it, so the
+    # generated type does not say they may be absent: `balance_as_of` is the
+    # day the balance is for, `balance_worked` the hours since the contract
+    # started (through `ended_on` at most), `balance_expected_through` what
+    # was expected through the day before.
+    balance_as_of: date_type | None
+    balance_opening: float | None
+    balance_worked: float | None
+    balance_expected_through: float | None
+
+
+class LedgerNoteKind(StrEnum):
+    """Why a weekday of a ledger week owed less: the three absence types, or a
+    public holiday."""
+
+    VACATION = "vacation"
+    SICK = "sick"
+    OTHER = "other"
+    HOLIDAY = "holiday"
+
+
+class LedgerNote(BaseModel):
+    """One weekday of a ledger week that owed less than its term: an absence
+    (with `half_day`) or a named public holiday (with `name`)."""
+
+    date: date_type
+    kind: LedgerNoteKind
+    half_day: bool | None = None
+    name: str | None = None
+
+
+class LedgerWeek(BaseModel):
+    """One week of the ledger. See `domain/ledger.py` for what each figure is
+    and when it is None."""
+
+    week_of: date_type
+    worked: float
+    days: list[float]  # Mon..Sun, hours
+    effective_goal: float | None
+    effective_goal_type: GoalType
+    effective_goal_overridden: bool
+    contract_expected: float | None
+    balance_end: float | None
+    notes: list[LedgerNote]
+
+
+class LedgerTotals(BaseModel):
+    """The balance as of today and the two terms that move it, since the
+    contract started — the standing's "worked since · expected through" line
+    and the ledger's foot. The opening balance is the contract's own."""
+
+    expected: float
+    worked: float
+    balance: float
+
+
+class Ledger(BaseModel):
+    """`GET /{id}/ledger`: N weeks newest first, and the totals as of today.
+    Typed because it crosses the wire, as `ContractWeek` is."""
+
+    weeks: list[LedgerWeek]
+    since: date_type | None  # contract.starts_on, or None
+    totals: LedgerTotals | None  # None when there is no balance today
 
 
 class Beat(TzNormalizedModel):
@@ -423,6 +489,22 @@ class Project(BaseModel):
             return None
         term = self.contract.term_on(week_monday)
         return term if term is not None and term.is_time_based else None
+
+    def goal_overridden(self, week_monday: date_type) -> bool:
+        """Whether a goal override resolves for the week — what lets the UI
+        tell "override says no goal" (None, overridden) from "no override and
+        no project default" (None, not overridden).
+
+        False on a week the contract governs: `effective_goal` does not read
+        the overrides there, so none is in effect however many are stored.
+        """
+        if self.goal_term(week_monday) is not None:
+            return False
+        return any(
+            o.week_of == week_monday
+            or (o.effective_from is not None and o.effective_from <= week_monday)
+            for o in self.goal_overrides
+        )
 
     def effective_goal(self, week_monday: date_type) -> tuple[float | None, GoalType]:
         """Resolve the effective goal for a given week (identified by its Monday).

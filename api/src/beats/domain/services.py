@@ -2,11 +2,19 @@
 
 import logging
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from beats.domain.contracts import absences_by_day, balance, expected_hours, expected_on, term_on
+from beats.domain.contracts import (
+    absences_by_day,
+    balance_terms,
+    expected_on,
+    owes,
+    round_hours,
+    term_on,
+    week_expectation,
+)
 from beats.domain.exceptions import (
     AbsenceNotFound,
     InvalidEndTime,
@@ -19,14 +27,15 @@ from beats.domain.exceptions import (
     UnknownHolidayRegion,
 )
 from beats.domain.holidays import Holiday, check_region, named_holidays_between
+from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
     Absence,
     Beat,
     Contract,
     ContractDay,
-    ContractTerm,
     ContractWeek,
     DayAbsence,
+    Ledger,
     Project,
     ProjectKind,
 )
@@ -73,23 +82,6 @@ async def derive_flow_tags(
             seen.add(tag)
             tags.append(tag)
     return tags[:_MAX_FLOW_TAGS]
-
-
-def _has_override_for_week(project: Project, week_monday: date) -> bool:
-    """Return True iff a goal override resolves for the given week.
-
-    False on a week the contract governs: `effective_goal` does not read the
-    overrides there, so none is in effect however many are stored.
-    """
-    if project.goal_term(week_monday) is not None:
-        return False
-    for o in project.goal_overrides:
-        if o.week_of == week_monday:
-            return True
-    for o in project.goal_overrides:
-        if o.effective_from is not None and o.effective_from <= week_monday:
-            return True
-    return False
 
 
 class TimerService:
@@ -473,7 +465,7 @@ class ProjectService:
             # UI distinguish "override says no goal" (null + overridden=true,
             # render as "No goal") from "no override and no project default"
             # (null + overridden=false, render as "—").
-            result["effective_goal_overridden"] = _has_override_for_week(project, start_of_week)
+            result["effective_goal_overridden"] = project.goal_overridden(start_of_week)
 
         return result
 
@@ -560,41 +552,6 @@ def worked_by_local_day(beats: Iterable[Beat], tz: ZoneInfo) -> dict[date, float
     return hours
 
 
-def _owes(term: ContractTerm | None) -> bool:
-    """Whether a term sets an expectation: time-based, and for more than 0
-    hours. Before the first term and under an objective term there is no
-    expectation to report, only work. A term of 0 hours — a sabbatical, or
-    the migration's reading of an override that said "no goal from here" —
-    governs the week, so the personal goal does not resurface under it, but
-    expects nothing of it by nature: null, as `Project.effective_goal`
-    already reads it, not a 0 the header would show as "12.0/0.0h"."""
-    return term is not None and bool(term.hours_per_week)
-
-
-def _hours(value: float) -> float:
-    return round(value, 2)
-
-
-def week_expectation(
-    contract: Contract, absences: Iterable[Absence], holidays: set[date], week_of: date
-) -> float | None:
-    """Hours the contract expects of the week starting `week_of`, after its
-    holidays and absences — the week route's `expected`, on its own.
-
-    None under the null rule: no weekday of the week has a term that sets an
-    expectation (before the first term, an objective term, a term of 0
-    hours). Weekdays only, since Saturday and Sunday owe nothing under any
-    term and so say nothing about whether the week has one. 0 is distinct: a
-    week the contract owed nothing by circumstance — every weekday a holiday
-    or an absence, or after `ended_on`.
-    """
-    weekdays = (week_of + timedelta(days=offset) for offset in range(5))
-    if not any(_owes(term_on(contract, day)) for day in weekdays):
-        return None
-    sunday = week_of + timedelta(days=6)
-    return _hours(expected_hours(contract, absences, holidays, week_of, sunday))
-
-
 class ContractService:
     """A day job read against its contract, and its absences.
 
@@ -610,10 +567,16 @@ class ContractService:
         project_repo: ProjectReader,
         beat_repo: ProjectBeatReader,
         absence_repo: AbsenceStore,
+        now: Callable[[ZoneInfo], datetime] = datetime.now,
     ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
         self.absence_repo = absence_repo
+        # The one clock every read here uses: which week is open, which day
+        # the balance is as of, which year the calendar defaults to are all
+        # "today in the request timezone", and a test hands in a fixed instant
+        # to pin that it is the request's and not the server's.
+        self._now = now
 
     async def week(self, project_id: str, week_of: date | None, tz: ZoneInfo) -> ContractWeek:
         """The week starting `week_of` (a Monday; None for the current week in
@@ -640,7 +603,7 @@ class ContractService:
         if project.id is None:
             raise ProjectNotFound()
         contract = project.contract
-        today = datetime.now(tz).date()
+        today = self._now(tz).date()
         if week_of is None:
             week_of = today - timedelta(days=today.weekday())
         start = min(contract.starts_on, week_of)
@@ -653,6 +616,38 @@ class ContractService:
             )
         worked = worked_by_local_day(beats, tz)
         return self._assemble(contract, absences, holidays, worked, week_of, today)
+
+    async def ledger(self, project_id: str, weeks: int, tz: ZoneInfo) -> Ledger:
+        """The last `weeks` weeks of any project, newest first, ending with the
+        current week in `tz`, and the balance as of today in `tz` with the
+        terms that make it — the project page's one read for every week
+        figure (`domain/ledger.py`).
+
+        One beats read, and on a day job with a contract one absence read and
+        one calendar build, both over the union of the weeks shown and the
+        contract's life so far: each week's closing balance needs every day
+        since the contract started. A project of another kind, or a day job
+        without a contract, gets its goal and its hours and nothing is read
+        for a contract. A region the calendar library has stopped knowing is
+        this project's own error (400), as it is on the week route.
+        """
+        project = await self.project_repo.get_by_id(project_id)
+        beats = await self.beat_repo.list_by_project(project_id)
+        today = self._now(tz).date()
+        monday = today - timedelta(days=today.weekday())
+        contract = project.contract if project.kind is ProjectKind.DAY_JOB else None
+        absences: list[Absence] = []
+        holidays: dict[date, str] = {}
+        if contract is not None and project.id is not None:
+            start = min(contract.starts_on, monday - timedelta(weeks=weeks - 1))
+            end = max(today, monday + timedelta(days=6))
+            absences = await self.absence_repo.list_by_project(project.id, start, end)
+            if contract.holiday_country is not None:
+                holidays = named_holidays_between(
+                    contract.holiday_country, contract.holiday_subdivision, start, end
+                )
+        worked = worked_by_local_day(beats, tz)
+        return assemble_ledger(project, contract, absences, holidays, worked, today, weeks)
 
     async def weeks_for(
         self, projects: Iterable[Project], beats_by_pid: Mapping[str, list[Beat]], tz: ZoneInfo
@@ -734,8 +729,8 @@ class ContractService:
             days.append(
                 ContractDay(
                     date=day,
-                    expected=_hours(expected_day),
-                    worked=_hours(worked_day),
+                    expected=round_hours(expected_day),
+                    worked=round_hours(worked_day),
                     holiday=holidays.get(day),
                     absence=(
                         DayAbsence(type=absence.type, half_day=absence.half_day, note=absence.note)
@@ -747,19 +742,23 @@ class ContractService:
         # The same function every other reader of the figure goes through,
         # so the card, the history row and the planning line cannot drift.
         expected = week_expectation(contract, absences, holiday_days, week_of)
-        remaining = _hours(expected_raw - worked_raw) if expected is not None else None
+        remaining = round_hours(expected_raw - worked_raw) if expected is not None else None
         running = (
-            _hours(balance(contract, absences, holiday_days, worked, today))
-            if _owes(term_on(contract, today))
+            balance_terms(contract, absences, holiday_days, worked, today)
+            if owes(term_on(contract, today))
             else None
         )
         return ContractWeek(
             week_of=week_of,
             expected=expected,
-            worked=_hours(worked_raw),
+            worked=round_hours(worked_raw),
             remaining=remaining,
-            balance=running,
+            balance=round_hours(running.balance) if running else None,
             days=days,
+            balance_as_of=today if running else None,
+            balance_opening=round_hours(running.opening) if running else None,
+            balance_worked=round_hours(running.worked) if running else None,
+            balance_expected_through=(round_hours(running.expected_through) if running else None),
         )
 
     async def holidays(self, project_id: str, year: int | None, tz: ZoneInfo) -> list[Holiday]:
@@ -771,7 +770,7 @@ class ContractService:
         if contract is None or contract.holiday_country is None:
             return []
         if year is None:
-            year = datetime.now(tz).year
+            year = self._now(tz).year
         found = named_holidays_between(
             contract.holiday_country,
             contract.holiday_subdivision,
@@ -786,7 +785,7 @@ class ContractService:
         """Absences in [start, end], by date; each bound left None defaults on
         its own to the current calendar year in `tz`."""
         await self._day_job(project_id)
-        today = datetime.now(tz).date()
+        today = self._now(tz).date()
         return await self.absence_repo.list_by_project(
             project_id, start or date(today.year, 1, 1), end or date(today.year, 12, 31)
         )

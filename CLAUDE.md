@@ -53,7 +53,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 866 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 893 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -85,7 +85,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 866-test suite takes about 30 seconds.
+  the full 893-test suite takes about 30 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -230,8 +230,12 @@ nothing.
   `holidays` package is imported in `domain/holidays.py` and nowhere else; the arithmetic in
   `domain/contracts.py` takes holidays as a set of dates. Worked time is bucketed by the
   local date each beat started on, in the request timezone (`tz`, default UTC); the holiday
-  region is the employer's, whatever the timezone. The decisions are in
-  [docs/work-contracts-roadmap.md](docs/work-contracts-roadmap.md).
+  region is the employer's, whatever the timezone. `GET /{id}/ledger` is the project page's
+  one read for every week figure — `domain/ledger.py` assembles N weeks from one worked map,
+  one absence list and one holiday calendar, and `/contract/week` carries the three terms
+  under its balance (`balance_opening + balance_worked - balance_expected_through`). The
+  decisions are in [docs/work-contracts-roadmap.md](docs/work-contracts-roadmap.md) and
+  [docs/project-page-roadmap.md](docs/project-page-roadmap.md).
 
 ## Daemon CLI
 
@@ -316,7 +320,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; on a day job `/{id}/contract` (replace), `/{id}/contract/week`, `/{id}/holidays`, `/{id}/absences` |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week`, `/{id}/holidays`, `/{id}/absences` |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |

@@ -25,7 +25,7 @@ Anything marked *open* is genuinely undecided.
 
 | Phase | Commit |
 |---|---|
-| 1 — API: the ledger route and the balance proof | — |
+| 1 — API: the ledger route and the balance proof | feat(api): the week ledger route and the balance proof |
 | 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | — |
 | 3a — Project page: the standing, the days, the ledger | — |
 | 3b — Project page: the register, time off, the drawer | — |
@@ -211,9 +211,10 @@ read, one holiday calendar over
     "days": [6.9, 6.4, 6.7, 6.5, 6.4, 0, 0],   // Mon..Sun worked hours
     "effective_goal": 33.6, "effective_goal_type": "target", "effective_goal_overridden": false,
     "contract_expected": 33.6,            // adjusted; null when nothing time-based governs
-    "balance_end": 5.7,                   // balance(..., today = week_of + 7 days); null for the current
-                                          // week, before the first term, under an objective / 0 h term,
-                                          // on any non-day-job
+    "balance_end": 5.7,                   // the balance at the close of Sunday: opening + worked − expected
+                                          // through it, the Monday-morning figure; null for the current
+                                          // week and whenever contract_expected is null (one rule for the
+                                          // row); the frozen final balance after ended_on
     "notes": [ {"date":"2026-08-18","kind":"sick","half_day":true},
                {"date":"2026-05-25","kind":"holiday","name":"Whit Monday"} ]
   } ],
@@ -294,6 +295,88 @@ HTTP contract, bugs that happened. Not class names.
   side project); parity — `ledger.weeks[0].worked == contract/week.worked`
   for the same tz and a beat that crossed midnight; the HTTP contract.
 - `pnpm gen:types`; CLAUDE.md routes table; this file's status.
+
+**Notes** — what the phase settled that the text above left open:
+
+- **The closing balance is the Monday-morning figure.** `balance(today =
+  week_of + 7)` as written would count the following Monday's hours (today's
+  work counts as soon as it happens) while charging only through Sunday, so
+  the row-to-row proof — balance moves by worked − expected — failed on the
+  first fixture. `closing_balances` reads the balance at the close of the
+  week's Sunday: hours worked through it, hours expected through it.
+- **After `ended_on` every row repeats the final balance**, and
+  `contract_expected` is 0 there (owed nothing by circumstance; the term
+  still governs). `balance_terms` freezes both sides on that day, so the
+  frozen figure is what the closing balance is; a blank would have hidden
+  the number the "Final balance" state shows. Hours tracked after the end
+  appear in `worked` and move nothing.
+- **`balance_end` and `contract_expected` share one null rule**: a week with
+  no expectation has no closing balance. The first cut read the term in force
+  on the week's Sunday, which gave a term starting on a Saturday a balance
+  under a blank expectation, and a switch to an objective term mid-week the
+  reverse (review). `week_expectation`'s weekday rule now decides both, so
+  the two columns go blank together; a Saturday start leaves its week before
+  the contract on both counts, and its weekend hours move the next close.
+- **`totals` is None on the week route's rule for today's balance**
+  (`owes(term_on(contract, today))`), so the standing and the ledger's foot
+  go blank together.
+- **The proof holds to the cent, not to the bit.** `balance` stays
+  `round(opening + worked − expected, 2)` as before; the three terms are
+  rounded on their own, so `opening + worked − expected_through` can differ
+  from `balance` by up to 0.01. Tests assert `abs=0.01`. `balance_opening`
+  is rounded like every other hour figure on the wire.
+- **`notes` are weekdays only**, by date, a holiday before an absence on the
+  same day; an absence carries `half_day` (always), a holiday `name`. The
+  absence's free-text `note` is not carried — the rail's Time off panel
+  reads the absence list for that.
+- **The shapes are domain models** (`Ledger`, `LedgerWeek`, `LedgerNote`,
+  `LedgerTotals`, `LedgerNoteKind` in `domain/models.py`) and the route's
+  `response_model` is `Ledger`, as `/contract/week` returns `ContractWeek`;
+  no `LedgerResponse` in `api/schemas.py`. `effective_goal_type` is always a
+  `GoalType` (the `/week/` breakdown could report null).
+- **`week_expectation`, `owes` and `round_hours` moved from `services.py` to
+  `contracts.py`** (`_owes` and `_hours` lost their underscores), and
+  `_has_override_for_week` became `Project.goal_overridden`: `ledger.py`
+  needs all four and `services.py` imports `ledger.py`, so they could not
+  stay where they were without a cycle. `balance()` is a thin wrapper over
+  `balance_terms()`.
+- **`weeks` is validated by the route** (`Query(ge=1, le=104)`, default 8):
+  a 422 naming `weeks` in `fields`. `ContractService.ledger` reads
+  `[min(contract.starts_on, first Monday), max(today, last Sunday)]` as
+  written, though today is never past the last Sunday.
+- **`DEVICE_ALLOWED_PREFIXES` is unchanged**: `/api/projects` is in it, so a
+  paired device can read the ledger, as it can already read the week.
+- **The four `/contract/week` fields are pinned in `TestContractWeekAPI`**
+  (the route's own class), the ledger's HTTP contract in `TestLedgerAPI`,
+  the service's read plan and the midnight parity in
+  `test_domain.py::TestContractServiceLedger`, the assembly on fixed dates in
+  `test_ledger.py`.
+- **The four `/contract/week` proof fields are required-nullable, like
+  `balance`** (review): declared with `= None` defaults they left
+  `ContractWeek.required`, and the generated type said `balance_as_of?:` —
+  may be absent — when the server never omits them.
+- **Closing balances come from one pass** (review): `closing_balances` in
+  `contracts.py` reads every Sunday's close off a running total over the
+  same per-day rule (`_daily`) that `balance_terms` sums, instead of
+  re-summing the contract's life per row. 104 weeks of a five-year contract
+  went from 0.32 s to 0.01 s; 400 random fixtures agree with the per-row
+  formula to the bit, so the proof is still one rule in one place.
+- **`ContractService` takes its clock** (`now`, default `datetime.now`)
+  (review): today in the request timezone decides which week is open and
+  which day the balance is as of, and no test could pin it against the wall
+  clock. The service tests run at a fixed instant — Sunday 23:30 UTC is
+  Monday in Zürich, on both routes.
+- **`worked` and the balance's move differ on the week a contract starts or
+  ends mid-week** (review): the row shows every hour logged, the balance
+  counts only those from the first day through `ended_on`. Documented in
+  `ledger.py` and pinned by a Wednesday start and a Wednesday end; the page
+  should derive the +/− cell from two closes when it has both, not from
+  worked − expected.
+- **The fixtures the reviews' mutants got past** now exist: hours on a
+  Sunday (the close's Sunday edge), a term starting on a Wednesday and on a
+  Saturday, `ended_on` on a Wednesday, absences through the service's read
+  window at both ends, and the row identity on the wire. The 422 test keeps
+  one out-of-range case rather than restating `ge=1, le=104` twice.
 
 ### Phase 2 — The afternoon `[ui]`
 

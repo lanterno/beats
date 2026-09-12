@@ -626,6 +626,51 @@
             ],
             "title": "Balance"
           },
+          "balance_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance As Of"
+          },
+          "balance_expected_through": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Expected Through"
+          },
+          "balance_opening": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Opening"
+          },
+          "balance_worked": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Worked"
+          },
           "days": {
             "items": {
               "$ref": "#/components/schemas/ContractDay"
@@ -671,7 +716,11 @@
           "worked",
           "remaining",
           "balance",
-          "days"
+          "days",
+          "balance_as_of",
+          "balance_opening",
+          "balance_worked",
+          "balance_expected_through"
         ],
         "title": "ContractWeek",
         "type": "object"
@@ -1716,6 +1765,204 @@
           "body"
         ],
         "title": "InsightCardResponse",
+        "type": "object"
+      },
+      "Ledger": {
+        "description": "`GET /{id}/ledger`: N weeks newest first, and the totals as of today.\nTyped because it crosses the wire, as `ContractWeek` is.",
+        "properties": {
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LedgerTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerWeek"
+            },
+            "title": "Weeks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "weeks",
+          "since",
+          "totals"
+        ],
+        "title": "Ledger",
+        "type": "object"
+      },
+      "LedgerNote": {
+        "description": "One weekday of a ledger week that owed less than its term: an absence\n(with `half_day`) or a named public holiday (with `name`).",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "half_day": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half Day"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LedgerNoteKind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "date",
+          "kind"
+        ],
+        "title": "LedgerNote",
+        "type": "object"
+      },
+      "LedgerNoteKind": {
+        "description": "Why a weekday of a ledger week owed less: the three absence types, or a\npublic holiday.",
+        "enum": [
+          "vacation",
+          "sick",
+          "other",
+          "holiday"
+        ],
+        "title": "LedgerNoteKind",
+        "type": "string"
+      },
+      "LedgerTotals": {
+        "description": "The balance as of today and the two terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through\" line\nand the ledger's foot. The opening balance is the contract's own.",
+        "properties": {
+          "balance": {
+            "title": "Balance",
+            "type": "number"
+          },
+          "expected": {
+            "title": "Expected",
+            "type": "number"
+          },
+          "worked": {
+            "title": "Worked",
+            "type": "number"
+          }
+        },
+        "required": [
+          "expected",
+          "worked",
+          "balance"
+        ],
+        "title": "LedgerTotals",
+        "type": "object"
+      },
+      "LedgerWeek": {
+        "description": "One week of the ledger. See `domain/ledger.py` for what each figure is\nand when it is None.",
+        "properties": {
+          "balance_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance End"
+          },
+          "contract_expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Expected"
+          },
+          "days": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "effective_goal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Goal"
+          },
+          "effective_goal_overridden": {
+            "title": "Effective Goal Overridden",
+            "type": "boolean"
+          },
+          "effective_goal_type": {
+            "$ref": "#/components/schemas/GoalType"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerNote"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "week_of": {
+            "format": "date",
+            "title": "Week Of",
+            "type": "string"
+          },
+          "worked": {
+            "title": "Worked",
+            "type": "number"
+          }
+        },
+        "required": [
+          "week_of",
+          "worked",
+          "days",
+          "effective_goal",
+          "effective_goal_type",
+          "effective_goal_overridden",
+          "contract_expected",
+          "balance_end",
+          "notes"
+        ],
+        "title": "LedgerWeek",
         "type": "object"
       },
       "LoginOptionsResponse": {
@@ -7713,6 +7960,84 @@
           }
         },
         "summary": "Get Holidays",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/ledger": {
+      "get": {
+        "description": "The last `weeks` weeks of any project, newest first, ending with the\ncurrent week in `tz` \u2014 worked hours by day, the goal in force, and on a\nday job the contract's adjusted expectation, the balance at each week's\nclose and its absences and holidays \u2014 plus the balance as of today with\nthe terms that make it. Worked hours are bucketed by the local day each\nbeat started on, in `tz`, and a running timer counts up to now, exactly\nas `/contract/week`. A project the contract does not govern carries its\ngoal and its hours and nulls for the rest.",
+        "operationId": "get_ledger_api_projects__project_id__ledger_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many weeks back, ending with the current one.",
+            "in": "query",
+            "name": "weeks",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "description": "How many weeks back, ending with the current one.",
+              "maximum": 104,
+              "minimum": 1,
+              "title": "Weeks",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ledger"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ledger",
         "tags": [
           "Projects"
         ]

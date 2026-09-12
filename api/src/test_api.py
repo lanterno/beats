@@ -1224,6 +1224,34 @@ class TestContractWeekAPI:
         assert week["balance"] is None
         assert week["worked"] == 1
         assert [d["expected"] for d in week["days"]] == [0] * 7
+        # No balance, no proof under it.
+        assert all(
+            week[field] is None
+            for field in (
+                "balance_as_of",
+                "balance_opening",
+                "balance_worked",
+                "balance_expected_through",
+            )
+        )
+
+    def test_week_carries_the_proof_under_the_balance(self, client, auth_headers):
+        # The three terms beside the balance are what the standing shows
+        # under the figure; each is rounded on its own, so the sum lands on
+        # the balance to the cent. Odd minutes, so the rounding is exercised.
+        project = _day_job(client, auth_headers, opening_balance_hours=2.25)
+        _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 47)
+        _log(client, auth_headers, project["id"], "2026-03-04T09:00:00+00:00", 323)
+
+        week = self._week(client, auth_headers, project["id"])
+
+        assert week["balance_as_of"] == datetime.now(UTC).date().isoformat()
+        assert week["balance_opening"] == 2.25
+        assert week["balance_worked"] == pytest.approx(round((47 + 323) / 60, 2))
+        assert week["balance_expected_through"] > 0
+        assert week["balance_opening"] + week["balance_worked"] - week[
+            "balance_expected_through"
+        ] == pytest.approx(week["balance"], abs=0.01)
 
     def test_holidays_are_empty_without_a_region(self, client, auth_headers):
         project = _day_job(client, auth_headers)
@@ -1321,6 +1349,121 @@ class TestContractWeekAPI:
         assert by_id[side["id"]]["contract_worked"] is None
         # The personal goal is untouched by the contract fields.
         assert by_id[side["id"]]["effective_goal"] == 5
+
+
+class TestLedgerAPI:
+    """GET /api/projects/{id}/ledger — every week figure on the project page,
+    from one read. The assembly is tested on fixed dates in `test_ledger.py`;
+    this is the wire: the shape, the bounds, the timezone, the scoping, and
+    that its current week is the week route's."""
+
+    def _ledger(self, client, headers, project_id: str, **params) -> dict:
+        resp = client.get(f"/api/projects/{project_id}/ledger", params=params, headers=headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    @staticmethod
+    def _this_monday() -> date:
+        today = datetime.now(UTC).date()
+        return today - timedelta(days=today.weekday())
+
+    def test_eight_weeks_newest_first_by_default(self, client, auth_headers):
+        project = _day_job(client, auth_headers, opening_balance_hours=2.25)
+        monday = self._this_monday()
+        last_monday = monday - timedelta(weeks=1)
+        _log(client, auth_headers, project["id"], f"{monday}T09:00:00+00:00", 47)
+        _log(client, auth_headers, project["id"], f"{last_monday}T09:00:00+00:00", 95)
+
+        ledger = self._ledger(client, auth_headers, project["id"])
+
+        assert [w["week_of"] for w in ledger["weeks"]] == [
+            (monday - timedelta(weeks=n)).isoformat() for n in range(8)
+        ]
+        current, last = ledger["weeks"][:2]
+        assert current["worked"] == 0.78
+        assert current["days"] == [0.78, 0, 0, 0, 0, 0, 0]
+        assert current["balance_end"] is None  # not closed yet
+        assert current["contract_expected"] == 40
+        assert (current["effective_goal"], current["effective_goal_type"]) == (40, "target")
+        assert current["effective_goal_overridden"] is False
+        assert current["notes"] == []
+        assert last["worked"] == 1.58
+        # Last week's close is the week before's moved by last week's own
+        # worked − expected: the row is its own week's, not a neighbour's.
+        assert last["balance_end"] - ledger["weeks"][2]["balance_end"] == pytest.approx(
+            last["worked"] - last["contract_expected"], abs=0.01
+        )
+        assert ledger["since"] == CONTRACT_START
+        totals = ledger["totals"]
+        assert 2.25 + totals["worked"] - totals["expected"] == pytest.approx(
+            totals["balance"], abs=0.01
+        )
+        # The current week is the week route's, to the decimal, and so is
+        # today's balance.
+        resp = client.get(f"/api/projects/{project['id']}/contract/week", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        week = resp.json()
+        assert current["worked"] == week["worked"]
+        assert totals["balance"] == week["balance"]
+        assert (totals["worked"], totals["expected"]) == (
+            week["balance_worked"],
+            week["balance_expected_through"],
+        )
+
+    def test_weeks_out_of_range_is_422_naming_the_parameter(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.get(
+            f"/api/projects/{project['id']}/ledger", params={"weeks": 105}, headers=auth_headers
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["weeks"]
+
+    def test_days_follow_the_request_timezone(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        monday = self._this_monday()
+        # 23:30 UTC on Monday, running into Tuesday — which in Zürich began
+        # at 00:30 (or 01:30) on the Tuesday. Whole to its local start day.
+        _log(client, auth_headers, project["id"], f"{monday}T23:30:00+00:00", 60)
+
+        # Two weeks, looked up by Monday: late on a Sunday, Zürich is already
+        # in the next week while UTC is not.
+        def week_of(ledger: dict) -> dict:
+            return next(w for w in ledger["weeks"] if w["week_of"] == monday.isoformat())
+
+        in_utc = week_of(self._ledger(client, auth_headers, project["id"], weeks=2))
+        assert in_utc["days"][:2] == [1, 0]
+
+        in_zurich = week_of(
+            self._ledger(client, auth_headers, project["id"], weeks=2, tz="Europe/Zurich")
+        )
+        assert in_zurich["days"][:2] == [0, 1]
+        assert in_zurich["worked"] == in_utc["worked"] == 1
+
+    def test_side_project_carries_the_goal_and_the_hours_only(self, client, auth_headers):
+        project = _create_project(client, auth_headers, weekly_goal=5)
+        monday = self._this_monday()
+        _log(client, auth_headers, project["id"], f"{monday}T09:00:00+00:00", 90)
+
+        ledger = self._ledger(client, auth_headers, project["id"], weeks=2)
+
+        assert (ledger["since"], ledger["totals"]) == (None, None)
+        assert all(
+            (w["contract_expected"], w["balance_end"], w["notes"]) == (None, None, [])
+            for w in ledger["weeks"]
+        )
+        assert ledger["weeks"][0]["effective_goal"] == 5
+        assert ledger["weeks"][0]["worked"] == 1.5
+
+    def test_someone_elses_project_is_404(self, client, auth_headers, other_auth_headers):
+        mine = _day_job(client, auth_headers)
+        resp = client.get(f"/api/projects/{mine['id']}/ledger", headers=other_auth_headers)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
+        resp = client.get("/api/projects/not-an-id/ledger", headers=auth_headers)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
 
 
 class TestAbsencesAPI:

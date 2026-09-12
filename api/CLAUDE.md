@@ -18,7 +18,8 @@ src/beats/
 │   ├── models.py        Pydantic domain models (Beat, Project, WeeklyPlan, …)
 │   ├── exceptions.py    DomainException hierarchy → unified envelope
 │   ├── services.py      TimerService, ProjectService, BeatService, ContractService
-│   ├── contracts.py     Work-contract arithmetic: term in force, expected hours, balance
+│   ├── contracts.py     Work-contract arithmetic: term in force, expected hours, balance and its terms, closing balances
+│   ├── ledger.py        Pure assembly of the project page's weeks (goal, expectation, closing balance)
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
 │   ├── flow.py          Pure aggregation over the daemon's flow windows, for the coach
@@ -51,11 +52,12 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Nine test files cover different layers (866 tests, ~30s for the full run):
+Ten test files cover different layers (893 tests, ~30s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 295 tests.
-- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 301 tests.
+- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 281 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, plus one round trip through the absence repository; 27 tests.
+- **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, the row-to-row balance proof; 17 tests.
 - **`src/beats/test_migration.py`** — the two startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, and the one that then clears the personal goal the contract replaced; 19 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 137 tests.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.

@@ -1750,6 +1750,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ledger
+         * @description The last `weeks` weeks of any project, newest first, ending with the
+         *     current week in `tz` — worked hours by day, the goal in force, and on a
+         *     day job the contract's adjusted expectation, the balance at each week's
+         *     close and its absences and holidays — plus the balance as of today with
+         *     the terms that make it. Worked hours are bucketed by the local day each
+         *     beat started on, in `tz`, and a running timer counts up to now, exactly
+         *     as `/contract/week`. A project the contract does not govern carries its
+         *     goal and its hours and nulls for the rest.
+         */
+        get: operations["get_ledger_api_projects__project_id__ledger_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/start": {
         parameters: {
             query?: never;
@@ -2479,6 +2506,14 @@ export interface components {
         ContractWeek: {
             /** Balance */
             balance: number | null;
+            /** Balance As Of */
+            balance_as_of: string | null;
+            /** Balance Expected Through */
+            balance_expected_through: number | null;
+            /** Balance Opening */
+            balance_opening: number | null;
+            /** Balance Worked */
+            balance_worked: number | null;
             /** Days */
             days: components["schemas"]["ContractDay"][];
             /** Expected */
@@ -2911,6 +2946,83 @@ export interface components {
             title: string;
             /** Type */
             type: string;
+        };
+        /**
+         * Ledger
+         * @description `GET /{id}/ledger`: N weeks newest first, and the totals as of today.
+         *     Typed because it crosses the wire, as `ContractWeek` is.
+         */
+        Ledger: {
+            /** Since */
+            since: string | null;
+            totals: components["schemas"]["LedgerTotals"] | null;
+            /** Weeks */
+            weeks: components["schemas"]["LedgerWeek"][];
+        };
+        /**
+         * LedgerNote
+         * @description One weekday of a ledger week that owed less than its term: an absence
+         *     (with `half_day`) or a named public holiday (with `name`).
+         */
+        LedgerNote: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Half Day */
+            half_day?: boolean | null;
+            kind: components["schemas"]["LedgerNoteKind"];
+            /** Name */
+            name?: string | null;
+        };
+        /**
+         * LedgerNoteKind
+         * @description Why a weekday of a ledger week owed less: the three absence types, or a
+         *     public holiday.
+         * @enum {string}
+         */
+        LedgerNoteKind: "vacation" | "sick" | "other" | "holiday";
+        /**
+         * LedgerTotals
+         * @description The balance as of today and the two terms that move it, since the
+         *     contract started — the standing's "worked since · expected through" line
+         *     and the ledger's foot. The opening balance is the contract's own.
+         */
+        LedgerTotals: {
+            /** Balance */
+            balance: number;
+            /** Expected */
+            expected: number;
+            /** Worked */
+            worked: number;
+        };
+        /**
+         * LedgerWeek
+         * @description One week of the ledger. See `domain/ledger.py` for what each figure is
+         *     and when it is None.
+         */
+        LedgerWeek: {
+            /** Balance End */
+            balance_end: number | null;
+            /** Contract Expected */
+            contract_expected: number | null;
+            /** Days */
+            days: number[];
+            /** Effective Goal */
+            effective_goal: number | null;
+            /** Effective Goal Overridden */
+            effective_goal_overridden: boolean;
+            effective_goal_type: components["schemas"]["GoalType"];
+            /** Notes */
+            notes: components["schemas"]["LedgerNote"][];
+            /**
+             * Week Of
+             * Format: date
+             */
+            week_of: string;
+            /** Worked */
+            worked: number;
         };
         /** LoginOptionsResponse */
         LoginOptionsResponse: {
@@ -6469,6 +6581,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Holiday"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_api_projects__project_id__ledger_get: {
+        parameters: {
+            query?: {
+                /** @description How many weeks back, ending with the current one. */
+                weeks?: number;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ledger"];
                 };
             };
             /** @description Not found */

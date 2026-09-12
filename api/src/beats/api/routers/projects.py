@@ -29,7 +29,7 @@ from beats.api.schemas import (
     WeekBreakdownResponse,
 )
 from beats.domain.holidays import Holiday
-from beats.domain.models import Contract, ContractWeek, GoalOverride, Project, ProjectKind
+from beats.domain.models import Contract, ContractWeek, GoalOverride, Ledger, Project, ProjectKind
 
 router = APIRouter(
     prefix="/api/projects",
@@ -261,6 +261,26 @@ async def get_contract_week(
     409 on a project that is not a day job (NOT_A_DAY_JOB) or has no
     contract yet (NO_CONTRACT)."""
     return await service.week(project_id, week_of, tz)
+
+
+@router.get("/{project_id}/ledger", response_model=Ledger)
+async def get_ledger(
+    project_id: str,
+    service: ContractServiceDep,
+    tz: TimezoneDep,
+    weeks: int = Query(
+        default=8, ge=1, le=104, description="How many weeks back, ending with the current one."
+    ),
+):
+    """The last `weeks` weeks of any project, newest first, ending with the
+    current week in `tz` — worked hours by day, the goal in force, and on a
+    day job the contract's adjusted expectation, the balance at each week's
+    close and its absences and holidays — plus the balance as of today with
+    the terms that make it. Worked hours are bucketed by the local day each
+    beat started on, in `tz`, and a running timer counts up to now, exactly
+    as `/contract/week`. A project the contract does not govern carries its
+    goal and its hours and nulls for the rest."""
+    return await service.ledger(project_id, weeks, tz)
 
 
 @router.get("/{project_id}/holidays", response_model=list[Holiday])

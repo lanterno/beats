@@ -31,6 +31,7 @@ from beats.domain.intelligence import (
 )
 from beats.domain.models import (
     Absence,
+    AbsenceType,
     Beat,
     BiometricDay,
     Contract,
@@ -3428,7 +3429,7 @@ class TestWeekExpectation:
     on them says nothing about whether the week has an expectation."""
 
     def test_a_term_starting_on_saturday_leaves_its_week_before_the_contract(self):
-        from beats.domain.services import week_expectation
+        from beats.domain.contracts import week_expectation
 
         saturday = date(2026, 3, 7)
         term = ContractTerm(
@@ -3462,6 +3463,86 @@ class TestContractServiceIndex:
         weeks = await service.weeks_for([known, unknown, side], {}, ZoneInfo("UTC"))
         assert set(weeks) == {"p1"}
         assert weeks["p1"].expected == 40
+
+
+class TestContractServiceLedger:
+    """`ledger` is the project page's one read. The assembly is tested on fixed
+    dates in `test_ledger.py`; what the service adds is the clock and the read
+    plan, and four things about them are worth pinning: today is the request
+    timezone's, its current week is the week route's (same beats, same tz,
+    same bucketing), the absence window reaches back to the contract's first
+    day and forward to the week's end, and one bad contract is that project's
+    own error, not skipped as the index does. The clock is handed in, so each
+    runs at a fixed instant."""
+
+    ZURICH = ZoneInfo("Europe/Zurich")
+    UTC_TZ = ZoneInfo("UTC")
+
+    @staticmethod
+    def _service(*, at: datetime, beats=(), absences=(), project=None):
+        from beats.domain.services import ContractService
+
+        return ContractService(
+            project_repo=_FakeProjectRepoForServices([project or _day_job("p1")]),
+            beat_repo=_FakeBeatRepoForServices(list(beats)),
+            absence_repo=_FakeAbsenceRepo(list(absences)),
+            now=lambda tz: at.astimezone(tz),
+        )
+
+    async def test_today_is_the_request_timezones(self):
+        # Sunday 8 March 23:30 UTC is Monday 00:30 in Zürich: the open week
+        # is the new one there and still the old one in UTC, on both routes.
+        service = self._service(at=datetime(2026, 3, 8, 23, 30, tzinfo=UTC))
+
+        assert (await service.ledger("p1", 1, self.ZURICH)).weeks[0].week_of == date(2026, 3, 9)
+        assert (await service.ledger("p1", 1, self.UTC_TZ)).weeks[0].week_of == date(2026, 3, 2)
+        assert (await service.week("p1", None, self.ZURICH)).week_of == date(2026, 3, 9)
+        assert (await service.week("p1", None, self.UTC_TZ)).week_of == date(2026, 3, 2)
+
+    async def test_current_week_agrees_with_the_week_route_across_midnight(self):
+        # A beat at 23:30 UTC on Monday 9 March — 00:30 on the Tuesday in
+        # Zürich, running to 01:30. Bucketed whole to the day it started, in
+        # the request timezone, on both routes: Tuesday, not Monday.
+        started = datetime(2026, 3, 9, 23, 30, tzinfo=UTC)
+        beat = Beat(id="b1", project_id="p1", start=started, end=started + timedelta(hours=1))
+        service = self._service(at=datetime(2026, 3, 11, 12, tzinfo=UTC), beats=[beat])
+
+        ledger = await service.ledger("p1", 2, self.ZURICH)
+        week = await service.week("p1", None, self.ZURICH)
+
+        assert ledger.weeks[0].week_of == week.week_of == date(2026, 3, 9)
+        assert ledger.weeks[0].worked == week.worked == 1
+        assert ledger.weeks[0].days == [d.worked for d in week.days] == [0, 1, 0, 0, 0, 0, 0]
+        assert ledger.totals is not None
+        assert ledger.totals.balance == week.balance
+
+    async def test_absences_are_read_from_the_contracts_first_day_to_the_weeks_end(self):
+        # Read on Thursday 5 March for two weeks. A day off on 12 January is
+        # well before the weeks shown but still charges nothing to the
+        # balance; one on Friday 6 March is after today but still lowers
+        # this week's expectation. Missing either would read as a working day.
+        at = datetime(2026, 3, 5, 12, tzinfo=UTC)
+        absences = [
+            Absence(project_id="p1", date=date(2026, 1, 12), type=AbsenceType.VACATION),
+            Absence(project_id="p1", date=date(2026, 3, 6), type=AbsenceType.VACATION),
+        ]
+        with_absences = await self._service(at=at, absences=absences).ledger("p1", 2, self.UTC_TZ)
+        without = await self._service(at=at).ledger("p1", 2, self.UTC_TZ)
+
+        assert with_absences.weeks[0].contract_expected == 32
+        assert without.weeks[0].contract_expected == 40
+        assert with_absences.totals is not None
+        assert without.totals is not None
+        assert without.totals.expected == 344  # 8 weeks of 40 and Mon–Wed of this one
+        assert with_absences.totals.expected == without.totals.expected - 8
+
+    async def test_unknown_region_is_this_projects_own_error(self):
+        service = self._service(
+            at=datetime(2026, 3, 5, 12, tzinfo=UTC),
+            project=_day_job("p2", holiday_country="XX"),
+        )
+        with pytest.raises(UnknownHolidayRegion):
+            await service.ledger("p2", 1, self.UTC_TZ)
 
 
 class TestProjectServiceTimeAggregations:
