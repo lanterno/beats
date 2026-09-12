@@ -1,26 +1,48 @@
 """Domain services - business logic that coordinates multiple entities."""
 
+import logging
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
+from beats.domain.contracts import absences_by_day, balance, expected_on, term_on
 from beats.domain.exceptions import (
+    AbsenceNotFound,
     InvalidEndTime,
     NoActiveTimer,
+    NoContract,
     NoObjectMatched,
+    NotADayJob,
     ProjectNotFound,
     TimerAlreadyRunning,
+    UnknownHolidayRegion,
 )
-from beats.domain.holidays import check_region
-from beats.domain.models import Beat, Project
+from beats.domain.holidays import Holiday, check_region, named_holidays_between
+from beats.domain.models import (
+    Absence,
+    Beat,
+    Contract,
+    ContractDay,
+    ContractTerm,
+    ContractWeek,
+    DayAbsence,
+    Project,
+    ProjectKind,
+)
 from beats.domain.ports import (
+    AbsenceStore,
     BeatStore,
     FlowWindowReader,
     ProjectBeatReader,
+    ProjectReader,
     ProjectStore,
     TimerBeatStore,
     TimerProjectReader,
 )
-from beats.domain.utils import normalize_tz
+from beats.domain.utils import local_date, normalize_tz
+
+logger = logging.getLogger(__name__)
 
 # Cap on auto-derived tags per session — enough to capture the repos + languages
 # a focused session touches without turning the tag cloud into noise.
@@ -229,16 +251,24 @@ class BeatService:
         return await self.beat_repo.list(project_id=project_id, date_filter=date_filter)
 
 
-def _check_contract_region(project: Project) -> None:
-    """Refuse a contract whose holiday region the calendar library does not know.
+def _check_contract(project: Project) -> None:
+    """What a project write must satisfy beyond the model's own validators.
 
-    Deliberately not a validator on `Contract`: the model is re-validated on
-    every read, and which codes the library knows moves with its version. A
-    code it stops recognising must make one contract un-editable until it is
-    fixed, not every project of the user unreadable.
+    A contract lives only on a day job: sent with any other kind it is refused
+    (409), on the project routes as on `PUT /{id}/contract`, rather than kept
+    dormant on a project that cannot read it. And its holiday region must be
+    one the calendar library knows — deliberately not a validator on
+    `Contract`: the model is re-validated on every read, and which codes the
+    library knows moves with its version. A code it stops recognising must
+    make one contract un-editable until it is fixed, not every project of the
+    user unreadable.
     """
     contract = project.contract
-    if contract is not None and contract.holiday_country is not None:
+    if contract is None:
+        return
+    if project.kind is not ProjectKind.DAY_JOB:
+        raise NotADayJob()
+    if contract.holiday_country is not None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
 
 
@@ -251,13 +281,26 @@ class ProjectService:
 
     async def create_project(self, project: Project) -> Project:
         """Create a new project."""
-        _check_contract_region(project)
+        _check_contract(project)
         return await self.project_repo.create(project)
 
     async def update_project(self, project: Project) -> Project:
         """Update an existing project."""
-        _check_contract_region(project)
+        _check_contract(project)
         return await self.project_repo.update(project)
+
+    async def replace_contract(self, project_id: str, contract: Contract) -> Project:
+        """Replace a day job's whole contract — terms, region, opening balance, end.
+
+        Whole rather than patched, like goal overrides: the terms are a history
+        that only makes sense as one list. The kind is not touched here; a
+        project that is not a day job has no contract to replace (409).
+        """
+        project = await self.project_repo.get_by_id(project_id)
+        if project.kind is not ProjectKind.DAY_JOB:
+            raise NotADayJob()
+        project.contract = contract
+        return await self.update_project(project)
 
     async def archive_project(self, project_id: str) -> Project:
         """Archive a project."""
@@ -469,3 +512,213 @@ class ProjectService:
             by_day[beat.day].append(beat.duration)
 
         return {str(day): str(sum(durations, timedelta())) for day, durations in by_day.items()}
+
+
+def worked_by_local_day(beats: Iterable[Beat], tz: ZoneInfo) -> dict[date, float]:
+    """Hours per local calendar day, by the day each beat *started*.
+
+    A beat that crosses midnight belongs whole to the day it started on: the
+    contract counts hours, not which side of twelve they fell, and one late
+    session is one session. A running beat counts up to now (`Beat.duration`),
+    so the week's `worked` moves while the timer runs.
+    """
+    hours: dict[date, float] = defaultdict(float)
+    for beat in beats:
+        hours[local_date(beat.start, tz)] += beat.duration.total_seconds() / 3600
+    return hours
+
+
+def _owes(term: ContractTerm | None) -> bool:
+    """Whether a term is time-based: before the first term and under an
+    objective term there is no expectation to report, only work."""
+    return term is not None and term.hours_per_week is not None
+
+
+def _hours(value: float) -> float:
+    return round(value, 2)
+
+
+class ContractService:
+    """A day job read against its contract, and its absences.
+
+    Writing the contract is `ProjectService.replace_contract`, a project write
+    with the region check; this service only reads projects, through a
+    user-scoped repository, so someone else's project is not found (404)
+    rather than forbidden — the same answer as for a project that does not
+    exist. Absences are kept here because their only reader is the week.
+    """
+
+    def __init__(
+        self,
+        project_repo: ProjectReader,
+        beat_repo: ProjectBeatReader,
+        absence_repo: AbsenceStore,
+    ):
+        self.project_repo = project_repo
+        self.beat_repo = beat_repo
+        self.absence_repo = absence_repo
+
+    async def week(self, project_id: str, week_of: date | None, tz: ZoneInfo) -> ContractWeek:
+        """The week starting `week_of` (a Monday; None for the current week in
+        `tz`) against the contract, with the balance as of today in `tz`."""
+        project = await self._day_job(project_id)
+        beats = await self.beat_repo.list_by_project(project_id)
+        return await self.week_for(project, beats, week_of, tz)
+
+    async def week_for(
+        self, project: Project, beats: list[Beat], week_of: date | None, tz: ZoneInfo
+    ) -> ContractWeek:
+        """`week` for a project whose beats the caller already holds — the
+        project index loads every listed project's beats in one query and
+        must not load them again per day job.
+
+        One absence read and one calendar build per call, both over the
+        union of the week and the contract's life so far: the week needs its
+        own days, the balance needs every day since the contract started.
+        """
+        if project.kind is not ProjectKind.DAY_JOB:
+            raise NotADayJob()
+        if project.contract is None:
+            raise NoContract()
+        if project.id is None:
+            raise ProjectNotFound()
+        contract = project.contract
+        today = datetime.now(tz).date()
+        if week_of is None:
+            week_of = today - timedelta(days=today.weekday())
+        start = min(contract.starts_on, week_of)
+        end = max(today, week_of + timedelta(days=6))
+        absences = await self.absence_repo.list_by_project(project.id, start, end)
+        holidays: dict[date, str] = {}
+        if contract.holiday_country is not None:
+            holidays = named_holidays_between(
+                contract.holiday_country, contract.holiday_subdivision, start, end
+            )
+        worked = worked_by_local_day(beats, tz)
+        return self._assemble(contract, absences, holidays, worked, week_of, today)
+
+    async def weeks_for(
+        self, projects: Iterable[Project], beats_by_pid: Mapping[str, list[Beat]], tz: ZoneInfo
+    ) -> dict[str, ContractWeek]:
+        """The current week of every day job with a contract among `projects`,
+        by project id — the project index's read, over beats it already holds.
+
+        A project of another kind, or without a contract, is simply absent
+        from the result. So is one whose region the calendar library has
+        stopped knowing: that makes one contract unreadable — its own week
+        route says so — not the whole project list, so it is logged and
+        skipped.
+        """
+        weeks: dict[str, ContractWeek] = {}
+        for project in projects:
+            if not (project.id and project.kind is ProjectKind.DAY_JOB and project.contract):
+                continue
+            try:
+                weeks[project.id] = await self.week_for(
+                    project, beats_by_pid.get(project.id, []), None, tz
+                )
+            except UnknownHolidayRegion:
+                logger.warning("project %s: contract region unknown, week skipped", project.id)
+        return weeks
+
+    @staticmethod
+    def _assemble(
+        contract: Contract,
+        absences: Iterable[Absence],
+        holidays: Mapping[date, str],
+        worked: Mapping[date, float],
+        week_of: date,
+        today: date,
+    ) -> ContractWeek:
+        by_day = absences_by_day(absences)
+        holiday_days = set(holidays)
+        days: list[ContractDay] = []
+        expected_raw = 0.0
+        worked_raw = 0.0
+        for offset in range(7):
+            day = week_of + timedelta(days=offset)
+            expected_day = expected_on(contract, day, holiday_days, by_day)
+            worked_day = worked.get(day, 0.0)
+            expected_raw += expected_day
+            worked_raw += worked_day
+            absence = by_day.get(day)
+            days.append(
+                ContractDay(
+                    date=day,
+                    expected=_hours(expected_day),
+                    worked=_hours(worked_day),
+                    holiday=holidays.get(day),
+                    absence=(
+                        DayAbsence(type=absence.type, half_day=absence.half_day, note=absence.note)
+                        if absence is not None
+                        else None
+                    ),
+                )
+            )
+        # Weekdays only: Saturday and Sunday owe nothing under any term, so
+        # they say nothing about whether the week has an expectation.
+        owes = any(_owes(term_on(contract, day.date)) for day in days[:5])
+        expected = _hours(expected_raw) if owes else None
+        remaining = _hours(expected_raw - worked_raw) if owes else None
+        running = (
+            _hours(balance(contract, absences, holiday_days, worked, today))
+            if _owes(term_on(contract, today))
+            else None
+        )
+        return ContractWeek(
+            week_of=week_of,
+            expected=expected,
+            worked=_hours(worked_raw),
+            remaining=remaining,
+            balance=running,
+            days=days,
+        )
+
+    async def holidays(self, project_id: str, year: int | None, tz: ZoneInfo) -> list[Holiday]:
+        """The contract region's public holidays in `year` (None for the current
+        year in `tz`), for the calendar. Empty when there is no contract or it
+        names no region."""
+        project = await self._day_job(project_id)
+        contract = project.contract
+        if contract is None or contract.holiday_country is None:
+            return []
+        if year is None:
+            year = datetime.now(tz).year
+        found = named_holidays_between(
+            contract.holiday_country,
+            contract.holiday_subdivision,
+            date(year, 1, 1),
+            date(year, 12, 31),
+        )
+        return [Holiday(date=day, name=name) for day, name in sorted(found.items())]
+
+    async def list_absences(
+        self, project_id: str, start: date | None, end: date | None, tz: ZoneInfo
+    ) -> list[Absence]:
+        """Absences in [start, end], by date; each bound left None defaults on
+        its own to the current calendar year in `tz`."""
+        await self._day_job(project_id)
+        today = datetime.now(tz).date()
+        return await self.absence_repo.list_by_project(
+            project_id, start or date(today.year, 1, 1), end or date(today.year, 12, 31)
+        )
+
+    async def record_absence(self, absence: Absence) -> Absence:
+        """Record an absence; one already on that date is replaced."""
+        await self._day_job(absence.project_id)
+        return await self.absence_repo.upsert(absence)
+
+    async def remove_absence(self, project_id: str, absence_id: str) -> None:
+        """Remove an absence; one that is not on this project is not found."""
+        await self._day_job(project_id)
+        if not await self.absence_repo.delete(project_id, absence_id):
+            raise AbsenceNotFound(absence_id)
+
+    async def _day_job(self, project_id: str) -> Project:
+        """The project, provided it is a day job — with or without a contract:
+        leave can be recorded before the contract is written, and the holidays
+        of a job without one are simply none. Only the week needs a contract."""
+        project = await self.project_repo.get_by_id(project_id)
+        if project.kind is not ProjectKind.DAY_JOB:
+            raise NotADayJob()
+        return project

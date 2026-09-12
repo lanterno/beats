@@ -276,6 +276,46 @@ class Absence(BaseModel):
     note: str | None = None
 
 
+class DayAbsence(BaseModel):
+    """An absence as one day of the week report shows it — the record without
+    its keys, which the day already supplies."""
+
+    type: AbsenceType
+    half_day: bool
+    note: str | None = None
+
+
+class ContractDay(BaseModel):
+    """One day of a contract week: what it owed, what was worked, and why it
+    owed less if it did."""
+
+    date: date_type
+    expected: float
+    worked: float
+    holiday: str | None = None  # the holiday's name
+    absence: DayAbsence | None = None
+
+
+class ContractWeek(BaseModel):
+    """A day job's week against its contract, plus the running balance.
+
+    Typed because it crosses the wire (see `ProjectBreakdownEntry`).
+    `expected` and `remaining` are None when the contract owes nothing by
+    nature that week — no weekday has a time-based term in force — as
+    distinct from 0, which is a week the contract owed nothing by
+    circumstance (every weekday a holiday, or after `ended_on`). `balance`
+    is None on the same rule for today. `remaining` goes negative once the
+    week is over its expectation.
+    """
+
+    week_of: date_type
+    expected: float | None
+    worked: float
+    remaining: float | None
+    balance: float | None
+    days: list[ContractDay]
+
+
 class Beat(TzNormalizedModel):
     """A time tracking entry (heartbeat) for a project.
 

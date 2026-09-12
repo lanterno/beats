@@ -5,7 +5,7 @@ from datetime import date as date_type
 
 from pydantic import BaseModel, Field
 
-from beats.domain.models import GoalType, ProjectBreakdownEntry
+from beats.domain.models import AbsenceType, Contract, GoalType, ProjectBreakdownEntry, ProjectKind
 
 
 class RecordTimeRequest(BaseModel):
@@ -27,10 +27,23 @@ class CreateProjectRequest(BaseModel):
     # silently can't match work to the project. Brought to parity with
     # UpdateProjectRequest.
     category: str | None = None  # Activity category for flow score matching
+    kind: ProjectKind = ProjectKind.SIDE_PROJECT
+    # The domain Contract itself, so its validators are the request's: a bad
+    # term is a 422 whose `fields` name the term (`contract.terms.1`). Only
+    # meaningful on a day job; the model does not refuse it elsewhere.
+    contract: Contract | None = None
 
 
 class UpdateProjectRequest(BaseModel):
-    """Request body for updating a project."""
+    """Request body for updating a project.
+
+    The update is a wholesale replace, so a client that predates a field
+    would reset it on every colour change if "not sent" read as "clear".
+    `kind` and `contract` therefore tell the two apart through
+    `model_fields_set`: left out, the stored value is kept; `contract: null`
+    clears the contract. `kind` has no empty state, so null reads as left
+    out there.
+    """
 
     id: str
     name: str
@@ -45,6 +58,8 @@ class UpdateProjectRequest(BaseModel):
     github_repo: str | None = None  # "owner/repo"
     category: str | None = None  # Activity category for flow score matching
     autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths
+    kind: ProjectKind | None = None
+    contract: Contract | None = None
 
 
 class GoalOverrideRequest(BaseModel):
@@ -98,9 +113,8 @@ class ProjectResponse(BaseModel):
     declared, so the OpenAPI contract was silently widened. Now precise so
     generated clients see the full shape.
 
-    `kind` and `contract` exist on the domain Project but are not exposed
-    yet; the contract routes add them, together with the UI types that read
-    them.
+    `contract` is the domain model as stored — the terms, region, opening
+    balance and end date — and is only meaningful when `kind` is `day_job`.
     """
 
     id: str
@@ -114,6 +128,8 @@ class ProjectResponse(BaseModel):
     github_repo: str | None = None
     category: str | None = None
     autostart_repos: list[str] = Field(default_factory=list)
+    kind: ProjectKind = ProjectKind.SIDE_PROJECT
+    contract: Contract | None = None
 
 
 class ProjectsListItemResponse(ProjectResponse):
@@ -134,6 +150,47 @@ class ProjectsListItemResponse(ProjectResponse):
     effective_goal_type: GoalType | None = None
     effective_goal_overridden: bool | None = None
     last_tracked_at: datetime | None = None
+    # With `this_week`, on a day job with a contract: the current week
+    # against the contract and the balance as of today, both in the request
+    # timezone — what GET /{id}/contract/week reports, so the index does not
+    # need a request per project. Null on any other project, and — except
+    # `contract_worked`, which a day job reports under an objective term too,
+    # as the week route does — on a day job whose term this week is objective
+    # (see ContractWeek).
+    #
+    # `contract_worked` is carried even though `weekly_minutes` sits beside
+    # it, because the two are not the same figure: `weekly_minutes` is the
+    # personal goal's — completed beats only, bucketed by UTC date — while the
+    # contract counts a running timer and buckets by local start day in `tz`.
+    # A card showing expected · worked · remaining must read all three here.
+    contract_expected: float | None = None
+    contract_worked: float | None = None
+    contract_remaining: float | None = None
+    balance: float | None = None
+
+
+class AbsenceRequest(BaseModel):
+    """Request body for recording an absence.
+
+    One per (project, date): a second one posted for the same date replaces
+    the first, so this is also how a half day becomes a full one.
+    """
+
+    date: date_type
+    type: AbsenceType
+    half_day: bool = False
+    note: str | None = None
+
+
+class AbsenceResponse(BaseModel):
+    """Response schema for an absence."""
+
+    id: str
+    project_id: str
+    date: date_type
+    type: AbsenceType
+    half_day: bool = False
+    note: str | None = None
 
 
 class TimerStatusResponse(BaseModel):

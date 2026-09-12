@@ -28,6 +28,7 @@ from beats.domain.intelligence import (
     generate_observation,
 )
 from beats.domain.models import (
+    Absence,
     Beat,
     BiometricDay,
     Contract,
@@ -3222,6 +3223,54 @@ class TestProjectServiceCrud:
         svc = _project_service(projects=[active, archived])
         result = await svc.list_projects(archived=True)
         assert [p.id for p in result] == ["p2"]
+
+
+class _FakeAbsenceRepo:
+    """In-memory AbsenceStore: the range read and the two calendar writes."""
+
+    def __init__(self, absences: builtins.list[Absence] | None = None):
+        self._absences: list[Absence] = list(absences or [])
+
+    async def list_by_project(
+        self, project_id: str, start: date, end: date
+    ) -> builtins.list[Absence]:
+        return [a for a in self._absences if a.project_id == project_id and start <= a.date <= end]
+
+    async def upsert(self, absence: Absence) -> Absence:
+        key = (absence.project_id, absence.date)
+        self._absences = [a for a in self._absences if (a.project_id, a.date) != key]
+        self._absences.append(absence)
+        return absence
+
+    async def delete(self, project_id: str, absence_id: str) -> bool:
+        before = len(self._absences)
+        self._absences = [
+            a for a in self._absences if not (a.project_id == project_id and a.id == absence_id)
+        ]
+        return len(self._absences) < before
+
+
+class TestContractServiceIndex:
+    """`weeks_for` is the project index's read, and holds the one policy the
+    HTTP suite cannot reach: `check_region` keeps a region the library
+    rejects from ever being written, so only a fake can hold a stored region
+    the library has since stopped knowing. That costs the one project its
+    contract fields, not the whole list its response."""
+
+    async def test_unknown_region_skips_that_project_only(self):
+        from beats.domain.services import ContractService
+
+        known = _day_job("p1")
+        unknown = _day_job("p2", holiday_country="XX")
+        side = _project("p3", "Side", weekly_goal=5.0)
+        service = ContractService(
+            project_repo=_FakeProjectRepoForServices([known, unknown, side]),
+            beat_repo=_FakeBeatRepoForServices(),
+            absence_repo=_FakeAbsenceRepo(),
+        )
+        weeks = await service.weeks_for([known, unknown, side], {}, ZoneInfo("UTC"))
+        assert set(weeks) == {"p1"}
+        assert weeks["p1"].expected == 40
 
 
 class TestProjectServiceTimeAggregations:

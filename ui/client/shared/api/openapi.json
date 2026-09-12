@@ -1,6 +1,96 @@
 {
   "components": {
     "schemas": {
+      "AbsenceRequest": {
+        "description": "Request body for recording an absence.\n\nOne per (project, date): a second one posted for the same date replaces\nthe first, so this is also how a half day becomes a full one.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "half_day": {
+            "default": false,
+            "title": "Half Day",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AbsenceType"
+          }
+        },
+        "required": [
+          "date",
+          "type"
+        ],
+        "title": "AbsenceRequest",
+        "type": "object"
+      },
+      "AbsenceResponse": {
+        "description": "Response schema for an absence.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "half_day": {
+            "default": false,
+            "title": "Half Day",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AbsenceType"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "date",
+          "type"
+        ],
+        "title": "AbsenceResponse",
+        "type": "object"
+      },
+      "AbsenceType": {
+        "description": "Why a day was not worked. For the record and the calendar's colour only \u2014\nthe arithmetic treats all three the same.",
+        "enum": [
+          "vacation",
+          "sick",
+          "other"
+        ],
+        "title": "AbsenceType",
+        "type": "string"
+      },
       "AutoTimerSuggestion": {
         "properties": {
           "project_id": {
@@ -357,6 +447,235 @@
         "title": "ChatRequest",
         "type": "object"
       },
+      "Contract": {
+        "description": "A day job's terms as they changed over time, plus what frames them.\n\n`terms` is the history \u2014 part-time, then 80%, then full-time \u2014 kept in\norder of `effective_from` with no two starting on the same day, because\nthe day decides which term applies. The region names the employer's\npublic holidays: `holiday_subdivision` only means something inside a\n`holiday_country`. Both must be codes the holidays library knows, but\nthat is checked where a contract is written (`ProjectService`), not\nhere: this model is re-validated on every read, and the set of codes the\nlibrary knows moves with its version \u2014 a code it stops recognising must\nmake one contract un-editable, not every project of the user unreadable.\n`opening_balance_hours` is what was banked (or owed) before Beats started\ncounting; `ended_on` freezes the balance from that day on.",
+        "properties": {
+          "ended_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended On"
+          },
+          "holiday_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Country"
+          },
+          "holiday_subdivision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Subdivision"
+          },
+          "opening_balance_hours": {
+            "default": 0,
+            "title": "Opening Balance Hours",
+            "type": "number"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/ContractTerm"
+            },
+            "title": "Terms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "terms"
+        ],
+        "title": "Contract",
+        "type": "object"
+      },
+      "ContractDay": {
+        "description": "One day of a contract week: what it owed, what was worked, and why it\nowed less if it did.",
+        "properties": {
+          "absence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayAbsence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "expected": {
+            "title": "Expected",
+            "type": "number"
+          },
+          "holiday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday"
+          },
+          "worked": {
+            "title": "Worked",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "expected",
+          "worked"
+        ],
+        "title": "ContractDay",
+        "type": "object"
+      },
+      "ContractTerm": {
+        "description": "One stretch of a contract, from `effective_from` until the next term takes over.\n\nA time-based term (full_time / part_time) owes `full_time_hours \u00d7 percentage`\na week \u2014 a percentage needs its basis, since 80% of 42 is not 80% of 40. A\ncustom term states `weekly_hours` outright. An objective term owes nothing\nand carries no numbers at all. Hence the rules:\n\n- `percentage` lies in (0, 1]; a full_time term is 1 \u2014 filled in when\n  omitted, rejected when it says otherwise \u2014 and a part_time term is\n  less than 1, or it would be full-time under another name.\n- `weekly_hours` is required for custom and must be left out for the\n  time-based types, where it is derived (`hours_per_week`).\n- `full_time_hours` and `percentage` belong to the time-based types only.\n\n`effective_from` may be any day of the week: a contract that changes on a\nWednesday charges Monday and Tuesday at the old rate.",
+        "properties": {
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "full_time_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Time Hours"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "percentage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percentage"
+          },
+          "schedule_type": {
+            "$ref": "#/components/schemas/ScheduleType"
+          },
+          "weekly_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Hours"
+          }
+        },
+        "required": [
+          "effective_from",
+          "schedule_type"
+        ],
+        "title": "ContractTerm",
+        "type": "object"
+      },
+      "ContractWeek": {
+        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation.",
+        "properties": {
+          "balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ContractDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "remaining": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining"
+          },
+          "week_of": {
+            "format": "date",
+            "title": "Week Of",
+            "type": "string"
+          },
+          "worked": {
+            "title": "Worked",
+            "type": "number"
+          }
+        },
+        "required": [
+          "week_of",
+          "expected",
+          "worked",
+          "remaining",
+          "balance",
+          "days"
+        ],
+        "title": "ContractWeek",
+        "type": "object"
+      },
       "CreateBeatRequest": {
         "description": "Request body for creating a beat.\n\nNo note/tags: the app takes no free-text input. Tags are auto-derived\nserver-side from the daemon's flow signals (see BeatService).",
         "properties": {
@@ -413,6 +732,16 @@
             ],
             "title": "Color"
           },
+          "contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "anyOf": [
               {
@@ -423,6 +752,10 @@
               }
             ],
             "title": "Description"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind",
+            "default": "side_project"
           },
           "name": {
             "title": "Name",
@@ -468,6 +801,35 @@
           "url"
         ],
         "title": "CreateWebhookRequest",
+        "type": "object"
+      },
+      "DayAbsence": {
+        "description": "An absence as one day of the week report shows it \u2014 the record without\nits keys, which the day already supplies.",
+        "properties": {
+          "half_day": {
+            "title": "Half Day",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AbsenceType"
+          }
+        },
+        "required": [
+          "type",
+          "half_day"
+        ],
+        "title": "DayAbsence",
         "type": "object"
       },
       "DeleteSignalsResponse": {
@@ -1191,6 +1553,26 @@
         "title": "HeatmapDayResponse",
         "type": "object"
       },
+      "Holiday": {
+        "description": "One public holiday, as the calendar shows it.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "name"
+        ],
+        "title": "Holiday",
+        "type": "object"
+      },
       "InboxItemResponse": {
         "description": "A single card in the unified Inbox.\n\nNormalizes outputs from the intelligence module (patterns, suggestions,\nproject health alerts) into one shape the dashboard can render.",
         "properties": {
@@ -1842,8 +2224,18 @@
         "title": "ProjectHealthResponse",
         "type": "object"
       },
+      "ProjectKind": {
+        "description": "What a project is to the person tracking it. A contract is read only on a day job.",
+        "enum": [
+          "day_job",
+          "freelance",
+          "side_project"
+        ],
+        "title": "ProjectKind",
+        "type": "string"
+      },
       "ProjectResponse": {
-        "description": "Canonical response shape for a project \u2014 mirrors every field of the\ndomain Project. Previously declared only 6 of 11 fields; list/update\nroutes returned `model_dump()` with no response_model declared, so the\nOpenAPI contract was silently widened. Now precise so generated clients\nsee the full shape.",
+        "description": "Canonical response shape for a project \u2014 every field of the domain\nProject the API exposes. Previously declared only 6 of 11 fields;\nlist/update routes returned `model_dump()` with no response_model\ndeclared, so the OpenAPI contract was silently widened. Now precise so\ngenerated clients see the full shape.\n\n`contract` is the domain model as stored \u2014 the terms, region, opening\nbalance and end date \u2014 and is only meaningful when `kind` is `day_job`.",
         "properties": {
           "archived": {
             "default": false,
@@ -1878,6 +2270,16 @@
               }
             ],
             "title": "Color"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contract"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "description": {
             "anyOf": [
@@ -1915,6 +2317,10 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind",
+            "default": "side_project"
           },
           "name": {
             "title": "Name",
@@ -1954,6 +2360,17 @@
             "title": "Autostart Repos",
             "type": "array"
           },
+          "balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance"
+          },
           "category": {
             "anyOf": [
               {
@@ -1975,6 +2392,49 @@
               }
             ],
             "title": "Color"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contract_expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Expected"
+          },
+          "contract_remaining": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Remaining"
+          },
+          "contract_worked": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Worked"
           },
           "description": {
             "anyOf": [
@@ -2044,6 +2504,10 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind",
+            "default": "side_project"
           },
           "last_tracked_at": {
             "anyOf": [
@@ -2142,6 +2606,33 @@
           "token"
         ],
         "title": "RefreshResponse",
+        "type": "object"
+      },
+      "Region": {
+        "description": "One country in the picker, with the subdivisions that change its calendar.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "subdivisions": {
+            "items": {
+              "$ref": "#/components/schemas/Subdivision"
+            },
+            "title": "Subdivisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "subdivisions"
+        ],
+        "title": "Region",
         "type": "object"
       },
       "RegisterStartRequest": {
@@ -2400,6 +2891,17 @@
         "title": "SSOSessionResponse",
         "type": "object"
       },
+      "ScheduleType": {
+        "description": "How a contract term states the hours it owes.",
+        "enum": [
+          "full_time",
+          "part_time",
+          "custom",
+          "objective"
+        ],
+        "title": "ScheduleType",
+        "type": "string"
+      },
       "ScoreHistoryItem": {
         "description": "A single week's productivity score.",
         "properties": {
@@ -2454,6 +2956,24 @@
           "idle_samples"
         ],
         "title": "SignalSummaryResponse",
+        "type": "object"
+      },
+      "Subdivision": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "Subdivision",
         "type": "object"
       },
       "SuggestionResponse": {
@@ -2582,7 +3102,7 @@
         "type": "object"
       },
       "UpdateProjectRequest": {
-        "description": "Request body for updating a project.",
+        "description": "Request body for updating a project.\n\nThe update is a wholesale replace, so a client that predates a field\nwould reset it on every colour change if \"not sent\" read as \"clear\".\n`kind` and `contract` therefore tell the two apart through\n`model_fields_set`: left out, the stored value is kept; `contract: null`\nclears the contract. `kind` has no empty state, so null reads as left\nout there.",
         "properties": {
           "archived": {
             "default": false,
@@ -2618,6 +3138,16 @@
             ],
             "title": "Color"
           },
+          "contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "anyOf": [
               {
@@ -2647,6 +3177,16 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "name": {
             "title": "Name",
@@ -5890,6 +6430,32 @@
         ]
       }
     },
+    "/api/meta/holiday-regions": {
+      "get": {
+        "description": "Every country the holiday calendar knows, with the subdivisions that\nchange its calendar, for the contract's region picker.\n\nPublic data, but behind the ordinary session auth like everything else:\nnothing here is worth a second public prefix. It changes only with a\n`holidays` release, hence cacheable for a day \u2014 `public` so a shared\ncache may keep it despite the Authorization header.",
+        "operationId": "list_holiday_regions_api_meta_holiday_regions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Region"
+                  },
+                  "title": "Response List Holiday Regions Api Meta Holiday Regions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Holiday Regions",
+        "tags": [
+          "Meta"
+        ]
+      }
+    },
     "/api/oura/connect": {
       "post": {
         "description": "Connect Oura by validating a personal access token.",
@@ -6080,7 +6646,7 @@
             }
           },
           {
-            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
             "in": "query",
             "name": "include",
             "required": false,
@@ -6093,8 +6659,26 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
               "title": "Include"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
             }
           }
         ],
@@ -6262,6 +6846,214 @@
         ]
       }
     },
+    "/api/projects/{project_id}/absences": {
+      "get": {
+        "description": "Absences on the project within [start, end], by date. Each bound\ndefaults on its own to the current calendar year in `tz`.",
+        "operationId": "list_absences_api_projects__project_id__absences_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to 1 January of this year.",
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to 1 January of this year.",
+              "title": "Start"
+            }
+          },
+          {
+            "description": "Defaults to 31 December of this year.",
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to 31 December of this year.",
+              "title": "End"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AbsenceResponse"
+                  },
+                  "title": "Response List Absences Api Projects  Project Id  Absences Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Absences",
+        "tags": [
+          "Absences"
+        ]
+      },
+      "post": {
+        "description": "Record an absence. One per date: posting again for the same date\nreplaces the first and still answers 201, since the client asked to\ncreate and gets back the absence now on record.",
+        "operationId": "record_absence_api_projects__project_id__absences_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Absence",
+        "tags": [
+          "Absences"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/absences/{absence_id}": {
+      "delete": {
+        "description": "Remove an absence. 404 when it is not on this project.",
+        "operationId": "delete_absence_api_projects__project_id__absences__absence_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "absence_id",
+            "required": true,
+            "schema": {
+              "title": "Absence Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Absence",
+        "tags": [
+          "Absences"
+        ]
+      }
+    },
     "/api/projects/{project_id}/archive": {
       "post": {
         "description": "Archive a project.",
@@ -6301,6 +7093,145 @@
           }
         },
         "summary": "Archive Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/contract": {
+      "put": {
+        "description": "Replace a day job's whole contract: terms, holiday region, opening\nbalance and end date, in one shape, like goal-overrides. Leaves `kind`\nalone; on a project that is not a day job it is a 409 (NOT_A_DAY_JOB),\nand a region the calendar does not know is a 400 (UNKNOWN_HOLIDAY_REGION).",
+        "operationId": "replace_contract_api_projects__project_id__contract_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Contract"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace Contract",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/contract/week": {
+      "get": {
+        "description": "One week of a day job against its contract \u2014 expected, worked,\nremaining, the running balance as of today, and the seven days with\ntheir holiday and absence. Worked hours are bucketed by the local day\neach beat started on, in `tz`; a running timer counts up to now.\n409 on a project that is not a day job (NOT_A_DAY_JOB) or has no\ncontract yet (NO_CONTRACT).",
+        "operationId": "get_contract_week_api_projects__project_id__contract_week_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Monday of the week wanted. Defaults to the current week in `tz`.",
+            "in": "query",
+            "name": "week_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Monday of the week wanted. Defaults to the current week in `tz`.",
+              "title": "Week Of"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractWeek"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Contract Week",
         "tags": [
           "Projects"
         ]
@@ -6467,6 +7398,94 @@
           }
         },
         "summary": "Update Goal Overrides",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/holidays": {
+      "get": {
+        "description": "The contract region's public holidays for a year, for the absence\ncalendar. Empty when the contract names no region. 409 on a project\nthat is not a day job.",
+        "operationId": "get_holidays_api_projects__project_id__holidays_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to the current year in `tz`.",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9999,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the current year in `tz`.",
+              "title": "Year"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Holiday"
+                  },
+                  "title": "Response Get Holidays Api Projects  Project Id  Holidays Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Holidays",
         "tags": [
           "Projects"
         ]

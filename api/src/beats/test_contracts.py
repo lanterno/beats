@@ -2,7 +2,7 @@
 
 Holidays arrive as a `set[date]`, so no test here asserts that a region *has*
 a holiday; that is the library's suite. Two tests go through
-`holidays_between` all the same. One is for range logic that is ours: a week
+`named_holidays_between` all the same. One is for range logic that is ours: a week
 spanning New Year must consult both years' calendars. The other is there
 because the arithmetic leans on the library's observed-day behaviour — a
 substitute Monday comes back as an ordinary holiday, and being a weekday it
@@ -19,7 +19,7 @@ import pytest
 from pymongo import AsyncMongoClient
 
 from beats.domain.contracts import balance, expected_hours, term_on
-from beats.domain.holidays import holidays_between
+from beats.domain.holidays import named_holidays_between
 from beats.domain.models import (
     Absence,
     AbsenceType,
@@ -86,7 +86,7 @@ class TestExpectedHours:
         # New Year's Day 2023 was a Sunday; the library observes it in GB on
         # Monday 2 January, and a Monday costs its day.
         monday = date(2023, 1, 2)
-        holidays = holidays_between("GB", None, monday, monday + timedelta(days=6))
+        holidays = set(named_holidays_between("GB", None, monday, monday + timedelta(days=6)))
         expected = expected_hours(_contract(), [], holidays, monday, monday + timedelta(days=6))
         assert expected == 32
 
@@ -136,8 +136,8 @@ class TestHolidaysBetween:
         # Christmas 2025 sits on the start bound, New Year 2026 on the end
         # bound, and the two are in different years: one calendar per year,
         # both bounds inclusive.
-        found = holidays_between("GB", None, date(2025, 12, 25), date(2026, 1, 1))
-        assert found == {date(2025, 12, 25), date(2025, 12, 26), date(2026, 1, 1)}
+        found = named_holidays_between("GB", None, date(2025, 12, 25), date(2026, 1, 1))
+        assert set(found) == {date(2025, 12, 25), date(2025, 12, 26), date(2026, 1, 1)}
 
 
 class TestBalance:
@@ -219,7 +219,9 @@ class TestMongoAbsenceRepository:
             assert await repo.list_by_project("p1", THU, SUN) == []
 
             assert first.id is not None
-            assert await repo.delete(first.id) is True
+            # Scoped to the project in the URL: through another one it is not found.
+            assert await repo.delete("p2", first.id) is False
+            assert await repo.delete("p1", first.id) is True
             assert await repo.list_by_project("p1", MON, SUN) == []
         finally:
             await client.close()

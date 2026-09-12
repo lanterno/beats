@@ -53,7 +53,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~25s for 775 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 849 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -85,7 +85,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 775-test suite takes about 25 seconds.
+  the full 849-test suite takes about 30 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -303,7 +303,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD, timer start/stop, git activity |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; on a day job `/{id}/contract` (replace), `/{id}/contract/week`, `/{id}/holidays`, `/{id}/absences` |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
@@ -322,3 +322,4 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials, logout, home.space link) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | home.space SSO config + session exchange (public) |
+| `/api/meta` | Static reference data: holiday regions for the contract picker (cacheable, still behind auth) |

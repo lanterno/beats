@@ -1387,6 +1387,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/meta/holiday-regions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Holiday Regions
+         * @description Every country the holiday calendar knows, with the subdivisions that
+         *     change its calendar, for the contract's region picker.
+         *
+         *     Public data, but behind the ordinary session auth like everything else:
+         *     nothing here is worth a second public prefix. It changes only with a
+         *     `holidays` release, hence cacheable for a day — `public` so a shared
+         *     cache may keep it despite the Authorization header.
+         */
+        get: operations["list_holiday_regions_api_meta_holiday_regions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/oura/connect": {
         parameters: {
             query?: never;
@@ -1527,6 +1553,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Absences
+         * @description Absences on the project within [start, end], by date. Each bound
+         *     defaults on its own to the current calendar year in `tz`.
+         */
+        get: operations["list_absences_api_projects__project_id__absences_get"];
+        put?: never;
+        /**
+         * Record Absence
+         * @description Record an absence. One per date: posting again for the same date
+         *     replaces the first and still answers 201, since the client asked to
+         *     create and gets back the absence now on record.
+         */
+        post: operations["record_absence_api_projects__project_id__absences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/absences/{absence_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Absence
+         * @description Remove an absence. 404 when it is not on this project.
+         */
+        delete: operations["delete_absence_api_projects__project_id__absences__absence_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/archive": {
         parameters: {
             query?: never;
@@ -1541,6 +1614,54 @@ export interface paths {
          * @description Archive a project.
          */
         post: operations["archive_project_api_projects__project_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace Contract
+         * @description Replace a day job's whole contract: terms, holiday region, opening
+         *     balance and end date, in one shape, like goal-overrides. Leaves `kind`
+         *     alone; on a project that is not a day job it is a 409 (NOT_A_DAY_JOB),
+         *     and a region the calendar does not know is a 400 (UNKNOWN_HOLIDAY_REGION).
+         */
+        put: operations["replace_contract_api_projects__project_id__contract_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/contract/week": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contract Week
+         * @description One week of a day job against its contract — expected, worked,
+         *     remaining, the running balance as of today, and the seven days with
+         *     their holiday and absence. Worked hours are bucketed by the local day
+         *     each beat started on, in `tz`; a running timer counts up to now.
+         *     409 on a project that is not a day job (NOT_A_DAY_JOB) or has no
+         *     contract yet (NO_CONTRACT).
+         */
+        get: operations["get_contract_week_api_projects__project_id__contract_week_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1600,6 +1721,28 @@ export interface paths {
          * @description Replace goal overrides for a project.
          */
         put: operations["update_goal_overrides_api_projects__project_id__goal_overrides_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Holidays
+         * @description The contract region's public holidays for a year, for the absence
+         *     calendar. Empty when the contract names no region. 409 on a project
+         *     that is not a day job.
+         */
+        get: operations["get_holidays_api_projects__project_id__holidays_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2087,6 +2230,58 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AbsenceRequest
+         * @description Request body for recording an absence.
+         *
+         *     One per (project, date): a second one posted for the same date replaces
+         *     the first, so this is also how a half day becomes a full one.
+         */
+        AbsenceRequest: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Half Day
+             * @default false
+             */
+            half_day: boolean;
+            /** Note */
+            note?: string | null;
+            type: components["schemas"]["AbsenceType"];
+        };
+        /**
+         * AbsenceResponse
+         * @description Response schema for an absence.
+         */
+        AbsenceResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Half Day
+             * @default false
+             */
+            half_day: boolean;
+            /** Id */
+            id: string;
+            /** Note */
+            note?: string | null;
+            /** Project Id */
+            project_id: string;
+            type: components["schemas"]["AbsenceType"];
+        };
+        /**
+         * AbsenceType
+         * @description Why a day was not worked. For the record and the calendar's colour only —
+         *     the arithmetic treats all three the same.
+         * @enum {string}
+         */
+        AbsenceType: "vacation" | "sick" | "other";
         /** AutoTimerSuggestion */
         AutoTimerSuggestion: {
             /** Project Id */
@@ -2182,6 +2377,120 @@ export interface components {
             message: string;
         };
         /**
+         * Contract
+         * @description A day job's terms as they changed over time, plus what frames them.
+         *
+         *     `terms` is the history — part-time, then 80%, then full-time — kept in
+         *     order of `effective_from` with no two starting on the same day, because
+         *     the day decides which term applies. The region names the employer's
+         *     public holidays: `holiday_subdivision` only means something inside a
+         *     `holiday_country`. Both must be codes the holidays library knows, but
+         *     that is checked where a contract is written (`ProjectService`), not
+         *     here: this model is re-validated on every read, and the set of codes the
+         *     library knows moves with its version — a code it stops recognising must
+         *     make one contract un-editable, not every project of the user unreadable.
+         *     `opening_balance_hours` is what was banked (or owed) before Beats started
+         *     counting; `ended_on` freezes the balance from that day on.
+         */
+        Contract: {
+            /** Ended On */
+            ended_on?: string | null;
+            /** Holiday Country */
+            holiday_country?: string | null;
+            /** Holiday Subdivision */
+            holiday_subdivision?: string | null;
+            /**
+             * Opening Balance Hours
+             * @default 0
+             */
+            opening_balance_hours: number;
+            /** Terms */
+            terms: components["schemas"]["ContractTerm"][];
+        };
+        /**
+         * ContractDay
+         * @description One day of a contract week: what it owed, what was worked, and why it
+         *     owed less if it did.
+         */
+        ContractDay: {
+            absence?: components["schemas"]["DayAbsence"] | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Expected */
+            expected: number;
+            /** Holiday */
+            holiday?: string | null;
+            /** Worked */
+            worked: number;
+        };
+        /**
+         * ContractTerm
+         * @description One stretch of a contract, from `effective_from` until the next term takes over.
+         *
+         *     A time-based term (full_time / part_time) owes `full_time_hours × percentage`
+         *     a week — a percentage needs its basis, since 80% of 42 is not 80% of 40. A
+         *     custom term states `weekly_hours` outright. An objective term owes nothing
+         *     and carries no numbers at all. Hence the rules:
+         *
+         *     - `percentage` lies in (0, 1]; a full_time term is 1 — filled in when
+         *       omitted, rejected when it says otherwise — and a part_time term is
+         *       less than 1, or it would be full-time under another name.
+         *     - `weekly_hours` is required for custom and must be left out for the
+         *       time-based types, where it is derived (`hours_per_week`).
+         *     - `full_time_hours` and `percentage` belong to the time-based types only.
+         *
+         *     `effective_from` may be any day of the week: a contract that changes on a
+         *     Wednesday charges Monday and Tuesday at the old rate.
+         */
+        ContractTerm: {
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Full Time Hours */
+            full_time_hours?: number | null;
+            /** Note */
+            note?: string | null;
+            /** Percentage */
+            percentage?: number | null;
+            schedule_type: components["schemas"]["ScheduleType"];
+            /** Weekly Hours */
+            weekly_hours?: number | null;
+        };
+        /**
+         * ContractWeek
+         * @description A day job's week against its contract, plus the running balance.
+         *
+         *     Typed because it crosses the wire (see `ProjectBreakdownEntry`).
+         *     `expected` and `remaining` are None when the contract owes nothing by
+         *     nature that week — no weekday has a time-based term in force — as
+         *     distinct from 0, which is a week the contract owed nothing by
+         *     circumstance (every weekday a holiday, or after `ended_on`). `balance`
+         *     is None on the same rule for today. `remaining` goes negative once the
+         *     week is over its expectation.
+         */
+        ContractWeek: {
+            /** Balance */
+            balance: number | null;
+            /** Days */
+            days: components["schemas"]["ContractDay"][];
+            /** Expected */
+            expected: number | null;
+            /** Remaining */
+            remaining: number | null;
+            /**
+             * Week Of
+             * Format: date
+             */
+            week_of: string;
+            /** Worked */
+            worked: number;
+        };
+        /**
          * CreateBeatRequest
          * @description Request body for creating a beat.
          *
@@ -2208,8 +2517,11 @@ export interface components {
             category?: string | null;
             /** Color */
             color?: string | null;
+            contract?: components["schemas"]["Contract"] | null;
             /** Description */
             description?: string | null;
+            /** @default side_project */
+            kind: components["schemas"]["ProjectKind"];
             /** Name */
             name: string;
             /** Weekly Goal */
@@ -2227,6 +2539,18 @@ export interface components {
             events: string[];
             /** Url */
             url: string;
+        };
+        /**
+         * DayAbsence
+         * @description An absence as one day of the week report shows it — the record without
+         *     its keys, which the day already supplies.
+         */
+        DayAbsence: {
+            /** Half Day */
+            half_day: boolean;
+            /** Note */
+            note?: string | null;
+            type: components["schemas"]["AbsenceType"];
         };
         /** DeleteSignalsResponse */
         DeleteSignalsResponse: {
@@ -2495,6 +2819,19 @@ export interface components {
             session_count: number;
             /** Total Minutes */
             total_minutes: number;
+        };
+        /**
+         * Holiday
+         * @description One public holiday, as the calendar shows it.
+         */
+        Holiday: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Name */
+            name: string;
         };
         /**
          * InboxItemResponse
@@ -2799,12 +3136,21 @@ export interface components {
             weekly_goal_trend?: number[];
         };
         /**
+         * ProjectKind
+         * @description What a project is to the person tracking it. A contract is read only on a day job.
+         * @enum {string}
+         */
+        ProjectKind: "day_job" | "freelance" | "side_project";
+        /**
          * ProjectResponse
-         * @description Canonical response shape for a project — mirrors every field of the
-         *     domain Project. Previously declared only 6 of 11 fields; list/update
-         *     routes returned `model_dump()` with no response_model declared, so the
-         *     OpenAPI contract was silently widened. Now precise so generated clients
-         *     see the full shape.
+         * @description Canonical response shape for a project — every field of the domain
+         *     Project the API exposes. Previously declared only 6 of 11 fields;
+         *     list/update routes returned `model_dump()` with no response_model
+         *     declared, so the OpenAPI contract was silently widened. Now precise so
+         *     generated clients see the full shape.
+         *
+         *     `contract` is the domain model as stored — the terms, region, opening
+         *     balance and end date — and is only meaningful when `kind` is `day_job`.
          */
         ProjectResponse: {
             /**
@@ -2818,6 +3164,7 @@ export interface components {
             category?: string | null;
             /** Color */
             color?: string | null;
+            contract?: components["schemas"]["Contract"] | null;
             /** Description */
             description?: string | null;
             /** Github Repo */
@@ -2828,6 +3175,8 @@ export interface components {
             goal_type: components["schemas"]["GoalType"];
             /** Id */
             id: string;
+            /** @default side_project */
+            kind: components["schemas"]["ProjectKind"];
             /** Name */
             name: string;
             /** Weekly Goal */
@@ -2853,10 +3202,19 @@ export interface components {
             archived: boolean;
             /** Autostart Repos */
             autostart_repos?: string[];
+            /** Balance */
+            balance?: number | null;
             /** Category */
             category?: string | null;
             /** Color */
             color?: string | null;
+            contract?: components["schemas"]["Contract"] | null;
+            /** Contract Expected */
+            contract_expected?: number | null;
+            /** Contract Remaining */
+            contract_remaining?: number | null;
+            /** Contract Worked */
+            contract_worked?: number | null;
             /** Description */
             description?: string | null;
             /** Effective Goal */
@@ -2872,6 +3230,8 @@ export interface components {
             goal_type: components["schemas"]["GoalType"];
             /** Id */
             id: string;
+            /** @default side_project */
+            kind: components["schemas"]["ProjectKind"];
             /** Last Tracked At */
             last_tracked_at?: string | null;
             /** Name */
@@ -2911,6 +3271,18 @@ export interface components {
         RefreshResponse: {
             /** Token */
             token: string;
+        };
+        /**
+         * Region
+         * @description One country in the picker, with the subdivisions that change its calendar.
+         */
+        Region: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Subdivisions */
+            subdivisions: components["schemas"]["Subdivision"][];
         };
         /** RegisterStartRequest */
         RegisterStartRequest: {
@@ -3011,6 +3383,12 @@ export interface components {
             verified_by: string;
         };
         /**
+         * ScheduleType
+         * @description How a contract term states the hours it owes.
+         * @enum {string}
+         */
+        ScheduleType: "full_time" | "part_time" | "custom" | "objective";
+        /**
          * ScoreHistoryItem
          * @description A single week's productivity score.
          */
@@ -3037,6 +3415,13 @@ export interface components {
             idle_samples: number;
             /** Total Samples */
             total_samples: number;
+        };
+        /** Subdivision */
+        Subdivision: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
         /**
          * SuggestionResponse
@@ -3093,6 +3478,13 @@ export interface components {
         /**
          * UpdateProjectRequest
          * @description Request body for updating a project.
+         *
+         *     The update is a wholesale replace, so a client that predates a field
+         *     would reset it on every colour change if "not sent" read as "clear".
+         *     `kind` and `contract` therefore tell the two apart through
+         *     `model_fields_set`: left out, the stored value is kept; `contract: null`
+         *     clears the contract. `kind` has no empty state, so null reads as left
+         *     out there.
          */
         UpdateProjectRequest: {
             /**
@@ -3106,6 +3498,7 @@ export interface components {
             category?: string | null;
             /** Color */
             color?: string | null;
+            contract?: components["schemas"]["Contract"] | null;
             /** Description */
             description?: string | null;
             /** Github Repo */
@@ -3114,6 +3507,7 @@ export interface components {
             goal_type: components["schemas"]["GoalType"];
             /** Id */
             id: string;
+            kind?: components["schemas"]["ProjectKind"] | null;
             /** Name */
             name: string;
             /** Weekly Goal */
@@ -5281,6 +5675,26 @@ export interface operations {
             };
         };
     };
+    list_holiday_regions_api_meta_holiday_regions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Region"][];
+                };
+            };
+        };
+    };
     connect_api_oura_connect_post: {
         parameters: {
             query?: never;
@@ -5428,8 +5842,10 @@ export interface operations {
         parameters: {
             query?: {
                 archived?: boolean;
-                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
+                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
                 include?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
             };
             header?: never;
             path?: never;
@@ -5584,6 +6000,130 @@ export interface operations {
             };
         };
     };
+    list_absences_api_projects__project_id__absences_get: {
+        parameters: {
+            query?: {
+                /** @description Defaults to 1 January of this year. */
+                start?: string | null;
+                /** @description Defaults to 31 December of this year. */
+                end?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_absence_api_projects__project_id__absences_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_absence_api_projects__project_id__absences__absence_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                absence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     archive_project_api_projects__project_id__archive_post: {
         parameters: {
             query?: never;
@@ -5602,6 +6142,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_contract_api_projects__project_id__contract_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Contract"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contract_week_api_projects__project_id__contract_week_get: {
+        parameters: {
+            query?: {
+                /** @description Monday of the week wanted. Defaults to the current week in `tz`. */
+                week_of?: string | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractWeek"];
                 };
             };
             /** @description Not found */
@@ -5723,6 +6348,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_holidays_api_projects__project_id__holidays_get: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the current year in `tz`. */
+                year?: number | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Holiday"][];
                 };
             };
             /** @description Not found */

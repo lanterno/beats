@@ -5,7 +5,7 @@ Tests all endpoints: Projects, Beats, and Timer APIs
 
 import contextlib
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -824,37 +824,6 @@ class TestGoalOverridesAPI:
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["weekly_goal"] is None
 
-    def test_update_project_preserves_kind_and_contract(self, client, auth_headers, mongo):
-        """The same edit must not undo the startup migration: `kind` and
-        `contract` are not on the wire yet, so a PUT that rebuilt the project
-        from the request alone would replace a migrated day job with a side
-        project and no contract. Planted and read back in the collection,
-        since that is the only place they exist until the contract routes."""
-        from bson import ObjectId
-
-        project = self._create_project(client, auth_headers, weekly_goal=20)
-        oid = ObjectId(project["id"])
-        terms = [{"effective_from": "2026-01-05", "schedule_type": "custom", "weekly_hours": 20.0}]
-        mongo.projects.update_one(
-            {"_id": oid}, {"$set": {"kind": "day_job", "contract": {"terms": terms}}}
-        )
-
-        resp = client.put(
-            "/api/projects/",
-            json={
-                "id": project["id"],
-                "name": project["name"],
-                "color": "#abcdef",
-                "weekly_goal": 20,
-            },
-            headers=auth_headers,
-        )
-
-        assert resp.status_code == 200, resp.text
-        doc = mongo.projects.find_one({"_id": oid})
-        assert doc["kind"] == "day_job"
-        assert doc["contract"]["terms"] == terms
-
     def test_null_override_does_not_affect_earlier_weeks(self, client, auth_headers):
         """A permanent null override starting on a future Monday leaves earlier
         weeks with the project default goal."""
@@ -867,6 +836,500 @@ class TestGoalOverridesAPI:
         )
         resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
         assert resp.json()["effective_goal"] == 20
+
+
+# --- Work contracts: kind + contract on the project, the week, absences ---
+
+# A Monday, in the past: fixed dates keep the week tests independent of when
+# they run. The contract below starts well before it.
+CONTRACT_START = "2026-01-05"
+WEEK = "2026-03-02"
+FULL_TIME = [
+    {"effective_from": CONTRACT_START, "schedule_type": "full_time", "full_time_hours": 40}
+]
+
+
+def _create_project(client, headers, **fields) -> dict:
+    resp = client.post(
+        "/api/projects/", json={"name": f"p-{time.time()}", **fields}, headers=headers
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def _day_job(client, headers, terms=None, **contract) -> dict:
+    return _create_project(
+        client, headers, kind="day_job", contract={"terms": terms or FULL_TIME, **contract}
+    )
+
+
+def _log(client, headers, project_id: str, start: str, minutes: int) -> None:
+    begun = datetime.fromisoformat(start)
+    resp = client.post(
+        "/api/beats/",
+        json={
+            "project_id": project_id,
+            "start": begun.isoformat(),
+            "end": (begun + timedelta(minutes=minutes)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+
+
+class TestContractAPI:
+    """`kind` and `contract` on the project routes, and the contract replace."""
+
+    def test_invalid_term_is_422_naming_the_term(self, client, auth_headers):
+        # A custom term without weekly_hours: the domain validator's message,
+        # at the term's path, in the envelope's `fields`.
+        resp = client.post(
+            "/api/projects/",
+            json={
+                "name": "bad term",
+                "kind": "day_job",
+                "contract": {
+                    "terms": [{"effective_from": CONTRACT_START, "schedule_type": "custom"}]
+                },
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["contract.terms.0"]
+        assert "weekly_hours" in body["fields"][0]["message"]
+
+    def test_put_without_contract_keeps_the_stored_one(self, client, auth_headers):
+        # An older client that does not know `kind` or `contract` edits the
+        # colour; the day job must come back a day job with its contract —
+        # which is also what keeps the startup migration from being undone by
+        # the first ordinary edit.
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            "/api/projects/",
+            json={"id": project["id"], "name": project["name"], "color": "#abcdef"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["kind"] == "day_job"
+        assert resp.json()["contract"] == project["contract"]
+
+    def test_put_with_null_contract_clears_it(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            "/api/projects/",
+            json={"id": project["id"], "name": project["name"], "contract": None},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["contract"] is None
+        assert resp.json()["kind"] == "day_job"
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == project["id"])["contract"] is None
+
+    def test_contract_with_another_kind_is_409(self, client, auth_headers):
+        # A contract lives only on a day job: refused on the project routes
+        # as on PUT /contract, rather than stored where nothing can read it.
+        resp = client.post(
+            "/api/projects/",
+            json={"name": "freelance", "kind": "freelance", "contract": {"terms": FULL_TIME}},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+
+    def test_changing_the_kind_takes_the_contract_with_it(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            "/api/projects/",
+            json={"id": project["id"], "name": project["name"], "kind": "side_project"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["kind"] == "side_project"
+        assert resp.json()["contract"] is None
+        # Back to a day job it comes with nothing: no dormant contract kept.
+        resp = client.put(
+            "/api/projects/",
+            json={"id": project["id"], "name": project["name"], "kind": "day_job"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["contract"] is None
+
+    def test_replace_contract_replaces_the_whole_thing(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        replacement = {
+            "terms": [
+                {"effective_from": CONTRACT_START, "schedule_type": "custom", "weekly_hours": 20},
+                {
+                    "effective_from": WEEK,
+                    "schedule_type": "part_time",
+                    "full_time_hours": 42,
+                    "percentage": 0.8,
+                },
+            ],
+            "holiday_country": "CH",
+            "holiday_subdivision": "ZH",
+            "opening_balance_hours": 12.5,
+            "ended_on": None,
+        }
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract", json=replacement, headers=auth_headers
+        )
+        assert resp.status_code == 200, resp.text
+        contract = resp.json()["contract"]
+        assert contract["holiday_subdivision"] == "ZH"
+        assert contract["opening_balance_hours"] == 12.5
+        assert [t["effective_from"] for t in contract["terms"]] == [CONTRACT_START, WEEK]
+        assert resp.json()["kind"] == "day_job"
+
+    def test_replace_contract_on_a_side_project_is_409(self, client, auth_headers):
+        project = _create_project(client, auth_headers)
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+
+    def test_unknown_region_is_400_with_code(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "holiday_country": "XX"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["code"] == "UNKNOWN_HOLIDAY_REGION"
+        assert "XX" in resp.json()["detail"]
+
+
+class TestContractWeekAPI:
+    """GET /api/projects/{id}/contract/week, /holidays, and the index's this_week."""
+
+    def _week(self, client, headers, project_id: str, **params) -> dict:
+        resp = client.get(
+            f"/api/projects/{project_id}/contract/week",
+            params={"week_of": WEEK, **params},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def test_week_on_a_side_project_is_409(self, client, auth_headers):
+        project = _create_project(client, auth_headers)
+        resp = client.get(f"/api/projects/{project['id']}/contract/week", headers=auth_headers)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+
+    def test_malformed_project_id_is_404_in_the_envelope(self, client, auth_headers):
+        # Not an ObjectId at all, as opposed to a valid one nobody owns: the
+        # same answer, in the same envelope, rather than a bare 500.
+        resp = client.get("/api/projects/not-an-id/contract/week", headers=auth_headers)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_week_on_a_day_job_without_a_contract_is_409(self, client, auth_headers):
+        project = _create_project(client, auth_headers, kind="day_job")
+        resp = client.get(f"/api/projects/{project['id']}/contract/week", headers=auth_headers)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NO_CONTRACT"
+
+    def test_week_of_must_be_a_monday(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.get(
+            f"/api/projects/{project['id']}/contract/week",
+            params={"week_of": "2026-03-03"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["week_of"]
+
+    def test_week_reports_seven_days_with_worked_by_day(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 120)
+        _log(client, auth_headers, project["id"], "2026-03-04T09:00:00+00:00", 90)
+
+        week = self._week(client, auth_headers, project["id"])
+
+        assert week["week_of"] == WEEK
+        assert [d["date"] for d in week["days"]] == [
+            "2026-03-02",
+            "2026-03-03",
+            "2026-03-04",
+            "2026-03-05",
+            "2026-03-06",
+            "2026-03-07",
+            "2026-03-08",
+        ]
+        assert week["expected"] == 40
+        assert week["worked"] == 3.5
+        assert week["remaining"] == 36.5
+        assert [d["worked"] for d in week["days"]] == [0, 2, 1.5, 0, 0, 0, 0]
+        assert [d["expected"] for d in week["days"]] == [8, 8, 8, 8, 8, 0, 0]
+        assert all(d["holiday"] is None and d["absence"] is None for d in week["days"])
+        # Since the contract started, 3.5 h were worked against months owed.
+        assert isinstance(week["balance"], float)
+        assert week["balance"] < 0
+
+    def test_percentage_change_midweek_shows_in_days(self, client, auth_headers):
+        project = _day_job(
+            client,
+            auth_headers,
+            terms=[
+                *FULL_TIME,
+                {
+                    "effective_from": "2026-03-04",  # the Wednesday
+                    "schedule_type": "part_time",
+                    "full_time_hours": 40,
+                    "percentage": 0.5,
+                },
+            ],
+        )
+        week = self._week(client, auth_headers, project["id"])
+        assert [d["expected"] for d in week["days"]] == [8, 8, 4, 4, 4, 0, 0]
+        assert week["expected"] == 28
+
+    def test_absence_round_trip_reduces_expected(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-04", "type": "vacation", "note": "skiing"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        week = self._week(client, auth_headers, project["id"])
+        assert week["expected"] == 32
+        wednesday = week["days"][2]
+        assert wednesday["expected"] == 0
+        assert wednesday["absence"] == {"type": "vacation", "half_day": False, "note": "skiing"}
+
+        # Posting the same date again replaces: a full day becomes a half.
+        resp = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-04", "type": "sick", "half_day": True},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        week = self._week(client, auth_headers, project["id"])
+        assert week["expected"] == 36
+        assert week["days"][2]["absence"] == {"type": "sick", "half_day": True, "note": None}
+
+    def test_running_timer_counts_toward_worked(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        started = datetime.now(UTC) - timedelta(minutes=30)
+        resp = client.post(
+            f"/api/projects/{project['id']}/start",
+            json={"time": started.isoformat()},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        try:
+            # The week the timer started in, so a run across the Monday
+            # boundary still finds the beat where it began.
+            monday = (started - timedelta(days=started.weekday())).date().isoformat()
+            week = self._week(client, auth_headers, project["id"], week_of=monday)
+            assert week["worked"] >= 0.5
+            assert week["days"][started.weekday()]["worked"] >= 0.5
+        finally:
+            client.post(
+                "/api/projects/stop",
+                json={"time": datetime.now(UTC).isoformat()},
+                headers=auth_headers,
+            )
+
+    def test_beat_crossing_midnight_belongs_to_the_local_day_it_started(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        # 23:30 UTC on the Wednesday, running an hour into Thursday UTC —
+        # which in Tokyo is 08:30 on the Thursday.
+        _log(client, auth_headers, project["id"], "2026-03-04T23:30:00+00:00", 60)
+
+        in_utc = self._week(client, auth_headers, project["id"])
+        assert [d["worked"] for d in in_utc["days"][2:4]] == [1, 0]
+
+        in_tokyo = self._week(client, auth_headers, project["id"], tz="Asia/Tokyo")
+        assert [d["worked"] for d in in_tokyo["days"][2:4]] == [0, 1]
+
+    def test_objective_term_has_no_expectation_and_no_balance(self, client, auth_headers):
+        project = _day_job(
+            client,
+            auth_headers,
+            terms=[{"effective_from": CONTRACT_START, "schedule_type": "objective"}],
+        )
+        _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 60)
+        week = self._week(client, auth_headers, project["id"])
+        assert week["expected"] is None
+        assert week["remaining"] is None
+        assert week["balance"] is None
+        assert week["worked"] == 1
+        assert [d["expected"] for d in week["days"]] == [0] * 7
+
+    def test_holidays_are_empty_without_a_region(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = client.get(
+            f"/api/projects/{project['id']}/holidays",
+            params={"year": 2026},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == []
+
+    def test_region_holidays_are_named_and_zero_their_day(self, client, auth_headers):
+        # Which days GB observes is the library's business; that a listed
+        # weekday holiday comes back by name in the week and costs its day
+        # is ours.
+        project = _day_job(client, auth_headers, holiday_country="GB", holiday_subdivision="ENG")
+        resp = client.get(
+            f"/api/projects/{project['id']}/holidays",
+            params={"year": 2026},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        holidays = resp.json()
+        assert holidays, "a region with no holidays at all would be a wiring bug"
+        assert all(h["date"].startswith("2026-") and h["name"] for h in holidays)
+
+        # The first weekday holiday once the contract is in force: one before
+        # it would cost nothing for another reason (no term yet), and the
+        # holiday rule would go unexercised.
+        weekday = next(
+            h
+            for h in holidays
+            if h["date"] >= CONTRACT_START and date.fromisoformat(h["date"]).weekday() < 5
+        )
+        day = date.fromisoformat(weekday["date"])
+        monday = (day - timedelta(days=day.weekday())).isoformat()
+        week = self._week(client, auth_headers, project["id"], week_of=monday)
+        reported = week["days"][day.weekday()]
+        assert reported["holiday"] == weekday["name"]
+        assert reported["expected"] == 0
+        # Every weekday holiday in that week costs its 8 h off the 40.
+        off = sum(1 for d in week["days"][:5] if d["holiday"])
+        assert off >= 1
+        assert week["expected"] == 40 - 8 * off
+
+    def test_this_week_include_carries_contract_fields_for_day_jobs(self, client, auth_headers):
+        day_job = _day_job(client, auth_headers)
+        objective = _day_job(
+            client,
+            auth_headers,
+            terms=[{"effective_from": CONTRACT_START, "schedule_type": "objective"}],
+        )
+        side = _create_project(client, auth_headers, weekly_goal=5)
+
+        listed = client.get("/api/projects/?include=this_week", headers=auth_headers).json()
+        by_id = {p["id"]: p for p in listed}
+
+        mine = by_id[day_job["id"]]
+        assert mine["contract_expected"] == 40
+        assert isinstance(mine["balance"], float)
+        # The trio is the contract's own and adds up among itself; it does not
+        # share `weekly_minutes`' bucketing (see ProjectsListItemResponse).
+        assert mine["contract_expected"] - mine["contract_worked"] == pytest.approx(
+            mine["contract_remaining"]
+        )
+        for project in (objective, side):
+            item = by_id[project["id"]]
+            assert (item["contract_expected"], item["contract_remaining"], item["balance"]) == (
+                None,
+                None,
+                None,
+            )
+        # Work is reported under an objective term too, as the week route does;
+        # only a project of another kind has no contract figure at all.
+        assert by_id[objective["id"]]["contract_worked"] == 0
+        assert by_id[side["id"]]["contract_worked"] is None
+        # The personal goal is untouched by the contract fields.
+        assert by_id[side["id"]]["effective_goal"] == 5
+
+
+class TestAbsencesAPI:
+    """/api/projects/{id}/absences — scoping and the delete."""
+
+    def test_absences_are_scoped_to_the_user(self, client, auth_headers, other_auth_headers):
+        mine = _day_job(client, auth_headers)
+        other = other_auth_headers
+        url = f"/api/projects/{mine['id']}/absences"
+
+        # Someone else's project does not exist to them: 404, never 403.
+        resp = client.post(url, json={"date": "2026-03-04", "type": "sick"}, headers=other)
+        assert resp.status_code == 404, resp.text
+        assert client.get(url, headers=other).status_code == 404
+
+        # Nor can they reach one of mine by id through a day job of their own.
+        created = client.post(
+            url, json={"date": "2026-03-04", "type": "sick"}, headers=auth_headers
+        ).json()
+        theirs = _day_job(client, other)
+        resp = client.delete(
+            f"/api/projects/{theirs['id']}/absences/{created['id']}", headers=other
+        )
+        assert resp.status_code == 404, resp.text
+        assert [a["id"] for a in client.get(url, headers=auth_headers).json()] == [created["id"]]
+
+    def test_delete_is_204_and_then_gone(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        url = f"/api/projects/{project['id']}/absences"
+        created = client.post(
+            url, json={"date": "2026-03-04", "type": "other"}, headers=auth_headers
+        ).json()
+        assert created["project_id"] == project["id"]
+
+        resp = client.delete(f"{url}/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 204, resp.text
+        assert client.get(url, headers=auth_headers).json() == []
+        resp = client.delete(f"{url}/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_delete_is_scoped_to_the_project_in_the_path(self, client, auth_headers):
+        # Two day jobs of one user: an absence on the first is not reachable
+        # through the second's URL, so the 404 means "not on this project".
+        first = _day_job(client, auth_headers)
+        second = _day_job(client, auth_headers)
+        created = client.post(
+            f"/api/projects/{first['id']}/absences",
+            json={"date": "2026-03-04", "type": "sick"},
+            headers=auth_headers,
+        ).json()
+        resp = client.delete(
+            f"/api/projects/{second['id']}/absences/{created['id']}", headers=auth_headers
+        )
+        assert resp.status_code == 404, resp.text
+        listed = client.get(f"/api/projects/{first['id']}/absences", headers=auth_headers).json()
+        assert [a["id"] for a in listed] == [created["id"]]
+
+    def test_absence_on_a_side_project_is_409(self, client, auth_headers):
+        project = _create_project(client, auth_headers)
+        resp = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-04", "type": "vacation"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+
+
+class TestHolidayRegionsAPI:
+    def test_regions_are_listed_and_cacheable(self, client, auth_headers):
+        resp = client.get("/api/meta/holiday-regions", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        # `public` is the decision — a shared cache may keep it despite the
+        # Authorization header. The TTL is configuration and not restated.
+        assert "public" in resp.headers["cache-control"]
+        regions = resp.json()
+        with_subdivisions = next(r for r in regions if r["subdivisions"])
+        assert set(with_subdivisions) == {"code", "name", "subdivisions"}
+        assert set(with_subdivisions["subdivisions"][0]) == {"code", "name"}
+
+    def test_regions_need_a_session(self, client):
+        assert client.get("/api/meta/holiday-regions").status_code == 401
 
 
 class TestBeatsDirectAPI:

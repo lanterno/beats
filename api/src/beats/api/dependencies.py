@@ -13,9 +13,10 @@ from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.oura import OuraService
-from beats.domain.services import BeatService, ProjectService, TimerService
+from beats.domain.services import BeatService, ContractService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
+    AbsenceRepository,
     BeatRepository,
     BiometricDayRepository,
     CalendarIntegrationRepository,
@@ -24,6 +25,7 @@ from beats.infrastructure.repositories import (
     FlowWindowRepository,
     GitHubIntegrationRepository,
     InsightsRepository,
+    MongoAbsenceRepository,
     MongoBeatRepository,
     MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
@@ -159,6 +161,20 @@ def get_project_service(
     return ProjectService(project_repo=project_repo, beat_repo=beat_repo)
 
 
+get_absence_repository = _user_scoped(MongoAbsenceRepository, "absences")
+
+
+def get_contract_service(
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    absence_repo: Annotated[AbsenceRepository, Depends(get_absence_repository)],
+) -> ContractService:
+    """Get the contract service with injected repositories."""
+    return ContractService(
+        project_repo=project_repo, beat_repo=beat_repo, absence_repo=absence_repo
+    )
+
+
 def get_analytics_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
 ) -> AnalyticsService:
@@ -207,6 +223,8 @@ ProjectRepoDep = Annotated[ProjectRepository, Depends(get_project_repository)]
 TimerServiceDep = Annotated[TimerService, Depends(get_timer_service)]
 BeatServiceDep = Annotated[BeatService, Depends(get_beat_service)]
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+ContractServiceDep = Annotated[ContractService, Depends(get_contract_service)]
+AbsenceRepoDep = Annotated[AbsenceRepository, Depends(get_absence_repository)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]

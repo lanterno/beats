@@ -183,3 +183,17 @@ def auth_info(mongo, clean_db):
     token = sm.create_session_token(user_id, "test@example.com")
 
     return {"user_id": user_id, "headers": {"Authorization": f"Bearer {token}"}}
+
+
+@pytest.fixture
+def other_auth_headers(mongo) -> dict[str, str]:
+    """Bearer header for a second user, for the isolation tests: someone else's
+    data must read as not found, never as forbidden."""
+    from beats.auth.session import SessionManager
+    from beats.settings import settings
+
+    user_id = str(ObjectId())
+    email = f"other-{user_id}@example.com"
+    mongo.users.insert_one({"_id": ObjectId(user_id), "email": email, "display_name": None})
+    token = SessionManager(settings.jwt_secret).create_session_token(user_id, email)
+    return {"Authorization": f"Bearer {token}"}

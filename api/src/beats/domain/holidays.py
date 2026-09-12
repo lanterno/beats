@@ -4,7 +4,8 @@ Everything downstream takes holidays as a plain `set[date]`, so the arithmetic
 in `contracts.py` never touches this module and the library is exchangeable
 from one place. What is exposed: the dates in a range for one region, the
 list of regions for a picker, and the check the project service runs on a
-(country, subdivision) pair before a contract is written.
+(country, subdivision) pair before a contract is written. Each holiday comes
+with its name; a caller that only wants the dates takes the mapping's keys.
 
 Codes are the library's own: ISO 3166-1 alpha-2 for the country and the
 ISO 3166-2 part for the subdivision (`GB`/`ENG`, `CH`/`ZH`). Substitute days
@@ -23,6 +24,13 @@ from pydantic import BaseModel
 from beats.domain.exceptions import UnknownHolidayRegion
 
 
+class Holiday(BaseModel):
+    """One public holiday, as the calendar shows it."""
+
+    date: date
+    name: str
+
+
 class Subdivision(BaseModel):
     code: str
     name: str
@@ -36,12 +44,41 @@ class Region(BaseModel):
     subdivisions: list[Subdivision]
 
 
-def holidays_between(country: str, subdivision: str | None, start: date, end: date) -> set[date]:
-    """Every public holiday in the region falling within [start, end]."""
-    calendar = holidays_lib.country_holidays(
-        country, subdiv=subdivision, years=range(start.year, end.year + 1)
-    )
-    return {day for day in calendar if start <= day <= end}
+def named_holidays_between(
+    country: str, subdivision: str | None, start: date, end: date
+) -> dict[date, str]:
+    """Every public holiday in the region falling within [start, end], by name.
+
+    Two holidays on one day come back as one entry with both names, joined
+    the way the library joins them ("Christmas Day; Boxing Day (observed)").
+    """
+    found: dict[date, str] = {}
+    for year in range(start.year, end.year + 1):
+        found.update(
+            (day, name)
+            for day, name in _year(country, subdivision, year).items()
+            if start <= day <= end
+        )
+    return found
+
+
+@cache
+def _year(country: str, subdivision: str | None, year: int) -> dict[date, str]:
+    """One region's calendar for one year, built once per process.
+
+    The balance reads every year since a contract started on every request,
+    and some regions take ~10 ms a year to build; a mapping per
+    (region, year) is a few hundred bytes, so the cache stays small.
+    """
+    try:
+        calendar = holidays_lib.country_holidays(country, subdiv=subdivision, years=year)
+    except NotImplementedError:
+        # The region passed `check_region` when the contract was written; a
+        # library upgrade can still stop knowing it. Surface that as the
+        # domain's own error so the caller can decide what one bad contract
+        # costs — the week route reports it, the project index skips it.
+        raise UnknownHolidayRegion(country, subdivision) from None
+    return dict(calendar.items())
 
 
 def check_region(country: str, subdivision: str | None) -> None:

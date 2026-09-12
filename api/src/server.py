@@ -17,6 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
 from beats.api.middleware import IdempotencyMiddleware, ensure_mutation_log_indexes
+from beats.api.routers.absences import router as absences_router
 from beats.api.routers.account import router as account_router
 from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager, limiter
@@ -30,6 +31,7 @@ from beats.api.routers.export import router as export_router
 from beats.api.routers.fitbit import router as fitbit_router
 from beats.api.routers.github import router as github_router
 from beats.api.routers.intelligence import router as intelligence_router
+from beats.api.routers.meta import router as meta_router
 from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
@@ -250,6 +252,8 @@ app.include_router(auth_router)
 app.include_router(sso_router)
 app.include_router(account_router)
 app.include_router(projects_router)
+app.include_router(absences_router)
+app.include_router(meta_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)

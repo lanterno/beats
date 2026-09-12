@@ -316,7 +316,14 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
     model = Project
 
     async def get_by_id(self, project_id: str) -> Project:
-        project = await self._find_one({"_id": ObjectId(project_id)})
+        # A malformed id is "no such project", like an unknown one: every route
+        # under /api/projects/{id} takes the id from the path, and a 404 in the
+        # envelope is the answer they all promise. `exists` below does the same.
+        try:
+            oid = ObjectId(project_id)
+        except InvalidId:
+            raise ProjectNotFound(project_id) from None
+        project = await self._find_one({"_id": oid})
         if project is None:
             raise ProjectNotFound(project_id)
         return project
@@ -729,7 +736,7 @@ class MongoBiometricDayRepository(MongoStore[BiometricDay], BiometricDayReposito
 class AbsenceRepository(Protocol):
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
-    async def delete(self, absence_id: str) -> bool: ...
+    async def delete(self, project_id: str, absence_id: str) -> bool: ...
 
 
 class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
@@ -761,5 +768,12 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
             raise RuntimeError("upsert of Absence returned no document")
         return self._load(result)
 
-    async def delete(self, absence_id: str) -> bool:
-        return await self._delete_one({"_id": ObjectId(absence_id)})
+    async def delete(self, project_id: str, absence_id: str) -> bool:
+        # Scoped to the project in the URL as well as the user, so a 404 means
+        # "not on this project". A malformed id is "no such absence", the same
+        # answer as an unknown one — the route turns False into a 404 either way.
+        try:
+            oid = ObjectId(absence_id)
+        except InvalidId:
+            return False
+        return await self._delete_one({"_id": oid, "project_id": project_id})

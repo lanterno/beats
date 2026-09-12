@@ -90,7 +90,10 @@ async def validation_exception_handler(
 
     Each field reports a ``path`` (dot-joined location, with the ``body``
     prefix stripped so paths feel natural to consumers), the human message,
-    and the validation type.
+    and the validation type. An empty ``path`` is the body as a whole: a
+    route whose body is one bare object (``PUT /api/projects/{id}/contract``)
+    reports that object's own model-level validators there, where the same
+    object nested in a larger body would be named (``contract``).
     """
     fields: list[dict[str, Any]] = []
     for err in exc.errors():

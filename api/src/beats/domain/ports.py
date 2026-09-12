@@ -94,11 +94,19 @@ class ProjectBeatReader(Protocol):
     async def list_by_project(self, project_id: str) -> list[Beat]: ...
 
 
+class ProjectReader(Protocol):
+    """One project by id. What the contract service asks before doing anything
+    to a project: it reads the kind and the contract, and never writes."""
+
+    async def get_by_id(self, project_id: str) -> Project: ...
+
+
 class AbsenceStore(Protocol):
     """Absences on one project: the range read the arithmetic needs, and the
     two writes a calendar makes. Upsert is keyed on (project, date) — a
-    second absence on a day replaces the first."""
+    second absence on a day replaces the first. Delete is by id within the
+    project, so False means "not on this project"."""
 
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
-    async def delete(self, absence_id: str) -> bool: ...
+    async def delete(self, project_id: str, absence_id: str) -> bool: ...

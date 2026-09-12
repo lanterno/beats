@@ -270,34 +270,138 @@ with a `week_of` override only gets one term and the override is left in
 place; re-running the migration changes nothing; a document the pass
 cannot read is skipped and the rest migrated; and, Monday by Monday from
 the first beat, `term_on` says what `effective_goal` said — Decision 10
-as an assertion. `test_api.py`: a PUT on a migrated day job keeps its
-`kind` and `contract`.
+as an assertion. `test_api.py`: a PUT that does not mention `kind` or
+`contract` keeps both (in `TestContractAPI`, since Phase 3 put them on the
+wire).
 
 ### Phase 3 — HTTP contract `[api]`
 
-Added to `routers/projects.py` (contract belongs to the project) and a
-new `routers/absences.py`.
+The contract routes live in `routers/projects.py` (the contract belongs to
+the project), absences in `routers/absences.py` under the same
+`/api/projects/{id}` prefix, and the region list in a new `routers/meta.py`.
+`ContractService` in `domain/services.py` holds the week and balance
+assembly behind three narrow ports — `ProjectReader` (new, one read),
+`ProjectBeatReader`, `AbsenceStore` — and `ProjectService.replace_contract`
+is the one contract write, since it is a project write with the region
+check. Routers stay thin: the index's per-project loop and its skip policy
+are `ContractService.weeks_for`, and `holidays` and `list_absences` own
+their `tz` defaults as `week` does, so each is testable with a fake.
 
 | Route | Purpose |
 |---|---|
-| `POST/PUT /api/projects` | `kind` and `contract` on create/update; 422 from the validators |
-| `PUT /api/projects/{id}/contract` | replace terms / region / opening balance / `ended_on` — same replace-whole-list shape as `goal-overrides` |
-| `GET /api/projects/{id}/contract/week?week_of=` | `{expected, worked, remaining, balance, days: [{date, expected, worked, holiday?, absence?}]}` |
-| `GET /api/projects/{id}/holidays?year=` | the region's holidays, for the calendar |
-| `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date), delete |
-| `GET /api/meta/holiday-regions` | countries and subdivisions for the picker; cacheable, static |
+| `POST/PUT /api/projects` | `kind` and `contract` on create/update; 422 from the validators, at the term's path (`contract.terms.0`) |
+| `PUT /api/projects/{id}/contract` | replace terms / region / opening balance / `ended_on` as one object — whole, like `goal-overrides`; `kind` untouched |
+| `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, days: [{date, expected, worked, holiday, absence}]}` |
+| `GET /api/projects/{id}/holidays?year=` | the region's holidays as `[{date, name}]`; `[]` without a region; `year` in 1..9999 |
+| `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
+| `GET /api/meta/holiday-regions` | `[{code, name, subdivisions: [{code, name}]}]`; `Cache-Control: public, max-age=86400`; behind the normal auth |
 
-`ProjectResponse` gains `kind` and `contract`. The `this_week` include
-on `GET /api/projects` gains `contract_expected` / `contract_remaining`
-/ `balance` for day-job projects so the index does not need N requests.
+Decisions made while building it:
 
-`DEVICE_ALLOWED_PREFIXES` is **not** widened — the companion reads
-nothing new this iteration.
+- **Omitted is not null on `PUT /api/projects`.** The update is a wholesale
+  replace and older clients do not send `kind` or `contract`, so the route
+  reads `model_fields_set`: a field left out keeps the stored value,
+  `contract: null` clears it. `kind` has no empty state, so a null there
+  reads as left out. The request and response carry the domain `Contract`
+  model itself rather than a mirror — its validators are what produce the
+  422, and a copy would drift.
+- **A contract lives only on a day job.** `POST`/`PUT /api/projects` refuse
+  a contract sent with any other kind — 409 `NOT_A_DAY_JOB`, as
+  `PUT /{id}/contract` already answers — and a `PUT` that moves a day job
+  to another kind without mentioning `contract` clears it: the kind change
+  is what was asked for, and the contract goes with it. Nothing dormant is
+  kept for an undo; the alternative was a contract stored on a project no
+  route could read it from, and region-checked on every save all the same.
+  The check is `ProjectService`'s, beside the region check.
+- **Every non-2xx is in the envelope.** A malformed project id is a 404
+  like an unknown one — `MongoProjectRepository.get_by_id` reads `InvalidId`
+  as not found, which also fixes the older routes on the same path — and a
+  `year` outside 1..9999 or a `week_of` whose seven days run past the end of
+  the calendar is a 422 naming the parameter. On `PUT /{id}/contract` a
+  model-level validator — terms out of order, no terms, `ended_on` before
+  the first term — comes back with an empty `path` in `fields`: the body
+  *is* the contract, and an empty path is the body as a whole. The same
+  error through `POST /api/projects` is at `contract`.
+- **Wrong kind is a 409**, not a 400: `NOT_A_DAY_JOB` on the contract,
+  week, holidays and absence routes; `NO_CONTRACT` for the week of a day
+  job that has none yet. Both are `DomainException`s with a `code`, and
+  `UnknownHolidayRegion` now carries `UNKNOWN_HOLIDAY_REGION` (400).
+- **The week's `expected` and `remaining` are null**, and `days` carry
+  `expected: 0`, when no weekday of the week has a time-based term in force
+  — an objective term, or a week before the contract. That is distinct from
+  0, which is a week the contract owed nothing by circumstance (holidays,
+  after `ended_on`). `balance` is null on the same rule for today. Hours
+  are rounded to two decimals on the wire; `remaining` goes negative once
+  the week is over.
+- **Worked hours are bucketed by the local date each beat started on**, in
+  the request timezone (`tz`, default UTC): a beat crossing midnight
+  belongs whole to the day it began. A running timer counts up to now.
+  `balance` uses every beat on the project since the contract started, not
+  the week's.
+- **`week_of` must be a Monday** (422 naming the field, via a query-param
+  validator); it defaults to the current week in `tz`.
+- **Holidays come with names.** `domain/holidays.py`'s
+  `named_holidays_between` replaces `holidays_between` — a caller that
+  wants only the dates takes the keys — with a per-`(region, year)` cache — the balance rebuilds every year since the
+  contract started on each request, and some regions cost ~10 ms a year. A
+  stored region the library has stopped knowing (a library upgrade) raises
+  `UnknownHolidayRegion`: the week route reports it, the project index
+  logs it and leaves that project's contract fields null.
+- **Absences**: `GET` defaults each bound on its own to the current
+  calendar year in `tz`. `POST` answers 201 even when it replaced an
+  absence on that date, and is accepted on a day job that has no contract
+  yet — leave first, contract later; only the week needs one, hence
+  `NO_CONTRACT` there alone. `DELETE` is by id within the project in the
+  path (and the user), so its 404 means "not on this project". Someone
+  else's project is a 404 on every route, never a 403.
+- **`this_week` on `GET /api/projects`** gains `contract_expected`,
+  `contract_worked`, `contract_remaining`, `balance` — what the week route
+  reports for the current week, so a card can show expected · worked ·
+  remaining from the index alone. Null on anything that is not a day job
+  with a contract, and all but `contract_worked` null under an objective
+  term. `contract_worked` is carried although `weekly_minutes` sits beside
+  it because the two are different figures: `weekly_minutes` is the
+  personal goal's — completed beats only, by UTC date — and is left as it
+  was, since the current UI reads it. Beats stay one query; each day job
+  with a contract costs one absence read and one calendar build, and other
+  projects cost nothing.
 
-**Tests** (`test_api.py`): the envelope for an invalid term (422 with
-`fields`); a week query on a project of the wrong kind is 409 with a
-code; absences are scoped to the user (404, not 403, for someone else's
-project); create-then-week-query round trip reflects the absence.
+**`DEVICE_ALLOWED_PREFIXES` is unchanged**, but `/api/projects` was
+already in it, and the middleware matches by prefix: a paired device can
+therefore reach every new route under `/api/projects/{id}/…` — the
+contract, its week, holidays and absences. That is acceptable because a
+device could already `PUT /api/projects` and rewrite the whole project,
+contract included, so nothing new is exposed that was not reachable by a
+longer road. `/api/meta` is not in the tuple and stays session-only. The
+follow-up about widening the tuple for the companion's week card is moot:
+the route is reachable today.
+
+**Types**: the UI's generated API types (`ui/client/shared/api/openapi.json`,
+`generated.ts`) are stale from this phase until Phase 4 runs
+`pnpm gen:types`; the `ui-api-types` pre-push gate runs unconditionally.
+
+**Tests** (`test_api.py`, four classes beside the project tests): the
+envelope for an invalid term (422 with `fields`); a malformed project id as
+a 404 in the envelope; a week query on a project of the wrong kind and on a
+day job without a contract, each 409 with its code; absences scoped to the
+user (404, not 403, for someone else's project, and no reach into another
+user's absence by id) and a delete scoped to the project in the path;
+create-then-week round trip reflecting the absence and its replacement by
+a half day; `PUT` without `contract` keeping it, with `contract: null`
+clearing it, and with another `kind` taking it away; a contract sent with
+another kind refused; a percentage change mid-week in `days`; `week_of` off
+a Monday; holidays without a region; the first named weekday holiday *after
+the contract starts* zeroing its day and the week's total (an earlier one
+would be zero for want of a term, and the holiday rule would go
+unexercised); the objective term's nulls; a running timer's minutes in
+`worked`; a beat across midnight landing on its local start day; the
+`this_week` fields on a day job adding up and null on the others; the
+region list's shape and that it is `public`ly cacheable (the TTL is
+configuration and not restated). In `test_domain.py`, `weeks_for` with a
+fake holding a region the library rejects — unreachable over HTTP, since
+the region check keeps one from being written — skipping that project
+alone. No test of which days a region observes, and none restating a
+default.
 
 ### Phase 4 — UI: form, contract, absences `[ui]`
 
@@ -367,8 +471,9 @@ The reason for all of the above.
   types to mean something, which they already do.
 - **Balance ledger** — dated manual adjustments (payout, annual reset,
   cap) instead of editing the opening balance.
-- **Companion week card** — the same numbers in the tray; widens
-  `DEVICE_ALLOWED_PREFIXES` to `/api/projects/*/contract/week`.
+- **Companion week card** — the same numbers in the tray. The route is
+  already device-reachable through the `/api/projects` prefix (see Phase
+  3); what is missing is the companion reading it.
 - **Employer-specific holidays** — per-contract add/remove on top of
   the region (Dec 24/31, bridge days).
 - **Coach awareness** — the brief knowing you are 6 h over and it is

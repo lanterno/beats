@@ -2,14 +2,18 @@
 
 import http
 from datetime import date, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Query
+from pydantic import AfterValidator
 
 from beats.api.dependencies import (
     BeatRepoDep,
+    ContractServiceDep,
     GitHubServiceDep,
     ProjectServiceDep,
     TimerServiceDep,
+    TimezoneDep,
     WebhookRepoDep,
 )
 from beats.api.routers.webhooks import dispatch_webhook_event
@@ -23,7 +27,8 @@ from beats.api.schemas import (
     RecordTimeRequest,
     UpdateProjectRequest,
 )
-from beats.domain.models import GoalOverride, Project
+from beats.domain.holidays import Holiday
+from beats.domain.models import Contract, ContractWeek, GoalOverride, Project, ProjectKind
 
 router = APIRouter(
     prefix="/api/projects",
@@ -35,17 +40,21 @@ router = APIRouter(
 @router.get("/", response_model=list[ProjectsListItemResponse])
 async def list_projects(
     service: ProjectServiceDep,
+    contract_service: ContractServiceDep,
     # The grouped read below is wider than what ProjectService itself needs, so
     # it comes from the repository directly rather than reaching through the
     # service for a method the service does not use.
     beat_repo: BeatRepoDep,
+    tz: TimezoneDep,
     archived: bool = False,
     include: str | None = Query(
         default=None,
         description=(
             "Comma-separated aggregations to populate per project. Supported: "
             "'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal "
-            "trio), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response."
+            "trio, and on a day job the contract's expected / worked / remaining / "
+            "balance), "
+            "'last_tracked' (last_tracked_at). Omitted ⇒ slim response."
         ),
     ),
 ):
@@ -84,6 +93,13 @@ async def list_projects(
     project_ids = [p.id for p in projects if p.id]
     beats_by_pid = await beat_repo.list_grouped_by_project_ids(project_ids)
 
+    # The contract weeks reuse the beats already loaded above; what they add
+    # is one absence read and one holiday calendar per day job with a
+    # contract — a few projects at most — and nothing for the others.
+    contract_weeks = (
+        await contract_service.weeks_for(projects, beats_by_pid, tz) if want_week else {}
+    )
+
     def aggregate_one(p: Project) -> dict:
         item = p.model_dump(mode="json")
         if not p.id:
@@ -99,6 +115,12 @@ async def list_projects(
             item["effective_goal"] = week.get("effective_goal")
             item["effective_goal_type"] = week.get("effective_goal_type")
             item["effective_goal_overridden"] = week.get("effective_goal_overridden")
+            contract_week = contract_weeks.get(p.id)
+            if contract_week is not None:
+                item["contract_expected"] = contract_week.expected
+                item["contract_worked"] = contract_week.worked
+                item["contract_remaining"] = contract_week.remaining
+                item["balance"] = contract_week.balance
         if want_last:
             last = service._last_tracked_from_beats(beats)
             item["last_tracked_at"] = last.isoformat() if last else None
@@ -118,6 +140,8 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
         color=request.color,
         weekly_goal=request.weekly_goal,
         category=request.category,
+        kind=request.kind,
+        contract=request.contract,
     )
     created = await service.create_project(project)
     return created.model_dump()
@@ -126,12 +150,23 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
 @router.put("/", response_model=ProjectResponse)
 async def update_project(request: UpdateProjectRequest, service: ProjectServiceDep):
     """Update an existing project."""
-    # Preserve what the request does not carry: UpdateProjectRequest has no
-    # goal_overrides, kind or contract, so building Project() from the request
-    # alone would wipe them on every unrelated edit (e.g. a color change) —
-    # and the replace is wholesale, so a migrated day job would come back a
-    # side project with no contract. Read existing first.
+    # Preserve what the request does not carry: the replace is wholesale, so
+    # building Project() from the request alone would wipe goal_overrides on
+    # every unrelated edit (e.g. a color change) — and, from a client that
+    # predates them, kind and contract too, turning a migrated day job back
+    # into a side project with no contract. Read existing first; `kind` and
+    # `contract` are taken from the request only when it actually sent them
+    # (model_fields_set), so `contract: null` clears and absence keeps —
+    # unless the edit moves the project away from day_job, in which case the
+    # contract goes with it: a contract lives only on a day job, and the
+    # service refuses one sent with any other kind (409 NOT_A_DAY_JOB).
     existing = await service.project_repo.get_by_id(request.id)
+    sent = request.model_fields_set
+    kind = request.kind if request.kind is not None else existing.kind
+    if "contract" in sent:
+        contract = request.contract
+    else:
+        contract = existing.contract if kind is ProjectKind.DAY_JOB else None
     project = Project(
         id=request.id,
         name=request.name,
@@ -141,8 +176,8 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         weekly_goal=request.weekly_goal,
         goal_type=request.goal_type,
         goal_overrides=existing.goal_overrides,
-        kind=existing.kind,
-        contract=existing.contract,
+        kind=kind,
+        contract=contract,
         github_repo=request.github_repo,
         # category and autostart_repos were silently dropped here —
         # the schema accepted them but the route never forwarded them
@@ -174,6 +209,69 @@ async def update_goal_overrides(
     ]
     updated = await service.update_project(project)
     return updated.model_dump()
+
+
+@router.put("/{project_id}/contract", response_model=ProjectResponse)
+async def replace_contract(project_id: str, contract: Contract, service: ProjectServiceDep):
+    """Replace a day job's whole contract: terms, holiday region, opening
+    balance and end date, in one shape, like goal-overrides. Leaves `kind`
+    alone; on a project that is not a day job it is a 409 (NOT_A_DAY_JOB),
+    and a region the calendar does not know is a 400 (UNKNOWN_HOLIDAY_REGION)."""
+    updated = await service.replace_contract(project_id, contract)
+    return updated.model_dump()
+
+
+def _monday(day: date | None) -> date | None:
+    if day is None:
+        return None
+    if day.weekday() != 0:
+        msg = "week_of must be a Monday"
+        raise ValueError(msg)
+    if day > date.max - timedelta(days=6):
+        # Its seven days cannot even be enumerated; keep the answer a 422.
+        msg = "week_of is past the end of the calendar"
+        raise ValueError(msg)
+    return day
+
+
+# Validated as a query parameter so a Tuesday is a 422 naming `week_of` in
+# `fields`, the same envelope a bad body gets.
+WeekOfQuery = Annotated[
+    date | None,
+    Query(description="Monday of the week wanted. Defaults to the current week in `tz`."),
+    AfterValidator(_monday),
+]
+
+
+@router.get("/{project_id}/contract/week", response_model=ContractWeek)
+async def get_contract_week(
+    project_id: str,
+    service: ContractServiceDep,
+    tz: TimezoneDep,
+    week_of: WeekOfQuery = None,
+):
+    """One week of a day job against its contract — expected, worked,
+    remaining, the running balance as of today, and the seven days with
+    their holiday and absence. Worked hours are bucketed by the local day
+    each beat started on, in `tz`; a running timer counts up to now.
+    409 on a project that is not a day job (NOT_A_DAY_JOB) or has no
+    contract yet (NO_CONTRACT)."""
+    return await service.week(project_id, week_of, tz)
+
+
+@router.get("/{project_id}/holidays", response_model=list[Holiday])
+async def get_holidays(
+    project_id: str,
+    service: ContractServiceDep,
+    tz: TimezoneDep,
+    year: int | None = Query(
+        default=None, ge=1, le=9999, description="Defaults to the current year in `tz`."
+    ),
+):
+    """The contract region's public holidays for a year, for the absence
+    calendar. Empty when the contract names no region. 409 on a project
+    that is not a day job."""
+    return await service.holidays(project_id, year, tz)
 
 
 @router.get("/{project_id}/git-activity")
