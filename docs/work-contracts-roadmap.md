@@ -30,14 +30,13 @@ Phases 1–5 are on `main`, one commit each:
 | 4 — UI: form, contract, absences | `2e9d1cc` project kind, contract form, contract history, absences |
 | 5 — UI: the week | `4d319d6` the contract is the goal — week card, balance, and every reader |
 
-Phase 6 is this pass over the docs: `CLAUDE.md`, `api/CLAUDE.md`,
-`DATA.md`, `PRIVACY.md`, `README.md` and the two companion notes.
-
-A polish pass runs beside it and is not on `main` yet: an adjusted
-`contract_expected` on the per-week breakdown (`GET /api/projects/{id}/week/`),
-the Inbox suggestion, 0-hour weeks, and an E2E spec. The Phase 5 notes below
-describe `main` as of `4d319d6`; the polish pass's commit message is the
-record of what it changed in them.
+Phase 6 — the docs audit and a polish pass — is `af79f2b`: an adjusted
+`contract_expected` on the per-week breakdown (`GET /api/projects/{id}/week/`)
+so the history row, the Inbox suggestion, the pacing and stale-project cards
+quote the same figure as the week card; a 0-hour term reading as no
+expectation; and an E2E spec for the whole flow. The Phase 5 notes below
+describe `main` as of `4d319d6`; the polish notes appended to Phases 3 and 5
+record what changed after.
 
 The follow-ups at the end were re-checked against the code on 2026-09-12 and
 none has been built since. The coach one has moved a step, and says how.
