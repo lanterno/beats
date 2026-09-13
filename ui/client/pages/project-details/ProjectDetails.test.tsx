@@ -1,16 +1,13 @@
 /**
- * Smoke coverage for the project page.
- *
- * This is the one genuinely monolithic component left in the UI — ~900 lines
- * in a single function — and it had no tests, which is exactly why splitting it
- * was unsafe. These cases pin what the page promises before that happens:
- * the week table, the session list, its pagination, and the week-scoping that
- * links the two.
+ * The project page's regions per kind ("Where you stand", "Days", "Earlier
+ * weeks"; the contract and absences on a day job), the header's derived
+ * chip, and the open week riding in the URL. The panels' own behaviour is
+ * pinned beside them (Standing, WeekDays, WeekLedger tests).
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { hooks } = vi.hoisted(() => ({
@@ -18,10 +15,9 @@ const { hooks } = vi.hoisted(() => ({
 		useProject: vi.fn(),
 		useProjects: vi.fn(),
 		useSessions: vi.fn(),
-		useProjectWeeks: vi.fn(),
 		useContractWeek: vi.fn(),
-		useProjectPlannedByWeek: vi.fn(),
-		useProjectGitActivityByWeek: vi.fn(),
+		useProjectLedger: vi.fn(),
+		fetchTimerStatus: vi.fn(),
 	},
 }));
 
@@ -37,11 +33,15 @@ vi.mock("@/entities/project", async () => {
 		...actual,
 		useProject: () => hooks.useProject(),
 		useProjects: () => hooks.useProjects(),
-		useProjectWeeks: () => hooks.useProjectWeeks(),
-		useContractWeek: () => hooks.useContractWeek(),
+		useContractWeek: (id: string, weekOf?: string, options?: unknown) =>
+			hooks.useContractWeek(id, weekOf, options),
+		useProjectLedger: (id: string, weeks?: number, options?: unknown) =>
+			hooks.useProjectLedger(id, weeks, options),
 		useUpdateProject: () => idle,
 		useUpdateGoalOverrides: () => idle,
 		useUpdateContract: () => idle,
+		useArchiveProject: () => idle,
+		useUnarchiveProject: () => idle,
 		useHolidayRegions: () => ({ data: [] }),
 		useProjectHolidays: () => ({ data: [] }),
 	};
@@ -69,17 +69,26 @@ vi.mock("@/entities/session", async () => {
 });
 
 vi.mock("@/entities/planning", () => ({
-	useProjectPlannedByWeek: () => hooks.useProjectPlannedByWeek(),
+	useProjectPlannedByWeek: () => ({ byMondayIso: new Map() }),
 }));
 vi.mock("@/entities/github", () => ({
-	useProjectGitActivityByWeek: () => hooks.useProjectGitActivityByWeek(),
+	useProjectGitActivityByWeek: () => ({ byMondayIso: new Map() }),
 	// ProjectGitHubBadge (a sibling component) reaches for this one.
 	useGitHubStatus: () => ({ data: { connected: false }, isPending: false }),
 }));
+vi.mock("@/entities/intelligence", () => ({
+	useProjectHealth: () => ({ data: [] }),
+	useFocusScores: () => ({ data: [] }),
+	useDismissInboxItem: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("@/features/timer", () => ({
+	timerStatusKey: ["timer", "status"],
+	fetchTimerStatus: () => hooks.fetchTimerStatus(),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+import { addIsoDays, mondayOfIso, todayIso } from "@/shared/lib";
 import ProjectDetails from "./ProjectDetails";
-import { getMondayIsoFor } from "./weekIso";
 
 const PROJECT = {
 	id: "p1",
@@ -91,32 +100,26 @@ const PROJECT = {
 	autostartRepos: [],
 	kind: "side_project",
 	totalMinutes: 600,
+	weeklyMinutes: 0,
 	weeklyGoal: 10,
 };
 
-function session(id: string, startIso: string, minutes: number) {
-	const start = new Date(startIso);
-	return {
-		id,
-		projectId: "p1",
-		startTime: start.toISOString(),
-		endTime: new Date(start.getTime() + minutes * 60_000).toISOString(),
-		duration: minutes,
-		note: "",
-		tags: [],
-	};
+const DAY_JOB = {
+	...PROJECT,
+	kind: "day_job",
+	weeklyGoal: undefined,
+	contract: {
+		terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
+		openingBalanceHours: 0,
+	},
+};
+
+function LocationSpy() {
+	const location = useLocation();
+	return <output data-testid="location">{location.search}</output>;
 }
 
-/** `days` after an ISO date, as ISO. */
-function isoDaysAfter(iso: string, days: number): string {
-	const d = new Date(`${iso}T12:00:00`);
-	d.setDate(d.getDate() + days);
-	const mm = String(d.getMonth() + 1).padStart(2, "0");
-	const dd = String(d.getDate()).padStart(2, "0");
-	return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-function renderPage() {
+function renderPage(entry = "/") {
 	// Some children reach for the query client directly rather than through the
 	// mocked hooks, so the provider has to be real.
 	const client = new QueryClient({
@@ -124,8 +127,9 @@ function renderPage() {
 	});
 	return render(
 		<QueryClientProvider client={client}>
-			<MemoryRouter>
+			<MemoryRouter initialEntries={[entry]}>
 				<ProjectDetails />
+				<LocationSpy />
 			</MemoryRouter>
 		</QueryClientProvider>,
 	);
@@ -136,150 +140,51 @@ beforeEach(() => {
 	hooks.useProject.mockReturnValue({ data: PROJECT, isLoading: false, error: null });
 	hooks.useProjects.mockReturnValue({ data: [PROJECT] });
 	hooks.useSessions.mockReturnValue({ data: [], refetch: vi.fn() });
-	hooks.useProjectWeeks.mockReturnValue({ data: [] });
+	hooks.fetchTimerStatus.mockResolvedValue({ isBeating: false });
 	hooks.useContractWeek.mockReturnValue({ data: undefined, isLoading: false, error: null });
-	// Both hooks hand back a Map keyed by Monday ISO, not a plain object.
-	hooks.useProjectPlannedByWeek.mockReturnValue({ byMondayIso: new Map() });
-	hooks.useProjectGitActivityByWeek.mockReturnValue({ byMondayIso: new Map() });
+	hooks.useProjectLedger.mockReturnValue({
+		data: { since: null, totals: null, weeks: [] },
+		isLoading: false,
+		error: null,
+	});
 });
 
 afterEach(cleanup);
 
 describe("ProjectDetails", () => {
-	it("renders the project name", async () => {
-		renderPage();
-		expect(await screen.findAllByText("Alpha")).not.toHaveLength(0);
-	});
-
 	it("shows a loading state while the project resolves", () => {
 		hooks.useProject.mockReturnValue({ data: undefined, isLoading: true, error: null });
 		renderPage();
 		expect(screen.queryByText("the first one")).not.toBeInTheDocument();
 	});
 
-	it("renders the week history and sessions sections", async () => {
+	it("renders the identity and the three regions on a side project, without the contract surfaces", async () => {
 		renderPage();
-		expect(await screen.findByRole("region", { name: /week history/i })).toBeInTheDocument();
-		expect(screen.getByRole("heading", { name: /sessions/i })).toBeInTheDocument();
-	});
-
-	it("lists the project's sessions", async () => {
-		hooks.useSessions.mockReturnValue({
-			data: [session("s1", "2026-04-27T09:00:00Z", 60), session("s2", "2026-04-27T14:00:00Z", 30)],
-			refetch: vi.fn(),
-		});
-		renderPage();
-
-		const sessions = await screen.findByRole("region", { name: /sessions/i });
+		expect(await screen.findByRole("button", { name: "Alpha" })).toBeInTheDocument();
+		expect(screen.getByText("Side project · goal 10 h/week")).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Where you stand" })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Days" })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Earlier weeks" })).toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: /Contract/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: "Absences" })).not.toBeInTheDocument();
 		expect(
-			within(sessions).getAllByRole("button", { name: /edit|delete/i }).length,
-		).toBeGreaterThan(0);
+			screen.getByText("No sessions yet — start the timer in the sidebar."),
+		).toBeInTheDocument();
 	});
 
-	it("paginates long session lists behind a show-more control", async () => {
-		hooks.useSessions.mockReturnValue({
-			data: Array.from({ length: 30 }, (_, i) =>
-				session(`s${i}`, `2026-04-${String((i % 27) + 1).padStart(2, "0")}T09:00:00Z`, 30),
-			),
-			refetch: vi.fn(),
-		});
-		renderPage();
-
-		const more = await screen.findByRole("button", { name: /more sessions/i });
-		await userEvent.click(more);
-		// The control either reveals the rest and disappears, or offers another page.
-		expect(screen.queryByRole("button", { name: /more sessions/i })).not.toBe(more);
-	});
-
-	it("shows an empty state when the project has no sessions", async () => {
-		renderPage();
-		const sessions = await screen.findByRole("region", { name: /sessions/i });
-		expect(within(sessions).queryAllByRole("button", { name: /^edit$/i })).toHaveLength(0);
-	});
-
-	it("shows the contract surfaces on a day job, and the region nudge until a region is set", async () => {
-		hooks.useProject.mockReturnValue({
-			data: {
-				...PROJECT,
-				kind: "day_job",
-				contract: {
-					terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
-					openingBalanceHours: 0,
-				},
-			},
-			isLoading: false,
-			error: null,
-		});
-		renderPage();
-		expect(await screen.findByText(/Complete your contract/)).toBeInTheDocument();
-		expect(screen.getByRole("region", { name: /Contract history/i })).toBeInTheDocument();
-		expect(screen.getByRole("region", { name: /Absences/i })).toBeInTheDocument();
-		// A custom term owes hours, so the contract is the goal: the header
-		// offers no way to a personal goal the settings form would not show.
-		expect(screen.queryByTitle("Edit weekly goal")).not.toBeInTheDocument();
-		expect(screen.queryByText("+ Set weekly goal")).not.toBeInTheDocument();
-	});
-
-	it("keeps the contract surfaces off a side project", async () => {
-		renderPage();
-		await screen.findAllByText("Alpha");
-		expect(screen.queryByText(/Complete your contract/)).not.toBeInTheDocument();
-		expect(screen.queryByRole("region", { name: /Contract history/i })).not.toBeInTheDocument();
-		expect(screen.queryByRole("region", { name: /Absences/i })).not.toBeInTheDocument();
-		expect(screen.queryByRole("region", { name: /against the contract/i })).not.toBeInTheDocument();
-		expect(screen.getByTitle("Edit weekly goal")).toBeInTheDocument();
-		// The personal goal's week can be overridden from the table.
-		const history = screen.getByRole("region", { name: /week history/i });
-		expect(within(history).getAllByTitle(/goal override/).length).toBeGreaterThan(0);
-	});
-
-	it("reads the header from the contract week and offers no goal override on a week the contract governs", async () => {
-		hooks.useProject.mockReturnValue({
-			data: {
-				...PROJECT,
-				kind: "day_job",
-				// The API clears the personal goal on such a project; the contract is the goal.
-				weeklyGoal: undefined,
-				contract: {
-					terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
-					holidayCountry: "CH",
-					openingBalanceHours: 0,
-				},
-			},
-			isLoading: false,
-			error: null,
-		});
-		// The week route reports the term's nominal hours as the effective goal,
-		// for the current week and for a past one the same term governed.
-		hooks.useProjectWeeks.mockReturnValue({
-			data: [
-				{
-					weeksAgo: 0,
-					hours: 0,
-					dailyDurations: {},
-					effectiveGoal: 32,
-					effectiveGoalType: "target",
-					effectiveGoalOverridden: false,
-				},
-				{
-					weeksAgo: 1,
-					weekStart: "2026-08-31",
-					hours: 8,
-					dailyDurations: {},
-					effectiveGoal: 32,
-					effectiveGoalType: "target",
-					effectiveGoalOverridden: false,
-				},
-			],
-		});
-		// The contract week reports the expectation adjusted for a holiday.
+	it("shows the contract surfaces on a day job, and the region caveat until a region is set", async () => {
+		hooks.useProject.mockReturnValue({ data: DAY_JOB, isLoading: false, error: null });
 		hooks.useContractWeek.mockReturnValue({
 			data: {
-				weekOf: "2026-09-07",
+				weekOf: mondayOfIso(todayIso()),
 				expected: 25.6,
 				worked: 12,
 				remaining: 13.6,
 				balance: 3,
+				balanceAsOf: todayIso(),
+				balanceOpening: 0,
+				balanceWorked: 100,
+				balanceExpectedThrough: 97,
 				days: [],
 			},
 			isLoading: false,
@@ -287,118 +192,63 @@ describe("ProjectDetails", () => {
 		});
 		renderPage();
 
-		expect(await screen.findByTitle("This week against the contract")).toHaveTextContent(
-			"12.0/25.6h",
-		);
-		expect(screen.getByRole("region", { name: /against the contract/i })).toBeInTheDocument();
-
-		const history = screen.getByRole("region", { name: /week history/i });
-		expect(within(history).getByText("—/32h").closest("button")).toBeNull();
-		expect(within(history).getByText("8.0/32h").closest("button")).toBeNull();
-		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
+		expect(await screen.findByText("Day job · 32 h/week")).toBeInTheDocument();
+		const standing = screen.getByRole("region", { name: "Where you stand" });
+		expect(within(standing).getByText("+3.0 h")).toBeInTheDocument();
+		expect(within(standing).getByText("Expected").nextElementSibling).toHaveTextContent("25.6 h");
+		expect(standing).toHaveTextContent("Public holidays are not deducted");
+		expect(screen.getByRole("region", { name: /Contract history/ })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Absences" })).toBeInTheDocument();
 	});
 
-	it("shows a governed week's expectation after holidays and absences in the history row", async () => {
-		hooks.useProject.mockReturnValue({
-			data: {
-				...PROJECT,
-				kind: "day_job",
-				weeklyGoal: undefined,
-				contract: {
-					terms: [{ effectiveFrom: "2026-01-05", scheduleType: "custom", weeklyHours: 32 }],
-					holidayCountry: "CH",
-					openingBalanceHours: 0,
-				},
-			},
-			isLoading: false,
-			error: null,
-		});
-		// The /week/ route reports the term's nominal 32 as the goal and, beside
-		// it, what the week expects once a day of vacation (this week) and a
-		// holiday (last week) are off. The row must show the latter: it is the
-		// figure the week card above it shows.
-		hooks.useProjectWeeks.mockReturnValue({
-			data: [
-				{
-					weeksAgo: 0,
-					hours: 0,
-					dailyDurations: {},
-					effectiveGoal: 32,
-					effectiveGoalType: "target",
-					effectiveGoalOverridden: false,
-					contractExpected: 25.6,
-				},
-				{
-					weeksAgo: 1,
-					weekStart: "2026-08-31",
-					hours: 8,
-					dailyDurations: {},
-					effectiveGoal: 32,
-					effectiveGoalType: "target",
-					effectiveGoalOverridden: false,
-					contractExpected: 24,
-				},
-			],
-		});
+	it("puts the open week in the URL from ‹ › and drops it on Today", async () => {
 		renderPage();
+		await screen.findByRole("region", { name: "Days" });
+		expect(screen.getByTestId("location")).toHaveTextContent("");
 
-		const history = await screen.findByRole("region", { name: /week history/i });
-		expect(within(history).getByText("—/25.6h")).toHaveAttribute(
-			"title",
-			expect.stringMatching(/after holidays and absences/),
-		);
-		expect(within(history).getByText("8.0/24h")).toBeInTheDocument();
-		expect(within(history).getByText("-16.0h")).toBeInTheDocument();
-		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: "Previous week" }));
+		const lastMonday = mondayOfIso(todayIso());
+		const d = new Date(`${lastMonday}T12:00:00`);
+		d.setDate(d.getDate() - 7);
+		const previous = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+		expect(screen.getByTestId("location")).toHaveTextContent(`?week=${previous}`);
+		expect(hooks.useContractWeek).toHaveBeenCalledWith("p1", previous, expect.anything());
+
+		await userEvent.click(screen.getByRole("button", { name: "Today" }));
+		expect(screen.getByTestId("location")).toHaveTextContent("");
 	});
 
-	it("shows the week a contract starts mid-week as the contract's, with no override to offer", async () => {
-		// The first term takes effect on this week's Wednesday. The API resolves
-		// the week's goal on the personal path — its Monday is before the term —
-		// and there is none; beside it, `contract_expected` is what the three
-		// days expect, which is the week card's figure. The row follows the
-		// card: contract-set, and no override to offer.
-		const monday = getMondayIsoFor(0);
-		hooks.useProject.mockReturnValue({
-			data: {
-				...PROJECT,
-				kind: "day_job",
-				weeklyGoal: undefined,
-				contract: {
-					terms: [
-						{ effectiveFrom: isoDaysAfter(monday, 2), scheduleType: "custom", weeklyHours: 32 },
-					],
-					holidayCountry: "CH",
-					openingBalanceHours: 0,
-				},
-			},
-			isLoading: false,
-			error: null,
-		});
-		hooks.useProjectWeeks.mockReturnValue({
-			data: [
-				{
-					weeksAgo: 0,
-					weekStart: monday,
-					hours: 0,
-					dailyDurations: {},
-					effectiveGoal: null,
-					effectiveGoalOverridden: false,
-					contractExpected: 19.2,
-				},
-			],
-		});
-		hooks.useContractWeek.mockReturnValue({
-			data: { weekOf: monday, expected: 19.2, worked: 0, remaining: 19.2, balance: 0, days: [] },
-			isLoading: false,
-			error: null,
+	it("opens the week of any day named in ?week=, and this week for a malformed one", async () => {
+		const twoWeeksBack = addIsoDays(mondayOfIso(todayIso()), -14);
+		renderPage(`/?week=${addIsoDays(twoWeeksBack, 3)}`);
+		await screen.findByRole("region", { name: "Days" });
+		expect(hooks.useContractWeek).toHaveBeenCalledWith("p1", twoWeeksBack, expect.anything());
+		expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
+		cleanup();
+
+		renderPage("/?week=garbage");
+		await screen.findByRole("region", { name: "Days" });
+		expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
+	});
+
+	it("polls the current week and the ledger only while a beat runs on this project", async () => {
+		renderPage();
+		await screen.findByRole("region", { name: "Days" });
+		expect(hooks.useProjectLedger).toHaveBeenLastCalledWith("p1", 8, { refetchInterval: false });
+		cleanup();
+
+		hooks.fetchTimerStatus.mockResolvedValue({
+			isBeating: true,
+			since: new Date().toISOString(),
+			project: { id: "p1" },
 		});
 		renderPage();
-
-		const history = await screen.findByRole("region", { name: /week history/i });
-		const goal = within(history).getByText("—/19.2h");
-		expect(goal).toHaveAttribute("title", expect.stringMatching(/after holidays and absences/));
-		expect(goal.closest("button")).toBeNull();
-		expect(within(history).queryByTitle(/goal override/)).not.toBeInTheDocument();
+		await waitFor(() =>
+			expect(hooks.useProjectLedger).toHaveBeenLastCalledWith("p1", 8, { refetchInterval: 60_000 }),
+		);
+		expect(hooks.useContractWeek).toHaveBeenCalledWith("p1", mondayOfIso(todayIso()), {
+			enabled: false,
+			refetchInterval: 60_000,
+		});
 	});
 });

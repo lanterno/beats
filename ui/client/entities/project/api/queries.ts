@@ -4,16 +4,16 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/api";
-import type { ContractWeek, ProjectWithDuration, WeekHours } from "../model";
+import type { ContractWeek, Ledger, ProjectWithDuration } from "../model";
 import { toProject } from "../model";
 import {
 	archiveProject,
 	createProject,
 	fetchContractWeek,
 	fetchHolidayRegions,
+	fetchLedger,
 	fetchProjectHolidays,
 	fetchProjects,
-	fetchProjectWeek,
 	unarchiveProject,
 	updateContract,
 	updateGoalOverrides,
@@ -26,8 +26,8 @@ export const projectKeys = {
 	archivedList: () => [...projectKeys.all, "list", "archived"] as const,
 	detail: (id: string) => [...projectKeys.all, "detail", id] as const,
 	total: (id: string) => [...projectKeys.all, "total", id] as const,
-	week: (id: string, weeksAgo: number) => [...projectKeys.all, "week", id, weeksAgo] as const,
-	weeks: (id: string) => [...projectKeys.all, "weeks", id] as const,
+	/** Every ledger read of one project, whatever its length — what a write invalidates. */
+	ledger: (id: string) => [...projectKeys.all, "ledger", id] as const,
 	holidays: (id: string, year: number) => [...projectKeys.all, "holidays", id, year] as const,
 	/** Every week of one project against its contract — what an absence write invalidates. */
 	contractWeeks: (id: string) => [...projectKeys.all, "contract-week", id] as const,
@@ -66,9 +66,8 @@ function toProjectWithDuration(item: ApiProjectListItem): ProjectWithDuration {
  * Hook to fetch all projects augmented with totals + this-week + last-tracked.
  *
  * P3.0 of the project-management revamp: this used to fan out 2 extra requests
- * per project (fetchProjectTotal + fetchProjectWeek), so a user with 30
- * projects paid for 61 round-trips on a cold load. The augmented list
- * endpoint collapses that to one.
+ * per project (the total and the week), so a user with 30 projects paid for 61
+ * round-trips on a cold load. The augmented list endpoint collapses that to one.
  */
 export function useProjects() {
 	return useQuery({
@@ -128,54 +127,6 @@ export function useProject(projectId: string | undefined) {
 			return item ? toProjectWithDuration(item) : null;
 		},
 		enabled: !!projectId,
-	});
-}
-
-/**
- * Hook to fetch project weekly hours for a given number of weeks
- */
-export function useProjectWeeks(projectId: string | undefined, weekCount: number = 5) {
-	return useQuery({
-		queryKey: [...projectKeys.weeks(projectId || ""), weekCount],
-		queryFn: async (): Promise<WeekHours[]> => {
-			if (!projectId) return [];
-
-			const weeks = Array.from({ length: weekCount }, (_, i) => i);
-			const results = await Promise.allSettled(
-				weeks.map(async (weeksAgo) => {
-					const {
-						totalHours,
-						dailyDurations,
-						weekStart,
-						effectiveGoal,
-						effectiveGoalType,
-						effectiveGoalOverridden,
-						contractExpected,
-					} = await fetchProjectWeek(projectId, weeksAgo);
-					return {
-						weeksAgo,
-						hours: totalHours,
-						dailyDurations,
-						weekStart,
-						effectiveGoal,
-						effectiveGoalType,
-						effectiveGoalOverridden,
-						contractExpected,
-					};
-				}),
-			);
-
-			const weekHours: WeekHours[] = [];
-			results.forEach((result) => {
-				if (result.status === "fulfilled") {
-					weekHours.push(result.value);
-				}
-			});
-
-			return weekHours.sort((a, b) => a.weeksAgo - b.weeksAgo);
-		},
-		enabled: !!projectId,
-		staleTime: 60_000, // Weekly data doesn't change often
 	});
 }
 
@@ -281,14 +232,40 @@ export function useUpdateContract() {
 export function useContractWeek(
 	projectId: string | undefined,
 	weekOf?: string,
-	options: { enabled?: boolean } = {},
+	options: { enabled?: boolean; refetchInterval?: number | false } = {},
 ) {
 	return useQuery({
 		queryKey: projectKeys.contractWeek(projectId || "", weekOf),
 		queryFn: (): Promise<ContractWeek> => fetchContractWeek(projectId as string, weekOf),
 		enabled: !!projectId && (options.enabled ?? true),
-		// A running timer moves `worked`; fresh for as long as the list is.
+		// A running timer moves `worked`; fresh for as long as the list is. A
+		// timer start writes nothing a week read returns, so the page that shows
+		// a running beat passes `refetchInterval` to keep the figures moving.
 		staleTime: 30_000,
+		refetchInterval: options.refetchInterval ?? false,
+	});
+}
+
+/**
+ * The project's last `weeks` weeks, newest first, the current week included —
+ * the project page's one read for every week figure. Any kind of project.
+ * Invalidated by every project write (`projectKeys.all`), by absence writes
+ * through `projectKeys.ledger`, and by timer and session writes, since
+ * `worked` moves with them.
+ */
+export function useProjectLedger(
+	projectId: string | undefined,
+	weeks = 8,
+	options: { refetchInterval?: number | false } = {},
+) {
+	return useQuery({
+		queryKey: [...projectKeys.ledger(projectId || ""), weeks] as const,
+		queryFn: (): Promise<Ledger> => fetchLedger(projectId as string, weeks),
+		enabled: !!projectId,
+		// A running timer moves the current week's `worked` and today's balance;
+		// the page polls with `refetchInterval` while one runs.
+		staleTime: 30_000,
+		refetchInterval: options.refetchInterval ?? false,
 	});
 }
 

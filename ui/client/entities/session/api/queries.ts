@@ -11,11 +11,13 @@ import {
 	getCurrentWeekRange,
 	getDayName,
 	getWeekRange,
+	parseIsoDate,
 	parseUtcIso,
 	startOfDay,
+	toIsoDate,
 } from "@/shared/lib";
 import type { DayProjectBreakdown, DaySummary, Session } from "../model";
-import { toApiBeat, toSession } from "../model";
+import { groupSessionsByLocalDay, toApiBeat, toSession } from "../model";
 import {
 	deleteBeat,
 	fetchAllTags,
@@ -130,37 +132,17 @@ export function useAllCurrentWeekSessions() {
 	});
 }
 
-export function calculateDailySummary(sessions: Session[]): DaySummary[] {
-	const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
-
-	// Filter sessions to current week
-	const weeklySessions = sessions.filter((session) => {
-		const sessionDate = parseUtcIso(session.startTime);
-		return sessionDate >= weekStart && sessionDate <= weekEnd;
-	});
-
-	// Create summary for each day
-	return Array.from({ length: 7 }, (_, i) => {
-		const dayDate = new Date(weekStart);
-		dayDate.setDate(weekStart.getDate() + i);
-		dayDate.setHours(0, 0, 0, 0);
-
-		const dayEnd = new Date(dayDate);
-		dayEnd.setHours(23, 59, 59, 999);
-
-		const daySessions = weeklySessions.filter((session) => {
-			const sessionDate = parseUtcIso(session.startTime);
-			return sessionDate >= dayDate && sessionDate <= dayEnd;
-		});
-
-		const dayTotalMinutes = daySessions.reduce((sum, session) => sum + session.duration, 0);
-
+/** The current week's sessions by local day — `groupSessionsByLocalDay` for the sidebar's shape. */
+function calculateDailySummary(sessions: Session[]): DaySummary[] {
+	const { start: weekStart } = getCurrentWeekRange();
+	return groupSessionsByLocalDay(sessions, toIsoDate(weekStart)).map((day) => {
+		const date = startOfDay(parseIsoDate(day.date) ?? weekStart);
 		return {
-			date: dayDate,
-			dayName: getDayName(dayDate, "long"),
-			dateShort: formatDateShort(dayDate),
-			totalMinutes: dayTotalMinutes,
-			sessionCount: daySessions.length,
+			date,
+			dayName: getDayName(date, "long"),
+			dateShort: formatDateShort(date),
+			totalMinutes: day.totalMinutes,
+			sessionCount: day.sessionCount,
 		};
 	});
 }

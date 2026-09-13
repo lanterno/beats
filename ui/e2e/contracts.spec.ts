@@ -2,7 +2,7 @@ import { expect, type Locator, test } from "@playwright/test";
 
 /**
  * A day job against its contract, end to end: create one through the form,
- * read the week card, book a day of vacation in the absence calendar and
+ * read the standing, book a day of vacation in the absence calendar and
  * watch the expectation drop by one day's hours, then take the day back.
  *
  * Every run creates its own project — the name carries the clock — so what
@@ -91,7 +91,7 @@ test.describe("Work contracts", () => {
 		await form.getByRole("radio", { name: /Part time/ }).check();
 		await form.getByLabel("Full-time week (hours)").fill(String(FULL_TIME_HOURS));
 		await form.getByLabel("Percentage", { exact: true }).fill(String(PERCENT));
-		// From this week's Monday, so the week on the card is under the term.
+		// From this week's Monday, so the week in the standing is under the term.
 		await form.getByLabel("Effective from", { exact: true }).fill(isoDate(monday));
 		await form.getByLabel("Holiday region").selectOption("CH");
 		await form.getByLabel(/Region within/).selectOption("ZH");
@@ -101,13 +101,13 @@ test.describe("Work contracts", () => {
 		await expect(page).toHaveURL(/\/project\//);
 		await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
 
-		const card = page.getByRole("region", { name: "Week against the contract" });
-		const expected = card
+		const standing = page.getByRole("region", { name: "Where you stand" });
+		const expected = standing
 			.getByText("Expected", { exact: true })
 			.locator("..")
 			.getByRole("definition");
 		await expect(expected).toHaveText(/^\d+\.\d h$/);
-		await expect(card.getByText(/Balance as of today/)).toBeVisible();
+		await expect(standing.getByText(/^as of /)).toBeVisible();
 		const before = hoursIn(await expected.innerText());
 
 		// A day of vacation costs the week one day's hours.

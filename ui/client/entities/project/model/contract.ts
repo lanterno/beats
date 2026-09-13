@@ -111,7 +111,8 @@ export function fromPercent(percent: number): number {
 	return Math.round(percent * 100) / 10000;
 }
 
-function formatHours(hours: number): string {
+/** "42 h", "33.6 h" — a term's figure, at whatever precision it has. */
+export function formatHours(hours: number): string {
 	return `${Math.round(hours * 100) / 100} h`;
 }
 

@@ -16,16 +16,16 @@ import {
 	ContractWeekSchema,
 	get,
 	HolidayListSchema,
+	LedgerSchema,
 	ProjectTotalSchema,
 	parseApiResponse,
 	post,
 	put,
 	RegionListSchema,
-	WeekBreakdownSchema,
 } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
-import type { ContractWeek, Holiday, HolidayRegion } from "../model";
-import { toContractWeek } from "../model";
+import type { ContractWeek, Holiday, HolidayRegion, Ledger } from "../model";
+import { toContractWeek, toLedger } from "../model";
 
 /**
  * Per-project aggregations the backend can fold into the list response when
@@ -98,57 +98,6 @@ export async function unarchiveProject(projectId: string): Promise<void> {
 	await post<{ status: string }>(`/api/projects/${projectId}/unarchive`, {});
 }
 
-export interface WeekBreakdownResult {
-	totalHours: number;
-	dailyDurations: Record<string, string>;
-	/** Canonical Monday (ISO date) for this week, resolved server-side. */
-	weekStart: string | undefined;
-	/** number = goal applies; null = override says "no goal"; undefined = unknown */
-	effectiveGoal: number | null | undefined;
-	effectiveGoalType?: "target" | "cap";
-	/** True iff a goal override resolves for this week (regardless of value) */
-	effectiveGoalOverridden: boolean;
-	/**
-	 * What the contract expects of this week after holidays and absences, on a
-	 * day job it governs — the week card's figure; undefined elsewhere.
-	 */
-	contractExpected: number | undefined;
-}
-
-export async function fetchProjectWeek(
-	projectId: string,
-	weeksAgo: number,
-): Promise<WeekBreakdownResult> {
-	const data = await get<unknown>(`/api/projects/${projectId}/week/?weeks_ago=${weeksAgo}`);
-	const parsed = parseApiResponse(WeekBreakdownSchema, data);
-
-	const WEEKDAY_KEYS = [
-		"Monday",
-		"Tuesday",
-		"Wednesday",
-		"Thursday",
-		"Friday",
-		"Saturday",
-		"Sunday",
-	] as const;
-	const dailyDurations = Object.fromEntries(
-		WEEKDAY_KEYS.map((d) => [d, parsed[d] || "0:00:00"]),
-	) as Record<string, string>;
-
-	return {
-		totalHours: parsed.total_hours,
-		dailyDurations,
-		weekStart: parsed.week_start,
-		// Preserve null vs undefined: null = override sets "no goal" for this
-		// week; undefined = field absent (older API). Without this, a "no goal"
-		// override would silently fall back to project.weeklyGoal in the UI.
-		effectiveGoal: parsed.effective_goal === undefined ? undefined : parsed.effective_goal,
-		effectiveGoalType: parsed.effective_goal_type ?? undefined,
-		effectiveGoalOverridden: parsed.effective_goal_overridden,
-		contractExpected: parsed.contract_expected ?? undefined,
-	};
-}
-
 /**
  * Wholesale replace of a project. `kind` and `contract` are the two fields
  * the API reads by presence: leave either out and the stored value stays;
@@ -198,6 +147,19 @@ export async function fetchContractWeek(projectId: string, weekOf?: string): Pro
 	if (weekOf) params.set("week_of", weekOf);
 	const data = await get<unknown>(`/api/projects/${projectId}/contract/week?${params.toString()}`);
 	return toContractWeek(parseApiResponse(ContractWeekSchema, data));
+}
+
+/**
+ * The last `weeks` weeks of any project, newest first and ending with the
+ * current week in the browser's timezone, with the balance at each week's
+ * close on a day job and the balance as of today — every week figure on the
+ * project page (docs/project-page-roadmap.md, Decision 11). `weeks` is 1–104;
+ * 404 on a project that is not the caller's.
+ */
+export async function fetchLedger(projectId: string, weeks: number): Promise<Ledger> {
+	const params = new URLSearchParams({ weeks: String(weeks), tz: browserTimeZone() });
+	const data = await get<unknown>(`/api/projects/${projectId}/ledger?${params.toString()}`);
+	return toLedger(parseApiResponse(LedgerSchema, data));
 }
 
 /** The contract region's public holidays for a year; empty without a region. */

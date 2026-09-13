@@ -90,10 +90,62 @@ export const ContractWeekSchema = z.object({
 	worked: z.number(),
 	remaining: z.number().nullable(),
 	balance: z.number().nullable(),
+	// The proof of `balance`: opening + worked − expected_through, as of
+	// `balance_as_of`. Null exactly when `balance` is.
+	balance_as_of: z.string().nullable(), // YYYY-MM-DD
+	balance_opening: z.number().nullable(),
+	balance_worked: z.number().nullable(),
+	balance_expected_through: z.number().nullable(),
 	days: z.array(ContractDaySchema),
 });
 
 export type ApiContractWeek = z.infer<typeof ContractWeekSchema>;
+
+// The ledger (GET /ledger, docs/project-page-roadmap.md): the last N weeks of
+// any project, newest first, the current week included. These mirror the
+// API's `Ledger`, `LedgerWeek`, `LedgerNote` and `LedgerTotals` models; what
+// each figure means and when it is null is documented on the domain type.
+
+export const LedgerNoteKindSchema = z.enum(["vacation", "sick", "other", "holiday"]);
+
+export const LedgerNoteSchema = z.object({
+	date: z.string(), // YYYY-MM-DD, a weekday
+	kind: LedgerNoteKindSchema,
+	half_day: z.boolean().nullable().optional(), // on an absence
+	name: z.string().nullable().optional(), // on a holiday
+});
+
+export type ApiLedgerNote = z.infer<typeof LedgerNoteSchema>;
+
+export const LedgerWeekSchema = z.object({
+	week_of: z.string(), // the Monday, YYYY-MM-DD
+	worked: z.number(),
+	days: z.array(z.number()).length(7), // Mon..Sun
+	effective_goal: z.number().nullable(),
+	effective_goal_type: z.enum(["target", "cap"]),
+	effective_goal_overridden: z.boolean(),
+	contract_expected: z.number().nullable(),
+	balance_end: z.number().nullable(),
+	notes: z.array(LedgerNoteSchema),
+});
+
+export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
+
+export const LedgerTotalsSchema = z.object({
+	expected: z.number(),
+	worked: z.number(),
+	balance: z.number(),
+});
+
+export type ApiLedgerTotals = z.infer<typeof LedgerTotalsSchema>;
+
+export const LedgerSchema = z.object({
+	since: z.string().nullable(), // contract.starts_on, YYYY-MM-DD
+	totals: LedgerTotalsSchema.nullable(),
+	weeks: z.array(LedgerWeekSchema),
+});
+
+export type ApiLedger = z.infer<typeof LedgerSchema>;
 
 export const HolidaySchema = z.object({
 	date: z.string(), // YYYY-MM-DD
@@ -140,7 +192,7 @@ export type ApiProject = z.infer<typeof ApiProjectSchema>;
  * The list-endpoint item — same fields as ApiProject plus optional
  * aggregation slots populated when GET /api/projects/?include=... is sent.
  * P3.0 of the project-management revamp: collapses the previous N+1 fan-out
- * (one fetchProjectTotal + fetchProjectWeek per project) into one round-trip.
+ * (a total and a week read per project) into one round-trip.
  */
 export const ApiProjectListItemSchema = ApiProjectSchema.extend({
 	total_minutes: z.number().nullable().optional(),
@@ -179,26 +231,6 @@ export const TimerStatusSchema = z.object({
 });
 
 export type TimerStatus = z.infer<typeof TimerStatusSchema>;
-
-export const WeekBreakdownSchema = z.object({
-	Monday: z.string().optional().default("0:00:00"),
-	Tuesday: z.string().optional().default("0:00:00"),
-	Wednesday: z.string().optional().default("0:00:00"),
-	Thursday: z.string().optional().default("0:00:00"),
-	Friday: z.string().optional().default("0:00:00"),
-	Saturday: z.string().optional().default("0:00:00"),
-	Sunday: z.string().optional().default("0:00:00"),
-	total_hours: z.number().default(0),
-	week_start: z.string().optional(),
-	effective_goal: z.number().nullable().optional(),
-	effective_goal_type: z.enum(["target", "cap"]).nullable().optional(),
-	effective_goal_overridden: z.boolean().optional().default(false),
-	// On a day job the contract governs: what the week expects after holidays
-	// and absences — the week card's figure. Null elsewhere.
-	contract_expected: z.number().nullable().optional(),
-});
-
-export type WeekBreakdown = z.infer<typeof WeekBreakdownSchema>;
 
 export const ProjectTotalSchema = z.object({
 	total_minutes: z.number().optional(),

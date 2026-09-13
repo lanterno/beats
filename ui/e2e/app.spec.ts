@@ -31,7 +31,7 @@ test.describe("Beats App", () => {
 		const projectLink = page.locator('a[href^="/project/"]').first();
 		if (await projectLink.isVisible()) {
 			await projectLink.click();
-			await expect(page.locator("text=This Week")).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByRole("region", { name: "Days" })).toBeVisible({ timeout: 10_000 });
 		}
 	});
 });

@@ -99,6 +99,25 @@ export function parseIsoDate(yyyyMmDd: string | null | undefined): Date | null {
 }
 
 /**
+ * A 'YYYY-MM-DD' moved by whole days — the day after a Sunday is the next
+ * Monday whatever the clock did in between. Noon-anchored via parseIsoDate,
+ * so a DST change on the way cannot land the result on the wrong day.
+ */
+export function addIsoDays(yyyyMmDd: string, days: number): string {
+	const d = parseIsoDate(yyyyMmDd);
+	if (!d) return yyyyMmDd;
+	d.setDate(d.getDate() + days);
+	return toIsoDate(d);
+}
+
+/** The Monday of the ISO week a 'YYYY-MM-DD' falls in, as 'YYYY-MM-DD'. */
+export function mondayOfIso(yyyyMmDd: string): string {
+	const d = parseIsoDate(yyyyMmDd);
+	if (!d) return yyyyMmDd;
+	return addIsoDays(yyyyMmDd, -((d.getDay() + 6) % 7));
+}
+
+/**
  * Format a time for display in the user's local timezone (e.g., "02:30 PM")
  */
 export function formatTime(dateString: string): string {

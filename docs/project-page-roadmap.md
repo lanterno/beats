@@ -29,8 +29,8 @@ checked in beside this file; the artifact link is a convenience.
 | Phase | Commit |
 |---|---|
 | 1 — API: the ledger route and the balance proof | `59bb011` the week ledger route and the balance proof |
-| 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | feat(ui): the afternoon and the dusk |
-| 3a — Project page: the standing, the days, the ledger | — |
+| 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | `cf090e1` the afternoon and the dusk |
+| 3a — Project page: the standing, the days, the ledger | feat(ui): the standing, the days and the ledger |
 | 3b — Project page: the register, time off, the drawer | — |
 | 4 — Every other page on the new theme | — |
 | 5 — The marketing page, docs, gates | — |
@@ -477,6 +477,235 @@ HTTP contract, bugs that happened. Not class names.
 - E2E: `contracts.spec.ts` asserts the new regions ("Where you stand",
   "Days", "Earlier weeks"); `projects.spec.ts` / `app.spec.ts` lose the
   stale "This Week" text.
+
+**Notes** — what the entity half settled that the text above left open:
+
+- **The ledger's nulls stay null on the model.** `LedgerWeek.effectiveGoal`,
+  `contractExpected`, `balanceEnd`, `Ledger.since` and `totals` are `null`,
+  unlike `ContractWeek`, whose wire nulls become undefined: on the ledger
+  each null is a figure in its own right ("no goal", "no expectation", "no
+  close") and the rules in `model/ledger.ts` test for it by name.
+- **The four proof fields are required-nullable in `ContractWeekSchema`**,
+  as `balance` is (Phase 1's review); on the model they are `balanceAsOf?`,
+  `balanceOpening?`, `balanceWorked?`, `balanceExpectedThrough?`, undefined
+  exactly when `balance` is.
+- **`useProjectLedger(projectId, weeks = 8)`** is keyed
+  `[...projectKeys.ledger(id), weeks]`, fresh for 30 s, enabled with an id.
+  The absence hook invalidates `projectKeys.ledger(id)` beside
+  `contractWeeks`; every other write already goes through `projectKeys.all`.
+  `QuickLog` invalidates only `sessionKeys.all` after posting a beat — a gap
+  the week card had before and the ledger inherits, left as it was.
+- **`useProjectWeeks`, `fetchProjectWeek`, `WeekHours` and
+  `WeekBreakdownSchema` are still in the tree**: `ProjectDetails.tsx` reads
+  them and `ProjectDetails.test.tsx` mocks them with rows it asserts on, so
+  deleting them before the page is rewritten would have broken either `tsc`
+  or three page tests. They go with the page: `projectApi.ts`
+  (`WeekBreakdownResult`, `fetchProjectWeek`), `queries.ts` (`useProjectWeeks`,
+  `projectKeys.week`, `projectKeys.weeks`), `model/types.ts` (`WeekHours`,
+  `DailySummary` — also dead), the three project barrels,
+  `shared/api/schemas.ts` (`WeekBreakdownSchema`, `WeekBreakdown`) and its
+  barrel, the `fetchProjectWeek` mock in `queries.test.tsx`, and the
+  `projectKeys.weeks` line in the absence hook.
+- **A term's rule row sits under the week its date falls in** — newest
+  first: the week, then the rule, then the older weeks — as the mockup lays
+  it out, so reading down everything above the rule is under the new terms.
+  The closing rule sits above the week the contract ended in. A rule dated
+  in the current week or later sits at the top of the list, `planned` when
+  after today (the ghost). A rule older than the oldest week shown is not
+  shown; the page's "26 more back to the opening balance" covers it.
+- **The opening rule is the first term's**: "Contract starts Mon Jan 5,
+  2026 · Part time 60% of 42 h = 25.2 h/wk" over "brought forward +2.0 h"
+  ("nothing brought forward" at 0). A later term reads "From Wed Aug 5,
+  2026 · …" — the weekday is always named, so a mid-week date says which —
+  over "was 60% · 25.2 h · “the note”". The closing rule: "Ended Wed Aug 26,
+  2026 · final balance +5.7 h" (`totals.balance`, else that week's close);
+  "Ends … · planned" while still to come.
+- **The +/− cell** (`LedgerWeekRow.delta`) is the move between two closes
+  when the row and the one before both have one — Phase 1's note on the
+  week a contract starts or ends mid-week; else worked − expected; else
+  worked − goal (a side project); null with none. Rounded to 0.01.
+- **A quiet run breaks at a rule row.** "n weeks away · Jul 6 – 26 ·
+  vacation" needs at least one note and every note a vacation; anything
+  else is "n quiet weeks". A side project's empty weeks fold too (its
+  expectation is null).
+- **`ledgerCsv`** writes the week as its Monday's ISO date, a side project's
+  goal in the expected column, a blank for every null, and a rule or quiet
+  row as one escaped cell followed by four empty ones.
+- **`isFirstWeek` is false before the contract starts** — that is the
+  "Contract starts …" state — and true from `starts_on` for seven days.
+- **`projection` is null when today is not in the week**: the balance is
+  pinned to today, so only the current week projects; the page passes the
+  current week's `/contract/week` whatever week is open. Its two figures are
+  rounded to 0.01 like the API's and formatted with `formatSignedHours`, so
+  the sign is the balance's.
+- **`nominalLine` names a holiday by name and an absence by type**
+  ("Fri vacation 6.7 h", "Tue sick 3.4 h", "Fri Swiss National Day 6.7 h"),
+  weekdays only, and deducts what the day's expectation actually lost
+  (`termHoursPerDay − day.expected`), so a half day and a holiday under an
+  absence both come out right. Null when the difference has no day to name
+  (a mid-week term change or start): the rule row says so there.
+- **The sentence's branches, filled in**: "Nothing due today (…)" also leads
+  the N-days sentence when today expects nothing and two or more days
+  remain; three or more consecutive days read as a range ("Wed – Fri"), two
+  as "Thu and Fri"; under an hour a day is "about 50 min a day" to the five
+  minutes; the "then Mon 6.7 h" tail is the following week's first day with
+  an expectation, "Then Mon 6.7 h." on its own when no day is off. The
+  mockup's first-week overload line ("more than two days can hold …") is not
+  a branch: the figures show and the N-days sentence says what they say.
+- **A cap has no sentence.** The personal-goal path serves a day job under
+  an objective term or before its first term as well as the other kinds,
+  over the calendar days left. `weekSentence` takes a `StandingWeek`
+  (`weekOf`, `worked`, optional `expected`, `remaining`, `days`): a
+  `ContractWeek` on a day job, `{weekOf, worked}` off the ledger elsewhere.
+- **`groupSessionsByLocalDay(sessions, mondayIso)`** lives in
+  `entities/session/model`; `calculateDailySummary` is a wrapper over it for
+  the sidebar. There is no `useRunningBeat()`: an entity cannot import the
+  timer feature, so `timerStatusKey` and `fetchTimerStatus` are exported
+  from `features/timer` for the page to subscribe with the timer's own key.
+- **`addIsoDays` and `mondayOfIso`** joined `shared/lib/date.ts`;
+  `getISOWeek` is now on its barrel.
+
+**Notes** — what the page half settled that the text above left open:
+
+- **The regions are named as the roadmap names them**: `Panel` with
+  `role="region"` and `aria-label` "Where you stand", "Days", "Earlier
+  weeks"; the rail keeps "Contract history" and "Absences" until 3b. The
+  tests and the E2E specs find the page by those names, never by class.
+- **The layout queries the content column, not the viewport**, as the
+  mockup's `@container content` does: `@container/content` on the column
+  under the header, the standing's two halves from 640 px, the day row's
+  narrow grid under 560, the ledger's two-line grid under 640, the rail
+  beside the main column from 860. Tailwind v4's named container variants
+  (`@min-[640px]/content:`, `@max-[640px]/content:`) compile them — written
+  out in full in the source, because Tailwind reads class names off the file
+  text and a `${PHONE}:` template left the whole phone ledger uncompiled
+  (found on the first 400 px screenshot).
+- **The tints are tokens** (`--tint-vacation`, `-sick`, `-holiday`, `-other`,
+  each with an `-ink`, mapped as `--color-tint-*`): the mockup's sky,
+  blossom, leaf and neutral on both hours, used by the day rows, the ledger's
+  day cells and the legend. Phase 2 had not needed them.
+- **A day's figure is the API's, in this order**: `/contract/week`'s day on a
+  day job with a contract, else the ledger's `days[i]`, else the sessions'
+  sum plus the running beat. The sessions under it are grouped by the same
+  local-start rule, so they add up to it; the live row's duration ticks
+  every 30 s on the client while the figure beside it moves with the query
+  (it can lag the live row by up to a refetch, never disagree with the
+  standing). The delta ("+0.4") shows on days before today only.
+- **Today keeps its own row on the weekend.** Saturday and Sunday fold into
+  "Sat–Sun" only when both are empty and neither is today: the folded row
+  cannot be open by default, and a "today" chip wrapping inside it was the
+  first thing the screenshot showed.
+- **A past week open** shows its figures on the right and "Week 35 · closed
+  +1.5 h over" / "closed 0.7 h short" / "closed even" in the sentence's
+  place, from the week's `remaining` on a governed week and worked − goal
+  elsewhere; the balance stays as of today.
+- **Remaining is never negative**: 0.0 h once the week is met, and the
+  sentence carries the over ("The week is done — 0.5 h over."). Decision 1
+  leaves no "Over" label to switch to. A cap's third figure is "Under cap".
+- **After `ended_on`** the label reads "Final balance · ended Mon Aug 31,
+  2026", the proof's third line "expected through" that day, no projection;
+  the right half shows Worked alone. Before the first term the left reads
+  "Contract starts Mon Sep 14, 2026 · 33.6 h/week" and the right Worked
+  alone; under an objective or 0 h term "An objective term — no balance
+  while it lasts." and the personal goal's figures if there is one.
+- **The proof's second line names the contract's first day** ("worked since
+  Mon Jun 29"); the third names the weekday alone while it is in the current
+  week ("through Sat") and the date outside it. "0.0 h brought forward" where
+  the chip would say "even".
+- **The kind chip**: "Day job · 80% of 42 h · CH-ZH", "Day job · Full time ·
+  42 h · CH-ZH", "Day job · 32 h/week", "Day job · objective", "Day job · no
+  contract" (also before any term), "Day job · ended Aug 31, 2026"; "Side
+  project · goal 8 h/week" / "· cap 8 h/week" / "Side project";
+  "Freelance" likewise. `kindChip` is exported from `ProjectHeader.tsx`.
+- **"Edit goal" shows whenever the contract is not time-based today**
+  (`isTimeBasedOn`: every other kind, a day job without a contract, an
+  objective term) and opens the drawer on the goal; "Book time off" whenever
+  a day job has a contract and, like a day's "Change", scrolls to the
+  Absences panel in the rail until 3b's dialog.
+- **The four-week average** is over the ledger's last four closed weeks
+  ("3-week average" while fewer are closed, "No weeks closed yet" at none);
+  "Goal met N of the last M weeks" counts the weeks that had a goal, a cap
+  met when kept.
+- **The ledger stops at the opening balance**: weeks ending before `since`
+  are dropped, so the opening rule is the last row and "N more back to the
+  opening balance" is the count from `since`'s Monday to the oldest week
+  shown; the button goes at 0 and at the API's 104. A side project shows
+  "Show 5 more weeks" alone. Empty: "No earlier weeks — the contract started
+  this week." or "No earlier weeks yet."
+- **A run of days off reads as one range** in the row's why-line ("Mon Jul
+  20 – Fri Jul 24 · vacation") — five notes on one line was too much;
+  holidays and half days keep the entity's wording. "override" joins the line
+  on an ungoverned week with one.
+- **The ledger's cells carry no units** ("33.6", "+5.7"), the balance's zero
+  is "0.0" in the muted ink (not "even"), and the day cells scale to the
+  largest day among the rows shown, as the legend says.
+- **The since line is worked − expected with the opening in brackets**:
+  "Since Mon Jun 29, 2026 · 258.7 h expected · 255.3 h worked · −3.4 h
+  (+2.0 h brought forward)", so it adds up to the standing's balance.
+- **The goal cell's override** keeps `ProjectWeekHistory`'s save and remove
+  (one-off on `weekOf`, permanent on `effectiveFrom`, the same toasts), now
+  in `WeekLedger`; the popover is offered only where the contract governs
+  neither the week nor its expectation (`contractGovernsWeek`, or a
+  `contractExpected`).
+- **Session times are the 24 h clock** ("13:10 → now"), as the mockup
+  writes them, and durations "3h 05m"; `formatTime`'s 12 h form stays on the
+  dashboard.
+- **Restore sits on the Archived chip** (the existing unarchive mutation and
+  toast); `ProjectDangerZone` stays at the page's foot until 3b moves
+  archive into the drawer.
+- **The `/week/` symbols are gone**: `useProjectWeeks`, `fetchProjectWeek`,
+  `WeekBreakdownResult`, `WeekHours`, `DailySummary`, `WeekBreakdownSchema`
+  and `WeekBreakdown`, `projectKeys.week` / `weeks`, the mock in
+  `queries.test.tsx` and the absence hook's invalidation of it. Nothing in
+  the UI calls `GET …/week/` any more; the route itself goes in Phase 5.
+- **Not done here**: the folded weekend keeps "nothing expected" as its
+  figure whatever the hours on it (the days are empty by definition); the
+  `QuickLog` invalidation gap noted above stands.
+
+**Notes** — what the review settled:
+
+- **The contract's first close moves from the opening balance.**
+  `weekDelta` gives the week holding `since` (or the week after, when a
+  weekend start leaves that one without a close) close − opening, not
+  worked − expected, which counts hours logged before the first day.
+- **A governed past week's "closed" line is the ledger's +/−**, so the
+  standing and the row agree; the week's `remaining` stands in only when
+  the ledger has not reached the week. Remaining itself stays the week
+  route's figure.
+- **A week still to come gets its figures and no verdict**: no "closed"
+  line, no sentence. › stays unbounded, since a time-off entry may open
+  one.
+- **`nominalLine` is null unless the named days add up to Expected**
+  (within 0.05 h). A mid-week term change with a day off measures the day
+  against the wrong per-day hours, and no line beats a wrong one.
+- **A quiet week, where the contract does not govern, has no goal and no
+  override.** A missed 8 h goal is a −8.0 row, and an overridden week keeps
+  the cell its override is removed from.
+- **While a beat runs on this project, the current week and the ledger
+  poll every 60 s** (the live row's granularity). A past or next week does
+  not, and a timer start invalidates nothing: nothing a project read returns
+  has moved at that instant.
+- **On a day job with a contract, the standing waits for `/contract/week`**:
+  "…" while it loads, the API's message (`role="alert"`) on failure, never
+  the personal goal. A side project's average is "…" or the ledger's error
+  until the ledger answers.
+- **A day row's toggle is a real `<button aria-expanded>` over the day's
+  name**, stretched across the row with `::after`; "Change" is a sibling
+  lifted above it. The button's name is the day alone ("Mon 7").
+- **At phone width the day-off pill ellipsizes and "Change" keeps its
+  width.** A session's edit and delete hide until hover only where
+  `(hover: hover)`, so a phone shows them.
+- **A contract's expectation cell has one decimal** ("0.0" on a week off);
+  **a goal is written as entered** ("8" in the ledger, "8 h" in the
+  standing), as the chip writes it.
+- **Opening a week from a ledger row scrolls the Days panel into view**
+  and marks that row (`aria-current`, the wash).
+- **`QuickLog` invalidates `projectKeys.all`**, closing the gap noted
+  above.
+- **The dead exports went from the project and session barrels.** The
+  `shared/api` barrel keeps every schema and its type, as it does for
+  `ContractDaySchema`. `weekIso.ts` is deleted, and the page's column is a
+  `<div>`, since the shell owns `<main>`.
 
 ### Phase 3b — Project page: the register, time off, the drawer `[ui]`
 

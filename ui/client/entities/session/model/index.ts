@@ -1,3 +1,5 @@
+// Day grouping (the local-start-date rule)
+export { groupSessionsByLocalDay, type LocalDaySessions } from "./localDays";
 // Mappers
 export { toApiBeat, toSession } from "./mappers";
 // Types

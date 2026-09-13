@@ -77,8 +77,81 @@ export interface ContractWeek {
 	worked: number;
 	remaining?: number;
 	balance?: number;
+	/**
+	 * The proof of `balance`: `balanceOpening + balanceWorked −
+	 * balanceExpectedThrough`, as of `balanceAsOf` (today; the expectation is
+	 * charged through yesterday, today's hours count as they happen). All four
+	 * undefined exactly when `balance` is. Each is rounded on its own, so the
+	 * sum can differ from `balance` by 0.01.
+	 */
+	balanceAsOf?: string; // YYYY-MM-DD
+	balanceOpening?: number;
+	balanceWorked?: number;
+	balanceExpectedThrough?: number;
 	/** Monday to Sunday, in order. */
 	days: ContractDay[];
+}
+
+/** Why a weekday of a ledger week owed less than its term. */
+export type LedgerNoteKind = "vacation" | "sick" | "other" | "holiday";
+
+/** One weekday of a ledger week that owed less than its term: an absence or a named holiday. */
+export interface LedgerNote {
+	date: string; // YYYY-MM-DD, Monday to Friday
+	kind: LedgerNoteKind;
+	/** Half of the day off; always false on a holiday. */
+	halfDay: boolean;
+	/** The holiday's name; absent on an absence. */
+	name?: string;
+}
+
+/**
+ * One week of the ledger (GET /ledger). The wire's nulls stay null here:
+ * each is a figure in its own right, not a field that may be missing.
+ *
+ * - `effectiveGoal`: the goal the API resolves for the Monday — the term's
+ *   nominal hours on a week the contract governs, else the personal goal or
+ *   its override; null when nothing sets one (an override saying "no goal").
+ * - `contractExpected`: what the contract expects after holidays and absences;
+ *   null when nothing time-based governs the week (before the first term, an
+ *   objective or 0 h term, any other kind of project), 0 when it owed nothing
+ *   by circumstance (a week of vacation, after the contract ended).
+ * - `balanceEnd`: the balance at the close of the week's Sunday — the Monday
+ *   morning figure. Null on the current week (the standing carries today's)
+ *   and whenever `contractExpected` is null: one rule for the row. After the
+ *   contract ended every week repeats the frozen final balance.
+ * - `days`: seven entries, Monday to Sunday, hours worked by the local day
+ *   each beat started on, a running timer included.
+ * - `notes`: weekdays only, by date, a holiday before an absence on the same day.
+ */
+export interface LedgerWeek {
+	weekOf: string; // the Monday, YYYY-MM-DD
+	worked: number;
+	days: number[];
+	effectiveGoal: number | null;
+	effectiveGoalType: "target" | "cap";
+	effectiveGoalOverridden: boolean;
+	contractExpected: number | null;
+	balanceEnd: number | null;
+	notes: LedgerNote[];
+}
+
+/** The balance as of today and the two terms that move it, since the contract started. */
+export interface LedgerTotals {
+	expected: number;
+	worked: number;
+	balance: number;
+}
+
+/**
+ * The last N weeks of a project, newest first, the current week included.
+ * `since` is the contract's first day; `totals` is null whenever the week
+ * route's `balance` would be — no contract, or none that owes hours today.
+ */
+export interface Ledger {
+	since: string | null;
+	totals: LedgerTotals | null;
+	weeks: LedgerWeek[];
 }
 
 /** One public holiday of the contract's region. */
@@ -136,31 +209,4 @@ export interface ProjectWithDuration extends Project {
 	/** ISO timestamp of the project's most recent beat — drives the
 	 *  /projects index page's "last tracked" column (P3.0). */
 	lastTrackedAt?: string;
-}
-
-export interface DailySummary {
-	day: string;
-	hours: number;
-	date: Date;
-	totalMinutes: number;
-	sessionCount: number;
-}
-
-export interface WeekHours {
-	weeksAgo: number;
-	hours: number;
-	dailyDurations: Record<string, string>;
-	/** Canonical Monday (ISO date) for this week, resolved server-side. */
-	weekStart?: string;
-	/** number = goal applies; null = override says "no goal"; undefined = unknown */
-	effectiveGoal?: number | null;
-	effectiveGoalType?: "target" | "cap";
-	/** True iff a goal override resolves for this week */
-	effectiveGoalOverridden?: boolean;
-	/**
-	 * What the contract expects of this week after holidays and absences, on
-	 * a day job it governs — the week card's figure. Undefined elsewhere, and
-	 * on a week the contract expects nothing of by nature (a term of 0 hours).
-	 */
-	contractExpected?: number;
 }

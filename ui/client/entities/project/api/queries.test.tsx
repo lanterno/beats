@@ -16,16 +16,6 @@ import type { ApiProject } from "@/shared/api";
 vi.mock("./projectApi", () => ({
 	fetchProjects: vi.fn(),
 	fetchProjectTotal: vi.fn(() => Promise.resolve(0)),
-	fetchProjectWeek: vi.fn(() =>
-		Promise.resolve({
-			totalHours: 0,
-			dailyDurations: {},
-			weekStart: undefined,
-			effectiveGoal: undefined,
-			effectiveGoalType: undefined,
-			effectiveGoalOverridden: false,
-		}),
-	),
 	updateProject: vi.fn(),
 	updateGoalOverrides: vi.fn(),
 }));

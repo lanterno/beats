@@ -85,6 +85,19 @@
   --color-veil: var(--veil);
 
   /*
+    The tints (Decision 9): sky for vacation, blossom for sick, leaf for a
+    public holiday, a neutral for "other". Each is a fill and its ink.
+  */
+  --color-tint-vacation: var(--tint-vacation);
+  --color-tint-vacation-ink: var(--tint-vacation-ink);
+  --color-tint-sick: var(--tint-sick);
+  --color-tint-sick-ink: var(--tint-sick-ink);
+  --color-tint-holiday: var(--tint-holiday);
+  --color-tint-holiday-ink: var(--tint-holiday-ink);
+  --color-tint-other: var(--tint-other);
+  --color-tint-other-ink: var(--tint-other-ink);
+
+  /*
     Radii, on the mockup's stops, so the scale stays monotonic (Tailwind's
     own xl/2xl would otherwise fall below md). Pills are `rounded-full`,
     the panel is 1.625rem, the dialog 1.75rem.
@@ -231,6 +244,16 @@
 		--hill-far: #b9d9a8;
 		--hill-mid: #8ac07c;
 		--hill-near: #5c9f5e;
+
+		/* the tints: vacation, sick, holiday, other — a fill and its ink */
+		--tint-vacation: #d9ebf6;
+		--tint-vacation-ink: #276a8e;
+		--tint-sick: #fbe3d9;
+		--tint-sick-ink: #b04e33;
+		--tint-holiday: #e3f1d3;
+		--tint-holiday-ink: #356f3e;
+		--tint-other: #eeebe2;
+		--tint-other-ink: #6a6258;
 	}
 
 	/* Dusk — the same hill under an indigo sky */
@@ -304,6 +327,15 @@
 		--hill-far: #3b5470;
 		--hill-mid: #2c4a44;
 		--hill-near: #1f3a31;
+
+		--tint-vacation: #2d4a6b;
+		--tint-vacation-ink: #bcd9f0;
+		--tint-sick: #5a3630;
+		--tint-sick-ink: #f5b9a5;
+		--tint-holiday: #2f4a36;
+		--tint-holiday-ink: #bfe3b0;
+		--tint-other: #3b4556;
+		--tint-other-ink: #c9d2dc;
 	}
 
 	/* Density: compact */

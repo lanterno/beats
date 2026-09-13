@@ -12,7 +12,7 @@
 export { fetchTimerStatus } from "./api";
 // Model layer
 export type { TimerState, TimerStatus } from "./model";
-export { useTimer } from "./model";
+export { timerStatusKey, useTimer } from "./model";
 
 // UI layer
 export { TimerDisplay, TimerManager } from "./ui";

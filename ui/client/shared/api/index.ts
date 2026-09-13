@@ -25,6 +25,10 @@ export type {
 	ApiContractTerm,
 	ApiContractWeek,
 	ApiGoalOverride,
+	ApiLedger,
+	ApiLedgerNote,
+	ApiLedgerTotals,
+	ApiLedgerWeek,
 	ApiProject,
 	ApiProjectKind,
 	ApiProjectListItem,
@@ -46,7 +50,6 @@ export type {
 	RhythmSlot,
 	ScoreHistoryItem,
 	TimerStatus,
-	WeekBreakdown,
 	WeeklyDigest,
 } from "./schemas";
 // Zod schemas for validation
@@ -76,6 +79,11 @@ export {
 	HeatmapDayListSchema,
 	HolidayListSchema,
 	HolidaySchema,
+	LedgerNoteKindSchema,
+	LedgerNoteSchema,
+	LedgerSchema,
+	LedgerTotalsSchema,
+	LedgerWeekSchema,
 	PatternsResponseSchema,
 	ProductivityScoreSchema,
 	ProjectBreakdownEntrySchema,
@@ -89,7 +97,6 @@ export {
 	ScheduleTypeSchema,
 	ScoreHistorySchema,
 	TimerStatusSchema,
-	WeekBreakdownSchema,
 	WeeklyDigestListSchema,
 	WeeklyDigestSchema,
 } from "./schemas";

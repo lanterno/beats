@@ -13,7 +13,12 @@ import { fetchTimerStatus } from "../api";
 import type { TimerState } from "./types";
 
 const STORAGE_KEY = "project_hours_timer";
-const TIMER_STATUS_KEY = ["timer", "status"] as const;
+/**
+ * The timer status query's key. Exported so a page can subscribe to the
+ * running beat with the same key the timer keeps fresh (the project page's
+ * "→ now" row) rather than a second query on a second interval.
+ */
+export const timerStatusKey = ["timer", "status"] as const;
 const REFETCH_WHILE_RUNNING_MS = 15_000;
 const REFETCH_WHILE_IDLE_MS = 30_000;
 
@@ -44,7 +49,7 @@ export function useTimer() {
 	// Fetch timer status from API. Interval adapts to running state and pauses
 	// on hidden tabs; TanStack Query also refetches on focus / reconnect.
 	const { data: status } = useQuery({
-		queryKey: TIMER_STATUS_KEY,
+		queryKey: timerStatusKey,
 		queryFn: fetchTimerStatus,
 		refetchInterval: (query) =>
 			query.state.data?.isBeating ? REFETCH_WHILE_RUNNING_MS : REFETCH_WHILE_IDLE_MS,
@@ -139,7 +144,7 @@ export function useTimer() {
 				time: timerStartTime,
 			});
 			if (result.status === "sent") {
-				queryClient.invalidateQueries({ queryKey: TIMER_STATUS_KEY });
+				queryClient.invalidateQueries({ queryKey: timerStatusKey });
 			} else {
 				notifySyncWork();
 			}
@@ -166,7 +171,7 @@ export function useTimer() {
 
 			const result = await apiMutate<void>("POST", "/api/projects/stop", { time: stopTime });
 			if (result.status === "sent") {
-				queryClient.invalidateQueries({ queryKey: TIMER_STATUS_KEY });
+				queryClient.invalidateQueries({ queryKey: timerStatusKey });
 				queryClient.invalidateQueries({ queryKey: projectKeys.all });
 				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			} else {

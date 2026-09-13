@@ -32,8 +32,8 @@ export function useAbsences(projectId: string | undefined, range: AbsenceRange) 
 /**
  * An absence changes what the contract expects of the week, so a write
  * invalidates what reads that beside the calendar: the project's weeks
- * against the contract (the week card), the week history (its rows show
- * `contract_expected` from the `/week/` breakdown) and the project list,
+ * against the contract (the week card), the ledger (its expectation, notes
+ * and every closing balance after the day) and the project list,
  * whose `this_week` include carries the same figures for the index. The
  * list's detail copy (`useProject`) is not refetched — nothing on the
  * project page reads the contract fields from it — and the holidays do not
@@ -45,7 +45,7 @@ function useInvalidateAfterAbsenceWrite() {
 		Promise.all([
 			queryClient.invalidateQueries({ queryKey: absenceKeys.project(projectId) }),
 			queryClient.invalidateQueries({ queryKey: projectKeys.contractWeeks(projectId) }),
-			queryClient.invalidateQueries({ queryKey: projectKeys.weeks(projectId) }),
+			queryClient.invalidateQueries({ queryKey: projectKeys.ledger(projectId) }),
 			queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
 		]);
 }

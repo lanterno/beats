@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+	addIsoDays,
 	formatDateOnly,
 	formatDateShort,
 	getDayName,
 	getISOWeek,
 	getWeekRange,
+	mondayOfIso,
 	parseIsoDate,
 	parseUtcIso,
 	todayIso,
@@ -203,5 +205,21 @@ describe("getISOWeek", () => {
 		// April 7 2026 is a Tuesday
 		const date = new Date(2026, 3, 7);
 		expect(getISOWeek(date)).toBe(15);
+	});
+});
+
+describe("addIsoDays and mondayOfIso", () => {
+	it("moves by calendar days across a month end and a DST change", () => {
+		expect(addIsoDays("2026-08-31", 6)).toBe("2026-09-06");
+		expect(addIsoDays("2026-01-05", -7)).toBe("2025-12-29");
+		// Europe's clocks go forward on Sun Mar 29, 2026; the day after Saturday is still Sunday.
+		expect(addIsoDays("2026-03-28", 1)).toBe("2026-03-29");
+		expect(addIsoDays("2026-03-29", 1)).toBe("2026-03-30");
+	});
+
+	it("finds the Monday of any day's ISO week, Sunday included", () => {
+		expect(mondayOfIso("2026-09-10")).toBe("2026-09-07");
+		expect(mondayOfIso("2026-09-13")).toBe("2026-09-07");
+		expect(mondayOfIso("2026-09-07")).toBe("2026-09-07");
 	});
 });

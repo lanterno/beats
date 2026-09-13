@@ -102,7 +102,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 531 of them across 65 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 558 of them across 67 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 30 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
   MongoDB behind it; the dev server starts itself. A `setup` project

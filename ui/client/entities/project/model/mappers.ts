@@ -8,6 +8,9 @@ import type {
 	ApiContractTerm,
 	ApiContractWeek,
 	ApiGoalOverride,
+	ApiLedger,
+	ApiLedgerNote,
+	ApiLedgerWeek,
 	ApiProject,
 } from "@/shared/api";
 import { assignColor } from "./colors";
@@ -17,6 +20,9 @@ import type {
 	ContractTerm,
 	ContractWeek,
 	GoalOverride,
+	Ledger,
+	LedgerNote,
+	LedgerWeek,
 	Project,
 } from "./types";
 
@@ -129,7 +135,43 @@ export function toContractWeek(api: ApiContractWeek): ContractWeek {
 		worked: api.worked,
 		remaining: api.remaining ?? undefined,
 		balance: api.balance ?? undefined,
+		balanceAsOf: api.balance_as_of ?? undefined,
+		balanceOpening: api.balance_opening ?? undefined,
+		balanceWorked: api.balance_worked ?? undefined,
+		balanceExpectedThrough: api.balance_expected_through ?? undefined,
 		days: api.days.map(toContractDay),
+	};
+}
+
+function toLedgerNote(api: ApiLedgerNote): LedgerNote {
+	return {
+		date: api.date,
+		kind: api.kind,
+		halfDay: api.half_day ?? false,
+		name: api.name ?? undefined,
+	};
+}
+
+function toLedgerWeek(api: ApiLedgerWeek): LedgerWeek {
+	return {
+		weekOf: api.week_of,
+		worked: api.worked,
+		days: api.days,
+		effectiveGoal: api.effective_goal,
+		effectiveGoalType: api.effective_goal_type,
+		effectiveGoalOverridden: api.effective_goal_overridden,
+		contractExpected: api.contract_expected,
+		balanceEnd: api.balance_end,
+		notes: api.notes.map(toLedgerNote),
+	};
+}
+
+/** The ledger's nulls are figures (see LedgerWeek), so they are kept as null. */
+export function toLedger(api: ApiLedger): Ledger {
+	return {
+		since: api.since,
+		totals: api.totals,
+		weeks: api.weeks.map(toLedgerWeek),
 	};
 }
 

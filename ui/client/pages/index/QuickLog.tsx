@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
-import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
+import { ProjectPicker, projectKeys, useProjects, visibleProjects } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
 import { post } from "@/shared/api";
 import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
@@ -48,6 +48,8 @@ export function QuickLog() {
 				end: new Date(endTime).toISOString(),
 			});
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+			// A beat moves the project's week, its ledger and its balance too.
+			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 			toast("Session logged");
 			setOpen(false);
 		} catch {

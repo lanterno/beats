@@ -1,80 +1,83 @@
 /**
- * Project Details Page
- * Compact header, week history table, and paginated session list.
+ * Project Details Page — the identity on the sky, the standing, the open
+ * week's days and the ledger of earlier weeks, with the contract and the
+ * absences in a rail (docs/project-page-roadmap.md, "The page").
+ *
+ * The page owns the reads the panels share: `/contract/week` for the open
+ * week, the current week (the balance is pinned to today) and the next
+ * (for "then Mon 6.7 h"), the ledger, the sessions and the running timer.
+ * The open week is the URL's (`?week=`), so a ledger row, ‹ › and a link
+ * all move the same navigator.
  */
 
-import { ChevronLeft, Clock, Settings } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { toast } from "sonner";
-import { useProjectGitActivityByWeek } from "@/entities/github";
-import { useProjectPlannedByWeek } from "@/entities/planning";
+import { ChevronLeft, Clock } from "lucide-react";
+import { useRef, useState } from "react";
+import { Link, useParams } from "react-router";
 import {
-	assignColor,
-	contractGovernsWeek,
-	isTimeBasedOn,
 	LoadingSpinner,
 	type ProjectFormAutoFocusField,
 	useContractWeek,
 	useProject,
-	useProjects,
-	useProjectWeeks,
-	useUpdateProject,
+	useProjectLedger,
 } from "@/entities/project";
-import {
-	calculateDailySummary,
-	useDeleteSession,
-	useSessions,
-	useUpdateSession,
-} from "@/entities/session";
-import { describeError } from "@/shared/api";
-import {
-	getWeekNumberLabel,
-	parseTimedeltaToMinutes,
-	parseUtcIso,
-	startOfDay,
-	todayIso,
-} from "@/shared/lib";
-import { ColorPicker, GoalRing } from "@/shared/ui";
+import { useSessions } from "@/entities/session";
+import { addIsoDays, mondayOfIso, todayIso as readToday } from "@/shared/lib";
 import { AbsenceCalendar } from "./AbsenceCalendar";
 import { ContractHistoryPanel } from "./ContractHistoryPanel";
-import { ContractNudge } from "./ContractNudge";
-import { ContractWeekCard } from "./ContractWeekCard";
 import { ProjectDangerZone } from "./ProjectDangerZone";
-import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
-import { ProjectHealthRail } from "./ProjectHealthRail";
-import { ProjectSessionList } from "./ProjectSessionList";
+import { ProjectHeader } from "./ProjectHeader";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
-import { ProjectStats } from "./ProjectStats";
-import { ProjectWeekHistory } from "./ProjectWeekHistory";
-import { computeMondayIsoList, getMondayIsoFor } from "./weekIso";
+import { QuietFacts } from "./QuietFacts";
+import { Standing } from "./Standing";
+import { useOpenWeek } from "./useOpenWeek";
+import { useRunningBeat } from "./useRunningBeat";
+import { WeekDays } from "./WeekDays";
+import { WeekLedger } from "./WeekLedger";
 
-const WEEKDAYS = [
-	"Monday",
-	"Tuesday",
-	"Wednesday",
-	"Thursday",
-	"Friday",
-	"Saturday",
-	"Sunday",
-] as const;
+const LEDGER_WEEKS = 8;
+/**
+ * While a beat runs on this project its hours move Worked, today's figure,
+ * the balance and the sentence. A timer start writes nothing those reads
+ * return, so the current week and the ledger poll until it stops — once a
+ * minute, the live row's own granularity.
+ */
+const LIVE_REFETCH_MS = 60_000;
 
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
-	const [weekCount, setWeekCount] = useState(5);
-	const [colorPickerOpen, setColorPickerOpen] = useState(false);
+	const today = readToday();
+	const thisMonday = mondayOfIso(today);
+	const [weekOf, setWeekOf] = useOpenWeek(today);
+	const [ledgerWeeks, setLedgerWeeks] = useState(LEDGER_WEEKS);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [settingsFocus, setSettingsFocus] = useState<ProjectFormAutoFocusField>("name");
-	const navigate = useNavigate();
-	// P4.0: click a week label in the history table to scope the sessions
-	// list below to that week's Mon..Sun range. null = no scope.
-	const [scopedWeeksAgo, setScopedWeeksAgo] = useState<number | null>(null);
-	const hasSetInitialExpand = useRef(false);
 	// "Change contract…" in the settings form lands on the history panel's
 	// own button: terms are edited there, not in the form.
 	const changeContractButtonRef = useRef<HTMLButtonElement>(null);
-	// The header's contract figure brings the reader to the week card.
-	const weekCardRef = useRef<HTMLElement>(null);
+	// "Book time off" and a day's "Change" bring the reader to the absences,
+	// which stay in the rail until Phase 3b's dialog.
+	const absencesRef = useRef<HTMLDivElement>(null);
+	// A ledger row opens its week in the Days panel, which may be a screen up.
+	const daysRef = useRef<HTMLDivElement>(null);
+
+	const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
+	const { data: sessions } = useSessions(projectId);
+	const running = useRunningBeat(projectId);
+	const poll = running !== null ? LIVE_REFETCH_MS : false;
+
+	const governedProject = project?.kind === "day_job" && project.contract !== undefined;
+	const openWeekQuery = useContractWeek(projectId, weekOf, { enabled: governedProject });
+	const currentWeekQuery = useContractWeek(projectId, thisMonday, {
+		enabled: governedProject,
+		refetchInterval: poll,
+	});
+	const { data: nextWeek } = useContractWeek(projectId, addIsoDays(thisMonday, 7), {
+		enabled: governedProject,
+	});
+	const ledgerQuery = useProjectLedger(projectId, ledgerWeeks, { refetchInterval: poll });
+	const ledger = ledgerQuery.data;
+	// On the current week the open week is the current week's query, polled with it.
+	const openQuery = weekOf === thisMonday ? currentWeekQuery : openWeekQuery;
 
 	const openSettings = (field: ProjectFormAutoFocusField) => {
 		setSettingsFocus(field);
@@ -88,74 +91,13 @@ export default function ProjectDetails() {
 		button?.focus();
 	};
 
-	const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
-	const { data: allProjects } = useProjects();
-	// A time-based day job's goal is its contract, which the settings form
-	// edits in its own section and has no goal field for: the header reads
-	// this week against the contract instead, and offers no way to a personal
-	// goal the form would not show. Same rule as the form's, so they agree.
-	const contractIsGoal = project?.kind === "day_job" && isTimeBasedOn(project.contract, todayIso());
-	const thisMonday = getMondayIsoFor(0);
-	const { data: contractWeek } = useContractWeek(projectId, thisMonday, {
-		enabled: contractIsGoal,
-	});
-	const { data: sessions, refetch: refetchSessions } = useSessions(projectId);
-	const { data: hoursPerWeek } = useProjectWeeks(projectId, weekCount);
-	const updateSessionMutation = useUpdateSession();
-	const deleteSessionMutation = useDeleteSession();
-	const updateProjectMutation = useUpdateProject();
-
-	// P4.1: planned hours per week for this project. Hook must sit above the
-	// loading/not-found early return; Monday list is derived from weekCount
-	// rather than from project so the call stays unconditional. Undefined
-	// for a row = "no plan entry that week" (em-dash); 0 = explicit zero.
-	const mondayIsoList = computeMondayIsoList(weekCount);
-	const { byMondayIso: plannedByMonday } = useProjectPlannedByWeek(projectId, mondayIsoList);
-	// P4.4: weekly commit counts for the project's linked GitHub repo. Empty
-	// map when the repo isn't set or the user isn't OAuth-connected — the
-	// table renders an em-dash with a tooltip explaining the precondition.
-	const { byMondayIso: commitsByMonday } = useProjectGitActivityByWeek(projectId, mondayIsoList);
-
-	// Reset per-project view state when the route project changes. projectId is
-	// the intentional trigger here (the body only calls stable setters), so it
-	// belongs in the deps even though Biome can't infer that it's read.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: projectId is the reset trigger, not a body dependency
-	useEffect(() => {
-		setWeekCount(5);
-		hasSetInitialExpand.current = false;
-	}, [projectId]);
-
-	const handleSaveEdit = async (
-		sessionId: string,
-		startTime: string,
-		endTime: string,
-		projectIdForSession: string,
-	) => {
-		const session = sessions?.find((s) => s.id === sessionId);
-		if (!session) return;
-
-		try {
-			await updateSessionMutation.mutateAsync({
-				session,
-				startTime,
-				endTime,
-				projectId: projectIdForSession,
-			});
-			toast.success("Session updated");
-			refetchSessions();
-		} catch {
-			toast.error("Failed to update session");
-		}
+	const scrollToAbsences = () => {
+		absencesRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 	};
 
-	const handleDeleteSession = async (sessionId: string) => {
-		try {
-			await deleteSessionMutation.mutateAsync(sessionId);
-			toast.success("Session deleted");
-			refetchSessions();
-		} catch (err) {
-			toast.error(describeError(err, "Failed to delete session"));
-		}
+	const openWeekFromLedger = (week: string) => {
+		setWeekOf(week);
+		daysRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 	};
 
 	if (projectLoading) {
@@ -173,327 +115,95 @@ export default function ProjectDetails() {
 		);
 	}
 
-	const sessionList = sessions || [];
-	const weekList = hoursPerWeek || [];
-	const dailySummary = calculateDailySummary(sessionList);
-	const totalMinutes = project.totalMinutes || 0;
-	const totalHours = totalMinutes > 0 ? (totalMinutes / 60).toFixed(1) : "0";
-	const weeklyHours = project.weeklyMinutes ? project.weeklyMinutes / 60 : 0;
-	// effectiveGoal === null means an override explicitly set "no goal" for
-	// this week — don't fall back to project.weeklyGoal in that case.
-	const headerGoal = project.effectiveGoalOverridden
-		? (project.effectiveGoal ?? null)
-		: (project.effectiveGoal ?? project.weeklyGoal ?? null);
-	const headerGoalType = project.effectiveGoalType ?? project.goalType ?? "target";
-	const goalPct = headerGoal ? Math.min((weeklyHours / headerGoal) * 100, 100) : null;
-	const personalGoalApplies = !contractIsGoal;
-	// The ring's share of the contract's week; none when nothing is expected
-	// (a week of holidays), where a figure alone says more than a full ring.
-	const contractPct =
-		contractWeek?.expected !== undefined && contractWeek.expected > 0
-			? Math.min((contractWeek.worked / contractWeek.expected) * 100, 100)
-			: null;
-
-	const scrollToWeekCard = () => {
-		const card = weekCardRef.current;
-		card?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-		card?.focus({ preventScroll: true });
-	};
-
-	const sortedSessions = [...sessionList].sort(
-		(a, b) => parseUtcIso(b.startTime).getTime() - parseUtcIso(a.startTime).getTime(),
-	);
-
-	// Build week history rows: current week + past weeks
-	const today = startOfDay();
-	const todayDayIndex = (today.getDay() + 6) % 7; // Monday=0 ... Sunday=6
-
-	// Helper: get the Monday ISO string for a given weeksAgo
-	const getMondayIso = (weeksAgo: number): string => {
-		const d = new Date();
-		d.setHours(12, 0, 0, 0); // noon to avoid DST/UTC edge cases
-		d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - weeksAgo * 7);
-		const yyyy = d.getFullYear();
-		const mm = String(d.getMonth() + 1).padStart(2, "0");
-		const dd = String(d.getDate()).padStart(2, "0");
-		return `${yyyy}-${mm}-${dd}`;
-	};
-
-	// Week-0 data drives the current-week goal. The server already resolves the
-	// project default into effective_goal, so a null value always means "no
-	// goal" — no client-side fallback needed.
-	const week0Data = weekList.find((w) => w.weeksAgo === 0);
-
-	const currentWeekRow = {
-		label: "This wk",
-		weeksAgo: 0,
-		mondayIso: week0Data?.weekStart ?? getMondayIso(0),
-		days: WEEKDAYS.map((dayName) => {
-			const day = dailySummary.find((d) => d.dayName === dayName);
-			return day?.totalMinutes ?? 0;
-		}),
-		total: dailySummary.reduce((sum, d) => sum + d.totalMinutes, 0),
-		effectiveGoal: week0Data ? (week0Data.effectiveGoal ?? null) : headerGoal,
-		effectiveGoalType: (week0Data?.effectiveGoalType ?? headerGoalType) as "target" | "cap",
-		effectiveGoalOverridden: week0Data?.effectiveGoalOverridden ?? false,
-		contractGoverned: contractGovernsWeek(project, week0Data?.weekStart ?? getMondayIso(0)),
-		contractExpected: week0Data?.contractExpected,
-	};
-
-	const pastWeekRows = weekList
-		.filter((w) => w.weeksAgo > 0)
-		.map((week) => ({
-			label: getWeekNumberLabel(week.weeksAgo),
-			weeksAgo: week.weeksAgo,
-			// Key off the server's canonical Monday so the override we save lines
-			// up with the week the server resolves it against.
-			mondayIso: week.weekStart ?? getMondayIso(week.weeksAgo),
-			days: WEEKDAYS.map((dayName) =>
-				parseTimedeltaToMinutes(week.dailyDurations[dayName] || "0:00:00"),
-			),
-			total: week.hours * 60,
-			// effective_goal is fully resolved server-side (override → permanent →
-			// project default), so null always means "no goal".
-			effectiveGoal: week.effectiveGoal ?? null,
-			effectiveGoalType: (week.effectiveGoalType ?? project.goalType ?? "target") as
-				| "target"
-				| "cap",
-			effectiveGoalOverridden: week.effectiveGoalOverridden ?? false,
-			// The API ignores overrides on a week the contract governs
-			// (Project.goal_term); the table must not offer to set one there.
-			contractGoverned: contractGovernsWeek(project, week.weekStart ?? getMondayIso(week.weeksAgo)),
-			// The week's expectation after holidays and absences, so the row
-			// agrees with the week card above it rather than showing the term.
-			contractExpected: week.contractExpected,
-		}));
-
-	const allWeekRows = [currentWeekRow, ...pastWeekRows];
-	const hasAnyGoal =
-		project.weeklyGoal != null ||
-		(project.goalOverrides || []).length > 0 ||
-		allWeekRows.some((r) => r.effectiveGoal != null || r.contractExpected != null);
-
-	// Save/remove goal override handlers
+	const sessionList = sessions ?? [];
+	const ledgerWeek = ledger?.weeks.find((w) => w.weekOf === weekOf);
 
 	return (
-		<div>
-			{/* Mobile back-link breadcrumb (P0 a11y principle). Hidden on >= lg
-			    because the sidebar is the nav surface there. */}
+		<div className="max-w-5xl mx-auto px-4 sm:px-6 pb-24">
+			{/* Mobile back-link breadcrumb. Hidden on >= lg because the sidebar is the nav surface there. */}
 			<Link
 				to="/app"
-				className="lg:hidden inline-flex items-center gap-1 text-xs text-muted-foreground px-6 pt-3 hover:text-foreground transition-colors"
+				className="lg:hidden inline-flex items-center gap-1 text-xs font-bold text-foreground/70 pt-3 pb-1 hover:text-foreground transition-colors"
 			>
-				<ChevronLeft className="w-3.5 h-3.5" />
+				<ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
 				Back
 			</Link>
 
-			{/* Compact header */}
-			<header className="border-b border-border/50">
-				<div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
-					<div className="relative">
-						<button
-							type="button"
-							onClick={() => setColorPickerOpen((o) => !o)}
-							className="w-3 h-3 rounded-full shrink-0 hover:ring-2 hover:ring-accent/40 transition-all cursor-pointer"
-							style={{
-								backgroundColor: project.color || "hsl(var(--muted-foreground))",
-							}}
-							title="Change color"
+			<div className="pt-2 sm:pt-4">
+				<ProjectHeader project={project} todayIso={today} onOpenSettings={openSettings} />
+			</div>
+
+			<div className="@container/content min-w-0">
+				<div className="grid grid-cols-[minmax(0,1fr)] gap-6 mt-1 @min-[860px]/content:grid-cols-[minmax(0,1fr)_300px]">
+					{/* Not a <main>: the app shell already has one, and the panels are named regions. */}
+					<div className="min-w-0 flex flex-col gap-6">
+						<Standing
+							project={project}
+							todayIso={today}
+							openWeekOf={weekOf}
+							currentWeek={currentWeekQuery.data}
+							currentWeekError={currentWeekQuery.error}
+							openWeek={openQuery.data}
+							openWeekError={openQuery.error}
+							nextWeek={nextWeek}
+							ledger={ledger}
+							ledgerLoading={ledgerQuery.isLoading}
+							ledgerError={ledgerQuery.error}
+							running={running !== null}
+							onBookTimeOff={scrollToAbsences}
+							onEditGoal={() => openSettings("weeklyGoal")}
+							onAddContract={() => openSettings("scheduleType")}
+							onSetRegion={() => openSettings("holidayCountry")}
 						/>
-						{colorPickerOpen && (
-							<ColorPicker
-								value={project.color || assignColor(project.id)}
-								onChange={(color) => {
-									updateProjectMutation.mutate({
-										id: project.id,
-										name: project.name,
-										description: project.description,
-										color,
-										archived: project.archived,
-										weekly_goal: project.weeklyGoal,
-										goal_type: project.goalType,
-									});
-								}}
-								onClose={() => setColorPickerOpen(false)}
+						<div ref={daysRef} className="scroll-mt-4">
+							<WeekDays
+								project={project}
+								todayIso={today}
+								weekOf={weekOf}
+								onWeekChange={setWeekOf}
+								contractWeek={openQuery.data}
+								ledgerWeek={ledgerWeek}
+								running={running}
+								onChangeAbsence={scrollToAbsences}
+							/>
+						</div>
+						<WeekLedger
+							project={project}
+							todayIso={today}
+							ledger={ledger}
+							isLoading={ledgerQuery.isLoading}
+							error={ledgerQuery.error}
+							weeks={ledgerWeeks}
+							onShowMore={() => setLedgerWeeks((n) => Math.min(n + 5, 104))}
+							onOpenWeek={openWeekFromLedger}
+							openWeekOf={weekOf}
+							sessionCount={sessionList.length}
+						/>
+					</div>
+
+					<aside className="flex flex-col gap-6 @min-[860px]/content:sticky @min-[860px]/content:top-4 @min-[860px]/content:self-start">
+						{project.kind === "day_job" && (
+							<ContractHistoryPanel
+								project={project}
+								onOpenSettings={() => openSettings("scheduleType")}
+								changeButtonRef={changeContractButtonRef}
 							/>
 						)}
-					</div>
-					{/* Inline-clickable title: opens the settings drawer focused on
-					    name. Replaces the read-only h1 — the color dot was the only
-					    edit affordance pre-P1.2a. */}
-					<button
-						type="button"
-						onClick={() => openSettings("name")}
-						className="font-heading text-xl text-foreground truncate text-left hover:text-accent-ink transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
-						title="Edit project"
-					>
-						{project.name}
-					</button>
-					{project.archived && (
-						<span
-							className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-muted-foreground/40 text-muted-foreground shrink-0"
-							title="This project is archived. Hidden from active pickers and lists."
-						>
-							Archived
-						</span>
-					)}
-					{project.description ? (
-						<button
-							type="button"
-							onClick={() => openSettings("description")}
-							className="text-muted-foreground text-sm hidden md:inline truncate max-w-[200px] text-left hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
-							title="Edit description"
-						>
-							— {project.description}
-						</button>
-					) : (
-						<button
-							type="button"
-							onClick={() => openSettings("description")}
-							className="text-muted-foreground/50 text-sm hidden md:inline hover:text-muted-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
-						>
-							+ Add description
-						</button>
-					)}
-					<ProjectGitHubBadge
-						githubRepo={project.githubRepo}
-						onConfigureRepo={() => openSettings("githubRepo")}
-						onConnectGitHub={() => navigate("/settings#github")}
-					/>
-					<div className="ml-auto shrink-0 flex items-center gap-4">
-						{!personalGoalApplies ? (
-							contractWeek?.expected !== undefined ? (
-								<button
-									type="button"
-									onClick={scrollToWeekCard}
-									title="This week against the contract"
-									className="hidden sm:flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
-								>
-									{contractPct !== null && (
-										<GoalRing percent={contractPct} size={28} strokeWidth={3} />
-									)}
-									<span className="text-xs tabular-nums text-muted-foreground">
-										{contractWeek.worked.toFixed(1)}/{contractWeek.expected.toFixed(1)}h
-									</span>
-								</button>
-							) : null
-						) : goalPct !== null ? (
-							<button
-								type="button"
-								onClick={() => openSettings("weeklyGoal")}
-								title="Edit weekly goal"
-								className="hidden sm:flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
-							>
-								<GoalRing
-									percent={goalPct}
-									size={28}
-									strokeWidth={3}
-									isCap={headerGoalType === "cap"}
-								/>
-								<span className="text-xs tabular-nums text-muted-foreground">
-									{weeklyHours.toFixed(1)}/{headerGoal}h
-								</span>
-							</button>
-						) : (
-							<button
-								type="button"
-								onClick={() => openSettings("weeklyGoal")}
-								className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-accent-ink transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
-							>
-								+ Set weekly goal
-							</button>
+						{project.kind === "day_job" && project.contract && (
+							<div ref={absencesRef} className="scroll-mt-4">
+								<AbsenceCalendar projectId={project.id} />
+							</div>
 						)}
-						<span className="font-heading text-lg font-semibold tabular-nums text-accent-ink">
-							{totalHours}h
-						</span>
-						<button
-							type="button"
-							onClick={() => openSettings("name")}
-							aria-label="Project settings"
-							title="Project settings"
-							className="p-2 -m-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
-						>
-							<Settings className="w-4 h-4" />
-						</button>
-					</div>
+						<QuietFacts project={project} sessions={sessionList} todayIso={today} />
+					</aside>
 				</div>
-			</header>
-
-			<main className="max-w-5xl mx-auto px-6 pb-24">
-				<ContractNudge project={project} onOpenSettings={() => openSettings("holidayCountry")} />
-
-				{/* Project Health rail (P4.3) — alerts + recency + goal trend +
-				    today's average focus. */}
-				<ProjectHealthRail
-					projectId={project.id}
-					todaysProjectSessions={sessionList.filter(
-						(s) => parseUtcIso(s.startTime) >= startOfDay(),
-					)}
-				/>
-
-				{/* Stats above the fold (P4.0) — lead the page with project shape,
-				    not the session list. */}
-				<ProjectStats sessions={sessionList} lastTrackedAt={project.lastTrackedAt} />
-
-				{/* The week against the contract — expected, worked, remaining, the
-				    weekdays and the running balance — on a day job that has one. */}
-				{project.kind === "day_job" && project.contract && (
-					<ContractWeekCard
-						ref={weekCardRef}
-						projectId={project.id}
-						contract={project.contract}
-						personalGoal={headerGoal}
-					/>
-				)}
-
-				<ProjectWeekHistory
-					rows={allWeekRows}
-					hasAnyGoal={hasAnyGoal}
-					todayDayIndex={todayDayIndex}
-					plannedByMonday={plannedByMonday}
-					commitsByMonday={commitsByMonday}
-					hasGitHubRepo={Boolean(project.githubRepo)}
-					projectId={project.id}
-					weeklyGoal={project.weeklyGoal}
-					goalOverrides={project.goalOverrides || []}
-					scopedWeeksAgo={scopedWeeksAgo}
-					onScopeWeek={setScopedWeeksAgo}
-					onShowMoreWeeks={() => setWeekCount((c) => c + 5)}
-				/>
-
-				{/* Work contracts: the terms over time and the absence calendar,
-				    on a day job only. */}
-				{project.kind === "day_job" && (
-					<div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
-						<ContractHistoryPanel
-							project={project}
-							onOpenSettings={() => openSettings("scheduleType")}
-							changeButtonRef={changeContractButtonRef}
-						/>
-						{project.contract && <AbsenceCalendar projectId={project.id} />}
-					</div>
-				)}
-
-				<ProjectSessionList
-					// Keyed so navigating to another project remounts the list and
-					// resets its pagination, which the page used to do by hand.
-					key={projectId}
-					sessions={sortedSessions}
-					allProjects={allProjects || []}
-					scopedWeeksAgo={scopedWeeksAgo}
-					scopeLabel={allWeekRows.find((r) => r.weeksAgo === scopedWeeksAgo)?.label ?? "week"}
-					onClearScope={() => setScopedWeeksAgo(null)}
-					onSave={handleSaveEdit}
-					onDelete={handleDeleteSession}
-					isDeleting={deleteSessionMutation.isPending}
-				/>
 
 				<ProjectDangerZone
 					projectId={project.id}
 					projectName={project.name}
 					archived={project.archived}
 				/>
-			</main>
+			</div>
 
 			<ProjectSettingsDrawer
 				project={project}
@@ -505,23 +215,3 @@ export default function ProjectDetails() {
 		</div>
 	);
 }
-
-/**
- * One cell in the week-history table's "Planned" column.
- * - undefined  → em-dash (no plan entry for this project that week)
- * - 0          → "0h"     (plan explicitly set this project to zero)
- * - n          → "n.nh"
- */
-
-/**
- * Commits cell for the week-history table (P4.4).
- *
- * - `hasRepo === false` → em-dash with a tooltip pointing at the linked-repo
- *   precondition. Same em-dash as "no plan" so the column doesn't shout an
- *   empty state at a user who hasn't opted into the integration.
- * - `hasRepo === true` and count is undefined/0 → "0" in muted color.
- * - `hasRepo === true` and count > 0 → the count, with a tooltip.
- *
- * The Map from useProjectGitActivityByWeek seeds every visible Monday with 0
- * up-front, so an empty repo period reads "0" rather than the no-repo "—".
- */

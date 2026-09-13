@@ -116,6 +116,10 @@ describe("toContractWeek", () => {
 			worked: 12,
 			remaining: null,
 			balance: null,
+			balance_as_of: null,
+			balance_opening: null,
+			balance_worked: null,
+			balance_expected_through: null,
 			days: [
 				{ date: "2026-04-06", expected: 0, worked: 4, holiday: null, absence: null },
 				{
@@ -133,6 +137,10 @@ describe("toContractWeek", () => {
 			worked: 12,
 			remaining: undefined,
 			balance: undefined,
+			balanceAsOf: undefined,
+			balanceOpening: undefined,
+			balanceWorked: undefined,
+			balanceExpectedThrough: undefined,
 			days: [
 				{ date: "2026-04-06", expected: 0, worked: 4, holiday: undefined, absence: undefined },
 				{

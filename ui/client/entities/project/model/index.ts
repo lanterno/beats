@@ -34,8 +34,19 @@ export {
 	validateContractFrame,
 	validateTerm,
 } from "./contractForm";
+// The ledger's rows: rule rows, the quiet collapse, CSV
+export {
+	describeLedgerNote,
+	type LedgerRow,
+	type LedgerWeekRow,
+	ledgerCsv,
+	ledgerRows,
+	type QuietRow,
+	type RuleRow,
+	weekDelta,
+} from "./ledger";
 // Mappers
-export { toApiContract, toContract, toContractWeek, toProject } from "./mappers";
+export { toApiContract, toContract, toContractWeek, toLedger, toProject } from "./mappers";
 // Picker recents (user-scoped localStorage)
 export { clearPickerRecents, readPickerRecents, recordPickerRecent } from "./pickerRecents";
 // Project pins (user-scoped localStorage + custom-event sync)
@@ -51,6 +62,19 @@ export {
 	sortProjectsForList,
 	visibleProjects,
 } from "./selectors";
+// The standing: the sentence, the projection, the first week, the labels
+export {
+	isFirstWeek,
+	nominalLine,
+	type Projection,
+	projection,
+	type StandingWeek,
+	type WeekSentenceInput,
+	weekLabel,
+	weekNumber,
+	weekRange,
+	weekSentence,
+} from "./standing";
 // Types
 export type {
 	Contract,
@@ -58,15 +82,18 @@ export type {
 	ContractDayAbsence,
 	ContractTerm,
 	ContractWeek,
-	DailySummary,
 	GoalOverride,
 	Holiday,
 	HolidayRegion,
+	Ledger,
+	LedgerNote,
+	LedgerNoteKind,
+	LedgerTotals,
+	LedgerWeek,
 	Project,
 	ProjectKind,
 	ProjectWithDuration,
 	ScheduleType,
-	WeekHours,
 } from "./types";
 // This-week figures for a list row: contract or personal goal
 export { type WeekGoalView, weekGoalView } from "./weekGoal";

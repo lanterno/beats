@@ -7,13 +7,13 @@ test.describe("Projects", () => {
 		await expect(sidebar).toBeVisible();
 	});
 
-	test("project detail page shows weekly breakdown", async ({ page }) => {
+	test("project detail page shows the open week's days", async ({ page }) => {
 		await page.goto("/app");
 		const projectLink = page.locator('a[href^="/project/"]').first();
 
 		if (await projectLink.isVisible({ timeout: 5_000 }).catch(() => false)) {
 			await projectLink.click();
-			await expect(page.locator("text=This Week")).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByRole("region", { name: "Days" })).toBeVisible({ timeout: 10_000 });
 		}
 	});
 
@@ -23,9 +23,10 @@ test.describe("Projects", () => {
 
 		if (await projectLink.isVisible({ timeout: 5_000 }).catch(() => false)) {
 			await projectLink.click();
-			// Session list or empty state should be visible
-			const hasContent = page.locator("text=/Session|No sessions|This Week/").first();
-			await expect(hasContent).toBeVisible({ timeout: 10_000 });
+			// The open week's days, with their sessions or the empty line.
+			const days = page.getByRole("region", { name: "Days" });
+			await expect(days).toBeVisible({ timeout: 10_000 });
+			await expect(days.getByText(/session|No sessions yet/).first()).toBeVisible();
 		}
 	});
 
@@ -37,13 +38,13 @@ test.describe("Projects", () => {
 		if (count >= 2) {
 			// Click first project
 			await projectLinks.first().click();
-			await expect(page.locator("text=This Week")).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByRole("region", { name: "Days" })).toBeVisible({ timeout: 10_000 });
 			const firstUrl = page.url();
 
 			// Go back and click second project
 			await page.goto("/app");
 			await projectLinks.nth(1).click();
-			await expect(page.locator("text=This Week")).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByRole("region", { name: "Days" })).toBeVisible({ timeout: 10_000 });
 			expect(page.url()).not.toBe(firstUrl);
 		}
 	});
