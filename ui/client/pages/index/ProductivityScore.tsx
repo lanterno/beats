@@ -114,7 +114,7 @@ export function ProductivityScore() {
 	return (
 		<div>
 			<h2 className="flex items-center gap-2 text-foreground font-medium text-sm mb-3">
-				<TrendingUp className="w-3.5 h-3.5 text-accent/75" />
+				<TrendingUp className="w-3.5 h-3.5 text-accent-ink/75" />
 				Productivity
 			</h2>
 

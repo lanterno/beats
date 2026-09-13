@@ -134,7 +134,7 @@ export function ContractWeekCard({
 						<button
 							type="button"
 							onClick={() => setOffset(0)}
-							className="px-2 py-0.5 rounded-md text-xs text-accent hover:bg-accent/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+							className="px-2 py-0.5 rounded-md text-xs text-accent-ink hover:bg-accent/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 						>
 							Today
 						</button>
@@ -308,7 +308,7 @@ function DayCell({
 				<span
 					className={cn(
 						"text-[10px] uppercase tracking-wider",
-						isToday ? "text-accent font-semibold" : "text-muted-foreground",
+						isToday ? "text-accent-ink font-semibold" : "text-muted-foreground",
 					)}
 				>
 					{weekday}

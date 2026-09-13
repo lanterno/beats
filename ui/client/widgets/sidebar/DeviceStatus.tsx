@@ -40,28 +40,28 @@ export function DeviceStatus() {
 	const isOnline = Date.now() - lastSeen.getTime() < 5 * 60 * 1000; // 5 min threshold
 
 	return (
-		<div className="rounded-md border border-border/40 bg-secondary/10 px-3 py-2">
+		<div className="rounded-[1.125rem] bg-secondary px-3 py-2">
 			<div className="flex items-center gap-2">
 				{isOnline ? (
 					<Wifi className="w-3 h-3 text-success" />
 				) : (
-					<WifiOff className="w-3 h-3 text-muted-foreground/40" />
+					<WifiOff className="w-3 h-3 text-muted-foreground/60" />
 				)}
-				<span className="text-[10px] uppercase tracking-widest text-muted-foreground flex-1">
+				<span className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex-1">
 					Wall Clock
 				</span>
-				<span className="text-[10px] text-muted-foreground/60">
+				<span className="text-[10px] text-muted-foreground">
 					{formatTimeAgo(heartbeat.last_seen)}
 				</span>
 			</div>
 			{heartbeat.battery_voltage && (
 				<div className="flex items-center gap-1.5 mt-1">
-					<Battery className="w-3 h-3 text-muted-foreground/40" />
-					<span className="text-[10px] tabular-nums text-muted-foreground">
+					<Battery className="w-3 h-3 text-muted-foreground/60" />
+					<span className="text-[10px] font-mono text-muted-foreground">
 						{heartbeat.battery_voltage.toFixed(1)}V
 					</span>
 					{heartbeat.wifi_rssi && (
-						<span className="text-[10px] tabular-nums text-muted-foreground/50 ml-auto">
+						<span className="text-[10px] font-mono text-muted-foreground/70 ml-auto">
 							{heartbeat.wifi_rssi}dBm
 						</span>
 					)}

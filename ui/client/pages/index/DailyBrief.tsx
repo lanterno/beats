@@ -29,13 +29,13 @@ export function DailyBrief() {
 			className="rounded-xl border border-border/60 bg-card p-4 shadow-card"
 		>
 			<header className="flex items-center gap-2 mb-3">
-				<Sparkles className="w-4 h-4 text-accent" />
+				<Sparkles className="w-4 h-4 text-accent-ink" />
 				<h2 className="text-sm font-semibold text-foreground">Daily Brief</h2>
 				{selectedDate !== null && (
 					<button
 						type="button"
 						onClick={() => setSelectedDate(null)}
-						className="text-[11px] text-accent hover:underline"
+						className="text-[11px] text-accent-ink hover:underline"
 					>
 						← Today
 					</button>
@@ -77,7 +77,7 @@ export function DailyBrief() {
 						type="button"
 						onClick={() => generate.mutate(undefined)}
 						disabled={generate.isPending}
-						className="mt-2 text-accent hover:underline text-xs disabled:opacity-50"
+						className="mt-2 text-accent-ink hover:underline text-xs disabled:opacity-50"
 					>
 						{generate.isPending ? "Generating..." : "Generate now"}
 					</button>
@@ -96,7 +96,7 @@ export function DailyBrief() {
 								className={cn(
 									"shrink-0 px-2 py-1 rounded text-[11px] transition",
 									selectedDate === b.date
-										? "bg-accent/20 text-accent"
+										? "bg-accent/20 text-accent-ink"
 										: "text-muted-foreground/70 bg-secondary/30 hover:bg-secondary/50",
 								)}
 								title={b.body?.slice(0, 200)}

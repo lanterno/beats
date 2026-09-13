@@ -64,7 +64,7 @@ export function FlowHeadline() {
 
 			<div className="flex items-baseline gap-4 text-[12px] text-muted-foreground tabular-nums">
 				<span>
-					<span className="font-heading text-2xl text-accent">{avg}</span>
+					<span className="font-heading text-2xl text-accent-ink">{avg}</span>
 					<span className="text-[10px] text-muted-foreground"> /100</span>
 				</span>
 				<span>
@@ -141,7 +141,7 @@ function DeepLinkSpan({
 				e.stopPropagation();
 				onClick();
 			}}
-			className="text-foreground/80 hover:text-accent hover:underline transition-colors"
+			className="text-foreground/80 hover:text-accent-ink hover:underline transition-colors"
 		>
 			{label}
 		</button>

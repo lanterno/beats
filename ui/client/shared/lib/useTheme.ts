@@ -1,28 +1,24 @@
 /**
- * Theme hook — manages color theme, color mode, and layout density.
- * Persists to localStorage, applies data attributes on <html>.
+ * Theme hook — manages the hour (afternoon / dusk) and layout density.
+ * Persists to localStorage, applies data attributes on <html>, and keeps
+ * the browser chrome's `theme-color` on the sky.
  */
 import { useCallback, useEffect, useState } from "react";
 
-export type ThemeName = "ember" | "midnight" | "forest" | "mono" | "sunset";
-export type ColorMode = "dark" | "light";
+export type ThemeName = "afternoon" | "dusk";
 export type Density = "comfortable" | "compact" | "spacious";
 
 const THEME_KEY = "beats_theme";
-const MODE_KEY = "beats_mode";
 const DENSITY_KEY = "beats_density";
 
-export const THEMES: { id: ThemeName; label: string; accent: string }[] = [
-	{ id: "ember", label: "Ember", accent: "#d4952a" },
-	{ id: "midnight", label: "Midnight", accent: "#6699cc" },
-	{ id: "forest", label: "Forest", accent: "#66b366" },
-	{ id: "mono", label: "Mono", accent: "#999999" },
-	{ id: "sunset", label: "Sunset", accent: "#e06040" },
-];
-
-export const COLOR_MODES: { id: ColorMode; label: string }[] = [
-	{ id: "dark", label: "Dark" },
-	{ id: "light", label: "Light" },
+/**
+ * `sky` is the top of each hour's sky: what the browser paints its own
+ * chrome (`theme-color`) and the swatch Settings shows. index.html stamps
+ * the same values before first paint so a stored dusk does not flash.
+ */
+export const THEMES: { id: ThemeName; label: string; sky: string }[] = [
+	{ id: "afternoon", label: "Afternoon", sky: "#8CC1E2" },
+	{ id: "dusk", label: "Dusk", sky: "#1A2446" },
 ];
 
 export const DENSITIES: { id: Density; label: string }[] = [
@@ -31,10 +27,15 @@ export const DENSITIES: { id: Density; label: string }[] = [
 	{ id: "spacious", label: "Spacious" },
 ];
 
-function getStored<T extends string>(key: string, fallback: T): T {
+/**
+ * Read a stored choice, falling back when it is missing or not one of the
+ * offered ids. A value from before the two hours ("ember", "midnight", …)
+ * reads as the fallback; nothing is written back until the user picks.
+ */
+function getStored<T extends string>(key: string, offered: readonly { id: T }[], fallback: T): T {
 	try {
 		const val = localStorage.getItem(key);
-		return (val as T) || fallback;
+		return offered.some((o) => o.id === val) ? (val as T) : fallback;
 	} catch {
 		return fallback;
 	}
@@ -42,10 +43,8 @@ function getStored<T extends string>(key: string, fallback: T): T {
 
 function applyTheme(theme: ThemeName) {
 	document.documentElement.setAttribute("data-theme", theme);
-}
-
-function applyMode(mode: ColorMode) {
-	document.documentElement.setAttribute("data-mode", mode);
+	const sky = THEMES.find((t) => t.id === theme)?.sky;
+	if (sky) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", sky);
 }
 
 function applyDensity(density: Density) {
@@ -53,17 +52,16 @@ function applyDensity(density: Density) {
 }
 
 export function useTheme() {
-	const [theme, setThemeState] = useState<ThemeName>(() => getStored(THEME_KEY, "ember"));
-	const [mode, setModeState] = useState<ColorMode>(() => getStored(MODE_KEY, "dark"));
-	const [density, setDensityState] = useState<Density>(() => getStored(DENSITY_KEY, "comfortable"));
+	const [theme, setThemeState] = useState<ThemeName>(() =>
+		getStored(THEME_KEY, THEMES, "afternoon"),
+	);
+	const [density, setDensityState] = useState<Density>(() =>
+		getStored(DENSITY_KEY, DENSITIES, "comfortable"),
+	);
 
 	useEffect(() => {
 		applyTheme(theme);
 	}, [theme]);
-
-	useEffect(() => {
-		applyMode(mode);
-	}, [mode]);
 
 	useEffect(() => {
 		applyDensity(density);
@@ -75,17 +73,11 @@ export function useTheme() {
 		applyTheme(t);
 	}, []);
 
-	const setMode = useCallback((m: ColorMode) => {
-		setModeState(m);
-		localStorage.setItem(MODE_KEY, m);
-		applyMode(m);
-	}, []);
-
 	const setDensity = useCallback((d: Density) => {
 		setDensityState(d);
 		localStorage.setItem(DENSITY_KEY, d);
 		applyDensity(d);
 	}, []);
 
-	return { theme, setTheme, mode, setMode, density, setDensity };
+	return { theme, setTheme, density, setDensity };
 }

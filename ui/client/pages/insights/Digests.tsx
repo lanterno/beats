@@ -42,7 +42,7 @@ function DigestCard({ digest }: { digest: WeeklyDigest }) {
 							className={cn(
 								"flex items-center gap-0.5 text-xs font-medium tabular-nums",
 								delta > 0
-									? "text-accent"
+									? "text-accent-ink"
 									: delta < 0
 										? "text-destructive"
 										: "text-muted-foreground",
@@ -63,7 +63,7 @@ function DigestCard({ digest }: { digest: WeeklyDigest }) {
 							className={cn(
 								"text-xs px-2 py-0.5 rounded-full font-medium tabular-nums",
 								digest.productivity_score >= 70
-									? "bg-accent/10 text-accent"
+									? "bg-accent/10 text-accent-ink"
 									: digest.productivity_score >= 40
 										? "bg-warning/10 text-warning"
 										: "bg-destructive/10 text-destructive",

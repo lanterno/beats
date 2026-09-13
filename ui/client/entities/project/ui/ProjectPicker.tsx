@@ -190,9 +190,9 @@ export function ProjectPicker({
 				aria-label={triggerAriaLabel}
 				disabled={disabled}
 				className={cn(
-					"w-full inline-flex items-center gap-2 rounded-md border border-input bg-background text-left text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
+					"w-full inline-flex items-center gap-2 rounded-full bg-card text-left text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
 					compact ? "min-h-9 px-3 text-sm" : "min-h-10 px-3 text-base",
-					"hover:bg-secondary/40 disabled:opacity-50 disabled:cursor-not-allowed",
+					"hover:bg-card/70 disabled:opacity-50 disabled:cursor-not-allowed",
 				)}
 			>
 				{selectedProject ? (
@@ -204,7 +204,7 @@ export function ProjectPicker({
 						/>
 						<span className="truncate flex-1 min-w-0">{selectedProject.name}</span>
 						{selectedProject.archived && (
-							<span className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground shrink-0">
+							<span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-px rounded-full bg-secondary text-muted-foreground shrink-0">
 								Archived
 							</span>
 						)}
@@ -222,8 +222,8 @@ export function ProjectPicker({
 			</button>
 
 			{open && (
-				<div className="absolute z-50 mt-1 w-full min-w-56 rounded-lg border border-border bg-popover shadow-card overflow-hidden">
-					<div className="relative border-b border-border/60">
+				<div className="absolute z-50 mt-1 w-full min-w-56 rounded-2xl bg-popover shadow-card overflow-hidden">
+					<div className="relative border-b border-border">
 						<Search
 							className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60 pointer-events-none"
 							aria-hidden="true"
@@ -285,7 +285,7 @@ export function ProjectPicker({
 										onMouseEnter={() => setHighlight(i)}
 										className={cn(
 											"flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors",
-											isHighlighted ? "bg-accent/15 text-foreground" : "text-foreground/90",
+											isHighlighted ? "bg-secondary text-foreground" : "text-foreground/90",
 										)}
 									>
 										<span
@@ -295,7 +295,7 @@ export function ProjectPicker({
 										/>
 										<span className="truncate flex-1 min-w-0">{p.name}</span>
 										{p.archived && (
-											<span className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground shrink-0">
+											<span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-px rounded-full bg-secondary text-muted-foreground shrink-0">
 												Archived
 											</span>
 										)}
@@ -305,7 +305,7 @@ export function ProjectPicker({
 											</span>
 										)}
 										{isSelected && (
-											<Check className="w-3.5 h-3.5 text-accent shrink-0" aria-hidden="true" />
+											<Check className="w-3.5 h-3.5 text-accent-ink shrink-0" aria-hidden="true" />
 										)}
 									</li>
 								);

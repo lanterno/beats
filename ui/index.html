@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#d4952a" />
+    <meta name="theme-color" content="#8CC1E2" />
+    <!-- The stored hour, before first paint, so dusk does not flash the
+         afternoon. client/shared/lib/useTheme.ts owns both keys and the
+         dusk sky's hex from here on. -->
+    <script>
+      try {
+        var root = document.documentElement;
+        if (localStorage.getItem("beats_theme") === "dusk") {
+          root.dataset.theme = "dusk";
+          document.querySelector('meta[name="theme-color"]').content = "#1A2446";
+        }
+        var density = localStorage.getItem("beats_density");
+        if (density === "compact" || density === "spacious") root.dataset.density = density;
+      } catch (e) {}
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/pwa-192.svg" />

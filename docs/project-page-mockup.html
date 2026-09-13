@@ -1,0 +1,862 @@
+<title>Project Page Rethought</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Zen+Maru+Gothic:wght@400;500;700&display=swap">
+<style>
+/* ============================================================
+   Half past three on a hill above the fields.
+   A painted sky behind everything, green hills at the foot of the
+   screen, and the page floating on cloud-white panels: no borders,
+   no boxes, no textures. Daylight on :root; the blue hour under
+   prefers-color-scheme and under [data-theme="dark"].
+   ============================================================ */
+:root{
+  color-scheme:light;
+  --sky-top:#8CC1E2; --sky-mid:#BCDDEE; --sky-low:#E4F0F1; --sky-ground:#E9F2E6;
+  --sun:rgb(255 236 170 / .75);
+  --cloud:#FFFFFF; --cloud-shade:rgb(150 185 215 / .45); --cloud-a:.88;
+  --hill-far:#B9D9A8; --hill-mid:#8AC07C; --hill-near:#5C9F5E;
+  --panel:rgb(255 253 247 / .93); --panel-2:rgb(255 253 247 / .82); --shadow:rgb(43 84 110 / .22);
+  --ink:#2B3A44; --ink-2:#66737D; --hair:rgb(43 58 68 / .09);
+  --wash:rgb(114 176 214 / .16); --wash-2:rgb(114 176 214 / .28);
+  --accent:#F2B233; --accent-ink:#8C5E12; --accent-wash:rgb(242 178 51 / .2);
+  --over:#3F8F55; --owed:#D2683F;
+  --vac:#D9EBF6; --vac-ink:#276A8E; --sick:#FBE3D9; --sick-ink:#B04E33; --hol:#E3F1D3; --hol-ink:#356F3E; --oth:#EEEBE2; --oth-ink:#6A6258;
+  --veil:rgb(60 100 130 / .38);
+  --display:"M PLUS Rounded 1c","Zen Maru Gothic","Hiragino Maru Gothic ProN",system-ui,sans-serif;
+  --text:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Segoe UI",system-ui,sans-serif;
+  --figs:"M PLUS Rounded 1c","Zen Maru Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --sky-top:#1A2446; --sky-mid:#2E3E6E; --sky-low:#6A5A82; --sky-ground:#C98A63;
+    --sun:rgb(255 170 100 / .35);
+    --cloud:#5A6A96; --cloud-shade:rgb(20 30 60 / .5); --cloud-a:.6;
+    --hill-far:#3B5470; --hill-mid:#2C4A44; --hill-near:#1F3A31;
+    --panel:rgb(36 48 74 / .94); --panel-2:rgb(36 48 74 / .86); --shadow:rgb(5 10 25 / .55);
+    --ink:#ECF1F6; --ink-2:#A6B1BF; --hair:rgb(236 241 246 / .1);
+    --wash:rgb(140 190 230 / .14); --wash-2:rgb(140 190 230 / .26);
+    --accent:#F5C55B; --accent-ink:#F5C55B; --accent-wash:rgb(245 197 91 / .18);
+    --over:#8AD6A0; --owed:#F2A182;
+    --vac:#2D4A6B; --vac-ink:#BCD9F0; --sick:#5A3630; --sick-ink:#F5B9A5; --hol:#2F4A36; --hol-ink:#BFE3B0; --oth:#3B4556; --oth-ink:#C9D2DC;
+    --veil:rgb(8 14 30 / .6);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --sky-top:#1A2446; --sky-mid:#2E3E6E; --sky-low:#6A5A82; --sky-ground:#C98A63;
+  --sun:rgb(255 170 100 / .35);
+  --cloud:#5A6A96; --cloud-shade:rgb(20 30 60 / .5); --cloud-a:.6;
+  --hill-far:#3B5470; --hill-mid:#2C4A44; --hill-near:#1F3A31;
+  --panel:rgb(36 48 74 / .94); --panel-2:rgb(36 48 74 / .86); --shadow:rgb(5 10 25 / .55);
+  --ink:#ECF1F6; --ink-2:#A6B1BF; --hair:rgb(236 241 246 / .1);
+  --wash:rgb(140 190 230 / .14); --wash-2:rgb(140 190 230 / .26);
+  --accent:#F5C55B; --accent-ink:#F5C55B; --accent-wash:rgb(245 197 91 / .18);
+  --over:#8AD6A0; --owed:#F2A182;
+  --vac:#2D4A6B; --vac-ink:#BCD9F0; --sick:#5A3630; --sick-ink:#F5B9A5; --hol:#2F4A36; --hol-ink:#BFE3B0; --oth:#3B4556; --oth-ink:#C9D2DC;
+  --veil:rgb(8 14 30 / .6);
+}
+
+*{box-sizing:border-box}
+html{background:var(--sky-top)}
+body{margin:0;background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 42%,var(--sky-low) 78%,var(--sky-ground) 100%) fixed;color:var(--ink);font:400 14px/1.5 var(--text);font-variant-numeric:lining-nums;padding-block:0 220px;padding-inline:16px;min-height:100vh}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,[tabindex]:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:999px}
+b,strong{font-weight:700}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- the painting: sun, clouds, hills ---------- */
+.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.sun{position:absolute;top:-16vh;right:-8vw;width:56vw;height:56vw;max-width:760px;max-height:760px;border-radius:50%;background:radial-gradient(circle,var(--sun) 0,transparent 62%)}
+.cloud{position:absolute;opacity:var(--cloud-a);filter:blur(1.2px);animation:drift 140s ease-in-out infinite alternate}
+.cloud::before,.cloud::after{content:"";position:absolute;inset:0}
+.cloud::before{background:
+  radial-gradient(closest-side at 28% 66%,var(--cloud) 62%,transparent),
+  radial-gradient(closest-side at 50% 42%,var(--cloud) 58%,transparent),
+  radial-gradient(closest-side at 72% 64%,var(--cloud) 62%,transparent),
+  radial-gradient(closest-side at 50% 82%,var(--cloud) 74%,transparent)}
+.cloud::after{background:radial-gradient(60% 40% at 50% 100%,var(--cloud-shade),transparent 70%);mix-blend-mode:multiply;opacity:.6}
+.c1{left:6vw;top:9vh;width:380px;height:130px}
+.c2{left:38vw;top:4vh;width:520px;height:170px;animation-duration:170s;animation-delay:-60s}
+.c3{right:4vw;top:22vh;width:300px;height:100px;animation-duration:120s;animation-delay:-30s}
+.c4{left:22vw;top:34vh;width:240px;height:80px;opacity:calc(var(--cloud-a) * .7);animation-duration:200s;animation-delay:-90s}
+.c5{right:24vw;top:46vh;width:340px;height:110px;opacity:calc(var(--cloud-a) * .6);animation-duration:150s;animation-delay:-20s}
+@keyframes drift{from{transform:translateX(-1.5vw)}to{transform:translateX(1.5vw)}}
+.hills{position:absolute;left:0;right:0;bottom:0;width:100%;height:200px;display:block}
+.hills .far{fill:var(--hill-far)}.hills .mid{fill:var(--hill-mid)}.hills .near{fill:var(--hill-near)}
+@media (max-width:700px){.hills{height:120px}.sun{width:90vw;height:90vw}}
+
+/* ---------- shared soft idioms ---------- */
+.panel{background:var(--panel);border-radius:26px;box-shadow:0 22px 48px -26px var(--shadow)}
+.pill,.btn,.chip,.seg button,.dlg .segs button{border-radius:999px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:13px;font-weight:700;background:var(--wash-2);color:var(--ink);transition:transform .12s,background .12s}
+.btn:hover{background:color-mix(in srgb,var(--wash-2) 100%,var(--ink) 6%)}
+.btn:active{transform:translateY(1px)}
+.btn.pri{background:var(--accent);color:#2B3A44}
+.btn svg{width:13px;height:13px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 11px;white-space:nowrap;background:var(--wash);color:var(--ink)}
+.chip.warn{background:var(--accent-wash);color:var(--accent-ink)}
+.chip.arch{background:color-mix(in srgb,var(--owed) 18%,transparent);color:var(--owed)}
+.chip.arch button{text-decoration:underline;text-underline-offset:3px}
+.linkish{color:var(--accent-ink);font-size:12.5px;font-weight:700}
+.linkish:hover{text-decoration:underline;text-underline-offset:3px}
+.lbl,.sec-h,.ledger th,.dlg label,.fig .k,.two .lbl,.plist .h{font-family:var(--text);font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.ledger td,.day .fig,.sess .t,.sess .dur,.proof,.adjust,.timer .elapsed,.two .val,.terms .from,.cal .g,.plist .p .t,.ledger .total{font-family:var(--figs);font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum","lnum"}
+.hand,.ledger .why,.ledger tr.quiet td,.terms .n,.off .tally,.week .foot,.dlg .cost,.proj,.notice{color:var(--ink-2)}
+.needs{display:inline-block;font-family:var(--text);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent-wash);padding:1px 8px;border-radius:999px;margin-left:8px;white-space:nowrap;vertical-align:middle}
+.sec-h{margin:0}
+.sec-h .sub{font-family:var(--text);font-weight:500;letter-spacing:0;text-transform:none;font-size:12.5px;color:var(--ink-2);margin-left:8px}
+.hline{display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap}
+.hline .right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2)}
+.nav{display:inline-flex;align-items:center;gap:4px}
+.nav button{width:28px;height:28px;border-radius:50%;color:var(--ink);display:grid;place-items:center;background:var(--wash)}
+.nav button:hover{background:var(--wash-2)}
+.nav svg{width:14px;height:14px}
+
+/* ---------- mockup chrome: floating on the sky ---------- */
+.mock-bar{position:relative;z-index:1;max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding-block:18px 18px}
+.mock-bar h1{font-family:var(--display);font-size:18px;font-weight:800;margin:0;letter-spacing:-.01em;color:var(--ink)}
+.mock-bar h1 span{font-family:var(--text);color:var(--ink-2);font-weight:500;font-size:12.5px;margin-left:8px}
+.seg{display:inline-flex;align-items:center;gap:5px;padding:4px;border-radius:999px;background:var(--panel-2);box-shadow:0 10px 24px -16px var(--shadow)}
+.seg>span{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin:0 6px 0 8px}
+.seg button{padding:5px 12px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#2B3A44}
+.mock-bar .jump{margin-left:auto}
+
+/* ---------- the app: sidebar panel + page, no box around them ---------- */
+.frame{position:relative;z-index:1;max-width:1400px;margin:0 auto;display:grid;grid-template-columns:256px minmax(0,1fr);gap:26px;transition:max-width .25s}
+.frame.phone{max-width:400px;grid-template-columns:minmax(0,1fr)}
+.frame.phone .sidebar{display:none}
+.frame.phone .mobile-bar{display:flex}
+.mobile-bar{display:none;align-items:center;gap:12px;padding:10px 18px;margin-bottom:14px;border-radius:999px;background:var(--panel-2);font-family:var(--display);font-weight:800;font-size:16px;box-shadow:0 12px 26px -18px var(--shadow)}
+.mobile-bar .burger{width:18px;height:2px;background:currentColor;box-shadow:0 -5px 0 currentColor,0 5px 0 currentColor;margin:0 3px;border-radius:2px}
+
+.sidebar{background:var(--panel-2);border-radius:26px;padding:20px 18px;display:flex;flex-direction:column;gap:16px;font-size:13px;align-self:start;position:sticky;top:16px;box-shadow:0 22px 48px -26px var(--shadow)}
+.sidebar .brand{font-family:var(--display);font-weight:800;font-size:22px;padding:0 4px;display:flex;justify-content:space-between;align-items:baseline;letter-spacing:-.01em}
+.sidebar .brand small{font-family:var(--text);font-weight:700;font-size:9px;color:var(--ink-2);letter-spacing:.14em;text-transform:uppercase}
+.timer{border-radius:22px;padding:16px 12px 14px;text-align:center;background:var(--wash)}
+.timer .elapsed{font-size:30px;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+.timer .on{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.timer .btn{margin-top:12px;width:100%;justify-content:center;background:var(--accent);color:#2B3A44}
+.timer.idle .elapsed{color:var(--ink-2)}
+.timer.idle .btn{background:var(--wash-2);color:var(--ink)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.two>div{border-radius:18px;padding:10px 8px;text-align:center;background:var(--wash)}
+.two .lbl{font-size:9px}
+.two .val{font-size:18px;font-weight:800}
+.two .val.acc{color:var(--accent-ink)}
+.plist{display:flex;flex-direction:column;gap:2px}
+.plist .h{font-size:9.5px;padding:6px 8px}
+.plist .p{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:999px;color:var(--ink-2)}
+.plist .p.on{background:var(--wash-2);color:var(--ink);font-weight:700}
+.plist .p .dot,.hdr .dot{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:0 0 0 3px rgb(255 255 255 / .6)}
+.plist .p .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plist .p .t{font-size:12px;font-weight:700}
+
+.content{container-type:inline-size;container-name:content;min-width:0}
+.page{max-width:64rem;margin:0 auto;padding:0}
+
+/* ---------- header: on the sky itself, nothing around it ---------- */
+.hdr{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px 18px}
+.hdr .dot{width:14px;height:14px}
+.hdr .name{font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.1;text-wrap:balance;color:var(--ink);text-align:left}
+.hdr .chip{background:var(--panel-2);color:var(--ink)}
+.hdr .desc{color:var(--ink);font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:32ch;opacity:.8}
+.hdr .desc.add{opacity:.55}
+.hdr .repo{font-size:12px;font-weight:700;color:var(--ink);display:inline-flex;gap:6px;align-items:center;background:var(--panel-2);border-radius:999px;padding:3px 11px}
+.hdr .gear{margin-left:auto;color:var(--ink);width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:var(--panel-2)}
+.hdr .gear:hover{background:var(--panel)}
+.hdr .gear svg{width:16px;height:16px}
+
+/* ---------- grid ---------- */
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:26px;margin-top:4px}
+@container content (min-width: 860px){
+  .grid{grid-template-columns:minmax(0,1fr) 300px}
+  .rail{position:sticky;top:16px;align-self:start}
+}
+.main{min-width:0;display:flex;flex-direction:column;gap:26px}
+.rail{display:flex;flex-direction:column;gap:26px}
+.week,.ledger,.reg,.off,.quiet-facts{background:var(--panel);border-radius:26px;box-shadow:0 22px 48px -26px var(--shadow);padding:22px 24px}
+.quiet-facts{padding:16px 24px}
+
+/* ---------- the standing: the brightest cloud ---------- */
+.standing{position:relative;background:var(--panel);border-radius:30px;padding:24px 26px 22px;display:grid;grid-template-columns:minmax(0,1fr);gap:20px 32px;box-shadow:0 30px 60px -28px var(--shadow);overflow:hidden}
+.standing::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(60% 70% at 100% 0%,var(--accent-wash),transparent 70%),radial-gradient(50% 60% at 0% 100%,var(--wash),transparent 70%)}
+.standing>*{position:relative}
+@container content (min-width: 640px){
+  .standing{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}
+  .standing .bal{padding-right:30px}
+}
+.standing .lbl{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.standing .lbl .when{font-family:var(--text);text-transform:none;letter-spacing:0;font-weight:500;font-size:12.5px}
+.big{font-family:var(--display);font-weight:800;font-size:50px;line-height:1;letter-spacing:-.035em;margin-top:8px;color:var(--ink);font-variant-numeric:tabular-nums lining-nums;white-space:nowrap}
+@container content (max-width: 420px){.big{font-size:42px}}
+.big.over{color:var(--over)}.big.owed{color:var(--owed)}.big.even,.big.soft{color:var(--ink-2)}
+.big small{font-family:var(--text);font-size:17px;font-weight:500;letter-spacing:0;margin-left:8px;color:var(--ink-2)}
+.proof{margin-top:12px;font-size:12.5px;line-height:1.9;color:var(--ink-2)}
+.proof b{color:var(--ink);font-weight:800}
+.proj{margin-top:10px;font-size:13px;line-height:1.55;color:var(--ink);font-weight:500}
+.proj .k{color:var(--ink-2);font-weight:400}
+.notice{margin-top:10px;font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.figs{display:flex;flex-wrap:wrap;gap:8px 28px;margin-top:8px}
+.fig .k{font-size:10px}
+.fig .v{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.2;margin-top:2px;display:flex;align-items:center;gap:8px;color:var(--ink);font-variant-numeric:tabular-nums lining-nums}
+.fig .v.over{color:var(--over)}
+.live{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-wash);display:inline-block;animation:glow 2.8s ease-in-out infinite}
+@keyframes glow{50%{opacity:.55}}
+.adjust{margin-top:8px;font-size:12px;color:var(--ink-2)}
+.sentence{margin-top:10px;font-size:15.5px;color:var(--ink);line-height:1.5;text-wrap:pretty}
+.actions{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.side-avg{margin-top:8px}
+.side-avg .v{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-.02em}
+.side-avg .s{font-size:13px;color:var(--ink-2);margin-top:2px}
+
+/* ---------- the days ---------- */
+.week .days{margin-top:12px}
+.day{border-bottom:1px solid var(--hair)}
+.day:last-child{border-bottom:0}
+.day .row{display:grid;grid-template-columns:124px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 12px;cursor:pointer;border-radius:16px;margin:2px -6px}
+.day .row:hover{background:var(--wash)}
+.day.today .row{background:var(--accent-wash)}
+.day .d{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--ink)}
+.day .d .n{color:var(--ink-2);font-weight:700;font-family:var(--figs)}
+.day.today .d{color:var(--accent-ink)}
+.day .d .chip{font-size:10px;padding:1px 8px;background:var(--accent);color:#2B3A44;letter-spacing:.06em}
+.day .mid{font-size:12.5px;color:var(--ink-2);display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap;font-weight:500}
+.day .fig{font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap;display:flex;gap:8px;align-items:center}
+.day .fig .of{color:var(--ink-2);font-weight:500}
+.day .fig .dl{font-size:11.5px;min-width:3.2em;text-align:right}
+.dl.pos{color:var(--over)}.dl.neg{color:var(--owed)}
+.day .fig .car{color:var(--ink-2);width:14px;text-align:center;transition:transform .15s}
+.day.open .fig .car{transform:rotate(90deg)}
+.tint{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--dab,var(--oth));color:var(--oth-ink)}
+.tint.vac{background:var(--vac);color:var(--vac-ink)}
+.tint.sick{background:var(--sick);color:var(--sick-ink)}
+.tint.hol{background:var(--hol);color:var(--hol-ink)}
+.tint.oth{background:var(--oth);color:var(--oth-ink)}
+.sessions{display:none;padding:2px 6px 10px 130px}
+.day.open .sessions{display:block}
+@container content (max-width: 560px){
+  .day .row{grid-template-columns:78px minmax(0,1fr) auto;gap:8px;padding:9px 8px}
+  .day .mid{flex-wrap:nowrap;overflow:hidden;white-space:nowrap}
+  .day .mid .tint{overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:100%}
+  .sessions{padding-left:8px}
+  .sess{gap:8px}
+}
+.sess{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:6px 12px;border-radius:12px;font-size:13px}
+.sess:hover{background:var(--wash)}
+.sess .t{font-size:12.5px;font-weight:700;color:var(--ink)}
+.sess .note{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;gap:6px;align-items:center;min-width:0;font-weight:500}
+.tag{font-size:10.5px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--wash);color:var(--vac-ink)}
+.focus{font-size:10.5px;font-weight:700;color:var(--ink-2);background:var(--oth);border-radius:999px;padding:1px 7px}
+.sess .dur{font-size:12.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:10px}
+.sess .dur .live+*{color:var(--accent-ink)}
+.sess .ops{display:none;gap:2px}
+.sess:hover .ops{display:inline-flex}
+.sess .ops button{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;color:var(--ink-2)}
+.sess .ops button:hover{background:var(--wash-2);color:var(--ink)}
+.sess .ops svg{width:12px;height:12px}
+.week .foot{font-size:12.5px;padding:10px 12px 0;display:flex;gap:16px;flex-wrap:wrap;font-weight:500}
+
+/* ---------- earlier weeks ---------- */
+.ledger table{width:100%;border-collapse:collapse;margin-top:12px}
+.ledger th{text-align:right;padding:6px 8px 8px;white-space:nowrap;font-size:10px}
+.ledger th:first-child,.ledger th.l{text-align:left}
+.ledger td{padding:9px 8px;border-top:1px solid var(--hair);font-size:13.5px;font-weight:700;text-align:right;white-space:nowrap;vertical-align:middle;color:var(--ink)}
+.ledger td.l{text-align:left;font-family:var(--text);font-size:13.5px}
+.ledger td.x{color:var(--ink-2);font-weight:500;min-width:5ch}.ledger td.w,.ledger td.bal{min-width:5ch}.ledger td.bal{font-weight:800}
+.ledger tr.wk{cursor:pointer}
+.ledger tr.wk:hover td{background:var(--wash)}
+.ledger tr.wk:hover td:first-child{border-radius:14px 0 0 14px}.ledger tr.wk:hover td:last-child{border-radius:0 14px 14px 0}
+.ledger .wl{font-weight:800;font-size:13.5px}
+.ledger .wr{color:var(--ink-2);font-size:12px;margin-left:8px;font-family:var(--figs);font-weight:500}
+.ledger .why{display:block;font-size:12px;margin-top:1px;font-weight:500}
+.ledger td.mut{color:var(--ink-2);font-weight:500}
+.ledger td.pos{color:var(--over)}.ledger td.neg{color:var(--owed)}
+.cells{display:inline-grid;grid-template-columns:repeat(7,8px);gap:3px;align-items:end;height:16px;vertical-align:middle}
+.cells i{display:block;background:color-mix(in srgb,var(--over) 55%,transparent);border-radius:3px 3px 1px 1px;min-height:3px}
+.cells i.e{background:var(--hair);height:3px;border-radius:2px}
+.cells i.vac{background:var(--vac-ink)}.cells i.sick{background:var(--owed)}.cells i.hol{background:var(--accent)}.cells i.oth{background:var(--ink-2)}
+.ledger tr.rule td{padding:9px 14px;font-family:var(--text);font-size:12.5px;font-weight:700;color:var(--hol-ink);text-align:left;background:var(--hol);border:0;border-radius:999px;white-space:normal}
+.ledger tr.rule.ghost td{color:var(--ink-2);background:var(--oth)}
+.ledger tr.rule td span{color:var(--ink-2);margin-left:8px;font-weight:500}
+.ledger tr.quiet td{text-align:center;font-size:12.5px;font-weight:500;border-top:0;padding:6px}
+.ledger .more{display:flex;justify-content:center;gap:8px;padding:14px 6px 4px;font-size:12.5px;align-items:baseline}
+.ledger .more .mut{color:var(--ink-2)}
+.ledger .total{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--ink-2);padding:12px 8px 0;border-top:1px solid var(--hair);margin-top:8px;font-weight:500}
+.ledger .total b{color:var(--ink);font-weight:800}
+.figs-note .tint{font-size:10.5px;padding:0 8px}
+@container content (max-width: 640px){
+  .ledger table,.ledger thead,.ledger tbody{display:block}
+  .ledger thead{display:none}
+  .ledger tr.wk{display:grid;grid-template-columns:auto auto auto minmax(0,1fr);grid-template-areas:"week week week delta" "cells w x bal";gap:3px 10px;padding:9px 4px;border-top:1px solid var(--hair);align-items:center}
+  .ledger tr.wk td{border:0;padding:0;text-align:left;min-width:0}
+  .ledger td.l{grid-area:week}
+  .ledger td.c{grid-area:cells}
+  .ledger td.d{grid-area:delta;text-align:right}
+  .ledger td.w{grid-area:w}
+  .ledger td.x{grid-area:x}
+  .ledger td.x::before{content:"of "}
+  .ledger td.bal{grid-area:bal;text-align:right;color:var(--ink-2);font-weight:700}
+  .ledger td.bal::before{content:"bal "}
+  .ledger tr.rule,.ledger tr.quiet{display:block;margin:6px 0}
+  .ledger tr.rule td,.ledger tr.quiet td{display:block}
+  .ledger .figs-note{display:none}
+}
+
+/* ---------- rail ---------- */
+.reg .inforce{margin-top:12px}
+.reg .inforce .big2{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.reg .inforce .s{font-size:12.5px;color:var(--ink-2);margin-top:2px;font-weight:500}
+.reg .next{margin-top:8px;font-size:13px;color:var(--hol-ink);display:block;font-weight:700;line-height:1.45}
+.reg .next .k{color:var(--ink-2);font-weight:500;margin-right:4px}
+.chart{margin-top:14px;width:100%;height:auto;display:block;overflow:visible}
+.chart text{font-family:var(--figs);font-size:9.5px;font-weight:700;fill:var(--ink-2);font-variant-numeric:tabular-nums lining-nums}
+.chart .grid{stroke:var(--hair);stroke-width:1}
+.chart .step{stroke:var(--over);stroke-width:2.5;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.chart .planned{stroke:var(--ink-2);stroke-width:1.5;fill:none;stroke-dasharray:3 4;stroke-linecap:round}
+.chart .area{fill:url(#meadow)}
+.chart .today{stroke:var(--accent);stroke-width:2;stroke-linecap:round}
+.chart .lab{fill:var(--ink);font-size:9.5px}
+.terms{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
+.terms li{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"from st" "what what" "note note";gap:2px 8px;align-items:center;padding:9px 0;border-top:1px solid var(--hair);font-size:12.5px}
+.terms .from{grid-area:from;font-size:11.5px;color:var(--ink-2);white-space:nowrap;font-weight:700}
+.terms .stops{grid-area:st;display:inline-flex;gap:6px;align-items:center;justify-self:end}
+.terms .what{grid-area:what;min-width:0;color:var(--ink);font-weight:500}
+.terms .n{grid-area:note;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.terms .st{font-family:var(--text);font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 9px;border-radius:999px;background:var(--hol);color:var(--hol-ink);white-space:nowrap}
+.terms .st.plan{background:var(--oth);color:var(--oth-ink)}
+.terms .ops{display:inline-flex;gap:2px;opacity:0;transition:opacity .15s}
+.terms li:hover .ops{opacity:1}
+.terms .ops button{width:22px;height:22px;display:grid;place-items:center;color:var(--ink-2);border-radius:50%}
+.terms .ops button:hover{background:var(--wash-2);color:var(--ink)}
+.terms .ops svg{width:11px;height:11px}
+.reg .consts{margin-top:10px;font-size:12px;color:var(--ink-2);line-height:1.6;border-top:1px solid var(--hair);padding-top:10px;font-weight:500}
+.reg .consts button{color:var(--accent-ink);margin-left:6px;font-weight:700}
+.reg .addterm{margin-top:14px}
+.off .list{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column}
+.off li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 0;border-top:1px solid var(--hair);font-size:12.5px;cursor:pointer}
+.off li .w{color:var(--ink)}
+.off li .w b{font-weight:800;font-size:12.5px}
+.off li .w small{display:block;color:var(--ink-2);font-size:11.5px;font-weight:500}
+.off .tally{margin-top:10px;font-size:12.5px;border-top:1px solid var(--hair);padding-top:10px;line-height:1.6;font-weight:500}
+.off .empty{font-size:12.5px;color:var(--ink-2);margin-top:10px;line-height:1.5;font-weight:500}
+.quiet-facts{font-size:12px;color:var(--ink-2);line-height:1.7;font-weight:500}
+.quiet-facts b{color:var(--ink);font-weight:800}
+
+/* ---------- dialog: a cloud in front ---------- */
+.overlay{position:fixed;inset:0;background:var(--veil);display:grid;place-items:center;padding:16px;z-index:50}
+.dlg{background:var(--panel);color:var(--ink);border-radius:28px;width:min(100%,420px);padding:22px 24px 20px;box-shadow:0 40px 80px -30px var(--shadow)}
+.dlg h2{font-family:var(--display);font-size:20px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em}
+.dlg .f{margin-top:12px}
+.dlg label{display:block;font-size:10.5px;margin-bottom:5px}
+.dlg .segs{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:var(--wash)}
+.dlg .segs button{padding:5px 13px;font-size:12.5px;color:var(--ink-2);font-weight:700}
+.dlg .segs button[aria-pressed="true"]{background:var(--accent);color:#2B3A44}
+.dlg input[type=text]{width:100%;background:var(--wash);border:0;border-radius:12px;color:var(--ink);padding:8px 12px;font:inherit;font-size:13.5px;font-family:var(--figs);font-weight:700}
+.dlg input[type=text]:focus{outline:3px solid var(--accent);outline-offset:0;border-radius:12px}
+.dlg .two-f{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cal{margin-top:14px;border-radius:18px;padding:12px;background:var(--wash)}
+.cal .ch{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:800;margin-bottom:6px}
+.cal .g{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center;font-size:11.5px;font-weight:700}
+.cal .g .h{color:var(--ink-2);font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 0 4px;font-family:var(--text)}
+.cal .g .c{padding:6px 0;border-radius:10px;color:var(--ink)}
+.cal .g .c.we{color:color-mix(in srgb,var(--ink-2) 55%,transparent)}
+.cal .g .c.past{color:color-mix(in srgb,var(--ink-2) 75%,transparent)}
+.cal .g .c.sel{background:var(--accent);color:#2B3A44}
+.cal .g .c.vac{background:var(--vac);color:var(--vac-ink)}
+.cal .g .c.hol{background:var(--hol);color:var(--hol-ink)}
+.cal .g .c.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.dlg .row-btn{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.dlg .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:14px;font-weight:500}
+.dlg .check input{accent-color:var(--accent)}
+.dlg .cost{font-size:12.5px;margin-top:10px;font-weight:500}
+
+/* ---------- design notes: on a cloud below the app ---------- */
+.notes{position:relative;z-index:1;max-width:920px;margin:44px auto 0;font-size:15px;line-height:1.6;color:var(--ink);background:var(--panel);border-radius:30px;padding:34px 38px 30px;box-shadow:0 22px 48px -26px var(--shadow)}
+.notes h2{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.02em;margin:34px 0 10px;text-wrap:balance}
+.notes h2:first-child{margin-top:0}
+.notes p{margin:0 0 10px;max-width:68ch}
+.notes ul{padding-left:20px;margin:0 0 10px;max-width:72ch}
+.notes li{margin-bottom:6px}
+.notes li b{font-weight:800}
+.notes .q{list-style:none;padding-left:0}
+.notes .q li{background:var(--accent-wash);border-radius:16px;padding:10px 16px}
+.notes table{border-collapse:collapse;font-size:13.5px;margin:6px 0 12px;width:100%}
+.notes .tw{overflow-x:auto}
+.notes th,.notes td{text-align:left;padding:8px 10px 8px 0;border-top:1px solid var(--hair);vertical-align:top}
+.notes th{font-size:10.5px;border-top:0}
+.notes code{font-family:var(--figs);font-size:13px;font-weight:700;color:var(--ink);background:var(--wash);padding:1px 8px;border-radius:999px}
+.notes .needs{margin:0}
+@media (max-width:700px){.notes{padding:24px 20px;border-radius:22px}}
+</style>
+
+<div class="sky" aria-hidden="true">
+  <div class="sun"></div>
+  <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="cloud c4"></div><div class="cloud c5"></div>
+  <svg class="hills" viewBox="0 0 1440 200" preserveAspectRatio="none" aria-hidden="true">
+    <path class="far" d="M0 118 C 160 70, 330 96, 520 84 S 860 40, 1060 86 S 1340 108, 1440 92 L1440 200 L0 200 Z"/>
+    <path class="mid" d="M0 146 C 200 104, 380 150, 600 124 S 920 92, 1120 134 S 1360 156, 1440 132 L1440 200 L0 200 Z"/>
+    <path class="near" d="M0 172 C 240 140, 440 184, 720 158 S 1080 128, 1300 168 S 1400 176, 1440 166 L1440 200 L0 200 Z"/>
+  </svg>
+</div>
+
+<div class="mock-bar" role="toolbar" aria-label="Mockup controls">
+  <h1>Project page, rethought <span>mockup · not the live app</span></h1>
+  <div class="seg" id="seg-state"><span>State</span>
+    <button type="button" data-state="dayjob" aria-pressed="true">Day job · Thursday</button>
+    <button type="button" data-state="side" aria-pressed="false">Side project</button>
+    <button type="button" data-state="fresh" aria-pressed="false">New day job</button>
+  </div>
+  <div class="seg" id="seg-view"><span>View</span>
+    <button type="button" data-view="desktop" aria-pressed="true">Desktop</button>
+    <button type="button" data-view="phone" aria-pressed="false">Phone</button>
+  </div>
+  <div class="seg" id="seg-theme"><span>Hour</span>
+    <button type="button" data-theme="light" aria-pressed="true">Afternoon</button>
+    <button type="button" data-theme="dark" aria-pressed="false">Dusk</button>
+  </div>
+  <div class="jump"><a class="linkish" href="#notes">Design notes ↓</a></div>
+</div>
+
+<div class="frame" id="frame">
+  <aside class="sidebar" id="sidebar" aria-label="App sidebar (unchanged)"></aside>
+  <div class="content">
+    <div class="mobile-bar"><span class="burger" aria-hidden="true"></span> Beats</div>
+    <div class="page" id="page"></div>
+  </div>
+</div>
+
+<div id="dlg-root"></div>
+
+<section class="notes" id="notes">
+  <h2>The look</h2>
+  <p>Half past three on a hill above the fields. The page lives inside a painted afternoon: a watercolour sky with slow clouds, sunlight from the top right, and green hills at the foot of the screen. The figures sit on cloud-white panels that float on the painting. There are no boxes, no borders, no textures: separation is done with air, soft washes and round shapes. At dusk the same hill under an indigo sky with a band of sunset at the horizon, and one warm lamp on the running timer.</p>
+  <ul>
+    <li><b>Colour.</b> Sky blue and meadow green are the painting; the panels are warm white; the ink is a deep slate. One accent, sunlight yellow, marks today, the running timer and the thing you can press. Leaf green for hours over, persimmon for hours owed. Tints are soft pills: sky for vacation, blossom for sick, leaf for a public holiday.</li>
+    <li><b>Type.</b> Two rounded faces drawn in Japan. M PLUS Rounded 1c, plump at its heaviest weight, sets the balance, the week's figures and every column of digits, which all share one width. Zen Maru Gothic sets everything read. Nothing is hand-written; the warmth is in the round letterforms.</li>
+    <li><b>Shape.</b> Every surface is a rounded cloud, every control a pill, every highlight a wash. Rows in the day book and the ledger are separated by air and a barely-there rule, not by lines. The contract's rate changes are green pills laid across the ledger where they happened.</li>
+    <li><b>Light.</b> The standing is the brightest cloud, with a breath of sunlight in its top right corner. Everything else is a shade quieter so the balance is the first thing read.</li>
+    <li><b>Motion.</b> The clouds drift across two minutes. The lamp breathes. Nothing else moves, and nothing moves under reduced-motion.</li>
+  </ul>
+
+  <h2>What this page is now</h2>
+  <p>One question per kind of project, answered in the first screen. For a day job: <b>where do I stand with my employer as of today, and what does that make of the rest of this week?</b> For a side project or freelance work: <b>am I on the pace I set myself, and where did the hours go?</b> Everything under the first screen is the evidence for that answer, in the order a person would check it.</p>
+  <ul>
+    <li><b>The standing</b> is the only lifted object on the page. The balance sits in the largest type with its three-term proof, and the line beneath says what Sunday looks like under the two choices a Thursday offers. Beside it, the week as three figures and one sentence: whether tomorrow is a long day, a short day, or off, and when the week resumes.</li>
+    <li><b>The open week</b> shows its seven days once. Each weekday carries what the contract expected of it, what was worked, and its sessions underneath; today is open, the other days are one line and open on click. Holidays and absences sit on the day they cost. Booking Friday off is a click on Friday.</li>
+    <li><b>Earlier weeks</b> is the ledger: one line per week with the adjusted expectation, the hours, the difference and the running balance, and a rule row on the date every term changed. Reading down the column is how 60% → 80% → 100% becomes visible, not listed. Runs of weeks with nothing worked and nothing expected collapse to one line.</li>
+    <li><b>The contract register</b> in the rail draws the terms as a step function over the contract's life, names the term in force and the next one, and keeps the full list with edit, remove and "Change contract from…". On a side project the same slot holds the goal and its history, because a dated goal change is the same thing.</li>
+    <li><b>Time off</b> is an upcoming list and a year tally. The month grid survives as the date picker inside the booking dialog, so the page has exactly one time navigator: the open week.</li>
+    <li><b>The header identifies and never measures.</b> Dot, name, a derived kind chip, description, repo, settings. The lifetime total, the goal ring and the worked/expected pair leave it, so the header can never disagree with the figures below.</li>
+  </ul>
+
+  <h2>What was cut or demoted, and why</h2>
+  <div class="tw"><table>
+    <tr><th>Today</th><th>Now</th><th>Why</th></tr>
+    <tr><td>Week card + "This wk" table row + header ring</td><td>The standing and the open week, once</td><td>The same seven figures were drawn two or three times in different shapes.</td></tr>
+    <tr><td>Lifetime total in accent in the header</td><td>All-time line at the ledger's foot</td><td>It was the largest number on the page and not a balance term.</td></tr>
+    <tr><td>Project health card (alert, sparkline, focus today)</td><td>An alert line in the standing when there is one; a focus mark on today's sessions</td><td>The ledger is the trend with real figures; the aggregate focus score said less than the score on each session.</td></tr>
+    <tr><td>Stats tiles (avg, longest, count, last tracked)</td><td>The all-time line</td><td>Shape, not standing; they held the space above the fold that the balance needed.</td></tr>
+    <tr><td>Absence month grid on the page</td><td>Upcoming list + tally; the grid is the picker in the dialog</td><td>An input surface pretending to be a reading surface, and a second time navigator.</td></tr>
+    <tr><td>Planned and Commits columns</td><td>An annotation line on the open week ("Planned 28 h · 9 commits")</td><td>Context about a week, not part of its arithmetic; two of the columns that made the table scroll sideways. <b>This demotes the weekly plan's column here; say if you want it back.</b></td></tr>
+    <tr><td>Danger zone card</td><td>"Archive project" at the settings drawer's foot; "Restore" inline on the Archived chip</td><td>A red card on every visit for a once-per-project action.</td></tr>
+    <tr><td>Contract nudge banner</td><td>The register's warning state and a caveat in the balance proof</td><td>A missing region matters exactly where it distorts a figure.</td></tr>
+    <tr><td>Session list with scope chip and "Show 20 more"</td><td>Sessions under their day, inside the open week</td><td>A session is a line item of a day; that is where its figure is explained and where edit and delete sit next to the thing they change. Older sessions are reached by opening older weeks.</td></tr>
+  </table></div>
+  <p>Every other action survives unchanged: colour, name, description, repo, kind, the term dialog, edit and remove per term, the absence dialog, session edit and delete, goal overrides (on weeks the contract does not govern), archive and restore.</p>
+
+  <h2>What the API already has, and what it does not</h2>
+  <ul>
+    <li><b>From the wire today:</b> the balance, this week's expected / worked / remaining and its seven days with holiday and absence, the earlier weeks with their adjusted expectation, the terms, the absences, the holidays, the sessions. The step chart, the rule rows, the Thursday sentence, the Sunday projection, the tally and the upcoming list are all client arithmetic over those.</li>
+    <li><b>Marked <span class="needs" style="margin:0">needs api</span> in the mockup:</b> the running balance per past week and the three terms of the proof (opening, worked, expected-through). One tz-aware ledger route returning each week's worked, expected and closing balance would deliver both and fix a drift the current page inherits: the week rows are bucketed by UTC date and completed beats only, while the week card is bucketed by the request timezone and includes the running timer. Until it exists the balance column stays hidden; nothing is reconstructed client-side.</li>
+  </ul>
+
+  <h2>States not drawn here</h2>
+  <ul>
+    <li><b>No contract yet</b> (day job): the balance slot reads "No contract yet. Add the terms and the page keeps a balance from that date." with Add contract; the week runs against the personal goal if any; time off is bookable (the API allows it) and counts once a contract exists.</li>
+    <li><b>Objective or 0-hour term:</b> no balance ("no balance while it lasts"), no expectation, the personal goal if set; the register shows the term as a labelled gap or a step at zero.</li>
+    <li><b>Before the first term:</b> "Contract starts Mon Sep 14 · 33.6 h/week", worked only. <b>After ended_on:</b> "Final balance +N h · ended Aug 31" with the proof frozen at that date.</li>
+    <li><b>Missing region:</b> the register turns amber ("Public holidays are not deducted · Set region") and the proof line carries the same caveat.</li>
+    <li><b>Past week open:</b> the balance stays pinned to today; the right half of the standing becomes "Week 35 · closed +1.5 h over", the sentence goes away, the day rows show that week.</li>
+  </ul>
+
+  <h2>Decisions I need from you</h2>
+  <ul class="q">
+    <li><b>Words.</b> The mockup keeps the app's vocabulary: Expected / Worked / Remaining / Balance. The ledger concept preferred payroll words (Due / Put in). One set app-wide; say if you want the other.</li>
+    <li><b>The first week.</b> A fresh day job shows a large negative balance from day two, because each day is charged as it closes. The "New day job" state renders it in muted rather than red with a sentence explaining it. Keep that softer treatment for the first governed week, or show it red like any other?</li>
+    <li><b>The projection.</b> "By Sunday: +5.7 h if the week is met · +3.8 h if you stop now" is the most quotable line on the page and the one that swings with the running timer. Keep it, or keep only the proof?</li>
+    <li><b>The plan column</b> and the <b>health sparkline</b> are demoted as noted above. Both are shipped features; confirm.</li>
+    <li><b>Themes.</b> The app has four dark themes today. This direction has two hours, afternoon and dusk, the same hill painted twice. Keep two, or make the four names variants of these two?</li>
+  </ul>
+</section>
+
+<script>
+/* ---------- example data (figures are consistent with each other) ---------- */
+const ICON = {
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  l:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  r:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  git:'<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 6v12M18 10a6 6 0 0 1-6 6H8"/></svg>',
+};
+
+const DAYJOB = {
+  key:'dayjob', kind:'day_job', name:'Contract Co', color:'#5B9CF6', description:'Backend team', repo:'acme/backend',
+  chip:'Day job · 80% of 42 h · CH-ZH',
+  timer:{elapsed:'0:20:14', on:'Contract Co', running:true}, sidebar:{today:'3.4h', week:'25.0h'},
+  balance:{ value:'+10.5 h', word:'over', tone:'over', asOf:'as of Thu Sep 10',
+    proof:['<b>+2.0 h</b> brought forward','<b>+848.5 h</b> worked since Jan 5','<b>−840.0 h</b> expected through Wed'],
+    projection:'<span class="k">By Sunday:</span> +5.7 h if the week is met<br>+3.8 h if you stop now.',
+    proofTag:true },
+  week:{ title:'This week', wk:'W37', range:'Sep 7 – 13', kLabel:'Expected', k:'26.9 h', worked:'25.0 h', running:'since 13:10', remLabel:'Remaining', rem:'1.9 h',
+    adjust:'33.6 h nominal − Fri vacation 6.7 h', sentence:'<b>1.9 h to go, all today.</b> Friday is off, then Mon 6.7 h.',
+    annotation:['Planned 28 h','9 commits','Timer running since 13:10'], bookOff:true },
+  days:[
+    {d:'Mon',n:7,worked:'7.1',exp:'6.7',delta:'+0.4',cnt:'3 sessions',
+      sessions:[{t:'08:52 → 11:40',note:'standup, incident follow-up',tags:['ops'],dur:'2h 48m'},{t:'12:30 → 15:05',note:'billing sync',tags:['api'],dur:'2h 35m'},{t:'15:20 → 17:04',note:'PR review',tags:['review'],dur:'1h 44m'}]},
+    {d:'Tue',n:8,worked:'6.9',exp:'6.7',delta:'+0.2',cnt:'2 sessions',
+      sessions:[{t:'08:45 → 12:10',note:'migration',tags:['db'],dur:'3h 25m'},{t:'13:00 → 16:29',note:'migration, rollback plan',tags:['db'],dur:'3h 29m'}]},
+    {d:'Wed',n:9,worked:'7.6',exp:'6.7',delta:'+0.9',cnt:'2 sessions',
+      sessions:[{t:'08:41 → 12:10',note:'PR #409',tags:[],dur:'3h 29m'},{t:'13:05 → 17:11',note:'rollout',tags:['infra'],dur:'4h 06m'}]},
+    {d:'Thu',n:10,worked:'3.4',exp:'6.7',today:true,open:true,cnt:'2 sessions · running',
+      sessions:[{t:'08:47 → 11:52',note:'standup, PR reviews',tags:['review'],focus:74,dur:'3h 05m'},{t:'13:10 → now',note:'API pagination',tags:[],dur:'0h 20m',live:true}]},
+    {d:'Fri',n:11,absence:{type:'vac',label:'Vacation · Zürich trip'},fig:'nothing expected',change:true},
+    {d:'Sat–Sun',n:'12–13',weekend:true,fig:'nothing expected'},
+  ],
+  ledger:{ cols:{k:'Expected', bal:true}, rows:[
+    {t:'wk',l:'W36',r:'Aug 31 – Sep 6',cells:[6.9,6.4,6.7,6.5,6.4,0,0],x:'33.6',w:'32.9',d:'−0.7',b:'+5.7'},
+    {t:'wk',l:'W35',r:'Aug 24 – 30',cells:[7.2,7.0,7.4,6.8,6.7,0,0],x:'33.6',w:'35.1',d:'+1.5',b:'+6.4'},
+    {t:'wk',l:'W34',r:'Aug 17 – 23',cells:[6.8,3.3,6.6,6.4,6.3,0,0],tints:{1:'sick'},x:'30.2',why:'Tue Aug 18 · sick ½',w:'29.4',d:'−0.8',b:'+4.9'},
+    {t:'wk',l:'W33',r:'Aug 10 – 16',cells:[7.0,7.1,6.9,7.0,6.9,0,0],x:'33.6',w:'34.9',d:'+1.3',b:'+5.7'},
+    {t:'wk',l:'W32',r:'Aug 3 – 9',cells:[6.7,6.8,6.6,6.7,6.8,0,0],x:'33.6',w:'33.6',d:'0.0',b:'+4.4'},
+    {t:'rule',text:'From Mon Aug 3, 2026 · Part time 80% of 42 h = 33.6 h/wk',sub:'was 60% · 25.2 h · “Four days a week from August”'},
+    {t:'wk',l:'W31',r:'Jul 27 – Aug 2',cells:[5.6,5.3,5.5,5.4,5.3,0,0],x:'25.2',w:'27.1',d:'+1.9',b:'+4.4'},
+    {t:'quiet',text:'·· 3 weeks away · Jul 6 – 26 · vacation ··'},
+    {t:'wk',l:'W27',r:'Jun 29 – Jul 5',cells:[5.0,4.6,5.2,4.8,4.5,0,0],x:'25.2',w:'24.1',d:'−1.1',b:'+2.5'},
+  ], more:'Show 5 more weeks', moreSub:'26 more back to the opening balance',
+     total:'Since Mon Jan 5, 2026 · <b>840.0 h</b> expected · <b>848.5 h</b> worked · <b>+8.5 h</b> (+2.0 brought forward)', alltime:'All time 1,284 h · 412 sessions', csv:true },
+  register:{ kind:'contract', inforce:'Part time · 80% of 42 h', sub:'33.6 h/week · since Mon Aug 3, 2026', next:'Full time · 42 h/week from Mon Jan 4, 2027',
+    chart:{steps:[{date:'2026-01-05',h:25.2,lab:'60% · 25.2 h',x:'Jan 5 ’26'},{date:'2026-08-03',h:33.6,lab:'80% · 33.6 h',x:'Aug 3'},{date:'2027-01-04',h:42,lab:'100% · 42 h',x:'Jan 4 ’27',planned:true}],today:'2026-09-10',end:'2027-07-01',max:42},
+    terms:[{from:'Jan 5, 2026',what:'Part time · 60% of 42 h · 25.2 h/wk'},{from:'Aug 3, 2026',what:'Part time · 80% of 42 h · 33.6 h/wk',note:'Four days a week from August',st:'in force'},{from:'Jan 4, 2027',what:'Full time · 42 h/wk',st:'planned'}],
+    consts:'Holidays Switzerland · Zürich · Brought forward +2.0 h · Ended —' },
+  timeOff:{ list:[{when:'Tomorrow · Fri Sep 11',what:'Vacation',note:'Zürich trip',tint:'vac'},{when:'Mon Oct 5 – Fri Oct 9',what:'Vacation',note:'5 days',tint:'vac'},{when:'Fri Dec 25',what:'Christmas Day',note:'public holiday · Zürich',tint:'hol'}],
+    tally:'2026: 21 d vacation booked · ½ d sick' },
+  facts:'Last tracked <b>today 11:52</b> · Focus today <b>74</b>'
+};
+
+const SIDE = {
+  key:'side', kind:'side_project', name:'Loom', color:'#E6A123', description:'A weaving notebook for the studio', repo:'me/loom',
+  chip:'Side project · goal 8 h/week',
+  timer:{elapsed:'0:00:00', on:'', running:false}, sidebar:{today:'1.2h', week:'4.8h'},
+  balance:null,
+  aside:{label:'4-week average', value:'6.8 h / week', sub:'Goal met 2 of the last 4 weeks'},
+  week:{ title:'This week', wk:'W37', range:'Sep 7 – 13', kLabel:'Goal', k:'8 h', worked:'4.8 h', remLabel:'Remaining', rem:'3.2 h',
+    adjust:null, sentence:'<b>3.2 h to go over Thu – Sun</b> — about 50 min a day.', annotation:['3 commits'], bookOff:false, goalEdit:true },
+  days:[
+    {d:'Mon',n:7,worked:'1.5',cnt:'1 session',sessions:[{t:'20:10 → 21:40',note:'warp calculator',tags:['design'],dur:'1h 30m'}]},
+    {d:'Tue',n:8,worked:null,fig:'—'},
+    {d:'Wed',n:9,worked:'2.1',cnt:'2 sessions',sessions:[{t:'06:50 → 07:55',note:'pattern library',tags:[],dur:'1h 05m'},{t:'20:30 → 21:34',note:'draft schema',tags:['design'],dur:'1h 04m'}]},
+    {d:'Thu',n:10,worked:'1.2',today:true,open:true,cnt:'1 session',sessions:[{t:'07:05 → 08:17',note:'pattern library, warp calculator',tags:['design'],dur:'1h 12m'}]},
+    {d:'Fri',n:11,worked:null,fig:'—'},
+    {d:'Sat–Sun',n:'12–13',weekend:true,fig:'—'},
+  ],
+  ledger:{ cols:{k:'Goal', bal:false}, rows:[
+    {t:'wk',l:'W36',r:'Aug 31 – Sep 6',cells:[1.5,0,2.4,1.9,0,2.6,0],x:'8',w:'8.4',d:'+0.4'},
+    {t:'wk',l:'W35',r:'Aug 24 – 30',cells:[0,1.4,0,2.2,0,2.3,0],x:'8',w:'5.9',d:'−2.1'},
+    {t:'wk',l:'W34',r:'Aug 17 – 23',cells:[2.0,0,2.5,1.5,0,3.0,0],x:'8',w:'9.0',d:'+1.0'},
+    {t:'wk',l:'W33',r:'Aug 10 – 16',cells:[0,1.0,0,0,1.5,1.5,0],x:'8',w:'4.0',d:'−4.0'},
+    {t:'wk',l:'W32',r:'Aug 3 – 9',cells:[1.5,0,2.0,0,1.0,3.0,0],x:'8',w:'7.5',d:'−0.5'},
+    {t:'wk',l:'W31',r:'Jul 27 – Aug 2',cells:[0,0,0,0,0,0,0],x:'No goal',why:'override · off that week',w:'—',d:'—',italic:true},
+    {t:'rule',text:'From Mon Jul 6, 2026 · goal 8 h/week',sub:'was 5 h'},
+    {t:'wk',l:'W27',r:'Jun 29 – Jul 5',cells:[1.0,0,1.5,0,1.2,1.8,0],x:'5',w:'5.5',d:'+0.5'},
+  ], more:'Show 5 more weeks', moreSub:'14 more', total:null, alltime:'All time 138.2 h · 96 sessions · first session Mar 2, 2026', csv:false },
+  register:{ kind:'goal', inforce:'8 h / week · target', sub:'since Mon Jul 6, 2026', next:null,
+    chart:{steps:[{date:'2026-03-02',h:5,lab:'5 h / week',x:'Mar 2 ’26'},{date:'2026-07-06',h:8,lab:'8 h / week',x:'Jul 6'}],today:'2026-09-10',end:'2026-12-01',max:8},
+    terms:[{from:'Mar 2, 2026',what:'5 h / week · target'},{from:'Jul 6, 2026',what:'8 h / week · target',st:'in force'},{from:'W31 · Jul 27',what:'No goal that week',note:'one-week override'}],
+    consts:null },
+  timeOff:null,
+  facts:'Last tracked <b>today 08:17</b>'
+};
+
+const FRESH = {
+  key:'fresh', kind:'day_job', name:'Helio AG', color:'#4BC0A0', description:null, repo:null,
+  chip:'Day job · Full time · 42 h · CH-ZH',
+  timer:{elapsed:'0:00:00', on:'', running:false}, sidebar:{today:'2.5h', week:'2.5h'},
+  balance:{ value:'−22.7 h', word:'owed', tone:'soft', asOf:'as of Thu Sep 10',
+    proof:['<b>0.0 h</b> brought forward','<b>+2.5 h</b> worked since Mon Sep 7','<b>−25.2 h</b> expected through Wed Sep 9'],
+    projection:'<span class="k">First week under the contract.</span> Each day is charged as it closes; the figure settles once a full week is in.',
+    proofTag:true },
+  week:{ title:'This week', wk:'W37', range:'Sep 7 – 13', kLabel:'Expected', k:'42.0 h', worked:'2.5 h', remLabel:'Remaining', rem:'39.5 h',
+    adjust:null, sentence:'<b>39.5 h to go over Thu and Fri</b> — more than two days can hold. Record what was worked Mon – Wed, or book the days off.',
+    annotation:[], bookOff:true },
+  days:[
+    {d:'Mon',n:7,worked:null,exp:'8.4',fig:'— of 8.4'},
+    {d:'Tue',n:8,worked:null,exp:'8.4',fig:'— of 8.4'},
+    {d:'Wed',n:9,worked:null,exp:'8.4',fig:'— of 8.4'},
+    {d:'Thu',n:10,worked:'2.5',exp:'8.4',today:true,open:true,cnt:'1 session',sessions:[{t:'09:12 → 11:40',note:'onboarding, laptop setup',tags:[],dur:'2h 28m'}]},
+    {d:'Fri',n:11,worked:null,exp:'8.4',fig:'— of 8.4'},
+    {d:'Sat–Sun',n:'12–13',weekend:true,fig:'nothing expected'},
+  ],
+  ledger:{ cols:{k:'Expected', bal:true}, rows:[], empty:'No earlier weeks — the contract started on Monday.', more:null, total:null, alltime:'All time 2.5 h · 1 session', csv:false },
+  register:{ kind:'contract', inforce:'Full time · 42 h', sub:'42 h/week · since Mon Sep 7, 2026', next:null, chart:null,
+    terms:[{from:'Sep 7, 2026',what:'Full time · 42 h/wk',st:'in force'}], consts:'Holidays Switzerland · Zürich · Brought forward 0 h · Ended —' },
+  timeOff:{ list:[{when:'Fri Dec 25',what:'Christmas Day',note:'public holiday · Zürich',tint:'hol'}], tally:'Nothing booked yet in 2026', empty:true },
+  facts:'Last tracked <b>today 11:40</b>'
+};
+
+const STATES = {dayjob:DAYJOB, side:SIDE, fresh:FRESH};
+
+/* ---------- renderers ---------- */
+const h = (s)=>s;
+
+function renderSidebar(s){
+  const t = s.timer;
+  return `
+    <div class="brand"><span>Beats</span><small>sidebar · unchanged</small></div>
+    <div class="timer ${t.running?'':'idle'}">
+      <div class="elapsed">${t.elapsed}</div>
+      <div class="on">${t.running? t.on : 'Select project…'}</div>
+      <button type="button" class="btn-like btn" style="width:100%;justify-content:center;margin-top:10px">${t.running?'■ Stop':'▶ Start'}</button>
+    </div>
+    <div class="two"><div><div class="lbl">Today</div><div class="val">${s.sidebar.today}</div></div><div><div class="lbl">This week</div><div class="val acc">${s.sidebar.week}</div></div></div>
+    <div class="plist">
+      <div class="h">Projects</div>
+      ${[['Contract Co','#5B9CF6','25.0h'],['Loom','#E6A123','4.8h'],['Helio AG','#4BC0A0','2.5h'],['Thesis','#C46BD6','—'],['Reading','#7A8CA0','1.1h']].map(([n,c,tt])=>`<div class="p ${n===s.name?'on':''}"><span class="dot" style="background:${c}"></span><span class="n">${n}</span><span class="t">${tt}</span></div>`).join('')}
+    </div>`;
+}
+
+function renderHeader(s){
+  return `<header class="hdr">
+    <button type="button" class="dot" style="background:${s.color}" title="Change colour" aria-label="Change colour"></button>
+    <button type="button" class="name" title="Edit project">${s.name}</button>
+    <span class="chip">${s.chip}</span>
+    ${s.description? `<button type="button" class="desc" title="Edit description">${s.description}</button>` : `<button type="button" class="desc add">+ Add description</button>`}
+    ${s.repo? `<span class="repo">${ICON.git} ${s.repo}</span>` : `<button type="button" class="repo">${ICON.git} Link a repo</button>`}
+    <button type="button" class="gear" aria-label="Project settings" title="Project settings">${ICON.gear}</button>
+  </header>`;
+}
+
+function renderStanding(s){
+  const w = s.week;
+  let left;
+  if (s.balance){
+    const b = s.balance;
+    left = `<div class="bal">
+      <div class="lbl">Balance <span class="when">${b.asOf}</span>${b.proofTag?'<span class="needs" style="margin-left:0" title="The three terms of the proof are not on the wire yet">needs api</span>':''}</div>
+      <div class="big ${b.tone}">${b.value}<small>${b.word}</small></div>
+      <div class="proof">${b.proof.join('<br>')}</div>
+      <div class="proj">${b.projection}</div>
+    </div>`;
+  } else {
+    left = `<div class="bal">
+      <div class="lbl">${s.aside.label}</div>
+      <div class="side-avg"><div class="v">${s.aside.value}</div><div class="s">${s.aside.sub}</div></div>
+      <div class="notice" style="margin-top:14px">No contract on a side project — no balance, nothing owed. The goal is yours.</div>
+    </div>`;
+  }
+  const right = `<div class="wk">
+    <div class="lbl">${w.title} <span class="when">${w.range} · ${w.wk}</span></div>
+    <div class="figs">
+      <div class="fig"><div class="k">${w.kLabel}</div><div class="v">${w.k}</div></div>
+      <div class="fig"><div class="k">Worked</div><div class="v">${w.worked}${w.running?`<span class="live" title="Timer running ${w.running}"></span>`:''}</div></div>
+      <div class="fig"><div class="k">${w.remLabel}</div><div class="v">${w.rem}</div></div>
+    </div>
+    ${w.adjust? `<div class="adjust">${w.adjust}</div>`:''}
+    <div class="sentence">${w.sentence}</div>
+    <div class="actions">
+      ${w.bookOff? `<button type="button" class="btn" data-open-dialog>${ICON.plus} Book time off</button>`:''}
+      ${w.goalEdit? `<button type="button" class="btn">Edit goal</button>`:''}
+    </div>
+  </div>`;
+  return `<section class="standing" aria-label="Where you stand">${left}${right}</section>`;
+}
+
+function renderWeek(s){
+  const w = s.week;
+  const days = s.days.map(d=>{
+    const label = `<div class="d">${d.d} <span class="n">${d.n}</span>${d.today?'<span class="chip">today</span>':''}</div>`;
+    let mid = '';
+    if (d.absence) mid = `<span class="tint ${d.absence.type}">${d.absence.label}</span>${d.change?'<button type="button" class="linkish">Change</button>':''}`;
+    else if (d.holiday) mid = `<span class="tint hol">${d.holiday}</span>`;
+    else if (d.cnt) mid = `<span class="cnt">${d.cnt}</span>`;
+    let fig;
+    if (d.fig) fig = `<span class="of">${d.fig}</span>`;
+    else if (d.exp) fig = `${d.worked} <span class="of">of ${d.exp}</span>${d.delta?`<span class="dl ${d.delta.startsWith('+')?'pos':d.delta.startsWith('−')?'neg':''}">${d.delta}</span>`:'<span class="dl"></span>'}`;
+    else fig = `${d.worked} <span class="of">h</span>`;
+    const car = (d.sessions||d.cnt)? `<span class="car">›</span>` : `<span class="car" style="visibility:hidden">›</span>`;
+    const sess = (d.sessions||[]).map(x=>`<div class="sess">
+        <span class="t">${x.t}</span>
+        <span class="note">${x.note}${x.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}${x.focus?`<span class="focus" title="Focus score from the daemon">◦ ${x.focus}</span>`:''}</span>
+        <span class="dur">${x.live?'<span class="live"></span>':''}${x.dur}<span class="ops"><button type="button" aria-label="Edit session">${ICON.edit}</button><button type="button" aria-label="Delete session">${ICON.trash}</button></span></span>
+      </div>`).join('');
+    return `<div class="day ${d.today?'today':''} ${d.open?'open':''} ${d.weekend?'weekend':''}" data-day>
+      <div class="row" role="button" tabindex="0" aria-expanded="${d.open?'true':'false'}">${label}<div class="mid">${mid}</div><div class="fig">${fig}${car}</div></div>
+      <div class="sessions">${sess}</div>
+    </div>`;
+  }).join('');
+  return `<section class="week" aria-label="The open week">
+    <div class="hline">
+      <h3 class="sec-h">Days <span class="sub">${w.range} · ${w.wk}</span></h3>
+      <div class="right"><span class="nav"><button type="button" aria-label="Previous week">${ICON.l}</button><button type="button" aria-label="Next week">${ICON.r}</button></span></div>
+    </div>
+    <div class="days">${days}</div>
+    ${w.annotation.length? `<div class="foot">${w.annotation.map(a=>`<span>${a}</span>`).join('')}</div>`:''}
+  </section>`;
+}
+
+function cells(vals,tints){
+  const max = Math.max(...vals, 0.1);
+  return `<span class="cells" aria-hidden="true">${vals.map((v,i)=>{
+    const tint = tints && tints[i] ? tints[i] : '';
+    if (v<=0 && !tint) return '<i class="e"></i>';
+    const hgt = tint && v<=0 ? 6 : Math.max(3, Math.round(v/max*16));
+    return `<i class="${tint}" style="height:${hgt}px"></i>`;
+  }).join('')}</span>`;
+}
+
+function renderLedger(s){
+  const L = s.ledger;
+  const bal = L.cols.bal;
+  const head = `<thead><tr><th class="l">Week</th><th class="l"></th><th>${L.cols.k}</th><th>Worked</th><th>+/−</th>${bal?`<th>Balance<span class="needs">needs api</span></th>`:''}</tr></thead>`;
+  const body = L.rows.map(r=>{
+    if (r.t==='rule') return `<tr class="rule"><td colspan="${bal?6:5}">${r.text}<span>${r.sub||''}</span></td></tr>`;
+    if (r.t==='quiet') return `<tr class="quiet"><td colspan="${bal?6:5}">${r.text}</td></tr>`;
+    const dcls = r.d.startsWith('+')?'pos':r.d.startsWith('−')?'neg':'mut';
+    return `<tr class="wk" tabindex="0">
+      <td class="l"><span class="wl">${r.l}</span><span class="wr">${r.r}</span>${r.why?`<span class="why">${r.why}</span>`:''}</td>
+      <td class="c">${cells(r.cells,r.tints)}</td>
+      <td class="x mut" ${r.italic?'style="font-style:italic"':''}>${r.x}</td>
+      <td class="w">${r.w}</td>
+      <td class="d ${dcls}">${r.d}</td>
+      ${bal?`<td class="bal">${r.b||'—'}</td>`:''}
+    </tr>`;
+  }).join('');
+  const empty = L.rows.length? '' : `<p style="margin:12px 6px 0;font-size:13px;color:var(--ink-2)">${L.empty}</p>`;
+  return `<section class="ledger" aria-label="Earlier weeks">
+    <div class="hline"><h3 class="sec-h">Earlier weeks <span class="sub">newest first</span></h3>
+      <div class="right"><span class="figs-note">day cells scale to the largest day shown · tints: <span class="tint vac" style="padding:0 5px">vacation</span> <span class="tint sick" style="padding:0 5px">sick</span> <span class="tint hol" style="padding:0 5px">holiday</span></span>${L.csv?`<button type="button" class="linkish" style="margin-left:10px">Copy as CSV</button>`:''}</div></div>
+    ${L.rows.length? `<table>${head}<tbody>${body}</tbody></table>`:''}${empty}
+    ${L.more? `<div class="more"><button type="button" class="linkish">${L.more}</button><span class="mut">· ${L.moreSub}</span></div>`:''}
+    <div class="total">${L.total? `<span>${L.total}</span>`:''}<span>${L.alltime}</span></div>
+  </section>`;
+}
+
+function stepChart(c){
+  // Hours per week as a step function over the contract's life. Solid through
+  // today, dashed after it (the current term continuing, or a planned one).
+  // Each step is labelled under its own line, so the y axis needs no ticks.
+  const W=296,H=112,pl=4,pr=4,pt=18,pb=24;
+  const t0=+new Date(c.steps[0].date), t1=+new Date(c.end);
+  const x=t=>pl+(t-t0)/(t1-t0)*(W-pl-pr);
+  const y=v=>pt+(1-v/c.max)*(H-pt-pb);
+  const today=x(+new Date(c.today));
+  let solid='', dashed='', labels='', xl='', gl='';
+  const pts=[];
+  [...new Set([0,...c.steps.map(s=>s.h)])].forEach(v=>{ gl+=`<line class="grid" x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}"/>`; });
+  c.steps.forEach((s,i)=>{
+    const xs=x(+new Date(s.date)); const next=c.steps[i+1]; const xe= next? x(+new Date(next.date)) : x(t1);
+    const yy=y(s.h);
+    if (s.planned){
+      dashed+=`M${xs},${yy}L${xe},${yy}`;
+    } else {
+      const stop=Math.min(xe, today);
+      solid+=`${solid?'L':'M'}${xs},${yy}L${stop},${yy}`;
+      pts.push([xs,yy],[stop,yy]);
+      if (xe>stop) dashed+=`M${stop},${yy}L${xe},${yy}`;
+      if (next) { const seg=`L${xe},${y(next.h)}`; if (next.planned) dashed+=seg; else solid+=seg; }
+    }
+    labels+=`<text class="lab" x="${xs+4}" y="${yy+12}">${s.lab}</text>`;
+    const anchor = i===0 ? 'start' : (xs > W-44 ? 'end' : 'middle');
+    xl+=`<text x="${xs}" y="${H-7}" text-anchor="${anchor}">${s.x}</text>`;
+  });
+  const area = pts.length ? `M${pts[0][0]},${y(0)}` + pts.map(p=>`L${p[0]},${p[1]}`).join('') + `L${pts[pts.length-1][0]},${y(0)}Z` : '';
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Hours per week over the contract's life">
+    <defs><linearGradient id="meadow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--hill-mid);stop-opacity:.6"/><stop offset="1" style="stop-color:var(--hill-mid);stop-opacity:.06"/></linearGradient></defs>
+    ${gl}<path class="area" d="${area}"/><path class="step" d="${solid}"/><path class="planned" d="${dashed}"/>
+    <line class="today" x1="${today}" x2="${today}" y1="${pt-3}" y2="${y(0)}"/><text x="${today}" y="${pt-7}" text-anchor="middle">today</text>
+    ${labels}${xl}
+  </svg>`;
+}
+
+function renderRegister(s){
+  const R = s.register;
+  const isC = R.kind==='contract';
+  return `<section class="reg" aria-label="${isC?'Contract':'Goal'}">
+    <div class="hline"><h3 class="sec-h">${isC?'Contract':'Goal'}</h3><div class="right">${isC?'':'<button type="button" class="linkish">Edit</button>'}</div></div>
+    <div class="inforce"><div class="big2">${R.inforce}</div><div class="s">${R.sub}</div></div>
+    ${R.next? `<div class="next"><span class="k">Next</span> → ${R.next}</div>`:''}
+    ${R.chart? stepChart(R.chart) : ''}
+    <ul class="terms">${R.terms.map(t=>`<li><span class="from">From ${t.from}</span><span class="stops">${t.st?`<span class="st ${t.st==='planned'?'plan':''}">${t.st}</span>`:''}<span class="ops"><button type="button" aria-label="Edit term">${ICON.edit}</button><button type="button" aria-label="Remove term">${ICON.trash}</button></span></span><span class="what">${t.what}</span>${t.note?`<span class="n">“${t.note}”</span>`:''}</li>`).join('')}</ul>
+    ${isC? `<div class="addterm"><button type="button" class="btn">${ICON.plus} Change contract from…</button></div>`:''}
+    ${R.consts? `<div class="consts">${R.consts}<button type="button">Edit</button></div>`:''}
+  </section>`;
+}
+
+function renderTimeOff(s){
+  const T = s.timeOff; if (!T) return '';
+  return `<section class="off" aria-label="Time off">
+    <div class="hline"><h3 class="sec-h">Time off <span class="sub">upcoming</span></h3><div class="right"><button type="button" class="linkish" data-open-dialog>+ Book</button></div></div>
+    <ul class="list">${T.list.map(e=>`<li><span class="w"><b>${e.when}</b><small>${e.what} · ${e.note}</small></span><span class="tint ${e.tint}">${e.tint==='hol'?'holiday':e.what.toLowerCase()}</span></li>`).join('')}</ul>
+    <div class="tally">${T.tally}</div>
+  </section>`;
+}
+
+function renderFacts(s){
+  return `<div class="quiet-facts">${s.facts}</div>`;
+}
+
+function renderPage(s){
+  return `${renderHeader(s)}
+  <div class="grid">
+    <div class="main">${renderStanding(s)}${renderWeek(s)}${renderLedger(s)}</div>
+    <aside class="rail">${renderRegister(s)}${renderTimeOff(s)}${renderFacts(s)}</aside>
+  </div>`;
+}
+
+function renderDialog(){
+  const cells=[]; const heads=['Mo','Tu','We','Th','Fr','Sa','Su'].map(d=>`<div class="h">${d}</div>`).join('');
+  // September 2026 starts on a Tuesday
+  cells.push('<div></div>');
+  for(let d=1; d<=30; d++){
+    const dow=(1+d)%7; // 0=Mon? compute: Sep 1 2026 is Tue → index 1
+    const idx=(d)%7; // Tue(1)…
+    const we = ((d+1)%7===0)||((d+2)%7===0); // Sat 5,12,19,26 ; Sun 6,13,20,27
+    let cls='c'; if(we) cls+=' we'; if(d<10) cls+=' past'; if(d===10) cls+=' today'; if(d===11) cls+=' sel';
+    cells.push(`<div class="${cls}">${d}</div>`);
+  }
+  return `<div class="overlay" data-close-dialog>
+    <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+      <h2 id="dlg-t">Book time off</h2>
+      <div class="f"><label>Type</label><div class="segs"><button type="button" aria-pressed="true">Vacation</button><button type="button" aria-pressed="false">Sick</button><button type="button" aria-pressed="false">Other</button></div></div>
+      <div class="f two-f"><div><label for="from">From</label><input id="from" type="text" value="Fri Sep 11, 2026"></div><div><label for="through">Through</label><input id="through" type="text" value="Fri Sep 11, 2026"></div></div>
+      <div class="cal"><div class="ch"><span>‹</span><span>September 2026</span><span>›</span></div><div class="g">${heads}${cells.join('')}</div></div>
+      <label class="check"><input type="checkbox" id="half"> Half day</label>
+      <div class="f"><label for="note">Note</label><input id="note" type="text" value="Zürich trip"></div>
+      <div class="cost">This week's expectation drops by 6.7 h, to 26.9 h. One weekday; weekends and public holidays are skipped.</div>
+      <div class="row-btn"><button type="button" class="btn" data-close-dialog>Cancel</button><button type="button" class="btn pri" data-close-dialog>Save</button></div>
+    </div></div>`;
+}
+
+/* ---------- wiring ---------- */
+const frame=document.getElementById('frame'), page=document.getElementById('page'), sidebar=document.getElementById('sidebar'), dlgRoot=document.getElementById('dlg-root');
+let current='dayjob';
+function show(key){
+  current=key; const s=STATES[key];
+  sidebar.innerHTML=renderSidebar(s); page.innerHTML=renderPage(s);
+  document.querySelectorAll('#seg-state button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.state===key)));
+}
+document.getElementById('seg-state').addEventListener('click',e=>{const b=e.target.closest('button[data-state]'); if(b) show(b.dataset.state);});
+document.getElementById('seg-view').addEventListener('click',e=>{const b=e.target.closest('button[data-view]'); if(!b) return; frame.classList.toggle('phone', b.dataset.view==='phone'); document.querySelectorAll('#seg-view button').forEach(x=>x.setAttribute('aria-pressed', String(x===b)));});
+document.getElementById('seg-theme').addEventListener('click',e=>{const b=e.target.closest('button[data-theme]'); if(!b) return; document.documentElement.dataset.theme=b.dataset.theme; document.querySelectorAll('#seg-theme button').forEach(x=>x.setAttribute('aria-pressed', String(x===b)));});
+page.addEventListener('click',e=>{
+  if (e.target.closest('[data-open-dialog]')){ dlgRoot.innerHTML=renderDialog(); return; }
+  const row=e.target.closest('.day .row'); if(row && !e.target.closest('button')){ const day=row.closest('.day'); if(day.querySelector('.sessions').innerHTML.trim()){ day.classList.toggle('open'); row.setAttribute('aria-expanded', String(day.classList.contains('open'))); } }
+});
+page.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ') && e.target.matches('.day .row')){ e.preventDefault(); e.target.click(); } });
+dlgRoot.addEventListener('click',e=>{ if (e.target.closest('.dlg')) { if (e.target.closest('button[data-close-dialog]')) dlgRoot.innerHTML=''; return; } if (e.target.closest('[data-close-dialog]')) dlgRoot.innerHTML=''; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') dlgRoot.innerHTML=''; });
+show('dayjob');
+</script>

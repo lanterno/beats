@@ -20,6 +20,7 @@ import {
 } from "@/shared/lib";
 import { CommandPalette, FocusMode } from "@/shared/ui";
 import { MobileHeader, Sidebar } from "@/widgets/sidebar";
+import { SkyBackdrop } from "./SkyBackdrop";
 
 export function Layout() {
 	const { data: projects } = useProjects();
@@ -109,7 +110,11 @@ export function Layout() {
 	};
 
 	return (
-		<div className="min-h-screen bg-background">
+		// No background here: the sky sits at z-index -1 and a painted ancestor
+		// would cover it (see the `.sky` note in global.css).
+		<div className="min-h-screen">
+			<SkyBackdrop />
+
 			{/* Desktop sidebar */}
 			<Sidebar {...timerProps} />
 

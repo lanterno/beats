@@ -52,7 +52,7 @@ export function PasskeysSection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Fingerprint className="w-4 h-4 text-accent" />
+				<Fingerprint className="w-4 h-4 text-accent-ink" />
 				Passkeys
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
@@ -71,7 +71,7 @@ export function PasskeysSection() {
 						<button
 							type="button"
 							onClick={loadCredentials}
-							className="text-xs text-accent hover:text-accent/80 transition-colors"
+							className="text-xs text-accent-ink hover:text-accent-ink/80 transition-colors"
 						>
 							Retry
 						</button>
@@ -85,7 +85,7 @@ export function PasskeysSection() {
 								key={cred.id}
 								className="flex items-center gap-2 bg-secondary/30 rounded px-2.5 py-1.5"
 							>
-								<Fingerprint className="w-3.5 h-3.5 text-accent/60 shrink-0" />
+								<Fingerprint className="w-3.5 h-3.5 text-accent-ink/60 shrink-0" />
 								<span className="text-xs text-foreground font-medium truncate flex-1">
 									{cred.device_name || "Unnamed passkey"}
 								</span>

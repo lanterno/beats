@@ -110,13 +110,13 @@ export function WeeklyCard() {
 
 				{/* Big number */}
 				<div className="text-center mb-4">
-					<p className="font-heading text-3xl font-bold text-accent tabular-nums">
+					<p className="font-heading text-3xl font-bold text-accent-ink tabular-nums">
 						{formatDuration(stats.totalMinutes)}
 					</p>
 					<p className="text-xs text-muted-foreground mt-0.5">
 						{stats.sessionCount} session{stats.sessionCount !== 1 ? "s" : ""}
 						{streaks && streaks.current > 0 && (
-							<span className="ml-2 text-accent/80">{streaks.current}-day streak</span>
+							<span className="ml-2 text-accent-ink/80">{streaks.current}-day streak</span>
 						)}
 					</p>
 				</div>
@@ -129,7 +129,7 @@ export function WeeklyCard() {
 								className="w-5 rounded-sm transition-all"
 								style={{
 									height: `${Math.max((minutes / maxDayMinutes) * 40, 2)}px`,
-									backgroundColor: minutes > 0 ? "var(--accent)" : "var(--muted)",
+									backgroundColor: minutes > 0 ? "hsl(var(--accent))" : "hsl(var(--muted))",
 									opacity: minutes > 0 ? 0.8 : 0.3,
 								}}
 							/>
@@ -161,7 +161,7 @@ export function WeeklyCard() {
 					<div className="text-center pt-2 border-t border-border/30">
 						<p className="text-xs text-muted-foreground">
 							Goals:{" "}
-							<span className="text-accent font-medium">
+							<span className="text-accent-ink font-medium">
 								{stats.goalsMetCount}/{stats.goalsTotal}
 							</span>{" "}
 							met
@@ -184,7 +184,7 @@ export function WeeklyCard() {
 				>
 					{isCopied ? (
 						<>
-							<Check className="w-3.5 h-3.5 text-accent" /> Copied
+							<Check className="w-3.5 h-3.5 text-accent-ink" /> Copied
 						</>
 					) : (
 						<>

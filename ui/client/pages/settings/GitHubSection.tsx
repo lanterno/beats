@@ -57,7 +57,7 @@ export function GitHubSection() {
 	return (
 		<section ref={sectionRef} id="github" className="mb-8 scroll-mt-6">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<GitBranch className="w-4 h-4 text-accent" />
+				<GitBranch className="w-4 h-4 text-accent-ink" />
 				GitHub
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
@@ -67,7 +67,7 @@ export function GitHubSection() {
 				</p>
 				{status?.connected ? (
 					<div className="flex items-center gap-3">
-						<span className="text-xs text-accent font-medium">
+						<span className="text-xs text-accent-ink font-medium">
 							Connected as {status.github_username}
 						</span>
 						<button

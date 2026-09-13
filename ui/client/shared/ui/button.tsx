@@ -5,22 +5,28 @@ import type * as React from "react";
 import { cn } from "../lib";
 
 const buttonVariants = cva(
-	"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-base font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+	"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-bold ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
 	{
 		variants: {
 			variant: {
-				default: "bg-primary text-primary-foreground hover:bg-primary/90",
+				default: "bg-accent text-accent-foreground hover:bg-accent/90",
 				destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+				// The mockup's `.btn`: the heavier wash (28 %, the token the
+				// sidebar's active row also uses), so a button reads heavier
+				// than a chip on the lighter wash. Translucent, so a hover
+				// cannot simply lower its alpha; mixing a little ink in makes
+				// it heavier on both hours.
 				outline:
-					"border border-input bg-transparent hover:bg-secondary hover:text-secondary-foreground",
-				secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-				ghost: "hover:bg-secondary hover:text-secondary-foreground",
-				link: "text-accent underline-offset-4 hover:underline",
+					"bg-sidebar-accent text-foreground hover:bg-[color-mix(in_srgb,var(--color-sidebar-accent),var(--color-foreground)_8%)]",
+				secondary:
+					"bg-sidebar-accent text-foreground hover:bg-[color-mix(in_srgb,var(--color-sidebar-accent),var(--color-foreground)_8%)]",
+				ghost: "hover:bg-secondary hover:text-foreground",
+				link: "text-accent-ink underline-offset-4 hover:underline",
 			},
 			size: {
 				default: "h-10 px-4 py-2",
-				sm: "h-9 rounded-md px-3",
-				lg: "h-11 rounded-md px-8",
+				sm: "h-9 px-3",
+				lg: "h-11 px-8",
 				icon: "h-10 w-10",
 			},
 		},

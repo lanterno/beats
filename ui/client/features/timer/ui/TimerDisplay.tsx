@@ -36,7 +36,7 @@ export function TimerDisplay({
 				<span className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Timer</span>
 			</div>
 			<p
-				className={`font-mono text-4xl font-medium tracking-tight tabular-nums ${isRunning ? "text-accent" : "text-foreground"}`}
+				className={`font-mono text-4xl font-medium tracking-tight tabular-nums ${isRunning ? "text-accent-ink" : "text-foreground"}`}
 			>
 				{displayTime}
 			</p>

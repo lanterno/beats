@@ -28,8 +28,8 @@ export default defineConfig(() => ({
 				name: "Beats — Time Tracker",
 				short_name: "Beats",
 				description: "Personal time tracking with insights, streaks, and a wall clock",
-				theme_color: "#d4952a",
-				background_color: "#1a120d",
+				theme_color: "#8CC1E2",
+				background_color: "#E4F0F1",
 				display: "standalone",
 				start_url: "/",
 				icons: [

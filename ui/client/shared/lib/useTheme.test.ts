@@ -34,28 +34,59 @@ describe("useTheme", () => {
 		mockStorage.clear();
 		vi.clearAllMocks();
 		document.documentElement.removeAttribute("data-theme");
-		document.documentElement.removeAttribute("data-mode");
 		document.documentElement.removeAttribute("data-density");
+		document.head.querySelector('meta[name="theme-color"]')?.remove();
+		const meta = document.createElement("meta");
+		meta.name = "theme-color";
+		meta.content = "";
+		document.head.appendChild(meta);
 	});
 
 	afterEach(() => {
 		mockStorage.clear();
 	});
 
-	it("defaults to ember theme", () => {
+	it("defaults to the afternoon", () => {
 		const { result } = renderHook(() => useTheme());
-		expect(result.current.theme).toBe("ember");
+		expect(result.current.theme).toBe("afternoon");
+		expect(document.documentElement.getAttribute("data-theme")).toBe("afternoon");
+	});
+
+	it("reads dusk from localStorage", () => {
+		store.beats_theme = "dusk";
+		const { result } = renderHook(() => useTheme());
+		expect(result.current.theme).toBe("dusk");
+	});
+
+	it("reads a theme from before the two hours as the afternoon, and writes nothing back", () => {
+		store.beats_theme = "midnight";
+		const { result } = renderHook(() => useTheme());
+		expect(result.current.theme).toBe("afternoon");
+		expect(mockStorage.setItem).not.toHaveBeenCalledWith("beats_theme", expect.anything());
+		expect(store.beats_theme).toBe("midnight");
+	});
+
+	it("setTheme persists, applies data-theme and moves theme-color with the hour", () => {
+		const themeColor = () =>
+			document.querySelector('meta[name="theme-color"]')?.getAttribute("content");
+		const { result } = renderHook(() => useTheme());
+		const afternoonSky = themeColor();
+		expect(afternoonSky).toBeTruthy();
+
+		act(() => result.current.setTheme("dusk"));
+		expect(result.current.theme).toBe("dusk");
+		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_theme", "dusk");
+		expect(document.documentElement.getAttribute("data-theme")).toBe("dusk");
+		expect(themeColor()).toBeTruthy();
+		expect(themeColor()).not.toBe(afternoonSky);
+
+		act(() => result.current.setTheme("afternoon"));
+		expect(themeColor()).toBe(afternoonSky);
 	});
 
 	it("defaults to comfortable density", () => {
 		const { result } = renderHook(() => useTheme());
 		expect(result.current.density).toBe("comfortable");
-	});
-
-	it("reads theme from localStorage", () => {
-		store.beats_theme = "midnight";
-		const { result } = renderHook(() => useTheme());
-		expect(result.current.theme).toBe("midnight");
 	});
 
 	it("reads density from localStorage", () => {
@@ -64,68 +95,11 @@ describe("useTheme", () => {
 		expect(result.current.density).toBe("compact");
 	});
 
-	it("persists theme to localStorage on change", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setTheme("forest"));
-		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_theme", "forest");
-	});
-
-	it("persists density to localStorage on change", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setDensity("spacious"));
-		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_density", "spacious");
-	});
-
-	it("applies data-theme attribute on <html>", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setTheme("sunset"));
-		expect(document.documentElement.getAttribute("data-theme")).toBe("sunset");
-	});
-
-	it("applies data-density attribute on <html>", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setDensity("compact"));
-		expect(document.documentElement.getAttribute("data-density")).toBe("compact");
-	});
-
-	it("updates state when theme changes", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setTheme("mono"));
-		expect(result.current.theme).toBe("mono");
-	});
-
-	it("updates state when density changes", () => {
+	it("setDensity persists and applies data-density", () => {
 		const { result } = renderHook(() => useTheme());
 		act(() => result.current.setDensity("spacious"));
 		expect(result.current.density).toBe("spacious");
-	});
-
-	it("defaults to dark mode", () => {
-		const { result } = renderHook(() => useTheme());
-		expect(result.current.mode).toBe("dark");
-	});
-
-	it("reads mode from localStorage", () => {
-		store.beats_mode = "light";
-		const { result } = renderHook(() => useTheme());
-		expect(result.current.mode).toBe("light");
-	});
-
-	it("persists mode to localStorage on change", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setMode("light"));
-		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_mode", "light");
-	});
-
-	it("applies data-mode attribute on <html>", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setMode("light"));
-		expect(document.documentElement.getAttribute("data-mode")).toBe("light");
-	});
-
-	it("updates state when mode changes", () => {
-		const { result } = renderHook(() => useTheme());
-		act(() => result.current.setMode("light"));
-		expect(result.current.mode).toBe("light");
+		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_density", "spacious");
+		expect(document.documentElement.getAttribute("data-density")).toBe("spacious");
 	});
 });

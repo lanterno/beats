@@ -65,8 +65,8 @@ import {
 } from "./projectFormWire";
 
 // FF.11: rotate the default color through PROJECT_COLORS per ProjectForm
-// mount so consecutive new projects don't all open with the same #5B9CF6
-// seed (the pre-FF.11 `assignColor("new")` always hashed to index 0).
+// mount so consecutive new projects don't all open with the same first
+// slot (the pre-FF.11 `assignColor("new")` always hashed to index 0).
 // Module-level counter is intentional — deterministic per session, no
 // plumbing required from consumers, and the user can still override via
 // the ColorPicker before submit.

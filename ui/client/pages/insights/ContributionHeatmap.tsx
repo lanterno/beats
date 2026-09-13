@@ -167,7 +167,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 								active days
 							</span>
 							<span>
-								<span className="text-accent font-medium tabular-nums">
+								<span className="text-accent-ink font-medium tabular-nums">
 									{(totalMinutes / 60).toFixed(0)}h
 								</span>{" "}
 								total

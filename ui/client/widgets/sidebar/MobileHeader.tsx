@@ -1,6 +1,7 @@
 /**
  * Mobile Header Component
  * Sticky top bar for mobile with hamburger menu and mini timer indicator.
+ * The bar is a pill floating on the sky; the drawer is the sidebar panel.
  */
 
 import {
@@ -30,6 +31,14 @@ interface MobileHeaderProps extends TimerProps {
 	projects: ProjectWithDuration[];
 }
 
+const NAV = [
+	{ to: "/projects", title: "Projects", Icon: Layers },
+	{ to: "/plan", title: "Weekly Plan", Icon: CalendarDays },
+	{ to: "/coach", title: "Coach", Icon: Sparkles },
+	{ to: "/insights", title: "Insights", Icon: BarChart3 },
+	{ to: "/settings", title: "Settings", Icon: Settings },
+] as const;
+
 export function MobileHeader(props: MobileHeaderProps) {
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const navigate = useNavigate();
@@ -56,23 +65,28 @@ export function MobileHeader(props: MobileHeaderProps) {
 
 	return (
 		<>
-			<header className="lg:hidden sticky top-0 z-50 h-12 border-b border-border bg-sidebar/95 backdrop-blur-sm flex items-center justify-between px-4">
-				<div className="flex items-center gap-3">
+			<header className="lg:hidden sticky top-3 z-50 mx-3 h-11 rounded-full bg-sidebar shadow-soft backdrop-blur-sm flex items-center justify-between pl-3 pr-4">
+				<div className="flex items-center gap-2.5">
 					<button
 						type="button"
 						onClick={() => setDrawerOpen(true)}
-						className="p-1 text-sidebar-foreground hover:text-accent transition-colors"
+						aria-label="Open menu"
+						aria-expanded={drawerOpen}
+						className="grid place-items-center w-8 h-8 rounded-full text-sidebar-foreground hover:bg-secondary transition-colors"
 					>
 						<Menu className="w-5 h-5" />
 					</button>
-					<Link to="/app" className="font-heading text-base font-bold text-sidebar-foreground">
+					<Link
+						to="/app"
+						className="font-heading text-base font-extrabold tracking-[-0.01em] text-sidebar-foreground"
+					>
 						Beats
 					</Link>
 					<SyncStatus />
 				</div>
 
 				{isRunning && selectedProject && (
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-2 rounded-full bg-secondary pl-2.5 pr-3 py-1">
 						<span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
 						<div
 							className="w-2 h-2 rounded-full shrink-0"
@@ -80,7 +94,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 						/>
 						<AnimatedDigits
 							value={formatSecondsToTime(totalSeconds)}
-							className="font-mono text-accent text-xs tabular-nums"
+							className="font-mono font-bold text-foreground text-xs"
 						/>
 					</div>
 				)}
@@ -92,76 +106,49 @@ export function MobileHeader(props: MobileHeaderProps) {
 					<button
 						type="button"
 						aria-label="Close menu"
-						className="absolute inset-0 w-full bg-black/50 backdrop-blur-xs"
+						className="absolute inset-0 w-full bg-veil backdrop-blur-xs"
 						onClick={closeDrawer}
 					/>
 					<aside
 						className={cn(
-							"absolute top-0 left-0 bottom-0 w-72 bg-sidebar border-r border-sidebar-border",
+							"absolute top-3 left-3 bottom-3 w-72 max-w-[calc(100vw-1.5rem)] rounded-[1.625rem] bg-sidebar shadow-soft",
 							"flex flex-col overflow-y-auto",
 							"animate-in slide-in-from-left duration-200",
 						)}
 					>
-						<div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-							<Link
-								to="/app"
-								onClick={closeDrawer}
-								className="font-heading text-lg font-bold text-sidebar-foreground"
-							>
-								Beats
-							</Link>
-							<div className="flex items-center gap-1">
+						<div className="px-4 pt-5 pb-3 space-y-3">
+							<div className="flex items-center justify-between px-1">
 								<Link
-									to="/projects"
+									to="/app"
 									onClick={closeDrawer}
-									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
-									title="Projects"
+									className="font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground"
 								>
-									<Layers className="w-4 h-4" />
-								</Link>
-								<Link
-									to="/plan"
-									onClick={closeDrawer}
-									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
-									title="Weekly Plan"
-								>
-									<CalendarDays className="w-4 h-4" />
-								</Link>
-								<Link
-									to="/coach"
-									onClick={closeDrawer}
-									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
-									title="Coach"
-								>
-									<Sparkles className="w-4 h-4" />
-								</Link>
-								<Link
-									to="/insights"
-									onClick={closeDrawer}
-									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
-									title="Insights"
-								>
-									<BarChart3 className="w-4 h-4" />
-								</Link>
-								<Link
-									to="/settings"
-									onClick={closeDrawer}
-									className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
-									title="Settings"
-								>
-									<Settings className="w-4 h-4" />
+									Beats
 								</Link>
 								<button
 									type="button"
 									onClick={closeDrawer}
-									className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+									className="grid place-items-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
 								>
 									<X className="w-5 h-5" />
 								</button>
 							</div>
+							<nav aria-label="Pages" className="flex items-center justify-between">
+								{NAV.map(({ to, title, Icon }) => (
+									<Link
+										key={to}
+										to={to}
+										onClick={closeDrawer}
+										className="grid place-items-center w-8 h-8 rounded-full bg-secondary text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+										title={title}
+									>
+										<Icon className="w-4 h-4" />
+									</Link>
+								))}
+							</nav>
 						</div>
 
-						<div className="flex-1 p-4 space-y-5">
+						<div className="flex-1 px-4 pb-4 space-y-4">
 							<SidebarTimer {...props} />
 							<SidebarStats />
 							<SidebarProjectList projects={projects} />
@@ -170,12 +157,12 @@ export function MobileHeader(props: MobileHeaderProps) {
 
 						{/* Install prompt */}
 						{canInstall && (
-							<div className="px-4 py-3 border-t border-sidebar-border">
-								<div className="flex items-center gap-2">
+							<div className="px-4 pb-2">
+								<div className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5">
 									<button
 										type="button"
 										onClick={install}
-										className="flex-1 flex items-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-primary transition-colors"
+										className="flex-1 flex items-center gap-2 text-xs font-bold text-sidebar-foreground hover:text-sidebar-primary transition-colors"
 									>
 										<Download className="w-3.5 h-3.5" />
 										Install Beats
@@ -183,7 +170,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 									<button
 										type="button"
 										onClick={dismissInstall}
-										className="p-0.5 text-sidebar-foreground/30 hover:text-sidebar-foreground/60 transition-colors"
+										className="p-0.5 rounded-full text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors"
 									>
 										<X className="w-3 h-3" />
 									</button>
@@ -192,10 +179,10 @@ export function MobileHeader(props: MobileHeaderProps) {
 						)}
 
 						{/* User + Logout */}
-						<div className="px-4 py-3 border-t border-sidebar-border">
-							<div className="flex items-center justify-between">
+						<div className="px-4 pt-1 pb-4">
+							<div className="flex items-center justify-between gap-2">
 								<span
-									className="text-xs text-sidebar-foreground/60 truncate max-w-[200px]"
+									className="text-xs text-muted-foreground truncate min-w-0 pl-1"
 									title={user?.email}
 								>
 									{user?.email}
@@ -203,7 +190,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 								<button
 									type="button"
 									onClick={handleLogout}
-									className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+									className="grid place-items-center w-7 h-7 shrink-0 rounded-full text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-secondary transition-colors"
 									title="Sign out"
 									aria-label="Sign out"
 								>

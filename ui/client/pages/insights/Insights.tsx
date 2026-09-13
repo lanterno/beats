@@ -76,18 +76,18 @@ export default function Insights() {
 	return (
 		<div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
 			{/* Header with project filter */}
-			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-3">
-					<h1 className="font-heading text-xl text-foreground">Insights</h1>
+			<div className="flex flex-wrap items-center justify-between gap-y-2">
+				<div className="flex flex-wrap items-center gap-3">
+					<h1 className="font-heading text-xl text-foreground shrink-0">Insights</h1>
 					<Link
 						to="/insights/digests"
-						className="text-[10px] px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+						className="shrink-0 whitespace-nowrap text-[11px] font-bold px-2.5 py-1 rounded-full bg-card text-foreground shadow-soft hover:text-accent-ink transition-colors"
 					>
 						Digests
 					</Link>
 					<Link
 						to={`/insights/year/${new Date().getFullYear() - 1}`}
-						className="text-[10px] px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+						className="shrink-0 whitespace-nowrap text-[11px] font-bold px-2.5 py-1 rounded-full bg-card text-foreground shadow-soft hover:text-accent-ink transition-colors"
 					>
 						{new Date().getFullYear() - 1} Review
 					</Link>
@@ -162,7 +162,7 @@ export default function Insights() {
 					<div className="flex justify-end">
 						<Link
 							to={`/insights/month/${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
-							className="text-xs text-accent hover:text-accent/80 transition-colors"
+							className="text-xs text-accent-ink hover:text-accent-ink/80 transition-colors"
 						>
 							View full monthly retrospective &rarr;
 						</Link>
@@ -282,7 +282,7 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
 		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 text-center">
 			<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1">{label}</p>
 			<p
-				className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent" : "text-foreground"}`}
+				className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent-ink" : "text-foreground"}`}
 			>
 				{value}
 			</p>

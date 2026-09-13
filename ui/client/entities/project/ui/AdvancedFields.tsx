@@ -228,7 +228,7 @@ export function AdvancedFields({
 					<button
 						type="button"
 						onClick={addRepo}
-						className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+						className="inline-flex items-center gap-1.5 text-xs text-accent-ink hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
 					>
 						<Plus className="w-3.5 h-3.5" />
 						{values.autostartRepos.length === 0 ? "Add a path" : "Add another"}

@@ -95,7 +95,7 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 				</p>
 			</div>
 			{!validRange && (
-				<p className="text-sm text-red-400" role="alert">
+				<p className="text-sm text-destructive" role="alert">
 					End time must be after the start time.
 				</p>
 			)}

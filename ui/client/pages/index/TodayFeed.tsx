@@ -121,7 +121,7 @@ function SessionRow({
 					{session.tags.map((tag) => (
 						<span
 							key={tag}
-							className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent/70"
+							className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent-ink/70"
 						>
 							{tag}
 						</span>
@@ -301,7 +301,7 @@ export function TodayFeed() {
 		<div>
 			<div className="flex items-center gap-2 mb-3">
 				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm">
-					<Clock className="w-3.5 h-3.5 text-accent/75" />
+					<Clock className="w-3.5 h-3.5 text-accent-ink/75" />
 					Activity
 				</h2>
 				<div className="ml-auto flex items-center gap-1 w-44">
@@ -331,7 +331,7 @@ export function TodayFeed() {
 				{/* Today section — always open */}
 				<div className="px-1 py-2">
 					<div className="flex items-center gap-2 px-3 py-1 mb-0.5">
-						<span className="text-xs uppercase tracking-[0.1em] text-accent font-semibold">
+						<span className="text-xs uppercase tracking-[0.1em] text-accent-ink font-semibold">
 							Today
 						</span>
 						{todayList.length > 0 && (
@@ -342,7 +342,7 @@ export function TodayFeed() {
 						{avgFocus !== null && (
 							<span className="text-xs text-muted-foreground/60">Focus: {avgFocus}</span>
 						)}
-						<span className="ml-auto text-sm font-medium tabular-nums text-accent">
+						<span className="ml-auto text-sm font-medium tabular-nums text-accent-ink">
 							{todayTotal > 0 ? formatDuration(todayTotal) : "0m"}
 						</span>
 					</div>

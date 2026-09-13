@@ -105,7 +105,7 @@ export function ProjectSessionList({
 					id="sessions-heading"
 					className="flex items-center gap-2 text-foreground font-medium text-sm"
 				>
-					<List className="w-3.5 h-3.5 text-accent/75" />
+					<List className="w-3.5 h-3.5 text-accent-ink/75" />
 					Sessions
 					{sessions.length > 0 && (
 						<span className="text-xs text-muted-foreground font-normal">
@@ -118,7 +118,7 @@ export function ProjectSessionList({
 					<button
 						type="button"
 						onClick={() => onClearScope()}
-						className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-accent hover:bg-accent/20 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+						className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-accent-ink hover:bg-accent/20 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 					>
 						Scoped to {scopeLabel}
 						<span aria-hidden="true">×</span>
@@ -177,7 +177,9 @@ export function ProjectSessionList({
 														</span>
 														<span
 															className={`text-sm font-medium tabular-nums ml-auto ${
-																session.duration > 0 ? "text-accent" : "text-muted-foreground/60"
+																session.duration > 0
+																	? "text-accent-ink"
+																	: "text-muted-foreground/60"
 															}`}
 														>
 															{session.duration > 0 ? formatDuration(session.duration) : "—"}
@@ -205,7 +207,7 @@ export function ProjectSessionList({
 																<button
 																	type="button"
 																	onClick={() => setEditingSessionId(session.id)}
-																	className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-accent hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+																	className="min-h-6 min-w-6 p-1 rounded text-muted-foreground/60 hover:text-accent-ink hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 																	aria-label="Edit session"
 																>
 																	<Edit2 className="w-3.5 h-3.5" />
@@ -231,7 +233,7 @@ export function ProjectSessionList({
 															{session.tags.map((tag) => (
 																<span
 																	key={tag}
-																	className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent/70"
+																	className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent-ink/70"
 																>
 																	{tag}
 																</span>
@@ -253,7 +255,7 @@ export function ProjectSessionList({
 							<button
 								type="button"
 								onClick={() => setVisibleCount((c) => c + SESSIONS_PER_PAGE)}
-								className="w-full py-2.5 text-sm text-accent hover:bg-accent/5 transition-colors"
+								className="w-full py-2.5 text-sm text-accent-ink hover:bg-accent/5 transition-colors"
 							>
 								{/* FF.12: scope to scopedSessions, not sortedSessions —
 								    when the user has clicked a week label the visible

@@ -43,7 +43,7 @@ export function SyncStatus({ className, verbose = false }: SyncStatusProps) {
 			: `${pendingCount} pending${lastError ? " (retrying)" : ""}`;
 		return (
 			<span
-				className={cn("inline-flex items-center gap-1.5 text-[11px] text-amber-500", className)}
+				className={cn("inline-flex items-center gap-1.5 text-[11px] text-accent-ink", className)}
 				title={lastError ?? label}
 			>
 				<AlertCircle className="w-3 h-3" />
@@ -62,7 +62,7 @@ export function SyncStatus({ className, verbose = false }: SyncStatusProps) {
 			)}
 			title="All changes synced"
 		>
-			<CheckCircle2 className="w-3 h-3 text-emerald-500" />
+			<CheckCircle2 className="w-3 h-3 text-success" />
 			<span>Synced</span>
 		</span>
 	);

@@ -233,7 +233,7 @@ export default function MonthlyRetrospective() {
 									<span className="font-medium text-foreground text-sm">
 										{stats.topProject.name}
 									</span>
-									<span className="ml-auto text-accent font-medium text-sm tabular-nums">
+									<span className="ml-auto text-accent-ink font-medium text-sm tabular-nums">
 										{formatDuration(stats.topProject.minutes)}
 									</span>
 								</div>
@@ -252,7 +252,7 @@ export default function MonthlyRetrospective() {
 											day: "numeric",
 										})}
 									</span>
-									<span className="text-accent font-medium text-sm tabular-nums">
+									<span className="text-accent-ink font-medium text-sm tabular-nums">
 										{formatDuration(stats.busiestDay.minutes)}
 									</span>
 								</div>
@@ -266,7 +266,7 @@ export default function MonthlyRetrospective() {
 								<span className="font-medium text-foreground text-sm">
 									{projectMap.get(stats.longestSession.projectId)?.name ?? "Unknown"}
 								</span>
-								<span className="text-accent font-medium text-sm tabular-nums">
+								<span className="text-accent-ink font-medium text-sm tabular-nums">
 									{formatDuration(stats.longestSession.duration)}
 								</span>
 							</div>
@@ -319,10 +319,10 @@ export default function MonthlyRetrospective() {
 								{stats.tagCloud.map(({ tag, count }) => (
 									<span
 										key={tag}
-										className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent"
+										className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent-ink"
 									>
 										{tag}
-										<span className="text-accent/50 text-[10px]">{count}</span>
+										<span className="text-accent-ink/50 text-[10px]">{count}</span>
 									</span>
 								))}
 							</div>
@@ -338,7 +338,7 @@ export default function MonthlyRetrospective() {
 						>
 							{copied ? (
 								<>
-									<Check className="w-3.5 h-3.5 text-accent" /> Copied
+									<Check className="w-3.5 h-3.5 text-accent-ink" /> Copied
 								</>
 							) : (
 								<>
@@ -358,7 +358,7 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
 		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 text-center">
 			<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1">{label}</p>
 			<p
-				className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent" : "text-foreground"}`}
+				className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent-ink" : "text-foreground"}`}
 			>
 				{value}
 			</p>

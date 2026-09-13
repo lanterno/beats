@@ -59,7 +59,7 @@ export function BestMoment({
 	return (
 		<div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
 			<div className="flex items-start gap-4">
-				<div className="font-heading tabular-nums text-3xl text-accent leading-none pt-1">
+				<div className="font-heading tabular-nums text-3xl text-accent-ink leading-none pt-1">
 					{score}
 				</div>
 				<div className="flex-1 min-w-0">

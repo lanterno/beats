@@ -62,7 +62,7 @@ export function QuickLog() {
 			<button
 				type="button"
 				onClick={() => setOpen(true)}
-				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-accent transition-colors"
+				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-accent-ink transition-colors"
 				title="Log a past session"
 			>
 				<Plus className="w-3.5 h-3.5" />
@@ -123,7 +123,7 @@ export function QuickLog() {
 			</div>
 
 			{!validRange && (
-				<p className="text-[11px] text-red-400" role="alert">
+				<p className="text-[11px] text-destructive" role="alert">
 					End time must be after the start time.
 				</p>
 			)}

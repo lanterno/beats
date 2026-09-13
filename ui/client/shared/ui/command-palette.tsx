@@ -102,17 +102,17 @@ export function CommandPalette({
 			<button
 				type="button"
 				aria-label="Close command palette"
-				className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+				className="absolute inset-0 bg-veil backdrop-blur-sm"
 				onClick={close}
 			/>
 
 			{/* Palette */}
 			<div
-				className="relative w-full max-w-md rounded-xl border border-border bg-card shadow-card overflow-hidden"
+				className="relative w-full max-w-md rounded-[1.5rem] bg-card shadow-card overflow-hidden"
 				style={{ animation: "fadeSlideIn 150ms ease-out both" }}
 			>
 				{/* Search input */}
-				<div className="flex items-center gap-3 px-4 py-3 border-b border-border/60">
+				<div className="flex items-center gap-3 px-4 py-3 border-b border-border">
 					<Search className="w-4 h-4 text-muted-foreground shrink-0" />
 					<input
 						ref={inputRef}
@@ -121,7 +121,7 @@ export function CommandPalette({
 						placeholder="Search projects, actions..."
 						className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
 					/>
-					<kbd className="text-[10px] text-muted-foreground/50 bg-secondary/50 rounded px-1.5 py-0.5 border border-border/40">
+					<kbd className="text-[10px] text-muted-foreground bg-secondary rounded-full px-2 py-0.5">
 						ESC
 					</kbd>
 				</div>
@@ -144,9 +144,7 @@ export function CommandPalette({
 								onMouseEnter={() => setSelectedIndex(i)}
 								className={cn(
 									"w-full flex items-center gap-3 px-4 py-2 text-left transition-colors",
-									i === selectedIndex
-										? "bg-accent/10 text-accent"
-										: "text-foreground hover:bg-secondary/30",
+									i === selectedIndex ? "bg-secondary text-foreground" : "text-foreground",
 								)}
 							>
 								{item.color ? (
@@ -159,7 +157,7 @@ export function CommandPalette({
 								)}
 								<span className="text-sm truncate flex-1">{item.label}</span>
 								{item.sublabel && (
-									<kbd className="text-[10px] text-muted-foreground/40 bg-secondary/30 rounded px-1.5 py-0.5 border border-border/30 shrink-0">
+									<kbd className="text-[10px] text-muted-foreground bg-secondary rounded-full px-2 py-0.5 shrink-0">
 										{item.sublabel}
 									</kbd>
 								)}

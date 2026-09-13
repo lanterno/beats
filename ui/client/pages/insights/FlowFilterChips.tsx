@@ -70,7 +70,7 @@ export function FlowFilterChips({
 						`beats_flow_windows_${date}.csv`,
 					);
 				}}
-				className="text-accent hover:underline tabular-nums"
+				className="text-accent-ink hover:underline tabular-nums"
 				title="Download the visible flow-window slice as CSV"
 			>
 				↓ csv
@@ -105,7 +105,7 @@ function CopyLinkButton() {
 					// to copying the address bar.
 				}
 			}}
-			className="text-accent hover:underline tabular-nums"
+			className="text-accent-ink hover:underline tabular-nums"
 			title="Copy this filtered view's URL to the clipboard"
 		>
 			{justCopied ? "✓ copied" : "🔗 copy link"}
@@ -161,7 +161,7 @@ function FilterPill({
 			<button
 				type="button"
 				onClick={onClear}
-				className="text-accent hover:underline tabular-nums"
+				className="text-accent-ink hover:underline tabular-nums"
 				aria-label={clearLabel}
 			>
 				clear

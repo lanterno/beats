@@ -83,7 +83,7 @@ export function DaemonPrivacySection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Eye className="w-4 h-4 text-accent" />
+				<Eye className="w-4 h-4 text-accent-ink" />
 				Signal Privacy
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">

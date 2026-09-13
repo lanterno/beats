@@ -150,7 +150,7 @@ export function ContractHistoryPanel({
 							<span className="text-foreground/80 shrink-0">·</span>
 							<span className="text-foreground truncate min-w-0">{describeTerm(term)}</span>
 							{isCurrent && (
-								<span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-accent/40 text-accent shrink-0">
+								<span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-accent/40 text-accent-ink shrink-0">
 									In force
 								</span>
 							)}

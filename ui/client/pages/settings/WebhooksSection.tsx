@@ -56,7 +56,7 @@ export function WebhooksSection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Webhook className="w-4 h-4 text-accent" />
+				<Webhook className="w-4 h-4 text-accent-ink" />
 				Webhooks
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
@@ -73,7 +73,7 @@ export function WebhooksSection() {
 								key={wh.id}
 								className="flex items-center gap-2 bg-secondary/30 rounded px-2.5 py-1.5"
 							>
-								<code className="text-xs text-foreground/80 font-mono truncate flex-1">
+								<code className="text-xs text-foreground/80 font-code truncate flex-1">
 									{wh.url}
 								</code>
 								<span className="text-[10px] text-muted-foreground shrink-0">

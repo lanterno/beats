@@ -113,7 +113,7 @@ export function ProjectPulseList() {
 		return (
 			<div>
 				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm mb-3">
-					<Layers className="w-3.5 h-3.5 text-accent/75" />
+					<Layers className="w-3.5 h-3.5 text-accent-ink/75" />
 					Projects
 				</h2>
 				<div className="rounded-lg border border-dashed border-border flex flex-col items-center">
@@ -139,7 +139,7 @@ export function ProjectPulseList() {
 	return (
 		<div>
 			<h2 className="flex items-center gap-2 text-foreground font-medium text-sm mb-3">
-				<Layers className="w-3.5 h-3.5 text-accent/75" />
+				<Layers className="w-3.5 h-3.5 text-accent-ink/75" />
 				Projects
 			</h2>
 
@@ -209,8 +209,8 @@ export function ProjectPulseList() {
 									className={cn(
 										"p-1 rounded transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
 										pinned
-											? "text-accent"
-											: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent",
+											? "text-accent-ink"
+											: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent-ink",
 									)}
 								>
 									<Star

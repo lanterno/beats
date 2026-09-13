@@ -50,7 +50,7 @@ export default function Coach() {
 		<div className="max-w-3xl mx-auto px-6 py-6 flex flex-col h-[calc(100vh-3rem)]">
 			{/* Header */}
 			<header className="flex items-center gap-2 mb-4">
-				<Sparkles className="w-5 h-5 text-accent" />
+				<Sparkles className="w-5 h-5 text-accent-ink" />
 				<h1 className="text-lg font-heading font-bold text-foreground">Coach</h1>
 				<div className="ml-auto flex items-center gap-1">
 					<button

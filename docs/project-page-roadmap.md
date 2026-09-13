@@ -19,14 +19,17 @@ recorded in the session that produced it. The decisions below were then
 confirmed by the owner on 2026-09-12 and are not to be re-litigated.
 Anything marked *open* is genuinely undecided.
 
+The copy of record is [docs/project-page-mockup.html](project-page-mockup.html),
+checked in beside this file; the artifact link is a convenience.
+
 ---
 
 ## Status
 
 | Phase | Commit |
 |---|---|
-| 1 — API: the ledger route and the balance proof | feat(api): the week ledger route and the balance proof |
-| 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | — |
+| 1 — API: the ledger route and the balance proof | `59bb011` the week ledger route and the balance proof |
+| 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | feat(ui): the afternoon and the dusk |
 | 3a — Project page: the standing, the days, the ledger | — |
 | 3b — Project page: the register, time off, the drawer | — |
 | 4 — Every other page on the new theme | — |
@@ -390,6 +393,71 @@ HTTP contract, bugs that happened. Not class names.
 - Gate: every page opens and reads on both hours (a live-browser lens
   walks the dashboard, projects, project, insights, plan, coach,
   settings at 1360 and 400 px).
+
+**Notes** — what the phase settled that the text above left open:
+
+- **The raw accent is never text.** Every `text-accent` outside the
+  marketing page became `text-accent-ink` (~130 sites, the pages included,
+  not the shell alone): the gate is "every page reads on both hours", and
+  the token swap had left the pages' links, chips and figures at 1.6–1.8:1
+  by day. Fills and borders keep the accent; at dusk the two tokens are one
+  colour, so nothing there moved. `HomePage.css` waits for Phase 5.
+- **Settings' selected option is the mockup's `.seg`**: the accent as a
+  fill with ink on it, `aria-pressed`, no border; unselected the wash. The
+  swatch dot is each hour's sky, not its accent — the accent dot vanished
+  on the accent fill, and the sky is what differs between the two.
+- **Focus mode lost its hard-coded ember gradient** (it painted
+  `hsl(38 20% 12%)` under accent digits whatever the hour). Now the haze at
+  85 % with a blur over the sky, the figure in ink at heading weight like
+  the sidebar's elapsed. Verified by class, not on screen — it needs a
+  running timer, which writes a session.
+- **Two veils the escape grep could not see** — `bg-black` under
+  `CoachMemoryDialog` and `AuthModal` — are `bg-veil`.
+- **`--muted` is a sky-grey (`203 35% 85%`), not the mockup's neutral
+  #EEEBE2**: at 1.15:1 on the panel a goal ring at 0 % and every bar track
+  vanished. `--muted-foreground` is one step darker than the mockup's ink-2
+  (`206 10% 40%`) because page subtitles sit on the bare sky until Phase 4;
+  ~3:1 on the sky's top, ~5.7:1 on a panel.
+- **The radius scale is explicit and monotonic** on the mockup's stops (sm
+  10, md 12, lg 16, xl 18, 2xl 22, 3xl = `--radius`, 4xl 28 px) instead of
+  `--radius` ± 2 px, which had put `rounded-sm` (20 px) above `rounded-xl`
+  (12 px). The unrestyled `rounded-md` controls are 12 px — the mockup's
+  input — rather than 22; the timer's custom-time field uses it.
+- **`Button` is the mockup's `.btn`**: the heavier wash (28 %, the token
+  the sidebar's active row also uses — reused on purpose, no new name) at
+  14 px / 700 for `secondary` and `outline`, so a button reads heavier than
+  a chip on the lighter wash.
+- **The idle timer's Start is the wash** (`.timer.idle .btn`); the accent
+  pill in the sidebar is the running state alone.
+- **`Progress` fills in leaf, not sunlight** (`bg-success/70`): the accent
+  stays with today, the running timer and the primary action.
+- **Code is `font-code`** at the four settings sites (`CodeBlock`, the API
+  base URL, webhook URLs, the pairing code), since `font-mono` now means
+  the rounded figures face.
+- **`index.html` stamps the stored hour and density before first paint**,
+  so a stored dusk no longer flashes the afternoon. The two storage keys and
+  the dusk sky's hex are repeated there; `useTheme.ts` owns them, and its
+  `THEMES` table carries each hour's `sky` for the meta and the swatch.
+- **The useTheme test asserts that `theme-color` moves with the hour and
+  returns**, not which hex — the old assertion restated a token value.
+- **Insights' header wraps at 400 px** (`flex-wrap`, `shrink-0
+  whitespace-nowrap` on the heading and its two chips), and those chips are
+  the mockup's `.hdr .chip` — the panel with ink on it — because on the
+  sky a 10 px accent-ink link was still under 3:1. The rest of the page is
+  Phase 4's.
+- **Nothing moves under reduced motion**: every animation and transition
+  collapses to its end state (`0.01ms !important`, the inline
+  `fadeSlideIn`/`sparkGrow` included); the clouds' `animation: none` stays.
+- **Bare triples in `WeeklyCard` and `YearInReview`** (`var(--accent)`
+  where a colour is required, so the declaration was dropped) are
+  `hsl(var(--accent))`; the busiest-month and day bars paint again.
+- **The mobile hamburger has a name** (`Open menu`, `aria-expanded`), and
+  the colour picker's default is `assignColor(project.id)`, not the
+  retired amber.
+- **Declined**: `apple-mobile-web-app-status-bar-style` stays
+  `black-translucent` — `default` would draw a system-coloured bar over an
+  indigo page at dusk, and neither can be checked here; a Phase 5 question
+  beside the PWA manifest.
 
 ### Phase 3a — Project page: the standing, the days, the ledger `[ui]`
 

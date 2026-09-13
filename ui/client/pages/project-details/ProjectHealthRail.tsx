@@ -89,7 +89,7 @@ export function ProjectHealthRail({ projectId, todaysProjectSessions }: ProjectH
 			)}
 		>
 			<header className="flex items-center gap-2 mb-1.5">
-				<Activity className="w-3.5 h-3.5 text-accent shrink-0" aria-hidden="true" />
+				<Activity className="w-3.5 h-3.5 text-accent-ink shrink-0" aria-hidden="true" />
 				<h3
 					id="project-health-title"
 					className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"

@@ -11,6 +11,7 @@ export { Dialog, type DialogProps } from "./dialog";
 export { EmptyState } from "./empty-state";
 export { FocusMode } from "./focus-mode";
 export { GoalRing } from "./goal-ring";
+export { Panel, type PanelProps } from "./panel";
 export { Progress } from "./progress";
 export { Toaster } from "./sonner";
 export { SyncStatus } from "./sync-status";

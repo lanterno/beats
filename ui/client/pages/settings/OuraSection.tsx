@@ -38,7 +38,7 @@ export function OuraSection() {
 						href="https://cloud.ouraring.com/personal-access-tokens"
 						target="_blank"
 						rel="noopener noreferrer"
-						className="text-accent hover:underline"
+						className="text-accent-ink hover:underline"
 					>
 						cloud.ouraring.com
 					</a>

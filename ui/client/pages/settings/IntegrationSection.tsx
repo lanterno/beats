@@ -35,14 +35,14 @@ export function IntegrationSection({
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Icon className="w-4 h-4 text-accent" />
+				<Icon className="w-4 h-4 text-accent-ink" />
 				{title}
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
 				<p className="text-xs text-muted-foreground">{description}</p>
 				{connected ? (
 					<div className="flex items-center gap-3">
-						<span className="text-xs text-accent font-medium">
+						<span className="text-xs text-accent-ink font-medium">
 							Connected{connectedDetail ? <> ({connectedDetail})</> : null}
 						</span>
 						<Button

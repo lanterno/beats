@@ -65,7 +65,7 @@ export function DistractionsToday() {
 						</span>
 						<div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
 							<div
-								className="h-full rounded-full bg-amber-500/70"
+								className="h-full rounded-full bg-accent/70"
 								style={{ width: `${(a.minutes / maxMinutes) * 100}%` }}
 							/>
 						</div>

@@ -78,7 +78,7 @@ export function WeekPanel() {
 					<button
 						type="button"
 						onClick={() => setWeekOffset(0)}
-						className="px-2 py-0.5 rounded-md text-xs text-accent hover:bg-accent/10 transition-colors"
+						className="px-2 py-0.5 rounded-md text-xs text-accent-ink hover:bg-accent/10 transition-colors"
 					>
 						Today
 					</button>
@@ -86,7 +86,7 @@ export function WeekPanel() {
 
 				<div className="ml-auto flex items-center gap-2">
 					{weekTotal > 0 && (
-						<span className="text-sm font-medium tabular-nums text-accent">
+						<span className="text-sm font-medium tabular-nums text-accent-ink">
 							{formatDuration(weekTotal)}
 						</span>
 					)}
@@ -161,7 +161,7 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 							<p
 								className={cn(
 									"text-xs uppercase tracking-wide leading-none",
-									isToday ? "text-accent font-semibold" : "text-muted-foreground",
+									isToday ? "text-accent-ink font-semibold" : "text-muted-foreground",
 								)}
 							>
 								{day.dayName}
@@ -169,7 +169,7 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 							<p
 								className={cn(
 									"text-[10px] mt-0.5 leading-none",
-									isToday ? "text-accent/70" : "text-muted-foreground/50",
+									isToday ? "text-accent-ink/70" : "text-muted-foreground/50",
 								)}
 							>
 								{formatDateShort(day.date)}
@@ -202,7 +202,7 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 								<p
 									className={cn(
 										"mt-auto pt-1 text-center text-xs font-medium tabular-nums",
-										isToday ? "text-accent" : "text-foreground/60",
+										isToday ? "text-accent-ink" : "text-foreground/60",
 									)}
 								>
 									{(day.totalMinutes / 60).toFixed(1)}h
@@ -286,7 +286,7 @@ function ProjectTotalsView({ data }: { data: DayProjectBreakdown[] }) {
 				<span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-2">
 					Total
 				</span>
-				<span className="text-sm font-medium tabular-nums text-accent">
+				<span className="text-sm font-medium tabular-nums text-accent-ink">
 					{formatDuration(weekTotal)}
 				</span>
 			</div>

@@ -67,7 +67,7 @@ export function HomeIdentitySection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<KeyRound className="w-4 h-4 text-accent" />
+				<KeyRound className="w-4 h-4 text-accent-ink" />
 				{sso.provider_name} identity
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
@@ -79,7 +79,7 @@ export function HomeIdentitySection() {
 				{link?.linked ? (
 					<>
 						<div className="flex items-center gap-2 bg-secondary/30 rounded px-2.5 py-1.5">
-							<KeyRound className="w-3.5 h-3.5 text-accent/60 shrink-0" />
+							<KeyRound className="w-3.5 h-3.5 text-accent-ink/60 shrink-0" />
 							<span className="text-xs text-foreground font-medium truncate flex-1">
 								{link.holder_name || "Linked device"}
 							</span>
@@ -104,7 +104,7 @@ export function HomeIdentitySection() {
 						type="button"
 						onClick={handleLink}
 						disabled={busy}
-						className="text-xs text-accent hover:text-accent/80 transition-colors disabled:opacity-40"
+						className="text-xs text-accent-ink hover:text-accent-ink/80 transition-colors disabled:opacity-40"
 					>
 						{busy ? "Linking..." : `Link my ${sso.provider_name} identity`}
 					</button>

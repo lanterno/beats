@@ -165,7 +165,7 @@ function TrendDelta({ delta }: { delta: number }) {
 	const up = delta > 0;
 	return (
 		<span
-			className={`tabular-nums ${up ? "text-green-500" : "text-amber-500"}`}
+			className={`tabular-nums ${up ? "text-success" : "text-accent-ink"}`}
 			title="vs the first week in the trend"
 		>
 			{up ? "↑" : "↓"} {Math.abs(delta)}

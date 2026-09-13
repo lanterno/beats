@@ -26,7 +26,7 @@ export function PatternCards() {
 		<div>
 			<div className="flex items-center justify-between mb-3">
 				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm">
-					<Sparkles className="w-3.5 h-3.5 text-accent/75" />
+					<Sparkles className="w-3.5 h-3.5 text-accent-ink/75" />
 					Patterns
 				</h2>
 				<button
@@ -34,7 +34,7 @@ export function PatternCards() {
 					onClick={() => refreshMutation.mutate()}
 					disabled={refreshMutation.isPending}
 					className={cn(
-						"flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors",
+						"flex items-center gap-1 text-xs text-muted-foreground hover:text-accent-ink transition-colors",
 						refreshMutation.isPending && "animate-spin",
 					)}
 				>

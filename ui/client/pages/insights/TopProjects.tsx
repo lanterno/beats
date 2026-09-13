@@ -115,7 +115,7 @@ export function TopProjects({ tag }: { tag?: string }) {
 							<span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-2">
 								Total
 							</span>
-							<span className="text-sm font-medium tabular-nums text-accent">
+							<span className="text-sm font-medium tabular-nums text-accent-ink">
 								{formatDuration(totalMinutes)}
 							</span>
 						</div>

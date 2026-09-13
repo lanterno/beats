@@ -95,7 +95,7 @@ export function FlowByWeekday({
 							</div>
 							<div
 								className={`text-[10px] tabular-nums ${
-									isPeak ? "text-accent font-medium" : "text-muted-foreground"
+									isPeak ? "text-accent-ink font-medium" : "text-muted-foreground"
 								}`}
 							>
 								{LABELS[displayIdx]}

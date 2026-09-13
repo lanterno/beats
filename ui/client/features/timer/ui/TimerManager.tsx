@@ -174,7 +174,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 						<button
 							type="button"
 							onClick={() => setShowStartTimeInput(!showStartTimeInput)}
-							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors duration-150"
+							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent-ink hover:bg-accent/5 transition-colors duration-150"
 						>
 							<Calendar className="w-3.5 h-3.5" />
 							{showStartTimeInput ? "Hide start time" : "Set start time"}
@@ -185,7 +185,7 @@ export function TimerManager({ projects, onSessionSaved, initialProjectId }: Tim
 						<button
 							type="button"
 							onClick={() => setShowStopTimeInput(!showStopTimeInput)}
-							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors duration-150"
+							className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm text-muted-foreground hover:text-accent-ink hover:bg-accent/5 transition-colors duration-150"
 						>
 							<Calendar className="w-3.5 h-3.5" />
 							{showStopTimeInput ? "Hide stop time" : "Set stop time"}

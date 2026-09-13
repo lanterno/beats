@@ -65,19 +65,15 @@ export function FocusMode({
 	if (!open) return null;
 
 	return (
-		<div
-			className="fixed inset-0 z-[200] bg-background flex flex-col items-center justify-center"
-			style={{
-				backgroundImage:
-					"radial-gradient(ellipse at 50% 40%, hsl(38 20% 12%) 0%, hsl(25 15% 6%) 70%)",
-			}}
-		>
+		// The haze over the sky, blurred: the hills still show through under
+		// the figure. The digits are ink, as the mockup's running timer.
+		<div className="fixed inset-0 z-[200] bg-background/85 backdrop-blur-xl flex flex-col items-center justify-center">
 			{/* Top controls */}
 			<div className="absolute top-4 right-4 flex items-center gap-2">
 				<button
 					type="button"
 					onClick={toggleFullscreen}
-					className="p-2 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+					className="p-2 rounded-full text-muted-foreground/60 hover:text-muted-foreground transition-colors"
 					title="Toggle fullscreen"
 				>
 					{document.fullscreenElement ? (
@@ -89,7 +85,7 @@ export function FocusMode({
 				<button
 					type="button"
 					onClick={onClose}
-					className="px-3 py-1.5 rounded-md text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+					className="px-3 py-1.5 rounded-full text-xs font-bold text-muted-foreground/60 hover:text-muted-foreground transition-colors"
 				>
 					ESC
 				</button>
@@ -107,7 +103,7 @@ export function FocusMode({
 			<AnimatedDigits
 				value={formatSecondsToTime(totalSeconds)}
 				className={cn(
-					"font-mono font-semibold tabular-nums tracking-tight text-accent",
+					"font-heading font-extrabold tracking-tight text-foreground",
 					"text-7xl sm:text-8xl md:text-9xl",
 				)}
 			/>
@@ -122,7 +118,7 @@ export function FocusMode({
 			<button
 				type="button"
 				onClick={onStop}
-				className="mt-12 flex items-center gap-2.5 px-8 py-3 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
+				className="mt-12 flex items-center gap-2.5 px-8 py-3 rounded-full text-sm font-bold bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
 			>
 				<Square className="w-4 h-4" />
 				Stop

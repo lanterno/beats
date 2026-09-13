@@ -91,7 +91,7 @@ export function FlowToday({
 					<button
 						type="button"
 						onClick={() => setSelectedIdx(stats.peakIndex)}
-						className="text-accent hover:underline tabular-nums"
+						className="text-accent-ink hover:underline tabular-nums"
 					>
 						{formatTime(windows[stats.peakIndex].window_start)}
 					</button>
@@ -256,7 +256,7 @@ function BaselineDelta({ avg, baseline }: { avg: number; baseline: number }) {
 	const up = delta > 0;
 	return (
 		<span
-			className={`tabular-nums ${up ? "text-green-500" : "text-amber-500"}`}
+			className={`tabular-nums ${up ? "text-success" : "text-accent-ink"}`}
 			title={`vs your 7-day baseline (${Math.round(baseline * 100)})`}
 		>
 			{up ? "↑" : "↓"} {Math.abs(delta)}

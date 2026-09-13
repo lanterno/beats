@@ -278,7 +278,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				aria-label="Close"
 				tabIndex={-1}
 				disabled={isProcessing}
-				className="absolute inset-0 w-full bg-black/60 backdrop-blur-sm"
+				className="absolute inset-0 w-full bg-veil backdrop-blur-sm"
 				onClick={onClose}
 			/>
 			<div className="relative w-full max-w-md mx-6 bg-card border border-border rounded-lg p-8 shadow-soft animate-in fade-in zoom-in-95 duration-200">

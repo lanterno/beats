@@ -199,7 +199,7 @@ export default function ProjectsIndex() {
 	return (
 		<div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
 			<header className="flex items-center gap-3">
-				<Layers className="w-5 h-5 text-accent" />
+				<Layers className="w-5 h-5 text-accent-ink" />
 				<h1 className="font-heading text-xl text-foreground">Projects</h1>
 				<Button type="button" size="sm" className="ml-auto" onClick={() => setDialogOpen(true)}>
 					<Plus className="w-3.5 h-3.5" />
@@ -309,7 +309,7 @@ function CategoryChips({
 						className={cn(
 							"inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
 							isSelected
-								? "border-accent/60 bg-accent/15 text-accent"
+								? "border-accent/60 bg-accent/15 text-accent-ink"
 								: "border-border text-muted-foreground hover:text-foreground hover:bg-secondary/40",
 						)}
 					>
@@ -350,7 +350,7 @@ function TabButton({
 			className={cn(
 				"inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs uppercase tracking-[0.12em] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
 				selected
-					? "bg-accent/15 text-accent"
+					? "bg-accent/15 text-accent-ink"
 					: "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
 			)}
 		>
@@ -491,7 +491,7 @@ function ProjectsTable({
 									<Link
 										to={`/project/${project.id}`}
 										onClick={(e) => e.stopPropagation()}
-										className="block truncate text-foreground font-medium hover:text-accent min-w-0 shrink"
+										className="block truncate text-foreground font-medium hover:text-accent-ink min-w-0 shrink"
 									>
 										{project.name}
 										{project.description && (
@@ -560,7 +560,7 @@ function RestoreButton({
 			}}
 			disabled={isRestoring}
 			aria-label={`Restore ${project.name}`}
-			className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+			className="inline-flex items-center gap-1.5 text-xs text-accent-ink hover:underline disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
 		>
 			{isRestoring ? (
 				<Loader2 className="w-3.5 h-3.5 animate-spin" />

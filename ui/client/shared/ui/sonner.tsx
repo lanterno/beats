@@ -1,20 +1,33 @@
+import type * as React from "react";
 import { Toaster as Sonner } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-const Toaster = ({ ...props }: ToasterProps) => {
+/*
+  Sonner styles its toasts from its own stylesheet, which is not in a cascade
+  layer and so outranks any Tailwind utility on the same property. Its CSS
+  variables are the supported way in: a toast is a small cloud — the panel
+  colour, the panel's ink, no border, and a 1rem radius.
+*/
+const cloud = {
+	"--normal-bg": "var(--color-card)",
+	"--normal-text": "var(--color-foreground)",
+	"--normal-border": "transparent",
+	"--border-radius": "1rem",
+} as React.CSSProperties;
+
+const Toaster = ({ style, ...props }: ToasterProps) => {
 	return (
 		<Sonner
-			theme="dark"
 			className="toaster group"
 			closeButton
+			style={{ ...cloud, ...style }}
 			toastOptions={{
 				classNames: {
-					toast:
-						"group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+					toast: "group toast",
 					description: "group-[.toast]:text-muted-foreground",
-					actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-					cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+					actionButton: "group-[.toast]:bg-accent group-[.toast]:text-accent-foreground",
+					cancelButton: "group-[.toast]:bg-secondary group-[.toast]:text-foreground",
 				},
 			}}
 			{...props}

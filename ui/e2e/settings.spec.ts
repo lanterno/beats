@@ -10,7 +10,7 @@ test.describe("Settings", () => {
 		await page.goto("/settings");
 		await expect(page.locator("text=Theme")).toBeVisible();
 
-		for (const theme of ["Ember", "Midnight", "Forest", "Mono", "Sunset"]) {
+		for (const theme of ["Afternoon", "Dusk"]) {
 			await expect(page.locator(`text=${theme}`)).toBeVisible();
 		}
 	});
@@ -27,10 +27,10 @@ test.describe("Settings", () => {
 	test("clicking a theme applies it", async ({ page }) => {
 		await page.goto("/settings");
 
-		await page.locator("text=Midnight").click();
+		await page.locator("text=Dusk").click();
 
 		const dataTheme = await page.locator("html").getAttribute("data-theme");
-		expect(dataTheme).toBe("midnight");
+		expect(dataTheme).toBe("dusk");
 	});
 
 	test("clicking a density applies it", async ({ page }) => {
@@ -67,13 +67,13 @@ test.describe("Settings", () => {
 
 	test("theme persists after navigation", async ({ page }) => {
 		await page.goto("/settings");
-		await page.locator("text=Forest").click();
+		await page.locator("text=Dusk").click();
 
 		// Navigate away and back
 		await page.goto("/app");
 		await page.goto("/settings");
 
 		const dataTheme = await page.locator("html").getAttribute("data-theme");
-		expect(dataTheme).toBe("forest");
+		expect(dataTheme).toBe("dusk");
 	});
 });

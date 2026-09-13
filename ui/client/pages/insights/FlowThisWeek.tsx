@@ -97,7 +97,7 @@ export function FlowThisWeek({
 							/>
 						</div>
 						<div
-							className={`text-[10px] tabular-nums ${b.isToday ? "text-accent font-medium" : "text-muted-foreground"}`}
+							className={`text-[10px] tabular-nums ${b.isToday ? "text-accent-ink font-medium" : "text-muted-foreground"}`}
 						>
 							{b.label}
 						</div>

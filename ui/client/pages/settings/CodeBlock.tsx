@@ -14,11 +14,11 @@ export function CodeBlock({ label, code }: { label: string; code: string }) {
 			<button
 				type="button"
 				onClick={handleCopy}
-				className="w-full text-left text-[11px] font-mono text-foreground/80 bg-secondary/40 rounded px-2.5 py-1.5 overflow-x-auto cursor-pointer hover:bg-secondary/60 transition-colors whitespace-nowrap"
+				className="w-full text-left text-[11px] font-code text-foreground/80 bg-secondary/40 rounded px-2.5 py-1.5 overflow-x-auto cursor-pointer hover:bg-secondary/60 transition-colors whitespace-nowrap"
 				title="Click to copy"
 			>
 				{code}
-				{copied && <span className="ml-2 text-accent text-[10px]">copied!</span>}
+				{copied && <span className="ml-2 text-accent-ink text-[10px]">copied!</span>}
 			</button>
 		</div>
 	);

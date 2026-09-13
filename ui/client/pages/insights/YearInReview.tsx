@@ -244,7 +244,7 @@ export default function YearInReview() {
 						<p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
 							Year in Review
 						</p>
-						<h1 className="font-heading text-6xl font-bold text-accent tabular-nums">{year}</h1>
+						<h1 className="font-heading text-6xl font-bold text-accent-ink tabular-nums">{year}</h1>
 					</div>
 
 					{/* Big stats */}
@@ -291,12 +291,14 @@ export default function YearInReview() {
 										style={{
 											height: `${Math.max((minutes / stats.maxMonthMinutes) * 80, 2)}px`,
 											backgroundColor:
-												i === stats.busiestMonthIdx ? "var(--accent)" : "var(--muted-foreground)",
+												i === stats.busiestMonthIdx
+													? "hsl(var(--accent))"
+													: "hsl(var(--muted-foreground))",
 											opacity: i === stats.busiestMonthIdx ? 0.9 : 0.15,
 										}}
 									/>
 									<span
-										className={`text-[9px] ${i === stats.busiestMonthIdx ? "text-accent font-medium" : "text-muted-foreground/50"}`}
+										className={`text-[9px] ${i === stats.busiestMonthIdx ? "text-accent-ink font-medium" : "text-muted-foreground/50"}`}
 									>
 										{MONTH_SHORT[i]}
 									</span>
@@ -350,7 +352,7 @@ export default function YearInReview() {
 									day: "numeric",
 								})}
 							</p>
-							<p className="text-accent font-medium text-sm">
+							<p className="text-accent-ink font-medium text-sm">
 								{formatDuration(stats.busiestDay.minutes)}
 							</p>
 						</div>
@@ -371,7 +373,9 @@ export default function YearInReview() {
 										style={{
 											height: `${Math.max((minutes / max) * 56, 1)}px`,
 											backgroundColor:
-												h === stats.peakHour ? "var(--accent)" : "var(--muted-foreground)",
+												h === stats.peakHour
+													? "hsl(var(--accent))"
+													: "hsl(var(--muted-foreground))",
 											opacity: h === stats.peakHour ? 0.9 : minutes > 0 ? 0.2 : 0.05,
 										}}
 										title={`${h}:00 — ${formatDuration(minutes)}`}
@@ -387,7 +391,7 @@ export default function YearInReview() {
 							<span className="text-[8px] text-muted-foreground/40">12 AM</span>
 						</div>
 						<p className="text-xs text-muted-foreground text-center mt-2">
-							Peak hour: <span className="text-accent font-medium">{stats.peakHour}:00</span>
+							Peak hour: <span className="text-accent-ink font-medium">{stats.peakHour}:00</span>
 						</p>
 					</div>
 
@@ -401,10 +405,10 @@ export default function YearInReview() {
 								{stats.topTags.map(({ tag, count }) => (
 									<span
 										key={tag}
-										className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent"
+										className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent-ink"
 									>
 										{tag}
-										<span className="text-accent/50 text-[10px]">{count}</span>
+										<span className="text-accent-ink/50 text-[10px]">{count}</span>
 									</span>
 								))}
 							</div>
@@ -421,7 +425,7 @@ export default function YearInReview() {
 						>
 							{copied ? (
 								<>
-									<Check className="w-3.5 h-3.5 text-accent" /> Copied
+									<Check className="w-3.5 h-3.5 text-accent-ink" /> Copied
 								</>
 							) : (
 								<>

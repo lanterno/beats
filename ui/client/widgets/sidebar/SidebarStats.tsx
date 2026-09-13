@@ -36,27 +36,27 @@ export function SidebarStats() {
 	return (
 		<div className="space-y-2">
 			<div className="grid grid-cols-2 gap-2">
-				<div className="rounded-md border border-border/60 bg-secondary/30 px-3 py-2.5 text-center">
-					<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-0.5">
+				<div className="rounded-[1.125rem] bg-secondary px-2 py-2.5 text-center">
+					<p className="text-muted-foreground text-[9px] font-bold uppercase tracking-[0.14em] mb-0.5">
 						Today
 					</p>
-					<p className="font-heading text-lg font-semibold tabular-nums text-foreground">
+					<p className="font-heading text-lg font-extrabold leading-tight text-foreground">
 						{todayHours}h
 					</p>
 				</div>
-				<div className="rounded-md border border-border/60 bg-secondary/30 px-3 py-2.5 text-center">
-					<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-0.5">
+				<div className="rounded-[1.125rem] bg-secondary px-2 py-2.5 text-center">
+					<p className="text-muted-foreground text-[9px] font-bold uppercase tracking-[0.14em] mb-0.5">
 						This week
 					</p>
-					<p className="font-heading text-lg font-semibold tabular-nums text-accent">
+					<p className="font-heading text-lg font-extrabold leading-tight text-accent-ink">
 						{weekHours}h
 					</p>
 					{weekChange && (
-						<p className="text-[10px] tabular-nums text-muted-foreground mt-0.5">
+						<p className="text-[10px] font-mono text-muted-foreground mt-0.5">
 							<span
 								className={weekChange.direction === "up" ? "text-success" : "text-muted-foreground"}
 							>
-								{weekChange.direction === "up" ? "\u2191" : "\u2193"} {weekChange.pct}%
+								{weekChange.direction === "up" ? "↑" : "↓"} {weekChange.pct}%
 							</span>{" "}
 							vs last wk
 						</p>
@@ -65,10 +65,10 @@ export function SidebarStats() {
 			</div>
 
 			{currentStreak > 0 && (
-				<div className="flex items-center justify-center gap-1.5 rounded-md border border-border/60 bg-secondary/30 px-3 py-1.5">
-					<Flame className="w-3.5 h-3.5 text-accent" />
+				<div className="flex items-center justify-center gap-1.5 rounded-full bg-secondary px-3 py-1.5">
+					<Flame className="w-3.5 h-3.5 text-accent-ink" />
 					<span className="text-xs text-foreground">
-						<span className="font-medium tabular-nums">{currentStreak}</span>
+						<span className="font-bold font-mono">{currentStreak}</span>
 						-day streak
 					</span>
 					{longestStreak > currentStreak && (

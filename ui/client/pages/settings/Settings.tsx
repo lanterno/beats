@@ -7,10 +7,8 @@ import {
 	Download,
 	FileJson,
 	FileSpreadsheet,
-	Moon,
 	Palette,
 	Rows3,
-	Sun,
 	Terminal,
 	Upload,
 } from "lucide-react";
@@ -18,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { config } from "@/shared/config";
-import { COLOR_MODES, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
+import { DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
 import { CalendarSection } from "./CalendarSection";
 import { CoachUsage } from "./CoachUsage";
@@ -35,7 +33,7 @@ import { WebhooksSection } from "./WebhooksSection";
 export default function Settings() {
 	const { data: projects } = useProjects();
 	const [importing, setImporting] = useState(false);
-	const { theme, setTheme, mode, setMode, density, setDensity } = useTheme();
+	const { theme, setTheme, density, setDensity } = useTheme();
 
 	const apiBase = config.apiBaseUrl;
 
@@ -99,7 +97,7 @@ export default function Settings() {
 			{/* Appearance — Theme */}
 			<section className="mb-8">
 				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Palette className="w-4 h-4 text-accent" />
+					<Palette className="w-4 h-4 text-accent-ink" />
 					Theme
 				</h2>
 				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
@@ -109,48 +107,18 @@ export default function Settings() {
 								type="button"
 								key={t.id}
 								onClick={() => setTheme(t.id)}
-								className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
+								aria-pressed={theme === t.id}
+								className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
 									theme === t.id
-										? "border-accent bg-accent/10 text-accent"
-										: "border-border bg-secondary/20 text-foreground hover:bg-secondary/40"
+										? "bg-accent text-accent-foreground"
+										: "bg-secondary text-foreground hover:bg-sidebar-accent"
 								}`}
 							>
 								<span
 									className="w-3 h-3 rounded-full shrink-0"
-									style={{ backgroundColor: t.accent }}
+									style={{ backgroundColor: t.sky }}
 								/>
 								{t.label}
-							</button>
-						))}
-					</div>
-				</div>
-			</section>
-
-			{/* Appearance — Color Mode */}
-			<section className="mb-8">
-				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					{mode === "dark" ? (
-						<Moon className="w-4 h-4 text-accent" />
-					) : (
-						<Sun className="w-4 h-4 text-accent" />
-					)}
-					Color Mode
-				</h2>
-				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
-					<div className="flex flex-wrap gap-2">
-						{COLOR_MODES.map((m) => (
-							<button
-								type="button"
-								key={m.id}
-								onClick={() => setMode(m.id)}
-								className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
-									mode === m.id
-										? "border-accent bg-accent/10 text-accent"
-										: "border-border bg-secondary/20 text-foreground hover:bg-secondary/40"
-								}`}
-							>
-								{m.id === "dark" ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
-								{m.label}
 							</button>
 						))}
 					</div>
@@ -160,7 +128,7 @@ export default function Settings() {
 			{/* Appearance — Density */}
 			<section className="mb-8">
 				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Rows3 className="w-4 h-4 text-accent" />
+					<Rows3 className="w-4 h-4 text-accent-ink" />
 					Layout Density
 				</h2>
 				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
@@ -170,10 +138,11 @@ export default function Settings() {
 								type="button"
 								key={d.id}
 								onClick={() => setDensity(d.id)}
-								className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
+								aria-pressed={density === d.id}
+								className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
 									density === d.id
-										? "border-accent bg-accent/10 text-accent"
-										: "border-border bg-secondary/20 text-foreground hover:bg-secondary/40"
+										? "bg-accent text-accent-foreground"
+										: "bg-secondary text-foreground hover:bg-sidebar-accent"
 								}`}
 							>
 								{d.label}
@@ -186,14 +155,14 @@ export default function Settings() {
 			{/* Data Export */}
 			<section className="mb-8">
 				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Download className="w-4 h-4 text-accent" />
+					<Download className="w-4 h-4 text-accent-ink" />
 					Data Export
 				</h2>
 				<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden divide-y divide-border/40">
 					{/* CSV */}
 					<div className="p-4">
 						<div className="flex items-start gap-3">
-							<FileSpreadsheet className="w-5 h-5 text-accent/70 mt-0.5 shrink-0" />
+							<FileSpreadsheet className="w-5 h-5 text-accent-ink/70 mt-0.5 shrink-0" />
 							<div className="flex-1">
 								<p className="text-sm font-medium text-foreground">Sessions CSV</p>
 								<p className="text-xs text-muted-foreground mt-0.5">
@@ -226,7 +195,7 @@ export default function Settings() {
 					{/* JSON */}
 					<div className="p-4">
 						<div className="flex items-start gap-3">
-							<FileJson className="w-5 h-5 text-accent/70 mt-0.5 shrink-0" />
+							<FileJson className="w-5 h-5 text-accent-ink/70 mt-0.5 shrink-0" />
 							<div className="flex-1">
 								<p className="text-sm font-medium text-foreground">Full JSON Backup</p>
 								<p className="text-xs text-muted-foreground mt-0.5">
@@ -248,7 +217,7 @@ export default function Settings() {
 			{/* Data Import */}
 			<section className="mb-8">
 				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Upload className="w-4 h-4 text-accent" />
+					<Upload className="w-4 h-4 text-accent-ink" />
 					Data Import
 				</h2>
 				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
@@ -295,13 +264,13 @@ export default function Settings() {
 			{/* API Info */}
 			<section className="mb-8">
 				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Terminal className="w-4 h-4 text-accent" />
+					<Terminal className="w-4 h-4 text-accent-ink" />
 					Developer
 				</h2>
 				<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden divide-y divide-border/40">
 					<div className="p-4">
 						<p className="text-xs text-muted-foreground mb-1">API Base URL</p>
-						<code className="text-sm text-foreground font-mono bg-secondary/40 px-2 py-0.5 rounded">
+						<code className="text-sm text-foreground font-code bg-secondary/40 px-2 py-0.5 rounded">
 							{apiBase}
 						</code>
 					</div>

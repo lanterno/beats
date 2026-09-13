@@ -21,8 +21,8 @@ const ICONS: Record<string, ReactNode> = {
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
-	high: "border-red-500/40 bg-red-500/5",
-	medium: "border-amber-500/40 bg-amber-500/5",
+	high: "border-destructive/40 bg-destructive/5",
+	medium: "border-accent/40 bg-accent/5",
 	low: "border-border/60 bg-card",
 };
 
@@ -69,7 +69,7 @@ export function Inbox() {
 									<button
 										type="button"
 										onClick={() => navigate(item.cta_href as string)}
-										className="mt-2 text-[12px] text-accent hover:underline"
+										className="mt-2 text-[12px] text-accent-ink hover:underline"
 									>
 										{item.cta_label} →
 									</button>

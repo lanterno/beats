@@ -61,19 +61,21 @@ export function DaemonSection() {
 	return (
 		<section className="mb-8">
 			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Cpu className="w-4 h-4 text-accent" />
+				<Cpu className="w-4 h-4 text-accent-ink" />
 				Daemon
 			</h2>
 			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">
 				<p className="text-xs text-muted-foreground">
-					Pair the <code className="text-accent">beatsd</code> daemon to this account for ambient
-					flow tracking. Run <code className="text-accent">beatsd pair &lt;code&gt;</code> within 5
-					minutes.
+					Pair the <code className="text-accent-ink">beatsd</code> daemon to this account for
+					ambient flow tracking. Run{" "}
+					<code className="text-accent-ink">beatsd pair &lt;code&gt;</code> within 5 minutes.
 				</p>
 
 				{code ? (
 					<div className="space-y-2">
-						<div className="font-mono text-2xl tracking-[0.3em] text-accent font-bold">{code}</div>
+						<div className="font-code text-2xl tracking-[0.3em] text-accent-ink font-bold">
+							{code}
+						</div>
 						<p className="text-[10px] text-muted-foreground">Expires in 5 minutes. One-time use.</p>
 						<button
 							type="button"

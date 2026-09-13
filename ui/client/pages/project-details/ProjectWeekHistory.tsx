@@ -151,7 +151,7 @@ export function ProjectWeekHistory({
 						<div
 							key={d}
 							className={`text-center text-[10px] uppercase tracking-widest ${
-								i === todayDayIndex ? "text-accent font-semibold" : "text-muted-foreground"
+								i === todayDayIndex ? "text-accent-ink font-semibold" : "text-muted-foreground"
 							}`}
 						>
 							{d}
@@ -220,8 +220,8 @@ export function ProjectWeekHistory({
 					const goalClass =
 						rowGoal != null
 							? goalMet
-								? "text-green-400"
-								: "text-accent"
+								? "text-success"
+								: "text-accent-ink"
 							: saysNoGoal
 								? "text-muted-foreground"
 								: "text-muted-foreground/50";
@@ -247,7 +247,7 @@ export function ProjectWeekHistory({
 								className={cn(
 									"text-xs truncate pr-1 text-left rounded transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
 									scopedWeeksAgo === row.weeksAgo
-										? "text-accent font-medium"
+										? "text-accent-ink font-medium"
 										: "text-muted-foreground hover:text-foreground",
 								)}
 							>
@@ -259,7 +259,7 @@ export function ProjectWeekHistory({
 									className={`text-center text-xs tabular-nums ${
 										mins > 0
 											? rowIdx === 0 && i === todayDayIndex
-												? "text-accent font-medium"
+												? "text-accent-ink font-medium"
 												: "text-foreground"
 											: "text-muted-foreground/30"
 									}`}
@@ -307,10 +307,10 @@ export function ProjectWeekHistory({
 													className={`h-full rounded-full transition-all ${
 														rowGoalType === "cap"
 															? goalPctRow >= 90
-																? "bg-red-400"
+																? "bg-destructive"
 																: "bg-accent/70"
 															: goalMet
-																? "bg-green-400"
+																? "bg-success"
 																: "bg-accent/70"
 													}`}
 													style={{ width: `${goalPctRow}%` }}
@@ -335,7 +335,7 @@ export function ProjectWeekHistory({
 									</div>
 									<div className="text-right text-xs tabular-nums self-center">
 										{row.total > 0 && rowGoal != null ? (
-											<span className={goalMet ? "text-green-400" : "text-red-400"}>
+											<span className={goalMet ? "text-success" : "text-destructive"}>
 												{goalMet ? "+" : ""}
 												{(rowHours - rowGoal).toFixed(1)}h
 											</span>
@@ -345,7 +345,7 @@ export function ProjectWeekHistory({
 									</div>
 								</>
 							) : (
-								<div className="text-right text-sm font-medium tabular-nums text-accent">
+								<div className="text-right text-sm font-medium tabular-nums text-accent-ink">
 									{row.total > 0 ? `${rowHours.toFixed(1)}h` : "—"}
 								</div>
 							)}
@@ -357,7 +357,7 @@ export function ProjectWeekHistory({
 				<button
 					type="button"
 					onClick={() => onShowMoreWeeks()}
-					className="w-full py-2 text-sm text-accent hover:bg-accent/5 transition-colors border-t border-border/40"
+					className="w-full py-2 text-sm text-accent-ink hover:bg-accent/5 transition-colors border-t border-border/40"
 				>
 					Show 5 more weeks...
 				</button>

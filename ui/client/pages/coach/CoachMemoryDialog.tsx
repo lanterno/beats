@@ -82,7 +82,7 @@ export function CoachMemoryDialog({ open, onClose }: CoachMemoryDialogProps) {
 			<button
 				type="button"
 				aria-label="Close"
-				className="absolute inset-0 bg-black/50 backdrop-blur-xs"
+				className="absolute inset-0 bg-veil backdrop-blur-xs"
 				onClick={onClose}
 			/>
 			<div
@@ -92,7 +92,7 @@ export function CoachMemoryDialog({ open, onClose }: CoachMemoryDialogProps) {
 				className="relative w-full max-w-lg rounded-xl border border-border/80 bg-card p-5 shadow-card"
 			>
 				<header className="flex items-center gap-2 mb-1">
-					<Brain className="w-4 h-4 text-accent" />
+					<Brain className="w-4 h-4 text-accent-ink" />
 					<h2 id="coach-memory-title" className="text-sm font-semibold text-foreground">
 						Coach memory
 					</h2>

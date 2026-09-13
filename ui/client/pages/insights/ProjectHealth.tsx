@@ -16,7 +16,7 @@ export function ProjectHealth() {
 	return (
 		<div className="rounded-lg border border-border/80 bg-card shadow-soft px-4 py-3">
 			<h3 className="flex items-center gap-2 text-sm font-medium text-foreground mb-3">
-				<Activity className="w-3.5 h-3.5 text-accent/75" />
+				<Activity className="w-3.5 h-3.5 text-accent-ink/75" />
 				Project Health
 			</h3>
 

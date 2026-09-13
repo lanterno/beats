@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useProjectPlannedByWeek } from "@/entities/planning";
 import {
+	assignColor,
 	contractGovernsWeek,
 	isTimeBasedOn,
 	LoadingSpinner,
@@ -301,7 +302,7 @@ export default function ProjectDetails() {
 						/>
 						{colorPickerOpen && (
 							<ColorPicker
-								value={project.color || "#FBBF24"}
+								value={project.color || assignColor(project.id)}
 								onChange={(color) => {
 									updateProjectMutation.mutate({
 										id: project.id,
@@ -323,7 +324,7 @@ export default function ProjectDetails() {
 					<button
 						type="button"
 						onClick={() => openSettings("name")}
-						className="font-heading text-xl text-foreground truncate text-left hover:text-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+						className="font-heading text-xl text-foreground truncate text-left hover:text-accent-ink transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
 						title="Edit project"
 					>
 						{project.name}
@@ -397,12 +398,12 @@ export default function ProjectDetails() {
 							<button
 								type="button"
 								onClick={() => openSettings("weeklyGoal")}
-								className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+								className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-accent-ink transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
 							>
 								+ Set weekly goal
 							</button>
 						)}
-						<span className="font-heading text-lg font-semibold tabular-nums text-accent">
+						<span className="font-heading text-lg font-semibold tabular-nums text-accent-ink">
 							{totalHours}h
 						</span>
 						<button

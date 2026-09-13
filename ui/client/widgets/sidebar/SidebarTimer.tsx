@@ -1,6 +1,8 @@
 /**
  * Sidebar Timer Component
  * Vertical timer card with prominent display and full-width controls.
+ * A wash block, as in the mockup's `.timer`: the elapsed figure in the
+ * display face, the primary action an accent pill, idle in the wash.
  */
 
 import { Calendar, Play, Square } from "lucide-react";
@@ -27,6 +29,16 @@ export interface TimerProps {
 	selectProject: (projectId: string | null) => void;
 	setCustomStartTime: (startTime: string | null) => void;
 }
+
+const PILL =
+	"w-full inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-bold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+
+const TOGGLE =
+	"inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors";
+
+// The mockup's `.dlg input`: a wash, no border, the figures face.
+const FIELD =
+	"w-full rounded-md bg-secondary px-3 py-2 text-[13.5px] font-mono font-bold text-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent";
 
 export function SidebarTimer({
 	projects,
@@ -96,19 +108,14 @@ export function SidebarTimer({
 	};
 
 	return (
-		<div
-			className={cn(
-				"rounded-lg border p-4 transition-all duration-300",
-				isRunning ? "border-accent/30 bg-accent/5 shadow-glow-amber" : "border-border bg-card",
-			)}
-		>
+		<div className="rounded-[1.375rem] bg-secondary px-3 pt-4 pb-3.5 transition-colors duration-300">
 			{/* Timer display */}
 			<div className="text-center mb-3">
 				<AnimatedDigits
 					value={formatSecondsToTime(totalSeconds)}
 					className={cn(
-						"font-mono text-3xl font-semibold tabular-nums tracking-tight",
-						isRunning ? "text-accent" : "text-muted-foreground/60",
+						"font-heading text-3xl font-extrabold tracking-[-0.01em] leading-none",
+						isRunning ? "text-foreground" : "text-muted-foreground",
 					)}
 				/>
 				{isRunning && selectedProject && (
@@ -118,7 +125,7 @@ export function SidebarTimer({
 							className="w-2 h-2 rounded-full shrink-0"
 							style={{ backgroundColor: selectedProject.color }}
 						/>
-						<span className="text-foreground text-sm font-medium truncate max-w-[140px]">
+						<span className="text-muted-foreground text-[12.5px] font-medium truncate max-w-[140px]">
 							{selectedProject.name}
 						</span>
 					</div>
@@ -147,13 +154,13 @@ export function SidebarTimer({
 					<button
 						type="button"
 						onClick={handleStop}
-						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/85 transition-colors"
+						className={cn(PILL, "bg-accent text-accent-foreground hover:bg-accent/90")}
 					>
-						<Square className="w-3.5 h-3.5" />
+						<Square className="w-3 h-3" fill="currentColor" />
 						Stop
 					</button>
 
-					<div className="flex items-center gap-1">
+					<div className="flex items-center justify-center">
 						<button
 							type="button"
 							onClick={() => {
@@ -162,10 +169,7 @@ export function SidebarTimer({
 									setCustomStopTime(new Date().toISOString());
 								}
 							}}
-							className={cn(
-								"p-1.5 rounded-md text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors text-xs flex items-center gap-1",
-								showStopTimeInput && "text-accent bg-accent/5",
-							)}
+							className={cn(TOGGLE, showStopTimeInput && "bg-sidebar-accent text-foreground")}
 						>
 							<Calendar className="w-3 h-3" />
 							Custom stop
@@ -184,7 +188,7 @@ export function SidebarTimer({
 								const date = new Date(e.target.value);
 								setCustomStopTime(date.toISOString());
 							}}
-							className="w-full rounded-md border border-border bg-background py-1.5 px-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-accent/30"
+							className={FIELD}
 						/>
 					)}
 				</div>
@@ -195,18 +199,20 @@ export function SidebarTimer({
 						onClick={handleStart}
 						disabled={!selectedProjectId}
 						className={cn(
-							"w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors",
+							PILL,
+							// The mockup's `.timer.idle .btn`: the wash, so the accent
+							// pill is the running state alone.
 							!selectedProjectId
-								? "bg-muted text-muted-foreground cursor-not-allowed"
-								: "bg-accent text-accent-foreground hover:bg-accent/85",
+								? "bg-sidebar-accent text-muted-foreground cursor-not-allowed"
+								: "bg-sidebar-accent text-foreground hover:bg-[color-mix(in_srgb,var(--color-sidebar-accent),var(--color-foreground)_8%)]",
 						)}
 					>
-						<Play className="w-3.5 h-3.5" />
+						<Play className="w-3 h-3" fill="currentColor" />
 						Start
 					</button>
 
 					{selectedProjectId && (
-						<div className="flex items-center gap-1">
+						<div className="flex items-center justify-center">
 							<button
 								type="button"
 								onClick={() => {
@@ -215,10 +221,7 @@ export function SidebarTimer({
 										setCustomStartTime(new Date(Date.now() - 60 * 60 * 1000).toISOString());
 									}
 								}}
-								className={cn(
-									"p-1.5 rounded-md text-muted-foreground hover:text-accent hover:bg-accent/5 transition-colors text-xs flex items-center gap-1",
-									showStartTimeInput && "text-accent bg-accent/5",
-								)}
+								className={cn(TOGGLE, showStartTimeInput && "bg-sidebar-accent text-foreground")}
 							>
 								<Calendar className="w-3 h-3" />
 								Custom start
@@ -238,7 +241,7 @@ export function SidebarTimer({
 								const date = new Date(e.target.value);
 								setCustomStartTime(date.toISOString());
 							}}
-							className="w-full rounded-md border border-border bg-background py-1.5 px-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-accent/30"
+							className={FIELD}
 						/>
 					)}
 				</div>

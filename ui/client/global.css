@@ -1,11 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap")
+@import url("https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Zen+Maru+Gothic:wght@400;500;700&display=swap")
 	layer(base);
 
 @import "tailwindcss";
 
 @plugin 'tailwindcss-animate';
-
-@custom-variant dark (&:is(.dark *));
 
 @utility container {
   margin-inline: auto;
@@ -18,22 +16,33 @@
   }
 }
 
+/*
+  Two typefaces, both rounded. M PLUS Rounded 1c carries the display figures
+  and every column of digits — its numerals are one width, so `font-mono`
+  keeps aligned figures without `tnum`. Zen Maru Gothic is everything read.
+  Real code (`pre`, `code`) keeps a monospace through `font-code`.
+*/
 @theme {
-  --font-heading: var(--font-heading);
-  --font-body: var(--font-body);
-  --font-mono: var(--font-mono);
+  --font-heading:
+    "M PLUS Rounded 1c", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+  --font-body:
+    "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "M PLUS Rounded 1c", "Zen Maru Gothic", system-ui, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  --shadow-soft:
-    0 1px 2px 0 rgb(0 0 0 / 0.2), 0 0 0 1px rgb(255 255 255 / 0.02);
+  /* The panel's shadow, and the dialog's. The colour is per theme. */
+  --shadow-soft: 0 22px 48px -26px var(--shadow-color);
+  --shadow-card: 0 40px 80px -30px var(--shadow-color);
+  --shadow-glow-amber: 0 0 20px -4px hsl(var(--accent) / 0.25);
 
-  --shadow-card:
-    0 2px 8px 0 rgb(0 0 0 / 0.3), 0 0 0 1px rgb(255 255 255 / 0.03);
-
-  --shadow-glow-amber:
-    0 0 20px -4px hsl(38 80% 52% / 0.15);
-
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
+  /*
+    Every token below is an HSL triple on :root so `hsl(var(--x) / .5)` keeps
+    working wherever it is written by hand. The washes — panel, wash, hairline,
+    the sidebar's — are translucent in the mockup, and the alpha rides in a
+    companion token so the two themes can differ (.93 by day, .94 at dusk).
+  */
+  --color-border: hsl(var(--border) / var(--border-alpha));
+  --color-input: hsl(var(--input) / var(--secondary-alpha));
   --color-ring: hsl(var(--ring));
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -41,7 +50,7 @@
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
 
-  --color-secondary: hsl(var(--secondary));
+  --color-secondary: hsl(var(--secondary) / var(--secondary-alpha));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
 
   --color-destructive: hsl(var(--destructive));
@@ -52,28 +61,41 @@
 
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-ink: hsl(var(--accent-ink));
 
   --color-accent-gold: hsl(var(--accent-gold));
   --color-success: hsl(var(--success));
 
-  --color-popover: hsl(var(--popover));
+  --color-popover: hsl(var(--popover) / var(--card-alpha));
   --color-popover-foreground: hsl(var(--popover-foreground));
 
-  --color-card: hsl(var(--card));
+  --color-card: hsl(var(--card) / var(--card-alpha));
   --color-card-foreground: hsl(var(--card-foreground));
 
-  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar: hsl(var(--sidebar-background) / var(--sidebar-alpha));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-primary: hsl(var(--sidebar-primary));
   --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent: hsl(var(--sidebar-accent) / var(--sidebar-accent-alpha));
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-border: hsl(var(--sidebar-border) / var(--border-alpha));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  /* The veil behind a dialog or the command palette. */
+  --color-veil: var(--veil);
+
+  /*
+    Radii, on the mockup's stops, so the scale stays monotonic (Tailwind's
+    own xl/2xl would otherwise fall below md). Pills are `rounded-full`,
+    the panel is 1.625rem, the dialog 1.75rem.
+  */
+  --radius-sm: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+  --radius-3xl: var(--radius);
+  --radius-4xl: 1.75rem;
 
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
@@ -114,473 +136,174 @@
 	}
 }
 
+/*
+  Two hours. `afternoon` on :root, `dusk` under [data-theme="dusk"]; the
+  values are the roadmap's (docs/project-page-roadmap.md, "The theme"), the
+  look is docs/project-page-mockup.html. Token names are the ones every
+  page already reads, so the pages follow the day the block lands.
+*/
 @layer base {
+	/* Afternoon — half past three on a hill above the fields */
 	:root {
-		--background: 25 15% 8%;
-		--foreground: 38 20% 88%;
+		color-scheme: light;
 
-		--card: 25 12% 11%;
-		--card-foreground: 38 20% 88%;
+		/* the sky's low haze; the sky itself is a fixed layer (.sky) */
+		--background: 185 32% 92%;
+		--foreground: 204 23% 22%;
 
-		--popover: 25 14% 13%;
-		--popover-foreground: 38 20% 88%;
+		/* cloud-white panels, #FFFDF7 at 93 % */
+		--card: 45 100% 98%;
+		--card-alpha: 0.93;
+		--card-foreground: 204 23% 22%;
 
-		--primary: 38 75% 55%;
-		--primary-foreground: 25 15% 8%;
+		--popover: 45 100% 98%;
+		--popover-foreground: 204 23% 22%;
 
-		--secondary: 25 10% 15%;
-		--secondary-foreground: 38 16% 72%;
+		/* sunlight: today, the running timer, the primary action */
+		--primary: 40 88% 57%;
+		--primary-foreground: 204 23% 22%;
 
-		--muted: 25 8% 16%;
-		--muted-foreground: 38 10% 52%;
+		/* the wash, rgb(114 176 214 / .16): chips, tiles, hover */
+		--secondary: 203 55% 64%;
+		--secondary-alpha: 0.16;
+		--secondary-foreground: 204 23% 22%;
 
-		--accent: 38 80% 52%;
-		--accent-foreground: 25 20% 6%;
+		/*
+		  The track behind a fill and the tint of a passive thing. The mockup's
+		  neutral #EEEBE2 is 1.15:1 on the panel — a goal ring at 0 % vanished —
+		  so this is a sky-grey that still reads on cream (~1.35:1).
+		  --muted-foreground is a step darker than the mockup's ink-2 (#66737D)
+		  because page subtitles sit on the sky, not a panel, until Phase 4.
+		*/
+		--muted: 203 35% 85%;
+		--muted-foreground: 206 10% 40%;
 
-		--accent-gold: 38 80% 52%;
+		--accent: 40 88% 57%;
+		--accent-foreground: 204 23% 22%;
+		/* the accent as text on a panel (#8C5E12); #F2B233 itself is not legible there */
+		--accent-ink: 37 77% 31%;
 
-		--destructive: 0 55% 50%;
-		--destructive-foreground: 0 0% 98%;
+		--accent-gold: 40 88% 57%;
 
-		--border: 25 10% 18%;
-		--input: 25 10% 14%;
-		--ring: 38 75% 55%;
+		/* persimmon for hours owed */
+		--destructive: 17 62% 54%;
+		--destructive-foreground: 45 100% 98%;
 
-		--radius: 0.5rem;
+		/* the hairline, rgb(43 58 68 / .09) */
+		--border: 204 23% 22%;
+		--border-alpha: 0.09;
+		--input: 203 55% 64%;
+		--ring: 40 88% 57%;
 
-		--font-heading: "Inter", ui-sans-serif, system-ui, sans-serif;
-		--font-body: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-		--font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+		--radius: 1.5rem;
 
-		--success: 152 50% 42%;
+		/* leaf green for hours over */
+		--success: 136 39% 40%;
 
-		--sidebar-background: 25 15% 7%;
-		--sidebar-foreground: 38 20% 88%;
-		--sidebar-primary: 38 80% 52%;
-		--sidebar-primary-foreground: 25 20% 6%;
-		--sidebar-accent: 38 30% 15%;
-		--sidebar-accent-foreground: 38 20% 88%;
-		--sidebar-border: 25 10% 18%;
-		--sidebar-ring: 38 75% 55%;
+		/* the sidebar: the panel at 82 % and its ink */
+		--sidebar-background: 45 100% 98%;
+		--sidebar-alpha: 0.82;
+		--sidebar-foreground: 204 23% 22%;
+		--sidebar-primary: 37 77% 31%;
+		--sidebar-primary-foreground: 204 23% 22%;
+		/* the heavier wash, rgb(114 176 214 / .28): the row that is on */
+		--sidebar-accent: 203 55% 64%;
+		--sidebar-accent-alpha: 0.28;
+		--sidebar-accent-foreground: 204 23% 22%;
+		--sidebar-border: 204 23% 22%;
+		--sidebar-ring: 40 88% 57%;
 
-		--body-glow: 38 20% 12%;
+		/* kept for the name; the glow it once tinted is now the sky */
+		--body-glow: 185 32% 92%;
+
+		--shadow-color: rgb(43 84 110 / 0.22);
+		--veil: rgb(60 100 130 / 0.38);
+
+		/* the painting */
+		--sky-top: #8cc1e2;
+		--sky-mid: #bcddee;
+		--sky-low: #e4f0f1;
+		--sky-ground: #e9f2e6;
+		--sun: rgb(255 236 170 / 0.75);
+		--cloud: #ffffff;
+		--cloud-shade: rgb(150 185 215 / 0.45);
+		--cloud-alpha: 0.88;
+		--hill-far: #b9d9a8;
+		--hill-mid: #8ac07c;
+		--hill-near: #5c9f5e;
 	}
 
-	/* Midnight theme — cool blue/slate */
-	:root[data-theme="midnight"] {
-		--background: 220 18% 8%;
-		--foreground: 216 20% 88%;
-
-		--card: 220 15% 11%;
-		--card-foreground: 216 20% 88%;
-
-		--popover: 220 16% 13%;
-		--popover-foreground: 216 20% 88%;
-
-		--primary: 210 60% 55%;
-		--primary-foreground: 220 18% 8%;
-
-		--secondary: 220 12% 15%;
-		--secondary-foreground: 216 16% 72%;
-
-		--muted: 220 10% 16%;
-		--muted-foreground: 216 10% 52%;
-
-		--accent: 210 60% 55%;
-		--accent-foreground: 220 20% 6%;
-
-		--accent-gold: 210 60% 55%;
-
-		--destructive: 0 55% 50%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 220 10% 18%;
-		--input: 220 10% 14%;
-		--ring: 210 60% 55%;
-
-		--success: 152 50% 42%;
-
-		--sidebar-background: 220 18% 7%;
-		--sidebar-foreground: 216 20% 88%;
-		--sidebar-primary: 210 60% 55%;
-		--sidebar-primary-foreground: 220 20% 6%;
-		--sidebar-accent: 210 30% 15%;
-		--sidebar-accent-foreground: 216 20% 88%;
-		--sidebar-border: 220 10% 18%;
-		--sidebar-ring: 210 60% 55%;
-
-		--body-glow: 210 20% 12%;
-	}
-
-	/* Forest theme — green/dark */
-	:root[data-theme="forest"] {
-		--background: 150 15% 7%;
-		--foreground: 140 18% 88%;
-
-		--card: 150 12% 10%;
-		--card-foreground: 140 18% 88%;
-
-		--popover: 150 14% 12%;
-		--popover-foreground: 140 18% 88%;
-
-		--primary: 145 50% 45%;
-		--primary-foreground: 150 15% 7%;
-
-		--secondary: 150 10% 14%;
-		--secondary-foreground: 140 14% 72%;
-
-		--muted: 150 8% 15%;
-		--muted-foreground: 140 10% 50%;
-
-		--accent: 145 50% 45%;
-		--accent-foreground: 150 18% 6%;
-
-		--accent-gold: 145 50% 45%;
-
-		--destructive: 0 55% 50%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 150 10% 17%;
-		--input: 150 10% 13%;
-		--ring: 145 50% 45%;
-
-		--success: 152 50% 42%;
-
-		--sidebar-background: 150 15% 6%;
-		--sidebar-foreground: 140 18% 88%;
-		--sidebar-primary: 145 50% 45%;
-		--sidebar-primary-foreground: 150 18% 6%;
-		--sidebar-accent: 145 25% 14%;
-		--sidebar-accent-foreground: 140 18% 88%;
-		--sidebar-border: 150 10% 17%;
-		--sidebar-ring: 145 50% 45%;
-
-		--body-glow: 145 15% 11%;
-	}
-
-	/* Mono theme — pure grayscale */
-	:root[data-theme="mono"] {
-		--background: 0 0% 8%;
-		--foreground: 0 0% 88%;
-
-		--card: 0 0% 11%;
-		--card-foreground: 0 0% 88%;
-
-		--popover: 0 0% 13%;
-		--popover-foreground: 0 0% 88%;
-
-		--primary: 0 0% 65%;
-		--primary-foreground: 0 0% 8%;
-
-		--secondary: 0 0% 15%;
-		--secondary-foreground: 0 0% 72%;
-
-		--muted: 0 0% 16%;
-		--muted-foreground: 0 0% 52%;
-
-		--accent: 0 0% 65%;
-		--accent-foreground: 0 0% 6%;
-
-		--accent-gold: 0 0% 65%;
-
-		--destructive: 0 55% 50%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 0 0% 18%;
-		--input: 0 0% 14%;
-		--ring: 0 0% 65%;
-
-		--success: 0 0% 55%;
-
-		--sidebar-background: 0 0% 7%;
-		--sidebar-foreground: 0 0% 88%;
-		--sidebar-primary: 0 0% 65%;
-		--sidebar-primary-foreground: 0 0% 6%;
-		--sidebar-accent: 0 0% 15%;
-		--sidebar-accent-foreground: 0 0% 88%;
-		--sidebar-border: 0 0% 18%;
-		--sidebar-ring: 0 0% 65%;
-
-		--body-glow: 0 0% 12%;
-	}
-
-	/* Sunset theme — warm red/orange */
-	:root[data-theme="sunset"] {
-		--background: 10 15% 8%;
-		--foreground: 20 20% 88%;
-
-		--card: 10 12% 11%;
-		--card-foreground: 20 20% 88%;
-
-		--popover: 10 14% 13%;
-		--popover-foreground: 20 20% 88%;
-
-		--primary: 15 70% 52%;
-		--primary-foreground: 10 15% 8%;
-
-		--secondary: 10 10% 15%;
-		--secondary-foreground: 20 14% 72%;
-
-		--muted: 10 8% 16%;
-		--muted-foreground: 20 10% 52%;
-
-		--accent: 15 70% 52%;
-		--accent-foreground: 10 18% 6%;
-
-		--accent-gold: 15 70% 52%;
-
-		--destructive: 0 55% 50%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 10 10% 18%;
-		--input: 10 10% 14%;
-		--ring: 15 70% 52%;
-
-		--success: 152 50% 42%;
-
-		--sidebar-background: 10 15% 7%;
-		--sidebar-foreground: 20 20% 88%;
-		--sidebar-primary: 15 70% 52%;
-		--sidebar-primary-foreground: 10 18% 6%;
-		--sidebar-accent: 15 25% 15%;
-		--sidebar-accent-foreground: 20 20% 88%;
-		--sidebar-border: 10 10% 18%;
-		--sidebar-ring: 15 70% 52%;
-
-		--body-glow: 15 18% 12%;
-	}
-
-	/* ─── Light mode variants ─── */
-
-	/* Ember light */
-	:root[data-mode="light"],
-	:root[data-mode="light"][data-theme="ember"] {
-		--background: 30 18% 92%;
-		--foreground: 25 20% 18%;
-
-		--card: 30 15% 95%;
-		--card-foreground: 25 20% 18%;
-
-		--popover: 30 15% 96%;
-		--popover-foreground: 25 20% 18%;
-
-		--primary: 38 75% 42%;
-		--primary-foreground: 38 20% 98%;
-
-		--secondary: 30 12% 88%;
-		--secondary-foreground: 25 16% 35%;
-
-		--muted: 30 10% 86%;
-		--muted-foreground: 25 10% 45%;
-
-		--accent: 38 80% 42%;
-		--accent-foreground: 38 20% 98%;
-
-		--accent-gold: 38 80% 42%;
-
-		--destructive: 0 55% 45%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 30 12% 82%;
-		--input: 30 10% 88%;
-		--ring: 38 75% 42%;
-
-		--success: 152 45% 36%;
-
-		--sidebar-background: 30 15% 90%;
-		--sidebar-foreground: 25 20% 18%;
-		--sidebar-primary: 38 80% 42%;
-		--sidebar-primary-foreground: 38 20% 98%;
-		--sidebar-accent: 38 25% 88%;
-		--sidebar-accent-foreground: 25 20% 18%;
-		--sidebar-border: 30 12% 82%;
-		--sidebar-ring: 38 75% 42%;
-
-		--body-glow: 38 20% 90%;
-	}
-
-	/* Midnight light */
-	:root[data-mode="light"][data-theme="midnight"] {
-		--background: 220 18% 92%;
-		--foreground: 220 20% 18%;
-
-		--card: 220 15% 95%;
-		--card-foreground: 220 20% 18%;
-
-		--popover: 220 15% 96%;
-		--popover-foreground: 220 20% 18%;
-
-		--primary: 210 55% 42%;
-		--primary-foreground: 210 20% 98%;
-
-		--secondary: 220 12% 88%;
-		--secondary-foreground: 220 14% 35%;
-
-		--muted: 220 10% 86%;
-		--muted-foreground: 220 10% 45%;
-
-		--accent: 210 55% 42%;
-		--accent-foreground: 210 20% 98%;
-
-		--accent-gold: 210 55% 42%;
-
-		--destructive: 0 55% 45%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 220 12% 82%;
-		--input: 220 10% 88%;
-		--ring: 210 55% 42%;
-
-		--success: 152 45% 36%;
-
-		--sidebar-background: 220 15% 90%;
-		--sidebar-foreground: 220 20% 18%;
-		--sidebar-primary: 210 55% 42%;
-		--sidebar-primary-foreground: 210 20% 98%;
-		--sidebar-accent: 210 25% 88%;
-		--sidebar-accent-foreground: 220 20% 18%;
-		--sidebar-border: 220 12% 82%;
-		--sidebar-ring: 210 55% 42%;
-
-		--body-glow: 210 18% 90%;
-	}
-
-	/* Forest light */
-	:root[data-mode="light"][data-theme="forest"] {
-		--background: 150 15% 91%;
-		--foreground: 150 18% 16%;
-
-		--card: 150 12% 94%;
-		--card-foreground: 150 18% 16%;
-
-		--popover: 150 12% 95%;
-		--popover-foreground: 150 18% 16%;
-
-		--primary: 145 45% 35%;
-		--primary-foreground: 145 18% 98%;
-
-		--secondary: 150 10% 87%;
-		--secondary-foreground: 150 14% 34%;
-
-		--muted: 150 8% 85%;
-		--muted-foreground: 150 10% 44%;
-
-		--accent: 145 45% 35%;
-		--accent-foreground: 145 18% 98%;
-
-		--accent-gold: 145 45% 35%;
-
-		--destructive: 0 55% 45%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 150 10% 80%;
-		--input: 150 10% 87%;
-		--ring: 145 45% 35%;
-
-		--success: 152 45% 36%;
-
-		--sidebar-background: 150 12% 89%;
-		--sidebar-foreground: 150 18% 16%;
-		--sidebar-primary: 145 45% 35%;
-		--sidebar-primary-foreground: 145 18% 98%;
-		--sidebar-accent: 145 20% 86%;
-		--sidebar-accent-foreground: 150 18% 16%;
-		--sidebar-border: 150 10% 80%;
-		--sidebar-ring: 145 45% 35%;
-
-		--body-glow: 145 14% 89%;
-	}
-
-	/* Mono light */
-	:root[data-mode="light"][data-theme="mono"] {
-		--background: 0 0% 91%;
-		--foreground: 0 0% 16%;
-
-		--card: 0 0% 94%;
-		--card-foreground: 0 0% 16%;
-
-		--popover: 0 0% 95%;
-		--popover-foreground: 0 0% 16%;
-
-		--primary: 0 0% 38%;
-		--primary-foreground: 0 0% 98%;
-
-		--secondary: 0 0% 87%;
-		--secondary-foreground: 0 0% 34%;
-
-		--muted: 0 0% 85%;
-		--muted-foreground: 0 0% 44%;
-
-		--accent: 0 0% 38%;
-		--accent-foreground: 0 0% 98%;
-
-		--accent-gold: 0 0% 38%;
-
-		--destructive: 0 55% 45%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 0 0% 80%;
-		--input: 0 0% 87%;
-		--ring: 0 0% 38%;
-
-		--success: 0 0% 42%;
-
-		--sidebar-background: 0 0% 89%;
-		--sidebar-foreground: 0 0% 16%;
-		--sidebar-primary: 0 0% 38%;
-		--sidebar-primary-foreground: 0 0% 98%;
-		--sidebar-accent: 0 0% 85%;
-		--sidebar-accent-foreground: 0 0% 16%;
-		--sidebar-border: 0 0% 80%;
-		--sidebar-ring: 0 0% 38%;
-
-		--body-glow: 0 0% 89%;
-	}
-
-	/* Sunset light */
-	:root[data-mode="light"][data-theme="sunset"] {
-		--background: 15 18% 92%;
-		--foreground: 10 18% 18%;
-
-		--card: 15 14% 95%;
-		--card-foreground: 10 18% 18%;
-
-		--popover: 15 14% 96%;
-		--popover-foreground: 10 18% 18%;
-
-		--primary: 15 65% 44%;
-		--primary-foreground: 15 20% 98%;
-
-		--secondary: 15 12% 88%;
-		--secondary-foreground: 10 14% 35%;
-
-		--muted: 15 10% 86%;
-		--muted-foreground: 10 10% 45%;
-
-		--accent: 15 65% 44%;
-		--accent-foreground: 15 20% 98%;
-
-		--accent-gold: 15 65% 44%;
-
-		--destructive: 0 55% 45%;
-		--destructive-foreground: 0 0% 98%;
-
-		--border: 15 12% 82%;
-		--input: 15 10% 88%;
-		--ring: 15 65% 44%;
-
-		--success: 152 45% 36%;
-
-		--sidebar-background: 15 14% 90%;
-		--sidebar-foreground: 10 18% 18%;
-		--sidebar-primary: 15 65% 44%;
-		--sidebar-primary-foreground: 15 20% 98%;
-		--sidebar-accent: 15 22% 88%;
-		--sidebar-accent-foreground: 10 18% 18%;
-		--sidebar-border: 15 12% 82%;
-		--sidebar-ring: 15 65% 44%;
-
-		--body-glow: 15 16% 90%;
+	/* Dusk — the same hill under an indigo sky */
+	:root[data-theme="dusk"] {
+		color-scheme: dark;
+
+		--background: 225 41% 31%;
+		--foreground: 210 36% 95%;
+
+		/* #243049 at 94 % */
+		--card: 221 34% 21%;
+		--card-alpha: 0.94;
+		--card-foreground: 210 36% 95%;
+
+		--popover: 221 34% 21%;
+		--popover-foreground: 210 36% 95%;
+
+		--primary: 41 89% 66%;
+		--primary-foreground: 204 23% 22%;
+
+		/* rgb(140 190 230 / .14) */
+		--secondary: 207 64% 73%;
+		--secondary-alpha: 0.14;
+		--secondary-foreground: 210 36% 95%;
+
+		--muted: 218 19% 28%;
+		--muted-foreground: 214 16% 70%;
+
+		--accent: 41 89% 66%;
+		--accent-foreground: 204 23% 22%;
+		--accent-ink: 41 89% 66%;
+
+		--accent-gold: 41 89% 66%;
+
+		--destructive: 17 81% 73%;
+		--destructive-foreground: 204 23% 22%;
+
+		/* rgb(236 241 246 / .10) */
+		--border: 210 36% 95%;
+		--border-alpha: 0.1;
+		--input: 207 64% 73%;
+		--ring: 41 89% 66%;
+
+		--success: 137 48% 69%;
+
+		--sidebar-background: 221 34% 21%;
+		--sidebar-alpha: 0.86;
+		--sidebar-foreground: 210 36% 95%;
+		--sidebar-primary: 41 89% 66%;
+		--sidebar-primary-foreground: 204 23% 22%;
+		/* rgb(140 190 230 / .26) */
+		--sidebar-accent: 207 64% 73%;
+		--sidebar-accent-alpha: 0.26;
+		--sidebar-accent-foreground: 210 36% 95%;
+		--sidebar-border: 210 36% 95%;
+		--sidebar-ring: 41 89% 66%;
+
+		--body-glow: 225 41% 31%;
+
+		--shadow-color: rgb(5 10 25 / 0.55);
+		--veil: rgb(8 14 30 / 0.6);
+
+		--sky-top: #1a2446;
+		--sky-mid: #2e3e6e;
+		--sky-low: #6a5a82;
+		--sky-ground: #c98a63;
+		--sun: rgb(255 170 100 / 0.35);
+		--cloud: #5a6a96;
+		--cloud-shade: rgb(20 30 60 / 0.5);
+		--cloud-alpha: 0.6;
+		--hill-far: #3b5470;
+		--hill-mid: #2c4a44;
+		--hill-near: #1f3a31;
 	}
 
 	/* Density: compact */
@@ -623,34 +346,16 @@
 		@apply border-border;
 	}
 
+	/*
+	  The body paints the sky's low haze so that anything still painting
+	  `bg-background` reads as ground. The sky itself — gradient, sun, clouds,
+	  hills — is the `.sky` layer below, rendered by app/SkyBackdrop.tsx.
+	*/
 	body {
 		@apply bg-background text-foreground antialiased;
 		font-family: var(--font-body);
+		font-variant-numeric: lining-nums;
 		min-height: 100vh;
-	}
-
-	/*
-	  Viewport-fixed background glow.
-
-	  Previously this lived on `body` via `background-attachment: fixed`. On iOS
-	  Safari (and some Android WebViews) a `fixed`-attachment background composited
-	  under a full-screen `backdrop-filter` overlay (e.g. focus mode or the
-	  command palette) renders as a solid BLACK rectangle — the whole app went
-	  black a moment after load. A `position: fixed` layer is the supported way to
-	  pin the background and does not trigger that bug.
-	*/
-	body::before {
-		content: "";
-		position: fixed;
-		inset: 0;
-		z-index: -1;
-		pointer-events: none;
-		background-color: hsl(var(--background));
-		background-image: radial-gradient(
-			ellipse at 50% 0%,
-			hsl(var(--body-glow, 38 20% 12%)) 0%,
-			hsl(var(--background)) 60%
-		);
 	}
 
 	h1,
@@ -660,7 +365,7 @@
 	h5,
 	h6 {
 		font-family: var(--font-heading);
-		font-weight: 600;
+		font-weight: 800;
 		letter-spacing: -0.02em;
 	}
 
@@ -671,8 +376,189 @@
 
 	pre,
 	code {
+		font-family: var(--font-code);
 		overflow-x: auto;
 		white-space: pre;
 	}
 }
 
+/*
+  The painting: sun, clouds, hills.
+
+  Viewport-fixed, behind everything. This used to be a glow on `body` via
+  `background-attachment: fixed`. On iOS Safari (and some Android WebViews) a
+  `fixed`-attachment background composited under a full-screen
+  `backdrop-filter` overlay (focus mode, the command palette) renders as a
+  solid BLACK rectangle — the whole app went black a moment after load. A
+  `position: fixed` element is the supported way to pin the background and
+  does not trigger that bug, so the gradient lives on `.sky`, never on `body`.
+
+  z-index -1 keeps it under in-flow content; that only holds while no
+  ancestor between it and the root paints a background or opens a stacking
+  context, which is why Layout's root div has neither.
+*/
+@layer components {
+	.sky {
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		pointer-events: none;
+		overflow: hidden;
+		background: linear-gradient(
+			180deg,
+			var(--sky-top) 0,
+			var(--sky-mid) 42%,
+			var(--sky-low) 78%,
+			var(--sky-ground) 100%
+		);
+	}
+
+	.sun {
+		position: absolute;
+		top: -16vh;
+		right: -8vw;
+		width: 56vw;
+		height: 56vw;
+		max-width: 760px;
+		max-height: 760px;
+		border-radius: 50%;
+		background: radial-gradient(circle, var(--sun) 0, transparent 62%);
+	}
+
+	.cloud {
+		position: absolute;
+		opacity: var(--cloud-alpha);
+		filter: blur(1.2px);
+		animation: drift 140s ease-in-out infinite alternate;
+	}
+
+	.cloud::before,
+	.cloud::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+	}
+
+	.cloud::before {
+		background:
+			radial-gradient(closest-side at 28% 66%, var(--cloud) 62%, transparent),
+			radial-gradient(closest-side at 50% 42%, var(--cloud) 58%, transparent),
+			radial-gradient(closest-side at 72% 64%, var(--cloud) 62%, transparent),
+			radial-gradient(closest-side at 50% 82%, var(--cloud) 74%, transparent);
+	}
+
+	.cloud::after {
+		background: radial-gradient(60% 40% at 50% 100%, var(--cloud-shade), transparent 70%);
+		mix-blend-mode: multiply;
+		opacity: 0.6;
+	}
+
+	.cloud-1 {
+		left: 6vw;
+		top: 9vh;
+		width: 380px;
+		height: 130px;
+	}
+
+	.cloud-2 {
+		left: 38vw;
+		top: 4vh;
+		width: 520px;
+		height: 170px;
+		animation-duration: 170s;
+		animation-delay: -60s;
+	}
+
+	.cloud-3 {
+		right: 4vw;
+		top: 22vh;
+		width: 300px;
+		height: 100px;
+		animation-duration: 120s;
+		animation-delay: -30s;
+	}
+
+	.cloud-4 {
+		left: 22vw;
+		top: 34vh;
+		width: 240px;
+		height: 80px;
+		opacity: calc(var(--cloud-alpha) * 0.7);
+		animation-duration: 200s;
+		animation-delay: -90s;
+	}
+
+	.cloud-5 {
+		right: 24vw;
+		top: 46vh;
+		width: 340px;
+		height: 110px;
+		opacity: calc(var(--cloud-alpha) * 0.6);
+		animation-duration: 150s;
+		animation-delay: -20s;
+	}
+
+	@keyframes drift {
+		from {
+			transform: translateX(-1.5vw);
+		}
+		to {
+			transform: translateX(1.5vw);
+		}
+	}
+
+	.hills {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		width: 100%;
+		height: 200px;
+		display: block;
+	}
+
+	.hills .far {
+		fill: var(--hill-far);
+	}
+
+	.hills .mid {
+		fill: var(--hill-mid);
+	}
+
+	.hills .near {
+		fill: var(--hill-near);
+	}
+
+	@media (max-width: 700px) {
+		.hills {
+			height: 120px;
+		}
+
+		.sun {
+			width: 90vw;
+			height: 90vw;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.cloud {
+			animation: none;
+		}
+	}
+}
+
+/*
+  Nothing moves under reduced motion: the clouds stop above, and every other
+  animation or transition — the page fade, the spark bars, a dialog's
+  entrance — jumps to its end state. `!important` because several of them
+  are inline styles.
+*/
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::before,
+	::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}

@@ -16,20 +16,12 @@ import {
 	Moon,
 	Palette,
 	Settings as SettingsIcon,
-	Sun,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { type NavigateFunction, useNavigate } from "react-router";
 import { signOut } from "@/shared/session";
 import type { CommandItem } from "@/shared/ui";
-import {
-	type ColorMode,
-	DENSITIES,
-	type Density,
-	THEMES,
-	type ThemeName,
-	useTheme,
-} from "./useTheme";
+import { DENSITIES, type Density, THEMES, type ThemeName, useTheme } from "./useTheme";
 
 const RECENCY_KEY = "beats_command_recency";
 const RECENCY_MAX = 20;
@@ -69,11 +61,11 @@ export function useCommandActions(ctx: CommandContext): {
 	recordInvocation: (id: string) => void;
 } {
 	const navigate = useNavigate();
-	const { theme, setTheme, mode, setMode, density, setDensity } = useTheme();
+	const { theme, setTheme, density, setDensity } = useTheme();
 
 	const items = useMemo<CommandItem[]>(
-		() => buildItems(ctx, navigate, theme, setTheme, mode, setMode, density, setDensity),
-		[ctx, navigate, theme, setTheme, mode, setMode, density, setDensity],
+		() => buildItems(ctx, navigate, theme, setTheme, density, setDensity),
+		[ctx, navigate, theme, setTheme, density, setDensity],
 	);
 
 	const recencyBoost = useCallback((id: string) => {
@@ -105,8 +97,6 @@ function buildItems(
 	navigate: NavigateFunction,
 	theme: ThemeName,
 	setTheme: (t: ThemeName) => void,
-	mode: ColorMode,
-	setMode: (m: ColorMode) => void,
 	density: Density,
 	setDensity: (d: Density) => void,
 ): CommandItem[] {
@@ -187,22 +177,13 @@ function buildItems(
 	items.push({
 		id: "theme.cycle",
 		label: `Theme: ${THEMES.find((t) => t.id === theme)?.label ?? theme} (cycle)`,
-		keywords: ["color", "palette", "dark", ...THEMES.map((t) => t.label.toLowerCase())],
+		keywords: ["color", "palette", "dark", "light", ...THEMES.map((t) => t.label.toLowerCase())],
 		icon: <Palette className="w-4 h-4" />,
 		action: () => {
 			const order = THEMES.map((t) => t.id);
 			const next = order[(order.indexOf(theme) + 1) % order.length];
 			setTheme(next);
 		},
-	});
-
-	// Mode toggle
-	items.push({
-		id: "mode.toggle",
-		label: `Mode: ${mode === "dark" ? "Dark" : "Light"} (toggle)`,
-		keywords: ["dark", "light", "mode", "brightness"],
-		icon: mode === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />,
-		action: () => setMode(mode === "dark" ? "light" : "dark"),
 	});
 
 	// Density cycle
