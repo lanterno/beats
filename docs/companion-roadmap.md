@@ -78,7 +78,8 @@ storage-sync behavior — can't be done in headless CI.
   `biometrics/daily`, `timer`, `projects`, `beats`, `coach/brief`,
   `analytics/heatmap` and `analytics/tags` — append as new endpoints land.
   The match is by prefix, so `/api/projects` already admits the contract
-  routes under `/api/projects/{id}/…` (contract, week, holidays, absences);
-  `/api/meta`, the holiday-region list, is not in the tuple. The companion
-  is unaware of contracts and reads none of those routes — a week card in
+  routes under `/api/projects/{id}/…` (`contract`, `contract/week`,
+  `ledger`, `holidays`, `absences`); `/api/meta`, the holiday-region list,
+  is not in the tuple. The companion is unaware of contracts and reads none
+  of those routes — a week card in
   the tray is a follow-up in `work-contracts-roadmap.md`

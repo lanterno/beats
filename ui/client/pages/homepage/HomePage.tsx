@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthModal } from "@/features/auth";
-import { Button } from "@/shared/ui";
+import { Button, SkyBackdrop } from "@/shared/ui";
 import "./HomePage.css";
 
 // lucide-react removed brand-mark icons (trademark policy), so we ship our own
@@ -67,8 +67,8 @@ function Nav({ onSignIn }: { onSignIn: () => void }) {
 		<nav className="homepage-nav">
 			<div className="homepage-nav-inner">
 				<a href="#top" className="homepage-wordmark">
-					<Clock className="w-4 h-4 text-accent" aria-hidden />
-					<span className="font-heading text-lg tracking-tight text-foreground">Beats</span>
+					<Clock className="w-4 h-4 text-accent-ink" aria-hidden />
+					<span>Beats</span>
 				</a>
 				<div className="homepage-nav-links">
 					<a href="#surfaces" className="homepage-nav-link">
@@ -265,9 +265,9 @@ function WebMock() {
 					})}
 				</div>
 				<div className="homepage-mock-projects">
-					<ProjectRow color="accent" name="Beats" hrs="14.2" />
-					<ProjectRow color="success" name="Writing" hrs="6.8" />
-					<ProjectRow color="primary" name="Reading" hrs="4.1" />
+					<ProjectRow color="sky" name="Beats" hrs="14.2" />
+					<ProjectRow color="leaf" name="Writing" hrs="6.8" />
+					<ProjectRow color="blossom" name="Reading" hrs="4.1" />
 				</div>
 				<div className="homepage-mock-heatmap-week" aria-hidden>
 					{cells.slice(0, 7 * 18).map((v, i) => (
@@ -279,7 +279,15 @@ function WebMock() {
 	);
 }
 
-function ProjectRow({ color, name, hrs }: { color: string; name: string; hrs: string }) {
+function ProjectRow({
+	color,
+	name,
+	hrs,
+}: {
+	color: "sky" | "leaf" | "blossom";
+	name: string;
+	hrs: string;
+}) {
 	return (
 		<div className="homepage-mock-project">
 			<span className={`homepage-mock-project-dot homepage-mock-color-${color}`} />
@@ -322,7 +330,7 @@ function EditorMock() {
 		<div className="homepage-mock homepage-mock-editor">
 			<div className="homepage-mock-editor-side">
 				<div className="homepage-mock-editor-tab">
-					<Clock className="w-3 h-3 text-accent" aria-hidden />
+					<Clock className="w-3 h-3" aria-hidden />
 					<span>Beats</span>
 				</div>
 				<div className="homepage-mock-editor-current">
@@ -619,7 +627,7 @@ function ShippedThisWeek() {
 	return (
 		<div className="homepage-trust-card homepage-trust-commits">
 			<div className="homepage-trust-card-head">
-				<Clock className="w-3.5 h-3.5 text-accent" aria-hidden />
+				<Clock className="w-3.5 h-3.5" aria-hidden />
 				<span>Shipped recently</span>
 			</div>
 			{errored && (
@@ -664,7 +672,7 @@ function FounderCard() {
 	return (
 		<div className="homepage-trust-card homepage-trust-founder">
 			<div className="homepage-trust-card-head">
-				<KeyRound className="w-3.5 h-3.5 text-accent" aria-hidden />
+				<KeyRound className="w-3.5 h-3.5" aria-hidden />
 				<span>Built by one person</span>
 			</div>
 			<div className="homepage-founder-avatar" aria-hidden>
@@ -698,7 +706,7 @@ function RoadmapCard() {
 			className="homepage-trust-card homepage-trust-roadmap"
 		>
 			<div className="homepage-trust-card-head">
-				<MapIcon className="w-3.5 h-3.5 text-accent" aria-hidden />
+				<MapIcon className="w-3.5 h-3.5" aria-hidden />
 				<span>Roadmap, in public</span>
 			</div>
 			<p className="homepage-roadmap-text">
@@ -853,7 +861,7 @@ function FooterNew() {
 			</div>
 			<div className="homepage-footer-bottom">
 				<div className="homepage-footer-mark">
-					<Clock className="w-3 h-3 text-accent" aria-hidden />
+					<Clock className="w-3 h-3 text-accent-ink" aria-hidden />
 					<span className="font-heading">Beats</span>
 					<span className="homepage-footer-sha font-mono">
 						<span className="sr-only">Deployed commit SHA </span>
@@ -916,7 +924,10 @@ export default function HomePage() {
 	const onPrimary = () => open("register-email");
 
 	return (
+		// No background on the root: the sky sits at z-index -1 and a painted
+		// ancestor would cover it (see the `.sky` note in global.css).
 		<div className="homepage-root">
+			<SkyBackdrop />
 			<Nav onSignIn={onSignIn} />
 			<Hero onPrimary={onPrimary} />
 			<SurfaceTour />

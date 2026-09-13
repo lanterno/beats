@@ -84,7 +84,7 @@ The companion knows nothing of project kinds or contracts. It lists
 projects, so `kind` and `contract` arrive in that response and are
 ignored (the contract figures in `this_week` come only with
 `include=this_week`, which it never asks for), and it reads none of the
-contract, week, holiday or absence routes under `/api/projects/{id}/…` —
+contract, week, ledger, holiday or absence routes under `/api/projects/{id}/…` —
 reachable with its device token all the same; see `companion-roadmap.md`
 § Auth model.
 

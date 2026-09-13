@@ -3546,9 +3546,9 @@ class TestContractServiceLedger:
 
 
 class TestProjectServiceTimeAggregations:
-    """Five aggregation methods that power the project-detail page:
-    get_today_time, get_week_breakdown, get_monthly_totals,
-    get_daily_average, get_daily_summary.
+    """Four aggregation methods that power the project-detail page:
+    get_today_time, get_monthly_totals, get_daily_average,
+    get_daily_summary.
 
     These all run on date.today() (local-time), so tests synthesize
     data relative to that anchor rather than pinning a fixed date.
@@ -3587,64 +3587,6 @@ class TestProjectServiceTimeAggregations:
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
         result = await svc.get_today_time("p1")
         assert result == timedelta(minutes=45)
-
-    # ---------------- get_week_breakdown ----------------
-
-    async def test_week_breakdown_returns_seven_days_plus_total(self):
-        """Dict has all 7 weekday names so the UI always renders a
-        full bar chart, plus total_hours, effective_goal, and
-        effective_goal_type. Pin the shape so the chart can't
-        render holes on quiet days."""
-        today = date.today()
-        monday = today - timedelta(days=today.weekday())
-        beats = [
-            self._completed("b1", "p1", monday, minutes=60),
-            self._completed("b2", "p1", monday + timedelta(days=2), minutes=30),
-        ]
-        svc = _project_service(projects=[_project("p1", "Alpha", weekly_goal=5.0)], beats=beats)
-        result = await svc.get_week_breakdown("p1")
-        for day_name in (
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ):
-            assert day_name in result
-        assert result["total_hours"] == 1.5  # 60 + 30 min
-        assert result["effective_goal"] == 5.0
-        assert result["effective_goal_type"] == "target"
-
-    async def test_week_breakdown_weeks_ago_shifts_window(self):
-        """weeks_ago=1 looks at last week, not this one. Pin so a
-        regression can't ignore the parameter and silently always
-        return the current week."""
-        today = date.today()
-        last_monday = today - timedelta(days=today.weekday()) - timedelta(weeks=1)
-        beats = [self._completed("b1", "p1", last_monday, minutes=120)]
-        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
-        this_week = await svc.get_week_breakdown("p1", weeks_ago=0)
-        last_week = await svc.get_week_breakdown("p1", weeks_ago=1)
-        assert this_week["total_hours"] == 0
-        assert last_week["total_hours"] == 2.0
-
-    async def test_week_breakdown_include_log_details(self):
-        """include_log_details=True swaps each day's duration string
-        for a list of log dicts. Pin the shape — the project-detail
-        Logs tab binds to {id, start, end, duration} per entry."""
-        today = date.today()
-        monday = today - timedelta(days=today.weekday())
-        beats = [self._completed("b1", "p1", monday, minutes=60)]
-        svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
-        result = await svc.get_week_breakdown("p1", weeks_ago=0, include_log_details=True)
-        monday_logs = result["Monday"]
-        assert isinstance(monday_logs, list)
-        assert len(monday_logs) == 1
-        log = monday_logs[0]
-        assert set(log.keys()) == {"id", "start", "end", "duration"}
-        assert log["id"] == "b1"
 
     # ---------------- get_monthly_totals ----------------
 
@@ -3729,14 +3671,15 @@ class TestProjectServiceTimeAggregations:
 
 class TestProjectServiceBeatsBatchHelpers:
     """Pure-Python helpers that take pre-fetched beats and return the
-    same shapes as the public per-project aggregations. The list_projects
+    same shapes as the public per-project aggregations, plus the index's
+    this-week slots, which have no per-project route. The list_projects
     route fetches every displayed project's beats in ONE Mongo find and
     calls these helpers directly, sharing the same in-memory list across
     the three aggregations.
 
     Why these tests matter: the helpers MUST stay byte-for-byte
     equivalent to the public methods, or the /projects index page
-    silently disagrees with the /project/{id}/week and /total endpoints.
+    silently disagrees with the /project/{id}/total endpoint.
     The matches_public_method tests run both paths over identical input
     and pin equality of the result dicts."""
 
@@ -3795,44 +3738,28 @@ class TestProjectServiceBeatsBatchHelpers:
         via_helper = ProjectService._monthly_totals_from_beats(beats)
         assert via_helper == via_public
 
-    async def test_week_breakdown_from_beats_matches_public_method(self):
-        """Helper output equals get_week_breakdown(pid) for the current
-        week, including effective_goal_overridden. Pin the equality so
-        the /projects index page can't drift from /project/{id}/week."""
+    def test_this_week_from_beats_minutes_and_goal(self):
+        """A 1h30m completed beat in the current week yields weekly_minutes
+        == 90.0 EXACTLY, beside the goal resolved for the week; a running
+        beat does not count. The list_projects route reports these as the
+        index's this-week slots — drift here moves what users see as 'this
+        week' on the projects index."""
         from beats.domain.services import ProjectService
 
         today = date.today()
         monday = today - timedelta(days=today.weekday())
         beats = [
-            self._completed("b1", "p1", monday, minutes=60),
-            self._completed("b2", "p1", monday + timedelta(days=2), minutes=30),
+            self._completed("b1", "p1", monday, minutes=90),
+            self._running("b2", "p1", today, hour=23),
         ]
         project = _project("p1", "Alpha", weekly_goal=5.0)
-        svc = _project_service(projects=[project], beats=beats)
-        via_public = await svc.get_week_breakdown("p1")
-        via_helper = ProjectService._week_breakdown_from_beats(beats, project, weeks_ago=0)
-        # `contract_expected` is the one key the public method adds on top of
-        # the helper; the index takes that figure from `weeks_for` instead.
-        assert via_public.pop("contract_expected") is None
-        assert via_helper == via_public
-        # effective_goal_overridden carried through both paths.
-        assert "effective_goal_overridden" in via_helper
-
-    def test_week_breakdown_from_beats_total_hours_precision(self):
-        """A single 1h30m beat in the current week yields total_hours
-        == 1.5 EXACTLY, and float(total_hours)*60 == 90.0 EXACTLY. The
-        list_projects route multiplies total_hours by 60 to populate
-        weekly_minutes — drift in this precision moves what users see
-        as 'this week' on the projects index."""
-        from beats.domain.services import ProjectService
-
-        today = date.today()
-        monday = today - timedelta(days=today.weekday())
-        beats = [self._completed("b1", "p1", monday, minutes=90)]
-        project = _project("p1", "Alpha")
-        result = ProjectService._week_breakdown_from_beats(beats, project, weeks_ago=0)
-        assert result["total_hours"] == 1.5
-        assert float(result["total_hours"]) * 60 == 90.0
+        result = ProjectService._this_week_from_beats(beats, project)
+        assert result == {
+            "weekly_minutes": 90.0,
+            "effective_goal": 5.0,
+            "effective_goal_type": "target",
+            "effective_goal_overridden": False,
+        }
 
 
 # Export bundle signing — Ed25519 sign/verify primitives

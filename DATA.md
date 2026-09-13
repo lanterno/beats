@@ -4,13 +4,18 @@ The full inventory of what Beats stores, where it stores it, and how to get it b
 
 ## Where data lives
 
-| Layer            | Provider                | What it holds                                            |
-|------------------|-------------------------|----------------------------------------------------------|
-| API              | Google Cloud Run        | Stateless — request handling only                        |
-| Primary database | MongoDB (GCP)           | Every collection listed below                            |
-| Web app          | Firebase Hosting        | Static assets only                                       |
-| Secrets          | GCP Secret Manager      | OAuth client secrets, Anthropic API key, infra creds     |
-| Logs             | Google Cloud Logging    | Request logs (no request bodies)                         |
+Beats runs in two places, and each has its own database. **home.space** is the
+primary: `compose.home.yml` on the home network. **lifepete.com** runs on Google
+Cloud. See Infrastructure in [CLAUDE.md](./CLAUDE.md).
+
+| Layer    | home.space                                                                 | lifepete.com                                                          | What it holds                                        |
+|----------|----------------------------------------------------------------------------|-----------------------------------------------------------------------|------------------------------------------------------|
+| API      | Container on the home network                                              | Google Cloud Run                                                      | Stateless — request handling only                    |
+| Database | MongoDB container, `beats-home-mongo-data` volume, not published on the LAN | External MongoDB cluster, reached by the connection string Terraform takes | Every collection listed below                        |
+| Web app  | nginx in the same stack, one origin with the API                           | Firebase Hosting                                                      | Static assets only                                   |
+| Secrets  | `api/.env` on the host                                                     | GCP Secret Manager                                                    | OAuth client secrets, Anthropic API key, infra creds |
+| Logs     | Container logs (`just logs`)                                               | Google Cloud Logging                                                  | Request logs (no request bodies)                     |
+| Backups  | `just backup <dir>`: a gzipped mongodump archive, taken on demand          | None configured in this repo                                          | The database                                         |
 
 ## What's stored, by domain
 
@@ -68,8 +73,8 @@ Coach prompts are sent to the [Anthropic Claude API](https://www.anthropic.com/)
 
 ## Encryption
 
-- **In transit**: TLS everywhere (HTTPS to the API, TLS to MongoDB)
-- **At rest**: MongoDB-managed encryption-at-rest on the storage volume; GCP-managed for Secret Manager
+- **In transit**: on lifepete.com, HTTPS to the API and TLS to the MongoDB cluster. On home.space the API reaches MongoDB over the stack's internal Docker network without TLS; the database is not published on the LAN.
+- **At rest**: on lifepete.com, the MongoDB cluster's encryption at rest and GCP's for Secret Manager. On home.space, only what the host's disk provides: Beats does not encrypt the Mongo volume or `api/.env`.
 - **Application-level encryption**: Beats does not currently apply a second encryption layer to integration tokens beyond what MongoDB provides. If you need that, do not connect integrations.
 
 ## Retention

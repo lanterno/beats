@@ -38,8 +38,18 @@ expectation; and an E2E spec for the whole flow. The Phase 5 notes below
 describe `main` as of `4d319d6`; the polish notes appended to Phases 3 and 5
 record what changed after.
 
-The follow-ups at the end were re-checked against the code on 2026-09-12 and
-none has been built since. The coach one has moved a step, and says how.
+The per-week breakdown has gone since. [The project page
+roadmap](project-page-roadmap.md) replaced the week history with the ledger's
+*Earlier weeks*, which reads each week's `contract_expected` and closing balance
+from `GET /api/projects/{id}/ledger`, and its Phase 5 removed
+`GET /api/projects/{id}/week/` with `WeekBreakdownResponse`. The notes below that
+name `/week/` describe the code as it was; the Inbox's readers still quote the
+adjusted figure through `WeekExpectationReader`.
+
+The follow-ups at the end were re-checked against the code on 2026-09-13. The
+balance ledger's read side has been built since, by the project page roadmap,
+and says so; the coach one has moved a step, and says how; the rest are not
+built.
 
 ---
 
@@ -667,11 +677,16 @@ The reason for all of the above.
 - **Vacation entitlement** — days per year, pro-rated by percentage
   and by a mid-year start, carry-over, remaining. Needs the absence
   types to mean something, which they already do.
-- **Balance ledger** — dated manual adjustments (payout, annual reset,
-  cap) instead of editing the opening balance.
-- **Companion week card** — the same numbers in the tray. The route is
-  already device-reachable through the `/api/projects` prefix (see Phase
-  3); what is missing is the companion reading it.
+- **Balance ledger** — the read side is done, by
+  [project-page-roadmap.md](project-page-roadmap.md):
+  `GET /api/projects/{id}/ledger` gives every week its expectation and its
+  closing balance, and the project page's *Earlier weeks* lays them out so the
+  rows add up to the balance. Still to come is the write side: dated manual
+  adjustments (payout, annual reset, cap) instead of editing the opening
+  balance.
+- **Companion week card** — the same numbers in the tray. `/contract/week`
+  and the ledger are already device-reachable through the `/api/projects`
+  prefix (see Phase 3); what is missing is the companion reading them.
 - **Employer-specific holidays** — per-contract add/remove on top of
   the region (Dec 24/31, bridge days).
 - **Coach awareness** — the brief knowing you are 6 h over and it is

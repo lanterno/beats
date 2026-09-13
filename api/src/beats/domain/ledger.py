@@ -12,9 +12,9 @@ What a week carries, and when a figure is None:
 
     worked            Σ of the seven days, request tz, a running beat included
     days              Mon..Sun hours, each rounded on its own
-    effective_goal    `Project.effective_goal` for the Monday, exactly as the
-                      `/week/` breakdown reports it: the term's nominal hours
-                      on a governed week, else the personal goal / override
+    effective_goal    `Project.effective_goal` for the Monday: the term's
+                      nominal hours on a governed week, else the personal
+                      goal / override
     contract_expected `week_expectation`: what the contract expects after
                       holidays and absences; None when nothing time-based
                       governs the week (before the first term, an objective

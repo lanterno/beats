@@ -26,7 +26,6 @@ from beats.api.schemas import (
     ProjectsListItemResponse,
     RecordTimeRequest,
     UpdateProjectRequest,
-    WeekBreakdownResponse,
 )
 from beats.domain.holidays import Holiday
 from beats.domain.models import Contract, ContractWeek, GoalOverride, Ledger, Project, ProjectKind
@@ -110,12 +109,7 @@ async def list_projects(
             totals = service._monthly_totals_from_beats(beats)
             item["total_minutes"] = totals.get("total_minutes", 0)
         if want_week:
-            week = service._week_breakdown_from_beats(beats, p, weeks_ago=0)
-            total_hours = week.get("total_hours", 0) or 0
-            item["weekly_minutes"] = float(total_hours) * 60
-            item["effective_goal"] = week.get("effective_goal")
-            item["effective_goal_type"] = week.get("effective_goal_type")
-            item["effective_goal_overridden"] = week.get("effective_goal_overridden")
+            item.update(service._this_week_from_beats(beats, p))
             contract_week = contract_weeks.get(p.id)
             if contract_week is not None:
                 item["contract_expected"] = contract_week.expected
@@ -340,24 +334,6 @@ async def today_time_for_project(project_id: str, service: ProjectServiceDep) ->
     """Get total time spent on project today."""
     duration = await service.get_today_time(project_id)
     return DurationResponse(duration=str(duration))
-
-
-@router.get("/{project_id}/week/", response_model=WeekBreakdownResponse)
-async def current_week_time_for_project(
-    project_id: str,
-    service: ProjectServiceDep,
-    weeks_ago: int = 0,
-    display_each_log_duration: bool = False,
-):
-    """Get time breakdown for a week: hours per day, the total, the week's
-    Monday, the effective goal as resolved for it, and `contract_expected` —
-    what the contract expects of the week after holidays and absences on a
-    day job it governs (the week card's figure), null elsewhere."""
-    return await service.get_week_breakdown(
-        project_id=project_id,
-        weeks_ago=weeks_ago,
-        include_log_details=display_each_log_duration,
-    )
 
 
 @router.get("/{project_id}/total/")

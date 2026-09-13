@@ -78,7 +78,7 @@ class TestProjectAPI:
         """
         # Create a project + log a beat so the aggregations have
         # something to report. The beat ends now so it counts in the
-        # current-week breakdown and as last_tracked_at.
+        # current week and as last_tracked_at.
         from datetime import UTC, datetime, timedelta
 
         proj_resp = client.post(
@@ -462,32 +462,6 @@ class TestProjectAPI:
         assert response.status_code == 200
         assert "duration" in response.json()
 
-    def test_project_week_time(self, client, auth_headers):
-        """Test GET /api/projects/{project_id}/week/ - Get current week time for project"""
-        # Create project
-        project = client.post(
-            "/api/projects/",
-            json={"name": f"test-week-{time.time()}", "description": "Test week time"},
-            headers=auth_headers,
-        ).json()
-
-        response = client.get(f"/api/projects/{project['id']}/week/", headers=auth_headers)
-        assert response.status_code == 200
-        week_data = response.json()
-        assert "total_hours" in week_data
-        # Check all weekdays are present
-        weekdays = [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-        ]
-        for day in weekdays:
-            assert day in week_data
-
     def test_project_total_time(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/total/ - Get total time per month"""
         # Create project and beats
@@ -653,6 +627,14 @@ class TestGoalOverridesAPI:
         assert resp.status_code == 201
         return resp.json()
 
+    def _this_week(self, client, auth_headers, project_id: str) -> dict:
+        """The ledger's current week: where the goal resolved for it is read."""
+        resp = client.get(
+            f"/api/projects/{project_id}/ledger", params={"weeks": 1}, headers=auth_headers
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()["weeks"][0]
+
     def test_put_goal_overrides(self, client, auth_headers):
         """Test PUT /api/projects/{id}/goal-overrides — add overrides."""
         project = self._create_project(client, auth_headers)
@@ -681,16 +663,7 @@ class TestGoalOverridesAPI:
         assert len(found["goal_overrides"]) == 1
         assert found["goal_overrides"][0]["weekly_goal"] == 10
 
-    def test_week_breakdown_includes_effective_goal(self, client, auth_headers):
-        """GET /api/projects/{id}/week/ returns effective_goal."""
-        project = self._create_project(client, auth_headers, weekly_goal=20)
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["effective_goal"] == 20
-        assert data["effective_goal_type"] == "target"
-
-    def test_week_breakdown_with_override(self, client, auth_headers):
+    def test_ledger_week_with_override(self, client, auth_headers):
         """Effective goal reflects an active override."""
         project = self._create_project(client, auth_headers, weekly_goal=20)
         # Add a permanent override starting well in the past
@@ -699,9 +672,7 @@ class TestGoalOverridesAPI:
             json=[{"effective_from": "2020-01-06", "weekly_goal": 35}],
             headers=auth_headers,
         )
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
-        data = resp.json()
-        assert data["effective_goal"] == 35
+        assert self._this_week(client, auth_headers, project["id"])["effective_goal"] == 35
 
     def test_replace_overrides(self, client, auth_headers):
         """PUT replaces all overrides, not appends."""
@@ -732,10 +703,8 @@ class TestGoalOverridesAPI:
             json=[{"week_of": "2020-01-06", "weekly_goal": None}],
             headers=auth_headers,
         )
-        # Past week (same Monday as the override): no goal
-        # weeks_ago for 2020-01-06 is well into the past; compute by hitting the
-        # endpoint directly via the week_of Monday. The breakdown uses weeks_ago,
-        # so we verify via project list instead.
+        # 2020-01-06 is beyond the ledger's reach, so the stored override is
+        # checked on the project list instead.
         projects = client.get("/api/projects/", headers=auth_headers).json()
         found = next(p for p in projects if p["id"] == project["id"])
         overrides = found["goal_overrides"]
@@ -750,18 +719,15 @@ class TestGoalOverridesAPI:
             json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
             headers=auth_headers,
         )
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json()["effective_goal"] is None
+        assert self._this_week(client, auth_headers, project["id"])["effective_goal"] is None
 
-    def test_week_breakdown_flags_override_in_effect(self, client, auth_headers):
+    def test_ledger_week_flags_override_in_effect(self, client, auth_headers):
         """`effective_goal_overridden` is true when an override resolves for the week."""
         project = self._create_project(client, auth_headers, weekly_goal=20)
         # No override yet: flag should be false, goal = project default.
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
-        body = resp.json()
-        assert body["effective_goal"] == 20
-        assert body["effective_goal_overridden"] is False
+        week = self._this_week(client, auth_headers, project["id"])
+        assert week["effective_goal"] == 20
+        assert week["effective_goal_overridden"] is False
 
         # Permanent null override starting in the past: this week has "no goal"
         # but the flag must reveal it's intentional, not "no project default".
@@ -770,34 +736,29 @@ class TestGoalOverridesAPI:
             json=[{"effective_from": "2020-01-06", "weekly_goal": None}],
             headers=auth_headers,
         )
-        body = client.get(
-            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
-        ).json()
-        assert body["effective_goal"] is None
-        assert body["effective_goal_overridden"] is True
+        week = self._this_week(client, auth_headers, project["id"])
+        assert week["effective_goal"] is None
+        assert week["effective_goal_overridden"] is True
 
-    def test_week_breakdown_returns_canonical_week_start(self, client, auth_headers):
-        """The breakdown returns the server's Monday, and an override keyed to
-        that exact date resolves for the same week. This is the contract the UI
+    def test_ledger_week_of_keys_an_override_for_that_week(self, client, auth_headers):
+        """The ledger returns the server's Monday, and an override keyed to that
+        exact date resolves for the same week. This is the contract the UI
         relies on to avoid client/server week-boundary drift on overrides."""
         from datetime import date as _date
 
         project = self._create_project(client, auth_headers, weekly_goal=20)
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
-        week_start = resp.json()["week_start"]
-        assert _date.fromisoformat(week_start).weekday() == 0  # is a Monday
+        week_of = self._this_week(client, auth_headers, project["id"])["week_of"]
+        assert _date.fromisoformat(week_of).weekday() == 0  # is a Monday
 
         # An override keyed to the returned Monday must resolve for this week.
         client.put(
             f"/api/projects/{project['id']}/goal-overrides",
-            json=[{"week_of": week_start, "weekly_goal": 7}],
+            json=[{"week_of": week_of, "weekly_goal": 7}],
             headers=auth_headers,
         )
-        body = client.get(
-            f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers
-        ).json()
-        assert body["effective_goal"] == 7
-        assert body["effective_goal_overridden"] is True
+        week = self._this_week(client, auth_headers, project["id"])
+        assert week["effective_goal"] == 7
+        assert week["effective_goal_overridden"] is True
 
     def test_update_project_preserves_goal_overrides(self, client, auth_headers):
         """Editing the project (e.g. color change) must not wipe overrides."""
@@ -834,8 +795,7 @@ class TestGoalOverridesAPI:
             json=[{"effective_from": "2099-01-05", "weekly_goal": None}],
             headers=auth_headers,
         )
-        resp = client.get(f"/api/projects/{project['id']}/week/?weeks_ago=0", headers=auth_headers)
-        assert resp.json()["effective_goal"] == 20
+        assert self._this_week(client, auth_headers, project["id"])["effective_goal"] == 20
 
 
 # --- Work contracts: kind + contract on the project, the week, absences ---
@@ -1097,38 +1057,6 @@ class TestContractWeekAPI:
         week = self._week(client, auth_headers, project["id"])
         assert [d["expected"] for d in week["days"]] == [8, 8, 4, 4, 4, 0, 0]
         assert week["expected"] == 28
-
-    def test_week_breakdown_carries_the_adjusted_expectation_beside_the_nominal_goal(
-        self, client, auth_headers
-    ):
-        # The history row and the week card sit on one screen. The row must
-        # read what the week expects after holidays and absences — the card's
-        # figure — while `effective_goal` stays the term's nominal hours, which
-        # is what the score and the coach want (the readers' decision).
-        project = _day_job(client, auth_headers)
-        today = date.today()
-        wednesday = today - timedelta(days=today.weekday()) + timedelta(days=2)
-        resp = client.post(
-            f"/api/projects/{project['id']}/absences",
-            json={"date": wednesday.isoformat(), "type": "vacation"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 201, resp.text
-
-        resp = client.get(f"/api/projects/{project['id']}/week/", headers=auth_headers)
-        assert resp.status_code == 200, resp.text
-        breakdown = resp.json()
-        assert breakdown["contract_expected"] == 32
-        assert breakdown["effective_goal"] == 40
-        # And it is the week route's own figure for that Monday, to the decimal.
-        week = self._week(client, auth_headers, project["id"], week_of=breakdown["week_start"])
-        assert week["expected"] == breakdown["contract_expected"]
-
-        # A project the contract does not govern carries no such figure.
-        side = _create_project(client, auth_headers, weekly_goal=5)
-        resp = client.get(f"/api/projects/{side['id']}/week/", headers=auth_headers)
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["contract_expected"] is None
 
     def test_zero_hour_term_week_has_no_expectation(self, client, auth_headers):
         # A term of 0 hours governs — the personal goal must not resurface
@@ -1409,6 +1337,35 @@ class TestLedgerAPI:
             week["balance_worked"],
             week["balance_expected_through"],
         )
+
+    def test_a_week_carries_the_adjusted_expectation_beside_the_nominal_goal(
+        self, client, auth_headers
+    ):
+        # The row reads what the week expects after holidays and absences — the
+        # week route's figure — while `effective_goal` stays the term's nominal
+        # hours, which is what the score and the coach want (the readers'
+        # decision).
+        project = _day_job(client, auth_headers)
+        wednesday = self._this_monday() + timedelta(days=2)
+        resp = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": wednesday.isoformat(), "type": "vacation"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        current = self._ledger(client, auth_headers, project["id"], weeks=1)["weeks"][0]
+
+        assert current["contract_expected"] == 32
+        assert current["effective_goal"] == 40
+        # And it is the week route's own figure for that Monday, to the decimal.
+        resp = client.get(
+            f"/api/projects/{project['id']}/contract/week",
+            params={"week_of": current["week_of"]},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["expected"] == current["contract_expected"]
 
     def test_weeks_out_of_range_is_422_naming_the_parameter(self, client, auth_headers):
         project = _day_job(client, auth_headers)

@@ -397,7 +397,7 @@
 	/*
 	  The body paints the sky's low haze so that anything still painting
 	  `bg-background` reads as ground. The sky itself — gradient, sun, clouds,
-	  hills — is the `.sky` layer below, rendered by app/SkyBackdrop.tsx.
+	  hills — is the `.sky` layer below, rendered by shared/ui/sky-backdrop.tsx.
 	*/
 	body {
 		@apply bg-background text-foreground antialiased;

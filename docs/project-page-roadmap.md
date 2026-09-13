@@ -32,8 +32,27 @@ checked in beside this file; the artifact link is a convenience.
 | 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | `cf090e1` the afternoon and the dusk |
 | 3a — Project page: the standing, the days, the ledger | `8e77327` the standing, the days and the ledger |
 | 3b — Project page: the register, time off, the drawer | `44868cf` the register, time off and the drawer |
-| 4 — Every other page on the new theme | feat(ui): every page in the afternoon |
-| 5 — The marketing page, docs, gates | — |
+| 4 — Every other page on the new theme | `6bd4a88` every page in the afternoon |
+| 5 — The marketing page, docs, gates | feat: the afternoon on the front page, the old week route gone, the docs to match |
+
+**Where it stands.** Every phase has shipped. The project page opens on the
+standing — a day job's balance as of today with the three figures that make it
+and what Sunday will bring, or a side project's pace against its goal — beside
+the open week, then that week's days and the earlier weeks down to the opening
+balance, the figures from `/contract/week` and the one ledger route and each
+week's +/− worked out on the page as the move between two closes. The
+rail holds the contract register or the goal, time off with its booking dialog,
+and the quiet facts. Every page, the marketing page last, is in the afternoon or
+the dusk, and `GET …/week/` is gone. The Follow-ups still hold the ledger's
+write side, vacation entitlement, focus scores over a range and the companion's
+week card; two API questions, the first week's Remaining and English holiday
+names; and what the later phases found and left: the Plan page's UTC week,
+Passkeys' endless Loading, the unnamed webhook delete button, the long nominal
+line, the standing's two states that only unit tests and a walk have seen, and
+the flow bars' height, which no E2E check pins. Phase 5 left the front page's
+faint nav pill at dusk, the badges' own colours, the em dash drawn as a rule and
+sky copy under 4.5:1 low in the viewport there too, and the Open list holds the
+status-bar style Phase 2 deferred.
 
 ---
 
@@ -1053,6 +1072,45 @@ HTTP contract, bugs that happened. Not class names.
   (the follow-ups that this closes: the balance ledger read side), the
   status table above.
 
+**Notes** — what the phase settled that the text above left open:
+
+- **`SkyBackdrop` moved to `shared/ui`** (`sky-backdrop.tsx`, on the barrel): a
+  page may not import from `app/`, and the marketing page wants the shell's sky.
+  `.homepage-root` paints no background, which would cover it.
+- **`HomePage.css` reads the theme through a few local variables** on
+  `.homepage-root` (`--hp-panel`, `--hp-ink`, `--hp-wash` …), so dusk has no
+  rules of its own, and the wall clock face's three hexes are gone. Surfaces are
+  panels, controls pills, the dashed separators the list hairline; the wordmark
+  and the titles are M PLUS Rounded 800; the heatmaps and bars take the app's
+  muted-to-leaf scale.
+- **The accent is the running beat and the primary button**: the pulse dot, the
+  editor's timer and status bar, the clock digits. Links are accent ink, the
+  eyebrows chips on the sky, and the mock's project dots sky, leaf and blossom.
+- **Text on the sky is ink, or ink at 80 % for secondary copy**, never the muted
+  tone: it scrolls over the purple band of the dusk sky. The page ends with
+  extra padding so the footer clears the hills, and "11:42 → 12:20" no longer
+  wraps in the daemon card.
+- **`/week/` went, but its helper's index half stayed.** The projects index
+  (`include=this_week`) read `_week_breakdown_from_beats` for `weekly_minutes`
+  and the goal, so `ProjectService._this_week_from_beats` returns those four
+  fields on the old rule: completed beats, the current week by server date.
+  `ProjectService` lost its `contracts` argument, which only the breakdown used;
+  `WeekExpectationReader` and `ContractService.expected_for_week` stay for the
+  Inbox's readers.
+- **The breakdown's tests that pinned a rule now read the ledger**: the goal
+  overrides (one-off, permanent, a null override clearing forward, the week they
+  key on) and the adjusted expectation beside the nominal goal, 32 h against 40
+  as `/contract/week` says. The rest went with the route, and the generated types
+  lost the path and both schemas.
+- **Not done here**: at dusk the nav pill is nearly the colour of the panels
+  scrolling under it, so its edge is faint; the shields.io badges keep their own
+  colours, the dark stars badge in the nav included; the hero subtitle's em dash
+  draws as a long rule in Zen Maru Gothic; text on the sky falls under 4.5:1
+  where it crosses the dusk sky's lowest band or the afternoon's hills, low in
+  the viewport (the 13 px surface detail line now takes full ink, which still
+  reaches only about 3.4:1 there); and Phase 2's
+  `apple-mobile-web-app-status-bar-style` question is still open.
+
 ---
 
 ## Follow-ups (not this iteration)
@@ -1064,7 +1122,29 @@ HTTP contract, bugs that happened. Not class names.
 - **Focus scores over a range** — the per-session mark is today-only
   because the endpoint takes one date.
 - **Companion week card** — unchanged; see `work-contracts-roadmap.md`.
+- **The first week's Remaining** — on the week a contract starts mid-week,
+  `/contract/week`'s `remaining` is expected minus every hour logged that week,
+  hours before `starts_on` included, which the balance does not count. An API
+  question Phase 3a left open.
+- **The standing's future-week and load-failure states** were verified by unit
+  tests and the Phase 4 walk only.
+- **Holiday names in English** — they come from the `holidays` package in the
+  region's language ("Weihnachten"); an English-names option is an API follow-up.
+- **The nominal line under Expected** grows long when several days are off.
+- **The Plan page works out the week in UTC.**
+- **Passkeys shows "Loading..." forever** for an account with no passkeys.
+- **The webhook delete button has no accessible name.**
+- **No E2E check pins the flow bars' height**, which jsdom cannot see.
+- **The front page's nav pill at dusk** is nearly the colour of the panels
+  scrolling under it, so its edge is faint.
+- **The shields.io badges keep their own colours**, the dark stars badge in the
+  nav included.
+- **The hero subtitle's em dash** draws as a long rule in Zen Maru Gothic.
+- **Text on the sky is under 4.5:1 low in the viewport**, over the dusk sky's
+  lowest band and the afternoon's hills.
 
 ## Open
 
 - Whether `sunset`'s users (if any) should get a third hour. Two ship.
+- `apple-mobile-web-app-status-bar-style`: it stays `black-translucent`, which
+  Phase 2 deferred to Phase 5 and Phase 5 did not decide.

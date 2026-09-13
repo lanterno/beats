@@ -65,6 +65,7 @@ vi.mock("@/widgets/sidebar", () => ({
 vi.mock("@/shared/ui", () => ({
 	CommandPalette: () => <div data-testid="command-palette" />,
 	FocusMode: () => <div data-testid="focus-mode" />,
+	SkyBackdrop: () => null,
 }));
 
 import { Layout } from "./Layout";

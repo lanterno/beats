@@ -48,7 +48,6 @@ from beats.domain.ports import (
     ProjectStore,
     TimerBeatStore,
     TimerProjectReader,
-    WeekExpectationReader,
 )
 from beats.domain.utils import local_date, normalize_tz
 
@@ -272,24 +271,11 @@ def _check_contract(project: Project) -> None:
 
 
 class ProjectService:
-    """Service for managing project operations and analytics.
+    """Service for managing project operations and analytics."""
 
-    `contracts` is the one read this service makes of a contract: what a
-    day job's week expects after holidays and absences, so the week
-    breakdown can carry that figure beside the nominal goal. Through the
-    narrow port rather than `ContractService` itself, so this service cannot
-    quietly start writing absences.
-    """
-
-    def __init__(
-        self,
-        project_repo: ProjectStore,
-        beat_repo: ProjectBeatReader,
-        contracts: WeekExpectationReader | None = None,
-    ):
+    def __init__(self, project_repo: ProjectStore, beat_repo: ProjectBeatReader):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
-        self.contracts = contracts
 
     async def create_project(self, project: Project) -> Project:
         """Create a new project."""
@@ -359,9 +345,10 @@ class ProjectService:
     # beats per-project and delegates. The list_projects route (after
     # FF.15) fetches every displayed project's beats in ONE Mongo find and
     # calls these helpers directly, sharing the same in-memory list across
-    # the three aggregations. The helpers MUST stay byte-for-byte
-    # equivalent to the original public-method bodies — the
-    # `*_matches_public_method` tests in test_domain.py guard the drift.
+    # the three aggregations. A helper with a public method MUST stay
+    # byte-for-byte equivalent to it — the `*_matches_public_method` tests
+    # in test_domain.py guard the drift. `_this_week_from_beats` has none:
+    # it is the index's alone.
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -370,104 +357,30 @@ class ProjectService:
             return None
         return max(b.end or b.start for b in beats)
 
-    async def get_week_breakdown(
-        self,
-        project_id: str,
-        weeks_ago: int = 0,
-        include_log_details: bool = False,
-    ) -> dict:
-        """Get time breakdown for a week.
-
-        Args:
-            project_id: The project ID.
-            weeks_ago: How many weeks back (0 = current week).
-            include_log_details: If True, include individual log entries.
-
-        Returns:
-            Dict with time per day and total hours — and `contract_expected`,
-            what the contract expects of the week after holidays and
-            absences on a day job it governs, None elsewhere. `effective_goal`
-            stays the term's nominal hours (the readers' decision); this is
-            the one figure beside it, so the history row can agree with the
-            week card to the decimal.
-        """
-        beats = await self.beat_repo.list_by_project(project_id)
-        project = await self.project_repo.get_by_id(project_id)
-        result = self._week_breakdown_from_beats(
-            beats, project, weeks_ago=weeks_ago, include_log_details=include_log_details
-        )
-        monday = date.fromisoformat(result["week_start"])
-        result["contract_expected"] = (
-            await self.contracts.expected_for_week(project, monday)
-            if self.contracts is not None
-            else None
-        )
-        return result
-
     @staticmethod
-    def _week_breakdown_from_beats(
-        beats: list[Beat],
-        project: Project | None,
-        weeks_ago: int = 0,
-        include_log_details: bool = False,
-    ) -> dict:
-        # Calculate week boundaries
-        today = date.today() - timedelta(weeks=weeks_ago)
-        start_of_week = today - timedelta(days=today.weekday())  # Monday
-        end_of_week = start_of_week + timedelta(days=6)  # Sunday
-
-        # Filter to completed beats in this week
-        week_beats = [
-            b for b in beats if b.end is not None and start_of_week <= b.start.date() <= end_of_week
-        ]
-
-        per_day_logs: dict[str, list] = defaultdict(list)
-        per_day_duration: dict[str, timedelta] = defaultdict(timedelta)
-
-        for beat in week_beats:
-            day_name = beat.start.strftime("%A")
-            per_day_duration[day_name] += beat.duration
-            if include_log_details:
-                per_day_logs[day_name].append(
-                    {
-                        "id": beat.id,
-                        "start": beat.start.isoformat(),
-                        "end": beat.end.isoformat() if beat.end else None,
-                        "duration": str(beat.duration),
-                    }
-                )
-
-        result = {}
-        total_duration = timedelta()
-        for i in range(7):
-            day_date = start_of_week + timedelta(days=i)
-            day_name = day_date.strftime("%A")
-            duration = per_day_duration.get(day_name, timedelta())
-            total_duration += duration
-            result[day_name] = (
-                per_day_logs.get(day_name, []) if include_log_details else str(duration)
-            )
-
-        result["total_hours"] = round(total_duration.total_seconds() / 3600, 2)
-        # Canonical Monday for this week, resolved server-side. The UI keys goal
-        # overrides off this value so the saved week_of always matches the week
-        # the server resolves against — recomputing the Monday client-side drifts
-        # across the week boundary whenever the client and server timezones land
-        # on different calendar days.
-        result["week_start"] = start_of_week.isoformat()
-
-        # Resolve effective goal for this week
-        if project:
-            eff_goal, eff_type = project.effective_goal(start_of_week)
-            result["effective_goal"] = eff_goal
-            result["effective_goal_type"] = eff_type.value if eff_type else None
-            # True iff a matching override is in effect for this week — lets the
-            # UI distinguish "override says no goal" (null + overridden=true,
-            # render as "No goal") from "no override and no project default"
-            # (null + overridden=false, render as "—").
-            result["effective_goal_overridden"] = project.goal_overridden(start_of_week)
-
-        return result
+    def _this_week_from_beats(beats: list[Beat], project: Project) -> dict:
+        """The index's `this_week` slots for one project: the minutes of its
+        completed beats that started in the current week, by the server's
+        date, and the goal `Project.effective_goal` resolves for that Monday
+        — with whether an override is what resolved it."""
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        sunday = monday + timedelta(days=6)
+        worked = sum(
+            (b.duration for b in beats if b.end is not None and monday <= b.start.date() <= sunday),
+            timedelta(),
+        )
+        goal, goal_type = project.effective_goal(monday)
+        return {
+            # Hours to the hundredth first, as the index has always counted them.
+            "weekly_minutes": round(worked.total_seconds() / 3600, 2) * 60,
+            "effective_goal": goal,
+            "effective_goal_type": goal_type.value if goal_type else None,
+            # True iff an override resolves for the week — lets the UI tell
+            # "override says no goal" (null + overridden) from "no override and
+            # no project default" (null + not overridden).
+            "effective_goal_overridden": project.goal_overridden(monday),
+        }
 
     async def get_monthly_totals(self, project_id: str) -> dict:
         """Get total time per month for a project.
@@ -676,8 +589,8 @@ class ContractService:
     async def expected_for_week(self, project: Project, week_of: date) -> float | None:
         """What the contract expects of the week starting `week_of` — the week
         route's `expected` on its own, for the readers that quote a figure
-        beside it: the `/week/` breakdown's history row, the Inbox's planning
-        line, the pacing card. None on anything but a day job with a
+        beside it: the Inbox's planning line, the pacing card, the
+        stale-project card. None on anything but a day job with a
         contract, and under the null rule (`week_expectation`).
 
         One absence read and one calendar build, over the week alone — the

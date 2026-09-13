@@ -40,7 +40,8 @@ api/src/
     ├── domain/
     │   ├── models.py            # Beat, Project (kind, Contract), Absence, WeeklyPlan, Webhook, …
     │   ├── services.py          # BeatService, ProjectService, TimerService, ContractService
-    │   ├── contracts.py         # Work-contract arithmetic: term in force, expected hours, balance
+    │   ├── contracts.py         # Work-contract arithmetic: term in force, expected hours, balance, closing balances
+    │   ├── ledger.py            # Pure assembly of a project's weeks for the ledger route
     │   ├── holidays.py          # The only importer of the `holidays` package: calendars, regions
     │   ├── analytics.py         # AnalyticsService (heatmap, rhythm, gaps)
     │   ├── intelligence/        # Score, digests, patterns, planning, focus, health
@@ -66,7 +67,7 @@ api/src/
         ├── dependencies.py      # FastAPI Depends() wiring
         ├── schemas.py           # Request/response Pydantic models
         └── routers/
-            ├── projects.py      # CRUD, timer start/stop, stats, contract, week, holidays
+            ├── projects.py      # CRUD, timer start/stop, stats, contract and its week, ledger, holidays
             ├── absences.py      # Absences under /api/projects/{id}
             ├── beats.py         # Session CRUD, filtering
             ├── timer.py         # Timer status
@@ -99,7 +100,7 @@ Pure business logic with no framework dependencies.
 - **WeeklyPlan** — Per-project hour targets for one week.
 - **Webhook** — A registered URL to receive `timer.start` / `timer.stop` events.
 
-Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions, `ContractService` reads a day job's week and running balance against its contract, holidays and absences.
+Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions, `ContractService` reads a day job's week and running balance against its contract, holidays and absences, and any project's ledger: its last N weeks, newest first, with the goal, the expectation and the balance at each week's close, assembled by the pure `domain/ledger.py`.
 
 ### Infrastructure Layer
 
@@ -140,10 +141,14 @@ When a timer starts or stops, `dispatch_webhook_event()` fires HTTP POSTs to all
 ui/client/
 ├── app/            # App shell, routing, providers
 ├── pages/          # Route-level components
+│   ├── homepage/   # Marketing page, on the sky
 │   ├── index/      # Dashboard (timer, feed, project list)
+│   ├── projects-index/ # Every project with its week
+│   ├── project-details/ # The standing, the days, the ledger; contract, time off
+│   ├── plan/       # Weekly plan (planned hours per project)
 │   ├── insights/   # Heatmap, rhythm, monthly retro, year review
-│   ├── project-details/
-│   ├── settings/   # Themes, webhooks, developer info
+│   ├── coach/      # Coach chat and memory
+│   ├── settings/   # The hour and density, integrations, webhooks
 │   └── not-found/
 ├── widgets/        # Complex composed UI (sidebar)
 ├── features/       # Cross-cutting features
@@ -152,6 +157,7 @@ ui/client/
 ├── entities/       # Domain data layers
 │   ├── session/    # Beat/session API, queries, types
 │   ├── project/    # Project API, queries, types
+│   ├── absence/    # Days off on a day-job contract
 │   ├── planning/   # Weekly plans (planned hours per project)
 │   ├── intelligence/ # Digests, score, patterns, focus, inbox
 │   ├── coach/      # Chat + brief
@@ -161,22 +167,21 @@ ui/client/
     ├── api/        # HTTP client (fetch wrapper)
     ├── lib/        # formatDuration, parseUtcIso, etc.
     ├── config/     # Constants
-    └── ui/         # TagInput, EmptyState, etc.
+    ├── session/    # Session port: the token and account scope lower layers read
+    └── ui/         # Panel, SkyBackdrop, Button, Dialog, etc.
 ```
 
 Each entity follows a `model/api/ui` structure. Data fetching uses TanStack Query with query key factories (e.g., `sessionKeys.all`, `sessionKeys.heatmap(year)`).
 
+### Project Page
+
+A project's page opens on the **standing**: for a day job, the balance as of today with the three figures that make it (brought forward, worked since the contract began, expected through yesterday) and what Sunday will bring; for a side project or freelance work, the pace against the goal. Beside it sits the open week — Expected, Worked, Remaining — and below come that week's days and the earlier weeks, newest first down to the opening balance, with a rule row wherever the terms changed. A rail holds the contract register (the terms and a step chart of hours per week, or the goal and its overrides), time off with the booking dialog, and a few quiet facts. Every week figure comes from two routes, `GET /api/projects/{id}/contract/week` and `GET /api/projects/{id}/ledger`; the page adds the sentence, the Sunday projection and the ledger's rows with their +/− (the move between two closes), as pure functions in `entities/project/model` (`standing.ts`, `ledger.ts`).
+
 ### Theming
 
-Five dark themes implemented via CSS custom properties on `:root[data-theme="..."]`:
+Two hours, picked in Settings: **Afternoon** (light, the default) and **Dusk** (dark). The tokens are CSS custom properties on `:root`, redefined under `:root[data-theme="dusk"]`, so every page follows the hour without rules of its own. Behind the app is a painted sky — `SkyBackdrop`, a viewport-fixed layer with a gradient, the sun, drifting clouds and three hills — and the content sits on `Panel`s: rounded, shadowed, no border. Two rounded typefaces, M PLUS Rounded 1c for the figures and Zen Maru Gothic for the text; one accent, sunlight, for today, the running timer and the primary action.
 
-- **Default** — Warm brown/amber
-- **Midnight** — Cool blue/slate
-- **Forest** — Green/dark
-- **Mono** — Pure grayscale
-- **Sunset** — Warm red/orange
-
-Three density levels (`compact`, `default`, `spacious`) adjust the root font size. Preferences stored in localStorage.
+Three density levels (`comfortable`, `compact`, `spacious`); compact and spacious set the root font size to 14 and 18 px. Both choices are stored in localStorage, and a script in `index.html` applies them before first paint, so a stored dusk does not flash the afternoon.
 
 ### Insights Pages
 
@@ -190,16 +195,16 @@ Three density levels (`compact`, `default`, `spacious`) adjust the root font siz
 
 ## Wall Clock (`/wall-clock`)
 
-**Stack:** ESP32, Rust (embedded), HTTP client
+**Stack:** ESP32, Arduino/C++ (PlatformIO), HTTP client, WS2812B LEDs + e-ink display
 
 A physical desk device with a button, status LED, and 7-segment energy meter. Communicates with the API:
 
 - **Button press** → `POST /api/projects/{id}/start` or `POST /api/projects/stop` (toggle)
-- **Status polling** → `GET /api/device/status` returns timer state, project color, daily progress, theme accent color
+- **Status polling** → `GET /api/device/status` returns timer state, project color, daily progress, an accent color
 - **Favorites** → `GET /api/device/favorites` for multi-project switching (double-press cycles)
 - **Heartbeat** → `POST /api/device/heartbeat` reports battery, WiFi RSSI, uptime
 
-The status LED shows the active project's color. The energy meter fills up based on daily hours tracked. Theme accent colors sync from the web UI.
+The status LED shows the active project's color. The energy meter fills up based on daily hours tracked. It and the pulse animation use a fixed accent (ember): the firmware sends no theme, and `THEME_ACCENTS` in `api/src/beats/api/routers/device.py` still names the five retired themes, not the web UI's two hours.
 
 ---
 
@@ -222,7 +227,7 @@ Integration tests use [Testcontainers](https://testcontainers.com/) to spin up a
 2. Sets `DB_DSN` and `DB_NAME` environment variables before any test module is imported
 3. Pydantic Settings picks up the container's connection string (env vars override `.env.test`)
 4. A session-scoped `test_client` fixture creates `TestClient(app)` inside a `with` block, triggering the FastAPI lifespan which connects PyMongo's async client to the container
-5. A class-scoped `clean_db` autouse fixture drops all collections between test classes (using sync pymongo to avoid event loop conflicts with the async client)
+5. A class-scoped `clean_db` autouse fixture empties every collection (`delete_many`) between test classes, keeping the indexes, including the TTL indexes the app builds at startup (using sync pymongo to avoid event loop conflicts with the async client)
 6. After all tests, the container is automatically stopped and removed
 
 **Two test modes:**
@@ -237,10 +242,10 @@ When `BEATS_TEST_ENV=1` (set by the compose test profile), testcontainers is ski
 **Key files:**
 
 - `api/src/conftest.py` — Container lifecycle hooks + fixtures
-- `api/src/test_api.py` — 266 integration tests, one class per router
-- `api/src/beats/test_domain.py` — 261 unit tests (models, validation, analytics)
+- `api/src/test_api.py` — 299 integration tests, one class per router
+- `api/src/beats/test_domain.py` — 277 unit tests (models, validation, analytics)
 
-Counts drift; the repo-root `CLAUDE.md` carries the current per-file
+Counts drift; `api/CLAUDE.md` carries the current per-file
 breakdown, and `pytest` is the authority over both.
 - `api/.env.test` — Fallback test config (overridden by testcontainers env vars)
 

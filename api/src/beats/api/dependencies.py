@@ -170,14 +170,9 @@ def get_contract_service(
 def get_project_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
-    contract_service: Annotated[ContractService, Depends(get_contract_service)],
 ) -> ProjectService:
-    """Get the project service with injected repositories. The contract
-    service is its `WeekExpectationReader`: the week breakdown asks it what
-    a governed week expects, and nothing more."""
-    return ProjectService(
-        project_repo=project_repo, beat_repo=beat_repo, contracts=contract_service
-    )
+    """Get the project service with injected repositories."""
+    return ProjectService(project_repo=project_repo, beat_repo=beat_repo)
 
 
 def get_analytics_service(

@@ -1,6 +1,6 @@
 # Beats UI
 
-React 19 SPA — Vite 7, TypeScript 5.9, TailwindCSS 4, pnpm.
+React 19 SPA — Vite 8, TypeScript 6, TailwindCSS 4, pnpm.
 
 ## Architecture
 
@@ -11,11 +11,11 @@ client/
 ├── app/           App.tsx (router + providers), Layout.tsx (authenticated
 │                  shell), session.ts (wires auth into the session port)
 ├── pages/         Route-level components — homepage, index, insights, coach,
-│                  plan, project-details, settings, not-found
+│                  plan, projects-index, project-details, settings, not-found
 ├── widgets/       Cross-page composite UI — sidebar (desktop) + mobile header
 ├── features/      User interactions — timer, auth
-├── entities/      Business objects — project, session, planning, coach,
-│                  intelligence, calendar, github
+├── entities/      Business objects — project, absence, session, planning,
+│                  coach, intelligence, calendar, github
 ├── shared/        No business logic — api client, lib helpers, ui primitives,
 │                  config, session port
 └── main.tsx       Entry point
@@ -63,9 +63,66 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 - **Linting**: Biome (replaces ESLint+Prettier) — tabs, line width 100. Covers
   `client/`, `e2e/` and the root config files; accessibility rules are on, with
   seven at `warn` pending per-component decisions (see `biome.json`).
-- **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives
+- **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives (see
+  Theme below)
 - **PWA**: vite-plugin-pwa with workbox runtime caching
 - **Node**: >=25.0.0
+
+## Theme
+
+Two hours: `afternoon` (light, the default) and `dusk`. `client/global.css` defines
+the tokens on `:root` and redefines them under `:root[data-theme="dusk"]`; they are
+the names every component already reads (`--card`, `--accent`, `--muted-foreground`
+…), as HSL triples so `hsl(var(--x) / .5)` works by hand, and `@theme` maps them to
+Tailwind colours. `shared/lib/useTheme.ts` owns the hour and the density: the
+storage keys, the `data-theme` / `data-density` attributes and `theme-color`; a
+stored value that is not one of the two hours reads as afternoon. The inline script
+at the top of `index.html` stamps both before first paint, so a stored dusk does not
+flash, and repeats the keys and the dusk sky's hex — change them in both places.
+
+- **The sky** is `SkyBackdrop` (`shared/ui/sky-backdrop.tsx`), rendered first by
+  `Layout` and by the marketing page: a `position: fixed` layer at z-index −1 with the
+  gradient, the sun, five drifting clouds and three hills, coloured by the `--sky-*`,
+  `--cloud*` and `--hill-*` tokens. It shows only while nothing between it and the
+  root paints a background or opens a stacking context, which is why `Layout`'s root
+  and `.homepage-root` do neither. Never `background-attachment: fixed` on `body`:
+  iOS Safari paints it black under a `backdrop-filter` overlay (the note in
+  `global.css`).
+- **`Panel`** (`shared/ui/panel.tsx`) is the one card: `rounded-[1.625rem] bg-card
+  shadow-soft`, no border, `p-6` unless `padding` says otherwise. Controls are pills,
+  separators inside a list are the hairline (`border-border`), highlights are washes
+  (`bg-secondary`). A wash vanishes on the bare sky, so a control there sits on the
+  card surface.
+- **The accent is sunlight** and marks today, the running timer and a page's primary
+  action. As text it is `text-accent-ink`, never the raw accent, which is under 2:1
+  on a panel by day; small text in a tone takes `--success-ink` or
+  `--destructive-ink`, and big figures and fills the tone itself. Vacation, sick,
+  holiday and other are the `tint-*` tokens.
+- **Fonts**, loaded from Google Fonts at the top of `global.css`: M PLUS Rounded 1c
+  (500 / 700 / 800) is `font-heading` and `font-mono` — the display figures and every
+  column of digits, whose numerals are one width, so no `tnum`. Zen Maru Gothic
+  (400 / 500 / 700) is `font-body`, everything read. Real code is `font-code`, since
+  `font-mono` is not a monospace.
+- Under `prefers-reduced-motion` nothing moves: the clouds stop, and every animation
+  and transition jumps to its end state.
+
+## The project page
+
+`pages/project-details` answers "where do I stand?" in its first screen
+(`docs/project-page-roadmap.md`). `ProjectDetails.tsx` owns the reads its panels
+share — `/contract/week` for the open week, the current week (the balance is pinned to
+today) and the next, the ledger, the sessions and the running timer — and the open
+week, which is the URL's `?week=`, so ‹ ›, a ledger row and a time-off entry all move
+one navigator; it also owns the booking dialog every "Book time off" opens. Under
+`ProjectHeader` the main column is `Standing` ("Where you stand": the balance and its
+proof, or a side project's pace, beside the open week), `WeekDays` ("Days") and
+`WeekLedger` ("Earlier weeks"); the rail holds `ContractRegister` (the contract with
+its step chart, or the goal), `TimeOff` on a day job, and `QuietFacts`. The layout
+queries the content column (`@container/content`), not the viewport, and the rail sits
+beside the column from 860 px of it. Every figure is the API's; the page's own
+arithmetic — the sentence, the Sunday projection, the ledger's rows and their +/− — is
+pure functions in `entities/project/model` (`standing.ts`, `ledger.ts`), a test per
+branch. Tests and E2E specs find the panels by their region names, never by class.
 
 ## Testing
 

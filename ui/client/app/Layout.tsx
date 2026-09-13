@@ -18,9 +18,8 @@ import {
 	useTheme,
 	useTimerNotification,
 } from "@/shared/lib";
-import { CommandPalette, FocusMode } from "@/shared/ui";
+import { CommandPalette, FocusMode, SkyBackdrop } from "@/shared/ui";
 import { MobileHeader, Sidebar } from "@/widgets/sidebar";
-import { SkyBackdrop } from "./SkyBackdrop";
 
 export function Layout() {
 	const { data: projects } = useProjects();

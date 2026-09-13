@@ -29,7 +29,7 @@ A full-stack system across six surfaces — Python API, React SPA, Go daemon, Fl
 | **Companion** | Flutter (macOS/iOS/Android/Linux/Windows), HealthKit + Health Connect bridges |
 | **VS Code extension** | TypeScript, sends `{repo, branch, language}` heartbeats to the daemon |
 | **Wall Clock** | ESP32 firmware (Arduino/C++) with WS2812B LED + e-ink display |
-| **Infrastructure** | Docker Compose on the home network (nginx + MongoDB); Terraform/GCP kept for reference |
+| **Infrastructure** | Two live deployments: Docker Compose on the home network (nginx + MongoDB), and Cloud Run + Firebase Hosting on Google Cloud (Terraform) |
 
 ## Quick Start
 
@@ -58,7 +58,7 @@ integrations/vscode-beats/    VS Code extension (workspace heartbeats + status b
 wall-clock/                   ESP32 firmware + docs
 compose.home.yml              Home-network deployment (Mongo + API + SPA on one port)
 justfile                      Verbs the home.space stack calls
-terraform/                    GCP infrastructure-as-code (previous deployment)
+terraform/                    GCP infrastructure-as-code (lifepete.com, also live)
 docs/                         Design notes
 ```
 
@@ -102,6 +102,7 @@ The Flutter app and VS Code extension are shipped in this repo:
 | Document | What it covers |
 |----------|---------------|
 | [Work Contracts Roadmap](docs/work-contracts-roadmap.md) | Day-job projects with a contract — percentage of a full-time basis, regional holidays, absences, and a running overtime balance; the decisions, the arithmetic, and the phases |
+| [Project Page Roadmap](docs/project-page-roadmap.md) | The project page rebuilt around where you stand, the week ledger route behind it, and the whole app moved into the afternoon and the dusk; the decisions, the arithmetic, the theme, and the phases |
 | [Companion Roadmap](docs/companion-roadmap.md) | What's left for the companion — native widgets, Apple Watch, server push |
 | [Pete macOS Roadmap](docs/pete-macos-roadmap.md) | The Mac-only ambition — dock badge, Focus auto-engage, Spotlight + Shortcuts, Live Activities, Apple Intelligence. All of it needs a Mac; none is built. |
 | [Flutter Companion](docs/flutter-companion.md) | Companion design notes, API contract, and the remaining HealthKit / Health Connect / background-sync work (blocked on real devices) |
@@ -158,9 +159,13 @@ SPA and the API share that single origin deliberately — see
 The stack starts and stops it through `services.toml` at the stack root, which
 names the verbs above and knows nothing else about beats.
 
-`terraform/` and `cloudbuild.yaml` describe the previous Google Cloud
-deployment (Cloud Run + Firebase Hosting + Cloud Build). They are kept for
-reference and are not what runs.
+A second deployment is also live: **lifepete.com** on Google Cloud. The API runs
+on Cloud Run, built by Cloud Build (`api/cloudbuild.yaml`) with `terraform/`
+owning its config; the SPA is on Firebase Hosting, shipped by the `deploy` job in
+`.github/workflows/ui.yml`. It splits the SPA and the API across two origins
+joined by CORS, so nothing local resembles it. Read Infrastructure in
+[CLAUDE.md](CLAUDE.md) before removing anything that looks like it belongs to
+only one deployment.
 
 ## Sign-in
 
@@ -190,7 +195,7 @@ working" rather than "nobody can sign in".
 Off unless `BEATS_SSO_ENABLED` is set — see `api/.env.example`. Run
 `just sso-doctor` when it misbehaves.
 
-Note that WebAuthn is origin-bound: a passkey registered against the old
+Note that WebAuthn is origin-bound: a passkey registered against the
 `lifepete.com` origin will not work against `beats.home.space`. Linking a
 home.space identity is the way an old account gets back in.
 
@@ -199,12 +204,16 @@ home.space identity is the way an old account gets back in.
 - Start/stop timer per project with weekly goals (targets and caps)
 - Day-job contracts: a project kind, hours as a percentage of a full-time basis, the
   region's public holidays, absences, and a running overtime balance
+- A project page that opens on where you stand — the balance as of today and what the
+  rest of the week needs — over the week's days and a ledger of earlier weeks that adds
+  up to it
 - Contribution heatmap, daily rhythm chart, streak tracking
 - Session timeline with notes and tags, the tags derived server-side from
   daemon flow signals rather than typed by hand
 - Monthly retrospectives and year-in-review
 - Full JSON backup/restore, CSV export, webhooks
-- Five dark themes, three density levels
+- Two hours, afternoon and dusk — a painted sky over green hills behind the app and
+  the front page — and three density levels
 - WebAuthn passkey login, plus optional home.space SSO
 - ESP32 wall clock with ambient daily progress display
 - PWA-ready with offline timer support

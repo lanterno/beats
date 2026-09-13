@@ -53,7 +53,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 893 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 887 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -85,7 +85,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 893-test suite takes about 30 seconds.
+  the full 887-test suite takes about 30 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -102,7 +102,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 558 of them across 67 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 583 of them across 70 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 30 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
   MongoDB behind it; the dev server starts itself. A `setup` project
@@ -233,9 +233,24 @@ nothing.
   region is the employer's, whatever the timezone. `GET /{id}/ledger` is the project page's
   one read for every week figure — `domain/ledger.py` assembles N weeks from one worked map,
   one absence list and one holiday calendar, and `/contract/week` carries the three terms
-  under its balance (`balance_opening + balance_worked - balance_expected_through`). The
-  decisions are in [docs/work-contracts-roadmap.md](docs/work-contracts-roadmap.md) and
+  under its balance (`balance_opening + balance_worked - balance_expected_through`, equal
+  to `balance` within 0.01, since each term is rounded on its own). A week's closing balance
+  is the Monday-morning figure, read off one running total (`closing_balances`); on the week
+  a contract starts or ends mid-week `worked` counts hours the balance does not, so the
+  page's +/− is the move between two closes. The decisions are in
+  [docs/work-contracts-roadmap.md](docs/work-contracts-roadmap.md) and
   [docs/project-page-roadmap.md](docs/project-page-roadmap.md).
+- Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
+  (`:root[data-theme="dusk"]`), picked in Settings beside the density. `useTheme.ts` owns the
+  storage keys, and a stored value that is neither hour reads as afternoon. Behind the app and
+  the marketing page is the sky — `SkyBackdrop` (`ui/client/shared/ui/sky-backdrop.tsx`: gradient, sun, clouds,
+  hills), a fixed layer at z-index −1, so nothing between it and the root may paint a
+  background. Surfaces are `Panel` (rounded, the panel shadow, no border) and controls are
+  pills. Two rounded faces: M PLUS Rounded 1c for display figures and every column of digits
+  (`font-heading`, `font-mono`), Zen Maru Gothic for everything read (`font-body`); real code
+  is `font-code`. A script in `ui/index.html` stamps the stored hour and density before first
+  paint, so a stored dusk does not flash the afternoon; it repeats the keys and the dusk
+  sky's hex, so a change to either is made in both places.
 
 ## Daemon CLI
 
@@ -320,7 +335,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week`, `/{id}/holidays`, `/{id}/absences` |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences` |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
