@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { CredentialInfo } from "@/features/auth";
 import { describeError } from "@/shared/api";
+import { Panel } from "@/shared/ui";
+import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
 export function PasskeysSection() {
 	const [credentials, setCredentials] = useState<CredentialInfo[]>([]);
@@ -51,45 +53,36 @@ export function PasskeysSection() {
 
 	return (
 		<section className="mb-8">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Fingerprint className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<Fingerprint className={HEADING_ICON} />
 				Passkeys
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
-				<p className="text-xs text-muted-foreground">
+			<Panel padding="p-5" className="space-y-3">
+				<p className={LEAD}>
 					Passkeys let you sign in securely without a password. You must keep at least one
 					registered.
 				</p>
 
-				{credentials.length === 0 && !loadError && (
-					<p className="text-xs text-muted-foreground/60 italic">Loading...</p>
-				)}
+				{credentials.length === 0 && !loadError && <p className={LEAD}>Loading...</p>}
 
 				{loadError && (
 					<div className="flex items-center gap-2">
-						<p className="text-xs text-destructive">Failed to load passkeys.</p>
-						<button
-							type="button"
-							onClick={loadCredentials}
-							className="text-xs text-accent-ink hover:text-accent-ink/80 transition-colors"
-						>
+						<p className="text-[12.5px] text-destructive-ink">Failed to load passkeys.</p>
+						<button type="button" onClick={loadCredentials} className={LINKISH}>
 							Retry
 						</button>
 					</div>
 				)}
 
 				{credentials.length > 0 && (
-					<div className="space-y-1.5">
+					<div className={LIST}>
 						{credentials.map((cred) => (
-							<div
-								key={cred.id}
-								className="flex items-center gap-2 bg-secondary/30 rounded px-2.5 py-1.5"
-							>
-								<Fingerprint className="w-3.5 h-3.5 text-accent-ink/60 shrink-0" />
-								<span className="text-xs text-foreground font-medium truncate flex-1">
+							<div key={cred.id} className={ROW}>
+								<Fingerprint className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+								<span className="text-foreground font-bold truncate flex-1">
 									{cred.device_name || "Unnamed passkey"}
 								</span>
-								<span className="text-[10px] text-muted-foreground shrink-0">
+								<span className="text-[11.5px] font-medium text-muted-foreground shrink-0">
 									{formatDate(cred.created_at)}
 								</span>
 								{credentials.length > 1 && (
@@ -97,7 +90,7 @@ export function PasskeysSection() {
 										type="button"
 										onClick={() => handleDelete(cred.id)}
 										disabled={deleting === cred.id}
-										className="p-1 text-muted-foreground/40 hover:text-destructive transition-colors shrink-0 disabled:opacity-40"
+										className={REMOVE}
 										title="Remove passkey"
 									>
 										<Trash2 className="w-3 h-3" />
@@ -107,7 +100,7 @@ export function PasskeysSection() {
 						))}
 					</div>
 				)}
-			</div>
+			</Panel>
 		</section>
 	);
 }

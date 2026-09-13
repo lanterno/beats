@@ -14,6 +14,7 @@
  */
 import { useState } from "react";
 import { downloadFile, shortRepoPath } from "@/shared/lib";
+import { SKY_CHIP } from "./styles";
 
 export interface FlowFilterChipsProps {
 	repo?: string;
@@ -33,7 +34,7 @@ export function FlowFilterChips({
 	onClearBundleId,
 }: FlowFilterChipsProps) {
 	return (
-		<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+		<div className="flex flex-wrap items-center gap-2 text-[11px]">
 			{repo && (
 				<FilterPill
 					label="repo"
@@ -70,7 +71,7 @@ export function FlowFilterChips({
 						`beats_flow_windows_${date}.csv`,
 					);
 				}}
-				className="text-accent-ink hover:underline tabular-nums"
+				className={`${SKY_CHIP} tabular-nums`}
 				title="Download the visible flow-window slice as CSV"
 			>
 				↓ csv
@@ -105,7 +106,7 @@ function CopyLinkButton() {
 					// to copying the address bar.
 				}
 			}}
-			className="text-accent-ink hover:underline tabular-nums"
+			className={`${SKY_CHIP} tabular-nums`}
 			title="Copy this filtered view's URL to the clipboard"
 		>
 			{justCopied ? "✓ copied" : "🔗 copy link"}
@@ -153,15 +154,15 @@ function FilterPill({
 	clearLabel: string;
 }) {
 	return (
-		<span className="flex items-center gap-2">
+		<span className="inline-flex items-center gap-2 rounded-full bg-card shadow-soft pl-3 pr-1 py-1 font-medium text-muted-foreground">
 			<span>Filtered to {label}</span>
-			<span className="text-foreground/80 font-mono" title={title}>
+			<span className="text-foreground font-bold font-code" title={title}>
 				{value}
 			</span>
 			<button
 				type="button"
 				onClick={onClear}
-				className="text-accent-ink hover:underline tabular-nums"
+				className="rounded-full bg-secondary px-2 py-0.5 font-bold text-foreground hover:bg-sidebar-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 				aria-label={clearLabel}
 			>
 				clear

@@ -72,7 +72,7 @@ describe("ProjectGitHubBadge", () => {
 		expect(screen.getByRole("button", { name: /Link a repo/ })).toBeInTheDocument();
 	});
 
-	it("suppresses the dashed 'Connect GitHub' CTA while the status query is loading for a project with a repo", () => {
+	it("suppresses the 'Connect GitHub' CTA while the status query is loading for a project with a repo", () => {
 		// Hard reload on a project with a linked repo + OAuth connected:
 		// status is undefined for a tick. The pre-FF.2 badge flashed
 		// "Connect GitHub" before flipping to the link. Now it shows a

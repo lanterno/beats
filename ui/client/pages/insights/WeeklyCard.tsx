@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { useStreaks, useThisWeekSessions } from "@/entities/session";
 import { formatDuration, getWeekRange, parseUtcIso } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { LABEL, SKY_BUTTON } from "./styles";
 
 export function WeeklyCard() {
 	const { data: projects } = useProjects();
@@ -34,7 +36,7 @@ export function WeeklyCard() {
 				id,
 				minutes,
 				name: projectMap.get(id)?.name ?? "Unknown",
-				color: projectMap.get(id)?.color ?? "#888",
+				color: projectMap.get(id)?.color ?? "var(--color-muted-foreground)",
 			}));
 
 		// Day breakdown for mini chart
@@ -99,24 +101,22 @@ export function WeeklyCard() {
 	return (
 		<div className="space-y-3">
 			{/* The card */}
-			<div className="rounded-xl border border-border/80 bg-card shadow-soft p-6 max-w-sm mx-auto">
+			<Panel className="max-w-sm mx-auto">
 				{/* Header */}
 				<div className="text-center mb-4">
-					<p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground mb-0.5">
-						Weekly Summary
-					</p>
-					<p className="text-xs text-muted-foreground/70">{weekLabel}</p>
+					<p className={`${LABEL} mb-0.5`}>Weekly Summary</p>
+					<p className="text-xs font-medium text-muted-foreground">{weekLabel}</p>
 				</div>
 
 				{/* Big number */}
 				<div className="text-center mb-4">
-					<p className="font-heading text-3xl font-bold text-accent-ink tabular-nums">
+					<p className="font-heading text-3xl font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
 						{formatDuration(stats.totalMinutes)}
 					</p>
-					<p className="text-xs text-muted-foreground mt-0.5">
+					<p className="text-xs font-medium text-muted-foreground mt-0.5">
 						{stats.sessionCount} session{stats.sessionCount !== 1 ? "s" : ""}
 						{streaks && streaks.current > 0 && (
-							<span className="ml-2 text-accent-ink/80">{streaks.current}-day streak</span>
+							<span className="ml-2 text-foreground font-bold">{streaks.current}-day streak</span>
 						)}
 					</p>
 				</div>
@@ -126,14 +126,15 @@ export function WeeklyCard() {
 					{stats.dayMinutes.map((minutes, i) => (
 						<div key={i} className="flex flex-col items-center gap-0.5">
 							<div
-								className="w-5 rounded-sm transition-all"
+								className="w-5 rounded-t-[5px] rounded-b-[2px] transition-all"
 								style={{
 									height: `${Math.max((minutes / maxDayMinutes) * 40, 2)}px`,
-									backgroundColor: minutes > 0 ? "hsl(var(--accent))" : "hsl(var(--muted))",
-									opacity: minutes > 0 ? 0.8 : 0.3,
+									backgroundColor: minutes > 0 ? "hsl(var(--success) / 0.7)" : "hsl(var(--muted))",
 								}}
 							/>
-							<span className="text-[8px] text-muted-foreground/60">{dayLabels[i]}</span>
+							<span className="text-[9.5px] font-bold font-mono text-muted-foreground">
+								{dayLabels[i]}
+							</span>
 						</div>
 					))}
 				</div>
@@ -147,8 +148,10 @@ export function WeeklyCard() {
 									className="w-2 h-2 rounded-full shrink-0"
 									style={{ backgroundColor: p.color }}
 								/>
-								<span className="text-xs text-foreground truncate flex-1">{p.name}</span>
-								<span className="text-xs font-medium tabular-nums text-foreground">
+								<span className="text-xs font-medium text-foreground truncate flex-1">
+									{p.name}
+								</span>
+								<span className="text-xs font-bold font-mono tabular-nums text-foreground">
 									{formatDuration(p.minutes)}
 								</span>
 							</div>
@@ -158,10 +161,10 @@ export function WeeklyCard() {
 
 				{/* Goals */}
 				{stats.goalsTotal > 0 && (
-					<div className="text-center pt-2 border-t border-border/30">
-						<p className="text-xs text-muted-foreground">
+					<div className="text-center pt-2.5 border-t border-border">
+						<p className="text-xs font-medium text-muted-foreground">
 							Goals:{" "}
-							<span className="text-accent-ink font-medium">
+							<span className="text-foreground font-bold">
 								{stats.goalsMetCount}/{stats.goalsTotal}
 							</span>{" "}
 							met
@@ -171,20 +174,18 @@ export function WeeklyCard() {
 
 				{/* Branding */}
 				<div className="text-center mt-3">
-					<p className="text-[9px] text-muted-foreground/40 tracking-widest uppercase">Beats</p>
+					<p className="text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
+						Beats
+					</p>
 				</div>
-			</div>
+			</Panel>
 
 			{/* Actions */}
 			<div className="flex justify-center gap-2">
-				<button
-					type="button"
-					onClick={handleCopy}
-					className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
-				>
+				<button type="button" onClick={handleCopy} className={SKY_BUTTON}>
 					{isCopied ? (
 						<>
-							<Check className="w-3.5 h-3.5 text-accent-ink" /> Copied
+							<Check className="w-3.5 h-3.5 text-success" /> Copied
 						</>
 					) : (
 						<>

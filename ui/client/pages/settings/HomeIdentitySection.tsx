@@ -3,6 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { SSOConfig, SSOLinkInfo } from "@/features/auth";
 import { describeError } from "@/shared/api";
+import { cn } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { HEADING, HEADING_ICON, LEAD, LINKISH } from "./styles";
 
 export function HomeIdentitySection() {
 	const [sso, setSso] = useState<SSOConfig | null>(null);
@@ -66,50 +69,45 @@ export function HomeIdentitySection() {
 
 	return (
 		<section className="mb-8">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<KeyRound className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<KeyRound className={HEADING_ICON} />
 				{sso.provider_name} identity
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
-				<p className="text-xs text-muted-foreground">
+			<Panel padding="p-5" className="space-y-3">
+				<p className={LEAD}>
 					Link your {sso.provider_name} identity to sign in here with it, alongside your passkeys.
 					Linking never replaces them — either way in keeps working.
 				</p>
 
 				{link?.linked ? (
 					<>
-						<div className="flex items-center gap-2 bg-secondary/30 rounded px-2.5 py-1.5">
-							<KeyRound className="w-3.5 h-3.5 text-accent-ink/60 shrink-0" />
-							<span className="text-xs text-foreground font-medium truncate flex-1">
+						<div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2">
+							<KeyRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+							<span className="text-[12.5px] text-foreground font-bold truncate flex-1">
 								{link.holder_name || "Linked device"}
 							</span>
 							{link.roles.length > 0 && (
-								<span className="text-[10px] text-muted-foreground shrink-0">
+								<span className="text-[11px] text-muted-foreground shrink-0">
 									{link.roles.join(", ")}
 								</span>
 							)}
 						</div>
-						<p className="text-[10px] text-muted-foreground/60 font-mono break-all">{link.did}</p>
+						<p className="text-[11px] text-muted-foreground font-code break-all">{link.did}</p>
 						<button
 							type="button"
 							onClick={handleUnlink}
 							disabled={busy}
-							className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+							className={cn(LINKISH, "text-muted-foreground hover:text-destructive-ink")}
 						>
 							{busy ? "Working..." : "Unlink"}
 						</button>
 					</>
 				) : (
-					<button
-						type="button"
-						onClick={handleLink}
-						disabled={busy}
-						className="text-xs text-accent-ink hover:text-accent-ink/80 transition-colors disabled:opacity-40"
-					>
+					<button type="button" onClick={handleLink} disabled={busy} className={LINKISH}>
 						{busy ? "Linking..." : `Link my ${sso.provider_name} identity`}
 					</button>
 				)}
-			</div>
+			</Panel>
 		</section>
 	);
 }

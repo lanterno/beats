@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { useDailyRhythm } from "@/entities/session";
 import { cn } from "@/shared/lib";
-import { EmptyState, Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui";
+import { EmptyState, Panel, Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui";
+import { LABEL, SEG, SEG_BUTTON, SEG_OFF, SEG_ON } from "./styles";
 
 type Period = "week" | "month" | "all";
 
@@ -37,23 +38,17 @@ export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
 	const hasData = slots.some((s) => s.minutes > 0);
 
 	return (
-		<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
+		<Panel padding="px-6 py-[22px]">
 			{/* Header */}
-			<div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40">
-				<span className="text-sm font-medium text-foreground">Daily Rhythm</span>
-				<div className="flex rounded-md border border-border overflow-hidden">
+			<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+				<span className={LABEL}>Daily Rhythm</span>
+				<div className={SEG}>
 					{(["week", "month", "all"] as Period[]).map((p) => (
 						<button
 							type="button"
 							key={p}
 							onClick={() => setPeriod(p)}
-							className={cn(
-								"px-2.5 py-1 text-xs transition-colors",
-								p !== "week" && "border-l border-border",
-								period === p
-									? "bg-accent text-accent-foreground"
-									: "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-							)}
+							className={cn(SEG_BUTTON, period === p ? SEG_ON : SEG_OFF)}
 						>
 							{PERIOD_LABELS[p]}
 						</button>
@@ -62,7 +57,7 @@ export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
 			</div>
 
 			{/* Chart */}
-			<div className="px-4 py-4">
+			<div className="mt-4">
 				{isLoading ? (
 					<div className="h-28 flex items-center justify-center text-muted-foreground text-xs">
 						Loading...
@@ -80,11 +75,11 @@ export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
 								return (
 									<Tooltip key={slot.slot}>
 										<TooltipTrigger asChild>
-											<div className="flex-1 flex items-end justify-center cursor-default">
+											<div className="flex-1 h-full flex items-end justify-center cursor-default">
 												<div
 													className={cn(
-														"w-full rounded-t-sm transition-all",
-														slot.minutes > 0 ? "bg-accent/60 hover:bg-accent/80" : "bg-transparent",
+														"w-full rounded-t-[3px] transition-all",
+														slot.minutes > 0 ? "bg-success/55 hover:bg-success" : "bg-transparent",
 													)}
 													style={{ height: `${height}%` }}
 												/>
@@ -113,7 +108,9 @@ export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
 								return (
 									<div key={i} className="flex-1 text-center">
 										{isLabeled && (
-											<span className="text-[9px] tabular-nums text-muted-foreground">{hour}</span>
+											<span className="text-[9.5px] font-bold font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+												{hour}
+											</span>
 										)}
 									</div>
 								);
@@ -122,6 +119,6 @@ export function DailyRhythmChart({ projectId, tag }: DailyRhythmChartProps) {
 					</div>
 				)}
 			</div>
-		</div>
+		</Panel>
 	);
 }

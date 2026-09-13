@@ -10,15 +10,17 @@ export function CodeBlock({ label, code }: { label: string; code: string }) {
 	};
 	return (
 		<div>
-			<p className="text-[10px] text-muted-foreground/60 mb-0.5">{label}</p>
+			<p className="text-[11px] font-medium text-muted-foreground mb-1">{label}</p>
 			<button
 				type="button"
 				onClick={handleCopy}
-				className="w-full text-left text-[11px] font-code text-foreground/80 bg-secondary/40 rounded px-2.5 py-1.5 overflow-x-auto cursor-pointer hover:bg-secondary/60 transition-colors whitespace-nowrap"
+				className="w-full text-left text-[11.5px] font-code text-foreground bg-secondary rounded-xl px-3 py-2 overflow-x-auto cursor-pointer hover:bg-sidebar-accent transition-colors whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 				title="Click to copy"
 			>
 				{code}
-				{copied && <span className="ml-2 text-accent-ink text-[10px]">copied!</span>}
+				{copied && (
+					<span className="ml-2 font-body font-bold text-foreground text-[10.5px]">copied!</span>
+				)}
 			</button>
 		</div>
 	);

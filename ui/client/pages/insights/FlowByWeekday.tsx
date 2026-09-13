@@ -14,6 +14,8 @@
 import { useMemo } from "react";
 import { useFlowWindowsLastDays } from "@/entities/session";
 import { aggregateFlowByWeekday } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { FOOTNOTE, LABEL, META } from "./styles";
 
 const DAYS = 28;
 const MIN_WINDOWS_TO_RENDER = 50; // ~50 minutes across 4 weeks — below that, weekday means are noise
@@ -61,10 +63,10 @@ export function FlowByWeekday({
 	const peakCount = byWeekday.get(DISPLAY_ORDER[peakIdx])?.count ?? 0;
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Flow by weekday</p>
-				<p className="text-[11px] text-muted-foreground">last {DAYS} days · ISO week</p>
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Flow by weekday</p>
+				<p className={META}>last {DAYS} days · ISO week</p>
 			</div>
 
 			{/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here. */}
@@ -77,11 +79,11 @@ export function FlowByWeekday({
 					const cell = byWeekday.get(dayIdx);
 					const isPeak = displayIdx === peakIdx;
 					return (
-						<div key={dayIdx} className="flex-1 flex flex-col items-center gap-1.5">
+						<div key={dayIdx} className="flex-1 self-stretch flex flex-col items-center gap-1.5">
 							<div className="relative w-full flex-1 flex items-end">
 								<div
-									className={`w-full rounded-sm transition-all ${
-										!cell ? "bg-secondary/40" : isPeak ? "bg-accent" : "bg-accent/55"
+									className={`w-full rounded-t-md rounded-b-[3px] transition-all ${
+										!cell ? "bg-muted" : isPeak ? "bg-success" : "bg-success/45"
 									}`}
 									style={{
 										height: cell ? `${Math.max(4, cell.avg * 100)}%` : "0%",
@@ -95,7 +97,7 @@ export function FlowByWeekday({
 							</div>
 							<div
 								className={`text-[10px] tabular-nums ${
-									isPeak ? "text-accent-ink font-medium" : "text-muted-foreground"
+									isPeak ? "text-foreground font-bold" : "text-muted-foreground font-medium"
 								}`}
 							>
 								{LABELS[displayIdx]}
@@ -106,11 +108,12 @@ export function FlowByWeekday({
 			</div>
 
 			{peakCount > 0 && (
-				<p className="text-[10px] text-muted-foreground border-t border-border/40 pt-2">
+				<p className={FOOTNOTE}>
 					Best weekday over the last {DAYS} days:{" "}
-					<span className="text-foreground">{peakLabel}</span> at {Math.round(peakAvg * 100)}/100.
+					<span className="text-foreground font-bold">{peakLabel}</span> at{" "}
+					{Math.round(peakAvg * 100)}/100.
 				</p>
 			)}
-		</div>
+		</Panel>
 	);
 }

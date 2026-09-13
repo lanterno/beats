@@ -31,8 +31,8 @@ checked in beside this file; the artifact link is a convenience.
 | 1 — API: the ledger route and the balance proof | `59bb011` the week ledger route and the balance proof |
 | 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | `cf090e1` the afternoon and the dusk |
 | 3a — Project page: the standing, the days, the ledger | `8e77327` the standing, the days and the ledger |
-| 3b — Project page: the register, time off, the drawer | feat(ui): the register, time off and the drawer |
-| 4 — Every other page on the new theme | — |
+| 3b — Project page: the register, time off, the drawer | `44868cf` the register, time off and the drawer |
+| 4 — Every other page on the new theme | feat(ui): every page in the afternoon |
 | 5 — The marketing page, docs, gates | — |
 
 ---
@@ -911,6 +911,135 @@ HTTP contract, bugs that happened. Not class names.
   tokens. Layout and behaviour unchanged.
 - Gate: the same live-browser walk as Phase 2, both hours, both widths;
   the full Playwright suite.
+
+**Notes** — the deliberate exceptions, and what the integration sweep settled:
+
+- **Hairlines stay where they separate content**: list rows (inbox, pulse
+  list, activity, digest breakdown, devices, passkeys, webhooks), panel
+  footers and footnotes, the two blocks in Data Export and Developer, the
+  button rows under Signal Privacy and in the memory dialog, the rule inside
+  a coach message with tool calls, the auth modal's "or" line and footer,
+  the timer card's section rules, and the project form's contract block and
+  Advanced disclosure. Every other border is gone.
+- **The accent where it means something**: today (its label and column, the
+  This week bar, the heatmap's today ring, FlowToday's latest point), the
+  running timer (Stop, the Running chip), one primary action a page
+  (Generate latest, Coach Send, the auth modal's main button, Save on the
+  session form), links and the pinned star in accent ink, and the pressed
+  option of a `.seg` — Settings' Theme and Density, the insights period
+  control, and the dashboard week panel's view toggle, which the sweep
+  moved from a card lift onto the accent to match the mockup. Totals, big
+  figures, tags, heading icons and the empty states' New project are ink or
+  the wash.
+- **Selected without the accent where the control is not a `.seg`**: tabs,
+  category and brief-history chips, the flow filter rows and the project
+  form's option cards (Kind, Goal type, Schedule) sit on the heavier wash in
+  ink; the native radio still marks the choice.
+- **Colour that carries meaning stays**: leaf for good scores, high focus and
+  chart data marks (as the ledger's day cells); persimmon for low scores, low
+  focus, high-severity inbox items (by icon colour only), distraction bars
+  and ProjectHealth's alert rows; up/down deltas success/destructive; the
+  digest score chip success, ink or destructive. Destructive red fills only
+  actions that delete for good; elsewhere remove turns red on hover. Coach
+  usage bars are the sky token — leaf would call spending the budget good.
+  Project colours are user data; the week panel's entries are a wash in the
+  project's colour with its dot, not a coloured left border.
+- **On the bare sky, the card surface, not the wash** (a wash vanishes
+  there): the search field and Quick log chip, the tag select, flow filter
+  chips, clear buttons, breadcrumb and nav, Copy summary, and the project
+  header's GitHub chip. Section headings on the sky are the small label in
+  ink; page subtitles (Plan, Settings) and the project header's description
+  are ink at 90 %.
+  The year page's poster and the coach conversation and input are Panels,
+  because muted text on the sky was too faint.
+- **`NotFound` and `ErrorBoundary` keep `bg-background`**: they render
+  outside Layout, with no sky behind them.
+- **`AuthModal` is restyled but still hand-rolled**: moving it onto `Dialog`
+  would change its Escape and backdrop behaviour mid-sign-in. `CoachMemoryDialog` is on
+  `Dialog`; `NewProjectDialog` already was.
+- **Class strings are repeated per page**: `pages/insights/styles.ts` and
+  `pages/settings/styles.ts` beside `project-details/styles.ts`, so the label,
+  link, nav and chip strings now exist three times; a candidate for
+  `shared/ui`. `SparkDot` draws the sparklines' endpoint, since a plain SVG
+  circle stretches to an oval with the chart.
+- **Narrow screens**: below `sm` the week grid is a list of day rows, and
+  session durations stay on one line; on the year page the month value labels hide below `sm` (the
+  figures remain in the rankings) and "2516h 38.74m" still breaks onto two
+  lines. The session delete button now shows on phones and hides until hover
+  only on devices that hover.
+- **Markup unchanged**: card titles are still `p`/`span`, not headings; the
+  pattern cards' emoji render as boxes (no emoji font), as before.
+- **Bugs fixed on the way**: `--color-warning`, which no token defines, drew
+  nothing (the score ring, the middle score bar and focus dot, Digests);
+  Daily Rhythm's bar containers had no height; PatternCards spun the whole
+  Refresh button; `${color}B0`, and `#888` + `2E` in the week panel, built
+  invalid colours for a project without one. `useFlowWindows` and
+  `useFlowWindowsLastDays` keyed on the current millisecond — ~500 identical
+  requests in 2.5 s and eight flow cards stuck loading — and now take "now"
+  to the minute through one helper, as the summary hook did;
+  `flowQueries.test.tsx` fails on the old hooks.
+- **The sweep past the three directories**: `BalanceChip` is a tinted pill
+  without a border; `GoalRing` fills in leaf, a cap in muted ink until 90 %;
+  `LoadingSpinner` is muted and on the sky; the shared project forms
+  (`ProjectForm`, `ContractTermFields`, `AdvancedFields` — the new-project
+  dialog, the settings drawer and the term dialog) are wash fields and wash
+  option cards; `GoalOverridePopover` is a cloud with `.segs`;
+  `ProjectGitHubBadge` is the header's sky chip, not dashed borders; the
+  error screen's Reload, the focus-mode keys and two icon buttons are pills.
+- **Left on purpose**: the colour picker's `border-2` swatch ring (a
+  selection mark), `useTheme`'s sky hexes and
+  `PROJECT_COLORS` (data), and the timer's custom-time field at `rounded-md`
+  (Phase 2). `HomePage.css` is Phase 5's.
+- **Not seen on screen**: the auth modal (it needs a sign-out), the timer
+  card (only tests render it), the session edit form, the home.space
+  identity section (SSO is off locally).
+- **Open, not styling**: the Plan page's week is computed in UTC (on Sunday
+  13 September it read "Week of 2026-09-06"); Passkeys shows "Loading..."
+  forever for an account with none; the webhook delete button has no
+  accessible name.
+- **Review fixes — flow bars**: Flow this week, Flow rhythm and Flow by
+  weekday had Daily Rhythm's zero-height bars (under `items-end` a column was
+  only as tall as its label); the columns now `self-stretch`. jsdom cannot see
+  layout; the e2e bar-height assertion the review proposed is not added yet.
+- **Review fixes — Days keeps the kind whole**: the type (with ½) and the note
+  are two spans; only the note, or a holiday's name, takes the ellipsis. Under
+  560 px "nothing expected" hides on a day off with nothing worked, since the
+  tint already says so.
+- **Review fixes — the kind chip names the goal in force**: `standingGoalOn`
+  (`entities/project`) is the one resolution for the chip and the Goal panel,
+  the permanent override on this Monday, else the project's own. A one-week
+  override bends This week, not the chip: the chip identifies, This week
+  measures.
+- **Review fixes — `--success-ink`**: leaf as small text (`136 45% 30%` by day,
+  5.9:1 on the panel; the fill itself at dusk), beside `--destructive-ink`.
+  Small tone text takes the inks: the balance chip, the digest delta and score,
+  the flow deltas, the sidebar's week change, and `TONE` in Days and the
+  ledger. `BIG_TONE` keeps the fills on the standing's big figure (large text
+  passes at 3:1); icons keep `text-success`.
+- **Review fixes — ink over muted on a wash**: the week panel's hours are ink
+  at 85 % (muted was 3.0:1 on today's accent at dusk); the sidebar's selected
+  row and the selected tab's count are ink at 80 % on the heavier wash.
+  PATTERNS is ink; subtitles and "+ Add description" on the sky are ink at
+  90 % (80 % is 4.0:1 at the sky's top). The project filter's "All projects"
+  is the live value, so the muted ink, not /60.
+- **Review fixes — quiet rows dim their marks, not the row**: the pulse list
+  dims the dot and sparkline and greys the name; the sidebar dims the dot. A
+  balance chip never fades.
+- **Review fixes — the dot halo follows the hour**: the sidebar's and the
+  header's dots ring in `--card` at 60 %, not a literal white, which turned
+  into pale rims at dusk.
+- **Review fixes — week panel**: below `sm` each day is a row with its
+  projects wrapping (seven 38 px columns read "L…"); Project totals mixes the
+  colour with `color-mix`, the last appended alpha.
+- **Review fixes — onto `Button`**: Coach's Send and Stop and the error
+  screen's Reload, which had no focus ring. The timer card's Start and Stop stay
+  hand-rolled: their disabled state is muted text on the wash, not Button's
+  opacity.
+- **Review fixes — tests bound to styling**: the auth modal's X is named
+  "Close dialog" and its test finds it by name; ProjectsIndex no longer asserts
+  `table-fixed`. The e2e specs' `[class*="sidebar"]` locators stay (outside this
+  phase's diff; a rewrite needs a Playwright run). The search field and the tag
+  select have names.
 
 ### Phase 5 — The marketing page, docs, gates
 

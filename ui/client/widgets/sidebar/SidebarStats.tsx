@@ -54,7 +54,9 @@ export function SidebarStats() {
 					{weekChange && (
 						<p className="text-[10px] font-mono text-muted-foreground mt-0.5">
 							<span
-								className={weekChange.direction === "up" ? "text-success" : "text-muted-foreground"}
+								className={
+									weekChange.direction === "up" ? "text-success-ink" : "text-muted-foreground"
+								}
 							>
 								{weekChange.direction === "up" ? "↑" : "↓"} {weekChange.pct}%
 							</span>{" "}

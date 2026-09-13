@@ -65,22 +65,22 @@ export function GoalOverridePopover({
 	return (
 		<div
 			ref={ref}
-			className="absolute z-50 right-0 top-full mt-1 rounded-lg border border-border bg-popover shadow-card p-3 w-56"
+			className="absolute z-50 right-0 top-full mt-1 rounded-2xl bg-popover shadow-card p-3 w-56"
 			style={{ animation: "fadeSlideIn 100ms ease-out both" }}
 		>
-			<div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+			<div className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-2">
 				Override goal
 			</div>
 
 			{/* Has goal / No goal toggle */}
-			<div className="flex gap-1 mb-2">
+			<div className="flex gap-1 p-1 mb-2 rounded-full bg-secondary">
 				<button
 					type="button"
 					onClick={() => setNoGoal(false)}
-					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+					className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
 						!noGoal
 							? "bg-accent text-accent-foreground"
-							: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+							: "text-muted-foreground hover:text-foreground"
 					}`}
 				>
 					Has goal
@@ -88,10 +88,10 @@ export function GoalOverridePopover({
 				<button
 					type="button"
 					onClick={() => setNoGoal(true)}
-					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+					className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
 						noGoal
 							? "bg-accent text-accent-foreground"
-							: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+							: "text-muted-foreground hover:text-foreground"
 					}`}
 				>
 					No goal
@@ -113,19 +113,19 @@ export function GoalOverridePopover({
 								if (e.key === "Enter") handleSave();
 								if (e.key === "Escape") onClose();
 							}}
-							className="w-20 text-sm font-mono bg-secondary/50 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+							className="w-20 text-sm font-mono font-bold bg-secondary rounded-xl px-2.5 py-1 text-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent"
 						/>
 						<span className="text-xs text-muted-foreground">h/week</span>
 					</div>
 
-					<div className="flex gap-1 mb-2">
+					<div className="flex gap-1 p-1 mb-2 rounded-full bg-secondary">
 						<button
 							type="button"
 							onClick={() => setGoalType("target")}
-							className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+							className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
 								goalType === "target"
 									? "bg-accent text-accent-foreground"
-									: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+									: "text-muted-foreground hover:text-foreground"
 							}`}
 						>
 							Target
@@ -133,10 +133,10 @@ export function GoalOverridePopover({
 						<button
 							type="button"
 							onClick={() => setGoalType("cap")}
-							className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+							className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
 								goalType === "cap"
 									? "bg-accent text-accent-foreground"
-									: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+									: "text-muted-foreground hover:text-foreground"
 							}`}
 						>
 							Cap
@@ -149,14 +149,14 @@ export function GoalOverridePopover({
 			    is de-emphasized — for routine adjustments, editing the project's
 			    DEFAULT weekly goal in Settings is the better path. P3.4 of the
 			    project-management revamp. */}
-			<div className="flex gap-1 mb-1">
+			<div className="flex gap-1 p-1 mb-1 rounded-full bg-secondary">
 				<button
 					type="button"
 					onClick={() => setScope("week")}
-					className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+					className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
 						scope === "week"
 							? "bg-accent text-accent-foreground"
-							: "bg-secondary/50 text-muted-foreground hover:text-foreground"
+							: "text-muted-foreground hover:text-foreground"
 					}`}
 				>
 					This week only
@@ -165,10 +165,10 @@ export function GoalOverridePopover({
 					type="button"
 					onClick={() => setScope("permanent")}
 					title="Adds an override from this week forward. Prefer changing the project's default goal in Settings for routine adjustments."
-					className={`flex-1 text-[10px] py-1 rounded border transition-colors ${
+					className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
 						scope === "permanent"
-							? "bg-accent/80 text-accent-foreground border-accent/80"
-							: "bg-transparent text-muted-foreground/60 border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/60"
+							? "bg-accent text-accent-foreground"
+							: "text-muted-foreground/70 hover:text-foreground"
 					}`}
 				>
 					Temporary shift
@@ -184,7 +184,7 @@ export function GoalOverridePopover({
 				<button
 					type="button"
 					onClick={handleSave}
-					className="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
+					className="flex-1 px-2 py-1.5 text-[11px] font-bold rounded-full bg-accent text-accent-foreground hover:bg-accent/90 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					{noGoal ? "Save (no goal)" : "Save"}
 				</button>
@@ -192,7 +192,7 @@ export function GoalOverridePopover({
 					<button
 						type="button"
 						onClick={onRemove}
-						className="px-2 py-1 text-[10px] font-medium rounded bg-destructive/15 text-destructive hover:bg-destructive/25 transition-colors"
+						className="px-3 py-1.5 text-[11px] font-bold rounded-full bg-destructive/15 text-destructive-ink hover:bg-destructive/25 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Remove
 					</button>

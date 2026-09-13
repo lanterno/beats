@@ -11,9 +11,9 @@ import { cn } from "@/shared/lib";
 import { type BalanceTone, balanceTone, describeBalance, formatSignedHours } from "../model";
 
 const TONE_CLASS: Record<BalanceTone, string> = {
-	over: "border-success/40 bg-success/10 text-success",
-	owed: "border-destructive/40 bg-destructive/10 text-destructive",
-	even: "border-border text-muted-foreground",
+	over: "bg-success/15 text-success-ink",
+	owed: "bg-destructive/15 text-destructive-ink",
+	even: "bg-secondary text-muted-foreground",
 };
 
 interface BalanceChipProps {
@@ -25,7 +25,7 @@ export function BalanceChip({ hours, className }: BalanceChipProps) {
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-medium tabular-nums whitespace-nowrap shrink-0",
+				"inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums whitespace-nowrap shrink-0",
 				TONE_CLASS[balanceTone(hours)],
 				className,
 			)}

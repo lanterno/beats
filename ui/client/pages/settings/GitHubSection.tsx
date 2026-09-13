@@ -10,6 +10,8 @@ import {
 } from "@/entities/github";
 import { describeError } from "@/shared/api";
 import { useOAuthCallback } from "@/shared/lib";
+import { Button, Panel } from "@/shared/ui";
+import { CHIP, CONNECTED_DOT, DANGER_HOVER, HEADING, HEADING_ICON, LEAD } from "./styles";
 
 export function GitHubSection() {
 	const { data: status } = useGitHubStatus();
@@ -56,38 +58,36 @@ export function GitHubSection() {
 
 	return (
 		<section ref={sectionRef} id="github" className="mb-8 scroll-mt-6">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<GitBranch className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<GitBranch className={HEADING_ICON} />
 				GitHub
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
-				<p className="text-xs text-muted-foreground">
+			<Panel padding="p-5" className="space-y-3">
+				<p className={LEAD}>
 					Connect GitHub to see commit activity alongside your tracked sessions. Link a repo to a
 					project in its settings to enable correlation.
 				</p>
 				{status?.connected ? (
-					<div className="flex items-center gap-3">
-						<span className="text-xs text-accent-ink font-medium">
+					<div className="flex flex-wrap items-center gap-3">
+						<span className={CHIP}>
+							<span className={CONNECTED_DOT} />
 							Connected as {status.github_username}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={handleDisconnect}
-							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+							className={DANGER_HOVER}
 						>
 							Disconnect
-						</button>
+						</Button>
 					</div>
 				) : (
-					<button
-						type="button"
-						onClick={handleConnect}
-						className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
-					>
+					<Button variant="secondary" size="sm" onClick={handleConnect}>
 						Connect GitHub
-					</button>
+					</Button>
 				)}
-			</div>
+			</Panel>
 		</section>
 	);
 }

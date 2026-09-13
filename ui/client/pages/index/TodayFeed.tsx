@@ -18,13 +18,25 @@ import {
 } from "@/entities/session";
 import { describeError, type FocusScore, type Gap } from "@/shared/api";
 import { cn, formatDuration, formatTime, parseUtcIso, startOfDay } from "@/shared/lib";
-import { EmptyState } from "@/shared/ui";
+import { Button, EmptyState, Panel } from "@/shared/ui";
 
+const LABEL = "font-body text-[10.5px] font-bold uppercase tracking-[0.14em]";
+
+/** Edit-style round control, as on the project page's session rows. */
+const OP =
+	"grid place-items-center w-6 h-6 rounded-full text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+
+// Leaf for a focused session, persimmon for a scattered one, the muted ink
+// between. There is no warning token: the middle band used to name one and
+// drew no dot at all.
 function focusColor(score: number): string {
-	if (score >= 70) return "var(--color-accent)";
-	if (score >= 40) return "var(--color-warning)";
+	if (score >= 70) return "var(--color-success)";
+	if (score >= 40) return "var(--color-muted-foreground)";
 	return "var(--color-destructive)";
 }
+
+/** A session whose project has no colour. */
+const NO_COLOR = "var(--color-muted-foreground)";
 
 function SessionRow({
 	session,
@@ -49,27 +61,29 @@ function SessionRow({
 	const [confirming, setConfirming] = useState(false);
 
 	return (
-		<div className="group w-full flex flex-col px-3 py-1.5 hover:bg-secondary/30 rounded-md transition-colors">
+		<div className="group w-full flex flex-col px-3 py-1.5 hover:bg-secondary rounded-xl transition-colors">
 			<div className="flex items-center gap-2">
 				<button
 					type="button"
 					onClick={() => navigate(`/project/${projectId}`)}
-					className="flex items-center gap-2 flex-1 min-w-0 text-left"
+					className="flex items-center gap-2 flex-1 min-w-0 text-left rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<div
-						className="w-1.5 h-1.5 rounded-full shrink-0"
+						className="w-2 h-2 rounded-full shrink-0"
 						style={{ backgroundColor: projectColor }}
 					/>
-					<span className="text-sm text-foreground truncate flex-1 min-w-0">{projectName}</span>
+					<span className="text-[13px] font-bold text-foreground truncate flex-1 min-w-0">
+						{projectName}
+					</span>
 					{projectArchived && (
 						<span
-							className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground shrink-0"
+							className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-px rounded-full bg-secondary text-muted-foreground shrink-0"
 							title="This project is archived"
 						>
 							Archived
 						</span>
 					)}
-					<span className="text-xs text-muted-foreground tabular-nums shrink-0">
+					<span className="text-xs font-mono font-bold text-muted-foreground shrink-0">
 						{formatTime(session.startTime)} → {formatTime(session.endTime)}
 					</span>
 					{focusScore && (
@@ -79,35 +93,40 @@ function SessionRow({
 							title={`Focus: ${focusScore.score}`}
 						/>
 					)}
-					<span className="text-sm font-medium tabular-nums text-foreground w-14 text-right shrink-0">
+					<span className="text-[12.5px] font-mono font-bold text-foreground min-w-14 whitespace-nowrap text-right shrink-0">
 						{session.duration > 0 ? formatDuration(session.duration) : "—"}
 					</span>
 				</button>
 				{onDelete &&
 					(confirming ? (
 						<div className="flex items-center gap-1 shrink-0">
-							<button
+							<Button
 								type="button"
+								variant="destructive"
+								size="sm"
+								className="h-6 px-2 text-[11px]"
 								onClick={() => onDelete(session.id)}
 								disabled={deleting}
-								className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-destructive/90 text-destructive-foreground hover:bg-destructive disabled:opacity-50 transition-colors"
 							>
 								Delete
-							</button>
-							<button
+							</Button>
+							<Button
 								type="button"
+								variant="ghost"
+								size="sm"
+								className="h-6 px-2 text-[11px]"
 								onClick={() => setConfirming(false)}
-								className="px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
 							>
 								Cancel
-							</button>
+							</Button>
 						</div>
 					) : (
 						<button
 							type="button"
 							onClick={() => setConfirming(true)}
 							aria-label="Delete session"
-							className="p-1 rounded text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all shrink-0"
+							// Hidden until hover only where there is hover: a phone shows it.
+							className={`${OP} shrink-0 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`}
 						>
 							<Trash2 className="w-3.5 h-3.5" />
 						</button>
@@ -116,12 +135,14 @@ function SessionRow({
 			{(session.note || session.tags.length > 0) && (
 				<div className="flex items-center gap-1.5 ml-4 mt-0.5">
 					{session.note && (
-						<span className="text-[11px] text-muted-foreground/70 truncate">{session.note}</span>
+						<span className="text-[11.5px] font-medium text-muted-foreground truncate">
+							{session.note}
+						</span>
 					)}
 					{session.tags.map((tag) => (
 						<span
 							key={tag}
-							className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent-ink/70"
+							className="text-[10.5px] font-bold px-2 rounded-full bg-secondary text-tint-vacation-ink"
 						>
 							{tag}
 						</span>
@@ -134,13 +155,13 @@ function SessionRow({
 
 function GapRow({ gap }: { gap: Gap }) {
 	return (
-		<div className="flex items-center gap-2 px-3 py-1 opacity-60">
-			<div className="w-1.5 h-1.5 rounded-full shrink-0 border border-dashed border-muted-foreground/40" />
-			<span className="text-xs text-muted-foreground italic flex-1">Untracked</span>
-			<span className="text-xs text-muted-foreground tabular-nums shrink-0">
+		<div className="flex items-center gap-2 px-3 py-1">
+			<div className="w-2 h-2 rounded-full shrink-0 bg-muted" />
+			<span className="text-xs font-medium text-muted-foreground italic flex-1">Untracked</span>
+			<span className="text-xs font-mono font-bold text-muted-foreground shrink-0">
 				{formatTime(gap.start)} → {formatTime(gap.end)}
 			</span>
-			<span className="text-xs tabular-nums text-muted-foreground w-14 text-right shrink-0">
+			<span className="text-xs font-mono font-bold text-muted-foreground min-w-14 whitespace-nowrap text-right shrink-0">
 				{formatDuration(gap.duration_minutes)}
 			</span>
 		</div>
@@ -193,7 +214,7 @@ function SessionGroup({
 			<button
 				type="button"
 				onClick={() => setOpen(!open)}
-				className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary/20 rounded-md transition-colors"
+				className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary rounded-xl transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 			>
 				<ChevronDown
 					className={cn(
@@ -201,13 +222,11 @@ function SessionGroup({
 						!open && "-rotate-90",
 					)}
 				/>
-				<span className="text-xs uppercase tracking-[0.1em] text-muted-foreground font-medium">
-					{label}
-				</span>
-				<span className="text-xs text-muted-foreground/60">
+				<span className={`${LABEL} text-muted-foreground`}>{label}</span>
+				<span className="text-xs font-medium text-muted-foreground">
 					— {sessions.length} session{sessions.length !== 1 ? "s" : ""}
 				</span>
-				<span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">
+				<span className="ml-auto text-xs font-mono font-bold text-muted-foreground">
 					{formatDuration(totalMinutes)}
 				</span>
 			</button>
@@ -220,7 +239,7 @@ function SessionGroup({
 								key={session.id}
 								session={session}
 								projectName={info?.name || "Unknown"}
-								projectColor={info?.color || "#888"}
+								projectColor={info?.color || NO_COLOR}
 								projectId={session.projectId}
 								projectArchived={info?.archived}
 								focusScore={focusScoreMap?.get(session.id)}
@@ -300,8 +319,8 @@ export function TodayFeed() {
 	return (
 		<div>
 			<div className="flex items-center gap-2 mb-3">
-				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm">
-					<Clock className="w-3.5 h-3.5 text-accent-ink/75" />
+				<h2 className={`flex items-center gap-2 px-2 ${LABEL} text-foreground`}>
+					<Clock className="w-3.5 h-3.5 text-muted-foreground" />
 					Activity
 				</h2>
 				<div className="ml-auto flex items-center gap-1 w-44">
@@ -319,7 +338,7 @@ export function TodayFeed() {
 							onClick={() => setFilterProjectId(null)}
 							aria-label="Clear project filter"
 							title="Show all projects"
-							className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+							className="grid place-items-center w-7 h-7 shrink-0 rounded-full bg-sidebar text-foreground hover:bg-card transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 						>
 							<X className="w-3.5 h-3.5" />
 						</button>
@@ -327,22 +346,20 @@ export function TodayFeed() {
 				</div>
 			</div>
 
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
+			<Panel padding="px-3 py-3">
 				{/* Today section — always open */}
-				<div className="px-1 py-2">
+				<div className="pb-1">
 					<div className="flex items-center gap-2 px-3 py-1 mb-0.5">
-						<span className="text-xs uppercase tracking-[0.1em] text-accent-ink font-semibold">
-							Today
-						</span>
+						<span className={`${LABEL} text-accent-ink`}>Today</span>
 						{todayList.length > 0 && (
-							<span className="text-xs text-muted-foreground/60">
+							<span className="text-xs font-medium text-muted-foreground">
 								— {todayList.length} session{todayList.length !== 1 ? "s" : ""}
 							</span>
 						)}
 						{avgFocus !== null && (
-							<span className="text-xs text-muted-foreground/60">Focus: {avgFocus}</span>
+							<span className="text-xs font-medium text-muted-foreground">Focus: {avgFocus}</span>
 						)}
-						<span className="ml-auto text-sm font-medium tabular-nums text-accent-ink">
+						<span className="ml-auto text-sm font-mono font-extrabold text-foreground">
 							{todayTotal > 0 ? formatDuration(todayTotal) : "0m"}
 						</span>
 					</div>
@@ -360,7 +377,7 @@ export function TodayFeed() {
 									key={session.id}
 									session={session}
 									projectName={info?.name || "Unknown"}
-									projectColor={info?.color || "#888"}
+									projectColor={info?.color || NO_COLOR}
 									projectId={session.projectId}
 									projectArchived={info?.archived}
 									focusScore={focusScoreMap.get(session.id)}
@@ -381,7 +398,7 @@ export function TodayFeed() {
 
 				{/* Yesterday + Earlier — collapsible */}
 				{(yesterdaySessions.length > 0 || earlierSessions.length > 0) && (
-					<div className="border-t border-border/40 px-1 py-1.5">
+					<div className="border-t border-border pt-1.5">
 						<SessionGroup
 							label="Yesterday"
 							sessions={yesterdaySessions}
@@ -402,7 +419,7 @@ export function TodayFeed() {
 						/>
 					</div>
 				)}
-			</div>
+			</Panel>
 		</div>
 	);
 }

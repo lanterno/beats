@@ -7,7 +7,8 @@ import { useNavigate } from "react-router";
 import { useProjects } from "@/entities/project";
 import { useProjectBreakdown } from "@/entities/session";
 import { cn, formatDuration } from "@/shared/lib";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState, Panel } from "@/shared/ui";
+import { LABEL, SEG, SEG_BUTTON, SEG_OFF, SEG_ON } from "./styles";
 
 type Period = "week" | "month" | "year" | "all";
 
@@ -43,23 +44,17 @@ export function TopProjects({ tag }: { tag?: string }) {
 	const totalMinutes = items.reduce((sum, i) => sum + i.minutes, 0);
 
 	return (
-		<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
+		<Panel padding="px-6 py-[22px]">
 			{/* Header */}
-			<div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40">
-				<span className="text-sm font-medium text-foreground">Top Projects</span>
-				<div className="flex rounded-md border border-border overflow-hidden">
+			<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+				<span className={LABEL}>Top Projects</span>
+				<div className={SEG}>
 					{(["week", "month", "year", "all"] as Period[]).map((p) => (
 						<button
 							type="button"
 							key={p}
 							onClick={() => setPeriod(p)}
-							className={cn(
-								"px-2 py-1 text-xs transition-colors",
-								p !== "week" && "border-l border-border",
-								period === p
-									? "bg-accent text-accent-foreground"
-									: "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-							)}
+							className={cn(SEG_BUTTON, period === p ? SEG_ON : SEG_OFF)}
 						>
 							{PERIOD_LABELS[p]}
 						</button>
@@ -68,7 +63,7 @@ export function TopProjects({ tag }: { tag?: string }) {
 			</div>
 
 			{/* Content */}
-			<div className="px-4 py-3">
+			<div className="mt-4">
 				{isLoading ? (
 					<div className="h-20 flex items-center justify-center text-muted-foreground text-xs">
 						Loading...
@@ -85,13 +80,13 @@ export function TopProjects({ tag }: { tag?: string }) {
 									type="button"
 									key={item.projectId}
 									onClick={() => navigate(`/project/${item.projectId}`)}
-									className="w-full flex items-center gap-2.5 hover:bg-secondary/30 -mx-1.5 px-1.5 py-0.5 rounded transition-colors"
+									className="w-full flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									<div
 										className="w-2 h-2 rounded-full shrink-0"
 										style={{ backgroundColor: item.color }}
 									/>
-									<span className="text-xs text-foreground truncate min-w-0 w-28 shrink-0 text-left">
+									<span className="text-xs font-medium text-foreground truncate min-w-0 w-28 shrink-0 text-left">
 										{item.name}
 									</span>
 									<div className="flex-1 h-2 rounded-full bg-muted">
@@ -99,11 +94,11 @@ export function TopProjects({ tag }: { tag?: string }) {
 											className="h-full rounded-full transition-all duration-300"
 											style={{
 												width: `${barWidth}%`,
-												backgroundColor: `${item.color}B0`,
+												backgroundColor: `color-mix(in srgb, ${item.color} 70%, transparent)`,
 											}}
 										/>
 									</div>
-									<span className="text-xs font-medium tabular-nums text-foreground shrink-0 w-14 text-right">
+									<span className="text-xs font-bold font-mono tabular-nums text-foreground shrink-0 w-20 whitespace-nowrap text-right">
 										{formatDuration(item.minutes)}
 									</span>
 								</button>
@@ -111,17 +106,15 @@ export function TopProjects({ tag }: { tag?: string }) {
 						})}
 
 						{/* Total footer */}
-						<div className="flex items-center justify-end pt-1.5 border-t border-border/30">
-							<span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-2">
-								Total
-							</span>
-							<span className="text-sm font-medium tabular-nums text-accent-ink">
+						<div className="flex items-center justify-end pt-2.5 border-t border-border">
+							<span className={`${LABEL} mr-2`}>Total</span>
+							<span className="text-sm font-bold font-mono tabular-nums text-foreground">
 								{formatDuration(totalMinutes)}
 							</span>
 						</div>
 					</div>
 				)}
 			</div>
-		</div>
+		</Panel>
 	);
 }

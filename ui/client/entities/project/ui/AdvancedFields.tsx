@@ -44,8 +44,9 @@ export function isValidGithubRepo(input: string): boolean {
 }
 
 const inputCls =
-	"w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40";
-const labelCls = "block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5";
+	"w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60";
+const labelCls =
+	"block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1.5";
 
 let rowIdCounter = 0;
 function newRowId(): string {
@@ -166,7 +167,7 @@ export function AdvancedFields({
 									? "project-form-github-repo-hint"
 									: undefined
 						}
-						className={`${inputCls} ${repoInvalid ? "border-destructive/50" : ""}`}
+						className={inputCls}
 					/>
 				</div>
 				{repoInvalid && (
@@ -219,7 +220,7 @@ export function AdvancedFields({
 								type="button"
 								onClick={() => removeRepo(i)}
 								aria-label={`Remove autostart path ${i + 1}`}
-								className="p-2 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-secondary/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+								className="p-2 rounded-full text-muted-foreground/60 hover:text-destructive-ink hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
 							>
 								<Trash2 className="w-4 h-4" />
 							</button>
@@ -228,7 +229,7 @@ export function AdvancedFields({
 					<button
 						type="button"
 						onClick={addRepo}
-						className="inline-flex items-center gap-1.5 text-xs text-accent-ink hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+						className="inline-flex items-center gap-1.5 text-xs text-accent-ink hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded-full"
 					>
 						<Plus className="w-3.5 h-3.5" />
 						{values.autostartRepos.length === 0 ? "Add a path" : "Add another"}

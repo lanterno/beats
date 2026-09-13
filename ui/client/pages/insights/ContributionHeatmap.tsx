@@ -8,7 +8,8 @@ import { useState } from "react";
 import { useHeatmap } from "@/entities/session";
 import type { HeatmapDay } from "@/shared/api";
 import { cn } from "@/shared/lib";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui";
+import { Panel, Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui";
+import { NAV_BUTTON } from "./styles";
 
 const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""];
 const MONTH_NAMES = [
@@ -35,11 +36,11 @@ function getIntensity(minutes: number): number {
 }
 
 const INTENSITY_CLASSES = [
-	"bg-muted/30",
-	"bg-accent/20",
-	"bg-accent/40",
-	"bg-accent/65",
-	"bg-accent",
+	"bg-muted",
+	"bg-success/25",
+	"bg-success/45",
+	"bg-success/70",
+	"bg-success",
 ];
 
 function buildGrid(year: number, data: HeatmapDay[]) {
@@ -132,42 +133,39 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 	const isCurrentYear = year === currentYear;
 
 	return (
-		<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
+		<Panel padding="px-6 py-[22px]">
 			{/* Header */}
-			<div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40">
+			<div className="flex flex-wrap items-center gap-2">
 				<button
 					type="button"
 					onClick={() => setYear((y) => y - 1)}
-					className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+					className={NAV_BUTTON}
 					aria-label="Previous year"
 				>
-					<ChevronLeft className="w-4 h-4" />
+					<ChevronLeft className="w-3.5 h-3.5" />
 				</button>
-				<span className="text-sm font-medium text-foreground min-w-[48px] text-center">{year}</span>
+				<span className="text-sm font-bold font-mono tabular-nums text-foreground min-w-[48px] text-center">
+					{year}
+				</span>
 				<button
 					type="button"
 					onClick={() => setYear((y) => Math.min(y + 1, currentYear))}
 					disabled={year >= currentYear}
-					className={cn(
-						"p-1 rounded-md transition-colors",
-						year >= currentYear
-							? "text-muted-foreground/30 cursor-not-allowed"
-							: "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-					)}
+					className={NAV_BUTTON}
 					aria-label="Next year"
 				>
-					<ChevronRight className="w-4 h-4" />
+					<ChevronRight className="w-3.5 h-3.5" />
 				</button>
 
-				<div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground">
+				<div className="ml-auto flex items-center gap-4 text-xs font-medium text-muted-foreground">
 					{hasData && (
 						<>
 							<span>
-								<span className="text-foreground font-medium tabular-nums">{activeDays}</span>{" "}
-								active days
+								<span className="text-foreground font-bold tabular-nums">{activeDays}</span> active
+								days
 							</span>
 							<span>
-								<span className="text-accent-ink font-medium tabular-nums">
+								<span className="text-foreground font-bold tabular-nums">
 									{(totalMinutes / 60).toFixed(0)}h
 								</span>{" "}
 								total
@@ -178,7 +176,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 			</div>
 
 			{/* Grid */}
-			<div className="px-4 py-3 overflow-x-auto">
+			<div className="mt-3 overflow-x-auto">
 				{isLoading ? (
 					<div className="h-24 flex items-center justify-center text-muted-foreground text-xs">
 						Loading...
@@ -223,9 +221,9 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 											<TooltipTrigger asChild>
 												<div
 													className={cn(
-														"w-[11px] h-[11px] rounded-[2px] transition-colors cursor-default",
+														"w-[11px] h-[11px] rounded-[3px] transition-colors cursor-default",
 														INTENSITY_CLASSES[intensity],
-														isToday && "ring-1 ring-foreground/60",
+														isToday && "ring-[1.5px] ring-accent",
 													)}
 												/>
 											</TooltipTrigger>
@@ -246,7 +244,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 														)}
 													</p>
 												) : (
-													<p className="text-muted-foreground/60 mt-0.5">No activity</p>
+													<p className="text-muted-foreground mt-0.5">No activity</p>
 												)}
 											</TooltipContent>
 										</Tooltip>
@@ -259,7 +257,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 						<div className="flex items-center gap-1.5 ml-8 mt-2">
 							<span className="text-[10px] text-muted-foreground">Less</span>
 							{INTENSITY_CLASSES.map((cls, i) => (
-								<div key={i} className={cn("w-[11px] h-[11px] rounded-[2px]", cls)} />
+								<div key={i} className={cn("w-[11px] h-[11px] rounded-[3px]", cls)} />
 							))}
 							<span className="text-[10px] text-muted-foreground">More</span>
 						</div>
@@ -267,7 +265,7 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 						{/* Empty state overlay */}
 						{!hasData && !isLoading && (
 							<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-								<span className="text-xs text-muted-foreground/50 bg-card/80 px-3 py-1.5 rounded-md">
+								<span className="text-xs font-medium text-muted-foreground bg-card px-3 py-1.5 rounded-full shadow-soft">
 									Start tracking to see your activity here
 								</span>
 							</div>
@@ -275,6 +273,6 @@ export function ContributionHeatmap({ projectId, tag }: ContributionHeatmapProps
 					</div>
 				)}
 			</div>
-		</div>
+		</Panel>
 	);
 }

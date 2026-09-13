@@ -11,7 +11,16 @@ import { useProjects } from "@/entities/project";
 import type { DayProjectBreakdown } from "@/entities/session";
 import { useWeeklySessionsByProject } from "@/entities/session";
 import { cn, formatDateShort, formatDuration, getWeekRange, startOfDay } from "@/shared/lib";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState, Panel } from "@/shared/ui";
+
+/** The ‹ › round buttons, as on the project page. */
+const NAV_BUTTON =
+	"grid place-items-center w-7 h-7 rounded-full bg-secondary text-foreground hover:bg-sidebar-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 disabled:pointer-events-none";
+/** The mockup's `.seg`: a pill group on the wash, the pressed option the accent (Settings, Insights). */
+const SEG_BUTTON =
+	"grid place-items-center w-7 h-7 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+const SEG_ON = "bg-accent text-accent-foreground";
+const SEG_OFF = "text-muted-foreground hover:text-foreground";
 
 type ViewMode = "daily" | "projects";
 
@@ -33,27 +42,27 @@ export function WeekPanel() {
 				: `${formatDateShort(start)} — ${formatDateShort(end)}`;
 
 	return (
-		<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
+		<Panel padding="p-0" className="overflow-hidden">
 			{/* Navigation row */}
-			<div className="flex items-center gap-2 px-3 py-2 border-b border-border/40">
+			<div className="flex flex-wrap items-center gap-2 px-5 pt-4 pb-2">
 				<button
 					type="button"
 					onClick={() => setWeekOffset((w) => w - 1)}
-					className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+					className={NAV_BUTTON}
 					aria-label="Previous week"
 				>
-					<ChevronLeft className="w-4 h-4" />
+					<ChevronLeft className="w-3.5 h-3.5" />
 				</button>
 
 				<div className="text-center min-w-[140px]">
-					<span className="text-sm font-medium text-foreground">{weekLabel}</span>
+					<span className="text-[13.5px] font-bold text-foreground">{weekLabel}</span>
 					{weekOffset !== 0 && (
-						<span className="text-xs text-muted-foreground ml-1.5 hidden sm:inline">
+						<span className="text-xs font-medium text-muted-foreground ml-1.5 hidden sm:inline">
 							{formatDateShort(start)} — {formatDateShort(end)}
 						</span>
 					)}
 					{weekOffset === 0 && (
-						<span className="text-xs text-muted-foreground ml-1.5 hidden sm:inline">
+						<span className="text-xs font-medium text-muted-foreground ml-1.5 hidden sm:inline">
 							{formatDateShort(start)} — {formatDateShort(end)}
 						</span>
 					)}
@@ -63,22 +72,17 @@ export function WeekPanel() {
 					type="button"
 					onClick={() => setWeekOffset((w) => Math.min(w + 1, 0))}
 					disabled={weekOffset >= 0}
-					className={cn(
-						"p-1 rounded-md transition-colors",
-						weekOffset >= 0
-							? "text-muted-foreground/30 cursor-not-allowed"
-							: "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-					)}
+					className={NAV_BUTTON}
 					aria-label="Next week"
 				>
-					<ChevronRight className="w-4 h-4" />
+					<ChevronRight className="w-3.5 h-3.5" />
 				</button>
 
 				{weekOffset !== 0 && (
 					<button
 						type="button"
 						onClick={() => setWeekOffset(0)}
-						className="px-2 py-0.5 rounded-md text-xs text-accent-ink hover:bg-accent/10 transition-colors"
+						className="px-1.5 text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Today
 					</button>
@@ -86,21 +90,17 @@ export function WeekPanel() {
 
 				<div className="ml-auto flex items-center gap-2">
 					{weekTotal > 0 && (
-						<span className="text-sm font-medium tabular-nums text-accent-ink">
+						<span className="text-sm font-mono font-extrabold text-foreground">
 							{formatDuration(weekTotal)}
 						</span>
 					)}
 
-					<div className="flex rounded-md border border-border overflow-hidden">
+					<div className="flex gap-0.5 p-[3px] rounded-full bg-secondary">
 						<button
 							type="button"
 							onClick={() => setView("daily")}
-							className={cn(
-								"p-1.5 transition-colors",
-								view === "daily"
-									? "bg-accent text-accent-foreground"
-									: "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-							)}
+							className={cn(SEG_BUTTON, view === "daily" ? SEG_ON : SEG_OFF)}
+							aria-pressed={view === "daily"}
 							aria-label="Daily breakdown"
 							title="Daily breakdown"
 						>
@@ -109,12 +109,8 @@ export function WeekPanel() {
 						<button
 							type="button"
 							onClick={() => setView("projects")}
-							className={cn(
-								"p-1.5 transition-colors border-l border-border",
-								view === "projects"
-									? "bg-accent text-accent-foreground"
-									: "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-							)}
+							className={cn(SEG_BUTTON, view === "projects" ? SEG_ON : SEG_OFF)}
+							aria-pressed={view === "projects"}
 							aria-label="Project totals"
 							title="Project totals"
 						>
@@ -126,7 +122,7 @@ export function WeekPanel() {
 
 			{/* Content */}
 			{isLoading ? (
-				<div className="h-32 flex items-center justify-center text-muted-foreground text-xs">
+				<div className="h-32 flex items-center justify-center text-muted-foreground text-xs font-medium">
 					Loading...
 				</div>
 			) : weekData && view === "daily" ? (
@@ -136,7 +132,7 @@ export function WeekPanel() {
 			) : (
 				<EmptyState variant="chart" message="No data for this week yet" />
 			)}
-		</div>
+		</Panel>
 	);
 }
 
@@ -144,7 +140,9 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 	const today = startOfDay();
 
 	return (
-		<div className="grid grid-cols-7 gap-px bg-border/30">
+		// Seven columns from `sm`. Below it a column is ~38 px and every name read
+		// "L…", so each day is a row there, its projects wrapping beside it.
+		<div className="grid grid-cols-1 gap-1 px-3 pb-3 sm:grid-cols-7">
 			{data.map((day) => {
 				const isToday = day.date.getTime() === today.getTime();
 
@@ -152,24 +150,24 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 					<div
 						key={day.dayName}
 						className={cn(
-							"bg-card px-2 py-2 min-h-[160px] flex flex-col",
-							isToday && "bg-accent/[0.03]",
+							"rounded-2xl min-w-0 flex items-center gap-2.5 px-2.5 py-1.5 sm:flex-col sm:items-stretch sm:gap-0 sm:px-1.5 sm:py-2 sm:min-h-[160px]",
+							isToday && "bg-accent/20",
 						)}
 					>
 						{/* Day header */}
-						<div className="text-center mb-2">
+						<div className="w-11 shrink-0 sm:w-auto sm:text-center sm:mb-2">
 							<p
 								className={cn(
-									"text-xs uppercase tracking-wide leading-none",
-									isToday ? "text-accent-ink font-semibold" : "text-muted-foreground",
+									"text-xs font-bold uppercase tracking-wide leading-none",
+									isToday ? "text-accent-ink" : "text-muted-foreground",
 								)}
 							>
 								{day.dayName}
 							</p>
 							<p
 								className={cn(
-									"text-[10px] mt-0.5 leading-none",
-									isToday ? "text-accent-ink/70" : "text-muted-foreground/50",
+									"text-[10px] font-mono font-bold mt-1 leading-none",
+									isToday ? "text-accent-ink" : "text-muted-foreground",
 								)}
 							>
 								{formatDateShort(day.date)}
@@ -178,39 +176,48 @@ function DailyView({ data }: { data: DayProjectBreakdown[] }) {
 
 						{/* Project segments */}
 						{day.segments.length > 0 ? (
-							<div className="flex-1 flex flex-col gap-1">
-								{day.segments.map((seg) => (
-									<div
-										key={seg.projectId}
-										className="rounded px-1.5 py-1 leading-tight"
-										style={{
-											backgroundColor: `${seg.projectColor}18`,
-											borderLeft: `3px solid ${seg.projectColor}`,
-										}}
-									>
-										<p className="text-xs font-medium text-foreground truncate">
-											{seg.projectName}
-										</p>
-										<p className="text-[11px] tabular-nums text-muted-foreground">
-											{seg.minutes >= 60
-												? `${(seg.minutes / 60).toFixed(1)}h`
-												: `${Math.round(seg.minutes)}m`}
-										</p>
-									</div>
-								))}
-								{/* Day total */}
+							<>
+								<div className="flex-1 min-w-0 flex flex-wrap gap-1 sm:flex-col sm:flex-nowrap">
+									{day.segments.map((seg) => (
+										// A wash in the project's own colour with its dot, not a
+										// bordered box.
+										<div
+											key={seg.projectId}
+											className="min-w-0 max-w-full flex items-center gap-1.5 rounded-xl px-2 py-1 leading-tight sm:block sm:px-1.5"
+											style={{
+												backgroundColor: `color-mix(in srgb, ${seg.projectColor} 18%, transparent)`,
+											}}
+										>
+											<p className="flex items-center gap-1 text-xs font-bold text-foreground min-w-0">
+												<span
+													className="w-1.5 h-1.5 rounded-full shrink-0"
+													style={{ backgroundColor: seg.projectColor }}
+													aria-hidden="true"
+												/>
+												<span className="truncate">{seg.projectName}</span>
+											</p>
+											{/* Ink, not the muted tone: on the wash, and today's accent at dusk, muted fell to 3:1. */}
+											<p className="text-[11px] font-mono font-bold text-foreground/85 whitespace-nowrap">
+												{seg.minutes >= 60
+													? `${(seg.minutes / 60).toFixed(1)}h`
+													: `${Math.round(seg.minutes)}m`}
+											</p>
+										</div>
+									))}
+								</div>
+								{/* Day total: the row's end below `sm`, the column's foot above */}
 								<p
 									className={cn(
-										"mt-auto pt-1 text-center text-xs font-medium tabular-nums",
-										isToday ? "text-accent-ink" : "text-foreground/60",
+										"shrink-0 text-center text-xs font-mono font-bold whitespace-nowrap sm:mt-auto sm:pt-1",
+										isToday ? "text-accent-ink" : "text-muted-foreground",
 									)}
 								>
 									{(day.totalMinutes / 60).toFixed(1)}h
 								</p>
-							</div>
+							</>
 						) : (
-							<div className="flex-1 flex items-center justify-center">
-								<span className="text-muted-foreground/25 text-xs">—</span>
+							<div className="flex-1 flex items-center sm:justify-center">
+								<span className="text-muted-foreground text-xs">—</span>
 							</div>
 						)}
 					</div>
@@ -244,14 +251,14 @@ function ProjectTotalsView({ data }: { data: DayProjectBreakdown[] }) {
 
 	if (sorted.length === 0) {
 		return (
-			<div className="h-32 flex items-center justify-center text-muted-foreground/40 text-xs">
+			<div className="h-32 flex items-center justify-center text-muted-foreground text-xs font-medium">
 				No activity this week
 			</div>
 		);
 	}
 
 	return (
-		<div className="px-3 py-2.5 space-y-1.5">
+		<div className="px-5 pt-2 pb-4 space-y-1.5">
 			{sorted.map((proj) => {
 				const barWidth = (proj.minutes / maxMinutes) * 100;
 				const hours = proj.minutes / 60;
@@ -262,7 +269,7 @@ function ProjectTotalsView({ data }: { data: DayProjectBreakdown[] }) {
 							className="w-2 h-2 rounded-full shrink-0"
 							style={{ backgroundColor: proj.color }}
 						/>
-						<span className="text-xs text-foreground truncate min-w-0 w-24 shrink-0">
+						<span className="text-xs font-bold text-foreground truncate min-w-0 w-24 shrink-0">
 							{proj.name}
 						</span>
 						<div className="flex-1 h-2 rounded-full bg-muted">
@@ -270,11 +277,12 @@ function ProjectTotalsView({ data }: { data: DayProjectBreakdown[] }) {
 								className="h-full rounded-full transition-all duration-300"
 								style={{
 									width: `${barWidth}%`,
-									backgroundColor: `${proj.color}B0`,
+									// A mix, not an appended alpha: the colour can be a var() fallback.
+									backgroundColor: `color-mix(in srgb, ${proj.color} 70%, transparent)`,
 								}}
 							/>
 						</div>
-						<span className="text-xs font-medium tabular-nums text-foreground shrink-0 w-12 text-right">
+						<span className="text-xs font-mono font-bold text-foreground shrink-0 w-12 text-right">
 							{hours >= 1 ? `${hours.toFixed(1)}h` : `${Math.round(proj.minutes)}m`}
 						</span>
 					</div>
@@ -282,11 +290,11 @@ function ProjectTotalsView({ data }: { data: DayProjectBreakdown[] }) {
 			})}
 
 			{/* Week total footer */}
-			<div className="flex items-center justify-end pt-1 border-t border-border/30">
-				<span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-2">
+			<div className="flex items-center justify-end pt-2 border-t border-border">
+				<span className="font-body text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground mr-2">
 					Total
 				</span>
-				<span className="text-sm font-medium tabular-nums text-accent-ink">
+				<span className="text-sm font-mono font-extrabold text-foreground">
 					{formatDuration(weekTotal)}
 				</span>
 			</div>

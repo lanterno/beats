@@ -13,7 +13,8 @@ import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { fetchBeats, sessionKeys, toSession, useHeatmap } from "@/entities/session";
 import { formatDuration, parseUtcIso } from "@/shared/lib";
-import { EmptyState } from "@/shared/ui";
+import { Button, EmptyState, Panel } from "@/shared/ui";
+import { CHIP, SKY_CHIP, SKY_ROUND } from "./styles";
 
 const MONTH_NAMES = [
 	"January",
@@ -102,7 +103,7 @@ export default function YearInReview() {
 				id,
 				minutes,
 				name: projectMap.get(id)?.name ?? "Unknown",
-				color: projectMap.get(id)?.color ?? "#888",
+				color: projectMap.get(id)?.color ?? "var(--color-muted-foreground)",
 			}));
 
 		// Work hours distribution (24-hour)
@@ -203,20 +204,17 @@ export default function YearInReview() {
 			{/* Navigation */}
 			<div className="flex items-center justify-between mb-8">
 				<div className="flex items-center gap-3">
-					<Link
-						to="/insights"
-						className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-					>
+					<Link to="/insights" className={SKY_CHIP}>
 						Insights
 					</Link>
-					<span className="text-muted-foreground/40">/</span>
+					<span className="text-muted-foreground">/</span>
 					<span className="text-sm text-foreground">Year in Review</span>
 				</div>
-				<div className="flex items-center gap-1">
+				<div className="flex items-center gap-2">
 					<button
 						type="button"
 						onClick={() => navigate(`/insights/year/${year - 1}`)}
-						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+						className={SKY_ROUND}
 					>
 						<ChevronLeft className="w-4 h-4" />
 					</button>
@@ -224,7 +222,7 @@ export default function YearInReview() {
 						type="button"
 						onClick={() => navigate(`/insights/year/${year + 1}`)}
 						disabled={isCurrentYear}
-						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-30"
+						className={SKY_ROUND}
 					>
 						<ChevronRight className="w-4 h-4" />
 					</button>
@@ -238,67 +236,70 @@ export default function YearInReview() {
 			) : !stats ? (
 				<EmptyState variant="chart" message={`No sessions tracked in ${year}`} />
 			) : (
-				<div className="space-y-10">
+				<Panel padding="px-6 py-10 sm:px-10" className="space-y-10">
 					{/* Title section */}
 					<div className="text-center space-y-2">
-						<p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+						<p className="text-[10.5px] font-bold uppercase tracking-[0.3em] text-muted-foreground">
 							Year in Review
 						</p>
-						<h1 className="font-heading text-6xl font-bold text-accent-ink tabular-nums">{year}</h1>
+						<h1 className="font-heading text-6xl font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
+							{year}
+						</h1>
 					</div>
 
 					{/* Big stats */}
 					<div className="grid grid-cols-2 gap-6 text-center">
 						<div>
-							<p className="font-heading text-3xl font-bold text-foreground tabular-nums">
+							<p className="font-heading text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
 								{formatDuration(stats.totalMinutes)}
 							</p>
-							<p className="text-xs text-muted-foreground mt-1">Total tracked</p>
+							<p className="text-xs font-medium text-muted-foreground mt-1">Total tracked</p>
 						</div>
 						<div>
-							<p className="font-heading text-3xl font-bold text-foreground tabular-nums">
+							<p className="font-heading text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
 								{stats.sessionCount.toLocaleString()}
 							</p>
-							<p className="text-xs text-muted-foreground mt-1">Sessions</p>
+							<p className="text-xs font-medium text-muted-foreground mt-1">Sessions</p>
 						</div>
 						<div>
-							<p className="font-heading text-3xl font-bold text-foreground tabular-nums">
+							<p className="font-heading text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
 								{stats.activeDays}
 							</p>
-							<p className="text-xs text-muted-foreground mt-1">Active days</p>
+							<p className="text-xs font-medium text-muted-foreground mt-1">Active days</p>
 						</div>
 						<div>
-							<p className="font-heading text-3xl font-bold text-foreground tabular-nums">
+							<p className="font-heading text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
 								{stats.longestStreak}
 							</p>
-							<p className="text-xs text-muted-foreground mt-1">Longest streak</p>
+							<p className="text-xs font-medium text-muted-foreground mt-1">Longest streak</p>
 						</div>
 					</div>
 
 					{/* Monthly chart */}
 					<div>
-						<p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 text-center">
+						<p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-3 text-center">
 							Month by Month
 						</p>
 						<div className="flex items-end justify-center gap-1.5 h-32">
 							{stats.monthlyMinutes.map((minutes, i) => (
 								<div key={i} className="flex flex-col items-center gap-1 flex-1">
-									<span className="text-[9px] text-muted-foreground/50 tabular-nums">
+									<span className="hidden sm:block text-[9px] font-bold font-mono text-muted-foreground tabular-nums">
 										{minutes > 0 ? formatDuration(minutes) : ""}
 									</span>
 									<div
-										className="w-full rounded-t-sm transition-all"
+										className="w-full rounded-t-[4px] transition-all"
 										style={{
 											height: `${Math.max((minutes / stats.maxMonthMinutes) * 80, 2)}px`,
 											backgroundColor:
 												i === stats.busiestMonthIdx
-													? "hsl(var(--accent))"
-													: "hsl(var(--muted-foreground))",
-											opacity: i === stats.busiestMonthIdx ? 0.9 : 0.15,
+													? "hsl(var(--success))"
+													: minutes > 0
+														? "hsl(var(--success) / 0.4)"
+														: "hsl(var(--muted))",
 										}}
 									/>
 									<span
-										className={`text-[9px] ${i === stats.busiestMonthIdx ? "text-accent-ink font-medium" : "text-muted-foreground/50"}`}
+										className={`text-[9px] ${i === stats.busiestMonthIdx ? "text-foreground font-bold" : "text-muted-foreground font-medium"}`}
 									>
 										{MONTH_SHORT[i]}
 									</span>
@@ -309,7 +310,7 @@ export default function YearInReview() {
 
 					{/* Project rankings */}
 					<div>
-						<p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-4 text-center">
+						<p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4 text-center">
 							Project Rankings
 						</p>
 						<div className="space-y-2.5">
@@ -317,7 +318,7 @@ export default function YearInReview() {
 								const pct = (p.minutes / stats.totalMinutes) * 100;
 								return (
 									<div key={p.id} className="flex items-center gap-3">
-										<span className="text-lg font-heading font-bold text-muted-foreground/30 w-8 text-right tabular-nums">
+										<span className="text-lg font-heading font-bold text-muted-foreground w-8 text-right tabular-nums">
 											{p.rank}
 										</span>
 										<div
@@ -327,10 +328,10 @@ export default function YearInReview() {
 										<span className="text-sm text-foreground font-medium truncate flex-1 min-w-0">
 											{p.name}
 										</span>
-										<span className="text-sm font-medium tabular-nums text-foreground shrink-0">
+										<span className="text-sm font-bold font-mono tabular-nums text-foreground shrink-0">
 											{formatDuration(p.minutes)}
 										</span>
-										<span className="text-[10px] text-muted-foreground w-10 text-right shrink-0">
+										<span className="text-[10px] font-medium text-muted-foreground w-10 text-right shrink-0">
 											{pct.toFixed(0)}%
 										</span>
 									</div>
@@ -342,7 +343,7 @@ export default function YearInReview() {
 					{/* Busiest day */}
 					{stats.busiestDay.minutes > 0 && (
 						<div className="text-center space-y-1">
-							<p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+							<p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
 								Busiest Day
 							</p>
 							<p className="font-heading text-lg font-semibold text-foreground">
@@ -352,7 +353,7 @@ export default function YearInReview() {
 									day: "numeric",
 								})}
 							</p>
-							<p className="text-accent-ink font-medium text-sm">
+							<p className="text-foreground font-bold font-mono text-sm">
 								{formatDuration(stats.busiestDay.minutes)}
 							</p>
 						</div>
@@ -360,7 +361,7 @@ export default function YearInReview() {
 
 					{/* Work hours distribution */}
 					<div>
-						<p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 text-center">
+						<p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-3 text-center">
 							When You Work
 						</p>
 						<div className="flex items-end justify-center gap-px h-16">
@@ -369,14 +370,15 @@ export default function YearInReview() {
 								return (
 									<div
 										key={h}
-										className="flex-1 rounded-t-sm transition-all"
+										className="flex-1 rounded-t-[3px] transition-all"
 										style={{
 											height: `${Math.max((minutes / max) * 56, 1)}px`,
 											backgroundColor:
 												h === stats.peakHour
-													? "hsl(var(--accent))"
-													: "hsl(var(--muted-foreground))",
-											opacity: h === stats.peakHour ? 0.9 : minutes > 0 ? 0.2 : 0.05,
+													? "hsl(var(--success))"
+													: minutes > 0
+														? "hsl(var(--success) / 0.4)"
+														: "hsl(var(--muted))",
 										}}
 										title={`${h}:00 — ${formatDuration(minutes)}`}
 									/>
@@ -384,31 +386,28 @@ export default function YearInReview() {
 							})}
 						</div>
 						<div className="flex justify-between mt-1">
-							<span className="text-[8px] text-muted-foreground/40">12 AM</span>
-							<span className="text-[8px] text-muted-foreground/40">6 AM</span>
-							<span className="text-[8px] text-muted-foreground/40">12 PM</span>
-							<span className="text-[8px] text-muted-foreground/40">6 PM</span>
-							<span className="text-[8px] text-muted-foreground/40">12 AM</span>
+							<span className="text-[9.5px] font-bold font-mono text-muted-foreground">12 AM</span>
+							<span className="text-[9.5px] font-bold font-mono text-muted-foreground">6 AM</span>
+							<span className="text-[9.5px] font-bold font-mono text-muted-foreground">12 PM</span>
+							<span className="text-[9.5px] font-bold font-mono text-muted-foreground">6 PM</span>
+							<span className="text-[9.5px] font-bold font-mono text-muted-foreground">12 AM</span>
 						</div>
-						<p className="text-xs text-muted-foreground text-center mt-2">
-							Peak hour: <span className="text-accent-ink font-medium">{stats.peakHour}:00</span>
+						<p className="text-xs font-medium text-muted-foreground text-center mt-2">
+							Peak hour: <span className="text-foreground font-bold">{stats.peakHour}:00</span>
 						</p>
 					</div>
 
 					{/* Tags */}
 					{stats.topTags.length > 0 && (
 						<div className="text-center">
-							<p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
+							<p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-3">
 								Top Tags
 							</p>
 							<div className="flex flex-wrap justify-center gap-2">
 								{stats.topTags.map(({ tag, count }) => (
-									<span
-										key={tag}
-										className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent-ink"
-									>
+									<span key={tag} className={CHIP}>
 										{tag}
-										<span className="text-accent-ink/50 text-[10px]">{count}</span>
+										<span className="text-muted-foreground text-[10px]">{count}</span>
 									</span>
 								))}
 							</div>
@@ -416,25 +415,28 @@ export default function YearInReview() {
 					)}
 
 					{/* Footer */}
-					<div className="text-center pt-4 border-t border-border/20 space-y-3">
-						<p className="text-[10px] text-muted-foreground/30 tracking-[0.3em] uppercase">Beats</p>
-						<button
-							type="button"
+					<div className="text-center pt-5 border-t border-border space-y-3">
+						<p className="text-[10px] font-bold text-muted-foreground tracking-[0.3em] uppercase">
+							Beats
+						</p>
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={handleCopy}
-							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
+							className="h-8 px-3.5 text-xs"
 						>
 							{copied ? (
 								<>
-									<Check className="w-3.5 h-3.5 text-accent-ink" /> Copied
+									<Check className="w-3.5 h-3.5 text-success" /> Copied
 								</>
 							) : (
 								<>
 									<Copy className="w-3.5 h-3.5" /> Copy summary
 								</>
 							)}
-						</button>
+						</Button>
 					</div>
-				</div>
+				</Panel>
 			)}
 		</div>
 	);

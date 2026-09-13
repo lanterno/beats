@@ -9,6 +9,9 @@
 import { useMemo, useState } from "react";
 import { useFlowWindows, useFlowWindowsLastDays } from "@/entities/session";
 import { flowBaseline, shortRepoPath, summarizeFlow } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { SparkDot } from "./SparkDot";
+import { AREA_BOTTOM, AREA_TOP, LABEL, LINKISH, META, SPARK_GRID } from "./styles";
 
 const SPARK_W = 480;
 const SPARK_H = 64;
@@ -45,12 +48,12 @@ export function FlowToday({
 	if (isLoading) return null;
 	if (!windows || windows.length === 0) {
 		return (
-			<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3">
-				<p className="font-heading text-sm text-foreground mb-1">Flow today</p>
-				<p className="text-muted-foreground text-xs">
+			<Panel padding="px-6 py-[22px]">
+				<p className={LABEL}>Flow today</p>
+				<p className="mt-2 text-[12.5px] font-medium text-muted-foreground">
 					No flow windows yet today. Make sure <code>beatsd run</code> is up.
 				</p>
-			</div>
+			</Panel>
 		);
 	}
 
@@ -60,25 +63,26 @@ export function FlowToday({
 			: null;
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Flow today</p>
-				<div className="flex items-baseline gap-3 text-[11px] text-muted-foreground">
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Flow today</p>
+				<div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 ${META}`}>
 					<span>
 						avg{" "}
-						<span className="text-foreground tabular-nums">
+						<span className="text-foreground font-bold tabular-nums">
 							{Math.round((stats?.avg ?? 0) * 100)}
 						</span>
 					</span>
 					{stats && baseline !== null && <BaselineDelta avg={stats.avg} baseline={baseline} />}
 					<span>
 						peak{" "}
-						<span className="text-foreground tabular-nums">
+						<span className="text-foreground font-bold tabular-nums">
 							{Math.round((stats?.peak ?? 0) * 100)}
 						</span>
 					</span>
 					<span>
-						<span className="text-foreground tabular-nums">{stats?.count ?? 0}</span> windows
+						<span className="text-foreground font-bold tabular-nums">{stats?.count ?? 0}</span>{" "}
+						windows
 					</span>
 				</div>
 			</div>
@@ -86,12 +90,12 @@ export function FlowToday({
 			<FlowSparkline windows={windows} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
 
 			{stats && stats.count > 1 && (
-				<div className="text-[11px] text-muted-foreground">
+				<div className={META}>
 					peak at{" "}
 					<button
 						type="button"
 						onClick={() => setSelectedIdx(stats.peakIndex)}
-						className="text-accent-ink hover:underline tabular-nums"
+						className={`${LINKISH} tabular-nums`}
 					>
 						{formatTime(windows[stats.peakIndex].window_start)}
 					</button>
@@ -99,25 +103,22 @@ export function FlowToday({
 			)}
 
 			{selected && (
-				<div className="border-t border-border/40 pt-2 space-y-1.5">
-					<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+				<div className="border-t border-border pt-2.5 space-y-1.5">
+					<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground">
 						<span className="tabular-nums">{formatTime(selected.window_start)}</span>
 						<span>
-							<span className="text-foreground tabular-nums">
+							<span className="text-foreground font-bold tabular-nums">
 								{Math.round(selected.flow_score * 100)}
 							</span>
 							<span className="text-muted-foreground"> / 100</span>
 						</span>
 						{selected.dominant_category && (
-							<span className="uppercase tracking-wider text-[9px]">
+							<span className="px-2 py-px rounded-full bg-secondary text-[10px] font-bold uppercase tracking-[0.06em]">
 								{selected.dominant_category}
 							</span>
 						)}
 						{selected.editor_repo && (
-							<span
-								className="text-foreground/70 truncate max-w-[280px]"
-								title={selected.editor_repo}
-							>
+							<span className="text-foreground truncate max-w-[280px]" title={selected.editor_repo}>
 								{shortRepoPath(selected.editor_repo)}
 								{selected.editor_branch ? (
 									<span className="text-muted-foreground"> · {selected.editor_branch}</span>
@@ -137,7 +138,7 @@ export function FlowToday({
 					</div>
 				</div>
 			)}
-		</div>
+		</Panel>
 	);
 }
 
@@ -147,7 +148,7 @@ export function FlowToday({
 function ScoreStat({ label, value }: { label: string; value: number | string }) {
 	return (
 		<span title={`${label}: ${value}`}>
-			{label} <span className="text-foreground tabular-nums">{value}</span>
+			{label} <span className="text-foreground font-bold tabular-nums">{value}</span>
 		</span>
 	);
 }
@@ -161,12 +162,12 @@ interface SparklineProps {
 function FlowSparkline({ windows, selectedIdx, onSelect }: SparklineProps) {
 	if (!windows || windows.length === 0) return null;
 	const n = windows.length;
+	// Y is flipped because SVG origin is top-left.
+	const yOf = (score: number) => SPARK_H - score * SPARK_H * 0.85;
 
-	// Build the area path. Y is flipped because SVG origin is top-left.
 	const points = windows.map((w, i) => {
 		const x = n === 1 ? SPARK_W / 2 : (i / (n - 1)) * SPARK_W;
-		const y = SPARK_H - w.flow_score * SPARK_H * 0.85;
-		return { x, y };
+		return { x, y: yOf(w.flow_score) };
 	});
 
 	const linePath = points
@@ -183,11 +184,12 @@ function FlowSparkline({ windows, selectedIdx, onSelect }: SparklineProps) {
 
 	const sel =
 		selectedIdx !== null && selectedIdx >= 0 && selectedIdx < n ? points[selectedIdx] : null;
+	const end = points[n - 1];
 
 	return (
 		<svg
 			viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-			className="w-full h-16 cursor-crosshair"
+			className="w-full h-16 cursor-crosshair overflow-visible"
 			preserveAspectRatio="none"
 			onMouseDown={handlePoint}
 			onMouseMove={(e) => e.buttons === 1 && handlePoint(e)}
@@ -196,41 +198,48 @@ function FlowSparkline({ windows, selectedIdx, onSelect }: SparklineProps) {
 			<title>Flow score through the day</title>
 			<defs>
 				<linearGradient id="flow-area" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stopColor="rgb(var(--accent-rgb, 212 149 42))" stopOpacity="0.25" />
-					<stop offset="100%" stopColor="rgb(var(--accent-rgb, 212 149 42))" stopOpacity="0" />
+					<stop offset="0%" style={AREA_TOP} />
+					<stop offset="100%" style={AREA_BOTTOM} />
 				</linearGradient>
 			</defs>
+			{SPARK_GRID.map((v) => (
+				<line
+					key={v}
+					x1={0}
+					x2={SPARK_W}
+					y1={yOf(v)}
+					y2={yOf(v)}
+					className="stroke-border"
+					strokeWidth={1}
+					vectorEffect="non-scaling-stroke"
+				/>
+			))}
 			<path d={areaPath} fill="url(#flow-area)" />
 			<path
 				d={linePath}
 				fill="none"
-				stroke="rgb(var(--accent-rgb, 212 149 42))"
-				strokeWidth="1.5"
+				className="stroke-success"
+				strokeWidth={2}
+				strokeLinejoin="round"
 				strokeLinecap="round"
 				vectorEffect="non-scaling-stroke"
 			/>
 			{sel && (
-				<>
-					<line
-						x1={sel.x}
-						y1={0}
-						x2={sel.x}
-						y2={SPARK_H}
-						stroke="rgb(var(--accent-rgb, 212 149 42))"
-						strokeOpacity="0.35"
-						strokeWidth="1"
-						vectorEffect="non-scaling-stroke"
-					/>
-					<circle
-						cx={sel.x}
-						cy={sel.y}
-						r="3.5"
-						fill="rgb(var(--accent-rgb, 212 149 42))"
-						stroke="rgb(var(--background-rgb, 26 20 8))"
-						strokeWidth="1.5"
-					/>
-				</>
+				<line
+					x1={sel.x}
+					y1={0}
+					x2={sel.x}
+					y2={SPARK_H}
+					className="stroke-muted-foreground"
+					strokeOpacity={0.5}
+					strokeWidth={1}
+					strokeDasharray="3 3"
+					vectorEffect="non-scaling-stroke"
+				/>
 			)}
+			{/* The latest window is today's newest: the accent marks it. */}
+			<SparkDot x={end.x} y={end.y} className="stroke-accent" />
+			{sel && sel !== end && <SparkDot x={sel.x} y={sel.y} className="stroke-success" />}
 		</svg>
 	);
 }
@@ -256,7 +265,7 @@ function BaselineDelta({ avg, baseline }: { avg: number; baseline: number }) {
 	const up = delta > 0;
 	return (
 		<span
-			className={`tabular-nums ${up ? "text-success" : "text-accent-ink"}`}
+			className={`font-bold tabular-nums ${up ? "text-success-ink" : "text-destructive-ink"}`}
 			title={`vs your 7-day baseline (${Math.round(baseline * 100)})`}
 		>
 			{up ? "↑" : "↓"} {Math.abs(delta)}

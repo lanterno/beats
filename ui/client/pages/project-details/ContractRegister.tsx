@@ -31,7 +31,9 @@ import {
 	contractFieldErrors,
 	describeTerm,
 	formatSignedHours,
+	permanentOverrideOn,
 	sortTerms,
+	standingGoalOn,
 	termFormDefaults,
 	termFromForm,
 	termHoursPerWeek,
@@ -238,16 +240,6 @@ function overrideGoal(o: GoalOverride, fallbackType: "target" | "cap"): string {
 	return `${hoursLabel(o.weeklyGoal)} / week · ${o.goalType ?? fallbackType}`;
 }
 
-/** The permanent override in effect on a Monday: the latest one dated on or before it. */
-function permanentOn(overrides: GoalOverride[], mondayIso: string): GoalOverride | undefined {
-	let found: GoalOverride | undefined;
-	for (const o of overrides) {
-		if (!o.effectiveFrom || o.effectiveFrom > mondayIso) continue;
-		if (!found || o.effectiveFrom > (found.effectiveFrom ?? "")) found = o;
-	}
-	return found;
-}
-
 /**
  * Every goal override, oldest first, with remove. An override is removed by
  * identity — two stored for the same Monday (a legacy case) must not both go
@@ -260,7 +252,7 @@ function OverrideList({ project, todayIso }: { project: ProjectWithDuration; tod
 	if (overrides.length === 0) return null;
 
 	const monday = mondayOfIso(todayIso);
-	const inForce = permanentOn(overrides, monday);
+	const inForce = permanentOverrideOn(overrides, monday);
 	const fallbackType = project.goalType ?? "target";
 	const sorted = [...overrides].sort((a, b) =>
 		(a.weekOf ?? a.effectiveFrom ?? "").localeCompare(b.weekOf ?? b.effectiveFrom ?? ""),
@@ -619,10 +611,9 @@ function GoalVariant({
 	const permanents = overrides
 		.filter((o): o is GoalOverride & { effectiveFrom: string } => !!o.effectiveFrom)
 		.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
-	const inForce = permanentOn(permanents, monday);
+	// The header's kind chip reads the same resolution.
+	const { weeklyGoal: goal, goalType, override: inForce } = standingGoalOn(project, monday);
 	const base = project.weeklyGoal ?? null;
-	const goal = inForce ? inForce.weeklyGoal : base;
-	const goalType = inForce?.goalType ?? project.goalType ?? "target";
 	const same = (a: GoalOverride, b: GoalOverride) =>
 		a.weeklyGoal === b.weeklyGoal && (a.goalType ?? goalType) === (b.goalType ?? goalType);
 

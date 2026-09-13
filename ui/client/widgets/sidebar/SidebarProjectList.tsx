@@ -25,8 +25,9 @@ interface SidebarProjectListProps {
 
 const HEADING = "text-muted-foreground text-[9.5px] font-bold uppercase tracking-[0.14em]";
 
-// The mockup's `.plist .p .dot`: a soft white ring lifts the dot off the wash.
-const DOT = "w-[11px] h-[11px] rounded-full shrink-0 shadow-[0_0_0_3px_rgb(255_255_255/.6)]";
+// The mockup's `.plist .p .dot`: a soft ring in the panel's own colour lifts the
+// dot off the wash. A literal white turned into pale rims on the dusk panel.
+const DOT = "w-[11px] h-[11px] rounded-full shrink-0 shadow-[0_0_0_3px_hsl(var(--card)/.6)]";
 
 export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 	const navigate = useNavigate();
@@ -72,7 +73,6 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 								isActive
 									? "bg-sidebar-accent text-sidebar-foreground font-bold"
 									: "hover:bg-secondary text-muted-foreground hover:text-sidebar-foreground",
-								isInactive && !isActive && "opacity-55",
 							)}
 						>
 							<button
@@ -80,14 +80,21 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 								onClick={() => navigate(`/project/${project.id}`)}
 								className="flex items-center gap-2 flex-1 min-w-0 text-left text-[13px] pl-2.5 pr-1 py-1.5 rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							>
-								<div className={DOT} style={{ backgroundColor: project.color }} />
+								{/* A quiet project dims its dot, not its row: the name is already the muted ink. */}
+								<div
+									className={cn(DOT, isInactive && !isActive && "opacity-55")}
+									style={{ backgroundColor: project.color }}
+								/>
 								<span className="truncate flex-1 min-w-0">{project.name}</span>
 								<span
 									className={cn(
 										"text-xs font-mono font-bold shrink-0",
-										project.weeklyMinutes > 0
-											? "text-muted-foreground"
-											: "text-muted-foreground/50",
+										project.weeklyMinutes === 0
+											? "text-muted-foreground/50"
+											: // On the heavier wash the muted ink is 3.4:1 at dusk.
+												isActive
+												? "text-foreground/80"
+												: "text-muted-foreground",
 									)}
 								>
 									{project.weeklyMinutes > 0 ? formatDuration(project.weeklyMinutes) : "—"}

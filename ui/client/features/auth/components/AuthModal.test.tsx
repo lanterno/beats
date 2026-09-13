@@ -284,12 +284,7 @@ describe("AuthModal", () => {
 
 		it("calls onClose when the close (X) button is clicked", async () => {
 			const { onClose } = renderModal();
-			// The X button has no aria-label; find it via the lucide X icon being inside.
-			const closeBtns = screen
-				.getAllByRole("button")
-				.filter((b) => b.querySelector("svg") && b.className.includes("absolute"));
-			expect(closeBtns.length).toBe(1);
-			await userEvent.click(closeBtns[0]);
+			await userEvent.click(screen.getByRole("button", { name: "Close dialog" }));
 			expect(onClose).toHaveBeenCalled();
 		});
 

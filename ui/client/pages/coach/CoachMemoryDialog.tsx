@@ -5,7 +5,7 @@
  * DELETE /api/coach/data) that previously had no UI.
  */
 
-import { Brain, Loader2, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -16,7 +16,7 @@ import {
 } from "@/entities/coach";
 import { describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
-import { Button } from "@/shared/ui";
+import { Button, Dialog } from "@/shared/ui";
 
 interface CoachMemoryDialogProps {
 	open: boolean;
@@ -35,17 +35,6 @@ export function CoachMemoryDialog({ open, onClose }: CoachMemoryDialogProps) {
 	useEffect(() => {
 		if (open) setConfirm(null);
 	}, [open]);
-
-	useEffect(() => {
-		if (!open) return;
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") onClose();
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [open, onClose]);
-
-	if (!open) return null;
 
 	const handleRewrite = () => {
 		rewrite.mutate(undefined, {
@@ -77,151 +66,124 @@ export function CoachMemoryDialog({ open, onClose }: CoachMemoryDialogProps) {
 
 	const content = memory?.content?.trim();
 
+	// The Dialog primitive owns the veil, Escape, the focus trap and the close
+	// button the hand-rolled modal used to reimplement.
 	return (
-		<div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-			<button
-				type="button"
-				aria-label="Close"
-				className="absolute inset-0 bg-veil backdrop-blur-xs"
-				onClick={onClose}
-			/>
-			<div
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby="coach-memory-title"
-				className="relative w-full max-w-lg rounded-xl border border-border/80 bg-card p-5 shadow-card"
-			>
-				<header className="flex items-center gap-2 mb-1">
-					<Brain className="w-4 h-4 text-accent-ink" />
-					<h2 id="coach-memory-title" className="text-sm font-semibold text-foreground">
-						Coach memory
-					</h2>
-					<button
-						type="button"
-						onClick={onClose}
-						aria-label="Close"
-						className="ml-auto p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition"
-					>
-						<X className="w-4 h-4" />
-					</button>
-				</header>
-				<p className="text-xs text-muted-foreground/70 mb-3">
-					What the coach remembers about you, built from your recent activity.
-				</p>
-
-				<div className="rounded-lg border border-border/60 bg-secondary/20 p-3 max-h-64 overflow-y-auto mb-4">
-					{isLoading ? (
-						<div className="flex justify-center py-6 text-muted-foreground/50">
-							<Loader2 className="w-4 h-4 animate-spin" />
+		<Dialog
+			open={open}
+			onClose={onClose}
+			title="Coach memory"
+			description="What the coach remembers about you, built from your recent activity."
+		>
+			<div className="rounded-[1.125rem] bg-secondary p-3.5 max-h-64 overflow-y-auto mb-4">
+				{isLoading ? (
+					<div className="flex justify-center py-6 text-muted-foreground">
+						<Loader2 className="w-4 h-4 animate-spin" />
+					</div>
+				) : content ? (
+					<>
+						<div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+							{content}
 						</div>
-					) : content ? (
-						<>
-							<div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
-								{content}
-							</div>
-							{memory?.updated_at && (
-								<p className="mt-2 text-[11px] text-muted-foreground/50">
-									Updated {formatDate(memory.updated_at)}
-								</p>
-							)}
-						</>
-					) : (
-						<p className="text-sm text-muted-foreground/60 py-4 text-center">
-							The coach hasn't built any memory yet. It learns from your sessions, briefs, and
-							reviews over time.
-						</p>
-					)}
-				</div>
-
-				<div className="flex flex-wrap items-center gap-2">
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						onClick={handleRewrite}
-						disabled={rewrite.isPending}
-					>
-						{rewrite.isPending ? (
-							<Loader2 className="w-3.5 h-3.5 animate-spin" />
-						) : (
-							<RefreshCw className="w-3.5 h-3.5" />
+						{memory?.updated_at && (
+							<p className="mt-2 text-[11.5px] font-medium text-muted-foreground">
+								Updated {formatDate(memory.updated_at)}
+							</p>
 						)}
-						Rewrite from recent activity
-					</Button>
+					</>
+				) : (
+					<p className="text-sm text-muted-foreground py-4 text-center">
+						The coach hasn't built any memory yet. It learns from your sessions, briefs, and reviews
+						over time.
+					</p>
+				)}
+			</div>
 
-					{confirm === "memory" ? (
-						<div className="flex items-center gap-1">
-							<Button
-								type="button"
-								variant="destructive"
-								size="sm"
-								onClick={handleDeleteMemory}
-								disabled={deleteMemory.isPending}
-							>
-								Confirm delete
-							</Button>
-							<Button type="button" variant="ghost" size="sm" onClick={() => setConfirm(null)}>
-								Cancel
-							</Button>
-						</div>
-					) : (
+			<div className="flex flex-wrap items-center gap-2">
+				<Button
+					type="button"
+					variant="secondary"
+					size="sm"
+					onClick={handleRewrite}
+					disabled={rewrite.isPending}
+				>
+					{rewrite.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+					Rewrite from recent activity
+				</Button>
+
+				{confirm === "memory" ? (
+					<div className="flex items-center gap-2">
 						<Button
 							type="button"
-							variant="ghost"
+							variant="destructive"
 							size="sm"
-							onClick={() => setConfirm("memory")}
-							disabled={!content}
+							onClick={handleDeleteMemory}
+							disabled={deleteMemory.isPending}
 						>
-							<Trash2 className="w-3.5 h-3.5" />
-							Delete memory
+							Confirm delete
 						</Button>
-					)}
-				</div>
+						<Button type="button" variant="secondary" size="sm" onClick={() => setConfirm(null)}>
+							Cancel
+						</Button>
+					</div>
+				) : (
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="text-destructive-ink hover:text-destructive-ink"
+						onClick={() => setConfirm("memory")}
+						disabled={!content}
+					>
+						<Trash2 />
+						Delete memory
+					</Button>
+				)}
+			</div>
 
-				{/* Danger zone — wipe everything the coach has stored. */}
-				<div className="mt-4 pt-4 border-t border-border/40">
-					{confirm === "all" ? (
-						<div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-							<div className="flex items-start gap-2">
-								<TriangleAlert className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-								<div className="flex-1">
-									<p className="text-sm text-foreground">
-										Delete all coach data — memory, briefs, reviews, conversations, and usage. This
-										cannot be undone.
-									</p>
-									<div className="flex items-center gap-1 mt-2">
-										<Button
-											type="button"
-											variant="destructive"
-											size="sm"
-											onClick={handleDeleteAll}
-											disabled={deleteAll.isPending}
-										>
-											{deleteAll.isPending ? "Deleting..." : "Delete everything"}
-										</Button>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											onClick={() => setConfirm(null)}
-										>
-											Cancel
-										</Button>
-									</div>
+			{/* Danger zone — wipe everything the coach has stored. */}
+			<div className="mt-4 pt-4 border-t border-border">
+				{confirm === "all" ? (
+					<div className="rounded-[1.125rem] bg-destructive/10 p-3.5">
+						<div className="flex items-start gap-2">
+							<TriangleAlert className="w-4 h-4 text-destructive-ink shrink-0 mt-0.5" />
+							<div className="flex-1">
+								<p className="text-sm text-foreground">
+									Delete all coach data — memory, briefs, reviews, conversations, and usage. This
+									cannot be undone.
+								</p>
+								<div className="flex flex-wrap items-center gap-2 mt-2.5">
+									<Button
+										type="button"
+										variant="destructive"
+										size="sm"
+										onClick={handleDeleteAll}
+										disabled={deleteAll.isPending}
+									>
+										{deleteAll.isPending ? "Deleting..." : "Delete everything"}
+									</Button>
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										onClick={() => setConfirm(null)}
+									>
+										Cancel
+									</Button>
 								</div>
 							</div>
 						</div>
-					) : (
-						<button
-							type="button"
-							onClick={() => setConfirm("all")}
-							className="text-xs text-destructive/80 hover:text-destructive hover:underline"
-						>
-							Delete all coach data…
-						</button>
-					)}
-				</div>
+					</div>
+				) : (
+					<button
+						type="button"
+						onClick={() => setConfirm("all")}
+						className="text-[12.5px] font-bold text-destructive-ink hover:underline underline-offset-[3px] rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						Delete all coach data…
+					</button>
+				)}
 			</div>
-		</div>
+		</Dialog>
 	);
 }

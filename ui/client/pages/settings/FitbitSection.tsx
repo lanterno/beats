@@ -53,7 +53,7 @@ export function FitbitSection() {
 			onDisconnect={fitbit.disconnect}
 			disconnecting={fitbit.isDisconnecting}
 		>
-			<Button size="sm" className="text-xs" onClick={handleConnect} disabled={redirecting}>
+			<Button variant="secondary" size="sm" onClick={handleConnect} disabled={redirecting}>
 				{redirecting ? "Connecting…" : "Connect Fitbit"}
 			</Button>
 		</IntegrationSection>

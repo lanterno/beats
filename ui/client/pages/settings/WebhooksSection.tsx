@@ -2,6 +2,8 @@ import { Plus, Trash2, Webhook } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { del, get, post } from "@/shared/api";
+import { Button, Panel } from "@/shared/ui";
+import { FIELD, HEADING, HEADING_ICON, LEAD, LIST, REMOVE, ROW } from "./styles";
 
 export interface WebhookEntry {
 	id: string;
@@ -55,35 +57,28 @@ export function WebhooksSection() {
 
 	return (
 		<section className="mb-8">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Webhook className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<Webhook className={HEADING_ICON} />
 				Webhooks
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
-				<p className="text-xs text-muted-foreground">
-					Receive POST requests on <code className="text-foreground/80">timer.start</code> and{" "}
-					<code className="text-foreground/80">timer.stop</code> events. Works with IFTTT, Zapier,
-					Home Assistant, or custom endpoints.
+			<Panel padding="p-5" className="space-y-3">
+				<p className={LEAD}>
+					Receive POST requests on <code className="font-code text-foreground">timer.start</code>{" "}
+					and <code className="font-code text-foreground">timer.stop</code> events. Works with
+					IFTTT, Zapier, Home Assistant, or custom endpoints.
 				</p>
 
 				{webhooks.length > 0 && (
-					<div className="space-y-1.5">
+					<div className={LIST}>
 						{webhooks.map((wh) => (
-							<div
-								key={wh.id}
-								className="flex items-center gap-2 bg-secondary/30 rounded px-2.5 py-1.5"
-							>
-								<code className="text-xs text-foreground/80 font-code truncate flex-1">
+							<div key={wh.id} className={ROW}>
+								<code className="text-[12px] text-foreground font-code truncate flex-1 min-w-0">
 									{wh.url}
 								</code>
-								<span className="text-[10px] text-muted-foreground shrink-0">
+								<span className="text-[11.5px] font-medium text-muted-foreground shrink-0">
 									{wh.events.join(", ")}
 								</span>
-								<button
-									type="button"
-									onClick={() => handleDelete(wh.id)}
-									className="p-1 text-muted-foreground/40 hover:text-destructive transition-colors shrink-0"
-								>
+								<button type="button" onClick={() => handleDelete(wh.id)} className={REMOVE}>
 									<Trash2 className="w-3 h-3" />
 								</button>
 							</div>
@@ -98,19 +93,19 @@ export function WebhooksSection() {
 						onChange={(e) => setNewUrl(e.target.value)}
 						placeholder="https://example.com/webhook"
 						onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-						className="flex-1 text-xs bg-secondary/50 border border-border rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-accent font-mono"
+						className={`${FIELD} flex-1 font-code`}
 					/>
-					<button
-						type="button"
+					<Button
+						variant="secondary"
+						size="sm"
 						onClick={handleAdd}
 						disabled={!newUrl.trim() || adding}
-						className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground disabled:opacity-40 hover:bg-accent/85 transition-colors"
 					>
-						<Plus className="w-3 h-3" />
+						<Plus />
 						Add
-					</button>
+					</Button>
 				</div>
-			</div>
+			</Panel>
 		</section>
 	);
 }

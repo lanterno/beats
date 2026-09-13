@@ -175,6 +175,27 @@ describe("ProjectDetails", () => {
 		).toBeInTheDocument();
 	});
 
+	it("names the goal in force in the header chip, as the Goal panel does, not the base goal", async () => {
+		const monday = mondayOfIso(todayIso());
+		hooks.useProject.mockReturnValue({
+			data: {
+				...PROJECT,
+				goalOverrides: [
+					{ effectiveFrom: addIsoDays(monday, -21), weeklyGoal: 8, goalType: "target" },
+					{ effectiveFrom: addIsoDays(monday, 14), weeklyGoal: 12, goalType: "target" },
+				],
+			},
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		expect(await screen.findByText("Side project · goal 8 h/week")).toBeInTheDocument();
+		const goal = screen.getByRole("region", { name: "Goal" });
+		expect(within(goal).queryByText("10 h / week · target")).not.toBeInTheDocument();
+		expect(within(goal).getAllByText("8 h / week · target").length).toBeGreaterThan(0);
+	});
+
 	it("shows the contract surfaces on a day job, and the region caveat until a region is set", async () => {
 		hooks.useProject.mockReturnValue({ data: DAY_JOB, isLoading: false, error: null });
 		hooks.useContractWeek.mockReturnValue({

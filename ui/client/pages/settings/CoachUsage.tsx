@@ -4,6 +4,9 @@
 
 import { BarChart3, Sparkles } from "lucide-react";
 import { useCoachUsage } from "@/entities/coach";
+import { cn } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { HEADING, HEADING_ICON, LABEL } from "./styles";
 
 export function CoachUsage() {
 	const { data, isLoading } = useCoachUsage();
@@ -22,22 +25,22 @@ export function CoachUsage() {
 
 	return (
 		<section className="mb-8">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Sparkles className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<Sparkles className={HEADING_ICON} />
 				Coach Usage
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">
+			<Panel padding="p-5" className="space-y-4">
 				{/* Budget bar */}
 				<div>
-					<div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+					<div className="flex items-center justify-between gap-3 text-[12.5px] font-medium text-muted-foreground mb-1.5">
 						<span>
 							Month: ${month_total_usd.toFixed(2)} / ${budget_usd.toFixed(2)}
 						</span>
-						<span>{budgetPct.toFixed(0)}%</span>
+						<span className="font-mono font-bold text-foreground">{budgetPct.toFixed(0)}%</span>
 					</div>
-					<div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
+					<div className="h-2 rounded-full bg-secondary overflow-hidden">
 						<div
-							className="h-full rounded-full bg-accent transition-all"
+							className="h-full rounded-full bg-[hsl(var(--secondary))] transition-all"
 							style={{ width: `${budgetPct}%` }}
 						/>
 					</div>
@@ -46,18 +49,22 @@ export function CoachUsage() {
 				{/* Stats row */}
 				<div className="grid grid-cols-3 gap-3 text-center">
 					<div>
-						<div className="text-lg font-semibold text-foreground">{totalCalls}</div>
-						<div className="text-[11px] text-muted-foreground">Calls (30d)</div>
+						<div className="font-heading text-[22px] font-extrabold tracking-[-0.02em] text-foreground">
+							{totalCalls}
+						</div>
+						<div className="text-[11.5px] font-medium text-muted-foreground">Calls (30d)</div>
 					</div>
 					<div>
-						<div className="text-lg font-semibold text-foreground">{cacheRatio}%</div>
-						<div className="text-[11px] text-muted-foreground">Cache hit ratio</div>
+						<div className="font-heading text-[22px] font-extrabold tracking-[-0.02em] text-foreground">
+							{cacheRatio}%
+						</div>
+						<div className="text-[11.5px] font-medium text-muted-foreground">Cache hit ratio</div>
 					</div>
 					<div>
-						<div className="text-lg font-semibold text-foreground">
+						<div className="font-heading text-[22px] font-extrabold tracking-[-0.02em] text-foreground">
 							${month_total_usd.toFixed(2)}
 						</div>
-						<div className="text-[11px] text-muted-foreground">Month cost</div>
+						<div className="text-[11.5px] font-medium text-muted-foreground">Month cost</div>
 					</div>
 				</div>
 
@@ -65,14 +72,14 @@ export function CoachUsage() {
 				{days.length > 0 && (
 					<div>
 						<div className="flex items-center gap-1.5 mb-2">
-							<BarChart3 className="w-3 h-3 text-muted-foreground/60" />
-							<span className="text-[11px] text-muted-foreground/60">Daily cost</span>
+							<BarChart3 className="w-3 h-3 text-muted-foreground" />
+							<span className={cn(LABEL, "text-[10px]")}>Daily cost</span>
 						</div>
 						<div className="flex items-end gap-[2px] h-12">
 							{days.slice(-30).map((d) => (
 								<div
 									key={d.date}
-									className="flex-1 bg-accent/60 rounded-t-sm hover:bg-accent transition"
+									className="flex-1 rounded-t-[3px] bg-[hsl(var(--secondary)/0.6)] hover:bg-[hsl(var(--secondary))] transition-colors"
 									style={{
 										height: `${Math.max(2, (d.cost_usd / maxCost) * 100)}%`,
 									}}
@@ -82,7 +89,7 @@ export function CoachUsage() {
 						</div>
 					</div>
 				)}
-			</div>
+			</Panel>
 		</section>
 	);
 }

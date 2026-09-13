@@ -9,6 +9,18 @@ import { toast } from "sonner";
 import { useUpsertWeeklyPlan, useWeeklyPlan } from "@/entities/planning";
 import { useProjects } from "@/entities/project";
 import { formatDuration, getMondayOfWeeksAgo } from "@/shared/lib";
+import { Button, Panel } from "@/shared/ui";
+
+/** A section heading on the sky: the mockup's `.lbl`, in ink so it reads there. */
+const SKY_HEADING =
+	"px-2 mb-2.5 font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-foreground";
+
+// The mockup's `.dlg input`: a wash, no border, the figures face.
+const FIELD =
+	"w-[4.5rem] text-right text-[13px] font-mono font-bold bg-secondary rounded-xl px-2.5 py-1.5 text-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent";
+
+/** A project with no colour. */
+const NO_COLOR = "var(--color-muted-foreground)";
 
 function getMonday(weeksAgo: number): string {
 	return getMondayOfWeeksAgo(weeksAgo).toISOString().slice(0, 10);
@@ -52,50 +64,55 @@ export default function PlanPage() {
 
 	return (
 		<div className="max-w-4xl mx-auto px-6 py-8">
-			<h1 className="font-heading text-2xl text-foreground mb-1 flex items-center gap-2">
-				<CalendarDays className="w-6 h-6 text-accent-ink" />
+			<h1 className="font-heading text-2xl font-extrabold tracking-[-0.02em] text-foreground mb-1 px-2 flex items-center gap-2">
+				<CalendarDays className="w-6 h-6 text-muted-foreground" />
 				Weekly Plan
 			</h1>
-			<p className="text-sm text-muted-foreground mb-8">
+			{/* On the bare sky the muted ink is under 3:1 and ink at 80 % is 4:1 at its top; 90 % reads. */}
+			<p className="text-sm font-medium text-foreground/90 mb-8 px-2">
 				Set time budgets for the week. Week of {thisMonday}.
 			</p>
 
 			<div className="grid md:grid-cols-2 gap-6">
 				{/* Last week summary */}
 				<div>
-					<h2 className="text-sm font-medium text-muted-foreground mb-3">
-						Last week ({lastMonday})
+					<h2 className={SKY_HEADING}>
+						Last week <span className="font-mono tracking-normal">({lastMonday})</span>
 					</h2>
-					<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-2">
+					<Panel padding="px-5 py-4" className="space-y-2">
 						{lastWeekPlan?.budgets && lastWeekPlan.budgets.length > 0 ? (
 							lastWeekPlan.budgets.map((b) => {
 								const project = activeProjects.find((p) => p.id === b.project_id);
 								return (
 									<div key={b.project_id} className="flex items-center justify-between">
-										<span className="text-sm text-foreground">{project?.name ?? "Unknown"}</span>
-										<span className="text-sm tabular-nums text-muted-foreground">
+										<span className="text-[13.5px] font-bold text-foreground">
+											{project?.name ?? "Unknown"}
+										</span>
+										<span className="text-[12.5px] font-mono font-bold text-muted-foreground">
 											{b.planned_hours}h planned
 										</span>
 									</div>
 								);
 							})
 						) : (
-							<p className="text-xs text-muted-foreground/60 italic">No plan set last week</p>
+							<p className="text-xs font-medium text-muted-foreground">No plan set last week</p>
 						)}
-					</div>
+					</Panel>
 				</div>
 
 				{/* This week budgets */}
 				<div>
-					<h2 className="text-sm font-medium text-foreground mb-3">This week</h2>
-					<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
+					<h2 className={SKY_HEADING}>This week</h2>
+					<Panel padding="px-5 py-4" className="space-y-3">
 						{activeProjects.map((p) => (
 							<div key={p.id} className="flex items-center gap-3">
 								<div
 									className="w-2 h-2 rounded-full shrink-0"
-									style={{ backgroundColor: p.color ?? "#888" }}
+									style={{ backgroundColor: p.color ?? NO_COLOR }}
 								/>
-								<span className="text-sm text-foreground flex-1 truncate">{p.name}</span>
+								<span className="text-[13.5px] font-bold text-foreground flex-1 truncate">
+									{p.name}
+								</span>
 								<input
 									type="number"
 									min={0}
@@ -105,26 +122,22 @@ export default function PlanPage() {
 									onChange={(e) =>
 										setBudgets((prev) => ({ ...prev, [p.id]: Number(e.target.value) || 0 }))
 									}
-									className="w-16 text-right text-sm tabular-nums bg-secondary/50 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+									className={FIELD}
 								/>
-								<span className="text-xs text-muted-foreground w-3">h</span>
+								<span className="text-xs font-medium text-muted-foreground w-3">h</span>
 							</div>
 						))}
 
-						<div className="pt-3 border-t border-border/40 flex items-center justify-between">
-							<span className="text-sm font-medium text-foreground">
+						<div className="pt-3 border-t border-border flex items-center justify-between">
+							<span className="text-sm font-bold text-foreground">
 								Total: {formatDuration(totalHours * 60)}
 							</span>
-							<button
-								type="button"
-								onClick={handleSave}
-								className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
-							>
+							<Button type="button" size="sm" onClick={handleSave}>
 								<Save className="w-3.5 h-3.5" />
 								Save Plan
-							</button>
+							</Button>
 						</div>
-					</div>
+					</Panel>
 				</div>
 			</div>
 		</div>

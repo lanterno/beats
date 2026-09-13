@@ -16,8 +16,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { config } from "@/shared/config";
-import { DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
+import { cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
+import { Button, buttonVariants, Panel } from "@/shared/ui";
 import { CalendarSection } from "./CalendarSection";
 import { CoachUsage } from "./CoachUsage";
 import { CodeBlock } from "./CodeBlock";
@@ -28,6 +29,7 @@ import { GitHubSection } from "./GitHubSection";
 import { HomeIdentitySection } from "./HomeIdentitySection";
 import { OuraSection } from "./OuraSection";
 import { PasskeysSection } from "./PasskeysSection";
+import { CHIP_BUTTON, HEADING, HEADING_ICON, LABEL, LEAD } from "./styles";
 import { WebhooksSection } from "./WebhooksSection";
 
 export default function Settings() {
@@ -89,18 +91,21 @@ export default function Settings() {
 
 	return (
 		<div className="max-w-3xl mx-auto px-6 py-8">
-			<h1 className="font-heading text-2xl text-foreground mb-1">Settings</h1>
-			<p className="text-sm text-muted-foreground mb-8">
+			<h1 className="font-heading text-[26px] font-extrabold tracking-[-0.01em] text-foreground mb-1">
+				Settings
+			</h1>
+			{/* On the bare sky: the muted ink is 3:1 there, ink at 90 % reads. */}
+			<p className="text-sm font-medium text-foreground/90 mb-8">
 				Appearance, data export, and developer tools.
 			</p>
 
 			{/* Appearance — Theme */}
 			<section className="mb-8">
-				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Palette className="w-4 h-4 text-accent-ink" />
+				<h2 className={HEADING}>
+					<Palette className={HEADING_ICON} />
 					Theme
 				</h2>
-				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
+				<Panel padding="p-5">
 					<div className="flex flex-wrap gap-2">
 						{THEMES.map((t) => (
 							<button
@@ -122,16 +127,16 @@ export default function Settings() {
 							</button>
 						))}
 					</div>
-				</div>
+				</Panel>
 			</section>
 
 			{/* Appearance — Density */}
 			<section className="mb-8">
-				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Rows3 className="w-4 h-4 text-accent-ink" />
+				<h2 className={HEADING}>
+					<Rows3 className={HEADING_ICON} />
 					Layout Density
 				</h2>
-				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
+				<Panel padding="p-5">
 					<div className="flex flex-wrap gap-2">
 						{DENSITIES.map((d) => (
 							<button
@@ -149,40 +154,36 @@ export default function Settings() {
 							</button>
 						))}
 					</div>
-				</div>
+				</Panel>
 			</section>
 
 			{/* Data Export */}
 			<section className="mb-8">
-				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Download className="w-4 h-4 text-accent-ink" />
+				<h2 className={HEADING}>
+					<Download className={HEADING_ICON} />
 					Data Export
 				</h2>
-				<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden divide-y divide-border/40">
+				<Panel padding="px-5 py-1" className="divide-y divide-border">
 					{/* CSV */}
-					<div className="p-4">
+					<div className="py-4">
 						<div className="flex items-start gap-3">
-							<FileSpreadsheet className="w-5 h-5 text-accent-ink/70 mt-0.5 shrink-0" />
-							<div className="flex-1">
-								<p className="text-sm font-medium text-foreground">Sessions CSV</p>
-								<p className="text-xs text-muted-foreground mt-0.5">
+							<FileSpreadsheet className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+							<div className="flex-1 min-w-0">
+								<p className="text-sm font-bold text-foreground">Sessions CSV</p>
+								<p className={cn(LEAD, "mt-0.5")}>
 									Export sessions as a spreadsheet with date, project, start, end, duration, notes,
 									and tags.
 								</p>
-								<div className="flex flex-wrap gap-2 mt-3">
-									<button
-										type="button"
-										onClick={() => handleExportCSV()}
-										className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
-									>
+								<div className="flex flex-wrap items-center gap-2 mt-3">
+									<Button variant="secondary" size="sm" onClick={() => handleExportCSV()}>
 										All sessions
-									</button>
+									</Button>
 									{activeProjects.map((p) => (
 										<button
 											type="button"
 											key={p.id}
 											onClick={() => handleExportCSV(p.id)}
-											className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
+											className={CHIP_BUTTON}
 										>
 											{p.name}
 										</button>
@@ -193,40 +194,38 @@ export default function Settings() {
 					</div>
 
 					{/* JSON */}
-					<div className="p-4">
+					<div className="py-4">
 						<div className="flex items-start gap-3">
-							<FileJson className="w-5 h-5 text-accent-ink/70 mt-0.5 shrink-0" />
-							<div className="flex-1">
-								<p className="text-sm font-medium text-foreground">Full JSON Backup</p>
-								<p className="text-xs text-muted-foreground mt-0.5">
+							<FileJson className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+							<div className="flex-1 min-w-0">
+								<p className="text-sm font-bold text-foreground">Full JSON Backup</p>
+								<p className={cn(LEAD, "mt-0.5")}>
 									Complete dump of all projects and sessions. Re-importable for disaster recovery.
 								</p>
-								<button
-									type="button"
-									onClick={handleExportJSON}
-									className="mt-3 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent/85 transition-colors"
-								>
+								<Button variant="secondary" size="sm" onClick={handleExportJSON} className="mt-3">
 									Download backup
-								</button>
+								</Button>
 							</div>
 						</div>
 					</div>
-				</div>
+				</Panel>
 			</section>
 
 			{/* Data Import */}
 			<section className="mb-8">
-				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Upload className="w-4 h-4 text-accent-ink" />
+				<h2 className={HEADING}>
+					<Upload className={HEADING_ICON} />
 					Data Import
 				</h2>
-				<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
-					<p className="text-xs text-muted-foreground mb-3">
+				<Panel padding="p-5">
+					<p className={cn(LEAD, "mb-3")}>
 						Restore from a JSON backup file. Records are upserted by ID — safe to re-import without
 						duplicates.
 					</p>
-					<label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors cursor-pointer">
-						<Upload className="w-3.5 h-3.5" />
+					<label
+						className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "cursor-pointer")}
+					>
+						<Upload />
 						{importing ? "Importing..." : "Choose backup file"}
 						<input
 							type="file"
@@ -236,7 +235,7 @@ export default function Settings() {
 							className="hidden"
 						/>
 					</label>
-				</div>
+				</Panel>
 			</section>
 
 			{/* Integrations */}
@@ -263,20 +262,20 @@ export default function Settings() {
 
 			{/* API Info */}
 			<section className="mb-8">
-				<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-					<Terminal className="w-4 h-4 text-accent-ink" />
+				<h2 className={HEADING}>
+					<Terminal className={HEADING_ICON} />
 					Developer
 				</h2>
-				<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden divide-y divide-border/40">
-					<div className="p-4">
-						<p className="text-xs text-muted-foreground mb-1">API Base URL</p>
-						<code className="text-sm text-foreground font-code bg-secondary/40 px-2 py-0.5 rounded">
+				<Panel padding="px-5 py-1" className="divide-y divide-border">
+					<div className="py-4">
+						<p className={cn(LABEL, "mb-1.5")}>API Base URL</p>
+						<code className="inline-block max-w-full break-all rounded-lg bg-secondary px-2.5 py-1 text-[13px] text-foreground font-code">
 							{apiBase}
 						</code>
 					</div>
-					<div className="p-4">
-						<p className="text-xs text-muted-foreground mb-2">Quick Start</p>
-						<div className="space-y-2">
+					<div className="py-4">
+						<p className={cn(LABEL, "mb-2")}>Quick Start</p>
+						<div className="space-y-2.5">
 							<CodeBlock
 								label="Start timer"
 								code={`curl -X POST ${apiBase}/api/projects/YOUR_PROJECT_ID/start -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
@@ -296,16 +295,8 @@ export default function Settings() {
 							/>
 						</div>
 					</div>
-				</div>
+				</Panel>
 			</section>
 		</div>
 	);
 }
-
-/**
- * The linked `home.space` identity — the account's second door.
- *
- * Renders nothing at all unless the instance actually offers SSO, so a
- * deployment without an identity service shows the settings page it always
- * showed.
- */

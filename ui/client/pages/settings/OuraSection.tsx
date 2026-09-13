@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { describeError, post } from "@/shared/api";
 import { Button } from "@/shared/ui";
 import { IntegrationSection } from "./IntegrationSection";
+import { FIELD } from "./styles";
 import { useIntegration } from "./useIntegration";
 
 export function OuraSection() {
@@ -38,7 +39,7 @@ export function OuraSection() {
 						href="https://cloud.ouraring.com/personal-access-tokens"
 						target="_blank"
 						rel="noopener noreferrer"
-						className="text-accent-ink hover:underline"
+						className="text-accent-ink font-bold hover:underline underline-offset-[3px]"
 					>
 						cloud.ouraring.com
 					</a>
@@ -59,11 +60,11 @@ export function OuraSection() {
 					value={token}
 					onChange={(e) => setToken(e.target.value)}
 					placeholder="Oura personal access token"
-					className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/20 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-accent"
+					className={`${FIELD} flex-1`}
 				/>
 				<Button
+					variant="secondary"
 					size="sm"
-					className="text-xs"
 					onClick={handleConnect}
 					disabled={connecting || !token.trim()}
 				>

@@ -8,6 +8,8 @@
 import { useMemo } from "react";
 import { useRecentDrift } from "@/entities/session";
 import { formatDuration, shortBundleLabel } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { LABEL, META } from "./styles";
 
 function startOfTodayIso(): string {
 	const now = new Date();
@@ -40,18 +42,18 @@ export function DistractionsToday() {
 	const maxMinutes = Math.max(...summary.apps.map((a) => a.minutes), 1);
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Distractions today</p>
-				<div className="flex items-baseline gap-3 text-[11px] text-muted-foreground">
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Distractions today</p>
+				<div className={`flex items-baseline gap-3 ${META}`}>
 					<span>
-						<span className="text-foreground tabular-nums">
+						<span className="text-foreground font-bold tabular-nums">
 							{formatDuration(summary.totalMinutes)}
 						</span>{" "}
 						drifting
 					</span>
 					<span>
-						<span className="text-foreground tabular-nums">{summary.count}</span> event
+						<span className="text-foreground font-bold tabular-nums">{summary.count}</span> event
 						{summary.count !== 1 ? "s" : ""}
 					</span>
 				</div>
@@ -60,21 +62,24 @@ export function DistractionsToday() {
 			<div className="space-y-1.5">
 				{summary.apps.map((a) => (
 					<div key={a.bundleId} className="flex items-center gap-2">
-						<span className="text-xs text-foreground/80 w-28 truncate shrink-0" title={a.bundleId}>
+						<span
+							className="text-xs font-medium text-foreground w-28 truncate shrink-0"
+							title={a.bundleId}
+						>
 							{shortBundleLabel(a.bundleId)}
 						</span>
-						<div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+						<div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
 							<div
-								className="h-full rounded-full bg-accent/70"
+								className="h-full rounded-full bg-destructive/60"
 								style={{ width: `${(a.minutes / maxMinutes) * 100}%` }}
 							/>
 						</div>
-						<span className="text-[11px] tabular-nums text-muted-foreground w-12 text-right shrink-0">
+						<span className="text-[11px] font-medium tabular-nums text-muted-foreground w-12 text-right shrink-0">
 							{formatDuration(a.minutes)}
 						</span>
 					</div>
 				))}
 			</div>
-		</div>
+		</Panel>
 	);
 }

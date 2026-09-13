@@ -281,20 +281,23 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				className="absolute inset-0 w-full bg-veil backdrop-blur-sm"
 				onClick={onClose}
 			/>
-			<div className="relative w-full max-w-md mx-6 bg-card border border-border rounded-lg p-8 shadow-soft animate-in fade-in zoom-in-95 duration-200">
+			<div className="relative w-full max-w-md mx-6 rounded-[1.75rem] bg-card p-8 shadow-card animate-in fade-in zoom-in-95 duration-200">
 				{/* Close button */}
 				<button
 					type="button"
+					aria-label="Close dialog"
 					onClick={onClose}
 					disabled={isProcessing}
-					className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+					className="absolute top-4 right-4 grid place-items-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<X size={18} />
 				</button>
 
 				{!webAuthnSupported ? (
 					<div className="text-center">
-						<h2 className="text-2xl font-heading text-foreground mb-4">Browser Not Supported</h2>
+						<h2 className="text-2xl font-heading font-extrabold text-foreground mb-4">
+							Browser Not Supported
+						</h2>
 						<p className="text-muted-foreground">
 							Your browser does not support Passkeys/WebAuthn. Please use a modern browser like
 							Chrome, Firefox, Safari, or Edge.
@@ -304,8 +307,10 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 					<>
 						{/* Header */}
 						<div className="text-center mb-8">
-							<h2 className="font-heading text-3xl text-foreground tracking-tight">Beats</h2>
-							<p className="mt-2 text-muted-foreground">
+							<h2 className="font-heading text-3xl font-extrabold text-foreground tracking-[-0.01em]">
+								Beats
+							</h2>
+							<p className="mt-2 font-medium text-muted-foreground">
 								{mode === "register-email" && "Create your account"}
 								{mode === "register-passkey" && "Set up your passkey"}
 								{mode === "login" && "Sign in with your passkey"}
@@ -314,7 +319,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 
 						{/* Error message */}
 						{error && (
-							<div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+							<div className="mb-6 px-4 py-3 rounded-[1.125rem] bg-destructive/10 text-destructive-ink text-sm font-medium">
 								{error}
 							</div>
 						)}
@@ -325,7 +330,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 								<div>
 									<label
 										htmlFor="auth-email"
-										className="block text-sm font-medium text-foreground mb-1.5"
+										className="block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-[5px]"
 									>
 										Email
 									</label>
@@ -336,17 +341,17 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 										value={email}
 										onChange={(e) => setEmail(e.target.value)}
 										placeholder="you@example.com"
-										className="w-full rounded-md border border-input bg-background py-2.5 px-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
+										className="w-full rounded-xl bg-secondary py-2.5 px-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent"
 										autoFocus
 									/>
 								</div>
 								<div>
 									<label
 										htmlFor="auth-displayName"
-										className="block text-sm font-medium text-foreground mb-1.5"
+										className="block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-[5px]"
 									>
 										Display name{" "}
-										<span className="text-muted-foreground font-normal">(optional)</span>
+										<span className="normal-case tracking-normal font-medium">(optional)</span>
 									</label>
 									<input
 										id="auth-displayName"
@@ -354,7 +359,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 										value={displayName}
 										onChange={(e) => setDisplayName(e.target.value)}
 										placeholder="Your name"
-										className="w-full rounded-md border border-input bg-background py-2.5 px-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40"
+										className="w-full rounded-xl bg-secondary py-2.5 px-3 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent"
 									/>
 								</div>
 								<Button
@@ -409,7 +414,9 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 							<div className="mt-6">
 								<div className="flex items-center gap-3 mb-4">
 									<span className="h-px flex-1 bg-border" />
-									<span className="text-xs text-muted-foreground uppercase tracking-wide">or</span>
+									<span className="text-[10.5px] font-bold text-muted-foreground uppercase tracking-[0.14em]">
+										or
+									</span>
 									<span className="h-px flex-1 bg-border" />
 								</div>
 								<Button
@@ -434,7 +441,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 							{mode === "login" && (
 								<button
 									type="button"
-									className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+									className="text-[12.5px] font-bold text-muted-foreground hover:text-foreground transition-colors w-full text-center rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 									onClick={() => setMode("register-email")}
 									disabled={isProcessing}
 								>
@@ -444,7 +451,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 							{(mode === "register-email" || mode === "register-passkey") && (
 								<button
 									type="button"
-									className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+									className="text-[12.5px] font-bold text-muted-foreground hover:text-foreground transition-colors w-full text-center rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 									onClick={() => {
 										setMode("login");
 										setRegistrationOptions(null);

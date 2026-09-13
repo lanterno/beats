@@ -16,6 +16,7 @@
 import { Link, useNavigate } from "react-router";
 import { useFlowWindowsSummary } from "@/entities/session";
 import { shortBundleLabel } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
 
 interface YesterdayRange {
 	start: string;
@@ -53,67 +54,77 @@ export function FlowHeadline() {
 	return (
 		<Link
 			to="/insights"
-			className="block rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition-colors"
+			className="group block rounded-[1.625rem] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 		>
-			<div className="flex items-baseline justify-between mb-1.5">
-				<p className="font-heading text-sm text-foreground">
-					{isToday ? "Flow today" : "Flow yesterday"}
-				</p>
-				<p className="text-[11px] text-muted-foreground">view details &rarr;</p>
-			</div>
-
-			<div className="flex items-baseline gap-4 text-[12px] text-muted-foreground tabular-nums">
-				<span>
-					<span className="font-heading text-2xl text-accent-ink">{avg}</span>
-					<span className="text-[10px] text-muted-foreground"> /100</span>
-				</span>
-				<span>
-					peak <span className="text-foreground">{peak}</span>
-					{peakAt && <span className="text-muted-foreground"> at {peakAt}</span>}
-				</span>
-				<span>
-					<span className="text-foreground">{data.count}</span> windows
-				</span>
-			</div>
-
-			{(data.top_repo || data.top_language || data.top_bundle) && (
-				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
-					{data.top_repo && (
-						<span>
-							best on{" "}
-							<DeepLinkSpan
-								label={shortTail(data.top_repo.key)}
-								title={`View Insights filtered to ${data.top_repo.key}`}
-								onClick={() => navigate(`/insights?repo=${encodeURIComponent(data.top_repo!.key)}`)}
-							/>
-						</span>
-					)}
-					{data.top_language && (
-						<span>
-							in{" "}
-							<DeepLinkSpan
-								label={data.top_language.key}
-								title={`View Insights filtered to ${data.top_language.key}`}
-								onClick={() =>
-									navigate(`/insights?language=${encodeURIComponent(data.top_language!.key)}`)
-								}
-							/>
-						</span>
-					)}
-					{data.top_bundle && (
-						<span>
-							using{" "}
-							<DeepLinkSpan
-								label={shortBundleLabel(data.top_bundle.key)}
-								title={`View Insights filtered to ${data.top_bundle.key}`}
-								onClick={() =>
-									navigate(`/insights?bundle=${encodeURIComponent(data.top_bundle!.key)}`)
-								}
-							/>
-						</span>
-					)}
+			<Panel padding="px-6 py-4" className="transition-shadow group-hover:shadow-card">
+				<div className="flex items-baseline justify-between mb-1">
+					<p className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+						{isToday ? "Flow today" : "Flow yesterday"}
+					</p>
+					<p className="text-[12.5px] font-bold text-accent-ink group-hover:underline underline-offset-[3px]">
+						view details &rarr;
+					</p>
 				</div>
-			)}
+
+				<div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12.5px] font-medium text-muted-foreground">
+					<span>
+						<span className="font-heading text-[26px] font-extrabold tracking-[-0.02em] text-foreground">
+							{avg}
+						</span>
+						<span className="text-xs font-mono font-bold text-muted-foreground"> /100</span>
+					</span>
+					<span>
+						peak <span className="font-mono font-bold text-foreground">{peak}</span>
+						{peakAt && (
+							<span className="font-mono font-bold text-muted-foreground"> at {peakAt}</span>
+						)}
+					</span>
+					<span>
+						<span className="font-mono font-bold text-foreground">{data.count}</span> windows
+					</span>
+				</div>
+
+				{(data.top_repo || data.top_language || data.top_bundle) && (
+					<div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-medium text-muted-foreground border-t border-border pt-2">
+						{data.top_repo && (
+							<span>
+								best on{" "}
+								<DeepLinkSpan
+									label={shortTail(data.top_repo.key)}
+									title={`View Insights filtered to ${data.top_repo.key}`}
+									onClick={() =>
+										navigate(`/insights?repo=${encodeURIComponent(data.top_repo!.key)}`)
+									}
+								/>
+							</span>
+						)}
+						{data.top_language && (
+							<span>
+								in{" "}
+								<DeepLinkSpan
+									label={data.top_language.key}
+									title={`View Insights filtered to ${data.top_language.key}`}
+									onClick={() =>
+										navigate(`/insights?language=${encodeURIComponent(data.top_language!.key)}`)
+									}
+								/>
+							</span>
+						)}
+						{data.top_bundle && (
+							<span>
+								using{" "}
+								<DeepLinkSpan
+									label={shortBundleLabel(data.top_bundle.key)}
+									title={`View Insights filtered to ${data.top_bundle.key}`}
+									onClick={() =>
+										navigate(`/insights?bundle=${encodeURIComponent(data.top_bundle!.key)}`)
+									}
+								/>
+							</span>
+						)}
+					</div>
+				)}
+			</Panel>
 		</Link>
 	);
 }
@@ -141,7 +152,7 @@ function DeepLinkSpan({
 				e.stopPropagation();
 				onClick();
 			}}
-			className="text-foreground/80 hover:text-accent-ink hover:underline transition-colors"
+			className="font-bold text-foreground hover:text-accent-ink hover:underline underline-offset-[3px] transition-colors rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 		>
 			{label}
 		</button>

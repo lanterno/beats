@@ -7,6 +7,8 @@ import { Activity, AlertTriangle } from "lucide-react";
 import { Link } from "react-router";
 import { useProjectHealth } from "@/entities/intelligence";
 import { cn } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { LABEL } from "./styles";
 
 export function ProjectHealth() {
 	const { data: projects } = useProjectHealth();
@@ -14,25 +16,27 @@ export function ProjectHealth() {
 	if (!projects || projects.length === 0) return null;
 
 	return (
-		<div className="rounded-lg border border-border/80 bg-card shadow-soft px-4 py-3">
-			<h3 className="flex items-center gap-2 text-sm font-medium text-foreground mb-3">
-				<Activity className="w-3.5 h-3.5 text-accent-ink/75" />
+		<Panel padding="px-6 py-[22px]">
+			<h3 className={cn(LABEL, "flex items-center gap-2 mb-3")}>
+				<Activity className="w-3.5 h-3.5" />
 				Project Health
 			</h3>
 
-			<div className="space-y-2">
+			<div className="space-y-1">
 				{projects.map((p) => (
 					<Link
 						key={p.project_id}
 						to={`/project/${p.project_id}`}
 						className={cn(
-							"flex items-center gap-2.5 px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-secondary/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
-							p.alert && "bg-destructive/5 border border-destructive/20",
+							"flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-xs transition-colors hover:bg-secondary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+							p.alert && "bg-destructive/10",
 						)}
 					>
-						<span className="text-foreground font-medium truncate flex-1">{p.project_name}</span>
+						<span className="text-foreground font-bold truncate flex-1">{p.project_name}</span>
 						{p.days_since_last !== null && p.days_since_last !== undefined && (
-							<span className="text-muted-foreground tabular-nums">{p.days_since_last}d ago</span>
+							<span className="text-muted-foreground font-medium tabular-nums">
+								{p.days_since_last}d ago
+							</span>
 						)}
 						{/* Mini sparkline for weekly goal trend */}
 						{p.weekly_goal_trend.length > 0 && (
@@ -42,7 +46,7 @@ export function ProjectHealth() {
 									return (
 										<div
 											key={i}
-											className="w-1.5 bg-accent/40 rounded-sm"
+											className="w-1.5 bg-success/55 rounded-[2px]"
 											style={{ height: `${Math.max(2, (h / max) * 12)}px` }}
 										/>
 									);
@@ -53,6 +57,6 @@ export function ProjectHealth() {
 					</Link>
 				))}
 			</div>
-		</div>
+		</Panel>
 	);
 }

@@ -34,6 +34,8 @@ export {
 	validateContractFrame,
 	validateTerm,
 } from "./contractForm";
+// The goal in force on a Monday: a permanent override, else the project's own
+export { permanentOverrideOn, type StandingGoal, standingGoalOn } from "./goalOverrides";
 // The ledger's rows: rule rows, the quiet collapse, CSV
 export {
 	describeLedgerNote,

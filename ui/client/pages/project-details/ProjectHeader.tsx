@@ -13,13 +13,14 @@ import type { ProjectFormAutoFocusField, ProjectWithDuration } from "@/entities/
 import {
 	assignColor,
 	displayTermOn,
+	standingGoalOn,
 	termHoursPerWeek,
 	toPercent,
 	useUnarchiveProject,
 	useUpdateProject,
 } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { cn } from "@/shared/lib";
+import { cn, mondayOfIso } from "@/shared/lib";
 import { ColorPicker } from "@/shared/ui";
 import { plainDate } from "./dates";
 import { ProjectGitHubBadge } from "./ProjectGitHubBadge";
@@ -38,9 +39,14 @@ function hoursLabel(hours: number): string {
  * "Day job · 80% of 42 h · CH-ZH", "Day job · no contract", "Day job ·
  * objective", "Day job · ended Aug 31, 2026", "Side project · goal 8 h/week",
  * "Freelance" — what the project is, read off its kind and contract today.
+ * Off a day job the goal is the one in force this week, as the Goal panel
+ * reads it: a permanent override, else the project's own.
  */
 export function kindChip(
-	project: Pick<ProjectWithDuration, "kind" | "contract" | "weeklyGoal" | "goalType">,
+	project: Pick<
+		ProjectWithDuration,
+		"kind" | "contract" | "weeklyGoal" | "goalType" | "goalOverrides"
+	>,
 	todayIso: string,
 ): string {
 	if (project.kind === "day_job") {
@@ -69,9 +75,9 @@ export function kindChip(
 		return `Day job${weekly == null ? "" : ` · ${hoursLabel(weekly)}/week`}${region}`;
 	}
 	const label = project.kind === "freelance" ? "Freelance" : "Side project";
-	if (project.weeklyGoal == null) return label;
-	const goal = project.goalType === "cap" ? "cap" : "goal";
-	return `${label} · ${goal} ${hoursLabel(project.weeklyGoal)}/week`;
+	const { weeklyGoal, goalType } = standingGoalOn(project, mondayOfIso(todayIso));
+	if (weeklyGoal == null) return label;
+	return `${label} · ${goalType === "cap" ? "cap" : "goal"} ${hoursLabel(weeklyGoal)}/week`;
 }
 
 // `.hdr .chip` — the panel at 82 % with ink on it, so it reads on the sky.
@@ -100,7 +106,7 @@ export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHead
 					type="button"
 					onClick={() => setColorPickerOpen((o) => !o)}
 					className={cn(
-						"block w-3.5 h-3.5 rounded-full shrink-0 shadow-[0_0_0_3px_rgb(255_255_255/.6)] hover:scale-110 transition-transform",
+						"block w-3.5 h-3.5 rounded-full shrink-0 shadow-[0_0_0_3px_hsl(var(--card)/.6)] hover:scale-110 transition-transform",
 						FOCUS,
 					)}
 					style={{ backgroundColor: project.color || assignColor(project.id) }}
@@ -145,7 +151,7 @@ export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHead
 					type="button"
 					onClick={() => onOpenSettings("description")}
 					className={cn(
-						"text-sm font-medium text-foreground/80 truncate max-w-[32ch] text-left hover:text-foreground transition-colors rounded",
+						"text-sm font-medium text-foreground/90 truncate max-w-[32ch] text-left hover:text-foreground transition-colors rounded",
 						FOCUS,
 					)}
 					title="Edit description"
@@ -157,7 +163,8 @@ export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHead
 					type="button"
 					onClick={() => onOpenSettings("description")}
 					className={cn(
-						"text-sm font-medium text-foreground/55 hover:text-foreground transition-colors rounded",
+						// Ink at 90 %: the sky's top is the palest ground on the page (/55 was 2.5:1).
+						"text-sm font-medium text-foreground/90 hover:text-foreground transition-colors rounded",
 						FOCUS,
 					)}
 				>

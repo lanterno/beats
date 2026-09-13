@@ -30,7 +30,22 @@ import {
 } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { cn, formatDuration } from "@/shared/lib";
-import { Button } from "@/shared/ui";
+import { Button, Panel } from "@/shared/ui";
+
+/** The mockup's `.lbl`, at the ledger's header size. */
+const LABEL = "font-body text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground";
+/** `.linkish` — a small bold action in the accent's ink. */
+const LINKISH =
+	"inline-flex items-center gap-1.5 text-accent-ink text-xs font-bold hover:underline underline-offset-[3px] rounded-full disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+/**
+ * A group of pills on the sky: the panel is its ground, and the chosen pill
+ * sits on the heavier wash in ink — the sidebar's active row, not the accent.
+ */
+const SKY_GROUP = "bg-sidebar shadow-soft p-1";
+const PILL =
+	"inline-flex items-center gap-1.5 rounded-full font-bold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+const PILL_ON = "bg-sidebar-accent text-foreground";
+const PILL_OFF = "text-muted-foreground hover:text-foreground hover:bg-secondary";
 
 type SortKey = "name" | "category" | "weekly" | "lastTracked";
 
@@ -199,15 +214,21 @@ export default function ProjectsIndex() {
 	return (
 		<div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
 			<header className="flex items-center gap-3">
-				<Layers className="w-5 h-5 text-accent-ink" />
-				<h1 className="font-heading text-xl text-foreground">Projects</h1>
+				<Layers className="w-5 h-5 text-muted-foreground" />
+				<h1 className="font-heading text-2xl font-extrabold tracking-[-0.02em] text-foreground">
+					Projects
+				</h1>
 				<Button type="button" size="sm" className="ml-auto" onClick={() => setDialogOpen(true)}>
 					<Plus className="w-3.5 h-3.5" />
 					New project
 				</Button>
 			</header>
 
-			<div className="flex items-center gap-1" role="tablist" aria-label="Project status">
+			<div
+				className={cn("flex w-fit items-center gap-1 rounded-full", SKY_GROUP)}
+				role="tablist"
+				aria-label="Project status"
+			>
 				<TabButton
 					label="Active"
 					count={visibleActive.length}
@@ -223,14 +244,17 @@ export default function ProjectsIndex() {
 			</div>
 
 			<div className="relative max-w-md">
-				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60 pointer-events-none" />
+				<Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
 				<input
 					type="search"
+					name="project-search"
 					placeholder="Search projects…"
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
 					aria-label="Search projects"
-					className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+					// On the sky a wash would vanish, so the field is the panel
+					// (the header chips' ground) — still borderless, the accent ring.
+					className="w-full rounded-full bg-sidebar shadow-soft py-2 pl-9 pr-3 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent"
 				/>
 			</div>
 
@@ -294,7 +318,10 @@ function CategoryChips({
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here.
 		<div
-			className="flex flex-wrap items-center gap-1.5"
+			className={cn(
+				"flex flex-wrap w-fit max-w-full items-center gap-1 rounded-[1.375rem]",
+				SKY_GROUP,
+			)}
 			role="group"
 			aria-label="Filter by category"
 		>
@@ -306,23 +333,14 @@ function CategoryChips({
 						type="button"
 						onClick={() => onToggle(category)}
 						aria-pressed={isSelected}
-						className={cn(
-							"inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
-							isSelected
-								? "border-accent/60 bg-accent/15 text-accent-ink"
-								: "border-border text-muted-foreground hover:text-foreground hover:bg-secondary/40",
-						)}
+						className={cn(PILL, "px-3 py-1 text-xs", isSelected ? PILL_ON : PILL_OFF)}
 					>
 						{category}
 					</button>
 				);
 			})}
 			{selected.size > 0 && (
-				<button
-					type="button"
-					onClick={onClear}
-					className="text-[11px] text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1"
-				>
+				<button type="button" onClick={onClear} className={cn(LINKISH, "px-2.5 py-1")}>
 					Clear
 				</button>
 			)}
@@ -347,15 +365,18 @@ function TabButton({
 			role="tab"
 			aria-selected={selected}
 			onClick={onSelect}
-			className={cn(
-				"inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs uppercase tracking-[0.12em] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
-				selected
-					? "bg-accent/15 text-accent-ink"
-					: "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
-			)}
+			className={cn(PILL, "px-3.5 py-1 text-[12.5px]", selected ? PILL_ON : PILL_OFF)}
 		>
 			{label}
-			<span className="tabular-nums text-[10px] opacity-70">{count}</span>
+			{/* On the selected tab's heavier wash the muted ink is 3.4:1 at dusk. */}
+			<span
+				className={cn(
+					"font-mono text-[11px]",
+					selected ? "text-foreground/80" : "text-muted-foreground",
+				)}
+			>
+				{count}
+			</span>
 		</button>
 	);
 }
@@ -370,30 +391,31 @@ function EmptyState({
 	onCreate: () => void;
 }) {
 	return (
-		<div className="rounded-lg border border-dashed border-border/80 bg-card/40 p-10 text-center">
+		<Panel padding="p-10" className="text-center">
 			<Layers className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
 			{hasAnyVisibleProjects ? (
 				<p className="text-sm text-muted-foreground">No projects match your search.</p>
 			) : tab === "archived" ? (
 				<>
-					<p className="text-sm text-foreground mb-1">No archived projects</p>
+					<p className="text-sm font-bold text-foreground mb-1">No archived projects</p>
 					<p className="text-xs text-muted-foreground">
 						Archive a project from its Danger Zone to send it here. Sessions are preserved.
 					</p>
 				</>
 			) : (
 				<>
-					<p className="text-sm text-foreground mb-1">No projects yet</p>
+					<p className="text-sm font-bold text-foreground mb-1">No projects yet</p>
 					<p className="text-xs text-muted-foreground mb-4">
 						Create your first project to start tracking time.
 					</p>
-					<Button type="button" onClick={onCreate}>
+					{/* The header's New project is the page's one accent; this repeats it in the wash. */}
+					<Button type="button" variant="secondary" onClick={onCreate}>
 						<Plus className="w-3.5 h-3.5" />
 						New project
 					</Button>
 				</>
 			)}
-		</div>
+		</Panel>
 	);
 }
 
@@ -432,7 +454,7 @@ function ProjectsTable({
 		// Archived view drops the Integrations + This week columns since both
 		// are always em-dashes for archived projects (no recent activity, the
 		// integration display is a navigation aid that belongs on Active).
-		<div className="hidden md:block overflow-x-auto rounded-lg border border-border/80 bg-card shadow-soft">
+		<Panel padding="px-4 py-2" className="hidden md:block overflow-x-auto">
 			<table className="w-full text-sm table-fixed">
 				<colgroup>
 					{/* Project — flexible, eats whatever's left */}
@@ -447,7 +469,7 @@ function ProjectsTable({
 					<col style={{ width: "128px" }} />
 					{archivedView && <col style={{ width: "96px" }} />}
 				</colgroup>
-				<thead className="bg-secondary/30 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+				<thead className={LABEL}>
 					<tr>
 						<SortHeader label="Project" sortKey="name" current={sort} onSort={onSort} />
 						<SortHeader label="Category" sortKey="category" current={sort} onSort={onSort} />
@@ -475,7 +497,7 @@ function ProjectsTable({
 					{list.map((project) => (
 						<tr
 							key={project.id}
-							className="border-t border-border/40 hover:bg-secondary/20 cursor-pointer"
+							className="border-t border-border hover:bg-secondary cursor-pointer"
 							onClick={() => onNavigate(project.id)}
 						>
 							<td className="px-3 py-2 min-w-0">
@@ -491,11 +513,11 @@ function ProjectsTable({
 									<Link
 										to={`/project/${project.id}`}
 										onClick={(e) => e.stopPropagation()}
-										className="block truncate text-foreground font-medium hover:text-accent-ink min-w-0 shrink"
+										className="block truncate text-foreground font-bold hover:text-accent-ink min-w-0 shrink rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 									>
 										{project.name}
 										{project.description && (
-											<span className="text-xs text-muted-foreground/60 hidden lg:inline">
+											<span className="text-xs font-medium text-muted-foreground hidden lg:inline">
 												{" · "}
 												{project.description}
 											</span>
@@ -503,8 +525,8 @@ function ProjectsTable({
 									</Link>
 								</div>
 							</td>
-							<td className="px-3 py-2 text-muted-foreground truncate">
-								{project.category ?? <span className="text-muted-foreground/40">—</span>}
+							<td className="px-3 py-2 font-medium text-muted-foreground truncate">
+								{project.category ?? <span className="text-muted-foreground">—</span>}
 							</td>
 							{!archivedView && (
 								<td className="px-3 py-2">
@@ -516,7 +538,7 @@ function ProjectsTable({
 									<WeeklyProgress project={project} />
 								</td>
 							)}
-							<td className="px-3 py-2 text-right text-muted-foreground tabular-nums whitespace-nowrap">
+							<td className="px-3 py-2 text-right text-[13px] font-mono font-bold text-muted-foreground whitespace-nowrap">
 								{formatRelativeDays(project.lastTrackedAt)}
 							</td>
 							{archivedView && (
@@ -532,7 +554,7 @@ function ProjectsTable({
 					))}
 				</tbody>
 			</table>
-		</div>
+		</Panel>
 	);
 }
 
@@ -560,7 +582,7 @@ function RestoreButton({
 			}}
 			disabled={isRestoring}
 			aria-label={`Restore ${project.name}`}
-			className="inline-flex items-center gap-1.5 text-xs text-accent-ink hover:underline disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
+			className={LINKISH}
 		>
 			{isRestoring ? (
 				<Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -596,7 +618,7 @@ function SortHeader({
 				type="button"
 				onClick={() => onSort(sortKey)}
 				className={cn(
-					"inline-flex items-center gap-1 uppercase tracking-[0.14em] text-[10px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 rounded",
+					"inline-flex items-center gap-1 font-bold uppercase tracking-[0.14em] text-[10px] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-full",
 					isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
 				)}
 			>
@@ -619,7 +641,7 @@ function ProjectsCardList({
 	restoringId?: string;
 }) {
 	return (
-		<div className="md:hidden space-y-2">
+		<div className="md:hidden space-y-3">
 			{list.map((project) => (
 				// FF.8: navigate target and Restore action live as SIBLINGS now,
 				// not nested. A <button> inside an <a> is invalid HTML (axe's
@@ -627,13 +649,10 @@ function ProjectsCardList({
 				// into the link instead of exposing it as its own target. The
 				// Link covers the descriptive top half; Restore sits in a
 				// separated section below.
-				<div
-					key={project.id}
-					className="rounded-lg border border-border/80 bg-card hover:bg-secondary/20 transition-colors overflow-hidden"
-				>
+				<Panel key={project.id} padding="p-0" className="overflow-hidden">
 					<Link
 						to={`/project/${project.id}`}
-						className="block p-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+						className="block px-5 py-3.5 hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
 					>
 						<div className="flex items-center gap-2 mb-1">
 							<span
@@ -641,27 +660,29 @@ function ProjectsCardList({
 								style={{ backgroundColor: project.color }}
 								aria-hidden="true"
 							/>
-							<span className="text-sm font-medium text-foreground truncate flex-1">
+							<span className="text-sm font-bold text-foreground truncate flex-1">
 								{project.name}
 							</span>
 							<IntegrationIcons project={project} />
 						</div>
 						{project.description && (
-							<p className="text-[11px] text-muted-foreground/70 line-clamp-1 mb-1">
+							<p className="text-xs font-medium text-muted-foreground line-clamp-1 mb-1">
 								{project.description}
 							</p>
 						)}
-						<div className="flex items-center justify-between text-[11px] text-muted-foreground">
+						<div className="flex items-center justify-between text-xs text-muted-foreground">
 							<WeeklyProgress project={project} />
-							<span className="tabular-nums">{formatRelativeDays(project.lastTrackedAt)}</span>
+							<span className="font-mono font-bold">
+								{formatRelativeDays(project.lastTrackedAt)}
+							</span>
 						</div>
 					</Link>
 					{archivedView && (
-						<div className="px-3 py-2 border-t border-border/40">
+						<div className="px-5 py-2.5 border-t border-border">
 							<RestoreButton project={project} onRestore={onRestore} restoringId={restoringId} />
 						</div>
 					)}
-				</div>
+				</Panel>
 			))}
 		</div>
 	);
@@ -677,11 +698,11 @@ function WeeklyProgress({ project }: { project: ProjectWithDuration }) {
 		// Nothing worked against nothing asked — a week of holidays, or after
 		// the contract ended — still carries the balance, as the pulse list's
 		// row does.
-		return <span className="text-muted-foreground/40 whitespace-nowrap">—{balance}</span>;
+		return <span className="text-muted-foreground whitespace-nowrap">—{balance}</span>;
 	}
 	if (!week.goal) {
 		return (
-			<span className="text-foreground tabular-nums whitespace-nowrap">
+			<span className="text-foreground font-mono font-bold whitespace-nowrap">
 				{formatDuration(week.hours * 60)}
 				{balance}
 			</span>
@@ -690,7 +711,7 @@ function WeeklyProgress({ project }: { project: ProjectWithDuration }) {
 	const pct = Math.min(100, Math.round((week.hours / week.goal) * 100));
 	return (
 		<span
-			className="tabular-nums text-foreground whitespace-nowrap"
+			className="font-mono font-bold text-foreground whitespace-nowrap"
 			title={`${week.hours.toFixed(1)}h of ${week.goal}h (${pct}%)`}
 		>
 			{week.hours.toFixed(1)}/{week.goal}h{balance}
@@ -702,7 +723,7 @@ function IntegrationIcons({ project }: { project: Project }) {
 	const hasGithub = Boolean(project.githubRepo);
 	const hasAutostart = project.autostartRepos.length > 0;
 	if (!hasGithub && !hasAutostart) {
-		return <span className="text-muted-foreground/30">—</span>;
+		return <span className="text-muted-foreground">—</span>;
 	}
 	return (
 		<div className="inline-flex items-center gap-1.5">

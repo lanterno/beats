@@ -9,7 +9,9 @@
  */
 import { useMemo } from "react";
 import { useFlowWindows } from "@/entities/session";
-import { aggregateFlowByRepo, shortRepoPath } from "@/shared/lib";
+import { aggregateFlowByRepo, cn, shortRepoPath } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { FOOTNOTE, LABEL, META, ROW } from "./styles";
 
 interface Props {
 	projectId?: string;
@@ -45,10 +47,10 @@ export function FlowByRepo({
 	};
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Flow by repo</p>
-				<p className="text-[11px] text-muted-foreground">
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Flow by repo</p>
+				<p className={META}>
 					today · {stats.length} {stats.length === 1 ? "repo" : "repos"}
 				</p>
 			</div>
@@ -61,27 +63,29 @@ export function FlowByRepo({
 							type="button"
 							key={s.repo}
 							onClick={() => handleClick(s.repo)}
-							className={`w-full flex items-center gap-3 rounded-md px-1.5 py-1 transition-colors ${
-								active ? "bg-accent/15" : "hover:bg-secondary/40"
-							}`}
+							className={cn(
+								ROW,
+								"w-full flex items-center gap-3 px-2 py-1.5",
+								active ? "bg-sidebar-accent" : "hover:bg-secondary",
+							)}
 							aria-pressed={active}
 						>
 							<div
-								className="text-foreground/80 truncate text-xs flex-1 min-w-0 text-left"
+								className="text-foreground font-medium truncate text-xs flex-1 min-w-0 text-left"
 								title={s.repo}
 							>
 								{shortRepoPath(s.repo)}
 							</div>
-							<div className="flex-[2] h-1.5 rounded-full bg-secondary/60 relative overflow-hidden">
+							<div className="flex-[2] h-1.5 rounded-full bg-muted relative overflow-hidden">
 								<div
-									className="absolute inset-y-0 left-0 bg-accent"
+									className="absolute inset-y-0 left-0 rounded-full bg-success/70"
 									style={{ width: `${(s.avg * 100).toFixed(1)}%` }}
 								/>
 							</div>
-							<div className="text-[11px] tabular-nums text-foreground w-9 text-right">
+							<div className="text-xs font-bold font-mono tabular-nums text-foreground w-9 text-right">
 								{Math.round(s.avg * 100)}
 							</div>
-							<div className="text-[10px] tabular-nums text-muted-foreground w-12 text-right">
+							<div className="text-[11px] font-medium tabular-nums text-muted-foreground w-12 text-right">
 								{s.minutes}m
 							</div>
 						</button>
@@ -90,14 +94,14 @@ export function FlowByRepo({
 			</div>
 
 			{stats.length >= 2 && (
-				<p className="text-[10px] text-muted-foreground border-t border-border/40 pt-2">
+				<p className={FOOTNOTE}>
 					Best flow today on{" "}
-					<span className="text-foreground">
+					<span className="text-foreground font-bold">
 						{shortRepoPath(stats.find((s) => s.avg === peakAvg)?.repo ?? "")}
 					</span>{" "}
 					at {Math.round(peakAvg * 100)}/100.
 				</p>
 			)}
-		</div>
+		</Panel>
 	);
 }

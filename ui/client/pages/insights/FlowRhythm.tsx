@@ -12,6 +12,8 @@
 import { useMemo } from "react";
 import { useFlowWindowsLastDays } from "@/entities/session";
 import { aggregateFlowByHour } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { FOOTNOTE, LABEL, META } from "./styles";
 
 const DAYS = 7;
 const MIN_WINDOWS_TO_RENDER = 12; // about 12 minutes of data — below that, bars are noise
@@ -48,10 +50,10 @@ export function FlowRhythm({
 	const byHour = new Map(stats.map((h) => [h.hour, h]));
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Flow rhythm</p>
-				<p className="text-[11px] text-muted-foreground">last {DAYS} days · by hour of day</p>
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Flow rhythm</p>
+				<p className={META}>last {DAYS} days · by hour of day</p>
 			</div>
 
 			{/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here. */}
@@ -64,11 +66,11 @@ export function FlowRhythm({
 					const cell = byHour.get(h);
 					const isPeak = peak && cell && cell.hour === peak.hour;
 					return (
-						<div key={h} className="flex-1 flex flex-col items-center gap-1">
+						<div key={h} className="flex-1 self-stretch flex flex-col items-center gap-1">
 							<div className="relative w-full flex-1 flex items-end">
 								<div
-									className={`w-full rounded-sm transition-all ${
-										!cell ? "bg-secondary/40" : isPeak ? "bg-accent" : "bg-accent/55"
+									className={`w-full rounded-t-[4px] rounded-b-[2px] transition-all ${
+										!cell ? "bg-muted" : isPeak ? "bg-success" : "bg-success/45"
 									}`}
 									style={{
 										height: cell ? `${Math.max(4, cell.avg * 100)}%` : "0%",
@@ -86,7 +88,7 @@ export function FlowRhythm({
 			</div>
 
 			{/* Sparse hour labels — every 6 hours keeps the row readable. */}
-			<div className="flex text-[9px] tabular-nums text-muted-foreground">
+			<div className="flex text-[9.5px] font-bold font-mono tabular-nums text-muted-foreground">
 				{[0, 6, 12, 18].map((h, i) => (
 					<div
 						key={h}
@@ -99,12 +101,13 @@ export function FlowRhythm({
 			</div>
 
 			{peak && peak.count > 0 && (
-				<p className="text-[10px] text-muted-foreground border-t border-border/40 pt-2">
-					You flow best around <span className="text-foreground">{formatHour(peak.hour)}</span> —
-					averaging {Math.round(peak.avg * 100)}/100 across {peak.count} windows.
+				<p className={FOOTNOTE}>
+					You flow best around{" "}
+					<span className="text-foreground font-bold">{formatHour(peak.hour)}</span> — averaging{" "}
+					{Math.round(peak.avg * 100)}/100 across {peak.count} windows.
 				</p>
 			)}
-		</div>
+		</Panel>
 	);
 }
 

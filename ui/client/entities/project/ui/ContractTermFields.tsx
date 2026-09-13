@@ -46,8 +46,9 @@ const SCHEDULE_OPTIONS: {
 ];
 
 const inputCls =
-	"w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40 aria-invalid:border-destructive/60";
-const labelCls = "block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5";
+	"w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60";
+const labelCls =
+	"block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1.5";
 const errorCls = "mt-1 text-xs text-destructive";
 
 export function ContractTermFields({
@@ -91,8 +92,8 @@ export function ContractTermFields({
 						return (
 							<label
 								key={value}
-								className={`flex items-start gap-2 rounded-md border min-h-12 px-3 py-2 cursor-pointer transition-colors ${
-									selected ? "border-accent/60 bg-accent/10" : "border-input hover:bg-secondary/40"
+								className={`flex items-start gap-2 rounded-2xl min-h-12 px-3 py-2 cursor-pointer transition-colors ${
+									selected ? "bg-sidebar-accent" : "bg-secondary hover:bg-sidebar-accent/60"
 								}`}
 							>
 								<input

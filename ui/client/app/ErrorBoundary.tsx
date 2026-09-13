@@ -6,6 +6,7 @@
  * i.e. "everything turns black".
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "@/shared/ui";
 
 interface Props {
 	children: ReactNode;
@@ -39,16 +40,14 @@ export class ErrorBoundary extends Component<Props, State> {
 					<p className="text-sm text-muted-foreground">
 						The app hit an unexpected error and couldn't finish loading this view.
 					</p>
-					<button
-						type="button"
+					<Button
 						onClick={() => {
 							this.setState({ error: null });
 							window.location.reload();
 						}}
-						className="inline-flex items-center justify-center rounded-md bg-accent text-accent-foreground px-4 py-2 text-sm font-medium hover:bg-accent/85 transition-colors"
 					>
 						Reload
-					</button>
+					</Button>
 				</div>
 			</div>
 		);

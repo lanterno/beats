@@ -2,6 +2,8 @@ import { Eye } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { del, get } from "@/shared/api";
+import { Button, Panel } from "@/shared/ui";
+import { DANGER_HOVER, HEADING, HEADING_ICON, LABEL, LEAD } from "./styles";
 
 interface SignalSummaryInfo {
 	id: string;
@@ -82,78 +84,70 @@ export function DaemonPrivacySection() {
 
 	return (
 		<section className="mb-8">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Eye className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<Eye className={HEADING_ICON} />
 				Signal Privacy
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-4">
-				<p className="text-xs text-muted-foreground">
+			<Panel padding="p-5" className="space-y-4">
+				<p className={LEAD}>
 					The daemon sends only aggregated category counts and flow scores. No raw content,
 					keystrokes, or window titles are ever transmitted.
 				</p>
 
 				{totalSamples > 0 ? (
 					<div className="space-y-3">
-						<p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-							Last 24 hours
-						</p>
-						<div className="grid grid-cols-2 gap-2">
+						<p className={LABEL}>Last 24 hours</p>
+						<div className="grid grid-cols-2 gap-x-6 gap-y-2">
 							{sortedCategories.map(([cat, count]) => (
-								<div key={cat} className="flex items-center justify-between text-xs">
-									<span className="text-foreground capitalize">{cat}</span>
-									<span className="text-muted-foreground tabular-nums">{count} samples</span>
+								<div key={cat} className="flex items-center justify-between gap-2 text-[12.5px]">
+									<span className="text-foreground font-medium capitalize">{cat}</span>
+									<span className="text-muted-foreground font-mono font-medium">
+										{count} samples
+									</span>
 								</div>
 							))}
-							<div className="flex items-center justify-between text-xs">
-								<span className="text-foreground">Idle</span>
-								<span className="text-muted-foreground tabular-nums">{idleSamples} samples</span>
+							<div className="flex items-center justify-between gap-2 text-[12.5px]">
+								<span className="text-foreground font-medium">Idle</span>
+								<span className="text-muted-foreground font-mono font-medium">
+									{idleSamples} samples
+								</span>
 							</div>
 						</div>
-						<p className="text-[10px] text-muted-foreground">
+						<p className="text-[11px] font-medium text-muted-foreground">
 							Total: {totalSamples} samples across {summaries.length} hours
 						</p>
 					</div>
 				) : (
-					<p className="text-xs text-muted-foreground/60">No signal data in the last 24 hours.</p>
+					<p className="text-[12.5px] text-muted-foreground">
+						No signal data in the last 24 hours.
+					</p>
 				)}
 
-				<div className="flex gap-2 pt-2 border-t border-border/50">
-					<button
-						type="button"
-						onClick={handleExport}
-						className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/50 transition-colors"
-					>
+				<div className="flex flex-wrap gap-2 pt-4 border-t border-border">
+					<Button variant="secondary" size="sm" onClick={handleExport}>
 						Export 24h (JSON)
-					</button>
+					</Button>
 					{confirmDelete ? (
 						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								onClick={handleDeleteAll}
-								disabled={deleting}
-								className="px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
-							>
+							<Button variant="destructive" size="sm" onClick={handleDeleteAll} disabled={deleting}>
 								{deleting ? "Deleting..." : "Confirm delete"}
-							</button>
-							<button
-								type="button"
-								onClick={() => setConfirmDelete(false)}
-								className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/50 transition-colors"
-							>
+							</Button>
+							<Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>
 								Cancel
-							</button>
+							</Button>
 						</div>
 					) : (
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => setConfirmDelete(true)}
-							className="px-3 py-1.5 text-xs rounded-md border border-border bg-secondary/30 text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+							className={DANGER_HOVER}
 						>
 							Delete all signals
-						</button>
+						</Button>
 					)}
 				</div>
-			</div>
+			</Panel>
 		</section>
 	);
 }

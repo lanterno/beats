@@ -75,7 +75,7 @@ interface DayModel {
 	/** Hours the contract expected; undefined off a governed week. */
 	expected?: number;
 	/** A holiday or an absence on the day; `absence` is what "Change" opens. */
-	off?: { kind: LedgerNoteKind; label: string; absence?: DayAbsence };
+	off?: { kind: LedgerNoteKind; label: string; note?: string; absence?: DayAbsence };
 	/** A weekday of a governed week with nothing off: time off can be booked on it. */
 	bookable: boolean;
 	isToday: boolean;
@@ -136,7 +136,8 @@ function buildDays(
 			const a = contractDay.absence;
 			off = {
 				kind: a.type,
-				label: `${ABSENCE_TYPE_LABELS[a.type]}${a.halfDay ? " ½" : ""}${a.note ? ` · ${a.note}` : ""}`,
+				label: `${ABSENCE_TYPE_LABELS[a.type]}${a.halfDay ? " ½" : ""}`,
+				note: a.note || undefined,
 				absence: a,
 			};
 		}
@@ -191,7 +192,8 @@ function Figure({ day, closed }: { day: DayModel; closed: boolean }) {
 				{hours1(day.worked)} <span className={of}>h · nothing expected</span>
 			</>
 		) : (
-			<span className={of}>nothing expected</span>
+			// On a narrow day off the tint already says so; the room goes to its note.
+			<span className={cn(of, day.off && "@max-[560px]/content:hidden")}>nothing expected</span>
 		);
 	}
 	if (day.worked <= 0) {
@@ -337,15 +339,18 @@ export function WeekDays({
 					const count = day.sessions.length;
 					const mid = day.off ? (
 						<>
-							{/* Under 560 px the pill gives way with an ellipsis so "Change" stays in view. */}
-							<span
-								className={cn(
-									TINT_PILL,
-									TINT[day.off.kind],
-									"@max-[560px]/content:block @max-[560px]/content:min-w-0 @max-[560px]/content:overflow-hidden @max-[560px]/content:text-ellipsis",
+							{/* The kind never gives way: under 560 px only the note, or a holiday's
+							    name, takes the ellipsis, so "Vacation" and "Change" stay in view. */}
+							<span className={cn(TINT_PILL, TINT[day.off.kind], "min-w-0")}>
+								<span className={day.off.kind === "holiday" ? "min-w-0 truncate" : "shrink-0"}>
+									{day.off.label}
+								</span>
+								{day.off.note && (
+									<>
+										{" "}
+										<span className="min-w-0 truncate">· {day.off.note}</span>
+									</>
 								)}
-							>
-								{day.off.label}
 							</span>
 							{day.off.absence && (
 								<button

@@ -12,6 +12,9 @@
  */
 import { useMemo, useState } from "react";
 import { useWeeklyFlowTrend } from "@/entities/session";
+import { Panel } from "@/shared/ui";
+import { SparkDot } from "./SparkDot";
+import { AREA_BOTTOM, AREA_TOP, LABEL, META, SPARK_GRID } from "./styles";
 
 const WEEKS = 12;
 const MIN_WEEKS_TO_RENDER = 4;
@@ -48,10 +51,10 @@ export function FlowTrend({
 	const selected = selectedIdx !== null && points[selectedIdx] ? points[selectedIdx] : null;
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Flow trend</p>
-				<div className="flex items-baseline gap-3 text-[11px] text-muted-foreground">
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Flow trend</p>
+				<div className={`flex items-baseline gap-3 ${META}`}>
 					<span>last {WEEKS} weeks</span>
 					{populated.length >= 2 && <TrendDelta delta={delta} />}
 				</div>
@@ -60,18 +63,20 @@ export function FlowTrend({
 			<TrendSparkline points={points} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
 
 			{selected && selected.count > 0 && (
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground border-t border-border pt-2.5">
 					<span className="tabular-nums">week of {formatWeek(selected.weekStart)}</span>
 					<span>
-						<span className="text-foreground tabular-nums">{Math.round(selected.avg * 100)}</span>
+						<span className="text-foreground font-bold tabular-nums">
+							{Math.round(selected.avg * 100)}
+						</span>
 						<span className="text-muted-foreground"> / 100</span>
 					</span>
 					<span>
-						<span className="text-foreground tabular-nums">{selected.count}</span> windows
+						<span className="text-foreground font-bold tabular-nums">{selected.count}</span> windows
 					</span>
 				</div>
 			)}
-		</div>
+		</Panel>
 	);
 }
 
@@ -87,10 +92,10 @@ function TrendSparkline({ points, selectedIdx, onSelect }: SparklineProps) {
 
 	// Empty weeks (count=0) get a y of 0 — visible as a dip-to-floor.
 	// That's correct: the user actually had no flow that week.
+	const yOf = (score: number) => H - score * H * 0.85;
 	const xy = points.map((p, i) => {
 		const x = n === 1 ? W / 2 : (i / (n - 1)) * W;
-		const y = H - p.avg * H * 0.85;
-		return { x, y };
+		return { x, y: yOf(p.avg) };
 	});
 
 	const linePath = xy
@@ -106,11 +111,12 @@ function TrendSparkline({ points, selectedIdx, onSelect }: SparklineProps) {
 	};
 
 	const sel = selectedIdx !== null && selectedIdx >= 0 && selectedIdx < n ? xy[selectedIdx] : null;
+	const end = xy[n - 1];
 
 	return (
 		<svg
 			viewBox={`0 0 ${W} ${H}`}
-			className="w-full h-16 cursor-crosshair"
+			className="w-full h-16 cursor-crosshair overflow-visible"
 			preserveAspectRatio="none"
 			onMouseDown={handlePoint}
 			onMouseMove={(e) => e.buttons === 1 && handlePoint(e)}
@@ -118,41 +124,48 @@ function TrendSparkline({ points, selectedIdx, onSelect }: SparklineProps) {
 			<title>Flow score trend</title>
 			<defs>
 				<linearGradient id="trend-area" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stopColor="rgb(var(--accent-rgb, 212 149 42))" stopOpacity="0.25" />
-					<stop offset="100%" stopColor="rgb(var(--accent-rgb, 212 149 42))" stopOpacity="0" />
+					<stop offset="0%" style={AREA_TOP} />
+					<stop offset="100%" style={AREA_BOTTOM} />
 				</linearGradient>
 			</defs>
+			{SPARK_GRID.map((v) => (
+				<line
+					key={v}
+					x1={0}
+					x2={W}
+					y1={yOf(v)}
+					y2={yOf(v)}
+					className="stroke-border"
+					strokeWidth={1}
+					vectorEffect="non-scaling-stroke"
+				/>
+			))}
 			<path d={areaPath} fill="url(#trend-area)" />
 			<path
 				d={linePath}
 				fill="none"
-				stroke="rgb(var(--accent-rgb, 212 149 42))"
-				strokeWidth="1.5"
+				className="stroke-success"
+				strokeWidth={2}
+				strokeLinejoin="round"
 				strokeLinecap="round"
 				vectorEffect="non-scaling-stroke"
 			/>
 			{sel && (
-				<>
-					<line
-						x1={sel.x}
-						y1={0}
-						x2={sel.x}
-						y2={H}
-						stroke="rgb(var(--accent-rgb, 212 149 42))"
-						strokeOpacity="0.35"
-						strokeWidth="1"
-						vectorEffect="non-scaling-stroke"
-					/>
-					<circle
-						cx={sel.x}
-						cy={sel.y}
-						r="3.5"
-						fill="rgb(var(--accent-rgb, 212 149 42))"
-						stroke="rgb(var(--background-rgb, 26 20 8))"
-						strokeWidth="1.5"
-					/>
-				</>
+				<line
+					x1={sel.x}
+					y1={0}
+					x2={sel.x}
+					y2={H}
+					className="stroke-muted-foreground"
+					strokeOpacity={0.5}
+					strokeWidth={1}
+					strokeDasharray="3 3"
+					vectorEffect="non-scaling-stroke"
+				/>
 			)}
+			{/* This week, the line's end. */}
+			<SparkDot x={end.x} y={end.y} className="stroke-success" />
+			{sel && sel !== end && <SparkDot x={sel.x} y={sel.y} className="stroke-success" />}
 		</svg>
 	);
 }
@@ -165,7 +178,7 @@ function TrendDelta({ delta }: { delta: number }) {
 	const up = delta > 0;
 	return (
 		<span
-			className={`tabular-nums ${up ? "text-success" : "text-accent-ink"}`}
+			className={`font-bold tabular-nums ${up ? "text-success-ink" : "text-destructive-ink"}`}
 			title="vs the first week in the trend"
 		>
 			{up ? "↑" : "↓"} {Math.abs(delta)}

@@ -11,6 +11,8 @@ import { useProjects } from "@/entities/project";
 import { useFlowWindowsLastDays } from "@/entities/session";
 import type { FlowWindow } from "@/shared/api";
 import { shortRepoPath } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { LABEL } from "./styles";
 
 const MIN_PEAK = 0.7; // below this, we don't celebrate
 
@@ -57,29 +59,29 @@ export function BestMoment({
 			: undefined;
 
 	return (
-		<div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+		<Panel padding="px-6 py-[18px]">
 			<div className="flex items-start gap-4">
-				<div className="font-heading tabular-nums text-3xl text-accent-ink leading-none pt-1">
+				<div className="font-heading font-extrabold tracking-[-0.02em] tabular-nums text-3xl text-foreground leading-none pt-1">
 					{score}
 				</div>
 				<div className="flex-1 min-w-0">
-					<p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
-						Peak this week
-					</p>
-					<p className="text-sm text-foreground">
+					<p className={`${LABEL} mb-1`}>Peak this week</p>
+					<p className="text-sm font-bold text-foreground">
 						{isToday ? "Today" : dayName} at <span className="tabular-nums">{timeStr}</span>
 					</p>
-					<div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+					<div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted-foreground">
 						{projectName && (
 							<span>
-								<span className="text-foreground/70">{projectName}</span>
+								<span className="text-foreground">{projectName}</span>
 							</span>
 						)}
 						{best.dominant_category && (
-							<span className="uppercase tracking-wider text-[9px]">{best.dominant_category}</span>
+							<span className="px-2 py-px rounded-full bg-secondary text-[10px] font-bold uppercase tracking-[0.06em]">
+								{best.dominant_category}
+							</span>
 						)}
 						{best.editor_repo && (
-							<span className="text-foreground/70 truncate" title={best.editor_repo}>
+							<span className="text-foreground truncate" title={best.editor_repo}>
 								{shortRepoPath(best.editor_repo)}
 								{best.editor_branch ? (
 									<span className="text-muted-foreground"> · {best.editor_branch}</span>
@@ -89,7 +91,7 @@ export function BestMoment({
 					</div>
 				</div>
 			</div>
-		</div>
+		</Panel>
 	);
 }
 

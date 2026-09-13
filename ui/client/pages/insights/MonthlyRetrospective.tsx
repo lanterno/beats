@@ -11,7 +11,8 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useProjects } from "@/entities/project";
 import { fetchBeats, sessionKeys, toSession } from "@/entities/session";
 import { formatDuration, parseUtcIso } from "@/shared/lib";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState, Panel } from "@/shared/ui";
+import { CHIP, LABEL, SKY_BUTTON, SKY_CHIP, SKY_ROUND } from "./styles";
 
 const MONTH_NAMES = [
 	"January",
@@ -120,7 +121,7 @@ export default function MonthlyRetrospective() {
 				id,
 				minutes,
 				name: projectMap.get(id)?.name ?? "Unknown",
-				color: projectMap.get(id)?.color ?? "#888",
+				color: projectMap.get(id)?.color ?? "var(--color-muted-foreground)",
 			}));
 
 		return {
@@ -167,24 +168,21 @@ export default function MonthlyRetrospective() {
 	return (
 		<div className="max-w-3xl mx-auto px-6 py-6 space-y-5">
 			{/* Navigation header */}
-			<div className="flex items-center justify-between">
+			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="flex items-center gap-3">
-					<Link
-						to="/insights"
-						className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-					>
+					<Link to="/insights" className={SKY_CHIP}>
 						Insights
 					</Link>
-					<span className="text-muted-foreground/40">/</span>
+					<span className="text-muted-foreground">/</span>
 					<h1 className="font-heading text-xl text-foreground">
 						{MONTH_NAMES[month]} {year}
 					</h1>
 				</div>
-				<div className="flex items-center gap-1">
+				<div className="flex items-center gap-2">
 					<button
 						type="button"
 						onClick={() => navigate(`/insights/month/${prevMonth}`)}
-						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+						className={SKY_ROUND}
 					>
 						<ChevronLeft className="w-4 h-4" />
 					</button>
@@ -192,7 +190,7 @@ export default function MonthlyRetrospective() {
 						type="button"
 						onClick={() => navigate(`/insights/month/${nextMonth}`)}
 						disabled={isCurrentMonth}
-						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-30"
+						className={SKY_ROUND}
 					>
 						<ChevronRight className="w-4 h-4" />
 					</button>
@@ -221,62 +219,54 @@ export default function MonthlyRetrospective() {
 					{/* Highlights */}
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 						{stats.topProject && (
-							<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3">
-								<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1.5">
-									Top Project
-								</p>
+							<Panel padding="px-5 py-4">
+								<p className={`${LABEL} mb-2`}>Top Project</p>
 								<div className="flex items-center gap-2">
 									<div
 										className="w-3 h-3 rounded-full shrink-0"
 										style={{ backgroundColor: stats.topProject.color }}
 									/>
-									<span className="font-medium text-foreground text-sm">
-										{stats.topProject.name}
-									</span>
-									<span className="ml-auto text-accent-ink font-medium text-sm tabular-nums">
+									<span className="font-bold text-foreground text-sm">{stats.topProject.name}</span>
+									<span className="ml-auto text-foreground font-bold font-mono text-sm tabular-nums">
 										{formatDuration(stats.topProject.minutes)}
 									</span>
 								</div>
-							</div>
+							</Panel>
 						)}
 						{stats.busiestDay && (
-							<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3">
-								<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1.5">
-									Busiest Day
-								</p>
+							<Panel padding="px-5 py-4">
+								<p className={`${LABEL} mb-2`}>Busiest Day</p>
 								<div className="flex items-center justify-between">
-									<span className="font-medium text-foreground text-sm">
+									<span className="font-bold text-foreground text-sm">
 										{stats.busiestDay.date.toLocaleDateString(undefined, {
 											weekday: "short",
 											month: "short",
 											day: "numeric",
 										})}
 									</span>
-									<span className="text-accent-ink font-medium text-sm tabular-nums">
+									<span className="text-foreground font-bold font-mono text-sm tabular-nums">
 										{formatDuration(stats.busiestDay.minutes)}
 									</span>
 								</div>
-							</div>
+							</Panel>
 						)}
-						<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3">
-							<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1.5">
-								Longest Session
-							</p>
+						<Panel padding="px-5 py-4">
+							<p className={`${LABEL} mb-2`}>Longest Session</p>
 							<div className="flex items-center justify-between">
-								<span className="font-medium text-foreground text-sm">
+								<span className="font-bold text-foreground text-sm">
 									{projectMap.get(stats.longestSession.projectId)?.name ?? "Unknown"}
 								</span>
-								<span className="text-accent-ink font-medium text-sm tabular-nums">
+								<span className="text-foreground font-bold font-mono text-sm tabular-nums">
 									{formatDuration(stats.longestSession.duration)}
 								</span>
 							</div>
-						</div>
+						</Panel>
 					</div>
 
 					{/* Project breakdown */}
 					{stats.projectBreakdown.length > 0 && (
-						<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
-							<p className="text-sm font-medium text-foreground mb-3">Project Breakdown</p>
+						<Panel padding="px-6 py-[22px]">
+							<p className={`${LABEL} mb-3`}>Project Breakdown</p>
 							<div className="space-y-2">
 								{stats.projectBreakdown.map((p) => {
 									const pct = (p.minutes / stats.totalMinutes) * 100;
@@ -286,7 +276,7 @@ export default function MonthlyRetrospective() {
 												className="w-2 h-2 rounded-full shrink-0"
 												style={{ backgroundColor: p.color }}
 											/>
-											<span className="text-xs text-foreground truncate w-28 shrink-0">
+											<span className="text-xs font-medium text-foreground truncate w-28 shrink-0">
 												{p.name}
 											</span>
 											<div className="flex-1 h-2 rounded-full bg-muted">
@@ -294,51 +284,44 @@ export default function MonthlyRetrospective() {
 													className="h-full rounded-full transition-all duration-300"
 													style={{
 														width: `${pct}%`,
-														backgroundColor: `${p.color}B0`,
+														backgroundColor: `color-mix(in srgb, ${p.color} 70%, transparent)`,
 													}}
 												/>
 											</div>
-											<span className="text-xs font-medium tabular-nums text-foreground w-14 text-right shrink-0">
+											<span className="text-xs font-bold font-mono tabular-nums text-foreground w-20 whitespace-nowrap text-right shrink-0">
 												{formatDuration(p.minutes)}
 											</span>
-											<span className="text-[10px] text-muted-foreground w-10 text-right shrink-0">
+											<span className="text-[10px] font-medium text-muted-foreground w-10 text-right shrink-0">
 												{pct.toFixed(0)}%
 											</span>
 										</div>
 									);
 								})}
 							</div>
-						</div>
+						</Panel>
 					)}
 
 					{/* Tag cloud */}
 					{stats.tagCloud.length > 0 && (
-						<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4">
-							<p className="text-sm font-medium text-foreground mb-3">Tags</p>
+						<Panel padding="px-6 py-[22px]">
+							<p className={`${LABEL} mb-3`}>Tags</p>
 							<div className="flex flex-wrap gap-2">
 								{stats.tagCloud.map(({ tag, count }) => (
-									<span
-										key={tag}
-										className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent-ink"
-									>
+									<span key={tag} className={CHIP}>
 										{tag}
-										<span className="text-accent-ink/50 text-[10px]">{count}</span>
+										<span className="text-muted-foreground text-[10px]">{count}</span>
 									</span>
 								))}
 							</div>
-						</div>
+						</Panel>
 					)}
 
 					{/* Copy summary button */}
 					<div className="flex justify-end">
-						<button
-							type="button"
-							onClick={handleCopy}
-							className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary/30 text-foreground hover:bg-secondary/60 transition-colors"
-						>
+						<button type="button" onClick={handleCopy} className={SKY_BUTTON}>
 							{copied ? (
 								<>
-									<Check className="w-3.5 h-3.5 text-accent-ink" /> Copied
+									<Check className="w-3.5 h-3.5 text-success" /> Copied
 								</>
 							) : (
 								<>
@@ -355,13 +338,13 @@ export default function MonthlyRetrospective() {
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 text-center">
-			<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1">{label}</p>
+		<Panel padding="px-4 py-3.5" className="text-center">
+			<p className={`${LABEL} mb-1`}>{label}</p>
 			<p
-				className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent-ink" : "text-foreground"}`}
+				className={`font-heading text-lg tabular-nums text-foreground ${accent ? "font-extrabold" : "font-bold"}`}
 			>
 				{value}
 			</p>
-		</div>
+		</Panel>
 	);
 }

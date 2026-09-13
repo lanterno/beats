@@ -41,8 +41,18 @@ export const CELL_TINT: Record<LedgerNoteKind, string> = {
 	other: "bg-muted-foreground",
 };
 
-/** Leaf for hours over, persimmon for hours owed, the muted ink for even. */
+/**
+ * Leaf for hours over, persimmon for hours owed, the muted ink for even, as
+ * small text: the inks, since the fills are 3.3–3.5:1 on a panel by day.
+ */
 export const TONE = {
+	over: "text-success-ink",
+	owed: "text-destructive-ink",
+	even: "text-muted-foreground",
+} as const;
+
+/** The same tones on the big balance figure, where the fills pass as large text. */
+export const BIG_TONE = {
 	over: "text-success",
 	owed: "text-destructive",
 	even: "text-muted-foreground",

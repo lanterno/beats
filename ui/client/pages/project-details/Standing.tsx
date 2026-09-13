@@ -40,7 +40,7 @@ import { describeError } from "@/shared/api";
 import { addIsoDays, cn, getDayName, mondayOfIso, parseIsoDate } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { longDate, shortDate } from "./dates";
-import { LABEL, LIVE_DOT, TONE } from "./styles";
+import { BIG_TONE, LABEL, LIVE_DOT } from "./styles";
 
 export interface StandingProps {
 	project: ProjectWithDuration;
@@ -253,7 +253,7 @@ function Balance({
 
 	const tone = balanceTone(week.balance);
 	const firstWeek = !ended && isFirstWeek(contract, todayIso);
-	const colour = firstWeek ? TONE.even : TONE[tone];
+	const colour = firstWeek ? BIG_TONE.even : BIG_TONE[tone];
 	const word = tone === "over" ? "over" : tone === "owed" ? "owed" : "";
 	const proj = ended ? null : projection(week, todayIso);
 	const since = first ? first.effectiveFrom : week.balanceAsOf;

@@ -66,6 +66,7 @@
 
   --color-accent-gold: hsl(var(--accent-gold));
   --color-success: hsl(var(--success));
+  --color-success-ink: hsl(var(--success-ink));
 
   --color-popover: hsl(var(--popover) / var(--card-alpha));
   --color-popover-foreground: hsl(var(--popover-foreground));
@@ -218,6 +219,11 @@
 
 		/* leaf green for hours over */
 		--success: 136 39% 40%;
+		/*
+		  the leaf as small text (5.9:1 on the panel, 4.7:1 on its own 15 % tint);
+		  --success is 3.3–3.9:1 there, so it stays for figures, fills and icons
+		*/
+		--success-ink: 136 45% 30%;
 
 		/* the sidebar: the panel at 82 % and its ink */
 		--sidebar-background: 45 100% 98%;
@@ -306,6 +312,8 @@
 		--ring: 41 89% 66%;
 
 		--success: 137 48% 69%;
+		/* already 7.6:1 on the dusk panel */
+		--success-ink: 137 48% 69%;
 
 		--sidebar-background: 221 34% 21%;
 		--sidebar-alpha: 0.86;

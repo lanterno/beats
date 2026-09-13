@@ -203,7 +203,7 @@ export function useWeeklySessionsByProject(
 						return {
 							projectId,
 							projectName: info?.name || "Unknown",
-							projectColor: info?.color || "#888",
+							projectColor: info?.color || "var(--color-muted-foreground)",
 							minutes,
 						};
 					})
@@ -277,6 +277,18 @@ export interface FlowFilter {
 }
 
 /**
+ * "Now" to the minute, for a query key. With the exact instant in the key,
+ * every render made a new query whose result re-rendered — a fetch loop as
+ * fast as the round trip, which left the insights' flow cards loading for
+ * good. A minute-old "now" is still today's flow.
+ */
+function nowToTheMinute(): Date {
+	const now = new Date();
+	now.setSeconds(0, 0);
+	return now;
+}
+
+/**
  * Hook to fetch flow windows in a date range. Used by the Insights "Flow"
  * card to render today's score sparkline. Defaults to today (00:00 → now).
  *
@@ -285,7 +297,7 @@ export interface FlowFilter {
  * editorRepo) combination as its own cache entry.
  */
 export function useFlowWindows(start?: string, end?: string, filter: FlowFilter = {}) {
-	const now = new Date();
+	const now = nowToTheMinute();
 	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 	const effectiveStart = start ?? todayStart;
 	const effectiveEnd = end ?? now.toISOString();
@@ -311,7 +323,7 @@ export function useFlowWindows(start?: string, end?: string, filter: FlowFilter 
  * so the freshness varies smoothly throughout the day.
  */
 export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
-	const now = new Date();
+	const now = nowToTheMinute();
 	const start = new Date(now);
 	start.setDate(start.getDate() - days);
 	start.setHours(0, 0, 0, 0);
@@ -344,11 +356,7 @@ export function useFlowWindowsLastDays(days = 7, filter: FlowFilter = {}) {
  * call sites that just want "today's flow" can pass nothing.
  */
 export function useFlowWindowsSummary(start?: string, end?: string, filter: FlowFilter = {}) {
-	// To the minute: with the exact instant in the key, every render made a
-	// new query whose result re-rendered — a fetch loop as fast as the round
-	// trip. A minute-old "now" is still today's flow.
-	const now = new Date();
-	now.setSeconds(0, 0);
+	const now = nowToTheMinute();
 	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 	const effectiveStart = start ?? todayStart;
 	const effectiveEnd = end ?? now.toISOString();

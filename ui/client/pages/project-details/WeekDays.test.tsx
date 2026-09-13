@@ -197,7 +197,8 @@ describe("WeekDays", () => {
 		expect(dayRow("Thu")).not.toHaveTextContent("−3.3");
 		expect(region).toHaveTextContent("— of 6.7");
 
-		const fri = within(region).getByText("Vacation · Zürich trip").closest("[data-day]");
+		const fri = within(region).getByText("· Zürich trip").closest("[data-day]");
+		expect(fri).toHaveTextContent("Vacation · Zürich trip");
 		expect(fri).toHaveTextContent("nothing expected");
 		screen.getByRole("button", { name: "Change" }).click();
 		expect(props.onChangeAbsence).toHaveBeenCalledWith("2026-09-11", {

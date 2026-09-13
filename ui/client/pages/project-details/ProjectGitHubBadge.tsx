@@ -9,7 +9,7 @@
  *
  * The two CTAs were a single onConfigure callback wired to focus the *name*
  * field — the FF.2 audit caught that "Connect GitHub" promised something the
- * drawer couldn't deliver. The badge now also suppresses the dashed CTA
+ * drawer couldn't deliver. The badge now also suppresses the CTA
  * while the status query is still in flight, so a hard reload of a connected
  * project no longer flashes "Connect GitHub" before resolving to the link.
  */
@@ -36,14 +36,14 @@ export function ProjectGitHubBadge({
 	const hasRepo = repo.length > 0;
 	const isConnected = !!status?.connected;
 
-	// Suppress the dashed "Connect GitHub" CTA while we don't yet know the
+	// Suppress the "Connect GitHub" CTA while we don't yet know the
 	// connection status for a project that has a repo set — otherwise the
 	// badge flashes "Connect" on every hard reload for connected users.
 	// `data === undefined` covers both initial fetch and refetch-after-error.
 	if (hasRepo && status === undefined && isPending) {
 		return (
 			<span
-				className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground/40 border border-border/40 bg-secondary/20 rounded px-1.5 py-0.5 max-w-[220px]"
+				className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-sidebar/50 px-[11px] py-[3px] text-xs font-bold text-muted-foreground max-w-[220px]"
 				aria-hidden="true"
 			>
 				<GitBranch className="w-3 h-3 shrink-0" aria-hidden="true" />
@@ -59,7 +59,7 @@ export function ProjectGitHubBadge({
 				target="_blank"
 				rel="noopener noreferrer"
 				title={`Open ${repo} on GitHub`}
-				className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground border border-border/60 bg-secondary/30 rounded px-1.5 py-0.5 hover:text-foreground hover:border-muted-foreground/60 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40 max-w-[220px]"
+				className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-sidebar px-[11px] py-[3px] text-xs font-bold text-foreground hover:text-accent-ink transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring max-w-[220px]"
 			>
 				<GitBranch className="w-3 h-3 shrink-0" aria-hidden="true" />
 				<span className="truncate">{repo}</span>
@@ -74,7 +74,7 @@ export function ProjectGitHubBadge({
 				type="button"
 				onClick={onConnectGitHub}
 				title="Repo is set but GitHub isn't connected — commits won't sync until you connect"
-				className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground border border-dashed border-border/60 rounded px-1.5 py-0.5 hover:text-foreground hover:border-muted-foreground/60 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+				className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-sidebar/60 px-[11px] py-[3px] text-xs font-bold text-foreground/80 hover:bg-sidebar hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 			>
 				<Link2Off className="w-3 h-3 shrink-0" aria-hidden="true" />
 				Connect GitHub
@@ -87,7 +87,7 @@ export function ProjectGitHubBadge({
 			type="button"
 			onClick={onConfigureRepo}
 			title="Link a GitHub repo to surface commit activity on this project"
-			className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground/70 border border-dashed border-border/50 rounded px-1.5 py-0.5 hover:text-foreground hover:border-muted-foreground/60 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+			className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-sidebar/60 px-[11px] py-[3px] text-xs font-bold text-foreground/80 hover:bg-sidebar hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 		>
 			<GitBranch className="w-3 h-3 shrink-0" aria-hidden="true" />
 			Link a repo

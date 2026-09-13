@@ -19,7 +19,11 @@ import {
 import { useAllBeats } from "@/entities/session";
 import type { ApiBeat } from "@/shared/api";
 import { cn, getCurrentWeekRange, getDayName, parseUtcIso, startOfDay } from "@/shared/lib";
-import { EmptyState, GoalRing } from "@/shared/ui";
+import { Button, EmptyState, GoalRing, Panel } from "@/shared/ui";
+
+/** A section heading on the sky: the mockup's `.lbl`, in ink so it reads there. */
+const SKY_HEADING =
+	"flex items-center gap-2 px-2 mb-2.5 font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-foreground";
 
 interface DaySummary {
 	day: string;
@@ -28,11 +32,11 @@ interface DaySummary {
 	totalMinutes: number;
 }
 
-function MiniSparkline({ data }: { data: DaySummary[] }) {
+function MiniSparkline({ data, className }: { data: DaySummary[]; className?: string }) {
 	const maxMinutes = Math.max(...data.map((d) => d.totalMinutes), 1);
 
 	return (
-		<div className="flex items-end gap-px h-3 shrink-0">
+		<div className={cn("flex items-end gap-px h-3 shrink-0", className)}>
 			{data.map((day, i) => {
 				const h = day.totalMinutes > 0 ? Math.max((day.totalMinutes / maxMinutes) * 12, 1.5) : 0;
 				const isToday = day.date.toDateString() === new Date().toDateString();
@@ -112,21 +116,17 @@ export function ProjectPulseList() {
 	if (sorted.length === 0) {
 		return (
 			<div>
-				<h2 className="flex items-center gap-2 text-foreground font-medium text-sm mb-3">
-					<Layers className="w-3.5 h-3.5 text-accent-ink/75" />
+				<h2 className={SKY_HEADING}>
+					<Layers className="w-3.5 h-3.5 text-muted-foreground" />
 					Projects
 				</h2>
-				<div className="rounded-lg border border-dashed border-border flex flex-col items-center">
+				<Panel padding="p-0" className="flex flex-col items-center">
 					<EmptyState variant="seedling" message="No projects yet. Create one to start tracking." />
-					<button
-						type="button"
-						onClick={() => setDialogOpen(true)}
-						className="mb-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/90 transition-colors"
-					>
+					<Button type="button" size="sm" className="mb-5" onClick={() => setDialogOpen(true)}>
 						<Plus className="w-3.5 h-3.5" />
 						New project
-					</button>
-				</div>
+					</Button>
+				</Panel>
 				<NewProjectDialog
 					open={dialogOpen}
 					onClose={() => setDialogOpen(false)}
@@ -138,13 +138,13 @@ export function ProjectPulseList() {
 
 	return (
 		<div>
-			<h2 className="flex items-center gap-2 text-foreground font-medium text-sm mb-3">
-				<Layers className="w-3.5 h-3.5 text-accent-ink/75" />
+			<h2 className={SKY_HEADING}>
+				<Layers className="w-3.5 h-3.5 text-muted-foreground" />
 				Projects
 			</h2>
 
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft overflow-hidden">
-				<div className="py-1">
+			<Panel padding="px-4 py-2.5">
+				<div className="flex flex-col">
 					{sorted.map((project) => {
 						const summary = summaries?.[project.id];
 						const todayMinutes =
@@ -159,71 +159,80 @@ export function ProjectPulseList() {
 
 						const pinned = isPinned(project.id);
 						return (
-							<div
-								key={project.id}
-								className={cn(
-									"group w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/40 transition-colors",
-									isInactive && "opacity-45",
-								)}
-							>
-								<button
-									type="button"
-									onClick={() => navigate(`/project/${project.id}`)}
-									className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+							<div key={project.id} className="border-t border-border first:border-t-0">
+								<div
+									className={cn(
+										"group w-full flex items-center gap-2.5 px-2 py-2 -mx-1.5 my-0.5 rounded-xl hover:bg-secondary transition-colors",
+									)}
 								>
-									<div
-										className="w-2 h-2 rounded-full shrink-0"
-										style={{ backgroundColor: project.color }}
-									/>
-									<span className="text-sm font-medium text-foreground truncate min-w-0 flex-1">
-										{project.name}
-									</span>
+									<button
+										type="button"
+										onClick={() => navigate(`/project/${project.id}`)}
+										className="flex items-center gap-2.5 flex-1 min-w-0 text-left rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+									>
+										{/* A quiet week dims the marks and greys the name, never the row: the
+										    balance chip of a day job owing hours must not fade with it. */}
+										<div
+											className={cn("w-2 h-2 rounded-full shrink-0", isInactive && "opacity-45")}
+											style={{ backgroundColor: project.color }}
+										/>
+										<span
+											className={cn(
+												"text-[13.5px] font-bold truncate min-w-0 flex-1",
+												isInactive ? "text-muted-foreground" : "text-foreground",
+											)}
+										>
+											{project.name}
+										</span>
 
-									{summary && <MiniSparkline data={summary} />}
+										{summary && (
+											<MiniSparkline data={summary} className={cn(isInactive && "opacity-45")} />
+										)}
 
-									<span
+										<span
+											className={cn(
+												"text-xs font-mono font-bold shrink-0 w-10 text-right",
+												todayHours > 0 ? "text-foreground" : "text-muted-foreground font-medium",
+											)}
+										>
+											{todayHours > 0 ? `${todayHours.toFixed(1)}h` : "—"}
+										</span>
+
+										{goalPct !== null && (
+											<GoalRing
+												percent={goalPct}
+												size={22}
+												strokeWidth={2.5}
+												isCap={week.goalType === "cap"}
+											/>
+										)}
+										{week.balance !== null && <BalanceChip hours={week.balance} />}
+									</button>
+									<button
+										type="button"
+										onClick={() => togglePinId(project.id)}
+										aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+										aria-pressed={pinned}
+										title={pinned ? "Unpin from top" : "Pin to top"}
 										className={cn(
-											"text-xs tabular-nums shrink-0 w-10 text-right",
-											todayHours > 0 ? "text-foreground" : "text-muted-foreground/40",
+											"p-1 rounded-full transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+											pinned
+												? "text-accent-ink"
+												: "text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-accent-ink",
 										)}
 									>
-										{todayHours > 0 ? `${todayHours.toFixed(1)}h` : "—"}
-									</span>
-
-									{goalPct !== null && (
-										<GoalRing
-											percent={goalPct}
-											size={22}
-											strokeWidth={2.5}
-											isCap={week.goalType === "cap"}
+										<Star
+											className="w-3 h-3"
+											fill={pinned ? "currentColor" : "none"}
+											aria-hidden="true"
 										/>
-									)}
-									{week.balance !== null && <BalanceChip hours={week.balance} />}
-								</button>
-								<button
-									type="button"
-									onClick={() => togglePinId(project.id)}
-									aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
-									aria-pressed={pinned}
-									title={pinned ? "Unpin from top" : "Pin to top"}
-									className={cn(
-										"p-1 rounded transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40",
-										pinned
-											? "text-accent-ink"
-											: "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-accent-ink",
-									)}
-								>
-									<Star
-										className="w-3 h-3"
-										fill={pinned ? "currentColor" : "none"}
-										aria-hidden="true"
-									/>
-								</button>
+									</button>
+								</div>
 							</div>
 						);
 					})}
 				</div>
-			</div>
+			</Panel>
 		</div>
 	);
 }

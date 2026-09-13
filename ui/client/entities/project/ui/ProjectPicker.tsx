@@ -210,7 +210,8 @@ export function ProjectPicker({
 						)}
 					</>
 				) : (
-					<span className="flex-1 min-w-0 text-muted-foreground/60">{triggerPlaceholder}</span>
+					// With nothing chosen this is the live value ("All projects"), not a hint.
+					<span className="flex-1 min-w-0 text-muted-foreground">{triggerPlaceholder}</span>
 				)}
 				<ChevronDown
 					className={cn(
@@ -254,7 +255,7 @@ export function ProjectPicker({
 									inputRef.current?.focus();
 								}}
 								aria-label="Clear search"
-								className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary/40"
+								className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground/50 hover:text-foreground hover:bg-secondary"
 							>
 								<X className="w-3 h-3" />
 							</button>

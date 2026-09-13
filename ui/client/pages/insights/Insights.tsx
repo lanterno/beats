@@ -9,6 +9,7 @@ import { Link } from "react-router";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
 import { formatDuration } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
 import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
@@ -24,6 +25,7 @@ import { FlowToday } from "./FlowToday";
 import { FlowTrend } from "./FlowTrend";
 import { PatternCards } from "./PatternCards";
 import { ProjectHealth } from "./ProjectHealth";
+import { LABEL, SKY_CHIP } from "./styles";
 import { TopProjects } from "./TopProjects";
 import { useInsightsFilters } from "./useInsightsFilters";
 import { WeeklyCard } from "./WeeklyCard";
@@ -79,23 +81,17 @@ export default function Insights() {
 			<div className="flex flex-wrap items-center justify-between gap-y-2">
 				<div className="flex flex-wrap items-center gap-3">
 					<h1 className="font-heading text-xl text-foreground shrink-0">Insights</h1>
-					<Link
-						to="/insights/digests"
-						className="shrink-0 whitespace-nowrap text-[11px] font-bold px-2.5 py-1 rounded-full bg-card text-foreground shadow-soft hover:text-accent-ink transition-colors"
-					>
+					<Link to="/insights/digests" className={SKY_CHIP}>
 						Digests
 					</Link>
-					<Link
-						to={`/insights/year/${new Date().getFullYear() - 1}`}
-						className="shrink-0 whitespace-nowrap text-[11px] font-bold px-2.5 py-1 rounded-full bg-card text-foreground shadow-soft hover:text-accent-ink transition-colors"
-					>
+					<Link to={`/insights/year/${new Date().getFullYear() - 1}`} className={SKY_CHIP}>
 						{new Date().getFullYear() - 1} Review
 					</Link>
 					{activeFilterCount >= 2 && (
 						<button
 							type="button"
 							onClick={clearAllFilters}
-							className="text-[10px] px-2 py-0.5 rounded-full border border-muted-foreground/40 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+							className={SKY_CHIP}
 							title="Clear every filter on this page (or press Esc)"
 						>
 							× clear all filters ({activeFilterCount})
@@ -105,9 +101,11 @@ export default function Insights() {
 				<div className="flex items-center gap-2">
 					{allTags && allTags.length > 0 && (
 						<select
+							name="tag-filter"
+							aria-label="Filter by tag"
 							value={selectedTag ?? ""}
 							onChange={(e) => setSelectedTag(e.target.value || undefined)}
-							className="text-xs bg-secondary/50 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+							className="min-h-9 rounded-full bg-card pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-card/70 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 						>
 							<option value="">All Tags</option>
 							{allTags.map((tag) => (
@@ -134,7 +132,7 @@ export default function Insights() {
 								onClick={() => setSelectedProjectId(undefined)}
 								aria-label="Clear project filter"
 								title="Show all projects"
-								className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-secondary/50 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent/40"
+								className="grid place-items-center w-7 h-7 rounded-full bg-card text-foreground hover:text-accent-ink transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								<X className="w-3.5 h-3.5" />
 							</button>
@@ -162,7 +160,7 @@ export default function Insights() {
 					<div className="flex justify-end">
 						<Link
 							to={`/insights/month/${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
-							className="text-xs text-accent-ink hover:text-accent-ink/80 transition-colors"
+							className={SKY_CHIP}
 						>
 							View full monthly retrospective &rarr;
 						</Link>
@@ -279,13 +277,13 @@ export default function Insights() {
 
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 text-center">
-			<p className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mb-1">{label}</p>
+		<Panel padding="px-4 py-3.5" className="text-center">
+			<p className={`${LABEL} mb-1`}>{label}</p>
 			<p
-				className={`font-heading text-lg font-semibold tabular-nums ${accent ? "text-accent-ink" : "text-foreground"}`}
+				className={`font-heading text-lg tabular-nums text-foreground ${accent ? "font-extrabold" : "font-bold"}`}
 			>
 				{value}
 			</p>
-		</div>
+		</Panel>
 	);
 }

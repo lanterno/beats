@@ -8,6 +8,8 @@
 import { useMemo } from "react";
 import { useFlowWindowsLastDays } from "@/entities/session";
 import { aggregateFlowByDay } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
+import { FOOTNOTE, LABEL, META } from "./styles";
 
 const DAYS = 7;
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -70,19 +72,19 @@ export function FlowThisWeek({
 	const peak = buckets[peakIdx];
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-secondary/20 px-4 py-3 space-y-3">
-			<div className="flex items-baseline justify-between">
-				<p className="font-heading text-sm text-foreground">Flow this week</p>
-				<p className="text-[11px] text-muted-foreground">last {DAYS} days</p>
+		<Panel padding="px-6 py-[22px]" className="space-y-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p className={LABEL}>Flow this week</p>
+				<p className={META}>last {DAYS} days</p>
 			</div>
 
 			{/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these group chart bars and filter chips rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here. */}
 			<div className="flex items-end gap-2 h-24" role="group" aria-label="Daily flow score">
 				{buckets.map((b) => (
-					<div key={b.date} className="flex-1 flex flex-col items-center gap-1.5">
+					<div key={b.date} className="flex-1 self-stretch flex flex-col items-center gap-1.5">
 						<div className="relative w-full flex-1 flex items-end">
 							<div
-								className={`w-full rounded-sm transition-all ${b.count === 0 ? "bg-secondary/40" : b.isToday ? "bg-accent" : "bg-accent/60"}`}
+								className={`w-full rounded-t-md rounded-b-[3px] transition-all ${b.count === 0 ? "bg-muted" : b.isToday ? "bg-accent" : "bg-success/55"}`}
 								style={{
 									// Pin a 4px floor so days with very low scores still
 									// have a visible mark, distinguishable from the no-data
@@ -97,7 +99,7 @@ export function FlowThisWeek({
 							/>
 						</div>
 						<div
-							className={`text-[10px] tabular-nums ${b.isToday ? "text-accent-ink font-medium" : "text-muted-foreground"}`}
+							className={`text-[10px] tabular-nums ${b.isToday ? "text-accent-ink font-bold" : "text-muted-foreground font-medium"}`}
 						>
 							{b.label}
 						</div>
@@ -106,12 +108,13 @@ export function FlowThisWeek({
 			</div>
 
 			{peak.count > 0 && (
-				<p className="text-[10px] text-muted-foreground border-t border-border/40 pt-2">
-					Best day this week: <span className="text-foreground">{formatDate(peak.date)}</span> at{" "}
+				<p className={FOOTNOTE}>
+					Best day this week:{" "}
+					<span className="text-foreground font-bold">{formatDate(peak.date)}</span> at{" "}
 					{Math.round(peak.avg * 100)}/100.
 				</p>
 			)}
-		</div>
+		</Panel>
 	);
 }
 

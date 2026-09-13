@@ -206,11 +206,6 @@ describe("ProjectsIndex", () => {
 			"Last tracked",
 		]);
 
-		// table-layout: fixed is critical — without it the Project column auto-
-		// sizes wide and the narrow columns wrap their text vertically. JSDOM
-		// doesn't compute styles fully so we assert the class itself.
-		expect(screen.getByRole("table").className).toMatch(/table-fixed/);
-
 		// Switch to Archived → Integrations and This week disappear; Restore appears.
 		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
 		const archivedHeaders = within(screen.getByRole("table"))

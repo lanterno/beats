@@ -32,16 +32,18 @@ export function TimerDisplay({
 	return (
 		<div className="flex flex-col items-center py-3">
 			<div className="flex items-center gap-2 mb-1">
-				<Clock className="w-4 h-4 text-muted-foreground/80" />
-				<span className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Timer</span>
+				<Clock className="w-4 h-4 text-muted-foreground" />
+				<span className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+					Timer
+				</span>
 			</div>
 			<p
-				className={`font-mono text-4xl font-medium tracking-tight tabular-nums ${isRunning ? "text-accent-ink" : "text-foreground"}`}
+				className={`font-heading text-4xl font-extrabold tracking-[-0.01em] ${isRunning ? "text-foreground" : "text-muted-foreground"}`}
 			>
 				{displayTime}
 			</p>
 			{projectName && isRunning && (
-				<p className="text-muted-foreground text-base mt-2">{projectName}</p>
+				<p className="text-muted-foreground text-base font-medium mt-2">{projectName}</p>
 			)}
 			{isRunning && customStartTime && (
 				<p className="text-muted-foreground text-sm mt-1">

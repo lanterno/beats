@@ -7,7 +7,8 @@
 
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/shared/ui";
+import { Button, Panel } from "@/shared/ui";
+import { CHIP, CONNECTED_DOT, DANGER_HOVER, HEADING, HEADING_ICON, LEAD } from "./styles";
 
 interface IntegrationSectionProps {
 	icon: LucideIcon;
@@ -34,23 +35,24 @@ export function IntegrationSection({
 }: IntegrationSectionProps) {
 	return (
 		<section className="mb-8">
-			<h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-				<Icon className="w-4 h-4 text-accent-ink" />
+			<h2 className={HEADING}>
+				<Icon className={HEADING_ICON} />
 				{title}
 			</h2>
-			<div className="rounded-lg border border-border/80 bg-card shadow-soft p-4 space-y-3">
-				<p className="text-xs text-muted-foreground">{description}</p>
+			<Panel padding="p-5" className="space-y-3">
+				<p className={LEAD}>{description}</p>
 				{connected ? (
-					<div className="flex items-center gap-3">
-						<span className="text-xs text-accent-ink font-medium">
+					<div className="flex flex-wrap items-center gap-3">
+						<span className={CHIP}>
+							<span className={CONNECTED_DOT} />
 							Connected{connectedDetail ? <> ({connectedDetail})</> : null}
 						</span>
 						<Button
-							variant="outline"
+							variant="secondary"
 							size="sm"
 							onClick={onDisconnect}
 							disabled={disconnecting}
-							className="text-xs hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+							className={DANGER_HOVER}
 						>
 							{disconnecting ? "Disconnecting…" : "Disconnect"}
 						</Button>
@@ -58,7 +60,7 @@ export function IntegrationSection({
 				) : (
 					children
 				)}
-			</div>
+			</Panel>
 		</section>
 	);
 }

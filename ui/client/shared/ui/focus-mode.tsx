@@ -127,9 +127,10 @@ export function FocusMode({
 			{/* Keyboard hint */}
 			<p className="absolute bottom-6 text-muted-foreground/20 text-xs">
 				Press{" "}
-				<kbd className="px-1.5 py-0.5 rounded bg-secondary/30 text-muted-foreground/30">F</kbd> or{" "}
-				<kbd className="px-1.5 py-0.5 rounded bg-secondary/30 text-muted-foreground/30">ESC</kbd> to
-				exit
+				<kbd className="px-2 py-0.5 rounded-full bg-secondary/30 text-muted-foreground/30">F</kbd>{" "}
+				or{" "}
+				<kbd className="px-2 py-0.5 rounded-full bg-secondary/30 text-muted-foreground/30">ESC</kbd>{" "}
+				to exit
 			</p>
 		</div>
 	);
