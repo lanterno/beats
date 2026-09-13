@@ -5,4 +5,9 @@ export {
 	fetchAbsences,
 	recordAbsence,
 } from "./absenceApi";
-export { absenceKeys, useAbsences, useRecordAbsence, useRemoveAbsence } from "./queries";
+export {
+	absenceKeys,
+	useAbsences,
+	useRecordAbsences,
+	useRemoveAbsences,
+} from "./queries";

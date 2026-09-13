@@ -120,3 +120,26 @@ describe("useProject detail after a mutation", () => {
 		});
 	});
 });
+
+describe("useProject on an archived project", () => {
+	it("finds it in the archived list when the active list does not have it", async () => {
+		// The project page is where an archived project is restored; before
+		// this it read "Project not found" and the Restore controls were dead.
+		vi.mocked(fetchProjects).mockImplementation((options) =>
+			Promise.resolve(options?.archived ? [{ ...apiProject(8), archived: true }] : []),
+		);
+		function Detail() {
+			const { data, isLoading } = useProject(PROJECT_ID);
+			if (isLoading) return <div data-testid="detail">loading</div>;
+			return (
+				<div data-testid="detail">{data ? `${data.name} archived=${data.archived}` : "none"}</div>
+			);
+		}
+		render(<Detail />, { wrapper });
+
+		await waitFor(() =>
+			expect(screen.getByTestId("detail")).toHaveTextContent("Deep Work archived=true"),
+		);
+		expect(fetchProjects).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));
+	});
+});

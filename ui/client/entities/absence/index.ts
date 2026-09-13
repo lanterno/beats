@@ -13,7 +13,7 @@ export {
 	fetchAbsences,
 	recordAbsence,
 	useAbsences,
-	useRecordAbsence,
-	useRemoveAbsence,
+	useRecordAbsences,
+	useRemoveAbsences,
 } from "./api";
 export { ABSENCE_TYPE_LABELS, type Absence, type AbsenceType, toAbsence } from "./model";

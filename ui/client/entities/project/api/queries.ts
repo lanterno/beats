@@ -124,7 +124,21 @@ export function useProject(projectId: string | undefined) {
 				include: ["totals", "this_week", "last_tracked"],
 			});
 			const item = items.find((p) => p.id === projectId);
-			return item ? toProjectWithDuration(item) : null;
+			if (item) return toProjectWithDuration(item);
+
+			// An archived project is not in the active list, and its page is
+			// where it is restored — the header's Archived chip, the settings
+			// drawer — so look there before calling it not found.
+			const archivedCached = queryClient
+				.getQueryData<ProjectWithDuration[]>(projectKeys.archivedList())
+				?.find((p) => p.id === projectId);
+			if (archivedCached) return archivedCached;
+			const archived = await fetchProjects({
+				archived: true,
+				include: ["totals", "this_week", "last_tracked"],
+			});
+			const archivedItem = archived.find((p) => p.id === projectId);
+			return archivedItem ? toProjectWithDuration(archivedItem) : null;
 		},
 		enabled: !!projectId,
 	});

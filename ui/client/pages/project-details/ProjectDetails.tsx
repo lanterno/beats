@@ -1,19 +1,23 @@
 /**
  * Project Details Page — the identity on the sky, the standing, the open
- * week's days and the ledger of earlier weeks, with the contract and the
- * absences in a rail (docs/project-page-roadmap.md, "The page").
+ * week's days and the ledger of earlier weeks, with the contract (or the
+ * goal), the time off and the quiet facts in a rail
+ * (docs/project-page-roadmap.md, "The page").
  *
  * The page owns the reads the panels share: `/contract/week` for the open
  * week, the current week (the balance is pinned to today) and the next
  * (for "then Mon 6.7 h"), the ledger, the sessions and the running timer.
- * The open week is the URL's (`?week=`), so a ledger row, ‹ › and a link
- * all move the same navigator.
+ * The open week is the URL's (`?week=`), so a ledger row, ‹ ›, a holiday in
+ * the time off and a link all move the same navigator. It also owns the
+ * booking dialog, which every "Book time off" and "Change" opens, and knows
+ * where focus goes when a save takes away the control that opened it.
  */
 
 import { ChevronLeft, Clock } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
+	type ContractWeek,
 	LoadingSpinner,
 	type ProjectFormAutoFocusField,
 	useContractWeek,
@@ -21,14 +25,21 @@ import {
 	useProjectLedger,
 } from "@/entities/project";
 import { useSessions } from "@/entities/session";
-import { addIsoDays, mondayOfIso, todayIso as readToday } from "@/shared/lib";
-import { AbsenceCalendar } from "./AbsenceCalendar";
-import { ContractHistoryPanel } from "./ContractHistoryPanel";
-import { ProjectDangerZone } from "./ProjectDangerZone";
+import {
+	addIsoDays,
+	mondayOfIso,
+	parseUtcIso,
+	todayIso as readToday,
+	toIsoDate,
+} from "@/shared/lib";
+import { type AbsenceBooking, AbsenceDialog } from "./AbsenceDialog";
+import { ContractRegister } from "./ContractRegister";
+import { nextWeekdayAfter } from "./dates";
 import { ProjectHeader } from "./ProjectHeader";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { QuietFacts } from "./QuietFacts";
 import { Standing } from "./Standing";
+import { TimeOff } from "./TimeOff";
 import { useOpenWeek } from "./useOpenWeek";
 import { useRunningBeat } from "./useRunningBeat";
 import { WeekDays } from "./WeekDays";
@@ -43,6 +54,28 @@ const LEDGER_WEEKS = 8;
  */
 const LIVE_REFETCH_MS = 60_000;
 
+interface Booking extends AbsenceBooking {
+	/** Remounts the dialog, so each opening starts from its own fields. */
+	key: number;
+	/** What takes focus on close when the control that opened the dialog has gone. */
+	returnFocus: () => HTMLElement | null;
+}
+
+/**
+ * Where "Book time off" starts: the first day after today the contract
+ * expects hours on, in this week or the next; else the first weekday after
+ * today with nothing off on it — not a day already booked.
+ */
+function nextDueDay(todayIso: string, weeks: (ContractWeek | undefined)[]): string {
+	const days = weeks.flatMap((week) => week?.days ?? []);
+	const due = days.find((day) => day.date > todayIso && day.expected > 0);
+	if (due) return due.date;
+	const off = new Set(days.filter((day) => day.absence || day.holiday).map((day) => day.date));
+	let day = nextWeekdayAfter(todayIso);
+	while (off.has(day)) day = nextWeekdayAfter(day);
+	return day;
+}
+
 export default function ProjectDetails() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const today = readToday();
@@ -51,14 +84,14 @@ export default function ProjectDetails() {
 	const [ledgerWeeks, setLedgerWeeks] = useState(LEDGER_WEEKS);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [settingsFocus, setSettingsFocus] = useState<ProjectFormAutoFocusField>("name");
-	// "Change contract…" in the settings form lands on the history panel's
-	// own button: terms are edited there, not in the form.
+	const [booking, setBooking] = useState<Booking | null>(null);
+	const bookings = useRef(0);
+	// "Change contract…" in the settings form lands on the register's own
+	// button: terms are edited there, not in the form.
 	const changeContractButtonRef = useRef<HTMLButtonElement>(null);
-	// "Book time off" and a day's "Change" bring the reader to the absences,
-	// which stay in the rail until Phase 3b's dialog.
-	const absencesRef = useRef<HTMLDivElement>(null);
 	// A ledger row opens its week in the Days panel, which may be a screen up.
 	const daysRef = useRef<HTMLDivElement>(null);
+	const timeOffBookRef = useRef<HTMLButtonElement>(null);
 
 	const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
 	const { data: sessions } = useSessions(projectId);
@@ -91,9 +124,27 @@ export default function ProjectDetails() {
 		button?.focus();
 	};
 
-	const scrollToAbsences = () => {
-		absencesRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+	const openBooking = (next: AbsenceBooking, returnFocus: () => HTMLElement | null) => {
+		bookings.current += 1;
+		setBooking({ ...next, key: bookings.current, returnFocus });
 	};
+
+	// A save can take away the control that opened the dialog — "Book time off
+	// on Wed 16" becomes "Change", a removed run leaves Time off — and focus
+	// then lands on what replaced it rather than on <body>.
+	const dayControl = (date: string) => () => {
+		const row = daysRef.current?.querySelector(`[data-day="${date}"]`);
+		return (
+			row?.querySelector<HTMLElement>("[data-booking]") ??
+			row?.querySelector<HTMLElement>("button") ??
+			daysRef.current?.querySelector<HTMLElement>("button") ??
+			null
+		);
+	};
+	const timeOffBook = () => timeOffBookRef.current;
+
+	const bookFromDefault = () =>
+		openBooking({ from: nextDueDay(today, [currentWeekQuery.data, nextWeek]) }, timeOffBook);
 
 	const openWeekFromLedger = (week: string) => {
 		setWeekOf(week);
@@ -117,6 +168,8 @@ export default function ProjectDetails() {
 
 	const sessionList = sessions ?? [];
 	const ledgerWeek = ledger?.weeks.find((w) => w.weekOf === weekOf);
+	const firstStart = sessionList.map((s) => s.startTime).sort()[0];
+	const firstTrackedIso = firstStart ? toIsoDate(parseUtcIso(firstStart)) : undefined;
 
 	return (
 		<div className="max-w-5xl mx-auto px-4 sm:px-6 pb-24">
@@ -150,7 +203,7 @@ export default function ProjectDetails() {
 							ledgerLoading={ledgerQuery.isLoading}
 							ledgerError={ledgerQuery.error}
 							running={running !== null}
-							onBookTimeOff={scrollToAbsences}
+							onBookTimeOff={bookFromDefault}
 							onEditGoal={() => openSettings("weeklyGoal")}
 							onAddContract={() => openSettings("scheduleType")}
 							onSetRegion={() => openSettings("holidayCountry")}
@@ -164,7 +217,20 @@ export default function ProjectDetails() {
 								contractWeek={openQuery.data}
 								ledgerWeek={ledgerWeek}
 								running={running}
-								onChangeAbsence={scrollToAbsences}
+								onChangeAbsence={(date, absence) =>
+									openBooking(
+										{
+											from: date,
+											initial: {
+												type: absence.type,
+												halfDay: absence.halfDay,
+												note: absence.note,
+											},
+										},
+										dayControl(date),
+									)
+								}
+								onBookTimeOff={(date) => openBooking({ from: date }, dayControl(date))}
 							/>
 						</div>
 						<WeekLedger
@@ -182,27 +248,26 @@ export default function ProjectDetails() {
 					</div>
 
 					<aside className="flex flex-col gap-6 @min-[860px]/content:sticky @min-[860px]/content:top-4 @min-[860px]/content:self-start">
+						<ContractRegister
+							project={project}
+							todayIso={today}
+							firstTrackedIso={firstTrackedIso}
+							onOpenSettings={openSettings}
+							changeButtonRef={changeContractButtonRef}
+						/>
 						{project.kind === "day_job" && (
-							<ContractHistoryPanel
+							<TimeOff
 								project={project}
-								onOpenSettings={() => openSettings("scheduleType")}
-								changeButtonRef={changeContractButtonRef}
+								todayIso={today}
+								onBook={bookFromDefault}
+								bookButtonRef={timeOffBookRef}
+								onOpenAbsence={(next) => openBooking(next, timeOffBook)}
+								onOpenWeek={openWeekFromLedger}
 							/>
-						)}
-						{project.kind === "day_job" && project.contract && (
-							<div ref={absencesRef} className="scroll-mt-4">
-								<AbsenceCalendar projectId={project.id} />
-							</div>
 						)}
 						<QuietFacts project={project} sessions={sessionList} todayIso={today} />
 					</aside>
 				</div>
-
-				<ProjectDangerZone
-					projectId={project.id}
-					projectName={project.name}
-					archived={project.archived}
-				/>
 			</div>
 
 			<ProjectSettingsDrawer
@@ -212,6 +277,20 @@ export default function ProjectDetails() {
 				autoFocusField={settingsFocus}
 				onChangeContract={project.contract ? handleChangeContract : undefined}
 			/>
+
+			{/* A dialog's close shuts only the booking it was opened on. */}
+			{booking && project.kind === "day_job" && (
+				<AbsenceDialog
+					key={booking.key}
+					project={project}
+					todayIso={today}
+					from={booking.from}
+					through={booking.through}
+					initial={booking.initial}
+					returnFocus={booking.returnFocus}
+					onClose={() => setBooking((open) => (open?.key === booking.key ? null : open))}
+				/>
+			)}
 		</div>
 	);
 }

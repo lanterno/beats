@@ -7,11 +7,18 @@
  * on phones (the P0 a11y principle calls for "mobile = bottom-sheet drawer
  * on phones"). Existing one-off modals (NewProjectDialog, CoachMemoryDialog)
  * are slated to migrate to this primitive as their owners touch them.
+ *
+ * Focus goes back to what opened the dialog. Radix returns it only to a
+ * `DialogPrimitive.Trigger`, and no dialog here has one — each opens from
+ * state — so without this every close left focus on <body>. When a save has
+ * taken the opener off the page ("Book time off" became "Change"), the
+ * caller's `returnFocus` names what stands in for it.
  */
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type * as React from "react";
+import { useRef } from "react";
 import { cn } from "../lib";
 
 export interface DialogProps {
@@ -23,11 +30,17 @@ export interface DialogProps {
 	/** Constrain content width on >= sm. Defaults to "max-w-lg". */
 	contentClassName?: string;
 	/**
-	 * Fires when the dialog has closed and is about to return focus to its
-	 * trigger. `preventDefault()` on the event and focus something else
-	 * instead — for a close that hands over to a control on the page.
+	 * Fires when the dialog has closed, before focus goes back to what opened
+	 * it. `preventDefault()` on the event and focus something else instead —
+	 * for a close that hands over to a control on the page.
 	 */
 	onCloseAutoFocus?: (event: Event) => void;
+	/**
+	 * Where focus goes on close when the control that opened the dialog is no
+	 * longer on the page. Unset, or returning nothing, focus stays where the
+	 * browser leaves it.
+	 */
+	returnFocus?: () => HTMLElement | null | undefined;
 }
 
 /**
@@ -42,7 +55,28 @@ export function Dialog({
 	children,
 	contentClassName,
 	onCloseAutoFocus,
+	returnFocus,
 }: DialogProps) {
+	// Read while rendering the open: by the time Radix's focus scope mounts, a
+	// field inside may have autofocused and the opener is no longer known.
+	const opener = useRef<HTMLElement | null>(null);
+	const wasOpen = useRef(false);
+	if (open && !wasOpen.current) {
+		const active = document.activeElement;
+		opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+	}
+	wasOpen.current = open;
+
+	const handleCloseAutoFocus = (event: Event) => {
+		onCloseAutoFocus?.(event);
+		if (event.defaultPrevented) return;
+		// Radix would focus a Trigger this dialog does not have, and nothing else.
+		event.preventDefault();
+		const back = opener.current?.isConnected ? opener.current : returnFocus?.();
+		opener.current = null;
+		back?.focus();
+	};
+
 	return (
 		<DialogPrimitive.Root
 			open={open}
@@ -59,7 +93,7 @@ export function Dialog({
 					)}
 				/>
 				<DialogPrimitive.Content
-					onCloseAutoFocus={onCloseAutoFocus}
+					onCloseAutoFocus={handleCloseAutoFocus}
 					className={cn(
 						"fixed z-[71] bg-card text-foreground shadow-card",
 						// Mobile: bottom-sheet, full-width, rounded top corners only.
@@ -80,7 +114,7 @@ export function Dialog({
 								{title}
 							</DialogPrimitive.Title>
 							{description && (
-								<DialogPrimitive.Description className="text-xs text-muted-foreground/70 mt-0.5">
+								<DialogPrimitive.Description className="text-xs text-muted-foreground mt-0.5">
 									{description}
 								</DialogPrimitive.Description>
 							)}

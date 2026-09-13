@@ -6,7 +6,7 @@
  * browser's zone.
  */
 
-import { formatDateShort, getDayName, parseIsoDate, parseUtcIso } from "@/shared/lib";
+import { addIsoDays, formatDateShort, getDayName, parseIsoDate, parseUtcIso } from "@/shared/lib";
 
 function day(iso: string): Date {
 	return parseIsoDate(iso) ?? new Date(0);
@@ -28,6 +28,19 @@ export function longDate(iso: string): string {
 export function plainDate(iso: string): string {
 	const d = day(iso);
 	return `${formatDateShort(d)}, ${d.getFullYear()}`;
+}
+
+/** Monday to Friday. */
+export function isWeekdayIso(iso: string): boolean {
+	const dow = day(iso).getDay();
+	return dow >= 1 && dow <= 5;
+}
+
+/** The first Monday-to-Friday day after `iso`. */
+export function nextWeekdayAfter(iso: string): string {
+	let next = addIsoDays(iso, 1);
+	while (!isWeekdayIso(next)) next = addIsoDays(next, 1);
+	return next;
 }
 
 /** "13:10" — a timestamp as the local clock, 24 h, as the mockup writes session times. */

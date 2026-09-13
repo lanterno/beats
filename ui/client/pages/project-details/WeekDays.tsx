@@ -11,7 +11,7 @@
  * (`groupSessionsByLocalDay`), so they add up to it.
  */
 
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ABSENCE_TYPE_LABELS } from "@/entities/absence";
@@ -19,6 +19,7 @@ import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useFocusScores } from "@/entities/intelligence";
 import { useProjectPlannedByWeek } from "@/entities/planning";
 import type {
+	ContractDay,
 	ContractWeek,
 	LedgerNoteKind,
 	LedgerWeek,
@@ -53,9 +54,13 @@ export interface WeekDaysProps {
 	ledgerWeek?: LedgerWeek;
 	/** The timer, when it runs on this project. */
 	running: RunningBeat | null;
-	/** "Change" on a day off: brings the reader to the absences. */
-	onChangeAbsence: () => void;
+	/** "Change" on a day off: the booking dialog on that day, with what the day holds. */
+	onChangeAbsence: (dateIso: string, absence: DayAbsence) => void;
+	/** "Book time off" on a weekday the contract governs: the booking dialog on that day. */
+	onBookTimeOff?: (dateIso: string) => void;
 }
+
+type DayAbsence = NonNullable<ContractDay["absence"]>;
 
 interface DayModel {
 	date: string;
@@ -69,7 +74,10 @@ interface DayModel {
 	worked: number;
 	/** Hours the contract expected; undefined off a governed week. */
 	expected?: number;
-	off?: { kind: LedgerNoteKind; label: string; changeable: boolean };
+	/** A holiday or an absence on the day; `absence` is what "Change" opens. */
+	off?: { kind: LedgerNoteKind; label: string; absence?: DayAbsence };
+	/** A weekday of a governed week with nothing off: time off can be booked on it. */
+	bookable: boolean;
 	isToday: boolean;
 }
 
@@ -121,13 +129,15 @@ function buildDays(
 			contractDay?.worked ?? ledgerWeek?.days[i] ?? day.totalMinutes / 60 + (live ? liveHours : 0);
 		let off: DayModel["off"];
 		if (contractDay?.holiday) {
-			off = { kind: "holiday", label: contractDay.holiday, changeable: false };
+			// An absence stored on a holiday (booked before the region was set)
+			// costs nothing either way, but keeps a Change so it can be removed.
+			off = { kind: "holiday", label: contractDay.holiday, absence: contractDay.absence };
 		} else if (contractDay?.absence) {
 			const a = contractDay.absence;
 			off = {
 				kind: a.type,
 				label: `${ABSENCE_TYPE_LABELS[a.type]}${a.halfDay ? " ½" : ""}${a.note ? ` · ${a.note}` : ""}`,
-				changeable: true,
+				absence: a,
 			};
 		}
 		return {
@@ -139,6 +149,7 @@ function buildDays(
 			worked,
 			expected: governed ? contractDay?.expected : undefined,
 			off,
+			bookable: governed && i < 5 && off === undefined,
 			isToday: day.date === todayIso,
 		};
 	});
@@ -216,6 +227,7 @@ export function WeekDays({
 	ledgerWeek,
 	running,
 	onChangeAbsence,
+	onBookTimeOff,
 }: WeekDaysProps) {
 	const thisMonday = mondayOfIso(todayIso);
 	const isCurrent = weekOf === thisMonday;
@@ -335,10 +347,11 @@ export function WeekDays({
 							>
 								{day.off.label}
 							</span>
-							{day.off.changeable && (
+							{day.off.absence && (
 								<button
 									type="button"
-									onClick={onChangeAbsence}
+									data-booking=""
+									onClick={() => day.off?.absence && onChangeAbsence(day.date, day.off.absence)}
 									className={cn(LINKISH, "relative z-10 shrink-0")}
 								>
 									Change
@@ -375,7 +388,7 @@ export function WeekDays({
 							data-day={day.date}
 							className={cn(
 								ROW,
-								"relative",
+								"relative group/day",
 								expandable && "hover:bg-secondary",
 								day.isToday && "bg-accent/20",
 							)}
@@ -392,8 +405,27 @@ export function WeekDays({
 							) : (
 								name
 							)}
-							<div className="text-[12.5px] text-muted-foreground font-medium flex gap-2 items-center min-w-0 flex-wrap @max-[560px]/content:flex-nowrap @max-[560px]/content:overflow-hidden @max-[560px]/content:whitespace-nowrap">
+							<div className="text-[12.5px] text-muted-foreground font-medium flex gap-2 items-center min-w-0 flex-wrap @max-[560px]/content:flex-nowrap @max-[560px]/content:overflow-x-clip @max-[560px]/content:whitespace-nowrap">
 								{mid}
+								{day.bookable && onBookTimeOff && (
+									// On a hover device it waits for the row's hover or its own focus;
+									// by keyboard it is the next stop after the day's toggle. Its box
+									// is 24 px tall, and 24 px wide once only the "+" shows, without
+									// growing the row (the negative margin; the cell clips x alone).
+									<button
+										type="button"
+										data-booking=""
+										onClick={() => onBookTimeOff(day.date)}
+										aria-label={`Book time off on ${day.name} ${day.number}`}
+										className={cn(
+											LINKISH,
+											"relative z-10 shrink-0 ml-auto inline-flex items-center justify-center gap-1 h-6 -my-1.5 @max-[560px]/content:w-6 [@media(hover:hover)]:opacity-0 group-hover/day:opacity-100 focus-visible:opacity-100 transition-opacity",
+										)}
+									>
+										<Plus className="w-3 h-3" aria-hidden="true" />
+										<span className="@max-[560px]/content:hidden">Book time off</span>
+									</button>
+								)}
 							</div>
 							<div className="text-[13.5px] font-bold text-foreground whitespace-nowrap flex gap-2 items-center font-mono">
 								<Figure day={day} closed={closed} />

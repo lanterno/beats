@@ -1,9 +1,9 @@
 /**
  * ContractTermFields — the inputs for one contract term: schedule type,
  * the numbers that type needs, the day it takes effect, a note. Shared by
- * ProjectForm (a new day job's first term) and the contract history
- * panel's term dialog, so a term is described the same way wherever it
- * is typed.
+ * ProjectForm (a new day job's first term) and the Contract panel's term
+ * dialog on the project page, so a term is described the same way wherever
+ * it is typed.
  *
  * Controlled: the host owns the values and the errors. Percentage is a
  * percent here (80) and a fraction on the wire — `termFromForm` converts.

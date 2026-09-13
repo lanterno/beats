@@ -55,6 +55,7 @@
 
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-ink: hsl(var(--destructive-ink));
 
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
@@ -201,6 +202,11 @@
 		/* persimmon for hours owed */
 		--destructive: 17 62% 54%;
 		--destructive-foreground: 45 100% 98%;
+		/*
+		  the owed tone as small text on a panel (#A84924, 5.4:1); #D2683F is
+		  3.4:1 there, so --destructive stays for figures and fills
+		*/
+		--destructive-ink: 17 65% 40%;
 
 		/* the hairline, rgb(43 58 68 / .09) */
 		--border: 204 23% 22%;
@@ -290,6 +296,8 @@
 
 		--destructive: 17 81% 73%;
 		--destructive-foreground: 204 23% 22%;
+		/* already 6.4:1 on the dusk panel */
+		--destructive-ink: 17 81% 73%;
 
 		/* rgb(236 241 246 / .10) */
 		--border: 210 36% 95%;

@@ -1,8 +1,10 @@
 /**
  * The project page's regions per kind ("Where you stand", "Days", "Earlier
- * weeks"; the contract and absences on a day job), the header's derived
- * chip, and the open week riding in the URL. The panels' own behaviour is
- * pinned beside them (Standing, WeekDays, WeekLedger tests).
+ * weeks"; the rail's Contract and Time off on a day job, Goal elsewhere), the
+ * header's derived chip, the open week riding in the URL, and the booking
+ * dialog opening from the standing on the right day. The panels' own
+ * behaviour is pinned beside them (Standing, WeekDays, WeekLedger,
+ * ContractRegister, TimeOff, AbsenceDialog tests).
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
@@ -51,8 +53,8 @@ vi.mock("@/entities/absence", () => {
 	const idle = { mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false };
 	return {
 		useAbsences: () => ({ data: [], error: null }),
-		useRecordAbsence: () => idle,
-		useRemoveAbsence: () => idle,
+		useRecordAbsences: () => idle,
+		useRemoveAbsences: () => idle,
 		ABSENCE_TYPE_LABELS: { vacation: "Vacation", sick: "Sick", other: "Other" },
 	};
 });
@@ -158,15 +160,16 @@ describe("ProjectDetails", () => {
 		expect(screen.queryByText("the first one")).not.toBeInTheDocument();
 	});
 
-	it("renders the identity and the three regions on a side project, without the contract surfaces", async () => {
+	it("renders the identity, the three regions and the Goal on a side project, without the contract surfaces", async () => {
 		renderPage();
 		expect(await screen.findByRole("button", { name: "Alpha" })).toBeInTheDocument();
 		expect(screen.getByText("Side project · goal 10 h/week")).toBeInTheDocument();
 		expect(screen.getByRole("region", { name: "Where you stand" })).toBeInTheDocument();
 		expect(screen.getByRole("region", { name: "Days" })).toBeInTheDocument();
 		expect(screen.getByRole("region", { name: "Earlier weeks" })).toBeInTheDocument();
-		expect(screen.queryByRole("region", { name: /Contract/ })).not.toBeInTheDocument();
-		expect(screen.queryByRole("region", { name: "Absences" })).not.toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Goal" })).toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: "Contract" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: "Time off" })).not.toBeInTheDocument();
 		expect(
 			screen.getByText("No sessions yet — start the timer in the sidebar."),
 		).toBeInTheDocument();
@@ -197,8 +200,44 @@ describe("ProjectDetails", () => {
 		expect(within(standing).getByText("+3.0 h")).toBeInTheDocument();
 		expect(within(standing).getByText("Expected").nextElementSibling).toHaveTextContent("25.6 h");
 		expect(standing).toHaveTextContent("Public holidays are not deducted");
-		expect(screen.getByRole("region", { name: /Contract history/ })).toBeInTheDocument();
-		expect(screen.getByRole("region", { name: "Absences" })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Contract" })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Time off" })).toBeInTheDocument();
+		expect(screen.queryByRole("region", { name: "Goal" })).not.toBeInTheDocument();
+	});
+
+	it("opens the booking dialog from the standing on the next day the contract expects hours", async () => {
+		hooks.useProject.mockReturnValue({ data: DAY_JOB, isLoading: false, error: null });
+		const thisMonday = mondayOfIso(todayIso());
+		const nextMonday = addIsoDays(thisMonday, 7);
+		// Due today and nothing after it this week; next week, Wednesday alone.
+		const todayIndex = (new Date(`${todayIso()}T12:00:00`).getDay() + 6) % 7;
+		const week = (weekOf: string, dueDay: number) => ({
+			weekOf,
+			expected: 6.4,
+			worked: 0,
+			remaining: 6.4,
+			balance: 0,
+			balanceAsOf: todayIso(),
+			balanceOpening: 0,
+			balanceWorked: 0,
+			balanceExpectedThrough: 0,
+			days: [0, 1, 2, 3, 4, 5, 6].map((i) => ({
+				date: addIsoDays(weekOf, i),
+				expected: i === dueDay ? 6.4 : 0,
+				worked: 0,
+			})),
+		});
+		hooks.useContractWeek.mockImplementation((_id: string, weekOf?: string) => ({
+			data: weekOf === nextMonday ? week(nextMonday, 2) : week(weekOf ?? thisMonday, todayIndex),
+			isLoading: false,
+			error: null,
+		}));
+		renderPage();
+
+		const standing = await screen.findByRole("region", { name: "Where you stand" });
+		await userEvent.click(within(standing).getByRole("button", { name: "Book time off" }));
+		const dialog = screen.getByRole("dialog", { name: "Book time off" });
+		expect(within(dialog).getByLabelText("From")).toHaveValue(addIsoDays(nextMonday, 2));
 	});
 
 	it("puts the open week in the URL from ‹ › and drops it on Today", async () => {

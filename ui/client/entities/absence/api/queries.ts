@@ -50,20 +50,56 @@ function useInvalidateAfterAbsenceWrite() {
 		]);
 }
 
-export function useRecordAbsence() {
+/** How far a run of writes got: `done` landed, and `error` (null when none) stopped the rest. */
+interface AbsenceWrites {
+	done: number;
+	error: unknown;
+}
+
+/**
+ * The writes in order, the first failure ending the run; nothing is rolled
+ * back. Each write is tried twice, as the app's mutations are — the run
+ * itself is never retried, since that would repeat what already landed.
+ */
+async function inOrder<T>(
+	items: T[],
+	write: (item: T) => Promise<unknown>,
+): Promise<AbsenceWrites> {
+	let done = 0;
+	for (const item of items) {
+		try {
+			await write(item).catch(() => write(item));
+		} catch (error) {
+			return { done, error };
+		}
+		done += 1;
+	}
+	return { done, error: null };
+}
+
+/**
+ * Record a run of absences, one day after another — the API takes one
+ * absence per POST, and posting on a day already booked replaces it. The
+ * reads are invalidated once, when the run is over: per day they refetched
+ * under the open dialog and held the next write until they had.
+ */
+export function useRecordAbsences() {
 	const invalidate = useInvalidateAfterAbsenceWrite();
 	return useMutation({
-		mutationFn: ({ projectId, input }: { projectId: string; input: AbsenceInput }) =>
-			recordAbsence(projectId, input),
-		onSuccess: (_absence, { projectId }) => invalidate(projectId),
+		mutationFn: ({ projectId, inputs }: { projectId: string; inputs: AbsenceInput[] }) =>
+			inOrder(inputs, (input) => recordAbsence(projectId, input)),
+		onSettled: (_writes, _error, { projectId }) => invalidate(projectId),
+		retry: false,
 	});
 }
 
-export function useRemoveAbsence() {
+/** Remove a run of absences by id, one after another, invalidating once at the end. */
+export function useRemoveAbsences() {
 	const invalidate = useInvalidateAfterAbsenceWrite();
 	return useMutation({
-		mutationFn: ({ projectId, absenceId }: { projectId: string; absenceId: string }) =>
-			deleteAbsence(projectId, absenceId),
-		onSuccess: (_void, { projectId }) => invalidate(projectId),
+		mutationFn: ({ projectId, absenceIds }: { projectId: string; absenceIds: string[] }) =>
+			inOrder(absenceIds, (absenceId) => deleteAbsence(projectId, absenceId)),
+		onSettled: (_writes, _error, { projectId }) => invalidate(projectId),
+		retry: false,
 	});
 }

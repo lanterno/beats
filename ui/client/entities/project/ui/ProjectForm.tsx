@@ -139,6 +139,12 @@ export interface ProjectFormProps {
 	holidayRegions?: HolidayRegion[];
 	/** The error a submit ended in, if any. A 422's fields land beside their inputs. */
 	submitError?: unknown;
+	/**
+	 * A line under the kind field for the kind now chosen, or null — where the
+	 * settings drawer says, before save, what a change of kind does to the
+	 * project's contract.
+	 */
+	kindNotice?: (kind: ProjectKind) => string | null;
 }
 
 function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues {
@@ -187,7 +193,7 @@ const KIND_OPTIONS: {
 const inputCls =
 	"w-full rounded-md border border-input bg-background py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-2 focus:ring-accent/20 focus:border-accent/40 aria-invalid:border-destructive/60";
 const labelCls = "block text-muted-foreground text-xs uppercase tracking-[0.12em] mb-1.5";
-const errorCls = "mt-1 text-xs text-destructive";
+const errorCls = "mt-1 text-xs text-destructive-ink";
 
 export function ProjectForm({
 	initialValues,
@@ -203,6 +209,7 @@ export function ProjectForm({
 	onChangeContract,
 	holidayRegions,
 	submitError,
+	kindNotice,
 }: ProjectFormProps) {
 	const [values, setValues] = useState<ProjectFormValues>(() => defaultValues(initialValues));
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -252,6 +259,11 @@ export function ProjectForm({
 		? isTimeBasedOn(existingContract, today)
 		: values.addContract && isTimeBased(values.term.scheduleType);
 	const showsPersonalGoal = !isDayJob || !contractIsTimeBased;
+	const notice = kindNotice?.(values.kind) ?? null;
+	const kindDescribedBy =
+		[errors.kind ? "project-form-kind-error" : null, notice ? "project-form-kind-notice" : null]
+			.filter((part): part is string => part !== null)
+			.join(" ") || undefined;
 
 	const validate = (): ProjectFormErrors => {
 		const next = emptyProjectFormErrors();
@@ -393,7 +405,7 @@ export function ProjectForm({
 					className="grid grid-cols-1 sm:grid-cols-3 gap-2"
 					role="radiogroup"
 					aria-labelledby="project-form-kind"
-					aria-describedby={errors.kind ? "project-form-kind-error" : undefined}
+					aria-describedby={kindDescribedBy}
 				>
 					{KIND_OPTIONS.map(({ value, label, description, Icon }) => {
 						const selected = values.kind === value;
@@ -431,6 +443,15 @@ export function ProjectForm({
 						);
 					})}
 				</div>
+				{kindNotice && (
+					// Always mounted, so the line is announced when a kind change brings it.
+					<output
+						id="project-form-kind-notice"
+						className={notice ? "block mt-1.5 text-xs text-destructive-ink" : "block"}
+					>
+						{notice}
+					</output>
+				)}
 				{errors.kind && (
 					<p id="project-form-kind-error" className={errorCls}>
 						{errors.kind}
@@ -494,8 +515,8 @@ export function ProjectForm({
 									Change contract…
 								</Button>
 							)}
-							<p className="text-[11px] text-muted-foreground/70 mt-1">
-								Terms — a new percentage, a start date — are edited in the contract history.
+							<p className="text-[11px] text-muted-foreground mt-1">
+								Terms — a new percentage, a start date — are edited in the Contract panel.
 							</p>
 						</div>
 					) : (
@@ -778,7 +799,7 @@ export function ProjectForm({
 			</div>
 
 			{errors.general.length > 0 && (
-				<div className="text-sm text-destructive space-y-0.5" role="alert" tabIndex={-1}>
+				<div className="text-sm text-destructive-ink space-y-0.5" role="alert" tabIndex={-1}>
 					{errors.general.map((message) => (
 						<p key={message}>{message}</p>
 					))}

@@ -30,8 +30,8 @@ checked in beside this file; the artifact link is a convenience.
 |---|---|
 | 1 — API: the ledger route and the balance proof | `59bb011` the week ledger route and the balance proof |
 | 2 — The afternoon: tokens, fonts, sky, panels, shell, settings | `cf090e1` the afternoon and the dusk |
-| 3a — Project page: the standing, the days, the ledger | feat(ui): the standing, the days and the ledger |
-| 3b — Project page: the register, time off, the drawer | — |
+| 3a — Project page: the standing, the days, the ledger | `8e77327` the standing, the days and the ledger |
+| 3b — Project page: the register, time off, the drawer | feat(ui): the register, time off and the drawer |
 | 4 — Every other page on the new theme | — |
 | 5 — The marketing page, docs, gates | — |
 
@@ -724,6 +724,183 @@ HTTP contract, bugs that happened. Not class names.
   where it moved (term add / remove; absence record / remove; archive
   navigates away; restore).
 - E2E: the vacation flow in `contracts.spec.ts` through the new dialog.
+
+**Notes** — what the phase settled that the text above left open:
+
+- **The rail's first panel has three shapes.** *Contract* on a day job with a
+  contract; the no-contract state ("No contract yet · Add contract") only on a
+  day job with neither a contract nor a personal goal; *Goal* everywhere else — including a
+  day job without a contract that has a goal, which adds a foot line "No
+  contract yet · Add contract".
+- **The in-force line reads by schedule type**: "Part time · 80% of 42 h",
+  "Full time · 42 h", "Custom · 32 h", "Objective"; under it "33.6 h/week ·
+  since Mon Aug 3, 2026" ("from" before the contract starts, "no weekly
+  expectation" on an objective term). After `ended_on` the last term keeps the
+  headline, no term is *In force*, there is no *Next*, and the constants say
+  "Ended Aug 31, 2026" ("Ends …" while still to come). *Next* is the first term
+  dated after today and not after the end: "Next → Full time · 42 h/week from
+  Mon Jan 4, 2027".
+- **The step chart is `stepChart.ts`**, pure geometry pinned by
+  `stepChart.test.ts`; the panel only paints it. A term dated after today is
+  dashed from its first day, the current term dashed after today; an objective
+  term is a gap (no line, no risers, its label on the axis), a 0 h term a line
+  on the axis. A step narrower than 40 of the 296 units keeps its line but not
+  its label, and an axis date within 36 units of the one before is left out —
+  the term list names both. The chart is capped at 26 rem, since under 860 px
+  of content the rail stacks full width and the text scaled with it; its text
+  carries a panel-coloured halo (`paint-order: stroke`) because the today line
+  crossed "80% · 33.6 h" on the first screenshot. The aria-label names every
+  step and "planned".
+- **The terms list oldest first**, as the mockup draws it; edit and remove hide
+  until the row is hovered or focused only where `(hover: hover)`. The
+  missing-region state is two lines: the caveat in the owed tone with *Set
+  region*, then "Brought forward … · Ended —" with *Edit*; both open the drawer
+  on the region.
+- **The Goal is the standing goal, not this week's.** The latest `effective_from`
+  override on or before this Monday, else the project's goal; a one-week
+  override is listed, not headlined. "since" walks back through the permanent
+  overrides that set the same figure and type; with none in force it is the
+  local day of the project's first session — the project carries no creation
+  date on the wire — and the goal's first chart step starts there. *Next* is
+  the first permanent override after this Monday.
+- **The override list moved oldest first** (the drawer's panel was newest
+  first) and still removes by identity (FF.6): a permanent override in force is
+  *In force*, a later one *Planned*, a week override "W31 · Jul 27, 2026 · No
+  goal that week · one-week override". **On a day job with a contract** the
+  register lists stored overrides under "Goal overrides" too — they govern the
+  weeks the contract does not — so their remove survived the drawer losing the
+  panel.
+- **Time off makes one absence read**, `[Jan 1, today + 365]`, for both the
+  upcoming list and the year's tally; holidays for this year and next, weekdays
+  from today. A run needs one type (not one note) and bridges weekends and
+  public holidays — Thu Dec 24 to Mon Dec 28 over Christmas is one row; its note
+  shows when every day shares it; days count in halves ("4½ days"); a single
+  half day reads "Vacation ½". A holiday sorts before an absence on the same
+  day. Six rows, then "Show all N"; "Nothing coming up." when empty. The tally
+  lists vacation, sick, other with "booked" after the first, over every absence
+  recorded in the calendar year. The region note shows without a region or
+  without a contract.
+- **A holiday row opens its week in Days** (Decision 10: a time-off entry moves
+  the open week) — it has nothing to book; an absence row opens the dialog on
+  the run: its days, its type, half day when every day is one, the shared note.
+- **The dialog records with `POST …/absences`**, the API's upsert (there is no
+  PUT), one weekday at a time; the first failure stops the run and keeps the
+  dialog open with "2 of 5 days saved — …". Nothing is rolled back, and saving
+  again is idempotent. Titled "Book time off", or "Change time off" when opened
+  on a booked day.
+- **Remove takes the whole range** when every bookable weekday in it is booked
+  ("Remove 5 days"), not only a single day — otherwise a week of vacation could
+  only be taken back a day at a time.
+- **The grid**: weekends are not buttons; past days and holidays are (sick leave
+  is recorded afterwards, and a range may start on a holiday); a holiday inside
+  the selection keeps its tint, since it is skipped; each day's name carries the
+  date, the holiday, the booking and "today", and `aria-pressed` marks the
+  selection. Save waits for the range's holidays and absences, so a holiday
+  cannot be booked by a race. More than 366 days is refused as a typo.
+- **The cost line counts against what is booked.** Per weekday, the term's day
+  (nothing before the first term, after `ended_on`, or under an objective term)
+  times the new share less the share already booked, so a half day becoming a
+  full one "drops by 3.4 h" and the reverse "rises by"; "stays as it is" at 0.
+  "This week's …" / "Week 38's expectation … to 26.9 h" only when the range sits
+  in one week with an expectation; across weeks "The expectation drops by
+  13.4 h." A range of weekends and holidays says "Nothing to book: weekends and
+  public holidays are skipped." with Save off.
+- **Standing's "Book time off" starts on the first day after today with hours
+  due** in this week's or next week's `/contract/week` (the page already reads
+  both), else the next weekday — not today. Time off's *+ Book* starts there
+  too.
+- **A governed weekday row offers "Book time off"** when nothing is off on it,
+  past days included: a text link from 560 px of content, a "+" under it, named
+  "Book time off on Mon 7" either way; faded until the row is hovered where
+  there is hover, shown on focus, and the next tab stop after the day's toggle.
+  "Change" hands the dialog the day's absence as its starting fields.
+- **The drawer's foot** is a section "Archive" ("Archived" once it is) under a
+  hairline: the existing sentence, *Archive project*, an inline confirm
+  ("Archive <name>?" · Archive project · Cancel) that closes the drawer and
+  goes to `/app`, or *Restore project*. A restore from another tab clears the
+  confirm.
+- **The kind line does not say the terms stay stored** — they do not. A kind
+  change clears the contract and nothing comes back with a return to day job
+  (`test_changing_the_kind_takes_the_contract_with_it`), so the line reads
+  "Changing the kind deletes the contract: its terms, region and opening balance
+  are not kept." It shows only on a project with a contract, while another kind
+  is chosen. `ProjectForm` grew `kindNotice(kind)`, rendered in an
+  always-mounted `<output>` under the kind radios and joined to them by
+  `aria-describedby`, so the change is announced.
+- **`ContractNudge` was already gone** (3a); the four panels went with their
+  tests.
+- **An archived project's page opens.** `useProject` read only the active
+  list, so `/project/<id>` of an archived project said "Project not found" —
+  the header's Archived chip and the drawer's Restore could never be reached,
+  and the projects index's Archived rows led to that page. It now looks in the
+  archived list (cached, then fetched) before giving up; the page is its only
+  caller.
+- **Not done here**: a side project's header chip reads the project's own goal
+  ("goal 5 h/week") while the Goal register reads the override in force (8 h) —
+  `kindChip` is 3a's; the Days' day-off pill shrinks to "V…" at 400 px beside
+  *Change* (3a's rule); the nominal line under Expected runs long with five days
+  off; holiday names are the calendar's own language ("Weihnachten").
+  `contracts.spec.ts` passed against the dev API, but on the headless shell
+  already in the Playwright cache (build 1234): this Playwright wants 1243,
+  and its download timed out from here.
+
+**Notes** — what the review settled:
+
+- **A booked day keeps its own note unless one is typed.** Opening a run whose
+  days had different notes and saving a half day sent the empty field to every
+  day and erased them. The field is written only once edited; untouched, a day
+  on record keeps its note and a day not yet booked takes the field. Differing
+  notes show as the placeholder "Different notes — typing replaces them".
+- **The dialog does not close while a run is saving**: Cancel is off, and
+  Escape, the overlay and × do nothing. Cancelled mid-save, the writes carried
+  on and their close shut whichever booking was open next; the page's close
+  also acts only on the booking that opened the dialog now.
+- **A run of writes is one mutation**, `useRecordAbsences` /
+  `useRemoveAbsences` (the per-day hooks went): in order, each write tried
+  twice as the app's mutations are, the first that fails twice ending the run
+  with `{ done, error }`, one invalidation when it is over. Per day, seven
+  queries refetched under the dialog before the next write (35 GETs for five
+  days) and the cost line moved mid-save.
+- **Focus goes back to the opener, in the `Dialog` primitive.** Radix returns it
+  only to a `Trigger`, which no dialog here renders, so every close (booking,
+  term, settings) left focus on `<body>`. The opener is read while rendering the
+  open, since a field inside autofocuses before Radix's scope looks. When a save
+  has removed it, the caller's `returnFocus` stands in: the day row's booking
+  control (`[data-booking]`, its new *Change* or *Book* again), Time off's
+  *+ Book* for a booking opened from the rail or the standing, *+ Change
+  contract from…* for a term. The archive confirm takes focus to its Cancel,
+  and Cancel back to *Archive project*.
+- **Remove shows whenever every bookable weekday in the range is on record** —
+  vacuously on a holiday, so an absence stored on one before the region was
+  set can be taken back; a Days row on a holiday that holds one keeps *Change*.
+- **Small text in the owed tone is `--destructive-ink`**: `#A84924` by day
+  (5.4:1 on the panel, where `#D2683F` is 3.4:1), `--destructive` itself at
+  dusk (6.4:1). It carries the region caveat, the kind line, the form's errors
+  and the page's alerts; `--destructive` stays on figures and fills. The small
+  owed deltas in Days and the ledger are the same 3.4:1 and wait for Phase 4's
+  sweep. In the grid, past weekdays and weekend numbers take the full muted ink
+  (weekends lighter in weight rather than colour), and the dialog description
+  lost its 70 %.
+- **The day row's "+" is a 24 × 24 target** (WCAG 2.5.8) that does not grow the
+  row: `h-6 -my-1.5`, `w-6` once the label hides, and the cell clips on x only
+  so the box is not cut.
+- **The register's no-contract state is one line**, like the Goal foot: the
+  sentence stays in the balance slot, so it no longer shows twice on a screen.
+  The region caveat ends at "Public holidays are not deducted." and *Set
+  region* carries the action.
+- **Time off gives a date outside this year its year** ("Fri Jan 1, 2027") and
+  wraps its second line as the mockup does. A run's starting fields are built
+  in `TimeOff` (half day only when every day is one, the note only when
+  shared), so its test pins them.
+- **The step in force keeps its label and its date when steps crowd.** A label
+  within 40 units after it, or the axis date just before it, gives way instead;
+  the today line no longer crosses an unlabelled step.
+- **"+ Book" with nothing due in the two weeks read** skips weekdays already off
+  or on a holiday, rather than opening *Book time off* on a booking.
+- **Not changed:** the stepChart test that matches the meadow's path string
+  stays, since the string is what `<path d>` paints and the helper has no other
+  consumer; removing a term or an override with its own button (no dialog)
+  still drops focus when the row goes.
 
 ### Phase 4 — Every other page on the new theme `[ui]`
 

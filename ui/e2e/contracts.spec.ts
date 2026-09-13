@@ -1,12 +1,16 @@
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /**
  * A day job against its contract, end to end: create one through the form,
- * read the standing, book a day of vacation in the absence calendar and
- * watch the expectation drop by one day's hours, then take the day back.
+ * read the standing, book the coming Friday off through Time off and watch
+ * the week's expectation drop by one day's hours, take the day back through
+ * the booking dialog, change the contract from a later date and see the
+ * register call it planned, then archive the project through the settings
+ * drawer.
  *
- * Every run creates its own project — the name carries the clock — so what
- * an earlier run left in the database never decides what this one sees.
+ * Every run creates its own project — the name carries the clock — and
+ * archives it at the end, so what an earlier run left in the database never
+ * decides what this one sees.
  */
 
 const FULL_TIME_HOURS = 40;
@@ -21,17 +25,22 @@ function isoDate(d: Date): string {
 	return `${y}-${m}-${day}`;
 }
 
-/** Monday to Friday of the current week, at noon local time. */
-function weekdaysOfThisWeek(): Date[] {
+function addDays(d: Date, days: number): Date {
+	const next = new Date(d);
+	next.setDate(d.getDate() + days);
+	return next;
+}
+
+/** This week's Monday, at noon local time. */
+function thisMonday(): Date {
 	const today = new Date();
 	today.setHours(12, 0, 0, 0);
-	const monday = new Date(today);
-	monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-	return [0, 1, 2, 3, 4].map((offset) => {
-		const d = new Date(monday);
-		d.setDate(monday.getDate() + offset);
-		return d;
-	});
+	return addDays(today, -((today.getDay() + 6) % 7));
+}
+
+/** "Sep 14, 2026" — a term's date as the register lists it. */
+function plainDate(d: Date): string {
+	return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${d.getFullYear()}`;
 }
 
 /** "25.6 h" → 25.6 */
@@ -41,47 +50,20 @@ function hoursIn(text: string): number {
 	return Number(match[1]);
 }
 
-/**
- * The first weekday of this week the calendar lets an absence be recorded
- * on — a public holiday is not a button. The calendar opens on the current
- * month; a week straddling a month boundary may need one step either way.
- */
-async function bookableWeekday(calendar: Locator): Promise<{ button: Locator; day: number }> {
-	const today = new Date();
-	const monthsFromToday = (d: Date) =>
-		(d.getFullYear() - today.getFullYear()) * 12 + d.getMonth() - today.getMonth();
-	// Days on the month already shown first, so the common case needs no click.
-	const candidates = weekdaysOfThisWeek().sort(
-		(a, b) => Math.abs(monthsFromToday(a)) - Math.abs(monthsFromToday(b)),
-	);
-	let shown = 0;
-	for (const date of candidates) {
-		const wanted = monthsFromToday(date);
-		while (shown < wanted) {
-			await calendar.getByRole("button", { name: "Next month" }).click();
-			shown += 1;
-		}
-		while (shown > wanted) {
-			await calendar.getByRole("button", { name: "Previous month" }).click();
-			shown -= 1;
-		}
-		const day = date.getDate();
-		// The button's name is the long date and what is on it, in whatever
-		// locale the browser spells the date; the day number is what we know.
-		const button = calendar.getByRole("button", {
-			name: new RegExp(`\\b${day}\\b.*record an absence$`),
-		});
-		if ((await button.count()) > 0) return { button, day };
-	}
-	throw new Error("every weekday of this week is a public holiday");
+function expectedFigure(page: Page): Locator {
+	return page
+		.getByRole("region", { name: "Where you stand" })
+		.getByText("Expected", { exact: true })
+		.locator("..")
+		.getByRole("definition");
 }
 
 test.describe("Work contracts", () => {
-	test("a day job's week follows the contract, and an absence lowers what it expects", async ({
+	test("a day job's week follows the contract, time off lowers it, and the register plans a change", async ({
 		page,
 	}) => {
 		const name = `Day job ${Date.now()}`;
-		const [monday] = weekdaysOfThisWeek();
+		const monday = thisMonday();
 
 		await page.goto("/app");
 		await page.getByRole("button", { name: "New project" }).first().click();
@@ -91,7 +73,7 @@ test.describe("Work contracts", () => {
 		await form.getByRole("radio", { name: /Part time/ }).check();
 		await form.getByLabel("Full-time week (hours)").fill(String(FULL_TIME_HOURS));
 		await form.getByLabel("Percentage", { exact: true }).fill(String(PERCENT));
-		// From this week's Monday, so the week in the standing is under the term.
+		// From this week's Monday, so every week the test opens is under the term.
 		await form.getByLabel("Effective from", { exact: true }).fill(isoDate(monday));
 		await form.getByLabel("Holiday region").selectOption("CH");
 		await form.getByLabel(/Region within/).selectOption("ZH");
@@ -100,28 +82,79 @@ test.describe("Work contracts", () => {
 		// Creating it lands on its page.
 		await expect(page).toHaveURL(/\/project\//);
 		await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
-
+		const projectUrl = page.url().split("?")[0];
 		const standing = page.getByRole("region", { name: "Where you stand" });
-		const expected = standing
-			.getByText("Expected", { exact: true })
-			.locator("..")
-			.getByRole("definition");
-		await expect(expected).toHaveText(/^\d+\.\d h$/);
 		await expect(standing.getByText(/^as of /)).toBeVisible();
-		const before = hoursIn(await expected.innerText());
 
-		// A day of vacation costs the week one day's hours.
-		const calendar = page.getByRole("region", { name: "Absences" });
-		const { button, day } = await bookableWeekday(calendar);
-		await button.click();
-		await page.getByRole("dialog").getByRole("button", { name: "Record absence" }).click();
+		// The coming Friday — this week's while it has not passed, else next
+		// week's — or a later one when that Friday is a public holiday, which
+		// has nothing to book.
+		const today = new Date();
+		today.setHours(12, 0, 0, 0);
+		let friday = addDays(monday, today.getDay() === 6 || today.getDay() === 0 ? 11 : 4);
+		const dialog = page.getByRole("dialog");
+		let before = 0;
+		for (let attempt = 0; ; attempt += 1) {
+			const week = isoDate(addDays(friday, -4));
+			await page.goto(`${projectUrl}?week=${week}`);
+			const expected = expectedFigure(page);
+			await expect(expected).toHaveText(/^\d+\.\d h$/);
+			before = hoursIn(await expected.innerText());
+
+			await page
+				.getByRole("region", { name: "Time off" })
+				.getByRole("button", { name: "+ Book" })
+				.click();
+			await dialog.getByLabel("From").fill(isoDate(friday));
+			await dialog.getByLabel("Through").fill(isoDate(friday));
+			if (!(await dialog.getByText(/^Nothing to book/).isVisible())) break;
+			if (attempt >= 3) throw new Error("four Fridays in a row are public holidays");
+			await dialog.getByRole("button", { name: "Cancel" }).click();
+			friday = addDays(friday, 7);
+		}
+
+		// A day of vacation costs the week one day's hours, and the day says why.
+		await expect(dialog.getByRole("button", { name: "Vacation" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await dialog.getByRole("button", { name: "Save" }).click();
+		await expect(dialog).toBeHidden();
+		const expected = expectedFigure(page);
 		await expect(expected).toHaveText(`${(before - HOURS_PER_DAY).toFixed(1)} h`);
+		const fridayRow = page
+			.getByRole("region", { name: "Days" })
+			.locator(`[data-day="${isoDate(friday)}"]`);
+		await expect(fridayRow).toContainText("Vacation");
 
-		// Taking it back gives them back.
-		await calendar
-			.getByRole("button", { name: new RegExp(`\\b${day}\\b.*Change or remove$`) })
-			.click();
-		await page.getByRole("dialog").getByRole("button", { name: "Remove" }).click();
+		// Taking it back through the dialog gives them back.
+		await fridayRow.getByRole("button", { name: "Change" }).click();
+		await dialog.getByRole("button", { name: "Remove" }).click();
+		await expect(dialog).toBeHidden();
 		await expect(expected).toHaveText(`${before.toFixed(1)} h`);
+		await expect(fridayRow).not.toContainText("Vacation");
+
+		// A change from three weeks on is planned; the first term stays in force.
+		const register = page.getByRole("region", { name: "Contract" });
+		const changeFrom = addDays(monday, 21);
+		await register.getByRole("button", { name: /Change contract from/ }).click();
+		await dialog.getByLabel("From").fill(isoDate(changeFrom));
+		await dialog.getByLabel("Percentage", { exact: true }).fill("90");
+		await dialog.getByRole("button", { name: "Save term" }).click();
+		await expect(dialog).toBeHidden();
+		const terms = register.getByRole("list", { name: "Terms" }).getByRole("listitem");
+		await expect(terms).toHaveCount(2);
+		await expect(terms.filter({ hasText: `From ${plainDate(monday)}` })).toContainText(/in force/i);
+		await expect(terms.filter({ hasText: `From ${plainDate(changeFrom)}` })).toContainText(
+			/planned/i,
+		);
+		await expect(register).toContainText(`Next → Part time · 90% of 40 h`);
+
+		// Archive at the foot of the settings drawer, confirmed, and back to the dashboard.
+		await page.getByRole("button", { name: "Project settings" }).click();
+		const foot = page.getByRole("dialog").getByRole("region", { name: "Archive" });
+		await foot.getByRole("button", { name: "Archive project" }).click();
+		await foot.getByRole("button", { name: "Archive project" }).click();
+		await expect(page).toHaveURL(/\/app$/);
 	});
 });

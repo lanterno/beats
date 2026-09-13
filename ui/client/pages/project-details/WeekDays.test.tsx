@@ -200,7 +200,11 @@ describe("WeekDays", () => {
 		const fri = within(region).getByText("Vacation · Zürich trip").closest("[data-day]");
 		expect(fri).toHaveTextContent("nothing expected");
 		screen.getByRole("button", { name: "Change" }).click();
-		expect(props.onChangeAbsence).toHaveBeenCalled();
+		expect(props.onChangeAbsence).toHaveBeenCalledWith("2026-09-11", {
+			type: "vacation",
+			halfDay: false,
+			note: "Zürich trip",
+		});
 
 		expect(region).toHaveTextContent("Sat–Sun 12–13");
 		expect(region).not.toHaveTextContent(/Sun\s*13\b/);
@@ -230,6 +234,21 @@ describe("WeekDays", () => {
 		await userEvent.click(change);
 		expect(props.onChangeAbsence).toHaveBeenCalledTimes(2);
 		expect(mon).toHaveAttribute("aria-expanded", "false");
+	});
+
+	it("offers Book time off on a governed weekday with nothing off, next after the day by keyboard", async () => {
+		const onBookTimeOff = vi.fn();
+		renderDays({ onBookTimeOff });
+		// Friday is already off; its row changes the absence instead.
+		expect(screen.queryByRole("button", { name: /Book time off on Fri/ })).not.toBeInTheDocument();
+
+		row("Mon").focus();
+		await userEvent.tab();
+		const book = screen.getByRole("button", { name: "Book time off on Mon 7" });
+		expect(book).toHaveFocus();
+		await userEvent.keyboard("{Enter}");
+		expect(onBookTimeOff).toHaveBeenCalledWith("2026-09-07");
+		expect(row("Mon")).toHaveAttribute("aria-expanded", "false");
 	});
 
 	it("keeps today's own row when today is on the weekend", () => {
@@ -272,8 +291,9 @@ describe("WeekDays", () => {
 		expect(screen.getByLabelText("Start")).toBeInTheDocument();
 	});
 
-	it("shows worked alone on a project the contract does not govern", () => {
+	it("shows worked alone on a project the contract does not govern, with nothing to book", () => {
 		renderDays({
+			onBookTimeOff: vi.fn(),
 			project: { ...PROJECT, kind: "side_project", contract: undefined },
 			contractWeek: undefined,
 			ledgerWeek: {
@@ -291,5 +311,6 @@ describe("WeekDays", () => {
 		expect(dayRow("Mon")).toHaveTextContent("7.1 h");
 		expect(dayRow("Mon")).not.toHaveTextContent("of");
 		expect(screen.getByRole("region", { name: "Days" })).not.toHaveTextContent("nothing expected");
+		expect(screen.queryByRole("button", { name: /Book time off/ })).not.toBeInTheDocument();
 	});
 });
