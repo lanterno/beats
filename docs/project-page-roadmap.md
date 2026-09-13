@@ -33,7 +33,7 @@ checked in beside this file; the artifact link is a convenience.
 | 3a — Project page: the standing, the days, the ledger | `8e77327` the standing, the days and the ledger |
 | 3b — Project page: the register, time off, the drawer | `44868cf` the register, time off and the drawer |
 | 4 — Every other page on the new theme | `6bd4a88` every page in the afternoon |
-| 5 — The marketing page, docs, gates | feat: the afternoon on the front page, the old week route gone, the docs to match |
+| 5 — The marketing page, docs, gates | `941da3b` the afternoon on the front page, the old week route gone, the docs to match |
 
 **Where it stands.** Every phase has shipped. The project page opens on the
 standing — a day job's balance as of today with the three figures that make it
