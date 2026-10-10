@@ -56,7 +56,7 @@ jobs:
           name: beats-vscode-vsix
           path: dist
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*.vsix
           # release-daemon.yml is the primary author of the release body;
