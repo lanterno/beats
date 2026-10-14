@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../brand.dart';
+
 /// One tap event from the notification surface. [actionId] is null when
 /// the user tapped the notification body itself (rather than a specific
 /// action button); routers switch on it to decide between "open the
@@ -49,7 +51,7 @@ class NotificationsService {
 
   /// Channel identifiers (Android only — iOS uses a single global channel).
   static const String _channelId = 'beats.coach';
-  static const String _channelName = 'Beats Coach';
+  static const String _channelName = '$appName Coach';
   static const String _channelDesc = 'Brief and auto-timer prompts';
 
   /// Streams every tap on a Beats notification. Subscribers get the
@@ -168,7 +170,7 @@ class NotificationsService {
       id: _idBrief,
       title: 'Your morning brief is ready',
       body: preview ?? 'Tap to read what the coach has for you today.',
-      notificationDetails: _details(subtitle: 'Beats coach'),
+      notificationDetails: _details(subtitle: '$appName coach'),
       payload: 'brief',
     );
   }
@@ -194,7 +196,7 @@ class NotificationsService {
       title: 'Start tracking?',
       body: 'You\'ve been deep in $projectName for a while.',
       notificationDetails: _details(
-        subtitle: 'Beats',
+        subtitle: appName,
         androidActions: const [
           AndroidNotificationAction(
             kStartAutoTimerActionId,
@@ -227,7 +229,7 @@ class NotificationsService {
       id: _idDrift,
       title: 'Drift detected',
       body: body,
-      notificationDetails: _details(subtitle: 'Beats'),
+      notificationDetails: _details(subtitle: appName),
       payload: 'drift:$appLabel',
     );
   }

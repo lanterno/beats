@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:system_tray/system_tray.dart';
+import '../brand.dart';
 import 'api_client.dart';
 import 'mac_ambient.dart';
 import 'tray_icon.dart';
@@ -98,7 +99,7 @@ class TrayService {
     await _tray.initSystemTray(
       title: '',
       iconPath: idlePath,
-      toolTip: 'Pete',
+      toolTip: appName,
     );
 
     _tray.registerSystemTrayEventHandler((eventName) {
@@ -244,7 +245,7 @@ class TrayService {
     }
 
     // Always show Open + Quit
-    items.add(MenuItemLabel(label: 'Open Beats', onClicked: (_) => onShowWindow()));
+    items.add(MenuItemLabel(label: 'Open $appName', onClicked: (_) => onShowWindow()));
     items.add(MenuSeparator());
     items.add(MenuItemLabel(label: 'Quit', onClicked: (_) => exit(0)));
 

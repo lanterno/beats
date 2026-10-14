@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/notifications.dart';
 import '../services/token_storage.dart';
@@ -137,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontSize: 20, color: BeatsColors.textPrimary)),
               const SizedBox(height: 12),
               Text(
-                'You\'ll need a fresh pairing code from Beats Settings to use this app again.',
+                'You\'ll need a fresh pairing code from $appName Settings to use this app again.',
                 style: BeatsType.bodySmall.copyWith(
                   color: BeatsColors.textTertiary, height: 1.5),
               ),
@@ -340,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _StatusRow(
                   ok: _heartbeatOk,
                   title: _heartbeatOk
-                      ? 'Connected to Beats'
+                      ? 'Connected to $appName'
                       : 'Connection failed',
                   subtitle: _heartbeatOk
                       ? 'Heartbeat OK'

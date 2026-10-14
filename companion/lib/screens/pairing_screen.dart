@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/qr_pairing.dart';
 import '../services/token_storage.dart';
@@ -157,7 +158,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 StaggeredEntrance(
                   delay: const Duration(milliseconds: 60),
                   child: Center(
-                    child: Text('Beats',
+                    child: Text(appName,
                       style: GoogleFonts.dmSerifDisplay(
                         fontSize: 28, color: BeatsColors.textPrimary)),
                   ),

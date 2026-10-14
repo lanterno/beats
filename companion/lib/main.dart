@@ -13,6 +13,7 @@ import 'services/notifications.dart';
 import 'services/token_storage.dart';
 import 'services/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
+import 'brand.dart';
 import 'theme/beats_theme.dart';
 
 void main() async {
@@ -27,7 +28,7 @@ class CompanionApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pete',
+      title: appName,
       debugShowCheckedModeBanner: false,
       theme: buildBeatsTheme(),
       home: const AppShell(),

@@ -1,6 +1,6 @@
 {
-    "name": "Pete",
-    "short_name": "Pete",
+    "name": "LifePete",
+    "short_name": "LifePete",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

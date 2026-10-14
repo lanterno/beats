@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.beats" "\0"
-            VALUE "FileDescription", "beats_companion" "\0"
+            VALUE "FileDescription", "LifePete" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "beats_companion" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.beats. All rights reserved." "\0"
             VALUE "OriginalFilename", "beats_companion.exe" "\0"
-            VALUE "ProductName", "beats_companion" "\0"
+            VALUE "ProductName", "LifePete" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../brand.dart';
 import '../services/qr_pairing.dart';
 import '../theme/beats_theme.dart';
 
@@ -63,7 +64,7 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
             padding: const EdgeInsets.all(32),
             child: Text(
               'QR scanning is only available on iOS and Android. '
-              'On desktop, type the 6-character code from your Beats web Settings.',
+              'On desktop, type the 6-character code from your $appName web Settings.',
               textAlign: TextAlign.center,
               style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textSecondary),
             ),
@@ -105,7 +106,7 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
           Positioned(
             left: 24, right: 24, bottom: 32,
             child: Text(
-              'Point at the QR code shown in your Beats web Settings → Daemon',
+              'Point at the QR code shown in your $appName web Settings → Daemon',
               textAlign: TextAlign.center,
               style: BeatsType.bodySmall.copyWith(
                 color: BeatsColors.textPrimary.withValues(alpha: 0.85),
