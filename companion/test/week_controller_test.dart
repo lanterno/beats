@@ -102,4 +102,34 @@ void main() {
       expect(week.anchor?.project.id, 'p1');
     });
   });
+
+  group('WeekController.refresh', () {
+    test('a slower, older reload does not overwrite a newer one', () async {
+      final api = _SlowLedgerApi();
+      final timer = TimerController(api)..projects = [northwind];
+      final week = WeekController(api, timer);
+
+      final first = week.refresh(); // its ledger answers last
+      final second = week.refresh();
+      await Future.wait([first, second]);
+
+      expect(week.weeks.single.worked, 2, reason: 'the newer read wins');
+      timer.dispose();
+    });
+  });
+}
+
+class _SlowLedgerApi extends ApiClient {
+  _SlowLedgerApi() : super(baseUrl: 'http://test');
+  var calls = 0;
+
+  @override
+  Future<Map<String, dynamic>> getLedger(String projectId, {int weeks = 1, String? timezone}) async {
+    final n = ++calls;
+    if (n == 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return ledger(worked: 1);
+    }
+    return ledger(worked: 2);
+  }
 }
