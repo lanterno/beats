@@ -106,7 +106,7 @@ class MainWindowState extends State<MainWindow> {
             onFind: find,
           ),
         Section.flow => FlowScreen(client: widget.client),
-        Section.coach => CoachScreen(client: widget.client),
+        Section.coach => CoachScreen(client: widget.client, timer: widget.timer, week: widget.week),
         Section.body => HealthScreen(client: widget.client),
       };
 
