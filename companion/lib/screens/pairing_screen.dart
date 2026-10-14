@@ -1,15 +1,19 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+
 import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/qr_pairing.dart';
 import '../services/token_storage.dart';
-import '../theme/beats_theme.dart';
-import '../theme/embers.dart';
-import '../theme/staggered_entrance.dart';
+import '../theme/sky.dart';
+import '../ui/kit.dart';
 import 'qr_pairing_screen.dart';
+import 'shell.dart' show BrandMark;
 
+/// First run: pair this device with a LifePete account by typing the
+/// six-character code the web app shows under Settings → Daemon.
 class PairingScreen extends StatefulWidget {
   final VoidCallback onPaired;
   const PairingScreen({super.key, required this.onPaired});
@@ -25,12 +29,16 @@ class _PairingScreenState extends State<PairingScreen> {
   final _webUrlController = TextEditingController();
   final _storage = TokenStorage();
   bool _loading = false;
+  bool _ownServer = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _loadUrls();
+    _codeController.addListener(() => setState(() {}));
+    _apiUrlController.addListener(() => setState(() {}));
+    _webUrlController.addListener(() => setState(() {}));
   }
 
   Future<void> _loadUrls() async {
@@ -44,14 +52,11 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   /// True on the platforms where `mobile_scanner` actually works
-  /// (iOS / Android). Desktops show the code-entry path only — they
-  /// don't have a built-in front-facing camera flow that the package
-  /// wraps.
+  /// (iOS / Android). Desktops show the code-entry path only.
   bool get _qrSupported => Platform.isIOS || Platform.isAndroid;
 
   /// Push the QR scanner; on success, autofill the code (and the API
   /// URL when the QR carried one) and immediately attempt to pair.
-  /// Cancellation is a no-op — the user just lands back on the form.
   Future<void> _scanQr() async {
     final result = await Navigator.of(context).push<QrPairingPayload?>(
       MaterialPageRoute(builder: (_) => const QrPairingScreen()),
@@ -75,27 +80,31 @@ class _PairingScreenState extends State<PairingScreen> {
     }
     final apiUrl = _apiUrlController.text.trim();
     if (apiUrl.isEmpty) {
-      setState(() => _error = 'Enter the API URL');
+      setState(() {
+        _ownServer = true;
+        _error = 'Enter the API URL';
+      });
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final client = ApiClient(baseUrl: apiUrl);
       final hostname = Platform.localHostname;
       final result = await client.exchangePairCode(code, deviceName: hostname);
       await _storage.saveToken(result.deviceToken);
       await _storage.saveApiUrl(apiUrl);
-      // Web URL is optional — if blank, leave the saved/default
-      // value alone so a user who only filled in the API field
-      // doesn't accidentally clobber a previously-set web URL.
+      // Web URL is optional — if blank, leave the saved/default value alone
+      // so a user who only filled in the API field doesn't clobber it.
       final webUrl = _webUrlController.text.trim();
       if (webUrl.isNotEmpty) {
         await _storage.saveWebUrl(webUrl);
       }
       if (mounted) widget.onPaired();
     } on ApiException catch (e) {
-      setState(() => _error = e.statusCode == 404
-          ? 'Invalid or expired code' : 'Pairing failed: ${e.message}');
+      setState(() => _error = e.statusCode == 404 ? 'Invalid or expired code' : 'Pairing failed: ${e.message}');
     } catch (e) {
       setState(() => _error = 'Connection failed: $e');
     } finally {
@@ -112,342 +121,249 @@ class _PairingScreenState extends State<PairingScreen> {
     super.dispose();
   }
 
+  String _host(String url, String fallback) {
+    final host = Uri.tryParse(url.trim())?.host ?? '';
+    return host.isEmpty ? fallback : host;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final p = context.sky;
+    final isMac = Platform.isMacOS;
+    final webHost = _host(_webUrlController.text, 'the web app');
+    final apiHost = _host(_apiUrlController.text, 'your server');
+
     return Scaffold(
-      backgroundColor: BeatsColors.background,
-      body: Stack(
-        children: [
-          // Ambient ember field behind the form — slow drift, very low alpha
-          // so it never competes with the input fields for attention.
-          const Positioned.fill(child: Embers()),
-          Center(
+      backgroundColor: Colors.transparent,
+      body: SkyBackdrop(
+        hills: true,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              // SingleChildScrollView so the form gracefully scrolls
-              // on short viewports (small windows, embedded webviews,
-              // CI test viewports) — adding the Web UI field made the
-              // column overflow the default test screen height.
-              child: SingleChildScrollView(
-                child: Padding(
-                padding: const EdgeInsets.all(32),
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Panel(
+                raised: true,
+                radius: 30,
+                padding: const EdgeInsets.fromLTRB(38, 34, 38, 28),
                 child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Logo mark
-                StaggeredEntrance(
-                  child: Center(
-                    child: Container(
-                      width: 56, height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: BeatsColors.amber.withValues(alpha: 0.1),
-                        border: Border.all(color: BeatsColors.amber.withValues(alpha: 0.2)),
-                      ),
-                      child: Center(
-                        child: Text('B',
-                          style: GoogleFonts.dmSerifDisplay(
-                            fontSize: 28, color: BeatsColors.amber)),
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(child: BrandMark(size: 60)),
+                    const SizedBox(height: 14),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        isMac ? 'Pair this Mac' : 'Pair this device',
+                        textAlign: TextAlign.center,
+                        style: SkyType.display(26),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 60),
-                  child: Center(
-                    child: Text(appName,
-                      style: GoogleFonts.dmSerifDisplay(
-                        fontSize: 28, color: BeatsColors.textPrimary)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 100),
-                  child: Center(
-                    child: Text(
-                      'Open Settings → Daemon → Pair to get a code',
-                      style: BeatsType.bodySmall.copyWith(color: BeatsColors.textTertiary),
+                    const SizedBox(height: 10),
+                    Text(
+                      isMac
+                          ? 'Once paired, $appName lives in your menu bar and keeps your timer one click away.'
+                          : 'Once paired, $appName keeps your timer one tap away.',
                       textAlign: TextAlign.center,
+                      style: SkyType.body(15, height: 1.6).copyWith(color: p.inkOnSky),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 40),
-
-                // API URL
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 140),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('API', style: BeatsType.label),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _apiUrlController,
-                        style: BeatsType.bodyMedium,
-                        decoration: _inputDecoration('https://beats.home.space'),
-                      ),
+                    const SizedBox(height: 22),
+                    _Step(n: 1, text: 'Open $webHost → Settings → Daemon'),
+                    const SizedBox(height: 10),
+                    const _Step(n: 2, text: 'Choose Pair and type the six characters here'),
+                    const SizedBox(height: 22),
+                    Text('Pairing code',
+                        style: SkyType.body(13, weight: FontWeight.w700).copyWith(color: p.inkOnSky)),
+                    const SizedBox(height: 8),
+                    _CodeBoxes(
+                      controller: _codeController,
+                      focusNode: _codeFocus,
+                      onSubmit: _pair,
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(_error!, style: SkyType.body(13).copyWith(color: p.persimmonInk)),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Web UI URL (optional). Distinct from API because
-                // deployments commonly host them on different hosts
-                // (api.example.com vs app.example.com); used by the
-                // FlowScreen / Coach tap-to-open feature to deep-link
-                // to filtered Insights views.
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 160),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('WEB UI (OPTIONAL)', style: BeatsType.label),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _webUrlController,
-                        style: BeatsType.bodyMedium,
-                        decoration: _inputDecoration('https://beats.home.space'),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 50,
+                      child: SkyButton(
+                        label: 'Pair',
+                        kind: SkyButtonKind.primary,
+                        large: true,
+                        leading: _loading
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: p.onSun),
+                              )
+                            : null,
+                        onPressed: _loading ? null : _pair,
                       ),
+                    ),
+                    if (_qrSupported) ...[
+                      const SizedBox(height: 8),
+                      Center(child: LinkButton(label: 'Scan a QR code instead', onPressed: _scanQr)),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Code
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 180),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('CODE', style: BeatsType.label),
-                      const SizedBox(height: 8),
-                      _CodeInput(
-                        controller: _codeController,
-                        focusNode: _codeFocus,
-                        onSubmitted: _pair,
-                      ),
-                      if (_qrSupported) ...[
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: _loading ? null : _scanQr,
-                            icon: const Icon(Icons.qr_code_scanner,
-                                size: 18, color: BeatsColors.amber),
-                            label: Text('Scan QR code',
-                                style: BeatsType.bodySmall
-                                    .copyWith(color: BeatsColors.amber)),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      children: [
+                        ProjectDot(color: p.leaf, size: 8),
+                        Text('Pairing with $apiHost', style: SkyType.body(13).copyWith(color: p.inkOnSky)),
+                        if (!_ownServer)
+                          LinkButton(
+                            label: 'Use my own server',
+                            bold: true,
+                            color: p.sunInk,
+                            onPressed: () => setState(() => _ownServer = true),
                           ),
-                        ),
                       ],
-                    ],
-                  ),
-                ),
-
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_error!,
-                    style: BeatsType.bodySmall.copyWith(color: BeatsColors.red),
-                    textAlign: TextAlign.center),
-                ],
-                const SizedBox(height: 24),
-
-                // Pair button
-                StaggeredEntrance(
-                  delay: const Duration(milliseconds: 220),
-                  child: GestureDetector(
-                    onTap: _loading ? null : _pair,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: BeatsColors.amber,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: _loading
-                            ? const SizedBox(width: 20, height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Color(0xFF1A1408)))
-                            : Text('Pair', style: BeatsType.button.copyWith(
-                                fontSize: 16, color: const Color(0xFF1A1408))),
-                      ),
                     ),
-                  ),
-                ),
+                    if (_ownServer) ...[
+                      const SizedBox(height: 12),
+                      _UrlField(label: 'API URL', controller: _apiUrlController, hint: 'https://api.example.com'),
+                      const SizedBox(height: 10),
+                      _UrlField(
+                        label: 'Web app URL (optional)',
+                        controller: _webUrlController,
+                        hint: 'https://example.com',
+                      ),
+                    ],
                   ],
                 ),
-              ), // Padding
-              ), // SingleChildScrollView
-            ), // ConstrainedBox
-          ), // Center
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary.withValues(alpha: 0.4)),
-    filled: true,
-    fillColor: BeatsColors.surface,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: BeatsColors.border)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: BeatsColors.border)),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: BeatsColors.amber.withValues(alpha: 0.4))),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-  );
-}
-
-/// 6-character code input rendered as individual boxes.
-///
-/// Backed by a single TextField (so paste, autofill, and keyboard navigation
-/// all keep working) with its visible text/cursor stripped to transparent.
-/// Six boxes float on top, reading off the controller — the active box (the
-/// next empty slot) highlights amber.
-class _CodeInput extends StatefulWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final VoidCallback onSubmitted;
-  const _CodeInput({
-    required this.controller,
-    required this.focusNode,
-    required this.onSubmitted,
-  });
-
-  @override
-  State<_CodeInput> createState() => _CodeInputState();
-}
-
-class _CodeInputState extends State<_CodeInput> {
-  static const _length = 6;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onChanged);
-    widget.focusNode.addListener(_onFocusChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onChanged);
-    widget.focusNode.removeListener(_onFocusChanged);
-    super.dispose();
-  }
-
-  void _onChanged() {
-    final raw = widget.controller.text;
-    final upper = raw.toUpperCase();
-    if (upper != raw) {
-      // Force-uppercase without losing the user's place in the field.
-      widget.controller.value = TextEditingValue(
-        text: upper,
-        selection: TextSelection.collapsed(offset: upper.length),
-      );
-    }
-    setState(() {});
-  }
-
-  void _onFocusChanged() => setState(() {});
-
-  Widget _box({required String char, required bool isActive}) {
-    final isFilled = char.isNotEmpty;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      height: 56,
-      decoration: BoxDecoration(
-        color: BeatsColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isActive
-              ? BeatsColors.amber
-              : isFilled
-                  ? BeatsColors.amber.withValues(alpha: 0.4)
-                  : BeatsColors.border,
-          width: isActive ? 1.6 : 1,
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        char,
-        style: GoogleFonts.jetBrainsMono(
-          fontSize: 24,
-          fontWeight: FontWeight.w400,
-          color: BeatsColors.textPrimary,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _Step extends StatelessWidget {
+  final int n;
+  final String text;
+  const _Step({required this.n, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final text = widget.controller.text;
-    final focused = widget.focusNode.hasFocus;
-    final activeIndex = text.length.clamp(0, _length - 1);
+    final p = context.sky;
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: p.wash, shape: BoxShape.circle),
+        child: Text('$n', style: SkyType.figure(13, weight: FontWeight.w700)),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Text(text, style: SkyType.body(15)),
+        ),
+      ),
+    ]);
+  }
+}
 
-    return GestureDetector(
-      onTap: () => widget.focusNode.requestFocus(),
-      child: Stack(
-        children: [
-          // Visible boxes — non-interactive, painted underneath.
-          IgnorePointer(
-            child: Row(
-              children: [
-                for (var i = 0; i < _length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(child: _box(
-                    char: i < text.length ? text[i] : '',
-                    isActive: focused && i == activeIndex,
-                  )),
-                ],
-              ],
-            ),
-          ),
-          // Invisible TextField sits on top to capture keystrokes / paste.
-          // Sized to fill the box row.
-          Positioned.fill(
-            child: TextField(
-              controller: widget.controller,
-              focusNode: widget.focusNode,
-              autofocus: false,
-              textCapitalization: TextCapitalization.characters,
-              textAlign: TextAlign.center,
-              maxLength: _length,
-              showCursor: false,
-              keyboardType: TextInputType.text,
-              onSubmitted: (_) => widget.onSubmitted(),
-              style: const TextStyle(
-                color: Colors.transparent,
-                height: 1,
+/// Six boxes showing the code, driven by one text field laid over them so
+/// typing, deleting and pasting a whole code all behave like one input.
+class _CodeBoxes extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onSubmit;
+
+  const _CodeBoxes({required this.controller, required this.focusNode, required this.onSubmit});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    final code = controller.text;
+    return ListenableBuilder(
+      listenable: focusNode,
+      builder: (context, _) => Stack(children: [
+        Row(children: [
+          for (var i = 0; i < 6; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                height: 58,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: focusNode.hasFocus && i == code.length.clamp(0, 5) ? p.panel.withValues(alpha: 1) : p.wash,
+                  borderRadius: BorderRadius.circular(16),
+                  border: focusNode.hasFocus && i == code.length.clamp(0, 5)
+                      ? Border.all(color: p.sun, width: 2)
+                      : null,
+                ),
+                child: Text(i < code.length ? code[i] : '', style: SkyType.figure(26)),
               ),
+            ),
+          ],
+        ]),
+        Positioned.fill(
+          child: Semantics(
+            label: 'Pairing code',
+            child: TextField(
+              key: const Key('pairing-code'),
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              maxLength: 6,
+              textCapitalization: TextCapitalization.characters,
+              textInputAction: TextInputAction.go,
+              onSubmitted: (_) => onSubmit(),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                TextInputFormatter.withFunction(
+                  (_, v) => v.copyWith(text: v.text.toUpperCase()),
+                ),
+                LengthLimitingTextInputFormatter(6),
+              ],
+              showCursor: false,
+              enableInteractiveSelection: true,
+              style: const TextStyle(color: Colors.transparent, fontSize: 1),
+              cursorColor: Colors.transparent,
               decoration: const InputDecoration(
                 counterText: '',
+                filled: false,
                 border: InputBorder.none,
-                enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                fillColor: Colors.transparent,
-                filled: true,
+                enabledBorder: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
+  }
+}
+
+class _UrlField extends StatelessWidget {
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  const _UrlField({required this.label, required this.controller, required this.hint});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: SkyType.body(13, weight: FontWeight.w700).copyWith(color: p.inkOnSky)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: controller,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        style: SkyType.body(15),
+        decoration: InputDecoration(hintText: hint),
+      ),
+    ]);
   }
 }
