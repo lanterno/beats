@@ -33,11 +33,6 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
-          name  = "WEBAUTHN_RP_NAME"
-          value = "Beats"
-        }
-
-        env {
           name  = "WEBAUTHN_ORIGIN"
           value = var.webauthn_origin
         }

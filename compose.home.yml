@@ -63,7 +63,6 @@ services:
       # will not work against another. `beats.home.space` is the name the
       # ingress serves, so it is the name the ceremony has to name.
       WEBAUTHN_RP_ID: ${BEATS_RP_ID:-beats.home.space}
-      WEBAUTHN_RP_NAME: Beats
       WEBAUTHN_ORIGIN: ${BEATS_ORIGIN:-https://beats.home.space}
 
       # --- home.space SSO ---
