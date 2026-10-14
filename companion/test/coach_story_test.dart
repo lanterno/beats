@@ -165,4 +165,21 @@ void main() {
     ]);
     expect(m.map((x) => (x.fromUser, x.text)), [(true, 'Why?'), (false, 'Because.')]);
   });
+
+  group('memoryChipLabel', () {
+    test('counts list items, in any of the usual markers', () {
+      expect(memoryChipLabel('## Rhythm\n- Mornings\n* Long blocks\n1. Day job first\n2) Spanish'), 'Remembers 4 things');
+      expect(memoryChipLabel('- Just one'), 'Remembers 1 thing');
+    });
+
+    test('prose memory has notes; none has no chip', () {
+      expect(memoryChipLabel('Works best before eleven.'), 'Has notes on you');
+      expect(memoryChipLabel(null), isNull);
+      expect(memoryChipLabel('  \n '), isNull);
+    });
+
+    test('a bare marker is not an item', () {
+      expect(memoryChipLabel('-\n*\nText'), 'Has notes on you');
+    });
+  });
 }
