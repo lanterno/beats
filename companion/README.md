@@ -12,8 +12,8 @@ app's sky (afternoon or dusk):
   week, the coach's brief and the body in a card each
 - **Flow** — the day's best stretch in a sentence, five-minute flow bars to pick
   through, best repo / language / app, where attention went
-- **Coach** — the morning brief as a letter, where each project's week stands, and
-  streaming chat over `/api/coach/chat`
+- **Coach** — the brief as a letter (rate it; write today's when there is none), where
+  each project's week stands, what the coach remembers, and streaming chat
 - **Body** — readiness, sleep, HRV, resting heart rate and steps over a week, and
   sleep beside the next day's flow (Oura, Fitbit, HealthKit, Health Connect)
 - **Quick start** (⌘K in the window, ⌃⌥T from any app) — type a project, and a
@@ -45,7 +45,7 @@ flutter run -d macos        # desktop dev run
 flutter run -d <device>     # mobile
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (295)
+flutter test                # widget + unit tests (298)
 
 # A debug build opens on any surface, for looking at one without clicking:
 open --env LIFEPETE_SECTION=flow   build/macos/Build/Products/Debug/beats_companion.app

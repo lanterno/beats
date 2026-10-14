@@ -52,14 +52,14 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Ten test files cover different layers (887 tests, ~30s for the full run):
+Ten test files cover different layers (895 tests, ~30s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 299 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 304 tests.
 - **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, plus one round trip through the absence repository; 27 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, the row-to-row balance proof; 17 tests.
 - **`src/beats/test_migration.py`** — the two startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, and the one that then clears the personal goal the contract replaced; 19 tests.
-- **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 137 tests.
+- **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 140 tests.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.
 - **`src/beats/test_sso.py`** — home.space SSO with a scripted issuer (`httpx.MockTransport`) and real Ed25519 tokens; 35 tests.
 - **`src/beats/test_middleware.py`** — idempotency middleware, no DB; 8 tests.
@@ -90,7 +90,7 @@ whatever a mock was told to return are not worth pinning.
 - `Database` is a singleton; `connect()` is called in the FastAPI lifespan, not at import time
 - Settings use pydantic-settings: env vars override `.env` file values
 - Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min)
-- Device tokens (daemon, wall-clock) are a separate JWT type; the auth middleware allows them only on paths in `DEVICE_ALLOWED_PREFIXES` (see `src/server.py`). Adding a new daemon-reachable path means appending to that tuple.
+- Device tokens (daemon, wall-clock) are a separate JWT type; the auth middleware allows them only on paths in `DEVICE_ALLOWED_PREFIXES`, plus GET/HEAD on `DEVICE_READ_ONLY_PREFIXES` (see `device_may_reach` in `src/server.py`). Adding a new daemon-reachable path means appending to one of those tuples — the read-only one when the prefix also carries writes a device shouldn't make (as `/api/coach/memory` carries delete and rewrite).
 - Error envelope: every non-2xx response carries `{detail, code, fields?}`. Routers can override the auto-mapped code by raising `HTTPException(detail={"code": "X", "message": "..."})` — see `coach.py` and `auth.py` for examples.
 - Multi-user: Each user's data is scoped via `user_id` field on all collections. Repos accept `user_id` in constructor.
 - `auth_info` fixture in conftest.py creates a test user + JWT for integration tests
