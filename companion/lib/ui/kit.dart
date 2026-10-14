@@ -355,15 +355,20 @@ class ProgressBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: SizedBox(
         height: height,
-        child: Stack(children: [
-          Positioned.fill(child: ColoredBox(color: context.sky.track)),
-          FractionallySizedBox(
-            widthFactor: fraction.clamp(0.0, 1.0),
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999)),
+        child: ColoredBox(
+          color: context.sky.track,
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            // The fill takes the bar's full height; only its width varies.
+            child: FractionallySizedBox(
+              widthFactor: fraction.clamp(0.0, 1.0),
+              heightFactor: 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999)),
+              ),
             ),
           ),
-        ]),
+        ),
       ),
     );
   }
