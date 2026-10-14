@@ -5,6 +5,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	type BriefRating,
+	type BriefResponse,
 	deleteCoachData,
 	deleteMemory,
 	fetchBriefHistory,
@@ -13,6 +15,7 @@ import {
 	fetchUsage,
 	generateBrief,
 	rewriteMemory,
+	setBriefFeedback,
 } from "./coachApi";
 
 export const coachKeys = {
@@ -49,6 +52,23 @@ export function useGenerateBrief() {
 			// key to the next local day if the clock crosses midnight in between.
 			queryClient.setQueryData(coachKeys.brief(), data);
 			queryClient.invalidateQueries({ queryKey: coachKeys.briefHistory(14) });
+		},
+	});
+}
+
+export function useBriefFeedback() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ date, rating }: { date: string; rating: BriefRating | null }) =>
+			setBriefFeedback(date, rating),
+		onSuccess: (data) => {
+			// The rated brief may be today's, a past one in history, or both.
+			queryClient.setQueryData<BriefResponse | null>(coachKeys.brief(), (old) =>
+				old?.date === data.date ? data : old,
+			);
+			queryClient.setQueryData<BriefResponse[]>(coachKeys.briefHistory(14), (old) =>
+				old?.map((b) => (b.date === data.date ? data : b)),
+			);
 		},
 	});
 }

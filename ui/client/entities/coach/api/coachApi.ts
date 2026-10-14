@@ -3,11 +3,12 @@
  */
 
 import type { Schemas } from "@/shared/api";
-import { del, get, post } from "@/shared/api";
+import { del, get, post, put } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
 
 export type BriefResponse = Schemas["BriefResponse"];
 export type UsageSummaryResponse = Schemas["UsageSummaryResponse"];
+export type BriefRating = NonNullable<BriefResponse["feedback"]>;
 
 // The coach's "today" (brief/review) is bucketed by the user's local
 // calendar day server-side; send the browser timezone so a brief/review
@@ -26,6 +27,15 @@ export async function fetchBriefHistory(limit = 14): Promise<BriefResponse[]> {
 export async function generateBrief(date?: string): Promise<BriefResponse> {
 	const tz = encodeURIComponent(browserTimeZone());
 	return post<BriefResponse>(`/api/coach/brief/generate?tz=${tz}`, date ? { date } : {});
+}
+
+/** Rate a brief, or clear its rating with null. The coach reads recent
+ * ratings when it writes the next brief. */
+export async function setBriefFeedback(
+	date: string,
+	rating: BriefRating | null,
+): Promise<BriefResponse> {
+	return put<BriefResponse>(`/api/coach/brief/${encodeURIComponent(date)}/feedback`, { rating });
 }
 
 export async function fetchUsage(days = 30): Promise<UsageSummaryResponse> {

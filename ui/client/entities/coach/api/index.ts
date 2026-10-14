@@ -1,4 +1,5 @@
 export type {
+	BriefRating,
 	BriefResponse,
 	ChatHistoryMessage,
 	MemoryResponse,
@@ -7,6 +8,7 @@ export type {
 export { type ChatSSEEvent, fetchChatHistory } from "./coachApi";
 export {
 	coachKeys,
+	useBriefFeedback,
 	useCoachBrief,
 	useCoachBriefHistory,
 	useCoachMemory,
