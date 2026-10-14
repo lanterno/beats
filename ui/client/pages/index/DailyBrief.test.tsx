@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DailyBrief } from "./DailyBrief";
 
 const generateMutate = vi.fn();
+const feedbackMutate = vi.fn();
 const useCoachBriefMock = vi.fn();
 const useCoachBriefHistoryMock = vi.fn();
 
@@ -11,6 +12,7 @@ vi.mock("@/entities/coach", () => ({
 	useCoachBrief: () => useCoachBriefMock(),
 	useCoachBriefHistory: () => useCoachBriefHistoryMock(),
 	useGenerateBrief: () => ({ mutate: generateMutate, isPending: false }),
+	useBriefFeedback: () => ({ mutate: feedbackMutate, isPending: false, isError: false }),
 }));
 
 const TODAY = { date: "2026-05-29", body: "today body" };
@@ -66,5 +68,44 @@ describe("DailyBrief history", () => {
 		expect(screen.getByText("yesterday body")).toBeInTheDocument();
 		await userEvent.click(chip);
 		expect(screen.getByText("today body")).toBeInTheDocument();
+	});
+});
+
+describe("DailyBrief rating", () => {
+	beforeEach(() => {
+		feedbackMutate.mockReset();
+		useCoachBriefHistoryMock.mockReturnValue({ data: HISTORY });
+	});
+
+	afterEach(cleanup);
+
+	it("rates the brief on screen", async () => {
+		useCoachBriefMock.mockReturnValue({ data: TODAY, isLoading: false });
+		render(<DailyBrief />);
+		await userEvent.click(screen.getByRole("button", { name: "Helpful" }));
+
+		expect(feedbackMutate).toHaveBeenCalledWith({ date: "2026-05-29", rating: "helpful" });
+	});
+
+	it("clears a rating when the chosen one is picked again", async () => {
+		useCoachBriefMock.mockReturnValue({
+			data: { ...TODAY, feedback: "not_useful" },
+			isLoading: false,
+		});
+		render(<DailyBrief />);
+		const notUseful = screen.getByRole("button", { name: "Not useful" });
+		expect(notUseful).toHaveAttribute("aria-pressed", "true");
+		await userEvent.click(notUseful);
+
+		expect(feedbackMutate).toHaveBeenCalledWith({ date: "2026-05-29", rating: null });
+	});
+
+	it("rates a past brief under its own date", async () => {
+		useCoachBriefMock.mockReturnValue({ data: TODAY, isLoading: false });
+		render(<DailyBrief />);
+		await userEvent.click(screen.getByRole("button", { name: "2026-05-28" }));
+		await userEvent.click(screen.getByRole("button", { name: "Not useful" }));
+
+		expect(feedbackMutate).toHaveBeenCalledWith({ date: "2026-05-28", rating: "not_useful" });
 	});
 });
