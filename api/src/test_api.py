@@ -5916,6 +5916,21 @@ class TestSignalsAPI:
         resp = client.get("/api/analytics/rhythm", headers=device_headers)
         assert resp.status_code == 403
 
+    def test_device_token_reads_coach_memory_but_cannot_change_it(self, client, auth_headers):
+        """A read-only prefix lets a device GET and nothing else: deleting or
+        rewriting the coach's memory stays with a signed-in browser."""
+        _, device_headers = self._pair_device(client, auth_headers)
+
+        assert client.get("/api/coach/memory", headers=device_headers).status_code == 200
+
+        for method, path in [
+            ("delete", "/api/coach/memory"),
+            ("post", "/api/coach/memory/rewrite"),
+        ]:
+            resp = client.request(method.upper(), path, headers=device_headers)
+            assert resp.status_code == 403, (method, path)
+            assert resp.json()["code"] == "DEVICE_PATH_FORBIDDEN"
+
     def test_flow_window_validation(self, client, auth_headers):
         """Flow score values are validated to [0, 1]."""
         _, device_headers = self._pair_device(client, auth_headers)
