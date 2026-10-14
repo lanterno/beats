@@ -90,7 +90,9 @@ class WeekController extends ChangeNotifier {
       try {
         return ProjectWeek.fromLedger(p, await client.getLedger(p.id, timezone: _tz));
       } catch (_) {
-        return null;
+        // A failed reload (offline, rate-limited) keeps the last good week
+        // rather than blanking the project out of every screen.
+        return weekOf(p.id);
       }
     }));
     weeks = results.whereType<ProjectWeek>().toList()
