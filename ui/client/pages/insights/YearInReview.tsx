@@ -12,6 +12,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { fetchBeats, sessionKeys, toSession, useHeatmap } from "@/entities/session";
+import { APP_NAME } from "@/shared/config";
 import { formatDuration, parseUtcIso } from "@/shared/lib";
 import { Button, EmptyState, Panel } from "@/shared/ui";
 import { CHIP, SKY_CHIP, SKY_ROUND } from "./styles";
@@ -417,7 +418,7 @@ export default function YearInReview() {
 					{/* Footer */}
 					<div className="text-center pt-5 border-t border-border space-y-3">
 						<p className="text-[10px] font-bold text-muted-foreground tracking-[0.3em] uppercase">
-							Beats
+							{APP_NAME}
 						</p>
 						<Button
 							variant="secondary"

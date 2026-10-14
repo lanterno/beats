@@ -19,6 +19,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { ProjectWithDuration } from "@/entities/project";
 import { useAuth } from "@/features/auth";
+import { APP_NAME } from "@/shared/config";
 import { cn, formatSecondsToTime, parseUtcIso, useInstallPrompt } from "@/shared/lib";
 import { signOut } from "@/shared/session";
 import { AnimatedDigits, SyncStatus } from "@/shared/ui";
@@ -80,7 +81,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 						to="/app"
 						className="font-heading text-base font-extrabold tracking-[-0.01em] text-sidebar-foreground"
 					>
-						Beats
+						{APP_NAME}
 					</Link>
 					<SyncStatus />
 				</div>
@@ -123,7 +124,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 									onClick={closeDrawer}
 									className="font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground"
 								>
-									Beats
+									{APP_NAME}
 								</Link>
 								<button
 									type="button"
@@ -165,7 +166,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 										className="flex-1 flex items-center gap-2 text-xs font-bold text-sidebar-foreground hover:text-sidebar-primary transition-colors"
 									>
 										<Download className="w-3.5 h-3.5" />
-										Install Beats
+										Install {APP_NAME}
 									</button>
 									<button
 										type="button"

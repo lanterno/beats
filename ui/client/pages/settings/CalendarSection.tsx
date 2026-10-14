@@ -7,6 +7,7 @@ import {
 	useDisconnectCalendar,
 } from "@/entities/calendar";
 import { describeError } from "@/shared/api";
+import { APP_NAME } from "@/shared/config";
 import { useOAuthCallback } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { CHIP, CONNECTED_DOT, DANGER_HOVER, HEADING, HEADING_ICON, LEAD } from "./styles";
@@ -49,7 +50,7 @@ export function CalendarSection() {
 			<Panel padding="p-5" className="space-y-3">
 				<p className={LEAD}>
 					Connect Google Calendar to see events alongside your tracked sessions. Read-only access —
-					Beats never modifies your calendar.
+					{APP_NAME} never modifies your calendar.
 				</p>
 				{status?.connected ? (
 					<div className="flex flex-wrap items-center gap-3">

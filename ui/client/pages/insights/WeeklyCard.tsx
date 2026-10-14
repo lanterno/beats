@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { useStreaks, useThisWeekSessions } from "@/entities/session";
+import { APP_NAME } from "@/shared/config";
 import { formatDuration, getWeekRange, parseUtcIso } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
 import { LABEL, SKY_BUTTON } from "./styles";
@@ -175,7 +176,7 @@ export function WeeklyCard() {
 				{/* Branding */}
 				<div className="text-center mt-3">
 					<p className="text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
-						Beats
+						{APP_NAME}
 					</p>
 				</div>
 			</Panel>

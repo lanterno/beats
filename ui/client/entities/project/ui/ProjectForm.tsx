@@ -35,6 +35,7 @@ import {
 	TrendingDown,
 } from "lucide-react";
 import { type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { APP_NAME } from "@/shared/config";
 import { formatDateOnly, todayIso } from "@/shared/lib";
 import { Button, ColorPicker } from "@/shared/ui";
 import type {
@@ -638,7 +639,7 @@ export function ProjectForm({
 											id="project-form-opening-balance-hint"
 											className="mt-1 text-[11px] text-muted-foreground/70"
 										>
-											Hours banked before Beats started counting; negative if owed.
+											Hours banked before {APP_NAME} started counting; negative if owed.
 										</p>
 									)}
 								</div>

@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+// Imported by path, not through the `@/shared/config` barrel: the barrel reads
+// `import.meta.env`, which does not exist while Vite loads this file.
+import { APP_NAME } from "./client/shared/config/brand";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,12 +24,21 @@ export default defineConfig(() => ({
 	},
 	plugins: [
 		react(),
+		// index.html cannot import the name, so it carries `%APP_NAME%` and this
+		// fills it in, before Vite's own `%ENV%` pass sees the placeholder.
+		{
+			name: "app-name",
+			transformIndexHtml: {
+				order: "pre",
+				handler: (html: string) => html.split("%APP_NAME%").join(APP_NAME),
+			},
+		},
 		VitePWA({
 			registerType: "autoUpdate",
 			includeAssets: ["favicon.svg", "favicon.ico", "pwa-192.svg", "pwa-512.svg"],
 			manifest: {
-				name: "Beats — Time Tracker",
-				short_name: "Beats",
+				name: `${APP_NAME} — Time Tracker`,
+				short_name: APP_NAME,
 				description: "Personal time tracking with insights, streaks, and a wall clock",
 				theme_color: "#8CC1E2",
 				background_color: "#E4F0F1",

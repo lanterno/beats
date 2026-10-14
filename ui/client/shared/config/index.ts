@@ -52,3 +52,5 @@ export const config: AppConfig = {
 	apiBaseUrl: resolveApiBaseUrl(),
 	isDev: import.meta.env.DEV,
 };
+
+export { APP_NAME } from "./brand";

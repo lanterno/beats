@@ -7,6 +7,7 @@ import { KeyRound, X } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { describeError } from "@/shared/api";
+import { APP_NAME } from "@/shared/config";
 import { Button } from "@/shared/ui";
 import {
 	getCurrentUser,
@@ -308,7 +309,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 						{/* Header */}
 						<div className="text-center mb-8">
 							<h2 className="font-heading text-3xl font-extrabold text-foreground tracking-[-0.01em]">
-								Beats
+								{APP_NAME}
 							</h2>
 							<p className="mt-2 font-medium text-muted-foreground">
 								{mode === "register-email" && "Create your account"}

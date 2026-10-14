@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { AuthModal } from "@/features/auth";
 import { Button, SkyBackdrop } from "@/shared/ui";
 import "./HomePage.css";
+import { APP_NAME } from "@/shared/config";
 
 // lucide-react removed brand-mark icons (trademark policy), so we ship our own
 // small GitHub mark. Matches the simple-icons / GitHub-octocat path.
@@ -68,14 +69,14 @@ function Nav({ onSignIn }: { onSignIn: () => void }) {
 			<div className="homepage-nav-inner">
 				<a href="#top" className="homepage-wordmark">
 					<Clock className="w-4 h-4 text-accent-ink" aria-hidden />
-					<span>Beats</span>
+					<span>{APP_NAME}</span>
 				</a>
 				<div className="homepage-nav-links">
 					<a href="#surfaces" className="homepage-nav-link">
 						Surfaces
 					</a>
 					<a href="#why" className="homepage-nav-link">
-						Why Beats
+						Why {APP_NAME}
 					</a>
 					<a
 						href={GITHUB_URL}
@@ -138,7 +139,7 @@ function DaemonStatusCard() {
 	// Static, honest mock — not animated, not randomized, not pretending to be live.
 	// Demonstrates the *shape* of the daemon status UI a signed-in user would see.
 	return (
-		<figure className="homepage-daemon-card" aria-label="Beats daemon status, example">
+		<figure className="homepage-daemon-card" aria-label={`${APP_NAME} daemon status, example`}>
 			<div className="homepage-daemon-head">
 				<div className="homepage-daemon-pulse" aria-hidden />
 				<span className="homepage-daemon-tag">beatsd · active</span>
@@ -190,9 +191,9 @@ function Hero({ onPrimary }: { onPrimary: () => void }) {
 					<GhBadgeRow />
 					<h1 className="homepage-hero-title">Your time, tracked while you work.</h1>
 					<p className="homepage-hero-subtitle">
-						Beats is a free, open-source rhythm system. A background daemon catches your sessions
-						across your editor, desktop, and an optional wall clock — then a coach helps you review
-						the week.
+						{APP_NAME} is a free, open-source rhythm system. A background daemon catches your
+						sessions across your editor, desktop, and an optional wall clock — then a coach helps
+						you review the week.
 					</p>
 					<div className="homepage-hero-cta">
 						<Button size="lg" onClick={onPrimary} className="homepage-cta-primary">
@@ -265,7 +266,7 @@ function WebMock() {
 					})}
 				</div>
 				<div className="homepage-mock-projects">
-					<ProjectRow color="sky" name="Beats" hrs="14.2" />
+					<ProjectRow color="sky" name={APP_NAME} hrs="14.2" />
 					<ProjectRow color="leaf" name="Writing" hrs="6.8" />
 					<ProjectRow color="blossom" name="Reading" hrs="4.1" />
 				</div>
@@ -331,7 +332,7 @@ function EditorMock() {
 			<div className="homepage-mock-editor-side">
 				<div className="homepage-mock-editor-tab">
 					<Clock className="w-3 h-3" aria-hidden />
-					<span>Beats</span>
+					<span>{APP_NAME}</span>
 				</div>
 				<div className="homepage-mock-editor-current">
 					<span className="homepage-mock-editor-label">Current beat</span>
@@ -497,7 +498,7 @@ function SurfaceTour() {
 			<div className="homepage-section-head">
 				<p className="homepage-section-eyebrow">Five surfaces, one rhythm.</p>
 				<h2 className="homepage-section-title">
-					Beats follows you across the tools you already use.
+					{APP_NAME} follows you across the tools you already use.
 				</h2>
 			</div>
 			<div className="homepage-surfaces-list">
@@ -544,14 +545,14 @@ function WhyBeats() {
 	return (
 		<section id="why" className="homepage-why">
 			<div className="homepage-section-head">
-				<p className="homepage-section-eyebrow">Why Beats</p>
+				<p className="homepage-section-eyebrow">Why {APP_NAME}</p>
 				<h2 className="homepage-section-title">Better than the three things you're using now.</h2>
 			</div>
 			<div className="homepage-why-grid">
 				<Contrast
 					label="vs. a spreadsheet"
 					title="Better than a spreadsheet — because you'll forget."
-					proof="Beats records on its own. The spreadsheet only knows the days you remembered to open it."
+					proof={`${APP_NAME} records on its own. The spreadsheet only knows the days you remembered to open it.`}
 				/>
 				<Contrast
 					label="vs. a timer"
@@ -679,8 +680,8 @@ function FounderCard() {
 				<span className="font-heading">A</span>
 			</div>
 			<p className="homepage-founder-quote">
-				“I built Beats because I wanted to know where my hours actually went. Not for a manager —
-				for me.”
+				“I built {APP_NAME} because I wanted to know where my hours actually went. Not for a manager
+				— for me.”
 			</p>
 			<div className="homepage-founder-meta">
 				<span className="homepage-founder-name">Ahmed Elghareeb</span>
@@ -862,7 +863,7 @@ function FooterNew() {
 			<div className="homepage-footer-bottom">
 				<div className="homepage-footer-mark">
 					<Clock className="w-3 h-3 text-accent-ink" aria-hidden />
-					<span className="font-heading">Beats</span>
+					<span className="font-heading">{APP_NAME}</span>
 					<span className="homepage-footer-sha font-mono">
 						<span className="sr-only">Deployed commit SHA </span>
 						build · {DEPLOY_SHA}
