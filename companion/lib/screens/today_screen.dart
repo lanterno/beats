@@ -665,7 +665,7 @@ class _TodayScreenState extends State<TodayScreen> {
         const SizedBox(height: 12),
         if (anchor?.balance != null)
           Chip2(
-            '${formatBalance(anchor!.balance!)} ${anchor.balance! >= 0 ? 'ahead' : 'behind'}',
+            '${formatBalance(anchor!.balance!)} ${anchor.balance! >= 0 ? 'ahead' : 'behind'} overall',
             bold: true,
             background: (anchor.balance! >= 0 ? p.leaf : p.persimmon).withValues(alpha: 0.14),
             foreground: anchor.balance! >= 0 ? p.leafInk : p.persimmonInk,
