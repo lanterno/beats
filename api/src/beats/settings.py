@@ -4,6 +4,8 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from beats.brand import APP_NAME
+
 # RFC 7518 §3.2 requires at least 32 bytes for HS256 HMAC keys.
 # Anything shorter is rejected: pyjwt logs InsecureKeyLengthWarning,
 # but more importantly an attacker who can guess or brute-force a
@@ -29,7 +31,9 @@ class Settings(BaseSettings):
 
     # WebAuthn settings
     webauthn_rp_id: str = Field(default="localhost", validation_alias="WEBAUTHN_RP_ID")
-    webauthn_rp_name: str = Field(default="Beats", validation_alias="WEBAUTHN_RP_NAME")
+    # Display only: the browser shows it in the passkey prompt. Credentials are
+    # bound to the RP ID above, so changing the name strands no one.
+    webauthn_rp_name: str = Field(default=APP_NAME, validation_alias="WEBAUTHN_RP_NAME")
     webauthn_origin: str = Field(
         default="http://localhost:8080", validation_alias="WEBAUTHN_ORIGIN"
     )

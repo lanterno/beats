@@ -28,6 +28,7 @@ import re
 from datetime import UTC, datetime
 
 from beats.auth.sso import HomeIdentity
+from beats.brand import APP_NAME
 from beats.domain.models import User
 from beats.infrastructure.repositories import UserRepository
 
@@ -110,7 +111,7 @@ class SSOAccountService:
                 sorted(self._provision_roles),
             )
             raise SSOProvisionForbidden(
-                "This home.space identity is not allowed to create a new Beats account. "
+                f"This home.space identity is not allowed to create a new {APP_NAME} account. "
                 "Ask the owner to create one for you, then link it from Settings."
             )
 
@@ -140,7 +141,7 @@ class SSOAccountService:
         holder = await self._users.get_by_sso_subject(identity.issuer, identity.did)
         if holder is not None and holder.id != user_id:
             raise SSOAlreadyLinked(
-                "That home.space identity is already linked to another Beats account."
+                f"That home.space identity is already linked to another {APP_NAME} account."
             )
 
         user = await self._users.get_by_id(user_id)
