@@ -18,11 +18,11 @@ import 'theme/beats_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
-  runApp(const PeteApp());
+  runApp(const CompanionApp());
 }
 
-class PeteApp extends StatelessWidget {
-  const PeteApp({super.key});
+class CompanionApp extends StatelessWidget {
+  const CompanionApp({super.key});
 
   @override
   Widget build(BuildContext context) {

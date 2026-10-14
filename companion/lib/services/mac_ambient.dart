@@ -5,13 +5,13 @@ import 'package:flutter/services.dart';
 ///
 /// On non-macOS platforms every method is a silent no-op so callers can
 /// invoke them unconditionally. The native side lives in
-/// `macos/Runner/PeteMacOS.swift` and is registered from
+/// `macos/Runner/MacAmbientBridge.swift` and is registered from
 /// `MainFlutterWindow.swift`. We pin the channel name here to the same
 /// string the Swift constant uses; if you rename one, rename both.
 class MacAmbient {
-  static const _channel = MethodChannel('pete/macos');
+  static const _channel = MethodChannel('companion/macos');
 
-  /// Sets the live label on Pete's dock icon. `null` or empty clears it.
+  /// Sets the live label on the app's dock icon. `null` or empty clears it.
   /// We send `"32"` while a 32-minute timer is running and `null` when
   /// idle — the badge reads like a wristwatch in peripheral vision.
   static Future<void> setDockBadge(String? label) async {

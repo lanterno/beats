@@ -5,7 +5,7 @@ class MainFlutterWindow: NSWindow {
   /// Held strong so its method-channel handler stays alive for the
   /// lifetime of the window. The bridge is initialized once awakeFromNib
   /// runs and torn down implicitly when the window deinits.
-  private var peteMacOS: PeteMacOS?
+  private var macAmbient: MacAmbientBridge?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -15,8 +15,8 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
-    let registrar = flutterViewController.registrar(forPlugin: "PeteMacOS")
-    peteMacOS = PeteMacOS(registrar: registrar)
+    let registrar = flutterViewController.registrar(forPlugin: "MacAmbientBridge")
+    macAmbient = MacAmbientBridge(registrar: registrar)
 
     super.awakeFromNib()
   }
