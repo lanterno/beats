@@ -1,0 +1,16 @@
+name: Brand
+on:
+  push:
+    paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**]
+  pull_request:
+    paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**]
+
+jobs:
+  # The product name is stamped from shared/brand.json into three surfaces, and
+  # none of their own workflows runs when only the JSON changes. Stdlib only.
+  name-is-current:
+    name: Product name is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/gen_brand.py --check
