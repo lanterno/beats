@@ -228,6 +228,7 @@ class _AppShellState extends State<AppShell> {
       client: _client!,
       timer: _timer!,
       week: _week!,
+      hour: widget.hour,
       onUnpaired: _onUnpaired,
     );
   }

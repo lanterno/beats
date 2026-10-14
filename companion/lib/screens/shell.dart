@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/time_format.dart';
+import '../state/hour.dart';
 import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
@@ -14,8 +15,8 @@ import '../ui/kit.dart';
 import 'coach_screen.dart';
 import 'flow_screen.dart';
 import 'body_screen.dart';
-import 'home_screen.dart';
 import 'palette.dart';
+import 'settings_screen.dart';
 import 'timer_actions.dart';
 import 'today_screen.dart';
 
@@ -52,6 +53,7 @@ class MainWindow extends StatefulWidget {
   final ApiClient client;
   final TimerController timer;
   final WeekController week;
+  final HourController hour;
   final VoidCallback onUnpaired;
   final Section initial;
 
@@ -60,6 +62,7 @@ class MainWindow extends StatefulWidget {
     required this.client,
     required this.timer,
     required this.week,
+    required this.hour,
     required this.onUnpaired,
     this.initial = Section.today,
   });
@@ -74,11 +77,18 @@ class MainWindowState extends State<MainWindow> {
   void show(Section s) => setState(() => _section = s);
 
   void openSettings() {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => HomeScreen(onUnpaired: () {
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        widget.onUnpaired();
-      }),
+    final nav = Navigator.of(context);
+    nav.popUntil((r) => r.isFirst);
+    nav.push(MaterialPageRoute(
+      builder: (_) => SettingsScreen(
+        client: widget.client,
+        timer: widget.timer,
+        hour: widget.hour,
+        onUnpaired: () {
+          nav.popUntil((r) => r.isFirst);
+          widget.onUnpaired();
+        },
+      ),
     ));
   }
 
