@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beats_companion/brand.dart';
 import 'package:beats_companion/screens/pairing_screen.dart';
 
 void main() {
@@ -13,7 +14,7 @@ void main() {
     // duration 400ms → 700ms is plenty).
     await tester.pump(const Duration(milliseconds: 700));
 
-    expect(find.text('Beats'), findsOneWidget);
+    expect(find.text(appName), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(3)); // API URL + Web UI URL + code
   });
