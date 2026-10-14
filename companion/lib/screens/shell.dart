@@ -16,7 +16,7 @@ import 'flow_screen.dart';
 import 'health_screen.dart';
 import 'home_screen.dart';
 import 'timer_actions.dart';
-import 'timer_screen.dart';
+import 'today_screen.dart';
 
 enum Section { today, flow, coach, body }
 
@@ -86,7 +86,14 @@ class MainWindowState extends State<MainWindow> {
   }
 
   Widget _screen() => switch (_section) {
-        Section.today => TimerScreen(client: widget.client),
+        Section.today => TodayScreen(
+            client: widget.client,
+            timer: widget.timer,
+            week: widget.week,
+            onOpenFlow: () => show(Section.flow),
+            onOpenCoach: () => show(Section.coach),
+            onOpenBody: () => show(Section.body),
+          ),
         Section.flow => FlowScreen(client: widget.client),
         Section.coach => CoachScreen(client: widget.client),
         Section.body => HealthScreen(client: widget.client),
