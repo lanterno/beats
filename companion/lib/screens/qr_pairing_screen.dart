@@ -1,12 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../brand.dart';
 import '../services/qr_pairing.dart';
-import '../theme/beats_theme.dart';
+import '../theme/sky.dart';
 
 /// Camera-driven QR pairing for iOS / Android. Pops back with a
 /// [QrPairingPayload] on the first successful scan. Returns null when
@@ -49,15 +48,16 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.sky;
     if (!(Platform.isIOS || Platform.isAndroid)) {
       // Defensive: a desktop tap-through that bypasses the parent's gate
       // shouldn't crash the camera plugin.
       return Scaffold(
-        backgroundColor: BeatsColors.background,
+        backgroundColor: p.panel.withValues(alpha: 1),
         appBar: AppBar(
-          backgroundColor: BeatsColors.background,
-          foregroundColor: BeatsColors.textPrimary,
-          title: const Text('Scan QR'),
+          backgroundColor: Colors.transparent,
+          foregroundColor: p.ink,
+          title: Text('Scan QR', style: SkyType.display(20)),
         ),
         body: Center(
           child: Padding(
@@ -66,20 +66,22 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
               'QR scanning is only available on iOS and Android. '
               'On desktop, type the 6-character code from your $appName web Settings.',
               textAlign: TextAlign.center,
-              style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textSecondary),
+              style: SkyType.body(15).copyWith(color: p.inkMuted),
             ),
           ),
         ),
       );
     }
 
+    // The camera fills the screen, so the frame around it is ink in
+    // either hour.
     return Scaffold(
-      backgroundColor: BeatsColors.background,
+      backgroundColor: SkyPalette.afternoon.ink,
       appBar: AppBar(
-        backgroundColor: BeatsColors.background,
-        foregroundColor: BeatsColors.textPrimary,
+        backgroundColor: SkyPalette.afternoon.ink,
+        foregroundColor: Colors.white,
         elevation: 0,
-        title: Text('Scan QR', style: GoogleFonts.dmSerifDisplay(fontSize: 22)),
+        title: Text('Scan QR', style: SkyType.display(20)),
       ),
       body: Stack(
         fit: StackFit.expand,
@@ -98,7 +100,7 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
                 height: 240,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: BeatsColors.amber, width: 2),
+                  border: Border.all(color: p.sun, width: 2),
                 ),
               ),
             ),
@@ -108,9 +110,7 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
             child: Text(
               'Point at the QR code shown in your $appName web Settings → Daemon',
               textAlign: TextAlign.center,
-              style: BeatsType.bodySmall.copyWith(
-                color: BeatsColors.textPrimary.withValues(alpha: 0.85),
-              ),
+              style: SkyType.body(13).copyWith(color: Colors.white.withValues(alpha: 0.85)),
             ),
           ),
         ],
