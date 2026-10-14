@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>LifePete</title>
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#223061"/>
+      <stop offset="1" stop-color="#1A2446"/>
+    </linearGradient>
+  </defs>
+  <!-- Apple's grid: an 824 body on a 1024 canvas, the rest is room for the shadow. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)" filter="url(#shadow)"/>
+  <g transform="translate(100 100) scale(6.866667)">
+    <circle cx="60" cy="60" r="34" fill="none" stroke="#2E3E6E" stroke-width="8"/>
+    <path d="M60 26A34 34 0 1 1 30.56 77" fill="none" stroke="#F5C35E" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="30.56" cy="77" r="9" fill="#F5C35E"/>
+  </g>
+</svg>
