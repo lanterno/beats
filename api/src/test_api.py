@@ -2241,6 +2241,80 @@ class TestCoachDeleteAndChatSse:
         assert body.rstrip().endswith("data: [DONE]")
 
 
+class TestBriefFeedback:
+    """PUT /api/coach/brief/{date}/feedback: a rating on one brief, which the
+    brief response carries and a null clears."""
+
+    def _db(self):
+        import os
+
+        from pymongo import MongoClient
+
+        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+        sync = MongoClient(dsn)
+        return sync, sync[os.environ.get("DB_NAME", "beats_test")]
+
+    @pytest.fixture(autouse=True)
+    def _brief(self, auth_info):
+        from datetime import UTC, datetime
+
+        sync, db = self._db()
+        db.daily_briefs.delete_many({})
+        db.daily_briefs.insert_one(
+            {
+                "user_id": auth_info["user_id"],
+                "date": "2026-10-14",
+                "body": "Protect the morning.",
+                "created_at": datetime.now(UTC),
+            }
+        )
+        sync.close()
+
+    def test_rating_is_stored_and_returned_and_null_clears_it(self, client, auth_info):
+        url = "/api/coach/brief/2026-10-14/feedback"
+        resp = client.put(url, json={"rating": "helpful"}, headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["feedback"] == "helpful"
+
+        resp = client.put(url, json={"rating": "not_useful"}, headers=auth_info["headers"])
+        assert resp.json()["feedback"] == "not_useful"
+
+        resp = client.put(url, json={"rating": None}, headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["feedback"] is None
+
+    def test_a_day_without_a_brief_is_404(self, client, auth_info):
+        resp = client.put(
+            "/api/coach/brief/2026-10-13/feedback",
+            json={"rating": "helpful"},
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "BRIEF_NOT_FOUND"
+
+    def test_a_bad_date_is_400_and_an_unknown_rating_422(self, client, auth_info):
+        h = auth_info["headers"]
+        bad_date = client.put(
+            "/api/coach/brief/yesterday/feedback", json={"rating": "helpful"}, headers=h
+        )
+        assert bad_date.status_code == 400
+        assert bad_date.json()["code"] == "INVALID_DATE"
+        bad_rating = client.put(
+            "/api/coach/brief/2026-10-14/feedback", json={"rating": "meh"}, headers=h
+        )
+        assert bad_rating.status_code == 422
+
+    def test_a_paired_device_may_rate(self, client, auth_info):
+        code = client.post("/api/device/pair/code", headers=auth_info["headers"]).json()["code"]
+        token = client.post("/api/device/pair/exchange", json={"code": code}).json()["device_token"]
+        resp = client.put(
+            "/api/coach/brief/2026-10-14/feedback",
+            json={"rating": "helpful"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+
 class TestCoachBriefErrorPaths:
     """Three coach endpoints with uncovered error envelopes:
     /brief/generate (BudgetExceeded → 429, generic → 502),
