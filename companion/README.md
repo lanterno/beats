@@ -21,6 +21,9 @@ app's sky (afternoon or dusk):
 - **Menu bar** — the running time and project, and a popover with Stop, today and
   the week, and one-click starts; closing the window leaves it running there
 - **Focus mode** (⇧⌘F) — the running clock, full window, at dusk
+- **Log time you forgot** (⌘L) — a past session, refused if it overlaps one already there
+- **Time away** (optional) — when the timer ran through ten minutes with no keyboard or
+  mouse, asks whether to keep that time or take it off
 - **Notifications** — the morning brief, drift nudges and auto-timer suggestions,
   each switchable, and held while you're in flow
 
@@ -42,7 +45,7 @@ flutter run -d macos        # desktop dev run
 flutter run -d <device>     # mobile
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (281)
+flutter test                # widget + unit tests (295)
 
 # A debug build opens on any surface, for looking at one without clicking:
 open --env LIFEPETE_SECTION=flow   build/macos/Build/Products/Debug/beats_companion.app
