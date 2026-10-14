@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import '../state/prefs.dart';
 import 'api_client.dart';
 import 'notification_dedupe.dart';
 import 'notifications.dart';
+import 'tray_service.dart' show flowScoresFromWindows;
 
 /// Foreground polling loop that converts API state into local notifications.
 ///
@@ -47,13 +49,32 @@ class NotificationPoller {
     if (_running) return; // prevent overlap if a previous tick is still in flight
     _running = true;
     try {
+      final prefs = await Prefs.load();
+      // Held notifications are not marked as sent, so they fire on the
+      // first tick after flow drops.
+      final hold = prefs.holdingInFlow && await _inFlowNow();
       await Future.wait([
-        _pollBrief(),
-        _pollDrift(),
-        _pollAutoTimer(),
+        if (prefs.briefOn && !hold) _pollBrief(),
+        if (prefs.driftOn && !hold) _pollDrift(),
+        // A suggestion is about time going untracked, which flow doesn't
+        // make less urgent.
+        if (prefs.suggestOn) _pollAutoTimer(),
       ]);
     } finally {
       _running = false;
+    }
+  }
+
+  Future<bool> _inFlowNow() async {
+    try {
+      final now = DateTime.now().toUtc();
+      final windows = await client.getFlowWindows(
+        now.subtract(const Duration(minutes: 10)).toIso8601String(),
+        now.toIso8601String(),
+      );
+      return inFlow(flowScoresFromWindows(windows));
+    } catch (_) {
+      return false;
     }
   }
 

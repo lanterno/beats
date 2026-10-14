@@ -1,36 +1,34 @@
+import 'dart:io';
+
+import 'package:beats_companion/screens/pairing_screen.dart';
+import 'package:beats_companion/theme/sky.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:beats_companion/brand.dart';
-import 'package:beats_companion/screens/pairing_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+Widget app() => MaterialApp(
+      theme: buildSkyTheme(SkyPalette.afternoon, Brightness.light),
+      home: PairingScreen(onPaired: () {}),
+    );
 
 void main() {
-  testWidgets('Pairing screen renders correctly', (WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: PairingScreen(onPaired: () {}),
-    ));
-    // Drain StaggeredEntrance timers and entrance animation.
-    // Embers run forever, so pumpAndSettle would hang — pump enough to
-    // drain the StaggeredEntrance entries instead (longest delay ~220ms,
-    // duration 400ms → 700ms is plenty).
-    await tester.pump(const Duration(milliseconds: 700));
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
-    expect(find.text(appName), findsOneWidget);
+  testWidgets('Pairing screen asks for a code', (tester) async {
+    await tester.pumpWidget(app());
+    await tester.pump();
+
+    // The heading names the machine: CI runs on Linux, laptops on macOS.
+    expect(find.text(Platform.isMacOS ? 'Pair this Mac' : 'Pair this device'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(3)); // API URL + Web UI URL + code
+    expect(find.byKey(const Key('pairing-code')), findsOneWidget);
   });
 
-  testWidgets('Pairing rejects short code', (WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: PairingScreen(onPaired: () {}),
-    ));
-    // Embers run forever, so pumpAndSettle would hang — pump enough to
-    // drain the StaggeredEntrance entries instead (longest delay ~220ms,
-    // duration 400ms → 700ms is plenty).
-    await tester.pump(const Duration(milliseconds: 700));
+  testWidgets('Pairing rejects a short code', (tester) async {
+    await tester.pumpWidget(app());
+    await tester.pump();
 
-    // Enter a short code and tap Pair
-    final codeField = find.byType(TextField).last;
-    await tester.enterText(codeField, 'AB');
+    await tester.enterText(find.byKey(const Key('pairing-code')), 'AB');
     await tester.tap(find.text('Pair'));
     await tester.pump();
 

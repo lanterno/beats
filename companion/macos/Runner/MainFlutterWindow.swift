@@ -6,8 +6,13 @@ class MainFlutterWindow: NSWindow {
   /// lifetime of the window. The bridge is initialized once awakeFromNib
   /// runs and torn down implicitly when the window deinits.
   private var macAmbient: MacAmbientBridge?
+  /// The menu bar item and its popover; held for the app's lifetime.
+  private var statusItem: StatusItemController?
 
   override func awakeFromNib() {
+    // Closed, not destroyed: the Dock icon and the menu bar reopen it.
+    self.isReleasedWhenClosed = false
+
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
@@ -17,6 +22,7 @@ class MainFlutterWindow: NSWindow {
 
     let registrar = flutterViewController.registrar(forPlugin: "MacAmbientBridge")
     macAmbient = MacAmbientBridge(registrar: registrar)
+    statusItem = StatusItemController(mainMessenger: flutterViewController.engine.binaryMessenger, window: self)
 
     super.awakeFromNib()
   }

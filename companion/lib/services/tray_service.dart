@@ -3,8 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:system_tray/system_tray.dart';
 import '../brand.dart';
+import '../state/prefs.dart';
+import '../state/timer_controller.dart';
 import 'api_client.dart';
 import 'mac_ambient.dart';
+import 'status_menu.dart';
+import 'time_format.dart';
 import 'tray_icon.dart';
 
 /// Decodes a project's hex color string (with or without `#`) into
@@ -64,60 +68,70 @@ String? dockBadgeForElapsed(Duration? elapsed, {required bool running}) {
   return '$mins';
 }
 
-/// macOS menu bar integration — live timer, quick-start, today's stats.
+/// What the menu bar item reads while [project] has run for [elapsed]:
+/// "1:24 Northwind", "1:24" or nothing, per [shows]; nothing when idle.
+String menuBarTitle(MenuBarShows shows, {String? project, Duration? elapsed}) {
+  if (project == null || elapsed == null) return '';
+  return switch (shows) {
+    MenuBarShows.timeAndProject => '${formatShortClock(elapsed)} $project',
+    MenuBarShows.time => formatShortClock(elapsed),
+    MenuBarShows.icon => '',
+  };
+}
+
+/// The menu bar item: the running timer's time and project, an icon that
+/// carries the project's colour and the last 90 minutes of flow, and the
+/// Dock badge. It follows the window's [TimerController] rather than
+/// polling on its own, so a start anywhere shows at once.
+///
+/// On macOS the item is native (StatusItemController.swift, via
+/// [StatusMenu]) and a click opens the popover; elsewhere it is the
+/// system_tray plugin with a menu to start and stop.
 class TrayService {
   final ApiClient client;
+  final TimerController timer;
   final VoidCallback onShowWindow;
 
-  final SystemTray _tray = SystemTray();
+  final bool _native = Platform.isMacOS;
+  SystemTray? _tray;
   final TrayIconRenderer _iconRenderer = TrayIconRenderer();
-  Timer? _pollTimer;
-  Timer? _tickTimer;
+  Prefs? _prefs;
   Timer? _flowTimer;
-  // Last 90 min of flow scores (one per ~5-min window the API emits).
-  // Drives the menu-bar sparkline. Empty when we haven't fetched yet or
-  // when the API call failed — the renderer falls back to a plain dot.
+  // Last 90 min of flow scores (one per window the API emits). Drives the
+  // menu-bar sparkline. Empty when we haven't fetched yet or when the API
+  // call failed — the renderer falls back to a plain dot.
   List<double> _flowScores = const [];
-
-  // State
-  bool _running = false;
-  String? _projectName;
-  String? _projectColorHex;
-  DateTime? _startTime;
-  List<Map<String, dynamic>> _projects = [];
+  String? _iconPath;
+  String _timerKey = '';
+  String? _lastTitle;
   // Tracks the last label pushed to the dock badge so we can skip the
   // method-channel hop on every tick (the minute counter only changes
   // every 60 ticks). `null` means "no badge displayed".
   String? _lastBadge;
 
-  TrayService({required this.client, required this.onShowWindow});
+  TrayService({required this.client, required this.timer, required this.onShowWindow});
 
   Future<void> init() async {
     if (!Platform.isMacOS && !Platform.isWindows && !Platform.isLinux) return;
+    _prefs = await Prefs.load();
+    _iconPath = await _iconRenderer.idleIcon();
 
-    final idlePath = await _iconRenderer.idleIcon();
-    await _tray.initSystemTray(
-      title: '',
-      iconPath: idlePath,
-      toolTip: appName,
-    );
+    if (_native) {
+      await StatusMenu.update(visible: true, imagePath: _iconPath, tooltip: appName);
+    } else {
+      final tray = SystemTray();
+      _tray = tray;
+      await tray.initSystemTray(title: '', iconPath: _iconPath!, toolTip: appName);
+      tray.registerSystemTrayEventHandler((eventName) {
+        if (eventName == kSystemTrayEventClick || eventName == kSystemTrayEventRightClick) {
+          tray.popUpContextMenu();
+        }
+      });
+    }
 
-    _tray.registerSystemTrayEventHandler((eventName) {
-      if (eventName == kSystemTrayEventClick) {
-        _tray.popUpContextMenu();
-      } else if (eventName == kSystemTrayEventRightClick) {
-        _tray.popUpContextMenu();
-      }
-    });
-
-    // Initial fetch
-    await _poll();
-
-    // Poll API every 15s for state changes
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _poll());
-
-    // Tick every second to update elapsed time in menu bar
-    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    timer.addListener(_onTimer);
+    timer.now.addListener(_tick);
+    await _onTimer();
 
     // Refresh the menu-bar sparkline every 5 min. Flow windows are emitted
     // by the daemon at roughly that cadence — polling faster just churns
@@ -141,59 +155,58 @@ class TrayService {
     } catch (_) {}
   }
 
-  Future<void> _poll() async {
-    try {
-      final results = await Future.wait([
-        client.getTimerStatus(),
-        client.getProjects(),
-      ]);
-      final status = results[0] as Map<String, dynamic>;
-      final projects = results[1] as List<Map<String, dynamic>>;
-
-      final isBeating = status['isBeating'] == true;
-      final project = status['project'] as Map<String, dynamic>?;
-      final name = project?['name'] as String?;
-      final since = status['since'] as String?;
-
-      _projects = projects;
-      _running = isBeating;
-      _projectName = name;
-      _startTime = since != null ? DateTime.tryParse(since) : null;
-
-      // Resolve the running project's color from the projects list so the
-      // tray icon can match it. Status payload doesn't carry color today.
-      _projectColorHex = null;
-      if (isBeating && project != null) {
-        final id = project['id'];
-        final match = projects.where((p) => p['id'] == id).firstOrNull;
-        final hex = match?['color'] as String?;
-        if (hex != null) _projectColorHex = hex;
-      }
-
+  Future<void> _onTimer() async {
+    final key = '${timer.current?.id}@${timer.since}';
+    if (key != _timerKey) {
+      _timerKey = key;
       await _updateIcon();
-      await _updateMenu();
-      _tick();
-    } catch (_) {}
+      // An open popover should show the change now, not at its next poll.
+      await StatusMenu.timerChanged();
+    }
+    if (!_native) await _updateMenu();
+    _tick();
   }
 
   Future<void> _updateIcon() async {
-    final rgb = _running && _projectColorHex != null
-        ? trayHexToRgb(_projectColorHex)
-        : null;
+    final color = timer.current?.color;
+    final rgb = color == null
+        ? null
+        : [(color.r * 255).round(), (color.g * 255).round(), (color.b * 255).round()];
     // Sparkline takes precedence whenever we have flow data — even idle,
     // a flat-but-recent flow line tells the user something. Fall back to
     // a plain dot when there's no data (fresh launch, API down).
-    final path = _flowScores.isNotEmpty
+    _iconPath = _flowScores.isNotEmpty
         ? await _iconRenderer.iconForSparkline(_flowScores, rgb)
         : await _iconRenderer.iconForProject(rgb);
-    await _tray.setImage(path);
+    if (_native) {
+      _lastTitle = null; // resend the title with the new icon
+      _tick();
+    } else {
+      await _tray?.setImage(_iconPath!);
+    }
   }
 
   void _tick() {
-    final running = _running && _startTime != null;
-    final elapsed = running ? DateTime.now().toUtc().difference(_startTime!) : null;
-
-    _tray.setTitle(running ? '${formatTrayElapsed(elapsed!)}  $_projectName' : '');
+    final running = timer.running;
+    final elapsed = running ? timer.elapsed : null;
+    final title = menuBarTitle(
+      _prefs?.menuBarShows ?? MenuBarShows.timeAndProject,
+      project: timer.current?.name,
+      elapsed: elapsed,
+    );
+    if (title != _lastTitle) {
+      _lastTitle = title;
+      if (_native) {
+        StatusMenu.update(
+          visible: true,
+          title: title,
+          imagePath: _iconPath,
+          tooltip: running ? '$appName — ${timer.current!.name}' : appName,
+        );
+      } else {
+        _tray?.setTitle(running ? '${formatTrayElapsed(elapsed!)}  ${timer.current!.name}' : '');
+      }
+    }
 
     // Mirror the running state into the macOS dock badge (whole minutes —
     // pixel-counting seconds in the dock would just be noise). Dedupe so we
@@ -205,85 +218,50 @@ class TrayService {
     }
   }
 
+  /// The tray menu off macOS: what runs and Stop, or a Start submenu.
   Future<void> _updateMenu() async {
+    final tray = _tray;
+    if (tray == null) return;
     final menu = Menu();
     final items = <MenuItemBase>[];
+    final current = timer.current;
 
-    if (_running && _projectName != null) {
-      // ── Running state ──
-      final elapsed = _startTime != null
-          ? formatTrayElapsed(DateTime.now().toUtc().difference(_startTime!))
-          : '—';
+    if (current != null) {
       items.addAll([
-        MenuItemLabel(label: '● $_projectName — $elapsed', enabled: false),
+        MenuItemLabel(label: '● ${current.name} — ${formatTrayElapsed(timer.elapsed)}', enabled: false),
         MenuSeparator(),
-        MenuItemLabel(label: '■  Stop Timer', onClicked: (_) => _stopTimer()),
+        MenuItemLabel(label: '■  Stop Timer', onClicked: (_) => timer.stop()),
         MenuSeparator(),
       ]);
     } else {
-      // ── Idle state ──
       items.add(MenuItemLabel(label: 'No timer running', enabled: false));
       items.add(MenuSeparator());
-
-      // Quick-start submenu
-      if (_projects.isNotEmpty) {
-        final projectItems = <MenuItemBase>[];
-        for (final p in _projects.take(12)) {
-          final name = p['name'] as String? ?? 'Unnamed';
-          final id = p['id'] as String? ?? '';
-          projectItems.add(
-            MenuItemLabel(
-              label: name,
-              onClicked: (_) => _startTimer(id, name),
-            ),
-          );
-        }
-        final startMenu = SubMenu(label: '▶  Start Timer', children: projectItems);
-        items.add(startMenu);
+      final projects = timer.recentFirst.take(12).toList();
+      if (projects.isNotEmpty) {
+        items.add(SubMenu(label: '▶  Start Timer', children: [
+          for (final p in projects) MenuItemLabel(label: p.name, onClicked: (_) => timer.startProject(p)),
+        ]));
         items.add(MenuSeparator());
       }
     }
 
-    // Always show Open + Quit
     items.add(MenuItemLabel(label: 'Open $appName', onClicked: (_) => onShowWindow()));
     items.add(MenuSeparator());
     items.add(MenuItemLabel(label: 'Quit', onClicked: (_) => exit(0)));
 
     await menu.buildFrom(items);
-    await _tray.setContextMenu(menu);
-  }
-
-  Future<void> _startTimer(String projectId, String projectName) async {
-    try {
-      await client.startTimer(projectId);
-      _running = true;
-      _projectName = projectName;
-      final match = _projects.where((p) => p['id'] == projectId).firstOrNull;
-      _projectColorHex = match?['color'] as String?;
-      _startTime = DateTime.now().toUtc();
-      await _updateIcon();
-      await _updateMenu();
-      _tick();
-    } catch (_) {}
-  }
-
-  Future<void> _stopTimer() async {
-    try {
-      await client.stopTimer();
-      _running = false;
-      _projectName = null;
-      _projectColorHex = null;
-      _startTime = null;
-      await _updateIcon();
-      await _updateMenu();
-      _tray.setTitle('');
-    } catch (_) {}
+    await tray.setContextMenu(menu);
   }
 
   void dispose() {
-    _pollTimer?.cancel();
-    _tickTimer?.cancel();
     _flowTimer?.cancel();
-    _tray.destroy();
+    timer.removeListener(_onTimer);
+    timer.now.removeListener(_tick);
+    if (_native) {
+      StatusMenu.update(visible: false);
+    } else {
+      _tray?.destroy();
+    }
+    MacAmbient.setDockBadge(null);
   }
 }

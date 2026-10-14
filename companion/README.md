@@ -4,12 +4,25 @@ Cross-platform Flutter app — desktop tray icon + mobile companion for the Beat
 
 ## What it does
 
-- **Timer** — start/stop, project picker with recents, custom start/stop times (no manual note/tags — tags are auto-derived server-side from daemon flow signals)
-- **Coach** — streaming chat with the AI coach over `/api/coach/chat`
-- **Flow** — today's flow score with timeline, top repo / language / app, daemon-driven flow windows
-- **Health** — HRV / sleep / readiness from connected Fitbit, Oura, HealthKit (iOS/macOS), Health Connect (Android)
-- **Tray icon** (desktop) — running/idle indicator with quick start/stop from the menu bar
-- **Notifications** — drift alerts, pomodoro completion, auto-timer suggestions
+On a Mac it is a window with a sidebar and a menu bar item, drawn in the web
+app's sky (afternoon or dusk):
+
+- **Today** — the running timer (Stop, switch, "Started earlier?"), today against
+  the week's targets, the day's sessions, flow and calendar on one strip, and the
+  week, the coach's brief and the body in a card each
+- **Flow** — the day's best stretch in a sentence, five-minute flow bars to pick
+  through, best repo / language / app, where attention went
+- **Coach** — the morning brief as a letter, where each project's week stands, and
+  streaming chat over `/api/coach/chat`
+- **Body** — readiness, sleep, HRV, resting heart rate and steps over a week, and
+  sleep beside the next day's flow (Oura, Fitbit, HealthKit, Health Connect)
+- **Quick start** (⌘K in the window, ⌃⌥T from any app) — type a project, and a
+  time: "kite from 11:00", "spanish 25m ago", "stop at 17:30"
+- **Menu bar** — the running time and project, and a popover with Stop, today and
+  the week, and one-click starts; closing the window leaves it running there
+- **Focus mode** (⇧⌘F) — the running clock, full window, at dusk
+- **Notifications** — the morning brief, drift nudges and auto-timer suggestions,
+  each switchable, and held while you're in flow
 
 ## Platforms
 
@@ -29,35 +42,46 @@ flutter run -d macos        # desktop dev run
 flutter run -d <device>     # mobile
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (159)
+flutter test                # widget + unit tests (281)
+
+# A debug build opens on any surface, for looking at one without clicking:
+open --env LIFEPETE_SECTION=flow   build/macos/Build/Products/Debug/beats_companion.app
+open --env LIFEPETE_ROUTE=settings build/macos/Build/Products/Debug/beats_companion.app   # or focus
+open --env LIFEPETE_POPOVER=panel  build/macos/Build/Products/Debug/beats_companion.app   # or palette
 ```
 
 ## Architecture
 
 ```
 lib/
-├── main.dart               Entry point, theme, top-level routing
-├── screens/                One file per top-level tab
-│   ├── home_screen.dart
-│   ├── timer_screen.dart
-│   ├── coach_screen.dart
-│   ├── flow_screen.dart
-│   ├── health_screen.dart
-│   ├── monastic_screen.dart
-│   ├── pairing_screen.dart
-│   └── qr_pairing_screen.dart
-├── services/               Cross-cutting concerns
-│   ├── api_client.dart            HTTP client → Beats API
-│   ├── token_storage.dart         OS keychain via flutter_secure_storage
-│   ├── notifications.dart         Local notifications + dedupe
-│   ├── tray_icon.dart             Desktop tray icon image generation
-│   ├── tray_service.dart          Desktop tray menu + click handling
-│   ├── flow_summary.dart          Flow window aggregation helpers
-│   ├── recent_projects.dart       Local recents list (SharedPreferences)
-│   ├── repo_path.dart             Path-shortening for display
+├── main.dart               Entry points: the window (main) and the menu bar popover (popoverMain)
+├── screens/
+│   ├── shell.dart                 The window: sidebar, menus and shortcuts, routes
+│   ├── today_screen.dart, flow_screen.dart, coach_screen.dart, body_screen.dart
+│   ├── settings_screen.dart, focus_screen.dart, palette.dart
+│   ├── pairing_screen.dart, qr_pairing_screen.dart (phones)
+│   └── timer_actions.dart         Start / stop / switch with the same confirmation and Undo everywhere
+├── popover/popover_app.dart The menu bar popover's app (a second Flutter engine)
+├── state/
+│   ├── timer_controller.dart      The timer and projects, shared by every surface
+│   ├── week_controller.dart       The week per project, read off each project's ledger
+│   ├── prefs.dart, hour.dart      Settings, and afternoon / dusk / follow macOS
+├── services/               API client and the pure logic each screen tells its story with
+│   ├── api_client.dart            HTTP client → API (and decodeSse for chat)
+│   ├── *_story.dart, day_ribbon.dart, quick_parse.dart, time_format.dart
+│   ├── tray_service.dart, status_menu.dart, mac_ambient.dart   Menu bar, Dock, login item
 │   └── ...
-└── theme/                  Design system: colors, typography, animations
+├── theme/sky.dart          The web's tokens and faces (ui/client/global.css), in two hours
+└── ui/kit.dart             Panels, pill buttons, rings, the sky backdrop
+macos/Runner/
+├── StatusItemController.swift     Menu bar item, popover engine, ⌃⌥T hot key
+└── MacAmbientBridge.swift         Dock badge and icon, open at login
 ```
+
+The popover is a second `FlutterEngine` that `StatusItemController` starts on the
+first click, running `popoverMain`. It reads the same token and keeps its own
+`TimerController`; when either side changes the timer it tells the other over
+`companion/menubar` and `companion/popover`.
 
 ## API
 
@@ -77,17 +101,21 @@ Read-only analytics methods (`getHeatmap`, `getFlowWindows`, `getSignalSummaries
 flutter test
 ```
 
-Tests cover:
-- API client error envelope parsing (`describeError`, `ApiException` shape)
-- Pure helpers: tag parsing, repo path shortening, bundle label parity (these have parity tests with the equivalent Go and TypeScript helpers in the daemon and UI — keeping the three surfaces in lockstep)
-- Pairing screen widget tests (validates the 6-char code shape)
-- Notification dedupe key derivation
-- Insights URL builder
-
-The post-stop sheet's tag chip flow, timer screen state machine, and flow screen aggregation aren't yet covered by widget tests — the API client layer is.
+Tests cover the logic, not the widgets:
+- The timer's switch, stop and undo against a scripted API (a switch closes one
+  session and opens the next at the same instant; undo reopens the same session)
+- The week read off ledgers, today's running total, and overlapping reloads
+- What each screen says: the day strip's geometry, Flow's best stretch and shares,
+  the Coach's week standings and chat stream fold, the Body's recovery and
+  sleep-beside-flow lines, Settings' readings
+- What the palette reads from what you type, and the SSE decoder across chunk cuts
+- API error envelope parsing, notification preferences and dedupe, the Insights URL
+- Bundle labels, repo paths and status-bar formatting, with parity tests against
+  the daemon (Go) and the VS Code extension (TypeScript)
+- The pairing screen renders and refuses a short code
 
 ## Style
 
 - Dart analyzer (`flutter analyze`) with no extra linter config — runs as a pre-commit hook via lefthook
-- No theming framework — `lib/theme/` defines colors and typography directly
-- No state management library — `setState` + `StreamSubscription` for tray events
+- The look is the web app's: `theme/sky.dart` carries `ui/client/global.css`'s tokens; change one, change both
+- No state management library — `ChangeNotifier` controllers (`state/`) shared through the window

@@ -321,6 +321,122 @@ class ApiClient {
     return jsonDecode(body);
   }
 
+  /// The coach conversation so far, oldest first. Each message carries
+  /// `role` ('user' | 'assistant'), `content` and `conversation_id`.
+  Future<List<Map<String, dynamic>>> getChatHistory({String? conversationId, int limit = 50}) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (conversationId != null) params['conversation_id'] = conversationId;
+    final uri = Uri.parse('$baseUrl/api/coach/chat/history').replace(queryParameters: params);
+    final resp = await http.get(uri, headers: _headers);
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Chat history failed');
+    }
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  /// Sends one message to the coach and yields its reply as the server's
+  /// SSE events: `{type: 'text', text}`, `{type: 'tool_use', name}`,
+  /// `{type: 'error', error, code}` and finally `{type: 'done',
+  /// conversation_id}`. A non-200 throws before anything is yielded.
+  Stream<Map<String, dynamic>> streamChat(String message, {String? conversationId}) async* {
+    final request = http.Request('POST', Uri.parse('$baseUrl/api/coach/chat'))
+      ..headers.addAll(_headers)
+      ..body = jsonEncode({
+        'message': message,
+        // ignore: use_null_aware_elements
+        if (conversationId != null) 'conversation_id': conversationId,
+      });
+    final client = http.Client();
+    try {
+      final resp = await client.send(request);
+      if (resp.statusCode != 200) {
+        throw _apiError(await http.Response.fromStream(resp), 'Coach chat failed');
+      }
+      yield* decodeSse(resp.stream);
+    } finally {
+      client.close();
+    }
+  }
+
+  // ---- Beats ----
+
+  /// The sessions that started on [utcDay] (a UTC calendar date — the API
+  /// buckets `date_filter` in UTC). A local day can straddle two UTC days,
+  /// so callers that want one local day ask for both and filter.
+  Future<List<Map<String, dynamic>>> getBeatsOn(DateTime utcDay) async {
+    final day = '${utcDay.year.toString().padLeft(4, '0')}-'
+        '${utcDay.month.toString().padLeft(2, '0')}-'
+        '${utcDay.day.toString().padLeft(2, '0')}';
+    final resp = await http.get(
+      Uri.parse('$baseUrl/api/beats/?date_filter=$day'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Sessions failed');
+    }
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  /// Rewrites one session's times. `end: null` reopens it as the running
+  /// timer, which is how a stop is undone and how a running timer's start
+  /// is moved earlier.
+  Future<Map<String, dynamic>> updateBeat({
+    required String id,
+    required String projectId,
+    required DateTime start,
+    DateTime? end,
+  }) async {
+    final resp = await http.put(
+      Uri.parse('$baseUrl/api/beats/'),
+      headers: _headers,
+      body: jsonEncode({
+        'id': id,
+        'project_id': projectId,
+        'start': start.toUtc().toIso8601String(),
+        'end': end?.toUtc().toIso8601String(),
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Session update failed');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  // ---- Projects ----
+
+  /// The project's ledger: the last [weeks] weeks newest first (hours per
+  /// day, the goal in force, a day job's expectation and closing balance)
+  /// and `totals`, today's balance. Weeks are bucketed in [timezone].
+  Future<Map<String, dynamic>> getLedger(String projectId, {int weeks = 1, String? timezone}) async {
+    final params = <String, String>{'weeks': '$weeks'};
+    if (timezone != null) params['tz'] = timezone;
+    final uri = Uri.parse('$baseUrl/api/projects/$projectId/ledger').replace(queryParameters: params);
+    final resp = await http.get(uri, headers: _headers);
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Ledger failed');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  // ---- Calendar ----
+
+  /// Calendar events between [start] and [end]: `summary`, `start`, `end`
+  /// (ISO strings) and `all_day`. Empty when no calendar is connected.
+  Future<List<Map<String, dynamic>>> getCalendarEvents(DateTime start, DateTime end) async {
+    final uri = Uri.parse('$baseUrl/api/calendar/events').replace(queryParameters: {
+      'start': start.toUtc().toIso8601String(),
+      'end': end.toUtc().toIso8601String(),
+    });
+    final resp = await http.get(uri, headers: _headers);
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Calendar failed');
+    }
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
   // ---- Biometrics ----
 
   /// Throws [ApiException] on non-200. See [getProjects] for the rationale.
@@ -334,6 +450,42 @@ class ApiClient {
     }
     final list = jsonDecode(resp.body) as List;
     return list.cast<Map<String, dynamic>>();
+  }
+}
+
+/// Decodes a `text/event-stream` body into its JSON `data:` payloads.
+/// Events are separated by a blank line; a `data: [DONE]` sentinel ends
+/// the stream; lines that are not `data:` (comments, `event:`) and
+/// payloads that are not JSON objects are skipped. Chunks may split an
+/// event, or a line, anywhere.
+Stream<Map<String, dynamic>> decodeSse(Stream<List<int>> bytes) async* {
+  final buffer = StringBuffer();
+  await for (final chunk in bytes.transform(utf8.decoder)) {
+    buffer.write(chunk);
+    var text = buffer.toString().replaceAll('\r\n', '\n');
+    var cut = text.indexOf('\n\n');
+    while (cut >= 0) {
+      final event = text.substring(0, cut);
+      text = text.substring(cut + 2);
+      final data = event
+          .split('\n')
+          .where((l) => l.startsWith('data:'))
+          .map((l) => l.substring(5).trimLeft())
+          .join('\n');
+      if (data == '[DONE]') return;
+      if (data.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(data);
+          if (decoded is Map<String, dynamic>) yield decoded;
+        } on FormatException {
+          // A malformed event is dropped; the stream carries on.
+        }
+      }
+      cut = text.indexOf('\n\n');
+    }
+    buffer
+      ..clear()
+      ..write(text);
   }
 }
 

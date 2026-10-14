@@ -1,307 +1,537 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../services/api_client.dart';
-import '../services/flow_summary.dart';
-import '../services/launch_insights.dart';
-import '../services/token_storage.dart';
-import '../theme/beats_refresh.dart';
-import '../theme/beats_theme.dart';
-import '../theme/grain_overlay.dart';
-import '../theme/staggered_entrance.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/api_client.dart';
+import '../services/coach_story.dart';
+import '../services/time_format.dart';
+import '../state/timer_controller.dart';
+import '../state/week_controller.dart';
+import '../theme/sky.dart';
+import '../ui/kit.dart';
+import 'timer_actions.dart';
+
+/// Coach: the morning brief as a letter, where each project's week stands,
+/// and a chat with the coach beside them.
 class CoachScreen extends StatefulWidget {
   final ApiClient client;
-  const CoachScreen({super.key, required this.client});
+  final TimerController timer;
+  final WeekController week;
+
+  const CoachScreen({super.key, required this.client, required this.timer, required this.week});
 
   @override
   State<CoachScreen> createState() => _CoachScreenState();
 }
 
 class _CoachScreenState extends State<CoachScreen> {
-  bool _loading = true;
-  Map<String, dynamic>? _brief;
+  static const _conversationKey = 'lifepete_coach_conversation';
 
-  /// Today's flow headline (avg / peak / count) for the small context
-  /// strip above the morning brief. Null when /summary is unreachable
-  /// or hasn't returned yet — the strip hides cleanly in that case so
-  /// the brief stays first-thing-the-user-sees.
-  ///
-  /// Falls back to yesterday's slice when today is empty (early-
-  /// morning case, just opened the laptop). _flowIsToday tracks
-  /// which slice we're showing so the strip label can swap.
-  int? _flowAvg;
-  int? _flowPeak;
-  int? _flowCount;
-  bool _flowIsToday = true;
-  // Loaded once in _refresh so the strip-tap can build a URL without
-  // touching SharedPreferences synchronously. Default matches the
-  // daemon's [ui] base_url default.
-  String _webUrl = 'http://localhost:8080';
-  final TokenStorage _storage = TokenStorage();
+  Map<String, dynamic>? _brief;
+  bool _briefLoaded = false;
+
+  final _messages = <ChatMessage>[];
+  ChatReply? _reply;
+  String? _conversationId;
+  bool _streaming = false;
+  bool _chatForbidden = false;
+  final _input = TextEditingController();
+  final _inputFocus = FocusNode();
+  final _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _loadBrief();
+    _restoreChat();
   }
 
-  Future<void> _refresh() async {
+  @override
+  void dispose() {
+    _input.dispose();
+    _inputFocus.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBrief() async {
+    Map<String, dynamic>? brief;
     try {
-      final brief = await widget.client.getTodayBrief();
-      final webUrl = await _storage.loadWebUrl();
-
-      // Today's flow headline — single round-trip via /summary so
-      // we don't paginate windows on the coach screen. Failure is
-      // non-fatal; the strip just hides.
-      final now = DateTime.now().toUtc();
-      final startOfDay = DateTime.utc(now.year, now.month, now.day);
-      final flowSummary = await widget.client.getFlowWindowsSummary(
-          startOfDay.toIso8601String(), now.toIso8601String());
-      var headline = parseFlowSummary(flowSummary);
-      var flowIsToday = true;
-      // Today's slice is empty — try yesterday so the user opening
-      // the app fresh in the morning still gets useful context.
-      // Same fallback rule the web FlowHeadline + FlowScreen empty
-      // state + `beatsd status` already use.
-      if (headline == null) {
-        final yEnd = startOfDay;
-        final yStart = yEnd.subtract(const Duration(days: 1));
-        final ySummary = await widget.client.getFlowWindowsSummary(
-            yStart.toIso8601String(), yEnd.toIso8601String());
-        headline = parseFlowSummary(ySummary);
-        flowIsToday = false;
-      }
-      final flowAvg = headline?.avg;
-      final flowPeak = headline?.peak;
-      final flowCount = headline?.count;
-
-      if (mounted) {
-        setState(() {
-          _brief = brief;
-          _flowAvg = flowAvg;
-          _flowPeak = flowPeak;
-          _flowCount = flowCount;
-          _flowIsToday = flowIsToday;
-          _webUrl = webUrl;
-          _loading = false;
-        });
-      }
+      brief = await widget.client.getTodayBrief();
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      brief = null;
     }
+    if (!mounted) return;
+    setState(() {
+      _brief = brief;
+      _briefLoaded = true;
+    });
+  }
+
+  Future<void> _restoreChat() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString(_conversationKey);
+    if (id == null) return;
+    try {
+      final rows = await widget.client.getChatHistory(conversationId: id);
+      if (!mounted) return;
+      setState(() {
+        _conversationId = id;
+        _messages
+          ..clear()
+          ..addAll(messagesFromHistory(rows));
+      });
+      _scrollToEnd();
+    } catch (e) {
+      if (mounted && isChatForbidden(e)) setState(() => _chatForbidden = true);
+    }
+  }
+
+  Future<void> _send([String? text]) async {
+    final message = (text ?? _input.text).trim();
+    if (message.isEmpty || _streaming) return;
+    _input.clear();
+    setState(() {
+      _messages.add(ChatMessage(fromUser: true, text: message));
+      _lastError = null;
+      _reply = const ChatReply();
+      _streaming = true;
+    });
+    _scrollToEnd();
+    try {
+      await for (final event in widget.client.streamChat(message, conversationId: _conversationId)) {
+        if (!mounted) return;
+        setState(() => _reply = applyChatEvent(_reply!, event));
+        _scrollToEnd();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (isChatForbidden(e)) {
+        setState(() {
+          _chatForbidden = true;
+          _streaming = false;
+          _reply = null;
+        });
+        return;
+      }
+      setState(() => _reply = _reply!.copyWith(error: chatFailureText(e)));
+    }
+    if (!mounted) return;
+    final reply = _reply!;
+    setState(() {
+      _streaming = false;
+      _reply = null;
+      if (reply.text.trim().isNotEmpty) {
+        _messages.add(ChatMessage(fromUser: false, text: reply.text.trim()));
+      }
+      if (reply.error != null) _lastError = reply.error;
+      if (reply.conversationId != null) _conversationId = reply.conversationId;
+    });
+    final id = reply.conversationId;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_conversationKey, id);
+    }
+    _inputFocus.requestFocus();
+    _scrollToEnd();
+  }
+
+  /// The last send's failure, shown under the conversation until the next send.
+  String? _lastError;
+
+  void _scrollToEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        backgroundColor: BeatsColors.background,
-        body: Center(child: CircularProgressIndicator(color: BeatsColors.amber)),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1100),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Semantics(header: true, child: Text('Coach', style: SkyType.display(34))),
+              const SizedBox(height: 18),
+              LayoutBuilder(builder: (context, box) {
+                final left = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  _letter(context),
+                  const SizedBox(height: 18),
+                  _weekPanel(context),
+                ]);
+                final chat = SizedBox(height: 640, child: _chatPanel(context));
+                if (box.maxWidth < 860) {
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    left,
+                    const SizedBox(height: 18),
+                    chat,
+                  ]);
+                }
+                return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 3, child: left),
+                  const SizedBox(width: 18),
+                  Expanded(flex: 2, child: chat),
+                ]);
+              }),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── The letter ──
+
+  Widget _letter(BuildContext context) {
+    final p = context.sky;
+    if (!_briefLoaded) {
+      return const Panel(raised: true, child: SizedBox(height: 120, child: Center(child: CircularProgressIndicator())));
+    }
+    final parts = splitBrief(_brief?['body'] as String?);
+    if (parts.headline == null && parts.blocks.isEmpty) {
+      return const Panel(
+        raised: true,
+        child: EmptyNote(
+          icon: Icons.wb_twilight_rounded,
+          title: 'No brief yet today',
+          body: 'Your coach writes one each morning. Check back after breakfast.',
+        ),
       );
     }
-
-    return Scaffold(
-      backgroundColor: BeatsColors.background,
-      body: SafeArea(
-        child: BeatsRefresh(
-          onRefresh: _refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 100),
-            children: [
-              // ── Today's flow headline (above the brief so the user
-              //    sees a quick "how today's actually going" before
-              //    they read the morning brief). ──
-              if (_flowAvg != null && _flowCount != null) ...[
-                StaggeredEntrance(child: _buildFlowHeadline()),
-                const SizedBox(height: 24),
-              ],
-
-              // ── Brief ──
-              StaggeredEntrance(
-                child: _BriefCard(
-                  timestamp: _briefTimestamp(),
-                  body: _brief?['body'] as String?,
-                ),
+    final created = DateTime.tryParse(_brief?['created_at'] as String? ?? '')?.toLocal();
+    final anchor = widget.week.anchor?.project;
+    return Panel(
+      raised: true,
+      color: p.panel.withValues(alpha: 1),
+      padding: const EdgeInsets.fromLTRB(34, 30, 34, 28),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.wb_twilight_rounded, size: 22, color: p.sunInk),
+          const SizedBox(width: 10),
+          Text('Morning brief', style: SkyType.body(14, weight: FontWeight.w700).copyWith(color: p.sunInk)),
+          const Spacer(),
+          if (created != null)
+            Text('${DateFormat('EEEE').format(created)} · ${formatTimeOfDay(created)}',
+                style: SkyType.body(13).copyWith(color: p.inkMuted)),
+        ]),
+        const SizedBox(height: 16),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (parts.headline != null) ...[
+              Semantics(
+                header: true,
+                child: Text(parts.headline!, style: SkyType.display(26).copyWith(height: 1.35)),
               ),
+              const SizedBox(height: 14),
             ],
-          ),
+            for (final block in parts.blocks) _block(context, block),
+          ]),
         ),
-      ),
-    );
-  }
-
-  /// Compact "TODAY  avg N · peak M · K windows" strip rendered above
-  /// the morning brief. Mirrors the FlowScreen stats line in style
-  /// (label-then-number, brutalist) so the two screens read as a set.
-  Widget _buildFlowHeadline() {
-    final labelStyle =
-        BeatsType.label.copyWith(color: BeatsColors.textSecondary, letterSpacing: 2);
-    final numStyle = BeatsType.label.copyWith(
-      color: BeatsColors.textPrimary,
-      fontSize: 14,
-      letterSpacing: 0,
-    );
-    // Whole strip is tappable — opens the unfiltered Insights view.
-    // Coach screen is a "summary" surface, no specific axis to deep-
-    // link by; the whole-strip tap matches FlowScreen's per-axis tap
-    // pattern in spirit (tap the flow info → go to Insights). The
-    // ↗ glyph is the same affordance cue the FlowScreen rows use.
-    return InkWell(
-      onTap: _launchInsights,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Row(
-          children: [
-            Container(
-                width: 3,
-                height: 14,
-                decoration: BoxDecoration(
-                    color: BeatsColors.green, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(width: 10),
-            Text(_flowIsToday ? 'TODAY' : 'YESTERDAY',
-                style: labelStyle.copyWith(color: BeatsColors.green)),
-            const SizedBox(width: 16),
-            Text('AVG', style: labelStyle),
-            const SizedBox(width: 6),
-            Text('$_flowAvg', style: numStyle),
-            const SizedBox(width: 14),
-            Text('PEAK', style: labelStyle),
-            const SizedBox(width: 6),
-            Text('$_flowPeak', style: numStyle),
-            const SizedBox(width: 14),
-            Text('${_flowCount}W',
-                style: labelStyle.copyWith(color: BeatsColors.textTertiary)),
-            const SizedBox(width: 10),
-            Text('↗',
-                style: labelStyle.copyWith(
-                    color: BeatsColors.textTertiary, fontSize: 9)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Opens the configured Beats web UI's Insights page (unfiltered).
-  /// Routes through the shared launchInsights helper so the launch
-  /// + SnackBar-on-failure UX stays consistent with FlowScreen.
-  Future<void> _launchInsights() => launchInsights(context, _webUrl);
-
-  /// Returns a short local-time string for when today's brief was generated,
-  /// e.g. "07:14". Returns null if there's no brief or the timestamp is missing.
-  String? _briefTimestamp() {
-    final raw = _brief?['created_at'] as String?;
-    if (raw == null) return null;
-    final ts = DateTime.tryParse(raw);
-    if (ts == null) return null;
-    final local = ts.toLocal();
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-/// Morning brief surface treatment — a softly-warm card with a sunrise
-/// gradient bleeding from the top edge and a subtle grain overlay so the
-/// surface reads as something hand-made rather than a flat data panel.
-///
-/// The brief itself is the centerpiece of the Coach tab; the card is what
-/// makes the eye land on it. Stays out of the layered widget tree above so
-/// the build() method reads as a flat list of sections.
-class _BriefCard extends StatelessWidget {
-  final String? timestamp;
-  final String? body;
-
-  const _BriefCard({this.timestamp, this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: BeatsColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BeatsColors.borderAccent.withValues(alpha: 0.6)),
-      ),
-      // Hard-clip so the sunrise gradient and the grain don't overpaint
-      // the rounded corners.
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        children: [
-          // Grain — drawn first so the gradient and content sit on top.
-          const Positioned.fill(child: GrainOverlay(opacity: 0.04)),
-
-          // Sunrise gradient — amber → transparent across the top 56px.
-          // Subtle enough to read as warmth-of-the-page rather than
-          // decoration; it's the only surface in the app that gets this
-          // treatment so the brief feels like the morning's first thing.
-          Positioned(
-            top: 0, left: 0, right: 0, height: 56,
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      BeatsColors.amber.withValues(alpha: 0.18),
-                      BeatsColors.amber.withValues(alpha: 0.0),
-                    ],
-                  ),
+        if (anchor != null)
+          ListenableBuilder(
+            listenable: widget.timer,
+            builder: (context, _) {
+              if (widget.timer.current?.id == anchor.id) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: SkyButton(
+                  label: 'Start ${anchor.name}',
+                  icon: Icons.play_arrow_rounded,
+                  kind: SkyButtonKind.primary,
+                  onPressed: () => TimerActions.start(context, widget.timer, anchor),
                 ),
-              ),
-            ),
+              );
+            },
           ),
+      ]),
+    );
+  }
 
-          // Content
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 3, height: 14,
-                      decoration: BoxDecoration(
-                        color: BeatsColors.amber,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+  Widget _block(BuildContext context, BriefBlock block) {
+    final p = context.sky;
+    final body = SkyType.body(16, height: 1.8).copyWith(color: p.ink);
+    TextSpan spans(TextStyle base) => TextSpan(children: [
+          for (final s in block.spans)
+            TextSpan(text: s.text, style: s.bold ? base.copyWith(fontWeight: FontWeight.w700) : base),
+        ]);
+    switch (block.kind) {
+      case BriefBlockKind.heading:
+        return Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 6),
+          child: Semantics(header: true, child: Text.rich(spans(SkyType.display(18)))),
+        );
+      case BriefBlockKind.bullet:
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 11, right: 12, left: 4),
+              child: ProjectDot(color: p.sun, size: 6),
+            ),
+            Expanded(child: Text.rich(spans(body))),
+          ]),
+        );
+      case BriefBlockKind.paragraph:
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text.rich(spans(body)),
+        );
+    }
+  }
+
+  // ── The week ──
+
+  Widget _weekPanel(BuildContext context) {
+    final p = context.sky;
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(26, 22, 26, 14),
+      child: ListenableBuilder(
+        listenable: widget.week,
+        builder: (context, _) {
+          final now = DateTime.now();
+          final rows = [
+            for (final w in widget.week.weeks)
+              if (standingFor(w, now) case final s?) (w, s),
+          ];
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const PanelHeading('Where your week stands'),
+            const SizedBox(height: 8),
+            if (rows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Text('Give a project a weekly goal on the web to see where it stands.',
+                    style: SkyType.body(14).copyWith(color: p.inkMuted)),
+              ),
+            for (final (i, (w, s)) in rows.indexed)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  border: i == rows.length - 1 ? null : Border(bottom: BorderSide(color: p.hairline)),
+                ),
+                child: Row(children: [
+                  ProjectDot(color: w.project.color),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: w.project.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        TextSpan(text: ' — ${s.sentence}'),
+                      ]),
+                      style: SkyType.body(15).copyWith(color: p.ink),
                     ),
-                    const SizedBox(width: 10),
-                    Text('MORNING BRIEF',
-                      style: BeatsType.label.copyWith(
-                        color: BeatsColors.amber,
-                        letterSpacing: 2,
-                      )),
-                    const Spacer(),
-                    if (timestamp != null)
-                      Text(timestamp!,
-                        style: BeatsType.label.copyWith(
-                          fontSize: 9,
-                          color: BeatsColors.textTertiary,
-                          letterSpacing: 1.5,
-                        )),
+                  ),
+                  const SizedBox(width: 10),
+                  Chip2(
+                    s.chip,
+                    bold: true,
+                    background: switch (s.tone) {
+                      StandingTone.ahead => p.leaf.withValues(alpha: 0.14),
+                      StandingTone.behind => p.persimmon.withValues(alpha: 0.14),
+                      StandingTone.neutral => p.wash,
+                    },
+                    foreground: switch (s.tone) {
+                      StandingTone.ahead => p.leafInk,
+                      StandingTone.behind => p.persimmonInk,
+                      StandingTone.neutral => p.ink,
+                    },
+                  ),
+                ]),
+              ),
+          ]);
+        },
+      ),
+    );
+  }
+
+  // ── Chat ──
+
+  Widget _chatPanel(BuildContext context) {
+    final p = context.sky;
+    if (_chatForbidden) {
+      return const Panel(
+        child: Center(
+          child: EmptyNote(
+            icon: Icons.cloud_off_rounded,
+            title: 'Chat needs a newer server',
+            body: 'Update the LifePete server to chat with your coach from this Mac.',
+          ),
+        ),
+      );
+    }
+    final reply = _reply;
+    return Panel(
+      padding: EdgeInsets.zero,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
+          child: Semantics(header: true, child: Text('Ask', style: SkyType.display(19))),
+        ),
+        Expanded(
+          child: _messages.isEmpty && reply == null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      'Ask about your time: your week, your focus, what to do next.',
+                      textAlign: TextAlign.center,
+                      style: SkyType.body(14).copyWith(color: p.inkMuted),
+                    ),
+                  ),
+                )
+              : ListView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+                  children: [
+                    for (final m in _messages) _bubble(context, fromUser: m.fromUser, text: m.text),
+                    if (reply != null) _replyBubble(context, reply),
+                    if (reply == null && _lastError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(_lastError!, style: SkyType.body(13).copyWith(color: p.persimmonInk)),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                if (body != null && body!.isNotEmpty)
-                  Text(
-                    body!,
-                    style: GoogleFonts.dmSans(
-                      fontSize: 15, height: 1.8,
-                      color: BeatsColors.textPrimary.withValues(alpha: 0.88),
-                      fontWeight: FontWeight.w400,
-                    ),
-                  )
-                else
-                  Text(
-                    'No brief today. The coach generates one each morning.',
-                    style: BeatsType.bodyMedium.copyWith(color: BeatsColors.textTertiary),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+          child: Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final q in const ['How\'s my week going?', 'When do I focus best?'])
+              OutlinedButton(
+                onPressed: _streaming ? null : () => _sendSuggestion(q),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: p.ink,
+                  side: BorderSide(color: p.hairline.withValues(alpha: 0.3)),
+                  shape: const StadiumBorder(),
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  textStyle: SkyType.body(13),
+                ),
+                child: Text(q),
+              ),
+          ]),
+        ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+          padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
+          decoration: BoxDecoration(
+            color: p.panel.withValues(alpha: 1),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: p.ink.withValues(alpha: 0.12)),
+          ),
+          child: Row(children: [
+            Expanded(
+              child: Focus(
+                onKeyEvent: (node, event) {
+                  if (event is KeyDownEvent &&
+                      (event.logicalKey == LogicalKeyboardKey.enter ||
+                          event.logicalKey == LogicalKeyboardKey.numpadEnter) &&
+                      !HardwareKeyboard.instance.isShiftPressed) {
+                    _send();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: TextField(
+                  controller: _input,
+                  focusNode: _inputFocus,
+                  enabled: !_streaming,
+                  minLines: 1,
+                  maxLines: 4,
+                  keyboardType: TextInputType.multiline,
+                  style: SkyType.body(15).copyWith(color: p.ink),
+                  decoration: const InputDecoration(
+                    hintText: 'Ask about your time…',
+                    filled: false,
+                    border: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
-              ],
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Send',
+              onPressed: _streaming ? null : _send,
+              icon: Icon(Icons.arrow_upward_rounded, color: p.onSun),
+              style: IconButton.styleFrom(
+                backgroundColor: p.sun,
+                disabledBackgroundColor: p.sun.withValues(alpha: 0.4),
+                fixedSize: const Size(40, 40),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  void _sendSuggestion(String q) => _send(q);
+
+  Widget _bubble(BuildContext context, {required bool fromUser, required String text, Widget? child}) {
+    final p = context.sky;
+    return Align(
+      alignment: fromUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: fromUser ? 360 : 420),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: fromUser ? p.ink : p.wash,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(20),
+              topRight: const Radius.circular(20),
+              bottomLeft: Radius.circular(fromUser ? 20 : 6),
+              bottomRight: Radius.circular(fromUser ? 6 : 20),
             ),
           ),
-        ],
+          child: child ??
+              SelectableText(
+                text,
+                style: SkyType.body(15, height: 1.6)
+                    .copyWith(color: fromUser ? p.panel.withValues(alpha: 1) : p.ink),
+              ),
+        ),
       ),
+    );
+  }
+
+  Widget _replyBubble(BuildContext context, ChatReply reply) {
+    final p = context.sky;
+    final muted = SkyType.body(14).copyWith(color: p.inkMuted, fontStyle: FontStyle.italic);
+    return _bubble(
+      context,
+      fromUser: false,
+      text: reply.text,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        if (reply.text.isNotEmpty) Text(reply.text, style: SkyType.body(15, height: 1.6).copyWith(color: p.ink)),
+        if (reply.lookingUp)
+          Padding(
+            padding: EdgeInsets.only(top: reply.text.isEmpty ? 0 : 6),
+            child: Text('Looking at your data…', style: muted),
+          )
+        else if (reply.text.isEmpty && reply.error == null)
+          Text('…', style: muted),
+        if (reply.error != null)
+          Padding(
+            padding: EdgeInsets.only(top: reply.text.isEmpty ? 0 : 6),
+            child: Text(reply.error!, style: SkyType.body(14).copyWith(color: p.persimmonInk)),
+          ),
+      ]),
     );
   }
 }
