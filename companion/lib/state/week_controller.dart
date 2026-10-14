@@ -65,6 +65,7 @@ class WeekController extends ChangeNotifier {
   String? _tz;
   Timer? _poll;
   String _lastTimerKey = '';
+  int _generation = 0;
 
   void start() {
     unawaited(refresh());
@@ -73,13 +74,18 @@ class WeekController extends ChangeNotifier {
   }
 
   void _onTimer() {
-    final key = '${timer.current?.id}@${timer.since}';
+    // The project list is part of the key: the first reload can run before
+    // the timer has read the projects, and must run again once it has.
+    final key = '${timer.current?.id}@${timer.since}#${timer.projects.length}';
     if (key == _lastTimerKey) return;
     _lastTimerKey = key;
     unawaited(refresh());
   }
 
   Future<void> refresh() async {
+    // Reloads overlap (the poll, a timer change); only the newest may
+    // apply, or a slow early one could overwrite a later, fuller result.
+    final generation = ++_generation;
     try {
       _tz ??= (await FlutterTimezone.getLocalTimezone()).identifier;
     } catch (_) {
@@ -95,6 +101,7 @@ class WeekController extends ChangeNotifier {
         return weekOf(p.id);
       }
     }));
+    if (generation != _generation) return;
     weeks = results.whereType<ProjectWeek>().toList()
       ..sort((a, b) => b.worked.compareTo(a.worked));
     loadedAt = DateTime.now();
