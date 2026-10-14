@@ -604,6 +604,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/coach/brief/{brief_date}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Brief Feedback
+         * @description Rate a brief helpful or not useful, or clear the rating. Recent
+         *     ratings go into the coach's context for the briefs after it.
+         */
+        put: operations["put_brief_feedback_api_coach_brief__brief_date__feedback_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/coach/chat": {
         parameters: {
             query?: never;
@@ -2357,6 +2378,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** BriefFeedbackRequest */
+        BriefFeedbackRequest: {
+            /** Rating */
+            rating?: ("helpful" | "not_useful") | null;
+        };
         /** BriefResponse */
         BriefResponse: {
             /** Body */
@@ -2369,6 +2395,8 @@ export interface components {
             created_at?: string | null;
             /** Date */
             date: string;
+            /** Feedback */
+            feedback?: ("helpful" | "not_useful") | null;
             /** Input Tokens */
             input_tokens?: number | null;
             /** Model */
@@ -4690,6 +4718,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BriefResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_brief_feedback_api_coach_brief__brief_date__feedback_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brief_date: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BriefFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefResponse"];
                 };
             };
             /** @description Validation Error */
