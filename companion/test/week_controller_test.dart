@@ -116,6 +116,20 @@ void main() {
       expect(week.weeks.single.worked, 2, reason: 'the newer read wins');
       timer.dispose();
     });
+
+    test('is complete only once a reload has covered the projects', () async {
+      final api = _SlowLedgerApi();
+      final timer = TimerController(api);
+      final week = WeekController(api, timer);
+
+      await week.refresh(); // before the timer has read any projects
+      expect(week.complete, isFalse);
+
+      timer.projects = [northwind];
+      await week.refresh();
+      expect(week.complete, isTrue);
+      timer.dispose();
+    });
   });
 }
 
