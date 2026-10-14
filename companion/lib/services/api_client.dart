@@ -310,15 +310,58 @@ class ApiClient {
 
   // ---- Coach ----
 
-  Future<Map<String, dynamic>?> getTodayBrief() async {
+  /// Today's brief, or null. "Today" is the local day in [timezone] (an IANA
+  /// name); without one the API reads the UTC day, which near midnight is
+  /// not the day the brief was written for.
+  Future<Map<String, dynamic>?> getTodayBrief({String? timezone}) async {
     final resp = await http.get(
-      Uri.parse('$baseUrl/api/coach/brief/today'),
+      Uri.parse('$baseUrl/api/coach/brief/today')
+          .replace(queryParameters: timezone == null ? null : {'tz': timezone}),
       headers: _headers,
     );
     if (resp.statusCode != 200) return null;
     final body = resp.body;
     if (body.isEmpty || body == 'null') return null;
     return jsonDecode(body);
+  }
+
+  /// Asks the coach to write today's brief now. Spends a little of the
+  /// month's coach budget (429 BUDGET_EXCEEDED once it is spent).
+  Future<Map<String, dynamic>> generateBrief({String? timezone}) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/api/coach/brief/generate')
+          .replace(queryParameters: timezone == null ? null : {'tz': timezone}),
+      headers: _headers,
+      body: '{}',
+    );
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Writing the brief failed');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  /// Rates the brief for [date] (`YYYY-MM-DD`) `helpful` or `not_useful`,
+  /// or clears the rating with null. Returns the brief as stored.
+  Future<Map<String, dynamic>> setBriefFeedback(String date, String? rating) async {
+    final resp = await http.put(
+      Uri.parse('$baseUrl/api/coach/brief/$date/feedback'),
+      headers: _headers,
+      body: jsonEncode({'rating': rating}),
+    );
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Saving your rating failed');
+    }
+    return jsonDecode(resp.body);
+  }
+
+  /// What the coach remembers about you: `content` (markdown, or null
+  /// before the first week) and `updated_at`. Read-only from a device.
+  Future<Map<String, dynamic>> getCoachMemory() async {
+    final resp = await http.get(Uri.parse('$baseUrl/api/coach/memory'), headers: _headers);
+    if (resp.statusCode != 200) {
+      throw _apiError(resp, 'Coach memory failed');
+    }
+    return jsonDecode(resp.body);
   }
 
   /// The coach conversation so far, oldest first. Each message carries

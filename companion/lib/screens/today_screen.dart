@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../services/body_story.dart';
 import '../services/date_keys.dart';
 import '../services/day_ribbon.dart';
+import '../services/local_timezone.dart';
 import '../services/time_format.dart';
 import '../state/idle_watcher.dart';
 import '../state/timer_controller.dart';
@@ -100,7 +101,7 @@ class _TodayScreenState extends State<TodayScreen> {
       Future.wait(utcDays.map((d) => _try(widget.client.getBeatsOn(d)))),
       _try(widget.client.getFlowWindows(dayStart.toUtc().toIso8601String(), now.toUtc().toIso8601String())),
       _try(widget.client.getCalendarEvents(dayStart, dayEnd)),
-      _try(widget.client.getTodayBrief()),
+      _try(localTimezone().then((tz) => widget.client.getTodayBrief(timezone: tz))),
       _try(widget.client.getBiometrics(dayKey(addDays(dayStart, -1)), dayKey(dayStart))),
       _try(widget.client.getPendingSuggestions(since: now.subtract(const Duration(minutes: 30)))),
     ]);
@@ -733,12 +734,17 @@ class _TodayScreenState extends State<TodayScreen> {
         const SizedBox(height: 10),
         Expanded(
           child: Text(
-            excerpt ?? 'No brief yet today. Your coach writes one each morning.',
+            excerpt ?? 'No brief yet today.',
             overflow: TextOverflow.fade,
             style: SkyType.body(15, height: 1.7).copyWith(color: excerpt == null ? p.inkMuted : p.ink),
           ),
         ),
-        LinkButton(label: 'Read the full brief', bold: true, color: p.sunInk, onPressed: widget.onOpenCoach),
+        LinkButton(
+          label: excerpt == null ? 'Write today\'s brief' : 'Read the full brief',
+          bold: true,
+          color: p.sunInk,
+          onPressed: widget.onOpenCoach,
+        ),
       ]),
     );
   }

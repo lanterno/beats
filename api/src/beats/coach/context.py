@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from beats.coach.feedback import brief_feedback_lines, recent_rated_briefs
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
 from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
@@ -113,6 +114,14 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
     except Exception:
         logger.debug("Flow rollup unavailable for user context", exc_info=True)
 
+    # Which recent briefs the user found helpful (best-effort, like the flow
+    # rollup: a brief must still render without it).
+    feedback_lines: list[str] = []
+    try:
+        feedback_lines = brief_feedback_lines(await recent_rated_briefs(user_id))
+    except Exception:
+        logger.debug("Brief feedback unavailable for user context", exc_info=True)
+
     # Coach memory
     memory_store = MemoryStore(db, user_id)
     memory = await memory_store.read()
@@ -137,6 +146,7 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         "",
         "### Weekly goals",
         *(goals if goals else ["  (No goals set)"]),
+        *feedback_lines,
         "",
         "## Coach memory",
         memory_section,

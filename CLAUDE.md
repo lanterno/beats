@@ -53,7 +53,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 887 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 895 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -85,7 +85,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 887-test suite takes about 30 seconds.
+  the full 895-test suite takes about 30 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -119,7 +119,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
-- **Companion tests** are in `companion/test/` (flutter_test) — 295 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Companion tests** are in `companion/test/` (flutter_test) — 298 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
   The SDK lives at `~/development/flutter` (stable), on `PATH` via `~/.zshrc`
   and symlinked into `~/.local/bin` so the lefthook gates — which run under a
   non-interactive `sh` that reads neither — can find it. `flutter doctor`
@@ -351,7 +351,7 @@ changing anything both ends share.
 | `/api/intelligence` | Digests, score, patterns, suggestions, focus scores, inbox |
 | `/api/plans` | Weekly plans (structured per-project hour targets) |
 | `/api/webhooks` | Webhook CRUD |
-| `/api/coach` | Brief generation, streaming chat, usage, memory |
+| `/api/coach` | Brief generation and feedback (`PUT /brief/{date}/feedback`, which recent briefs' context reads), streaming chat, usage, memory |
 | `/api/biometrics` | Daily health data from companion app / HealthKit / Health Connect |
 | `/api/calendar` | Google Calendar OAuth + events |
 | `/api/github` | GitHub OAuth + status |

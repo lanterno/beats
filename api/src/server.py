@@ -108,6 +108,22 @@ DEVICE_ALLOWED_PREFIXES = (
     "/api/coach/chat",
 )
 
+# Paths a device token may only read (GET, HEAD). The rest of each prefix
+# changes or deletes data a paired device has no reason to touch.
+DEVICE_READ_ONLY_PREFIXES = (
+    # The Mac app's Coach shows what the coach remembers. Deleting the memory
+    # (DELETE /memory) and rewriting it (POST /memory/rewrite, which also
+    # spends budget) stay with a signed-in browser.
+    "/api/coach/memory",
+)
+
+
+def device_may_reach(method: str, path: str) -> bool:
+    """Whether a device token may make this request at all."""
+    if any(path.startswith(p) for p in DEVICE_ALLOWED_PREFIXES):
+        return True
+    return method in ("GET", "HEAD") and any(path.startswith(p) for p in DEVICE_READ_ONLY_PREFIXES)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -214,8 +230,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     )
 
                 # Check path allowlist
-                path = request.url.path
-                if not any(path.startswith(p) for p in DEVICE_ALLOWED_PREFIXES):
+                if not device_may_reach(request.method, request.url.path):
                     return error_envelope(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Device token not authorized for this endpoint",

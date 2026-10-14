@@ -23,6 +23,7 @@ from beats.coach import chat as chat_module
 from beats.coach import context as context_module
 from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import tools as tools_module
+from beats.coach.feedback import brief_feedback_lines
 from beats.coach.gateway import (
     MODEL_PRICING,
     UNKNOWN_MODEL_PRICING,
@@ -105,6 +106,38 @@ class TestFmtMinutes:
         # 60.5 → int → 60 → "1h 0m" (the hour kicks in only AT 60
         # post-truncation, not before).
         assert fmt_minutes(60.5) == "1h 0m"
+
+
+class TestBriefFeedbackLines:
+    """The context section that tells the coach which briefs helped."""
+
+    def test_no_rated_brief_adds_nothing(self):
+        assert brief_feedback_lines([{"date": "2026-10-14", "body": "x"}]) == []
+
+    def test_names_each_day_its_rating_and_how_it_opened(self):
+        lines = brief_feedback_lines(
+            [
+                {
+                    "date": "2026-10-14",
+                    "feedback": "helpful",
+                    "body": "**Protect** the morning. Then lunch.",
+                },
+                {
+                    "date": "2026-10-13",
+                    "feedback": "not_useful",
+                    "body": "## Plan\nYou could work.",
+                },
+                {"date": "2026-10-12", "feedback": "meh", "body": "ignored"},
+            ]
+        )
+        assert "1 of the last 2 rated briefs helpful" in lines[2]
+        assert lines[3] == '  2026-10-14: helpful — opened with "Protect the morning."'
+        assert lines[4].startswith("  2026-10-13: not useful — opened with")
+        assert len(lines) == 5
+
+    def test_a_long_opening_is_cut(self):
+        lines = brief_feedback_lines([{"date": "d", "feedback": "helpful", "body": "word " * 60}])
+        assert lines[-1].endswith('…"')
 
 
 class TestMemoryStore:

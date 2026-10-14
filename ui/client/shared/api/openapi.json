@@ -338,6 +338,27 @@
         "title": "Body_import_full_json_api_export_import_post",
         "type": "object"
       },
+      "BriefFeedbackRequest": {
+        "properties": {
+          "rating": {
+            "anyOf": [
+              {
+                "enum": [
+                  "helpful",
+                  "not_useful"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          }
+        },
+        "title": "BriefFeedbackRequest",
+        "type": "object"
+      },
       "BriefResponse": {
         "properties": {
           "body": {
@@ -381,6 +402,21 @@
           "date": {
             "title": "Date",
             "type": "string"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "enum": [
+                  "helpful",
+                  "not_useful"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
           },
           "input_tokens": {
             "anyOf": [
@@ -5153,6 +5189,59 @@
           }
         },
         "summary": "Get Today Brief",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/brief/{brief_date}/feedback": {
+      "put": {
+        "description": "Rate a brief helpful or not useful, or clear the rating. Recent\nratings go into the coach's context for the briefs after it.",
+        "operationId": "put_brief_feedback_api_coach_brief__brief_date__feedback_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brief_date",
+            "required": true,
+            "schema": {
+              "title": "Brief Date",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Brief Feedback",
         "tags": [
           "coach"
         ]
