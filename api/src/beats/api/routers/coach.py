@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from beats.api.dependencies import CurrentUserId, TimezoneDep
 from beats.coach.brief import generate_brief, get_brief, list_briefs
 from beats.coach.chat import handle_chat_turn
+from beats.coach.feedback import BriefRating, set_brief_feedback
 from beats.coach.memory import MemoryStore
 from beats.coach.memory_rewrite import rewrite_coach_memory
 from beats.coach.repos import (
@@ -43,6 +44,12 @@ class BriefResponse(BaseModel):
     output_tokens: int | None = None
     cache_read: int | None = None
     created_at: datetime | None = None
+    feedback: BriefRating | None = None
+
+
+class BriefFeedbackRequest(BaseModel):
+    # None clears a rating given earlier.
+    rating: BriefRating | None = None
 
 
 class GenerateBriefRequest(BaseModel):
@@ -95,6 +102,30 @@ async def get_brief_history(
     """List recent briefs, newest first."""
     docs = await list_briefs(user_id, limit=limit)
     return [BriefResponse(**d) for d in docs]
+
+
+@router.put("/brief/{brief_date}/feedback", response_model=BriefResponse)
+async def put_brief_feedback(
+    brief_date: str,
+    request: BriefFeedbackRequest,
+    user_id: CurrentUserId,
+):
+    """Rate a brief helpful or not useful, or clear the rating. Recent
+    ratings go into the coach's context for the briefs after it."""
+    try:
+        day = date.fromisoformat(brief_date)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_DATE", "message": f"Invalid date: {brief_date}"},
+        ) from exc
+    doc = await set_brief_feedback(user_id, day, request.rating)
+    if doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "BRIEF_NOT_FOUND", "message": f"No brief for {brief_date}"},
+        )
+    return BriefResponse(**doc)
 
 
 @router.post("/brief/generate", response_model=BriefResponse)
