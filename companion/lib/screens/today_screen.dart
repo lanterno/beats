@@ -8,6 +8,7 @@ import '../services/body_story.dart';
 import '../services/date_keys.dart';
 import '../services/day_ribbon.dart';
 import '../services/time_format.dart';
+import '../state/idle_watcher.dart';
 import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
@@ -21,6 +22,7 @@ class TodayScreen extends StatefulWidget {
   final ApiClient client;
   final TimerController timer;
   final WeekController week;
+  final IdleWatcher idle;
   final VoidCallback onOpenFlow;
   final VoidCallback onOpenCoach;
   final VoidCallback onOpenBody;
@@ -31,6 +33,7 @@ class TodayScreen extends StatefulWidget {
     required this.client,
     required this.timer,
     required this.week,
+    required this.idle,
     required this.onOpenFlow,
     required this.onOpenCoach,
     required this.onOpenBody,
@@ -191,7 +194,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final p = context.sky;
     final now = DateTime.now();
     return ListenableBuilder(
-      listenable: Listenable.merge([widget.timer, widget.week]),
+      listenable: Listenable.merge([widget.timer, widget.week, widget.idle]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
         children: [
@@ -219,6 +222,10 @@ class _TodayScreenState extends State<TodayScreen> {
                   _suggestion = null;
                 }),
               ),
+            ],
+            if (widget.idle.pending != null) ...[
+              const SizedBox(height: 18),
+              _AwayBanner(ask: widget.idle.pending!, idle: widget.idle),
             ],
             const SizedBox(height: 18),
             _hero(context),
@@ -891,6 +898,32 @@ class _SuggestionBanner extends StatelessWidget {
           SkyButton(label: 'Not now', onPressed: onDismiss),
         ],
       ),
+    );
+  }
+}
+
+/// "You were away 14:02–14:26 while Resilio ran": keep it, or take it off.
+class _AwayBanner extends StatelessWidget {
+  final AwayAsk ask;
+  final IdleWatcher idle;
+  const _AwayBanner({required this.ask, required this.idle});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    final from = formatTimeOfDay(ask.period.from), to = formatTimeOfDay(ask.period.to);
+    return Panel(
+      radius: 20,
+      padding: const EdgeInsets.fromLTRB(18, 10, 12, 10),
+      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 14, runSpacing: 8, children: [
+        Icon(Icons.bedtime_outlined, size: 20, color: p.inkMuted),
+        Text(
+          'You were away $from–$to (${formatDuration(ask.period.length)}) while ${ask.project.name} ran.',
+          style: SkyType.body(14),
+        ),
+        SkyButton(label: 'Take it off', kind: SkyButtonKind.dark, onPressed: idle.takeOff),
+        SkyButton(label: 'Keep it', onPressed: idle.keep),
+      ]),
     );
   }
 }

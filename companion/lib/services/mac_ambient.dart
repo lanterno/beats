@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
 
-/// macOS-only ambient surfaces: the Dock badge and icon, and opening at login.
+/// macOS-only ambient surfaces: the Dock badge and icon, opening at login,
+/// and idle time.
 ///
 /// On non-macOS platforms every method is a silent no-op so callers can
 /// invoke them unconditionally. The native side lives in
@@ -48,5 +49,17 @@ class MacAmbient {
     try {
       await _channel.invokeMethod('dock.setVisible', {'visible': visible});
     } catch (_) {}
+  }
+
+  /// How long since the last keyboard or mouse input, or null off a Mac
+  /// or when macOS doesn't say.
+  static Future<Duration?> idleTime() async {
+    if (!Platform.isMacOS) return null;
+    try {
+      final seconds = await _channel.invokeMethod<double>('idle.seconds');
+      return seconds == null ? null : Duration(milliseconds: (seconds * 1000).round());
+    } catch (_) {
+      return null;
+    }
   }
 }

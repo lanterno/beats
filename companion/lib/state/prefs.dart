@@ -12,6 +12,7 @@ class Prefs {
   static const notifySuggest = 'lifepete_notify_suggest';
   static const notifyDrift = 'lifepete_notify_drift';
   static const holdInFlow = 'lifepete_hold_in_flow';
+  static const askOnIdle = 'lifepete_ask_on_idle';
   static const menuBar = 'lifepete_menu_bar';
   static const showInDock = 'lifepete_show_in_dock';
   static const _legacyAll = 'beats_notifications_enabled';
@@ -27,6 +28,9 @@ class Prefs {
   bool get suggestOn => _notify(notifySuggest);
   bool get driftOn => _notify(notifyDrift);
   bool get holdingInFlow => _p.getBool(holdInFlow) ?? true;
+
+  /// Off by default: asking about time away is something to opt into.
+  bool get askingOnIdle => _p.getBool(askOnIdle) ?? false;
   bool get dockVisible => _p.getBool(showInDock) ?? true;
 
   MenuBarShows get menuBarShows =>

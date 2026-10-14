@@ -375,6 +375,12 @@ class _NotificationsTabState extends State<_NotificationsTab> {
           subtitle: 'Briefs and nudges wait until your flow drops below 70',
           trailing: toggle(Prefs.holdInFlow, prefs.holdingInFlow),
         ),
+        if (Platform.isMacOS)
+          _Row(
+            title: 'Ask about time away',
+            subtitle: 'When the timer runs through 10 minutes with no keyboard or mouse',
+            trailing: toggle(Prefs.askOnIdle, prefs.askingOnIdle),
+          ),
       ]),
       if (Platform.isMacOS)
         Padding(

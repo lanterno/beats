@@ -15,6 +15,7 @@ import 'services/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'brand.dart';
 import 'state/hour.dart';
+import 'state/idle_watcher.dart';
 import 'state/timer_controller.dart';
 import 'state/week_controller.dart';
 import 'theme/sky.dart';
@@ -84,6 +85,7 @@ class _AppShellState extends State<AppShell> {
   ApiClient? _client;
   TimerController? _timer;
   WeekController? _week;
+  IdleWatcher? _idle;
   TrayService? _tray;
   NotificationPoller? _poller;
   StreamSubscription<NotificationTap>? _notificationTaps;
@@ -130,6 +132,8 @@ class _AppShellState extends State<AppShell> {
     _client = client;
     _timer = TimerController(client)..start();
     _week = WeekController(client, _timer!)..start();
+    _idle = IdleWatcher(_timer!);
+    if (Platform.isMacOS) _idle!.start();
     _tray = TrayService(
       client: client,
       timer: _timer!,
@@ -147,6 +151,8 @@ class _AppShellState extends State<AppShell> {
   void _disconnect() {
     _tray?.dispose();
     _tray = null;
+    _idle?.dispose();
+    _idle = null;
     _week?.dispose();
     _timer?.dispose();
     _week = null;
@@ -183,6 +189,14 @@ class _AppShellState extends State<AppShell> {
       if (!mounted) return;
       if (tap.actionId == kStartAutoTimerActionId) {
         _handleStartAutoTimerAction(tap.payload);
+        return;
+      }
+      if (tap.actionId == kTakeOffAwayActionId) {
+        _idle?.takeOff();
+        return;
+      }
+      if (tap.payload == 'away') {
+        _window.currentState?.show(Section.today);
         return;
       }
       _window.currentState?.show(Section.coach);
@@ -249,6 +263,7 @@ class _AppShellState extends State<AppShell> {
       client: _client!,
       timer: _timer!,
       week: _week!,
+      idle: _idle!,
       hour: widget.hour,
       onUnpaired: _onUnpaired,
     );
