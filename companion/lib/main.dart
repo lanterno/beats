@@ -94,6 +94,14 @@ class _AppShellState extends State<AppShell> {
     _checkPairing();
   }
 
+  bool _routed = false;
+
+  void _debugRoute() {
+    if (_routed) return;
+    _routed = true;
+    _debugRouteOnce(_window);
+  }
+
   Future<void> _checkPairing() async {
     String? token;
     try {
@@ -234,6 +242,7 @@ class _AppShellState extends State<AppShell> {
       return PairingScreen(onPaired: _onPaired);
     }
 
+    _debugRoute();
     return MainWindow(
       key: _window,
       initial: _debugSection(),
@@ -244,6 +253,15 @@ class _AppShellState extends State<AppShell> {
       onUnpaired: _onUnpaired,
     );
   }
+}
+
+/// In a debug build, `LIFEPETE_ROUTE=settings` (or `focus`) opens that
+/// over the window once it is up.
+void _debugRouteOnce(GlobalKey<MainWindowState> window) {
+  if (!kDebugMode) return;
+  final route = Platform.environment['LIFEPETE_ROUTE'];
+  if (route == null) return;
+  WidgetsBinding.instance.addPostFrameCallback((_) => window.currentState?.showByName(route: route));
 }
 
 /// In a debug build, `LIFEPETE_SECTION=flow` (today, flow, coach, body)

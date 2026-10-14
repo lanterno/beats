@@ -49,7 +49,27 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       self?.handleMain(call, result)
     }
     registerHotKey()
+    #if DEBUG
+      // `open --env LIFEPETE_POPOVER=panel|palette …` opens the popover once
+      // the item is up, so it can be looked at without clicking.
+      if let mode = ProcessInfo.processInfo.environment["LIFEPETE_POPOVER"] {
+        debugShow(mode: mode, attempts: 30)
+      }
+    #endif
   }
+
+  #if DEBUG
+    private func debugShow(mode: String, attempts: Int) {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+        guard let self else { return }
+        if self.statusItem.isVisible {
+          self.show(mode: mode)
+        } else if attempts > 0 {
+          self.debugShow(mode: mode, attempts: attempts - 1)
+        }
+      }
+    }
+  #endif
 
   // MARK: Main window → menu bar
 
