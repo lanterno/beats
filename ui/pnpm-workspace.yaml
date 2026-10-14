@@ -10,7 +10,9 @@ overrides:
   # Keep each target within the patched major line — the vulnerable ranges are
   # all in-major, and an unbounded ">=x" lets pnpm jump a major (e.g. js-yaml 5.x
   # dropped types.merge, breaking @redocly/openapi-core used by gen:types).
-  "brace-expansion@>=2.0.0 <2.1.2": ">=2.1.2 <3"
+  "brace-expansion@>=2.0.0 <2.1.7": ">=2.1.7 <3"
+  "brace-expansion@>=5.0.0 <5.0.12": ">=5.0.12 <6"
+  "source-map-js@<1.2.2": ">=1.2.2 <2"
   "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1 <5"
   "fast-uri@<3.1.6": ">=3.1.6 <4"
   "esbuild@>=0.27.3 <0.28.1": ">=0.28.1 <0.29"
