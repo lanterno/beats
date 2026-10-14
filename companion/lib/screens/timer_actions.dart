@@ -7,10 +7,10 @@ import '../state/timer_controller.dart';
 /// stop or start the timer goes through these so the confirmation, the
 /// Undo and the failure message read the same everywhere.
 class TimerActions {
-  static Future<void> stop(BuildContext context, TimerController timer) async {
+  static Future<void> stop(BuildContext context, TimerController timer, {DateTime? at}) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final stopped = await timer.stop();
+      final stopped = await timer.stop(at: at);
       if (stopped == null) return;
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(SnackBar(

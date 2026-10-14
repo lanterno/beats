@@ -15,6 +15,7 @@ import 'coach_screen.dart';
 import 'flow_screen.dart';
 import 'health_screen.dart';
 import 'home_screen.dart';
+import 'palette.dart';
 import 'timer_actions.dart';
 import 'today_screen.dart';
 
@@ -81,6 +82,15 @@ class MainWindowState extends State<MainWindow> {
     ));
   }
 
+  void find() {
+    final prefix = Platform.isMacOS ? '⌘' : 'Ctrl ';
+    showQuickStart(context, timer: widget.timer, actions: [
+      for (final (i, s) in Section.values.indexed)
+        PaletteAction('Open ${s.label}', s.icon, () => show(s), shortcut: '$prefix${i + 1}'),
+      PaletteAction('Settings', Icons.settings_outlined, openSettings, shortcut: '$prefix,'),
+    ]);
+  }
+
   void _stop() {
     if (widget.timer.running) TimerActions.stop(context, widget.timer);
   }
@@ -93,6 +103,7 @@ class MainWindowState extends State<MainWindow> {
             onOpenFlow: () => show(Section.flow),
             onOpenCoach: () => show(Section.coach),
             onOpenBody: () => show(Section.body),
+            onFind: find,
           ),
         Section.flow => FlowScreen(client: widget.client),
         Section.coach => CoachScreen(client: widget.client),
@@ -149,6 +160,7 @@ class MainWindowState extends State<MainWindow> {
           for (final s in Section.values) SingleActivator(s.key, control: true): () => show(s),
           const SingleActivator(LogicalKeyboardKey.comma, control: true): openSettings,
           const SingleActivator(LogicalKeyboardKey.period, control: true): _stop,
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true): find,
         },
         child: Focus(autofocus: true, child: window),
       );
@@ -179,6 +191,11 @@ class MainWindowState extends State<MainWindow> {
             ]),
           ]),
           PlatformMenu(label: 'Timer', menus: [
+            PlatformMenuItem(
+              label: 'Start or Find…',
+              shortcut: const SingleActivator(LogicalKeyboardKey.keyK, meta: true),
+              onSelected: find,
+            ),
             PlatformMenuItem(
               label: widget.timer.running ? 'Stop ${widget.timer.current!.name}' : 'Stop',
               shortcut: const SingleActivator(LogicalKeyboardKey.period, meta: true),
