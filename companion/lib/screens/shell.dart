@@ -103,6 +103,21 @@ class MainWindowState extends State<MainWindow> {
     ));
   }
 
+  /// Opens a place or a route by name, for the menu bar popover.
+  void showByName({String? section, String? route}) {
+    final s = Section.values.where((s) => s.name == section).firstOrNull;
+    if (s != null) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      show(s);
+    }
+    switch (route) {
+      case 'settings':
+        openSettings();
+      case 'focus':
+        openFocus();
+    }
+  }
+
   void find() {
     final prefix = Platform.isMacOS ? '⌘' : 'Ctrl ';
     showQuickStart(context, timer: widget.timer, actions: [

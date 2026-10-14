@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/shell.dart';
 import 'screens/timer_actions.dart';
+import 'popover/popover_app.dart';
 import 'services/api_client.dart';
 import 'services/notification_poller.dart';
 import 'services/notifications.dart';
+import 'services/status_menu.dart';
 import 'services/token_storage.dart';
 import 'services/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
@@ -41,6 +43,10 @@ void main() async {
   await hour.load();
   runApp(CompanionApp(hour: hour));
 }
+
+/// The menu bar popover's engine starts here (StatusItemController.swift).
+@pragma('vm:entry-point')
+Future<void> popoverMain() => runPopover();
 
 class CompanionApp extends StatelessWidget {
   final HourController hour;
@@ -95,14 +101,6 @@ class _AppShellState extends State<AppShell> {
       if (token != null) {
         final apiUrl = await _storage.loadApiUrl();
         _connect(ApiClient(baseUrl: apiUrl, deviceToken: token));
-        _tray = TrayService(
-          client: _client!,
-          onShowWindow: () async {
-            await windowManager.show();
-            await windowManager.focus();
-          },
-        );
-        _tray!.init();
         await _initNotifications();
       }
     } catch (_) {
@@ -124,9 +122,23 @@ class _AppShellState extends State<AppShell> {
     _client = client;
     _timer = TimerController(client)..start();
     _week = WeekController(client, _timer!)..start();
+    _tray = TrayService(
+      client: client,
+      timer: _timer!,
+      onShowWindow: () async {
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    )..init();
+    StatusMenu.listen(
+      show: (section, route) => _window.currentState?.showByName(section: section, route: route),
+      refresh: () => _timer?.refresh(),
+    );
   }
 
   void _disconnect() {
+    _tray?.dispose();
+    _tray = null;
     _week?.dispose();
     _timer?.dispose();
     _week = null;

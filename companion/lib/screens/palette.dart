@@ -224,7 +224,7 @@ class _QuickStartPaletteState extends State<QuickStartPalette> {
         );
 
     final card = Container(
-      width: 640,
+      width: widget.onDone == null ? 640 : null,
       constraints: const BoxConstraints(maxHeight: 560),
       decoration: BoxDecoration(
         color: p.panel.withValues(alpha: 1),
@@ -246,7 +246,11 @@ class _QuickStartPaletteState extends State<QuickStartPalette> {
                   autofocus: true,
                   style: SkyType.display(22, weight: FontWeight.w500),
                   decoration: InputDecoration(
-                    hintText: widget.timer.running ? 'Switch, stop, or “kite from 11:00”' : 'Start a project, or “spanish 25m ago”',
+                    hintText: widget.onDone != null
+                        ? (widget.timer.running ? 'Switch or stop' : 'Start a project')
+                        : widget.timer.running
+                            ? 'Switch, stop, or “kite from 11:00”'
+                            : 'Start a project, or “spanish 25m ago”',
                     hintStyle: SkyType.display(22, weight: FontWeight.w400).copyWith(color: p.inkMuted),
                     filled: false,
                     border: InputBorder.none,
