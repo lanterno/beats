@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/shell.dart';
@@ -223,10 +224,20 @@ class _AppShellState extends State<AppShell> {
 
     return MainWindow(
       key: _window,
+      initial: _debugSection(),
       client: _client!,
       timer: _timer!,
       week: _week!,
       onUnpaired: _onUnpaired,
     );
   }
+}
+
+/// In a debug build, `LIFEPETE_SECTION=flow` (today, flow, coach, body)
+/// opens on that place, so each screen can be looked at without clicking:
+/// `open --env LIFEPETE_SECTION=flow build/macos/…/beats_companion.app`.
+Section _debugSection() {
+  if (!kDebugMode) return Section.today;
+  final name = Platform.environment['LIFEPETE_SECTION'];
+  return Section.values.where((s) => s.name == name).firstOrNull ?? Section.today;
 }
