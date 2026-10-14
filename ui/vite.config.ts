@@ -35,7 +35,14 @@ export default defineConfig(() => ({
 		},
 		VitePWA({
 			registerType: "autoUpdate",
-			includeAssets: ["favicon.svg", "favicon.ico", "pwa-192.svg", "pwa-512.svg"],
+			includeAssets: [
+				"favicon.svg",
+				"favicon.ico",
+				"apple-touch-icon.png",
+				"pwa-192.svg",
+				"pwa-512.svg",
+				"pwa-maskable-512.svg",
+			],
 			manifest: {
 				name: `${APP_NAME} — Time Tracker`,
 				short_name: APP_NAME,
@@ -55,7 +62,15 @@ export default defineConfig(() => ({
 						src: "pwa-512.svg",
 						sizes: "512x512",
 						type: "image/svg+xml",
-						purpose: "any maskable",
+						purpose: "any",
+					},
+					{
+						// Full-bleed: a launcher that cuts its own shape would
+						// otherwise show the tile's corners inside its own.
+						src: "pwa-maskable-512.svg",
+						sizes: "512x512",
+						type: "image/svg+xml",
+						purpose: "maskable",
 					},
 				],
 			},
