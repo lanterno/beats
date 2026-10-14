@@ -1,12 +1,9 @@
 import 'dart:async';
-import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'screens/coach_screen.dart';
-import 'screens/flow_screen.dart';
-import 'screens/health_screen.dart';
-import 'screens/home_screen.dart';
 import 'screens/pairing_screen.dart';
-import 'screens/timer_screen.dart';
+import 'screens/shell.dart';
+import 'screens/timer_actions.dart';
 import 'services/api_client.dart';
 import 'services/notification_poller.dart';
 import 'services/notifications.dart';
@@ -14,30 +11,59 @@ import 'services/token_storage.dart';
 import 'services/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'brand.dart';
-import 'theme/beats_theme.dart';
+import 'state/hour.dart';
+import 'state/timer_controller.dart';
+import 'state/week_controller.dart';
+import 'theme/sky.dart';
+import 'ui/kit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
-  runApp(const CompanionApp());
+  if (Platform.isMacOS) {
+    // The sky runs under a hidden title bar; the traffic lights stay and sit
+    // in the sidebar's top corner.
+    await windowManager.waitUntilReadyToShow(
+      const WindowOptions(
+        title: appName,
+        size: Size(1180, 820),
+        minimumSize: Size(880, 620),
+        titleBarStyle: TitleBarStyle.hidden,
+      ),
+      () async {
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
+  }
+  final hour = HourController();
+  await hour.load();
+  runApp(CompanionApp(hour: hour));
 }
 
 class CompanionApp extends StatelessWidget {
-  const CompanionApp({super.key});
+  final HourController hour;
+  const CompanionApp({super.key, required this.hour});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: appName,
-      debugShowCheckedModeBanner: false,
-      theme: buildBeatsTheme(),
-      home: const AppShell(),
+    return ValueListenableBuilder(
+      valueListenable: hour,
+      builder: (context, _, _) => MaterialApp(
+        title: appName,
+        debugShowCheckedModeBanner: false,
+        theme: buildSkyTheme(SkyPalette.afternoon, Brightness.light),
+        darkTheme: buildSkyTheme(SkyPalette.dusk, Brightness.dark),
+        themeMode: hour.themeMode,
+        home: AppShell(hour: hour),
+      ),
     );
   }
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final HourController hour;
+  const AppShell({super.key, required this.hour});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -45,25 +71,20 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   final _storage = TokenStorage();
+  final _window = GlobalKey<MainWindowState>();
   bool _loading = true;
   bool _paired = false;
   ApiClient? _client;
+  TimerController? _timer;
+  WeekController? _week;
   TrayService? _tray;
   NotificationPoller? _poller;
   StreamSubscription<NotificationTap>? _notificationTaps;
-  int _currentTab = 0;
 
   @override
   void initState() {
     super.initState();
     _checkPairing();
-  }
-
-  @override
-  void dispose() {
-    _poller?.stop();
-    _notificationTaps?.cancel();
-    super.dispose();
   }
 
   Future<void> _checkPairing() async {
@@ -72,7 +93,7 @@ class _AppShellState extends State<AppShell> {
       token = await _storage.loadToken();
       if (token != null) {
         final apiUrl = await _storage.loadApiUrl();
-        _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+        _connect(ApiClient(baseUrl: apiUrl, deviceToken: token));
         _tray = TrayService(
           client: _client!,
           onShowWindow: () async {
@@ -88,7 +109,7 @@ class _AppShellState extends State<AppShell> {
       // We surface the pairing screen rather than wedging on a spinner — the
       // user can re-pair to recover.
       token = null;
-      _client = null;
+      _disconnect();
     }
     if (!mounted) return;
     setState(() {
@@ -97,16 +118,38 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  /// Starts the shared timer and week for a paired client.
+  void _connect(ApiClient client) {
+    _client = client;
+    _timer = TimerController(client)..start();
+    _week = WeekController(client, _timer!)..start();
+  }
+
+  void _disconnect() {
+    _week?.dispose();
+    _timer?.dispose();
+    _week = null;
+    _timer = null;
+    _client = null;
+  }
+
+  @override
+  void dispose() {
+    _poller?.stop();
+    _notificationTaps?.cancel();
+    _disconnect();
+    super.dispose();
+  }
+
   /// Initialize the notification stack and start the foreground poller.
   ///
   /// Tap routing:
   /// - The `Start` action button on an auto-timer notification fires the
-  ///   `kStartAutoTimerActionId` actionId. We POST `/api/timer/start`
-  ///   with the project id encoded in the payload — no screen ever
-  ///   opens. A confirmation snackbar lands on whatever screen the user
-  ///   is already on.
-  /// - Body taps on any other Beats notification (`brief`, plain
-  ///   `auto-timer:*`) route to the Coach tab.
+  ///   `kStartAutoTimerActionId` actionId. We start the suggested project
+  ///   (switching from whatever runs) without bringing a screen forward;
+  ///   a confirmation lands on whatever screen the user is already on.
+  /// - Body taps on any other notification (`brief`, plain `auto-timer:*`)
+  ///   open the Coach.
   Future<void> _initNotifications() async {
     final svc = NotificationsService.instance;
     await svc.init();
@@ -121,11 +164,7 @@ class _AppShellState extends State<AppShell> {
         _handleStartAutoTimerAction(tap.payload);
         return;
       }
-      // Route every coach-flavored payload to the Coach tab. Auto-timer
-      // body taps also land here so the user sees the suggestion in
-      // context if they ignore the Start button.
-      const coachTab = 2;
-      setState(() => _currentTab = coachTab);
+      _window.currentState?.show(Section.coach);
     });
 
     final poller = NotificationPoller(
@@ -136,31 +175,16 @@ class _AppShellState extends State<AppShell> {
     poller.start();
   }
 
-  /// Honor the auto-timer "Start" action button without bringing the
-  /// app to the foreground. POSTs `/api/timer/start` with the project id
-  /// carried in the payload, then drops a confirmation toast on whatever
-  /// screen happens to be visible (the action button can fire while the
-  /// app is in the background — when the user opens it later the toast
-  /// has already been queued).
+  /// Honors the auto-timer "Start" action button without bringing the app
+  /// forward (it can fire while the app is in the background).
   Future<void> _handleStartAutoTimerAction(String? payload) async {
     final parsed = parseAutoTimerPayload(payload);
-    final client = _client;
-    if (parsed == null || client == null) return;
-    try {
-      await client.startTimer(parsed.projectId);
-      if (!mounted) return;
-      final label = parsed.projectName.isEmpty ? 'project' : parsed.projectName;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Started tracking $label'),
-        behavior: SnackBarBehavior.floating,
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Couldn\'t start timer: $e'),
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
+    final timer = _timer;
+    if (parsed == null || timer == null) return;
+    await timer.refresh();
+    final project = timer.projectById(parsed.projectId);
+    if (project == null || !mounted) return;
+    await TimerActions.start(context, timer, project);
   }
 
   void _onPaired() async {
@@ -168,9 +192,9 @@ class _AppShellState extends State<AppShell> {
     final apiUrl = await _storage.loadApiUrl();
     setState(() {
       _paired = true;
-      _client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+      _connect(ApiClient(baseUrl: apiUrl, deviceToken: token));
     });
-    if (_client != null) await _initNotifications();
+    await _initNotifications();
   }
 
   void _onUnpaired() {
@@ -180,17 +204,16 @@ class _AppShellState extends State<AppShell> {
     _notificationTaps = null;
     setState(() {
       _paired = false;
-      _client = null;
-      _currentTab = 0;
+      _disconnect();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        backgroundColor: BeatsColors.background,
-        body: const Center(child: CircularProgressIndicator(color: BeatsColors.amber)),
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SkyBackdrop(child: Center(child: CircularProgressIndicator())),
       );
     }
 
@@ -198,128 +221,12 @@ class _AppShellState extends State<AppShell> {
       return PairingScreen(onPaired: _onPaired);
     }
 
-    return Scaffold(
-      backgroundColor: BeatsColors.background,
-      extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.02),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey(_currentTab),
-          child: _buildCurrentScreen(),
-        ),
-      ),
-      bottomNavigationBar: _BeatsNavBar(
-        currentIndex: _currentTab,
-        onTap: (i) => setState(() => _currentTab = i),
-      ),
-    );
-  }
-
-  Widget _buildCurrentScreen() {
-    switch (_currentTab) {
-      case 0: return TimerScreen(client: _client!);
-      case 1: return FlowScreen(client: _client!);
-      case 2: return CoachScreen(client: _client!);
-      case 3: return HealthScreen(client: _client!);
-      case 4: return HomeScreen(onUnpaired: _onUnpaired);
-      default: return TimerScreen(client: _client!);
-    }
-  }
-}
-
-/// Custom frosted-glass bottom navigation bar.
-class _BeatsNavBar extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  const _BeatsNavBar({required this.currentIndex, required this.onTap});
-
-  static const _items = [
-    (icon: Icons.timer_outlined, activeIcon: Icons.timer, label: 'Timer'),
-    (icon: Icons.insights_outlined, activeIcon: Icons.insights, label: 'Flow'),
-    (icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome, label: 'Coach'),
-    (icon: Icons.monitor_heart_outlined, activeIcon: Icons.monitor_heart, label: 'Health'),
-    (icon: Icons.tune_outlined, activeIcon: Icons.tune, label: 'Settings'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          height: 56 + bottomPadding,
-          padding: EdgeInsets.only(bottom: bottomPadding),
-          decoration: BoxDecoration(
-            color: BeatsColors.background.withValues(alpha: 0.85),
-            border: Border(
-              top: BorderSide(color: BeatsColors.border.withValues(alpha: 0.5)),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(_items.length, (i) {
-              final selected = i == currentIndex;
-              final item = _items[i];
-
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onTap(i),
-                child: SizedBox(
-                  width: 56,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedScale(
-                        scale: selected ? 1.1 : 1.0,
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutBack,
-                        child: Icon(
-                          selected ? item.activeIcon : item.icon,
-                          size: 22,
-                          color: selected
-                              ? BeatsColors.amber
-                              : BeatsColors.textTertiary,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      // Glow dot indicator
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        width: selected ? 4 : 0,
-                        height: selected ? 4 : 0,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: BeatsColors.amber,
-                          boxShadow: selected
-                              ? [BoxShadow(color: BeatsColors.amberGlow, blurRadius: 6)]
-                              : [],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
+    return MainWindow(
+      key: _window,
+      client: _client!,
+      timer: _timer!,
+      week: _week!,
+      onUnpaired: _onUnpaired,
     );
   }
 }
