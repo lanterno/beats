@@ -263,3 +263,16 @@ List<ChatMessage> messagesFromHistory(List<Map<String, dynamic>> rows) => [
             (r['content'] as String).trim().isNotEmpty)
           ChatMessage(fromUser: r['role'] == 'user', text: (r['content'] as String).trim()),
     ];
+
+/// The chip over the chat: how much the coach remembers, counted as the
+/// memory's list items ("Remembers 4 things"), or "Has notes on you" for
+/// memory written as prose. Null when there is no memory yet.
+String? memoryChipLabel(String? content) {
+  if (content == null || content.trim().isEmpty) return null;
+  final items = content
+      .split('\n')
+      .where((l) => RegExp(r'^\s*([-*•]|\d+[.)])\s+\S').hasMatch(l))
+      .length;
+  if (items == 0) return 'Has notes on you';
+  return items == 1 ? 'Remembers 1 thing' : 'Remembers $items things';
+}

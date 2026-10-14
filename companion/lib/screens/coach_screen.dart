@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/api_client.dart';
 import '../services/coach_story.dart';
+import '../services/local_timezone.dart';
 import '../services/time_format.dart';
 import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
@@ -32,6 +33,9 @@ class _CoachScreenState extends State<CoachScreen> {
 
   Map<String, dynamic>? _brief;
   bool _briefLoaded = false;
+  bool _writing = false;
+  String? _memory;
+  DateTime? _memoryUpdated;
 
   final _messages = <ChatMessage>[];
   ChatReply? _reply;
@@ -47,6 +51,92 @@ class _CoachScreenState extends State<CoachScreen> {
     super.initState();
     _loadBrief();
     _restoreChat();
+    _loadMemory();
+  }
+
+  Future<void> _loadMemory() async {
+    try {
+      final m = await widget.client.getCoachMemory();
+      if (!mounted) return;
+      setState(() {
+        _memory = m['content'] as String?;
+        _memoryUpdated = DateTime.tryParse(m['updated_at'] as String? ?? '')?.toLocal();
+      });
+    } catch (_) {
+      // An older server refuses devices here; the chip simply doesn't show.
+    }
+  }
+
+  /// Writes today's brief now, since nothing writes it on a schedule.
+  Future<void> _writeBrief() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _writing = true);
+    try {
+      final brief = await widget.client.generateBrief(timezone: await localTimezone());
+      if (!mounted) return;
+      setState(() => _brief = brief);
+    } catch (e) {
+      final budget = e is ApiException && e.code == 'BUDGET_EXCEEDED';
+      messenger.showSnackBar(SnackBar(
+        content: Text(budget ? 'You\'ve reached this month\'s coach budget.' : 'Couldn\'t write the brief: $e'),
+      ));
+    } finally {
+      if (mounted) setState(() => _writing = false);
+    }
+  }
+
+  /// Rates the brief; choosing the rating it already has clears it.
+  Future<void> _rate(String rating) async {
+    final brief = _brief;
+    final date = brief?['date'] as String?;
+    if (brief == null || date == null) return;
+    final next = brief['feedback'] == rating ? null : rating;
+    setState(() => _brief = {...brief, 'feedback': next});
+    try {
+      final saved = await widget.client.setBriefFeedback(date, next);
+      if (mounted) setState(() => _brief = saved);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _brief = brief);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Couldn\'t save that: $e')));
+    }
+  }
+
+  Future<void> _showMemory() async {
+    final p = context.sky;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 560),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 24, 28, 18),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text('What your coach remembers', style: SkyType.display(20)),
+              if (_memoryUpdated != null) ...[
+                const SizedBox(height: 4),
+                Text('Updated ${DateFormat('d MMMM').format(_memoryUpdated!)}',
+                    style: SkyType.body(13).copyWith(color: p.inkMuted)),
+              ],
+              const SizedBox(height: 14),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: SelectableText(_memory ?? '', style: SkyType.body(14, height: 1.7)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: Text('Rewrite or clear it from the coach on the web.',
+                      style: SkyType.body(12).copyWith(color: p.inkMuted)),
+                ),
+                SkyButton(label: 'Close', onPressed: () => Navigator.of(ctx).pop()),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -60,7 +150,7 @@ class _CoachScreenState extends State<CoachScreen> {
   Future<void> _loadBrief() async {
     Map<String, dynamic>? brief;
     try {
-      brief = await widget.client.getTodayBrief();
+      brief = await widget.client.getTodayBrief(timezone: await localTimezone());
     } catch (_) {
       brief = null;
     }
@@ -200,12 +290,19 @@ class _CoachScreenState extends State<CoachScreen> {
     }
     final parts = splitBrief(_brief?['body'] as String?);
     if (parts.headline == null && parts.blocks.isEmpty) {
-      return const Panel(
+      return Panel(
         raised: true,
         child: EmptyNote(
           icon: Icons.wb_twilight_rounded,
           title: 'No brief yet today',
-          body: 'Your coach writes one each morning. Check back after breakfast.',
+          body: 'Your coach writes it from your recent days, in a few seconds, '
+              'using a little of this month\'s coach budget.',
+          action: SkyButton(
+            label: _writing ? 'Writing…' : 'Write today\'s brief',
+            icon: Icons.edit_note_rounded,
+            kind: SkyButtonKind.primary,
+            onPressed: _writing ? null : _writeBrief,
+          ),
         ),
       );
     }
@@ -239,6 +336,23 @@ class _CoachScreenState extends State<CoachScreen> {
             for (final block in parts.blocks) _block(context, block),
           ]),
         ),
+        const SizedBox(height: 14),
+        Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Text('Was this useful?', style: SkyType.body(13).copyWith(color: p.inkMuted)),
+          for (final (rating, label, icon) in const [
+            ('helpful', 'Helpful', Icons.thumb_up_alt_outlined),
+            ('not_useful', 'Not useful', Icons.thumb_down_alt_outlined),
+          ])
+            Semantics(
+              selected: _brief?['feedback'] == rating,
+              child: SkyButton(
+                label: label,
+                icon: icon,
+                kind: _brief?['feedback'] == rating ? SkyButtonKind.dark : SkyButtonKind.secondary,
+                onPressed: () => _rate(rating),
+              ),
+            ),
+        ]),
         if (anchor != null)
           ListenableBuilder(
             listenable: widget.timer,
@@ -376,7 +490,18 @@ class _CoachScreenState extends State<CoachScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
-          child: Semantics(header: true, child: Text('Ask', style: SkyType.display(19))),
+          child: Row(children: [
+            Expanded(child: Semantics(header: true, child: Text('Ask', style: SkyType.display(19)))),
+            if (memoryChipLabel(_memory) != null)
+              ActionChip(
+                label: Text(memoryChipLabel(_memory)!, style: SkyType.body(12)),
+                backgroundColor: p.wash,
+                side: BorderSide.none,
+                shape: const StadiumBorder(),
+                tooltip: 'What your coach remembers',
+                onPressed: _showMemory,
+              ),
+          ]),
         ),
         Expanded(
           child: _messages.isEmpty && reply == null
