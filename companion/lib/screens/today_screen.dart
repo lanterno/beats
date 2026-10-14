@@ -262,7 +262,11 @@ class _TodayScreenState extends State<TodayScreen> {
       raised: true,
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 28),
       child: LayoutBuilder(builder: (context, box) {
-        final body = timer.running ? _running(context) : _idle(context);
+        final body = !timer.loaded
+            ? _reading(context)
+            : timer.running
+                ? _running(context)
+                : _idle(context);
         if (box.maxWidth < 620) {
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             body,
@@ -339,6 +343,20 @@ class _TodayScreenState extends State<TodayScreen> {
         LinkButton(label: 'Started earlier?', onPressed: _startedEarlier),
       ]),
     ]);
+  }
+
+  /// Before the first status read: neither "running" nor "what's next"
+  /// would be true yet.
+  Widget _reading(BuildContext context) {
+    final p = context.sky;
+    return SizedBox(
+      height: 176,
+      child: Row(children: [
+        const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+        const SizedBox(width: 14),
+        Text('Reading your timer…', style: SkyType.body(16).copyWith(color: p.inkMuted)),
+      ]),
+    );
   }
 
   Widget _idle(BuildContext context) {
@@ -613,6 +631,16 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget _weekCard(BuildContext context) {
     final p = context.sky;
     final week = widget.week;
+    if (!week.complete) {
+      return Panel(
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const PanelHeading('This week', size: 17),
+          const SizedBox(height: 14),
+          Text('Adding up the week…', style: SkyType.body(14).copyWith(color: p.inkMuted)),
+        ]),
+      );
+    }
     final anchor = week.anchor;
     final todayIndex = DateTime.now().weekday - 1;
     final worked = anchor?.worked ?? week.weeks.fold<double>(0, (a, w) => a + w.worked);

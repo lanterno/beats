@@ -62,6 +62,11 @@ class WeekController extends ChangeNotifier {
 
   List<ProjectWeek> weeks = const [];
   DateTime? loadedAt;
+
+  /// Whether one reload has finished across every project. Until then the
+  /// week is still arriving, project by project, and which project anchors
+  /// the week card can change.
+  bool complete = false;
   String? _tz;
   Timer? _poll;
   String _lastTimerKey = '';
@@ -115,6 +120,10 @@ class WeekController extends ChangeNotifier {
       if (p.id == timer.current?.id || loadedAt == null) loadedAt = DateTime.now();
       notifyListeners();
     }));
+    if (generation == _generation && live.isNotEmpty && !complete) {
+      complete = true;
+      notifyListeners();
+    }
   }
 
   ProjectWeek? weekOf(String projectId) =>

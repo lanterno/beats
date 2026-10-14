@@ -279,7 +279,8 @@ class _Panel extends StatelessWidget {
       builder: (context, now, _) {
         final today = week.todayMinutes(now);
         final target = week.dailyTargetMinutes(now);
-        final anchor = week.anchor;
+        // Which project anchors the week can change until it has all arrived.
+        final anchor = week.complete ? week.anchor : null;
         Widget line(String label, String value, String? of, double fraction, Color color) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

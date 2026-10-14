@@ -210,7 +210,7 @@ class _CoachScreenState extends State<CoachScreen> {
       );
     }
     final created = DateTime.tryParse(_brief?['created_at'] as String? ?? '')?.toLocal();
-    final anchor = widget.week.anchor?.project;
+    final anchor = widget.week.complete ? widget.week.anchor?.project : null;
     return Panel(
       raised: true,
       color: p.panel.withValues(alpha: 1),
