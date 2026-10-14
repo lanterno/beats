@@ -92,20 +92,29 @@ class WeekController extends ChangeNotifier {
       _tz = null; // The API buckets in UTC without one.
     }
     final live = timer.projects.where((p) => !p.archived).toList();
-    final results = await Future.wait(live.map((p) async {
+    final liveIds = {for (final p in live) p.id};
+    // Each project's week shows as soon as its ledger answers: one slow
+    // ledger (seconds, on a long history) shouldn't hold back the rest.
+    await Future.wait(live.map((p) async {
+      ProjectWeek? w;
       try {
-        return ProjectWeek.fromLedger(p, await client.getLedger(p.id, timezone: _tz));
+        w = ProjectWeek.fromLedger(p, await client.getLedger(p.id, timezone: _tz));
       } catch (_) {
         // A failed reload (offline, rate-limited) keeps the last good week
         // rather than blanking the project out of every screen.
-        return weekOf(p.id);
+        return;
       }
+      if (generation != _generation) return;
+      weeks = [
+        ?w,
+        for (final old in weeks)
+          if (old.project.id != p.id && liveIds.contains(old.project.id)) old,
+      ]..sort((a, b) => b.worked.compareTo(a.worked));
+      // todayMinutes adds the running timer from here on; only the running
+      // project's ledger says how far it had counted.
+      if (p.id == timer.current?.id || loadedAt == null) loadedAt = DateTime.now();
+      notifyListeners();
     }));
-    if (generation != _generation) return;
-    weeks = results.whereType<ProjectWeek>().toList()
-      ..sort((a, b) => b.worked.compareTo(a.worked));
-    loadedAt = DateTime.now();
-    notifyListeners();
   }
 
   ProjectWeek? weekOf(String projectId) =>
