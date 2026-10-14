@@ -16,6 +16,7 @@ import 'coach_screen.dart';
 import 'flow_screen.dart';
 import 'body_screen.dart';
 import 'focus_screen.dart';
+import 'log_session_dialog.dart';
 import 'palette.dart';
 import 'settings_screen.dart';
 import 'timer_actions.dart';
@@ -115,14 +116,19 @@ class MainWindowState extends State<MainWindow> {
         openSettings();
       case 'focus':
         openFocus();
+      case 'log':
+        logSession();
     }
   }
+
+  void logSession() => showLogSession(context, client: widget.client, timer: widget.timer, week: widget.week);
 
   void find() {
     final prefix = Platform.isMacOS ? '⌘' : 'Ctrl ';
     showQuickStart(context, timer: widget.timer, actions: [
       for (final (i, s) in Section.values.indexed)
         PaletteAction('Open ${s.label}', s.icon, () => show(s), shortcut: '$prefix${i + 1}'),
+      PaletteAction('Log time you forgot…', Icons.history_rounded, logSession, shortcut: '${prefix}L'),
       PaletteAction('Focus mode', Icons.fullscreen_rounded, openFocus, shortcut: '⇧${prefix}F'),
       PaletteAction('Settings', Icons.settings_outlined, openSettings, shortcut: '$prefix,'),
     ]);
@@ -198,6 +204,7 @@ class MainWindowState extends State<MainWindow> {
           const SingleActivator(LogicalKeyboardKey.comma, control: true): openSettings,
           const SingleActivator(LogicalKeyboardKey.period, control: true): _stop,
           const SingleActivator(LogicalKeyboardKey.keyK, control: true): find,
+          const SingleActivator(LogicalKeyboardKey.keyL, control: true): logSession,
           const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): openFocus,
         },
         child: Focus(autofocus: true, child: window),
@@ -233,6 +240,11 @@ class MainWindowState extends State<MainWindow> {
               label: 'Start or Find…',
               shortcut: const SingleActivator(LogicalKeyboardKey.keyK, meta: true),
               onSelected: find,
+            ),
+            PlatformMenuItem(
+              label: 'Log Forgotten Time…',
+              shortcut: const SingleActivator(LogicalKeyboardKey.keyL, meta: true),
+              onSelected: logSession,
             ),
             PlatformMenuItem(
               label: widget.timer.running ? 'Stop ${widget.timer.current!.name}' : 'Stop',

@@ -379,6 +379,27 @@ class ApiClient {
     return list.cast<Map<String, dynamic>>();
   }
 
+  /// Records a finished session after the fact ("I forgot to track").
+  Future<Map<String, dynamic>> createBeat({
+    required String projectId,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/api/beats/'),
+      headers: _headers,
+      body: jsonEncode({
+        'project_id': projectId,
+        'start': start.toUtc().toIso8601String(),
+        'end': end.toUtc().toIso8601String(),
+      }),
+    );
+    if (resp.statusCode != 201 && resp.statusCode != 200) {
+      throw _apiError(resp, 'Logging the session failed');
+    }
+    return jsonDecode(resp.body);
+  }
+
   /// Rewrites one session's times. `end: null` reopens it as the running
   /// timer, which is how a stop is undone and how a running timer's start
   /// is moved earlier.

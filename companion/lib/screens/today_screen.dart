@@ -12,6 +12,7 @@ import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
 import '../ui/kit.dart';
+import 'log_session_dialog.dart';
 import 'timer_actions.dart';
 
 /// Today: the timer, the day on one line, and the week, the coach and the
@@ -415,6 +416,11 @@ class _TodayScreenState extends State<TodayScreen> {
               ]),
             ),
         ]),
+      const SizedBox(height: 10),
+      LinkButton(
+        label: 'Log time you forgot',
+        onPressed: () => showLogSession(context, client: widget.client, timer: timer, week: widget.week),
+      ),
     ]);
   }
 

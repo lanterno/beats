@@ -269,6 +269,10 @@ class _Panel extends StatelessWidget {
       const SizedBox(height: 4),
       Text('Pick a project below, or press ⌃⌥T anywhere to type one.',
           style: SkyType.body(13).copyWith(color: p.inkMuted)),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: LinkButton(label: 'Log time you forgot…', onPressed: () => onOpen(route: 'log')),
+      ),
     ];
   }
 
