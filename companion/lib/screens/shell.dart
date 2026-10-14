@@ -15,6 +15,7 @@ import '../ui/kit.dart';
 import 'coach_screen.dart';
 import 'flow_screen.dart';
 import 'body_screen.dart';
+import 'focus_screen.dart';
 import 'palette.dart';
 import 'settings_screen.dart';
 import 'timer_actions.dart';
@@ -92,11 +93,22 @@ class MainWindowState extends State<MainWindow> {
     ));
   }
 
+  void openFocus() {
+    final nav = Navigator.of(context);
+    nav.popUntil((r) => r.isFirst);
+    nav.push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 350),
+      pageBuilder: (_, _, _) => FocusScreen(timer: widget.timer),
+      transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: animation, child: child),
+    ));
+  }
+
   void find() {
     final prefix = Platform.isMacOS ? '⌘' : 'Ctrl ';
     showQuickStart(context, timer: widget.timer, actions: [
       for (final (i, s) in Section.values.indexed)
         PaletteAction('Open ${s.label}', s.icon, () => show(s), shortcut: '$prefix${i + 1}'),
+      PaletteAction('Focus mode', Icons.fullscreen_rounded, openFocus, shortcut: '⇧${prefix}F'),
       PaletteAction('Settings', Icons.settings_outlined, openSettings, shortcut: '$prefix,'),
     ]);
   }
@@ -171,6 +183,7 @@ class MainWindowState extends State<MainWindow> {
           const SingleActivator(LogicalKeyboardKey.comma, control: true): openSettings,
           const SingleActivator(LogicalKeyboardKey.period, control: true): _stop,
           const SingleActivator(LogicalKeyboardKey.keyK, control: true): find,
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): openFocus,
         },
         child: Focus(autofocus: true, child: window),
       );
@@ -221,8 +234,13 @@ class MainWindowState extends State<MainWindow> {
                   onSelected: () => show(s),
                 ),
             ]),
-            const PlatformMenuItemGroup(members: [
-              PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.toggleFullScreen),
+            PlatformMenuItemGroup(members: [
+              PlatformMenuItem(
+                label: 'Focus Mode',
+                shortcut: const SingleActivator(LogicalKeyboardKey.keyF, meta: true, shift: true),
+                onSelected: openFocus,
+              ),
+              const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.toggleFullScreen),
             ]),
           ]),
           const PlatformMenu(label: 'Window', menus: [
