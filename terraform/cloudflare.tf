@@ -14,7 +14,7 @@ resource "cloudflare_record" "api_cname" {
   type            = "CNAME"
   content         = "ghs.googlehosted.com"
   ttl             = var.dns_ttl
-  proxied         = false  # Must be DNS-only for Cloud Run domain mapping (both Cloudflare and Cloud Run terminate SSL)
+  proxied         = false # Must be DNS-only for Cloud Run domain mapping (both Cloudflare and Cloud Run terminate SSL)
   allow_overwrite = true
   provider        = cloudflare
 }
