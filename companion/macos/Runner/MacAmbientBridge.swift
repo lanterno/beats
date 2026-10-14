@@ -4,7 +4,7 @@ import ServiceManagement
 
 /// Bridges the companion's Dart layer to macOS-only AppKit features the
 /// `window_manager` and `system_tray` plugins don't cover: the Dock badge
-/// and icon, and opening at login. Method names
+/// and icon, opening at login, and how long the Mac has been idle. Method names
 /// are namespaced by surface (`dock.setBadge`) so future bridges can
 /// land here without colliding.
 final class MacAmbientBridge {
@@ -70,6 +70,12 @@ final class MacAmbientBridge {
         }
       }
       result(nil)
+
+    case "idle.seconds":
+      // Seconds since the last keyboard or mouse event in this login
+      // session. Reading it needs no Accessibility permission.
+      let anyInput = CGEventType(rawValue: ~0)!
+      result(CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput))
 
     default:
       result(FlutterMethodNotImplemented)

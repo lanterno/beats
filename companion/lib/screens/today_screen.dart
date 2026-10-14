@@ -8,10 +8,12 @@ import '../services/body_story.dart';
 import '../services/date_keys.dart';
 import '../services/day_ribbon.dart';
 import '../services/time_format.dart';
+import '../state/idle_watcher.dart';
 import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
 import '../ui/kit.dart';
+import 'log_session_dialog.dart';
 import 'timer_actions.dart';
 
 /// Today: the timer, the day on one line, and the week, the coach and the
@@ -20,6 +22,7 @@ class TodayScreen extends StatefulWidget {
   final ApiClient client;
   final TimerController timer;
   final WeekController week;
+  final IdleWatcher idle;
   final VoidCallback onOpenFlow;
   final VoidCallback onOpenCoach;
   final VoidCallback onOpenBody;
@@ -30,6 +33,7 @@ class TodayScreen extends StatefulWidget {
     required this.client,
     required this.timer,
     required this.week,
+    required this.idle,
     required this.onOpenFlow,
     required this.onOpenCoach,
     required this.onOpenBody,
@@ -190,7 +194,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final p = context.sky;
     final now = DateTime.now();
     return ListenableBuilder(
-      listenable: Listenable.merge([widget.timer, widget.week]),
+      listenable: Listenable.merge([widget.timer, widget.week, widget.idle]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
         children: [
@@ -218,6 +222,10 @@ class _TodayScreenState extends State<TodayScreen> {
                   _suggestion = null;
                 }),
               ),
+            ],
+            if (widget.idle.pending != null) ...[
+              const SizedBox(height: 18),
+              _AwayBanner(ask: widget.idle.pending!, idle: widget.idle),
             ],
             const SizedBox(height: 18),
             _hero(context),
@@ -262,7 +270,11 @@ class _TodayScreenState extends State<TodayScreen> {
       raised: true,
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 28),
       child: LayoutBuilder(builder: (context, box) {
-        final body = timer.running ? _running(context) : _idle(context);
+        final body = !timer.loaded
+            ? _reading(context)
+            : timer.running
+                ? _running(context)
+                : _idle(context);
         if (box.maxWidth < 620) {
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             body,
@@ -341,6 +353,20 @@ class _TodayScreenState extends State<TodayScreen> {
     ]);
   }
 
+  /// Before the first status read: neither "running" nor "what's next"
+  /// would be true yet.
+  Widget _reading(BuildContext context) {
+    final p = context.sky;
+    return SizedBox(
+      height: 176,
+      child: Row(children: [
+        const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+        const SizedBox(width: 14),
+        Text('Reading your timer…', style: SkyType.body(16).copyWith(color: p.inkMuted)),
+      ]),
+    );
+  }
+
   Widget _idle(BuildContext context) {
     final p = context.sky;
     final timer = widget.timer;
@@ -397,6 +423,11 @@ class _TodayScreenState extends State<TodayScreen> {
               ]),
             ),
         ]),
+      const SizedBox(height: 10),
+      LinkButton(
+        label: 'Log time you forgot',
+        onPressed: () => showLogSession(context, client: widget.client, timer: timer, week: widget.week),
+      ),
     ]);
   }
 
@@ -613,6 +644,16 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget _weekCard(BuildContext context) {
     final p = context.sky;
     final week = widget.week;
+    if (!week.complete) {
+      return Panel(
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const PanelHeading('This week', size: 17),
+          const SizedBox(height: 14),
+          Text('Adding up the week…', style: SkyType.body(14).copyWith(color: p.inkMuted)),
+        ]),
+      );
+    }
     final anchor = week.anchor;
     final todayIndex = DateTime.now().weekday - 1;
     final worked = anchor?.worked ?? week.weeks.fold<double>(0, (a, w) => a + w.worked);
@@ -857,6 +898,32 @@ class _SuggestionBanner extends StatelessWidget {
           SkyButton(label: 'Not now', onPressed: onDismiss),
         ],
       ),
+    );
+  }
+}
+
+/// "You were away 14:02–14:26 while Resilio ran": keep it, or take it off.
+class _AwayBanner extends StatelessWidget {
+  final AwayAsk ask;
+  final IdleWatcher idle;
+  const _AwayBanner({required this.ask, required this.idle});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    final from = formatTimeOfDay(ask.period.from), to = formatTimeOfDay(ask.period.to);
+    return Panel(
+      radius: 20,
+      padding: const EdgeInsets.fromLTRB(18, 10, 12, 10),
+      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 14, runSpacing: 8, children: [
+        Icon(Icons.bedtime_outlined, size: 20, color: p.inkMuted),
+        Text(
+          'You were away $from–$to (${formatDuration(ask.period.length)}) while ${ask.project.name} ran.',
+          style: SkyType.body(14),
+        ),
+        SkyButton(label: 'Take it off', kind: SkyButtonKind.dark, onPressed: idle.takeOff),
+        SkyButton(label: 'Keep it', onPressed: idle.keep),
+      ]),
     );
   }
 }

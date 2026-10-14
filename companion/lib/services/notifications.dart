@@ -28,6 +28,11 @@ const String kStartAutoTimerActionId = 'start-auto-timer';
 /// action is attached per-message via `actions`.
 const String _autoTimerCategoryId = 'beats.auto-timer';
 
+/// The "Take it off" action on a time-away notification: the running
+/// session is cut where input stopped and resumed where it came back.
+const String kTakeOffAwayActionId = 'take-off-away';
+const String _awayCategoryId = 'lifepete.away';
+
 /// Singleton wrapper around `flutter_local_notifications` that handles init,
 /// permission, scheduling, and tap routing.
 ///
@@ -48,6 +53,7 @@ class NotificationsService {
   static const int _idBrief = 101;
   static const int _idAutoTimer = 103;
   static const int _idDrift = 104;
+  static const int _idAway = 105;
 
   /// Channel identifiers (Android only — iOS uses a single global channel).
   static const String _channelId = 'beats.coach';
@@ -74,6 +80,12 @@ class NotificationsService {
       requestBadgePermission: false,
       requestSoundPermission: false,
       notificationCategories: [
+        DarwinNotificationCategory(
+          _awayCategoryId,
+          actions: [
+            DarwinNotificationAction.plain(kTakeOffAwayActionId, 'Take it off'),
+          ],
+        ),
         DarwinNotificationCategory(
           _autoTimerCategoryId,
           actions: [
@@ -216,6 +228,29 @@ class NotificationsService {
   /// label derived from the bundle id (see [driftAppLabel] in
   /// `notification_poller.dart`); [durationSeconds] is the length of the
   /// drift window so the user understands the magnitude.
+  /// The timer ran through a stretch with no keyboard or mouse.
+  Future<void> notifyAwayWhileRunning({
+    required String projectName,
+    required String from,
+    required String to,
+    required int minutes,
+  }) async {
+    if (!_ready) await init();
+    await _plugin.show(
+      id: _idAway,
+      title: 'Away ${minutes}m while $projectName ran',
+      body: 'No keyboard or mouse from $from to $to. Keep that time, or take it off?',
+      notificationDetails: _details(
+        subtitle: appName,
+        androidActions: const [
+          AndroidNotificationAction(kTakeOffAwayActionId, 'Take it off', cancelNotification: true),
+        ],
+        darwinCategoryIdentifier: _awayCategoryId,
+      ),
+      payload: 'away',
+    );
+  }
+
   Future<void> notifyDriftAlert({
     required String appLabel,
     required double durationSeconds,
