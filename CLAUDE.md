@@ -119,7 +119,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
-- **Companion tests** are in `companion/test/` (flutter_test) — 159 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Companion tests** are in `companion/test/` (flutter_test) — 281 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
   The SDK lives at `~/development/flutter` (stable), on `PATH` via `~/.zshrc`
   and symlinked into `~/.local/bin` so the lefthook gates — which run under a
   non-interactive `sh` that reads neither — can find it. `flutter doctor`
@@ -257,7 +257,9 @@ nothing.
   (`font-heading`, `font-mono`), Zen Maru Gothic for everything read (`font-body`); real code
   is `font-code`. A script in `ui/index.html` stamps the stored hour and density before first
   paint, so a stored dusk does not flash the afternoon; it repeats the keys and the dusk
-  sky's hex, so a change to either is made in both places.
+  sky's hex, so a change to either is made in both places. The Mac companion is drawn
+  in the same two hours from the same tokens, copied into `companion/lib/theme/sky.dart`;
+  a colour changed in `global.css` is changed there too.
 
 ## Daemon CLI
 
