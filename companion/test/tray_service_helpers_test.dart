@@ -5,6 +5,7 @@
 // too much ceremony for color/timer-string normalization.
 
 import 'package:beats_companion/services/tray_service.dart';
+import 'package:beats_companion/state/prefs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -148,6 +149,21 @@ void main() {
 
     test('negative elapsed (clock skew) clamps to "0"', () {
       expect(dockBadgeForElapsed(const Duration(seconds: -30), running: true), '0');
+    });
+  });
+
+  group('menuBarTitle', () {
+    const elapsed = Duration(hours: 1, minutes: 24, seconds: 7);
+
+    test('follows what Settings says the item shows', () {
+      expect(menuBarTitle(MenuBarShows.timeAndProject, project: 'Northwind', elapsed: elapsed),
+          '1:24 Northwind');
+      expect(menuBarTitle(MenuBarShows.time, project: 'Northwind', elapsed: elapsed), '1:24');
+      expect(menuBarTitle(MenuBarShows.icon, project: 'Northwind', elapsed: elapsed), '');
+    });
+
+    test('is empty while nothing runs', () {
+      expect(menuBarTitle(MenuBarShows.timeAndProject), '');
     });
   });
 }
