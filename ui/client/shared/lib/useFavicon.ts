@@ -1,14 +1,15 @@
 /**
  * Favicon Timer Indicator Hook
- * When the timer is running, replaces the browser favicon with a
- * canvas-generated icon showing a colored dot matching the project color.
- * Restores the default favicon when the timer stops.
+ * When the timer is running, replaces the browser favicon with the day ring
+ * drawn in the running project's colour. Restores the default favicon when
+ * the timer stops.
  */
 import { useEffect, useRef } from "react";
 
 const DEFAULT_FAVICON = "/favicon.svg";
 const SIZE = 32;
 
+/** The day ring from shared/brand/favicon.svg, its arc and sun in [color]. */
 function createTimerFavicon(color: string): string {
 	const canvas = document.createElement("canvas");
 	canvas.width = SIZE;
@@ -16,16 +17,31 @@ function createTimerFavicon(color: string): string {
 	const ctx = canvas.getContext("2d");
 	if (!ctx) return DEFAULT_FAVICON;
 
-	// Outer ring
+	const c = SIZE / 2;
+	const r = 9.5;
+	// Twelve o'clock, round two thirds of the day to eight.
+	const from = -Math.PI / 2;
+	const to = from + (Math.PI * 4) / 3;
+
 	ctx.beginPath();
-	ctx.arc(SIZE / 2, SIZE / 2, 13, 0, Math.PI * 2);
-	ctx.strokeStyle = color;
-	ctx.lineWidth = 2.5;
+	ctx.roundRect(0, 0, SIZE, SIZE, 7);
+	ctx.fillStyle = "#1A2446";
+	ctx.fill();
+
+	ctx.lineWidth = 3.5;
+	ctx.lineCap = "round";
+	ctx.beginPath();
+	ctx.arc(c, c, r, 0, Math.PI * 2);
+	ctx.strokeStyle = "#2E3E6E";
 	ctx.stroke();
 
-	// Inner filled dot
 	ctx.beginPath();
-	ctx.arc(SIZE / 2, SIZE / 2, 7, 0, Math.PI * 2);
+	ctx.arc(c, c, r, from, to);
+	ctx.strokeStyle = color;
+	ctx.stroke();
+
+	ctx.beginPath();
+	ctx.arc(c + r * Math.cos(to), c + r * Math.sin(to), 3.6, 0, Math.PI * 2);
 	ctx.fillStyle = color;
 	ctx.fill();
 
