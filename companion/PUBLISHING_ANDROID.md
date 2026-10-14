@@ -6,7 +6,7 @@ Current state of the repo:
 - `companion/android/app/build.gradle.kts` already reads release signing from `companion/android/key.properties` (gitignored).
 - `applicationId` = `space.elghareeb.beats`.
 - `versionName` = 1.0.0, `versionCode` = 1 (from `companion/pubspec.yaml` → `version: 1.0.0+1`).
-- App label in `AndroidManifest.xml` is **"Pete"** — confirm this is the public name before uploading. If it should be "Beats", update `android:label` in `companion/android/app/src/main/AndroidManifest.xml` first.
+- App label in `AndroidManifest.xml` is **"LifePete"**. It is stamped from `shared/brand.json` by `scripts/gen_brand.py`; to change it, edit the JSON and rerun the script rather than the manifest.
 
 ## 1. Generate the upload keystore
 
@@ -101,6 +101,5 @@ The keystore from step 1 stays the same forever. The `.aab` and `versionCode` ch
 
 ## Open decisions to make before publishing
 
-- App label: keep **"Pete"** or change to **"Beats"** in `AndroidManifest.xml`?
 - Privacy policy URL: where will `PRIVACY.md` and `DATA.md` be publicly hosted?
 - Initial release track: ship straight to production after internal smoke, or go through closed/open testing first?

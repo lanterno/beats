@@ -1,6 +1,6 @@
-# Pete — macOS Roadmap
+# LifePete — macOS Roadmap
 
-> Pete is the Mac surface of the Beats system. This roadmap is the
+> LifePete on the Mac is the companion app. This roadmap is the
 > Mac-only ambition: the things a desktop with a menu bar, a window
 > server, a Focus engine, and a Continuity stack can do that no other
 > platform can match.
@@ -22,7 +22,7 @@ The timer should feel like part of the desk, not an app you open.
 - ~~**Floating now-bar**~~ — *Cut. The menu-bar tray already shows
   elapsed time + project; a floating panel duplicated the signal at the
   cost of screen real estate.*
-- **Dock badge** — minute counter on Pete's dock icon while running
+- **Dock badge** — minute counter on LifePete's dock icon while running
   (`NSApp.dockTile.badgeLabel`). Resets to empty on stop. The minutes
   read like a wristwatch in your peripheral vision.
 - **Menu-bar sparkline** — replace the static dot in the tray with a
@@ -37,7 +37,7 @@ The timer should feel like part of the desk, not an app you open.
 
 ## II. System-aware focus
 
-Pete should know what the Mac is doing without asking.
+LifePete should know what the Mac is doing without asking.
 
 - **Focus auto-engage** — when a timer starts, push a `Focus` filter
   via the Shortcuts intent surface (`SetFocusIntent`) keyed to the
@@ -73,30 +73,30 @@ Keyboard ≫ menu.
   HUD picker is a borderless `NSPanel` with a `TextField` and a
   monospaced project list — same vocabulary as Raycast.
 - **Spotlight / Raycast / Alfred provider** — register a CoreSpotlight
-  domain *and* ship a Raycast extension. Typing `pete linear` starts
-  a timer for the Linear project; `pete stop` stops; `pete note <text>`
-  appends. Single binary entry: `pete-cli`, talks to the running
+  domain *and* ship a Raycast extension. Typing `lifepete linear` starts
+  a timer for the Linear project; `lifepete stop` stops; `lifepete note <text>`
+  appends. Single binary entry: `lifepete-cli`, talks to the running
   app over a Unix socket so there's no double network round-trip.
 - **Shortcuts.app actions** — expose the timer API as `AppIntent`s:
   *Start Timer*, *Stop Timer*, *Get Current Project*, *Get Today Total*.
-  Now any user can wire Pete into
+  Now any user can wire LifePete into
   Stream Deck, Keyboard Maestro, or a homemade NFC tag on the desk.
-- **Services menu** — selected text in any app → *Services › Pete ›
+- **Services menu** — selected text in any app → *Services › LifePete ›
   Start timer with project name…* prefills the picker. Selected URL →
   if it matches a project hint, starts immediately.
 
 ## IV. Continuity & live presence
 
-Pete should follow the user across their devices.
+LifePete should follow the user across their devices.
 
 - **Live Activity bridge** — when the iPhone companion has a timer
   running, surface a Live Activity on the Mac's menu bar (Sonoma+'s
-  iPhone-mirrored Live Activities). Conversely, when Pete starts a
+  iPhone-mirrored Live Activities). Conversely, when LifePete starts a
   timer on the Mac, the iPhone Live Activity reflects it within
   seconds. One source of truth: the API; the bridge is just the
   Activity payload.
 - **Handoff** — `NSUserActivity` advertised when a project view is
-  visible. Open Pete on a second Mac signed into the same iCloud →
+  visible. Open LifePete on a second Mac signed into the same iCloud →
   Handoff icon in the dock; one click and the same project is loaded
   with the same running timer.
 - **iCloud key-value store** — recent-projects list, post-stop tag
@@ -115,7 +115,7 @@ Intelligence"* toggle.
   manual edit.
 - **Genmoji project icons** — the project picker today shows colored
   dots. Let users pick or *generate* a Genmoji per project via
-  `GenmojiKit`. Pete renders the Genmoji in the tray icon and floating
+  `GenmojiKit`. LifePete renders the Genmoji in the tray icon and floating
   now-bar.
 - **Image Playground end-of-week postcard** — Friday evening, after the
   review, generate an Image Playground card themed on the week's
@@ -128,17 +128,17 @@ Intelligence"* toggle.
 
 ## VI. Distribution polish
 
-The work that turns Pete from a sideloaded `.app` into something a
+The work that turns LifePete from a sideloaded `.app` into something a
 non-developer can install.
 
 - **Developer ID signing + notarization** — fixes the keychain-ACL
   reset on every rebuild (the bug we hit during the rename). One-time
   Apple Developer enrollment + a `codesign` step in CI.
 - **Sparkle auto-update channel** — release feed at
-  `releases.beats.app/pete/appcast.xml`, signed with `EdDSA`. Updates
+  `releases.beats.app/lifepete/appcast.xml`, signed with `EdDSA`. Updates
   land silently overnight; user sees a "What's changed" sheet on next
   launch.
-- **Homebrew Cask** — `brew install --cask pete` once notarization is
+- **Homebrew Cask** — `brew install --cask lifepete` once notarization is
   live. Mirrors the `beatsd` formula already in the homebrew-tap doc.
 - **App icon refresh** — proper macOS squircle, dark-mode variant, +
   template menu-bar icon (vector PDF). Today the menu bar uses a
@@ -158,7 +158,7 @@ Things that sound cool but don't earn their keep yet.
   unique macOS surface. Reconsider once iOS widgets are real (see the
   cross-platform roadmap).
 - **Stage Manager-aware layouts** — interesting but no clean API; what
-  signal would Pete take from it?
+  signal would LifePete take from it?
 - **Sherlocking risk** — if Apple ships a first-party Time Tracker in a
   future Health/Productivity bundle, half of this becomes redundant.
   Build the things that depend on Beats data (flow score, coach)

@@ -6,8 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/beats_theme.dart';
 
-/// Full-bleed, near-black clock face. The "Monastic" mode from the Pete
-/// macOS roadmap — meant to be left running on a docked secondary
+/// Full-bleed, near-black clock face. The "Monastic" mode from the macOS
+/// roadmap (`docs/macos-roadmap.md`) — meant to be left running on a docked secondary
 /// display, or invoked when the user wants the timer to be the only
 /// thing on screen.
 ///

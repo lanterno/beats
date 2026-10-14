@@ -130,6 +130,13 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   single source and `scripts/gen_app_labels.py` renders it into the Go, TypeScript
   and Dart tables. Edit the JSON, run the script, commit the output;
   `--check` fails CI and pre-push when it is stale.
+- **The product name** is structural the same way: `shared/brand.json` holds the name
+  people see (LifePete), and `scripts/gen_brand.py` stamps it into the SPA's
+  `shared/config/brand.ts`, the API's `beats/brand.py`, the companion's `lib/brand.dart`
+  and the companion's native manifests and runners. Code reads those constants, never a
+  literal. `--check` runs in pre-push and the Brand workflow. Build identifiers (bundle
+  IDs, package and binary names, `beatsd`, the `beats` repo and database) are not the
+  name and stay put.
 - **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
 
 ### What to test, and what not to
