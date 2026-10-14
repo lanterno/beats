@@ -8,6 +8,9 @@ class MainFlutterWindow: NSWindow {
   private var macAmbient: MacAmbientBridge?
 
   override func awakeFromNib() {
+    // Closed, not destroyed: the Dock icon and the menu bar reopen it.
+    self.isReleasedWhenClosed = false
+
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController

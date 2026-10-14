@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
 
-/// macOS-only ambient surfaces. Today: just the dock badge.
+/// macOS-only ambient surfaces: the Dock badge and icon, and opening at login.
 ///
 /// On non-macOS platforms every method is a silent no-op so callers can
 /// invoke them unconditionally. The native side lives in
@@ -22,5 +22,31 @@ class MacAmbient {
       // Method-channel failures shouldn't take the timer down. The dock
       // is decoration; the underlying timer state is still authoritative.
     }
+  }
+
+  /// Whether LifePete opens at login, or null where macOS can't say
+  /// (before macOS 13, or off a Mac).
+  static Future<bool?> openAtLogin() async {
+    if (!Platform.isMacOS) return null;
+    try {
+      return await _channel.invokeMethod<bool>('login.isEnabled');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Registers or removes LifePete as a login item. Returns the state
+  /// macOS reports afterwards; throws with macOS's reason on failure.
+  static Future<bool> setOpenAtLogin(bool enabled) async {
+    final ok = await _channel.invokeMethod<bool>('login.setEnabled', {'enabled': enabled});
+    return ok ?? false;
+  }
+
+  /// Shows or hides the Dock icon. Hidden, LifePete lives in the menu bar.
+  static Future<void> setDockVisible(bool visible) async {
+    if (!Platform.isMacOS) return;
+    try {
+      await _channel.invokeMethod('dock.setVisible', {'visible': visible});
+    } catch (_) {}
   }
 }
