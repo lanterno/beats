@@ -95,6 +95,17 @@ DEVICE_ALLOWED_PREFIXES = (
     # Companion's post-stop "How did it go?" sheet uses the user's prior tags
     # as one-tap chips alongside the freeform input.
     "/api/analytics/tags",
+    # The Mac app's Body screen reads the week's biometrics (GET /api/biometrics/),
+    # not just the daily push above, and its Settings show and change the Fitbit
+    # and Oura connections.
+    "/api/biometrics",
+    "/api/fitbit",
+    "/api/oura",
+    # Its Today screen lays the day's calendar beside the day's sessions.
+    "/api/calendar/events",
+    # Its Coach screen chats. Every message spends the user's coach budget,
+    # which /api/coach/chat enforces on its own (BUDGET_EXCEEDED).
+    "/api/coach/chat",
 )
 
 
