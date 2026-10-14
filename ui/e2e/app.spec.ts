@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { APP_NAME } from "../client/shared/config/brand";
 
-test.describe("Beats App", () => {
+test.describe("App shell", () => {
 	test("loads the dashboard", async ({ page }) => {
 		await page.goto("/app");
-		await expect(page).toHaveTitle(/Beats/);
+		await expect(page).toHaveTitle(new RegExp(APP_NAME));
 	});
 
 	test("sidebar shows project list", async ({ page }) => {

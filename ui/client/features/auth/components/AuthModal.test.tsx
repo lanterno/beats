@@ -54,6 +54,7 @@ import {
 	startAuthentication,
 	startRegistration,
 } from "@simplewebauthn/browser";
+import { APP_NAME } from "@/shared/config";
 import {
 	getLoginOptions,
 	getSsoConfig,
@@ -85,7 +86,7 @@ describe("AuthModal", () => {
 	describe("visibility", () => {
 		it("renders nothing when open is false", () => {
 			renderModal({ open: false });
-			expect(screen.queryByText("Beats")).not.toBeInTheDocument();
+			expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
 		});
 
 		it("renders the login mode by default", () => {
