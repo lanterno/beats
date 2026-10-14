@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:beats_companion/screens/pairing_screen.dart';
 import 'package:beats_companion/theme/sky.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +18,8 @@ void main() {
     await tester.pumpWidget(app());
     await tester.pump();
 
-    expect(find.text('Pair this Mac'), findsOneWidget);
+    // The heading names the machine: CI runs on Linux, laptops on macOS.
+    expect(find.text(Platform.isMacOS ? 'Pair this Mac' : 'Pair this device'), findsOneWidget);
     expect(find.text('Pair'), findsOneWidget);
     expect(find.byKey(const Key('pairing-code')), findsOneWidget);
   });
