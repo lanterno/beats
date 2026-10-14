@@ -13,7 +13,7 @@ import '../theme/sky.dart';
 import '../ui/kit.dart';
 import 'coach_screen.dart';
 import 'flow_screen.dart';
-import 'health_screen.dart';
+import 'body_screen.dart';
 import 'home_screen.dart';
 import 'palette.dart';
 import 'timer_actions.dart';
@@ -107,7 +107,7 @@ class MainWindowState extends State<MainWindow> {
           ),
         Section.flow => FlowScreen(client: widget.client),
         Section.coach => CoachScreen(client: widget.client, timer: widget.timer, week: widget.week),
-        Section.body => HealthScreen(client: widget.client),
+        Section.body => BodyScreen(client: widget.client),
       };
 
   @override
