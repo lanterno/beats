@@ -102,6 +102,10 @@ class TrayService {
   // call failed — the renderer falls back to a plain dot.
   List<double> _flowScores = const [];
   String? _iconPath;
+  // Nothing running: the icon is drawn in the menu bar's own colour, since
+  // the idle grey all but vanishes on a dark or busy menu bar. A running
+  // project keeps its colour.
+  bool get _iconTemplate => timer.current == null;
   String _timerKey = '';
   String? _lastTitle;
   // Tracks the last label pushed to the dock badge so we can skip the
@@ -117,7 +121,12 @@ class TrayService {
     _iconPath = await _iconRenderer.idleIcon();
 
     if (_native) {
-      await StatusMenu.update(visible: true, imagePath: _iconPath, tooltip: appName);
+      await StatusMenu.update(
+        visible: true,
+        imagePath: _iconPath,
+        template: _iconTemplate,
+        tooltip: appName,
+      );
     } else {
       final tray = SystemTray();
       _tray = tray;
@@ -201,6 +210,7 @@ class TrayService {
           visible: true,
           title: title,
           imagePath: _iconPath,
+          template: _iconTemplate,
           tooltip: running ? '$appName — ${timer.current!.name}' : appName,
         );
       } else {

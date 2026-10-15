@@ -90,8 +90,8 @@ class TrayIconRenderer {
     final canvas = ui.Canvas(recorder);
 
     // Inset so the sun at the arc's end doesn't kiss the menu bar edges.
-    const radius = 11.5;
-    const sunRadius = 4.4;
+    const radius = 12.0;
+    const sunRadius = 5.0;
     const start = -math.pi / 2;
     const sweep = math.pi * 4 / 3;
     final center = ui.Offset(_renderSize / 2.0, _renderSize / 2.0);
@@ -100,10 +100,10 @@ class TrayIconRenderer {
       ..color = c
       ..isAntiAlias = true
       ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = 3.6
+      ..strokeWidth = 4.2
       ..strokeCap = ui.StrokeCap.round;
 
-    canvas.drawCircle(center, radius, stroke(color.withValues(alpha: 0.35)));
+    canvas.drawCircle(center, radius, stroke(color.withValues(alpha: 0.4)));
     canvas.drawArc(circle, start, sweep, false, stroke(color));
     final end = center + ui.Offset(math.cos(start + sweep), math.sin(start + sweep)) * radius;
     final fill = ui.Paint()

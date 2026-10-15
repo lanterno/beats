@@ -10,10 +10,14 @@ import 'package:flutter/services.dart';
 class StatusMenu {
   static const _channel = MethodChannel('companion/menubar');
 
+  /// [template] has macOS draw the image in the menu bar's own colour, from
+  /// its alpha alone, as it does every system icon; an image in a fixed
+  /// colour can vanish against the wallpaper a translucent menu bar shows.
   static Future<void> update({
     required bool visible,
     String title = '',
     String? imagePath,
+    bool template = false,
     String? tooltip,
   }) async {
     if (!Platform.isMacOS) return;
@@ -22,6 +26,7 @@ class StatusMenu {
         'visible': visible,
         'title': title,
         'imagePath': ?imagePath,
+        'template': template,
         'tooltip': ?tooltip,
       });
     } catch (_) {}
