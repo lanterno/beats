@@ -79,8 +79,10 @@ jobs:
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n' \
             "$PASSWORD" "$PASSWORD" > key.properties
 
+      # The store's build pairs with lifepete.com unless someone names their own server.
       - run: >-
           flutter build appbundle --release
+          --dart-define-from-file=config/lifepete.json
           --build-name ${{ steps.version.outputs.name }}
           --build-number ${{ steps.version.outputs.code }}
 

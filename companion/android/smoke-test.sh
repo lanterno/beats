@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Runs the release APK on a booted emulator the way a Play reviewer would:
-# open it, tap "Look around with sample data", and look at every place. It
-# fails on a crash (the process gone, or a FATAL EXCEPTION in logcat — what
-# R8 shrinking a plugin's classes looks like), and leaves a screenshot of
-# each step in $OUT for a person to look at.
+# Runs the release APK on a booted emulator the way a Play reviewer meets it:
+# the pairing screen, then every place on sample data. It fails on a crash —
+# the process gone, or a FATAL EXCEPTION in logcat, which is how R8 shrinking
+# a plugin's classes shows up — and leaves a screenshot of each in $out for a
+# person to look at (edge to edge, the server named on pairing).
+#
+# Each place is a cold start with the launch route the app reads for sample
+# data (`--es route /sample/flow`): adb can't reliably tap Flutter's widgets.
 #
 #   smoke-test.sh path/to/app-release.apk [out-dir]
 set -euo pipefail
@@ -14,77 +17,71 @@ out=${2:-smoke}
 pkg=space.elghareeb.beats
 mkdir -p "$out"
 
-shot() { adb exec-out screencap -p > "$out/$1.png"; echo "  $1.png"; }
+# A slow emulator's own apps (the launcher, System UI) raise "isn't
+# responding" over everything; wait them out rather than photograph them.
+dismiss_anr() {
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 0
+  adb pull /sdcard/ui.xml "$out/ui.xml" >/dev/null 2>&1 || return 0
+  xy=$(python3 - "$out/ui.xml" <<'EOF'
+import re, sys
+xml = open(sys.argv[1]).read()
+if "isn't responding" in xml or "isn&apos;t responding" in xml:
+    for node in re.findall(r'<node [^>]*>', xml):
+        if 'text="Wait"' in node:
+            x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node).groups())
+            print((x1 + x2) // 2, (y1 + y2) // 2)
+            break
+EOF
+)
+  if [ -n "$xy" ]; then
+    adb shell input tap $xy
+    echo "  (dismissed a system \"isn't responding\" dialog)"
+    sleep 2
+  fi
+}
+
+shot() { dismiss_anr; adb exec-out screencap -p > "$out/$1.png"; echo "  $1.png"; }
 
 alive() {
   if ! adb shell pidof "$pkg" >/dev/null; then
     echo "::error::$pkg is not running after: $1"
-    adb logcat -d -s AndroidRuntime:E flutter:V > "$out/logcat.txt" || true
+    adb logcat -d > "$out/logcat.txt" || true
+    grep -A 20 "FATAL EXCEPTION" "$out/logcat.txt" | head -40 || true
     exit 1
   fi
 }
 
-# Taps the on-screen node whose text or description contains $1, found in a
-# UI Automator dump (Flutter exposes its semantics to it).
-tap() {
-  for _ in 1 2 3 4 5; do
-    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
-    adb pull /sdcard/ui.xml "$out/ui.xml" >/dev/null 2>&1 || true
-    xy=$(python3 - "$out/ui.xml" "$1" <<'EOF'
-import re, sys
-xml, want = open(sys.argv[1]).read(), sys.argv[2].lower()
-for node in re.findall(r'<node [^>]*>', xml):
-    label = ' '.join(re.findall(r'(?:text|content-desc)="([^"]*)"', node)).lower()
-    if want in label:
-        x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node).groups())
-        print((x1 + x2) // 2, (y1 + y2) // 2)
-        break
-EOF
-)
-    if [ -n "$xy" ]; then
-      adb shell input tap $xy
-      echo "  tapped \"$1\" at $xy"
-      return
-    fi
-    sleep 3
-  done
-  echo "::error::nothing on screen reads \"$1\""
-  exit 1
-}
+echo "Settling"
+sleep 20
+dismiss_anr
 
 echo "Installing"
 adb install -r "$apk" >/dev/null
 adb logcat -c
 
-echo "Launching"
 # The launcher activity as Android resolves it: the Kotlin namespace
-# (com.beats.beats_companion) isn't the application id, so ".MainActivity"
-# would point at a class that doesn't exist.
+# (com.beats.beats_companion) isn't the application id.
 activity=$(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$pkg" | tr -d '\r' | tail -1)
-echo "  $activity"
-adb shell am start -W -n "$activity" >/dev/null
-sleep 15
-alive "launch"
+echo "Launching $activity"
+
+open() {
+  adb shell am force-stop "$pkg"
+  if [ -n "$1" ]; then
+    adb shell am start -W -n "$activity" --es route "$1" >/dev/null
+  else
+    adb shell am start -W -n "$activity" >/dev/null
+  fi
+  sleep 12
+  alive "opening ${1:-the app}"
+}
+
+open ""
 shot 1-pairing
 
-tap "look around with sample data"
-sleep 12
-alive "opening sample data"
-shot 2-today
-
-for place in Flow Coach Body; do
-  tap "$place"
-  sleep 6
-  alive "opening $place"
-  shot "3-$(echo "$place" | tr '[:upper:]' '[:lower:]')"
+for place in today flow coach body find focus; do
+  open "/sample/$place"
+  shot "2-$place"
 done
-
-tap "Today"
-sleep 3
-tap "Start or switch"
-sleep 4
-alive "opening the start sheet"
-shot 4-start-sheet
 
 adb logcat -d > "$out/logcat.txt"
 if grep -q "FATAL EXCEPTION" "$out/logcat.txt"; then
