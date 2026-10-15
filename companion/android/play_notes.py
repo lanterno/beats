@@ -16,6 +16,12 @@ import re
 
 LIMIT = 500
 
+# "fix(ui): ", "feat!: ", "Companion: " at the start of an item: how PR titles
+# are filed, not what changed.
+PREFIX = re.compile(
+    r"^(• )?(?:(?:feat|fix|perf|refactor|chore|docs|test|ci|build|style)(?:\([^)]*\))?!?|Companion):\s+(\w)"
+)
+
 
 def play_notes(markdown: str, limit: int = LIMIT) -> str:
     """Markdown release notes → plain text that fits Play's limit.
@@ -26,6 +32,14 @@ def play_notes(markdown: str, limit: int = LIMIT) -> str:
     ...
     ... **Full Changelog**: https://github.com/lanterno/beats/compare/companion-v1.0.0...companion-v1.1.0''')
     '• Pairing opens without the keyboard\\n• Focus has a Stop button on phones'
+
+    GitHub's comment at the top, and how PR titles are filed, are not for a
+    phone; a title that merely contains a colon keeps it:
+
+    >>> play_notes('<!-- Release notes generated using configuration -->\\n- fix(ui): stop works offline\\n- Companion: the day ring\\n- Menu bar: the idle ring')
+    '• Stop works offline\\n• The day ring\\n• Menu bar: the idle ring'
+    >>> play_notes('feat!: pairing by QR')
+    'Pairing by QR'
 
     >>> play_notes('### Fixes\\n- See [the docs](https://example.com) and `flags`\\n\\n\\n- Faster sync')
     'Fixes\\n• See the docs and flags\\n\\n• Faster sync'
@@ -49,6 +63,7 @@ def play_notes(markdown: str, limit: int = LIMIT) -> str:
     >>> play_notes('- `--dart-define-from-file` reads use_lifepete_json and __init__')
     '• --dart-define-from-file reads use_lifepete_json and init'
     """
+    markdown = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL)
     lines: list[str] = []
     for raw in markdown.replace("\r\n", "\n").split("\n"):
         line = raw.strip()
@@ -58,6 +73,7 @@ def play_notes(markdown: str, limit: int = LIMIT) -> str:
         line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)  # [text](url) → text
         line = re.sub(r"^#{1,6}\s*", "", line)  # headings
         line = re.sub(r"^[*-]\s+", "• ", line)  # bullets
+        line = re.sub(PREFIX, lambda m: (m.group(1) or "") + m.group(2).upper(), line)
         line = re.sub(r"(?<!\w)([*_`]{1,3})([^*_`\n]+?)\1(?!\w)", r"\2", line)  # emphasis, code
         if line or (lines and lines[-1]):
             lines.append(line)

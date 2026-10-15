@@ -6,8 +6,8 @@ name: Release Android
 #
 # (or Releases → Draft a new release on GitHub, tag companion-v…, Publish).
 # The workflow tests, builds the bundle signed with the upload key, attaches
-# it to the release, and uploads it to Play with the release's notes as
-# "What's new". A pre-release goes to the internal testing track; a full
+# it to the release, and uploads it to Play with the app's changes since the
+# previous companion release as "What's new". A pre-release goes to the internal testing track; a full
 # release goes to the track named by the repo variable PLAY_RELEASE_TRACK —
 # `alpha` (the closed test) until production access is granted, then
 # `production`. There is no default: a full release with the variable unset
@@ -58,6 +58,8 @@ jobs:
         working-directory: companion
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the tags and merges What's new is built from
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -150,15 +152,32 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" "${{ steps.bundle.outputs.path }}" --clobber
 
-      # Play's "What's new" is plain text, at most 500 characters per language.
+      # What's new lists the app's own changes since the previous companion
+      # release: the titles of the PRs merged since that tag which changed
+      # the app (not its store docs, tests or release scripts). The release's
+      # GitHub notes cover the whole repo, so they are used only for the first
+      # release, which has no tag to count from. Play takes plain text, at most
+      # 500 characters per language; play_notes.py makes it fit.
       - name: What's new
         if: github.event_name == 'release'
         working-directory: .
         env:
-          NOTES: ${{ github.event.release.body }}
+          TAG: ${{ github.event.release.tag_name }}
+          BODY: ${{ github.event.release.body }}
         run: |
+          prev=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/companion-v*' \
+            | grep -vxF "$TAG" | head -1 || true)
+          if [ -n "$prev" ]; then
+            echo "Changes since $prev"
+            NOTES=$(git log --first-parent --merges --format='- %b' "$prev..$TAG" -- companion \
+              ':!companion/store' ':!companion/test' ':!companion/*.md' \
+              ':!companion/android/*.py' ':!companion/android/*.sh' | grep -v '^[[:space:]]*$' || true)
+          else
+            echo "No earlier companion release: using the release notes"
+            NOTES=$BODY
+          fi
           mkdir -p whatsnew
-          python3 companion/android/play_notes.py > whatsnew/whatsnew-en-US
+          NOTES=$NOTES python3 companion/android/play_notes.py > whatsnew/whatsnew-en-US
           echo "--- What's new:"; cat whatsnew/whatsnew-en-US
 
       - name: Forget the key
