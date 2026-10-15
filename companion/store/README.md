@@ -48,8 +48,11 @@ These need the account holder; the rest is done.
    only the upload key. Add yourself as an internal tester and install it.
 4. **App content** (*Policy and programs → App content*). Answers below.
 5. **Store listing** (*Grow users → Store presence → Main store listing*).
-   Paste the text files, upload the images. Category Productivity; contact
-   email ahmed.elghareeb@proton.me; website https://lifepete.com.
+   Paste the text files (the title is the app name), upload the images (the
+   screenshots in their numbered order), and answer the AI asset declaration
+   *Don't label assets* (they are renders of the app and hand-drawn SVG).
+   *Store settings*: category Productivity; contact email
+   ahmed.elghareeb@proton.me; website https://lifepete.com.
 6. **Closed testing.** Create a closed track, add testers by email or a Google
    Group, share the opt-in link, and promote the internal build to it.
 7. **Production access.** After 14 days with 12 or more testers, *Dashboard →
@@ -63,31 +66,38 @@ These need the account holder; the rest is done.
 
 **Privacy policy** — https://github.com/lanterno/beats/blob/main/PRIVACY.md
 
-**App access** — *All or some functionality is restricted*. Add instructions,
-no credentials:
+**Sign in details** (formerly App access) — *Yes, part of the app is
+restricted*. One set of details, named "Sample data (no account needed)", no
+username or password, with these instructions (it must stay under 500
+characters), and *full access* ticked:
 
-> LifePete shows a person's own time-tracking account, which needs pairing
-> with lifepete.com. To review without an account, on the first screen tap
-> "No account yet? Look around with sample data". Every screen then works on
-> made-up data: start, stop and switch the timer (the gold + button), Flow,
-> Coach (the chat replies), Body, Settings and Focus mode.
+> No account is needed to review. On the first screen (Pair this device), tap
+> "No account yet? Look around with sample data" at the bottom. Every screen
+> then works on made-up data: start, stop and switch the timer (the gold +
+> button), Today, Flow, Coach (chat replies), Body, Settings and Focus mode.
+> Pairing a real account needs a code from lifepete.com, which review doesn't
+> need.
 
 **Ads** — No.
 
-**Content rating** — questionnaire category *All other app types*. No violence,
-sexuality, language, drugs or gambling. Users don't interact with each other
-or share content; there is no purchase. The coach is an AI chat that answers
-from the person's own data. Expect *Everyone* / PEGI 3.
+**Content rating** — questionnaire category *All other app types*. *Online
+content: Yes* — the coach's replies are generated AI content that isn't in the
+download. Everything else No: no violence, sexuality, language, drugs or
+age-restricted products; users don't interact with each other; no location
+sharing, digital purchases, rewards, browser or news. Rated all ages.
 
 **Target audience** — 18 and over. It isn't made for children, and saying so
 keeps the Families policy out of scope.
 
 **News app** — No. **Government app** — No. **Financial features** — None.
+**Advertising ID** — No: the merged manifest has no
+`com.google.android.gms.permission.AD_ID` (check the bundle again after adding
+a Google SDK).
 
-**Health apps** — the app shows sleep, HRV, resting heart rate and steps that
-the person connected from Oura or Fitbit on their account; it doesn't read
-the phone's health stores. If the form asks, it is a *fitness and wellness*
-display, not a medical or diagnostic feature.
+**Health apps** — *Activity and fitness* and *Sleep management*: the app shows
+sleep, HRV, resting heart rate and steps that the person connected from Oura
+or Fitbit on their account. It doesn't read the phone's health stores, and
+nothing medical is ticked.
 
 **Data safety.** "Collected" means it leaves the phone; data the app only
 shows from the person's own server isn't collected by the app.
@@ -95,14 +105,23 @@ shows from the person's own server isn't collected by the app.
 - Does the app collect or share user data? **Yes** (collects; does not share).
 - Encrypted in transit? **Yes** — HTTPS to lifepete.com. (Someone pointing the
   app at their own server chooses its scheme.)
-- Can users ask for their data to be deleted? **Yes** — by email, as
-  PRIVACY.md says.
-- Data types, all *collected*, *not shared*, *required* (the app is a client
-  of the account), for *App functionality*:
+- Account creation: *My app does not allow users to create an account*, but
+  *users can log in with accounts created outside the app* → *Other*: "On the
+  LifePete website (lifepete.com) with an email and a passkey; the app is then
+  paired with a one-time code."
+- Data deletion: **Yes**, at
+  https://github.com/lanterno/beats/blob/main/PRIVACY.md#export-and-deletion
+  (by email, as that section says).
+- Data types, all *collected*, *not shared*, *not ephemeral*:
+  - **Messages → Other in-app messages** — coach chat. *Optional* (nobody has
+    to chat), for *App functionality*. The API passes it to Anthropic to
+    answer, which is a service provider acting for us, so not "shared".
   - **App activity → Other user-generated content** — sessions logged, project
-    choices, brief ratings, coach chat messages.
-  - **App activity → Other actions** — starting, stopping and switching the timer.
-  - **Device or other IDs** — the device name sent when pairing.
+    choices, brief ratings. *Required*, *App functionality*.
+  - **App activity → Other actions** — starting, stopping and switching the
+    timer. *Required*, *App functionality*.
+  - **Device or other IDs** — the device name sent when pairing. *Required*,
+    *App functionality* and *Analytics* (the scanner's installation ID, below).
 - The code scanner adds two more. `mobile_scanner` 7.2 pulls in Google ML Kit's
   bundled barcode model (`com.google.mlkit:barcode-scanning:17.3.0`; nothing
   sets `useUnbundled`), and ML Kit sends Google usage diagnostics: device and
@@ -112,7 +131,7 @@ shows from the person's own server isn't collected by the app.
   ML Kit says it doesn't pass this to third parties. Both *collected*, *not
   shared*, *required*, for *Analytics*:
   - **App info and performance → Diagnostics**
-  - **Device or other IDs** (already ticked above; add *Analytics* to its purposes)
+  - **Device or other IDs** (already above, with *Analytics* among its purposes)
 
   Switching scanner versions, or to the unbundled model, changes this list;
   check the disclosure page again when you do.
