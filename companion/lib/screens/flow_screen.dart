@@ -145,7 +145,7 @@ class _FlowScreenState extends State<FlowScreen> {
   Widget build(BuildContext context) {
     final data = _data[_day];
     return ListView(
-      padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+      padding: pagePadding(context),
       children: [
         _Column(children: [
           _header(context),

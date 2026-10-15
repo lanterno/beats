@@ -197,7 +197,7 @@ class _TodayScreenState extends State<TodayScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([widget.timer, widget.week, widget.idle]),
       builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+        padding: pagePadding(context),
         children: [
           _Column(children: [
             Row(crossAxisAlignment: CrossAxisAlignment.end, children: [

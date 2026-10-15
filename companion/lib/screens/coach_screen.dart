@@ -246,7 +246,7 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+      padding: pagePadding(context),
       children: [
         Center(
           child: ConstrainedBox(

@@ -95,7 +95,7 @@ class _BodyScreenState extends State<BodyScreen> {
     final p = context.sky;
     final synced = _syncedLabel();
     return ListView(
-      padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+      padding: pagePadding(context),
       children: [
         _Column(children: [
           Row(children: [

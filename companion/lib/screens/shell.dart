@@ -158,26 +158,47 @@ class MainWindowState extends State<MainWindow> {
         Section.body => BodyScreen(client: widget.client),
       };
 
+  /// One thumb: a floating tab bar at the window's foot (a gold start
+  /// button in the middle) and, away from Today, the running timer as a
+  /// pill above it. They are the Scaffold's bottom bar with the body drawn
+  /// behind them, so the page learns what they cover from MediaQuery's
+  /// bottom padding, snackbars float above them, and the keyboard covers
+  /// them rather than pushing them up.
+  Widget _phoneBars(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.timer,
+      builder: (context, _) {
+        final pill = widget.timer.running && _section != Section.today;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(14, 0, 14, math.max(MediaQuery.paddingOf(context).bottom, 12.0)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              alignment: Alignment.bottomCenter,
+              child: pill
+                  ? Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _RunningPill(timer: widget.timer, onOpen: () => show(Section.today)),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+            _TabBar(section: _section, onSection: show, onStart: find),
+          ]),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final content = LayoutBuilder(builder: (context, box) {
-      final wide = box.maxWidth >= 720;
+    final wide = MediaQuery.sizeOf(context).width >= 720;
+    final content = Builder(builder: (context) {
       final page = AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
         child: KeyedSubtree(key: ValueKey(_section), child: _screen()),
       );
-      if (!wide) {
-        return Column(children: [
-          Expanded(child: page),
-          NavigationBar(
-            selectedIndex: _section.index,
-            onDestinationSelected: (i) => show(Section.values[i]),
-            destinations: [
-              for (final s in Section.values) NavigationDestination(icon: Icon(s.icon), label: s.label),
-            ],
-          ),
-        ]);
-      }
+      if (!wide) return page;
       return Row(children: [
         _Sidebar(
           section: _section,
@@ -199,6 +220,8 @@ class MainWindowState extends State<MainWindow> {
 
     final window = Scaffold(
       backgroundColor: Colors.transparent,
+      extendBody: true,
+      bottomNavigationBar: wide ? null : _phoneBars(context),
       body: SkyBackdrop(child: content),
     );
 
@@ -413,6 +436,143 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The phone's places, on a floating pill: Today and Flow, the start
+/// button, Coach and Body.
+class _TabBar extends StatelessWidget {
+  static const height = 68.0;
+
+  final Section section;
+  final ValueChanged<Section> onSection;
+  final VoidCallback onStart;
+  const _TabBar({required this.section, required this.onSection, required this.onStart});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    Widget tab(Section s) {
+      final on = s == section;
+      return Semantics(
+        selected: on,
+        button: true,
+        label: s.label,
+        excludeSemantics: true,
+        child: Material(
+          color: on ? p.washStrong : Colors.transparent,
+          shape: const StadiumBorder(),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () => onSection(s),
+            child: SizedBox(
+              width: 64,
+              height: 52,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(s.icon, size: 20, color: on ? p.ink : p.inkMuted),
+                const SizedBox(height: 3),
+                Text(s.label,
+                    style: SkyType.body(11, weight: on ? FontWeight.w700 : FontWeight.w400, height: 1.2)
+                        .copyWith(color: on ? p.ink : p.inkMuted)),
+              ]),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: p.panel.withValues(alpha: 0.97),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: const [
+          BoxShadow(color: Color(0x142B3A44), blurRadius: 2, offset: Offset(0, 1)),
+          BoxShadow(color: Color(0x292B3A44), blurRadius: 32, offset: Offset(0, 12)),
+        ],
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        tab(Section.today),
+        tab(Section.flow),
+        Tooltip(
+          message: 'Start or switch',
+          child: Material(
+            color: p.sun,
+            shape: const CircleBorder(),
+            elevation: 3,
+            shadowColor: p.sun.withValues(alpha: 0.6),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onStart,
+              child: SizedBox.square(dimension: 56, child: Icon(Icons.add_rounded, size: 28, color: p.onSun)),
+            ),
+          ),
+        ),
+        tab(Section.coach),
+        tab(Section.body),
+      ]),
+    );
+  }
+}
+
+/// What runs, on every tab but Today: its ring, its name, the clock, and
+/// Stop. A tap anywhere else opens Today.
+class _RunningPill extends StatelessWidget {
+  static const height = 56.0;
+
+  final TimerController timer;
+  final VoidCallback onOpen;
+  const _RunningPill({required this.timer, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    final project = timer.current;
+    if (project == null) return const SizedBox.shrink();
+    // The pill is the ink colour, so its text is the panel's: dark on light
+    // in the afternoon, light on dark at dusk.
+    final fg = p.panel.withValues(alpha: 1);
+    return Material(
+      color: p.ink,
+      shape: const StadiumBorder(),
+      elevation: 6,
+      shadowColor: const Color(0x552B3A44),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onOpen,
+        child: SizedBox(
+          height: height,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+            child: Row(children: [
+              RingGlyph(color: project.color, track: fg.withValues(alpha: 0.25)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(project.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: SkyType.body(14, weight: FontWeight.w700).copyWith(color: fg)),
+              ),
+              ValueListenableBuilder(
+                valueListenable: timer.now,
+                builder: (context, _, _) => Semantics(
+                  label: 'Running for ${formatDuration(timer.elapsed)}',
+                  excludeSemantics: true,
+                  child: Text(formatClock(timer.elapsed), style: SkyType.figure(17, weight: FontWeight.w700).copyWith(color: fg)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                tooltip: 'Stop ${project.name}',
+                onPressed: () => TimerActions.stop(context, timer),
+                icon: Icon(Icons.stop_rounded, color: p.onSun),
+                style: IconButton.styleFrom(backgroundColor: p.sun, fixedSize: const Size.square(44)),
+              ),
+            ]),
+          ),
+        ),
       ),
     );
   }
