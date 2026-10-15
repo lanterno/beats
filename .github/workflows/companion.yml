@@ -1,9 +1,9 @@
 name: Companion
 on:
   push:
-    paths: [companion/**]
+    paths: [companion/**, .github/workflows/companion.yml]
   pull_request:
-    paths: [companion/**]
+    paths: [companion/**, .github/workflows/companion.yml]
 
 jobs:
   quality:

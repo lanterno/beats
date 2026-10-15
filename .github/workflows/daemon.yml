@@ -1,9 +1,9 @@
 name: Daemon
 on:
   push:
-    paths: [daemon/**]
+    paths: [daemon/**, .github/workflows/daemon.yml]
   pull_request:
-    paths: [daemon/**]
+    paths: [daemon/**, .github/workflows/daemon.yml]
 
 jobs:
   quality:

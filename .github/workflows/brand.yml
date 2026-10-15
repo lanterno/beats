@@ -1,9 +1,9 @@
 name: Brand
 on:
   push:
-    paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**]
+    paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**, .github/workflows/brand.yml]
   pull_request:
-    paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**]
+    paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**, .github/workflows/brand.yml]
 
 jobs:
   # The product name is stamped from shared/brand.json into three surfaces, and
