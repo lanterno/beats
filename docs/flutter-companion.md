@@ -17,8 +17,8 @@ flow plus Fitbit / Oura OAuth without needing the web UI.
 ## Shipped
 
 The scaffold lives under `companion/` and CI builds for all 6 platforms
-(`.github/workflows/companion.yml`). For the notification work and what's
-left to ship, see `companion-roadmap.md`.
+(`.github/workflows/companion.yml`). For the notification work see
+`companion-roadmap.md`; what is left to ship is tracked in Linear (below).
 
 ### File layout
 
@@ -99,62 +99,11 @@ reachable with its device token all the same; see `companion-roadmap.md`
 
 ## Remaining
 
-Each item is tagged with what blocks it from autonomous code work.
-
-### `[needs-device]` HealthKit / Health Connect ingestion
-
-The companion still doesn't ingest native health data — the Health
-screen reads whatever the API has (sourced from Fitbit / Oura today),
-not from HealthKit / Health Connect.
-
-What's left:
-
-| File / location | What |
-|---|---|
-| `lib/services/health_service.dart` | Wrap the `health` package. `requestPermissions()` for `SLEEP_ASLEEP`, `HEART_RATE_VARIABILITY_SDNN`, `RESTING_HEART_RATE`, `STEPS`, `WORKOUT`. `fetchYesterdayData() -> BiometricDay`. |
-| `lib/models/biometric_day.dart` | Mirrors the API's `BiometricDay` schema. |
-| `lib/screens/health_settings_screen.dart` | Toggles per metric, sync time picker (default 6 AM), manual "Sync now". |
-| `android/app/src/main/AndroidManifest.xml` | Health Connect permissions: `<uses-permission android:name="android.permission.health.READ_SLEEP" />`, etc. |
-| `ios/Runner/Info.plist` | `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`. |
-| Xcode project capability | Enable HealthKit on the iOS target. |
-
-Why blocked: HealthKit / Health Connect runtime behavior (permission
-prompts, data availability, source-merge rules, OS denial paths) can
-only be validated against a real device with real health data. Headless
-CI can compile the package but won't surface the integration bugs.
-
-Dependency to add when picked up: `health: ^11.0.0`.
-
-### `[needs-device]` Background sync
-
-The companion can only push biometrics while it's open. The nightly
-background path is unbuilt.
-
-| Platform | What |
-|---|---|
-| iOS | Register `BGAppRefreshTask` in `AppDelegate.swift` for `com.beats.healthSync`. Either start the Flutter engine headless on trigger (call `health_service.fetchYesterdayData` then POST), or — simpler — read native HealthKit in Swift and POST directly with `URLSession`. |
-| Android | `workmanager` plugin: register a periodic task (15 min minimum on Android, schedule for ~6 AM). Callback reads Health Connect data and POSTs. |
-
-Why blocked: same as above plus iOS `BGTaskScheduler` and Android Doze
-behavior change between app states and OS versions; no way to verify
-this works without a real device cycling through background lifecycle.
-
-Dependency to add when picked up: `workmanager: ^0.5.2`.
-
-### `[needs-device]` Native widgets and Apple Watch
-
-See `companion-roadmap.md` § Native widgets and Apple Watch.
-
-### `[needs-paid-credentials]` APNs / FCM real-time push
-
-See `companion-roadmap.md` § Server-pushed delivery.
-
-### `[external-resource]` Web-side QR generator
-
-The mobile companion's QR scanner is ready; the web Settings → Daemon
-page should display a QR encoding `{"code": "<6char>", "api": "<base-url>"}`
-so a fresh-install device pairs without typing the API URL. This is a
-React/UI change in `ui/`, not in the companion.
+Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone
+*Companion: native & device*: HealthKit / Health Connect ingestion
+(AHM-37), background sync (AHM-38), widgets and the Watch (AHM-39 to
+AHM-41), server push (AHM-42) and the web-side pairing QR code (AHM-43).
+Each issue carries the file-by-file plan that used to sit here.
 
 ---
 
@@ -200,5 +149,5 @@ Phone/Watch → HealthKit/Health Connect
   beyond the 7-day summary lives in the web UI.
 - If a user has both HealthKit and Fitbit, the API handles dedup by
   source priority (HealthKit > Oura > Fitbit).
-- Apple Watch is out of scope for this app — see
-  `companion-roadmap.md` § Native widgets and Apple Watch.
+- Apple Watch is out of scope for this app — it is its own target,
+  AHM-41 in Linear.

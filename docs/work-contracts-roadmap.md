@@ -46,10 +46,7 @@ from `GET /api/projects/{id}/ledger`, and its Phase 5 removed
 name `/week/` describe the code as it was; the Inbox's readers still quote the
 adjusted figure through `WeekExpectationReader`.
 
-The follow-ups at the end were re-checked against the code on 2026-09-13. The
-balance ledger's read side has been built since, by the project page roadmap,
-and says so; the coach one has moved a step, and says how; the rest are not
-built.
+The follow-ups and the open question have moved to Linear; see the end.
 
 ---
 
@@ -669,34 +666,11 @@ The reason for all of the above.
 
 ---
 
-## Follow-ups (not this iteration)
+## Follow-ups and open questions
 
-- **Monthly timesheet** — per month: expected, worked, holidays,
-  absences, balance; CSV. Swiss and German employers must keep this,
-  and it is what you hand HR in a dispute.
-- **Vacation entitlement** — days per year, pro-rated by percentage
-  and by a mid-year start, carry-over, remaining. Needs the absence
-  types to mean something, which they already do.
-- **Balance ledger** — the read side is done, by
-  [project-page-roadmap.md](project-page-roadmap.md):
-  `GET /api/projects/{id}/ledger` gives every week its expectation and its
-  closing balance, and the project page's *Earlier weeks* lays them out so the
-  rows add up to the balance. Still to come is the write side: dated manual
-  adjustments (payout, annual reset, cap) instead of editing the opening
-  balance.
-- **Companion week card** — the same numbers in the tray. `/contract/week`
-  and the ledger are already device-reachable through the `/api/projects`
-  prefix (see Phase 3); what is missing is the companion reading them.
-- **Employer-specific holidays** — per-contract add/remove on top of
-  the region (Dec 24/31, bridge days).
-- **Coach awareness** — the brief knowing you are 6 h over and it is
-  Thursday. The coach already gets the contract's weekly hours as the
-  goal (Phase 5); the balance, absences and holidays it does not see. A
-  privacy decision as much as a feature — `PRIVACY.md` is where it is
-  recorded.
-
-## Open
-
-- Whether `hours_per_day` should be configurable for contracts on a
-  4-day full-time week (some Belgian and Dutch employers). Decision 3
-  says no; revisit if a user asks.
+Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
+contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, vacation
+entitlement, the ledger's write side, employer-specific holidays, the coach
+seeing the balance, the companion's week card, and whether `hours_per_day`
+should be configurable for a 4-day full-time week. The balance ledger's
+read side was built by [project-page-roadmap.md](project-page-roadmap.md).

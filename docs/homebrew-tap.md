@@ -13,48 +13,11 @@ so users don't need Go installed and `brew upgrade` keeps them current.
 
 ## Outstanding work
 
-### `[external-resource]` Tap repo bootstrap + first release
-
-1. **Create the tap repo** on GitHub: `<your-user>/homebrew-beats`.
-   Add `Formula/beatsd.rb` containing exactly the contents of
-   `integrations/homebrew-formula/beatsd.rb` (the `Formula/` path is
-   what `brew tap` looks for).
-2. **Cut the first release** — `git tag v0.1.0 && git push --tags`.
-   `release-daemon.yml` produces the four tarballs on the GitHub
-   Release.
-3. **Fill in SHA256s** in the tap's `Formula/beatsd.rb` (replaces the
-   `PLACEHOLDER_*` lines). Either by hand or:
-
-   ```bash
-   brew bump-formula-pr \
-     --url "https://github.com/<user>/beats/releases/download/v0.1.0/beatsd-darwin-arm64.tar.gz" \
-     --sha256 "$(shasum -a 256 beatsd-darwin-arm64.tar.gz | cut -d' ' -f1)" \
-     Formula/beatsd.rb
-   ```
-
-   A small follow-up workflow could automate this on each release;
-   today it's a copy-paste.
-4. **Smoke-test**:
-   ```bash
-   brew tap <user>/beats
-   brew install beatsd
-   beatsd version
-   brew services start beatsd
-   ```
-
-Why blocked: needs a GitHub account with permission to create the
-public `homebrew-beats` repo, plus a tag-pushed release on this repo.
-
-### `[needs-paid-credentials]` macOS notarization (optional)
-
-Sign + notarize + staple the binary so Gatekeeper doesn't show
-"unidentified developer". Requires an Apple Developer account
-($99/year). Skip for the initial release — users can allow the binary
-via System Settings → Privacy & Security. When ready:
-
-- `codesign --sign "Developer ID Application: ..." beatsd`
-- `xcrun notarytool submit beatsd.zip --apple-id ... --password ... --team-id ...`
-- `xcrun stapler staple beatsd`
+Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone
+*Homebrew tap*: the tap repo and the first release with its smoke test
+(AHM-12), bumping the formula on each release (AHM-13), and notarization
+(AHM-14). `v0.1.0` and `v0.1.1` are already taken by tags from 2015 with
+no assets, so the first real release needs a new number.
 
 ## User install flow (post-publish)
 

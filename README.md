@@ -163,13 +163,16 @@ before removing anything that looks like it belongs to only one deployment.
 
 ## Design notes
 
+Open work — bugs, follow-ups, open questions — is tracked in
+[Linear](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de). These documents hold the decisions and designs.
+
 | Document | What it covers |
 |----------|----------------|
 | [Work Contracts Roadmap](docs/work-contracts-roadmap.md) | Day-job contracts: percentage of full time, regional holidays, absences, the overtime balance |
 | [Project Page Roadmap](docs/project-page-roadmap.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
-| [Companion Roadmap](docs/companion-roadmap.md) | What's left for the companion: native widgets, Apple Watch, server push |
-| [macOS Roadmap](docs/macos-roadmap.md) | Dock badge, Focus auto-engage, Spotlight and Shortcuts, Live Activities |
-| [Flutter Companion](docs/flutter-companion.md) | Companion design, the API contract, and the remaining HealthKit / Health Connect work |
+| [Companion Roadmap](docs/companion-roadmap.md) | The companion's role, and the design notes for its remaining native work |
+| [macOS Roadmap](docs/macos-roadmap.md) | The Mac-only ambition; its ideas are issues in Linear |
+| [Flutter Companion](docs/flutter-companion.md) | Companion design and the API contract |
 | [Homebrew Tap](docs/homebrew-tap.md) | Publishing `brew install <user>/beats/beatsd` |
 
 ## License

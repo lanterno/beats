@@ -43,16 +43,9 @@ balance, the figures from `/contract/week` and the one ledger route and each
 week's +/− worked out on the page as the move between two closes. The
 rail holds the contract register or the goal, time off with its booking dialog,
 and the quiet facts. Every page, the marketing page last, is in the afternoon or
-the dusk, and `GET …/week/` is gone. The Follow-ups still hold the ledger's
-write side, vacation entitlement, focus scores over a range and the companion's
-week card; two API questions, the first week's Remaining and English holiday
-names; and what the later phases found and left: the Plan page's UTC week,
-Passkeys' endless Loading, the unnamed webhook delete button, the long nominal
-line, the standing's two states that only unit tests and a walk have seen, and
-the flow bars' height, which no E2E check pins. Phase 5 left the front page's
-faint nav pill at dusk, the badges' own colours, the em dash drawn as a rule and
-sky copy under 4.5:1 low in the viewport there too, and the Open list holds the
-status-bar style Phase 2 deferred.
+the dusk, and `GET …/week/` is gone. What the work found and left is tracked in
+Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Project page
+follow-ups* (AHM-15 to AHM-29).
 
 ---
 
@@ -1113,38 +1106,10 @@ HTTP contract, bugs that happened. Not class names.
 
 ---
 
-## Follow-ups (not this iteration)
+## Follow-ups and open questions
 
-- **Balance adjustments** (payouts, annual resets) — the write side of
-  the ledger; the route above is read-only.
-- **Vacation entitlement** — the tally counts recorded days only; "of N"
-  needs entitlement, pro-rating and carry-over.
-- **Focus scores over a range** — the per-session mark is today-only
-  because the endpoint takes one date.
-- **Companion week card** — unchanged; see `work-contracts-roadmap.md`.
-- **The first week's Remaining** — on the week a contract starts mid-week,
-  `/contract/week`'s `remaining` is expected minus every hour logged that week,
-  hours before `starts_on` included, which the balance does not count. An API
-  question Phase 3a left open.
-- **The standing's future-week and load-failure states** were verified by unit
-  tests and the Phase 4 walk only.
-- **Holiday names in English** — they come from the `holidays` package in the
-  region's language ("Weihnachten"); an English-names option is an API follow-up.
-- **The nominal line under Expected** grows long when several days are off.
-- **The Plan page works out the week in UTC.**
-- **Passkeys shows "Loading..." forever** for an account with no passkeys.
-- **The webhook delete button has no accessible name.**
-- **No E2E check pins the flow bars' height**, which jsdom cannot see.
-- **The front page's nav pill at dusk** is nearly the colour of the panels
-  scrolling under it, so its edge is faint.
-- **The shields.io badges keep their own colours**, the dark stars badge in the
-  nav included.
-- **The hero subtitle's em dash** draws as a long rule in Zen Maru Gothic.
-- **Text on the sky is under 4.5:1 low in the viewport**, over the dusk sky's
-  lowest band and the afternoon's hills.
-
-## Open
-
-- Whether `sunset`'s users (if any) should get a third hour. Two ship.
-- `apple-mobile-web-app-status-bar-style`: it stays `black-translucent`, which
-  Phase 2 deferred to Phase 5 and Phase 5 did not decide.
+Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Project
+page follow-ups*. The ledger's write side, vacation entitlement and the
+companion's week card are under *Work contracts follow-ups*. The two open
+questions, a third hour for `sunset`'s users and
+`apple-mobile-web-app-status-bar-style`, are AHM-28 and AHM-29.

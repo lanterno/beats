@@ -17,6 +17,20 @@ terraform/                    GCP infrastructure
 docs/                         Cross-surface design docs
 ```
 
+## Project Management
+
+Work is tracked in Linear: the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), team `AHM`,
+grouped into milestones (Google Play launch, Homebrew tap, Project page
+follow-ups, Work contracts follow-ups, Companion: native & device, macOS).
+Labels name the surface (`api`, `ui`, `companion`, `daemon`, `macos`), what
+blocks an item (`needs-device`, `needs-paid-credentials`, `external`), and
+`decision` for an open question.
+
+The roadmaps in `docs/` keep the decisions, data models and designs; open
+work does not go back into them. A follow-up found while working is a new
+Linear issue, and a commit or PR that closes one names it (`AHM-17`). GitHub
+issues are left to Renovate's Dependency Dashboard.
+
 ## Quick Start
 
 ```bash

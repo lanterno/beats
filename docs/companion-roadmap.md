@@ -9,32 +9,10 @@
 
 ## Remaining
 
-Each item is tagged with what blocks it from autonomous code work.
-
-### `[needs-device]` Native widgets and Apple Watch
-
-Glanceable-info surfaces that live outside the Flutter app proper.
-
-- **iOS Widgets (WidgetKit)** — separate Xcode target. Small variant:
-  current project + elapsed time, or "No timer" + last session.
-  Medium: + today total + flow score gauge. Tap opens app to Timer.
-- **Android Widgets (Glance / AppWidget)** — separate Kotlin source
-  set. Same content as iOS.
-- **Apple Watch (WatchOS Companion)** — separate WatchOS target.
-  Complication shows elapsed / daily total; watch app exposes
-  start/stop + favorites picker. Uses `WatchConnectivity` to share
-  the device token from the phone.
-
-Each requires a real device to validate rendering, lifecycle, and
-storage-sync behavior — can't be done in headless CI.
-
-### `[needs-paid-credentials]` Server-pushed delivery
-
-- **APNs / FCM real-time push** — would solve the "app must be alive"
-  limitation (today: brief and review notifications only fire while
-  the app is alive or recently backgrounded). Requires an Apple
-  Developer account + an FCM project, plus a server-side notification
-  service in the API. Out of scope for the free-tier path.
+The open work is tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de),
+milestone *Companion: native & device*: iOS and Android widgets (AHM-39,
+AHM-40), the Apple Watch (AHM-41), server push (AHM-42) and offline support
+(AHM-44). The notes below are the design to start from.
 
 ---
 
