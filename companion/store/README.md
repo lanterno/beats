@@ -28,7 +28,7 @@ gh release create companion-v1.1.0-rc.1 --prerelease --generate-notes   # → in
 (or *Releases → Draft a new release* on GitHub). **Release Android** then tests,
 builds the bundle signed with the upload key, checks the native libraries are
 16 KB-aligned, attaches `lifepete-<version>-<code>.aab` to the release, and
-uploads it to Google Play with the release notes as *What's new*:
+uploads it to Google Play with the app's changes as *What's new*:
 
 - A **pre-release** goes to **internal testing**.
 - A **full release** goes to the track in the repo variable `PLAY_RELEASE_TRACK`:
@@ -39,10 +39,15 @@ uploads it to Google Play with the release notes as *What's new*:
 The upload is a completed release on that track. With managed publishing off,
 Google reviews it and it goes out on approval; to hold a production rollout or
 stage it, use the console. `versionCode` is the workflow's run number,
-`versionName` the tag without `companion-v`. *What's new* is the notes as plain
-text, cut to Play's 500 characters (`android/play_notes.py`): the generated
-notes' "by @someone in <PR>" and "Full Changelog" lines are dropped, so write the
-title of each PR for someone reading it on a phone.
+`versionName` the tag without `companion-v`.
+
+*What's new* lists the titles of the PRs merged since the previous `companion-v`
+release that changed the app — not its store docs, tests or release scripts —
+since the release's GitHub notes cover the whole repo (the very first release,
+with no tag to count from, uses those). `android/play_notes.py` turns them into
+plain text within Play's 500 characters: it drops prefixes like `fix(ui):`, and
+when the list runs long keeps whole lines and ends with "…and more". So a PR
+that changes the app wants a title someone can read on a phone.
 
 Run by hand from the Actions tab, the workflow only builds and keeps the bundle
 as an artifact.
