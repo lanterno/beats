@@ -1,46 +1,61 @@
 name: Release Android
-# Builds the companion as a signed Android App Bundle for Google Play.
+# Publishing a GitHub release ships the companion to Google Play.
 #
-#   git tag companion-v1.0.0 && git push origin companion-v1.0.0
+#   gh release create companion-v1.2.0 --generate-notes             # → PLAY_RELEASE_TRACK
+#   gh release create companion-v1.2.0-rc.1 --prerelease --generate-notes   # → internal
 #
-# or run it by hand from the Actions tab (it then builds from the branch
-# picked there, as version <pubspec version>). A tag also attaches the
-# bundle to a GitHub release.
+# (or Releases → Draft a new release on GitHub, tag companion-v…, Publish).
+# The workflow tests, builds the bundle signed with the upload key, attaches
+# it to the release, and uploads it to Play with the release's notes as
+# "What's new". A pre-release goes to the internal testing track; a full
+# release goes to the track named by the repo variable PLAY_RELEASE_TRACK —
+# `alpha` (the closed test) until production access is granted, then
+# `production`. There is no default: a full release with the variable unset
+# fails rather than guessing where the public build goes.
+#
+# Run by hand from the Actions tab, it only builds: the bundle is kept as an
+# artifact, nothing is uploaded.
 #
 # Signing uses the upload key — not the app signing key, which Google holds
 # (Play App Signing). The key lives in two repo secrets:
 #   ANDROID_UPLOAD_KEYSTORE_BASE64    the PKCS12 keystore, base64
 #   ANDROID_UPLOAD_KEYSTORE_PASSWORD  its password (the key's is the same)
-# Their source is the maintainer's vault (github.com/lanterno/vault, project
-# beats): `vault gh beats` sets both from it. Lose the vault and the upload
+# Play access is a third:
+#   PLAY_SERVICE_ACCOUNT_JSON         key of play-publisher@beats-476914, a
+#                                     service account with no Cloud roles; it
+#                                     can only do what Play Console's Users and
+#                                     permissions grant it, for this app
+# All three come from the maintainer's vault (github.com/lanterno/vault,
+# project beats): `vault gh beats` sets them. Lose the vault and the upload
 # key can be reset from the Play Console; it can't be recovered.
 #
 # versionCode is this workflow's run number: it only ever goes up, which is
-# all Play asks of it.
-#
-# Once PLAY_SERVICE_ACCOUNT_JSON is set (a Play Console service account with
-# release rights), the bundle also goes to the internal testing track as a
-# draft, to roll out from the console. The first upload of a new app must be
-# made by hand in the console; the API can only add to an app that has one.
+# all Play asks of it. versionName is the tag without `companion-v`.
 
 on:
-  push:
-    tags:
-      - "companion-v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
-  contents: write # the GitHub release, on a tag
+  contents: write # attach the bundle to the release
+
+# One release at a time: two uploads racing for the same track would leave
+# whichever committed second.
+concurrency:
+  group: release-android
+  cancel-in-progress: false
 
 jobs:
   bundle:
     name: Signed app bundle
+    # A release of anything else in this repo (the daemon, the extension) is
+    # not the companion's.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'companion-v')
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: companion
-    env:
-      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
@@ -53,17 +68,43 @@ jobs:
       - run: flutter pub get
       - run: flutter test
 
-      - name: Version
+      - name: Version and track
         id: version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TRACK: ${{ vars.PLAY_RELEASE_TRACK }}
+          HAS_PLAY_KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/companion-v* ]]; then
-            name="${GITHUB_REF#refs/tags/companion-v}"
+          code="${{ github.run_number }}"
+          if [ "$GITHUB_EVENT_NAME" = release ]; then
+            if [ "$HAS_PLAY_KEY" != true ]; then
+              echo "::error::PLAY_SERVICE_ACCOUNT_JSON isn't set, so a release can't reach Google Play"
+              exit 1
+            fi
+            if ! [[ "$TAG" =~ ^companion-v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$ ]]; then
+              echo "::error::release tag $TAG isn't companion-v<major>.<minor>.<patch>[-pre]"
+              exit 1
+            fi
+            name="${BASH_REMATCH[1]}"
+            if [ "$PRERELEASE" = true ]; then
+              track=internal
+            elif [ -n "$RELEASE_TRACK" ]; then
+              track="$RELEASE_TRACK"
+            else
+              echo "::error::set the repo variable PLAY_RELEASE_TRACK (alpha, or production once it's granted) to publish a full release"
+              exit 1
+            fi
           else
             name=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([^+]+).*/\1/')
+            track=
           fi
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "Building $name ($GITHUB_RUN_NUMBER)"
+          {
+            echo "name=$name"
+            echo "code=$code"
+            echo "track=$track"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building $name ($code)${track:+ for the $track track}"
 
       - name: Upload key
         working-directory: companion/android
@@ -101,23 +142,38 @@ jobs:
           name: lifepete-android-bundle
           path: ${{ steps.bundle.outputs.path }}
 
-      - name: GitHub release
-        if: startsWith(github.ref, 'refs/tags/companion-v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.bundle.outputs.path }}
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "${{ steps.bundle.outputs.path }}" --clobber
 
-      - name: Internal testing track (draft)
-        if: env.PLAY_SERVICE_ACCOUNT_JSON != ''
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: space.elghareeb.beats
-          releaseFiles: ${{ steps.bundle.outputs.path }}
-          track: internal
-          status: draft
+      # Play's "What's new" is plain text, at most 500 characters per language.
+      - name: What's new
+        if: github.event_name == 'release'
+        working-directory: .
+        env:
+          NOTES: ${{ github.event.release.body }}
+        run: |
+          mkdir -p whatsnew
+          python3 companion/android/play_notes.py > whatsnew/whatsnew-en-US
+          echo "--- What's new:"; cat whatsnew/whatsnew-en-US
 
       - name: Forget the key
         if: always()
         working-directory: companion/android
         run: rm -f app/upload-keystore.jks key.properties
+
+      - name: Upload to Google Play (${{ steps.version.outputs.track }})
+        if: github.event_name == 'release'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: space.elghareeb.beats
+          releaseFiles: ${{ steps.bundle.outputs.path }}
+          releaseName: ${{ steps.version.outputs.name }} (${{ steps.version.outputs.code }})
+          track: ${{ steps.version.outputs.track }}
+          status: completed
+          whatsNewDirectory: whatsnew
