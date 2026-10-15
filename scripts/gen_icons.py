@@ -6,8 +6,9 @@ The mark is drawn once, by hand, in four SVGs:
 - `mark.svg`      the rounded tile: the PWA's "any" icons.
 - `maskable.svg`  the same mark full-bleed, for launchers that cut their own
                   shape (the PWA's maskable icon, iOS's touch icon).
-- `favicon.svg`   redrawn on a 32 grid with heavier strokes, so the ring
-                  still reads in a browser tab.
+- `favicon.svg`   redrawn on a 32 grid with heavier strokes and no tile, so
+                  the ring reads in a browser tab and the tab strip shows
+                  through; it carries its own light and dark colours.
 - `macos.svg`     the tile on Apple's 1024 grid, with its shadow.
 
 This script copies or rasterizes them into the SPA's `public/` and every
@@ -43,16 +44,7 @@ MAC_SIZES = (16, 32, 64, 128, 256, 512, 1024)
 ICO_SIZES = (16, 32, 48)
 # Android's legacy launcher icon is 48dp, at each density bucket.
 ANDROID_SIZES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
-# Windows: the tab-weight favicon up to 32 px, the tile above it.
-WINDOWS_SIZES = (
-    (16, "favicon"),
-    (24, "favicon"),
-    (32, "favicon"),
-    (48, "mark"),
-    (64, "mark"),
-    (128, "mark"),
-    (256, "mark"),
-)
+WINDOWS_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
 def render(svg: Path, size: int, out: Path) -> None:
@@ -104,10 +96,7 @@ def main() -> int:
             PUBLIC / "favicon.ico",
         )
         write_ico(
-            [
-                (size, rendered(SOURCE / f"{svg}.svg", size, Path(tmp)))
-                for size, svg in WINDOWS_SIZES
-            ],
+            [(size, rendered(SOURCE / "mark.svg", size, Path(tmp))) for size in WINDOWS_SIZES],
             WINDOWS_ICO,
         )
 
