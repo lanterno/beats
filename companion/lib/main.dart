@@ -24,7 +24,11 @@ import 'ui/kit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
+  // window_manager is desktop-only: on a phone the call has no plugin to
+  // answer it and throws before runApp, leaving the app on its splash.
+  if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    await windowManager.ensureInitialized();
+  }
   if (Platform.isMacOS) {
     // The sky runs under a hidden title bar; the traffic lights stay and sit
     // in the sidebar's top corner. A debug build opened with LIFEPETE_PHONE=1
