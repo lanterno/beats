@@ -23,8 +23,8 @@ and the READMEs hold decisions and designs only; never add a to-do list,
   `macos`; a blocker if any — `needs-device`, `needs-paid-credentials`,
   `external` (done by the account holder in a console, not in code); a kind —
   `Bug`, `Feature`, `Improvement`; `decision` for an open question.
-- **States**: Backlog (someday) → Todo (next) → In Progress → In Review (PR
-  open) → Done. Canceled keeps a cut idea with its reason, so it isn't proposed
+- **States**: Backlog (someday) → Todo (next) → In Progress (a branch or PR
+  is open) → In Review → Done (merged). Canceled keeps a cut idea with its reason, so it isn't proposed
   again without it.
 - **Priority**: Urgent 1, High 2, Medium 3 (bugs), Low 4, None 0 (most ideas).
 
@@ -42,11 +42,13 @@ and the READMEs hold decisions and designs only; never add a to-do list,
    at the end of each commit's subject: `fix(ui): the Plan page's week in local
    time (AHM-17)`.
 5. Open the PR (the user merges; never push to `main`). Put `Fixes AHM-17` on
-   its own line in the body — for several, one line each. Set the issue to
-   **In Review** and add the PR as a link (`save_issue` `links`) unless the
-   GitHub integration already did.
-6. A PR that only partly covers an issue says `Part of AHM-17` instead, and the
-   issue stays In Progress.
+   its own line in the body — for several, one line each. Linear's GitHub
+   integration is installed for `lanterno/beats`: it links the PR and moves the
+   issue from then on (Done when the PR merges), so don't set states or add PR
+   links by hand. Check `get_issue` a minute later; if the PR isn't linked, the
+   ID is missing from the branch or the body.
+6. A PR that only partly covers an issue says `Part of AHM-17` instead; merging
+   it leaves the issue open.
 
 ## Filing what you find
 
