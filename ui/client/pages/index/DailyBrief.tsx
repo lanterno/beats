@@ -1,12 +1,21 @@
 /**
  * DailyBrief — dashboard card showing today's AI-generated morning brief.
  * Fetches from GET /api/coach/brief/today. Shows a generate button if no
- * brief exists yet. Previous briefs are selectable via the history row.
+ * brief exists yet. Previous briefs are selectable via the history row, and
+ * any brief shown can be rated; the coach reads recent ratings when it writes
+ * the next one.
  */
 
-import { Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useState } from "react";
-import { useCoachBrief, useCoachBriefHistory, useGenerateBrief } from "@/entities/coach";
+import {
+	type BriefRating,
+	type BriefResponse,
+	useBriefFeedback,
+	useCoachBrief,
+	useCoachBriefHistory,
+	useGenerateBrief,
+} from "@/entities/coach";
 import { cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
 
@@ -67,9 +76,12 @@ export function DailyBrief() {
 				)}
 
 				{selectedBrief?.body ? (
-					<div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-						{selectedBrief.body}
-					</div>
+					<>
+						<div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+							{selectedBrief.body}
+						</div>
+						<BriefRatingRow brief={selectedBrief} />
+					</>
 				) : selectedDate !== null ? (
 					<div className="text-[13px] font-medium text-muted-foreground text-center py-4">
 						<p>No brief for this day.</p>
@@ -113,5 +125,50 @@ export function DailyBrief() {
 				)}
 			</Panel>
 		</section>
+	);
+}
+
+const RATINGS: { rating: BriefRating; label: string; Icon: typeof ThumbsUp }[] = [
+	{ rating: "helpful", label: "Helpful", Icon: ThumbsUp },
+	{ rating: "not_useful", label: "Not useful", Icon: ThumbsDown },
+];
+
+/** "Was this useful?" — choosing the rating a brief already has clears it. */
+function BriefRatingRow({ brief }: { brief: BriefResponse }) {
+	const feedback = useBriefFeedback();
+	// While a rating is on its way, show the one asked for.
+	const current =
+		feedback.isPending && feedback.variables.date === brief.date
+			? feedback.variables.rating
+			: (brief.feedback ?? null);
+
+	return (
+		<div className="mt-3 flex flex-wrap items-center gap-2">
+			<span className="text-[12.5px] font-medium text-muted-foreground">Was this useful?</span>
+			{RATINGS.map(({ rating, label, Icon }) => (
+				<button
+					type="button"
+					key={rating}
+					aria-pressed={current === rating}
+					onClick={() =>
+						feedback.mutate({ date: brief.date, rating: current === rating ? null : rating })
+					}
+					className={cn(
+						"inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+						current === rating
+							? "bg-foreground text-background"
+							: "bg-secondary text-muted-foreground hover:text-foreground",
+					)}
+				>
+					<Icon className="w-3 h-3" />
+					{label}
+				</button>
+			))}
+			{feedback.isError && (
+				<span role="alert" className="text-[12px] font-medium text-destructive-ink">
+					Couldn&apos;t save that.
+				</span>
+			)}
+		</div>
 	);
 }
