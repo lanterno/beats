@@ -1,0 +1,17 @@
+name: Label pull requests
+# Labels each PR by the surfaces it touches (.github/labeler.yml), which is
+# what sorts the release notes. pull_request_target so a fork's PR can be
+# labelled too; it runs this workflow from main and never checks out the PR.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v7

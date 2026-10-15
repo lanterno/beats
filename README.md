@@ -10,6 +10,14 @@
 </p>
 
 <p align="center">
+  <a href="https://lifepete.com"><img src="https://img.shields.io/badge/use%20it-lifepete.com-f5b301" alt="Use it at lifepete.com"></a>
+  <a href="https://github.com/lanterno/beats/releases/latest"><img src="https://img.shields.io/github/v/release/lanterno/beats?label=release" alt="Latest release"></a>
+  <a href="https://github.com/lanterno/beats/actions/workflows/api.yml"><img src="https://github.com/lanterno/beats/actions/workflows/api.yml/badge.svg" alt="API checks"></a>
+  <a href="https://github.com/lanterno/beats/actions/workflows/ui.yml"><img src="https://github.com/lanterno/beats/actions/workflows/ui.yml/badge.svg" alt="Web app checks"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/lanterno/beats" alt="MIT licence"></a>
+</p>
+
+<p align="center">
   <img src="docs/images/desktop-app.png" alt="The LifePete desktop app on macOS, showing the Today view: quick-start project pills, today's ring, the day's timeline, and the week, coach and body cards" width="820">
 </p>
 
@@ -18,6 +26,16 @@ put in. Start a timer with one click, or let the daemon notice that you've been
 deep in a repo for twenty minutes and offer to start one for you. At the end of
 the week you know where the time went, whether the day job's hours add up, and
 when you do your best work.
+
+## Two ways to use it
+
+- **Hosted, at [lifepete.com](https://lifepete.com).** Sign in with a passkey and start
+  a timer; there is nothing to install or run. The Mac and phone apps, the daemon and the
+  VS Code extension pair with your account from Settings. It runs this repository's
+  `main`, and using it is what keeps the project going.
+- **Self-hosted.** Everything lifepete.com runs is here, under MIT. One
+  `docker compose` file brings up the database, the API and the web app on a single port;
+  see [Deployment](#deployment).
 
 ## Highlights
 
@@ -172,10 +190,17 @@ before removing anything that looks like it belongs to only one deployment.
 | [Flutter Companion](docs/flutter-companion.md) | Companion design, the API contract, and the remaining HealthKit / Health Connect work |
 | [Homebrew Tap](docs/homebrew-tap.md) | Publishing `brew install <user>/beats/beatsd` |
 
-## Support
+## Community
 
-If LifePete is useful to you, you can support its development on
-[GitHub Sponsors](https://github.com/sponsors/lanterno) or [Ko-fi](https://ko-fi.com/lanterno).
+- **Questions and ideas** go to [Discussions](https://github.com/lanterno/beats/discussions),
+  **bugs** to [issues](https://github.com/lanterno/beats/issues/new/choose), and
+  **vulnerabilities**, privately, as [SECURITY.md](SECURITY.md) says.
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) covers where to start, the hooks
+  and how commits are split. Everyone is expected to follow the
+  [code of conduct](CODE_OF_CONDUCT.md).
+- **Help with your lifepete.com account:** [SUPPORT.md](.github/SUPPORT.md).
+- **Supporting the project:** use [lifepete.com](https://lifepete.com), or sponsor it on
+  [GitHub Sponsors](https://github.com/sponsors/lanterno) or [Ko-fi](https://ko-fi.com/lanterno).
 
 ## License
 

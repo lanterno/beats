@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in LifePete is broken or behaves wrongly.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A bug that can be reproduced gets fixed first, so the steps matter most.
+        Security problems go to a [private advisory](https://github.com/lanterno/beats/security/advisories/new) instead.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      description: Pick every place it happens.
+      multiple: true
+      options:
+        - Web app on lifepete.com
+        - Web app, self-hosted
+        - Mac app (window or menu bar)
+        - Phone app (iOS or Android)
+        - beatsd (the daemon or its CLI)
+        - VS Code extension
+        - Wall clock
+        - The API itself
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a timer on a day-job project
+        2. Open the project page
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`beatsd version`, the app's About screen, the extension's version, or the commit you deployed. Leave empty for lifepete.com."
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: macOS 26.1, Safari 26 / Android 16, Pixel 9 / Ubuntu 24.04
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: "`beatsd doctor --json` is a good start for daemon problems. Remove anything you don't want public."
+      render: shell
