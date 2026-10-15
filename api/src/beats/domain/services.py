@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from beats.domain.contracts import (
     absences_by_day,
     balance_terms,
+    counts_worked,
     expected_on,
     owes,
     round_hours,
@@ -632,12 +633,15 @@ class ContractService:
         days: list[ContractDay] = []
         expected_raw = 0.0
         worked_raw = 0.0
+        counted_raw = 0.0  # worked inside the contract's dates, as the balance counts it
         for offset in range(7):
             day = week_of + timedelta(days=offset)
             expected_day = expected_on(contract, day, holiday_days, by_day)
             worked_day = worked.get(day, 0.0)
             expected_raw += expected_day
             worked_raw += worked_day
+            if counts_worked(contract, day):
+                counted_raw += worked_day
             absence = by_day.get(day)
             days.append(
                 ContractDay(
@@ -655,7 +659,7 @@ class ContractService:
         # The same function every other reader of the figure goes through,
         # so the card, the history row and the planning line cannot drift.
         expected = week_expectation(contract, absences, holiday_days, week_of)
-        remaining = round_hours(expected_raw - worked_raw) if expected is not None else None
+        remaining = round_hours(expected_raw - counted_raw) if expected is not None else None
         running = (
             balance_terms(contract, absences, holiday_days, worked, today)
             if owes(term_on(contract, today))
