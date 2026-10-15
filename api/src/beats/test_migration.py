@@ -438,3 +438,62 @@ class TestRetireHomeSSOLinks:
         assert await retire_home_sso_links(db) == [str(stranded)]
         # A second boot has nothing left to do.
         assert await retire_home_sso_links(db) == []
+
+
+class TestMoveSundayPlans:
+    """The Plan page stored weeks under their UTC Monday, a Sunday east of Greenwich."""
+
+    @pytest.fixture(autouse=True)
+    def _no_plans(self, mongo):
+        mongo.weekly_plans.delete_many({})
+
+    @staticmethod
+    def _plan(mongo, week_of: str, user_id: str = USER, hours: float = 10) -> ObjectId:
+        return mongo.weekly_plans.insert_one(
+            {
+                "user_id": user_id,
+                "week_of": week_of,
+                "budgets": [{"project_id": "p1", "planned_hours": hours}],
+            }
+        ).inserted_id
+
+    async def test_a_sunday_plan_moves_to_the_monday_after_it(self, db, mongo):
+        from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
+
+        pid = self._plan(mongo, "2026-10-11")
+        assert await move_sunday_plans_to_monday(db) == []
+        doc = mongo.weekly_plans.find_one({"_id": pid})
+        assert doc["week_of"] == "2026-10-12"
+        assert doc["budgets"] == [{"project_id": "p1", "planned_hours": 10}]
+
+    async def test_a_monday_plan_stays(self, db, mongo):
+        from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
+
+        pid = self._plan(mongo, "2026-10-12")
+        await move_sunday_plans_to_monday(db)
+        assert mongo.weekly_plans.find_one({"_id": pid})["week_of"] == "2026-10-12"
+
+    async def test_an_existing_monday_plan_wins_and_the_sunday_one_is_kept(self, db, mongo):
+        from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
+
+        sunday = self._plan(mongo, "2026-10-11", hours=5)
+        monday = self._plan(mongo, "2026-10-12", hours=8)
+        assert await move_sunday_plans_to_monday(db) == [str(sunday)]
+        assert mongo.weekly_plans.find_one({"_id": sunday})["week_of"] == "2026-10-11"
+        assert mongo.weekly_plans.find_one({"_id": monday})["budgets"][0]["planned_hours"] == 8
+
+    async def test_another_users_monday_does_not_block_the_move(self, db, mongo):
+        from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
+
+        mine = self._plan(mongo, "2026-10-11")
+        self._plan(mongo, "2026-10-12", user_id="user-2")
+        assert await move_sunday_plans_to_monday(db) == []
+        assert mongo.weekly_plans.find_one({"_id": mine})["week_of"] == "2026-10-12"
+
+    async def test_a_second_boot_has_nothing_to_do(self, db, mongo):
+        from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
+
+        pid = self._plan(mongo, "2026-10-11")
+        await move_sunday_plans_to_monday(db)
+        await move_sunday_plans_to_monday(db)
+        assert mongo.weekly_plans.find_one({"_id": pid})["week_of"] == "2026-10-12"
