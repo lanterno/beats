@@ -18,21 +18,18 @@ function createTimerFavicon(color: string): string {
 	if (!ctx) return DEFAULT_FAVICON;
 
 	const c = SIZE / 2;
-	const r = 9.5;
+	const r = 11.5;
 	// Twelve o'clock, round two thirds of the day to eight.
 	const from = -Math.PI / 2;
 	const to = from + (Math.PI * 4) / 3;
 
-	ctx.beginPath();
-	ctx.roundRect(0, 0, SIZE, SIZE, 7);
-	ctx.fillStyle = "#1A2446";
-	ctx.fill();
-
-	ctx.lineWidth = 3.5;
+	// No tile, like the favicon: the tab strip shows through. The track is a
+	// slate at half strength, which reads on a light strip and a dark one.
+	ctx.lineWidth = 4;
 	ctx.lineCap = "round";
 	ctx.beginPath();
 	ctx.arc(c, c, r, 0, Math.PI * 2);
-	ctx.strokeStyle = "#2E3E6E";
+	ctx.strokeStyle = "rgb(124 147 168 / 0.45)";
 	ctx.stroke();
 
 	ctx.beginPath();
@@ -41,7 +38,7 @@ function createTimerFavicon(color: string): string {
 	ctx.stroke();
 
 	ctx.beginPath();
-	ctx.arc(c + r * Math.cos(to), c + r * Math.sin(to), 3.6, 0, Math.PI * 2);
+	ctx.arc(c + r * Math.cos(to), c + r * Math.sin(to), 4.4, 0, Math.PI * 2);
 	ctx.fillStyle = color;
 	ctx.fill();
 

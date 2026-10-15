@@ -8,7 +8,7 @@ import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "r
 import { useNavigate } from "react-router";
 import { describeError } from "@/shared/api";
 import { APP_NAME } from "@/shared/config";
-import { Button } from "@/shared/ui";
+import { BrandMark, Button } from "@/shared/ui";
 import {
 	getCurrentUser,
 	getLoginOptions,
@@ -308,6 +308,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 					<>
 						{/* Header */}
 						<div className="text-center mb-8">
+							<BrandMark className="w-14 h-14 mx-auto mb-4" />
 							<h2 className="font-heading text-3xl font-extrabold text-foreground tracking-[-0.01em]">
 								{APP_NAME}
 							</h2>

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -497,23 +498,51 @@ class _RunningTile extends StatelessWidget {
   }
 }
 
-/// The app's mark: the first letter of its name on a sunlit square.
+/// The app's mark, the day ring (shared/brand/mark.svg): a faint ring, a
+/// gold arc from twelve round two thirds of the dial, and the sun where it
+/// ends, on a navy tile in either hour.
 class BrandMark extends StatelessWidget {
   final double size;
   const BrandMark({super.key, this.size = 30});
 
   @override
   Widget build(BuildContext context) {
-    final p = context.sky;
     return ExcludeSemantics(
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: p.sun, borderRadius: BorderRadius.circular(size / 3)),
-        child: Text(appName.characters.first,
-            style: SkyType.display(size * 0.55).copyWith(color: p.onSun)),
-      ),
+      child: CustomPaint(size: Size.square(size), painter: const _DayRingPainter()),
     );
   }
+}
+
+class _DayRingPainter extends CustomPainter {
+  const _DayRingPainter();
+
+  static const _tile = Color(0xFF1A2446);
+  static const _track = Color(0xFF2E3E6E);
+  static const _sun = Color(0xFFF5C35E);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Drawn on the SVG's 120 grid.
+    final k = size.width / 120;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(27 * k)),
+      Paint()..color = _tile,
+    );
+    final center = Offset(60 * k, 60 * k);
+    final radius = 34 * k;
+    Paint stroke(Color c) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8 * k
+      ..strokeCap = StrokeCap.round;
+    const start = -math.pi / 2;
+    const sweep = math.pi * 4 / 3;
+    canvas.drawCircle(center, radius, stroke(_track));
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, false, stroke(_sun));
+    final end = center + Offset(math.cos(start + sweep), math.sin(start + sweep)) * radius;
+    canvas.drawCircle(end, 9 * k, Paint()..color = _sun);
+  }
+
+  @override
+  bool shouldRepaint(_DayRingPainter oldDelegate) => false;
 }
