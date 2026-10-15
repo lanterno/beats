@@ -609,7 +609,7 @@ class _ConnectionsTabState extends State<_ConnectionsTab> {
     final workspaces = today == null ? null : workspaceCount(today);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const _SectionLabel('On this Mac'),
+      _SectionLabel(Platform.isMacOS ? 'On this Mac' : 'Your computer'),
       _Group([
         if (recent == null)
           _Row(title: 'Activity daemon (beatsd)', subtitle: 'Checking…', leading: _dot(p.inkMuted, hollow: true))

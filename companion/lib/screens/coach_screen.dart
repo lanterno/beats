@@ -252,7 +252,7 @@ class _CoachScreenState extends State<CoachScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1100),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Semantics(header: true, child: Text('Coach', style: SkyType.display(34))),
+              Semantics(header: true, child: Text('Coach', style: SkyType.display(isCompact(context) ? 30 : 34))),
               const SizedBox(height: 18),
               LayoutBuilder(builder: (context, box) {
                 final left = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -311,7 +311,7 @@ class _CoachScreenState extends State<CoachScreen> {
     return Panel(
       raised: true,
       color: p.panel.withValues(alpha: 1),
-      padding: const EdgeInsets.fromLTRB(34, 30, 34, 28),
+      padding: isCompact(context) ? const EdgeInsets.fromLTRB(20, 22, 20, 20) : const EdgeInsets.fromLTRB(34, 30, 34, 28),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Icon(Icons.wb_twilight_rounded, size: 22, color: p.sunInk),
@@ -329,7 +329,7 @@ class _CoachScreenState extends State<CoachScreen> {
             if (parts.headline != null) ...[
               Semantics(
                 header: true,
-                child: Text(parts.headline!, style: SkyType.display(26).copyWith(height: 1.35)),
+                child: Text(parts.headline!, style: SkyType.display(isCompact(context) ? 22 : 26).copyWith(height: 1.35)),
               ),
               const SizedBox(height: 14),
             ],
@@ -479,7 +479,7 @@ class _CoachScreenState extends State<CoachScreen> {
           child: EmptyNote(
             icon: Icons.cloud_off_rounded,
             title: 'Chat needs a newer server',
-            body: 'Update the LifePete server to chat with your coach from this Mac.',
+            body: 'Update the LifePete server to chat with your coach here.',
           ),
         ),
       );

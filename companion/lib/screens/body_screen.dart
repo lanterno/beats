@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -99,7 +100,7 @@ class _BodyScreenState extends State<BodyScreen> {
       children: [
         _Column(children: [
           Row(children: [
-            Expanded(child: Semantics(header: true, child: Text('Body', style: SkyType.display(34)))),
+            Expanded(child: Semantics(header: true, child: Text('Body', style: SkyType.display(isCompact(context) ? 30 : 34)))),
             if (synced != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -118,11 +119,12 @@ class _BodyScreenState extends State<BodyScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_week.isEmpty)
-            const Panel(
+            Panel(
               child: EmptyNote(
                 icon: Icons.favorite_border_rounded,
                 title: 'No health data yet',
-                body: 'Connect Oura or Fitbit in Settings (⌘,) and your sleep, HRV and readiness show up here.',
+                body: 'Connect Oura or Fitbit in Settings${Platform.isMacOS ? ' (⌘,)' : ''} and your sleep, '
+                    'HRV and readiness show up here.',
               ),
             )
           else ...[
