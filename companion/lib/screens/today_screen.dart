@@ -29,6 +29,9 @@ class TodayScreen extends StatefulWidget {
   final VoidCallback onOpenBody;
   final VoidCallback? onFind;
 
+  /// Settings, from Today's header on a phone, where there is no sidebar.
+  final VoidCallback? onSettings;
+
   const TodayScreen({
     super.key,
     required this.client,
@@ -39,6 +42,7 @@ class TodayScreen extends StatefulWidget {
     required this.onOpenCoach,
     required this.onOpenBody,
     this.onFind,
+    this.onSettings,
   });
 
   @override
@@ -194,10 +198,11 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) {
     final p = context.sky;
     final now = DateTime.now();
+    final compact = isCompact(context);
     return ListenableBuilder(
       listenable: Listenable.merge([widget.timer, widget.week, widget.idle]),
       builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+        padding: pagePadding(context),
         children: [
           _Column(children: [
             Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -206,10 +211,13 @@ class _TodayScreenState extends State<TodayScreen> {
                   Text(DateFormat('EEEE, d MMMM').format(now),
                       style: SkyType.body(14).copyWith(color: p.inkOnSky)),
                   const SizedBox(height: 2),
-                  Semantics(header: true, child: Text(_greeting(now), style: SkyType.display(34))),
+                  Semantics(header: true, child: Text(_greeting(now), style: SkyType.display(compact ? 28 : 34))),
                 ]),
               ),
-              if (widget.onFind != null) _FindButton(onPressed: widget.onFind!),
+              if (compact && widget.onSettings != null)
+                RoundIconButton(icon: Icons.settings_outlined, tooltip: 'Settings', size: 44, onPressed: widget.onSettings)
+              else if (!compact && widget.onFind != null)
+                _FindButton(onPressed: widget.onFind!),
             ]),
             if (_suggestion != null && _suggestion!['project_id'] != widget.timer.current?.id) ...[
               const SizedBox(height: 18),
@@ -229,7 +237,7 @@ class _TodayScreenState extends State<TodayScreen> {
               _AwayBanner(ask: widget.idle.pending!, idle: widget.idle),
             ],
             const SizedBox(height: 18),
-            _hero(context),
+            compact ? _phoneHero(context) : _hero(context),
             const SizedBox(height: 18),
             _ribbon(context),
             const SizedBox(height: 18),
@@ -285,6 +293,214 @@ class _TodayScreenState extends State<TodayScreen> {
         }
         return Row(children: [Expanded(child: body), const SizedBox(width: 28), ring]);
       }),
+    );
+  }
+
+  /// The redesign's phone hero: the day ring, today against the target,
+  /// with the running clock inside and the sun where the arc ends; under it
+  /// the one big Stop.
+  Widget _phoneHero(BuildContext context) {
+    final p = context.sky;
+    final timer = widget.timer;
+    final ring = ValueListenableBuilder(
+      valueListenable: timer.now,
+      builder: (context, now, _) {
+        final today = widget.week.todayMinutes(now);
+        final target = widget.week.dailyTargetMinutes(now);
+        final project = timer.current;
+        final inside = timer.running && project != null
+            ? Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 12, 4),
+                  decoration: BoxDecoration(
+                    color: project.color.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    ProjectDot(color: project.color, size: 9),
+                    const SizedBox(width: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 140),
+                      child: Text(project.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: SkyType.body(13, weight: FontWeight.w700)),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Semantics(
+                  label: 'Running for ${formatDuration(timer.elapsed)}',
+                  excludeSemantics: true,
+                  child: SizedBox(
+                    width: 170,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(formatClock(timer.elapsed), style: SkyType.figure(46).copyWith(letterSpacing: -0.5)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('since ${formatTimeOfDay(timer.since!)}', style: SkyType.body(13).copyWith(color: p.inkMuted)),
+              ])
+            : Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(formatMinutes(today), style: SkyType.figure(40)),
+                const SizedBox(height: 6),
+                Text('tracked today', style: SkyType.body(13).copyWith(color: p.inkMuted)),
+              ]);
+        final left = target == null ? null : target - today;
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          ProgressRing(
+            size: 236,
+            stroke: 16,
+            sun: 1.9,
+            fraction: target == null || target == 0 ? 0 : today / target,
+            color: p.sun,
+            semanticsLabel: target == null
+                ? '${formatMinutes(today)} tracked today'
+                : '${formatMinutes(today)} of ${formatMinutes(target)} tracked today',
+            child: inside,
+          ),
+          if (target != null) ...[
+            const SizedBox(height: 14),
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(text: formatMinutes(today), style: SkyType.figure(14, weight: FontWeight.w700).copyWith(color: p.ink)),
+                TextSpan(text: ' of ${formatMinutes(target)} today  ·  '),
+                TextSpan(
+                  text: left! > 0 ? '${formatMinutes(left)} to go' : 'done',
+                  style: TextStyle(fontWeight: FontWeight.w700, color: p.leafInk),
+                ),
+              ]),
+              textAlign: TextAlign.center,
+              style: SkyType.body(14).copyWith(color: p.inkOnSky),
+            ),
+          ],
+        ]);
+      },
+    );
+
+    final Widget below;
+    if (!timer.loaded) {
+      below = Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5)),
+        const SizedBox(width: 12),
+        Text('Reading your timer…', style: SkyType.body(15).copyWith(color: p.inkMuted)),
+      ]);
+    } else if (timer.running) {
+      final flow = _recentFlow;
+      below = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (flow != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: (flow >= 70 ? p.leaf : p.wash).withValues(alpha: flow >= 70 ? 0.14 : 1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(children: [
+              Icon(Icons.show_chart_rounded, size: 16, color: flow >= 70 ? p.leafInk : p.inkMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  flow >= 70 ? 'Flow $flow for the last 20 minutes — you\'re in it.' : 'Flow $flow for the last 20 minutes.',
+                  style: SkyType.body(13).copyWith(color: flow >= 70 ? p.leafInk : p.inkOnSky),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 10),
+        ],
+        SizedBox(
+          height: 56,
+          child: SkyButton(
+            label: 'Stop ${timer.current!.name}',
+            icon: Icons.stop_rounded,
+            kind: SkyButtonKind.primary,
+            large: true,
+            onPressed: () => TimerActions.stop(context, timer),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _HalfPill(label: 'Switch', onPressed: widget.onFind ?? _pickProject)),
+          const SizedBox(width: 10),
+          Expanded(child: _HalfPill(label: 'Started earlier?', onPressed: _startedEarlier)),
+        ]),
+      ]);
+    } else {
+      final stopped = timer.lastStopped;
+      final fresh = stopped != null && DateTime.now().difference(stopped.at) < const Duration(minutes: 10);
+      final projects = timer.recentFirst.take(3).toList();
+      below = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (fresh) ...[
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+            decoration: BoxDecoration(color: p.leaf.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(999)),
+            child: Row(children: [
+              Icon(Icons.check_rounded, size: 18, color: p.leafInk),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('${formatDuration(stopped.length)} logged to ${stopped.project.name}',
+                    style: SkyType.body(14).copyWith(color: p.leafInk)),
+              ),
+              LinkButton(
+                label: 'Undo',
+                bold: true,
+                color: p.leafInk,
+                onPressed: () => TimerActions.undo(ScaffoldMessenger.of(context), timer),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (projects.isEmpty)
+          Text('Create a project on the web to start tracking.',
+              textAlign: TextAlign.center, style: SkyType.body(15).copyWith(color: p.inkMuted))
+        else
+          Row(children: [
+            for (final (i, project) in projects.indexed) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: Material(
+                  color: project.color.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => TimerActions.start(context, timer, project),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Icons.play_arrow_rounded, size: 18, color: project.color),
+                        const SizedBox(height: 4),
+                        Text(project.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: SkyType.body(14, weight: FontWeight.w700, height: 1.3)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ]),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 52,
+          child: SkyButton(
+            label: 'Start something else',
+            kind: SkyButtonKind.primary,
+            large: true,
+            onPressed: widget.onFind,
+          ),
+        ),
+      ]);
+    }
+
+    return Panel(
+      raised: true,
+      radius: 32,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      child: Column(children: [ring, const SizedBox(height: 18), below]),
     );
   }
 
@@ -460,17 +676,20 @@ class _TodayScreenState extends State<TodayScreen> {
     final placedEvents = placeSpans(window, events, now: now);
     final nowAt = window.fractionOf(now);
 
+    final compact = isCompact(context);
+    final labelWidth = compact ? 58.0 : 74.0;
     Widget label(String text) => SizedBox(
-          width: 74,
+          width: labelWidth,
           child: Text(text, style: SkyType.body(12).copyWith(color: p.inkMuted)),
         );
 
     return Panel(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 20),
+      padding: compact ? const EdgeInsets.fromLTRB(18, 18, 18, 16) : const EdgeInsets.fromLTRB(26, 22, 26, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-            child: PanelHeading('Your day', subtitle: 'Sessions, flow and calendar on one line'),
+            child: PanelHeading('Your day',
+                size: compact ? 17 : 19, subtitle: compact ? null : 'Sessions, flow and calendar on one line'),
           ),
           LinkButton(label: 'Open Flow', bold: true, color: p.sunInk, onPressed: widget.onOpenFlow),
         ]),
@@ -592,7 +811,7 @@ class _TodayScreenState extends State<TodayScreen> {
         ],
         const SizedBox(height: 8),
         Row(children: [
-          const SizedBox(width: 74),
+          SizedBox(width: labelWidth),
           Expanded(
             child: LayoutBuilder(builder: (context, box) {
               final ticks = window.hourTicks(step: window.length.inHours > 14 ? 3 : 2);
@@ -804,6 +1023,32 @@ class _TodayScreenState extends State<TodayScreen> {
         ],
         LinkButton(label: 'Open Body', bold: true, color: p.sunInk, onPressed: widget.onOpenBody),
       ]),
+    );
+  }
+}
+
+/// A secondary pill sharing a row with another on a phone: its label gives
+/// way (ellipsis) on a narrow screen rather than overflowing.
+class _HalfPill extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  const _HalfPill({required this.label, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: p.wash,
+        foregroundColor: p.ink,
+        shape: const StadiumBorder(),
+        minimumSize: const Size.fromHeight(48),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        textStyle: SkyType.body(15, weight: FontWeight.w700),
+        elevation: 0,
+      ),
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
 }

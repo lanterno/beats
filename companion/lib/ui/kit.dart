@@ -8,6 +8,20 @@ import '../theme/sky.dart';
 /// the panels on it, pill buttons, rings and small marks. Mirrors the web
 /// app's `Panel`, pill controls and `SkyBackdrop`.
 
+/// Phone width: the window is laid out for one thumb — a tab bar at the
+/// foot instead of the sidebar, one column, tighter margins.
+bool isCompact(BuildContext context) => MediaQuery.sizeOf(context).width < 600;
+
+/// The padding a scrolling screen puts round its content: the margins for
+/// its width, plus whatever the system and the phone's floating bars cover
+/// (the shell adds those to MediaQuery's padding).
+EdgeInsets pagePadding(BuildContext context) {
+  final inset = MediaQuery.paddingOf(context);
+  return isCompact(context)
+      ? EdgeInsets.fromLTRB(16, inset.top + 12, 16, inset.bottom + 24)
+      : EdgeInsets.fromLTRB(32, inset.top + 36, 32, inset.bottom + 40);
+}
+
 /// A project's hex colour (`#5B9CF6` or `5B9CF6`), or [fallback] when it is
 /// missing or malformed.
 Color projectColor(String? hex, {Color fallback = const Color(0xFF8A99A6)}) {
@@ -284,6 +298,10 @@ class ProgressRing extends StatelessWidget {
   final Widget? child;
   final String? semanticsLabel;
 
+  /// Draws the sun where the arc ends, as the day ring in the logo does:
+  /// a dot this many times the stroke wide, ringed in the panel's colour.
+  final double? sun;
+
   const ProgressRing({
     super.key,
     required this.fraction,
@@ -293,6 +311,7 @@ class ProgressRing extends StatelessWidget {
     this.track,
     this.child,
     this.semanticsLabel,
+    this.sun,
   });
 
   @override
@@ -308,6 +327,8 @@ class ProgressRing extends StatelessWidget {
             color: color,
             track: track ?? context.sky.track,
             stroke: stroke,
+            sun: sun,
+            halo: context.sky.panel.withValues(alpha: 1),
           ),
           child: Center(child: child),
         ),
@@ -321,7 +342,16 @@ class _RingPainter extends CustomPainter {
   final Color color;
   final Color track;
   final double stroke;
-  _RingPainter({required this.fraction, required this.color, required this.track, required this.stroke});
+  final double? sun;
+  final Color halo;
+  _RingPainter({
+    required this.fraction,
+    required this.color,
+    required this.track,
+    required this.stroke,
+    this.sun,
+    this.halo = Colors.white,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -335,11 +365,23 @@ class _RingPainter extends CustomPainter {
     if (fraction > 0) {
       canvas.drawArc(arc, -pi / 2, 2 * pi * fraction, false, base..color = color);
     }
+    if (sun != null) {
+      final a = -pi / 2 + 2 * pi * fraction;
+      final r = arc.width / 2;
+      final at = arc.center + Offset(cos(a), sin(a)) * r;
+      final dot = stroke * sun! / 2;
+      canvas.drawCircle(at, dot + stroke * 0.25, Paint()..color = halo);
+      canvas.drawCircle(at, dot, Paint()..color = color);
+    }
   }
 
   @override
   bool shouldRepaint(_RingPainter old) =>
-      old.fraction != fraction || old.color != color || old.track != track;
+      old.fraction != fraction ||
+      old.color != color ||
+      old.track != track ||
+      old.sun != sun ||
+      old.halo != halo;
 }
 
 /// A thin rounded bar filled to [fraction].
@@ -468,4 +510,46 @@ class EmptyNote extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The logo's day ring without its tile, drawn small in [color]: the
+/// running project's mark in the phone's timer pill, as in the menu bar.
+class RingGlyph extends StatelessWidget {
+  final Color color;
+  final double size;
+  final Color? track;
+  const RingGlyph({super.key, required this.color, this.size = 24, this.track});
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+        child: CustomPaint(
+          size: Size.square(size),
+          painter: _GlyphPainter(color, track ?? Colors.white.withValues(alpha: 0.25)),
+        ),
+      );
+}
+
+class _GlyphPainter extends CustomPainter {
+  final Color color;
+  final Color track;
+  _GlyphPainter(this.color, this.track);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // shared/brand/favicon.svg's 32 grid: r11.5, stroke 4, sun r4.4.
+    final k = size.width / 32;
+    final c = Offset(16 * k, 16 * k);
+    final r = 11.5 * k;
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4 * k
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(c, r, line..color = track);
+    const from = -pi / 2, sweep = pi * 4 / 3;
+    canvas.drawArc(Rect.fromCircle(center: c, radius: r), from, sweep, false, line..color = color);
+    canvas.drawCircle(c + Offset(cos(from + sweep), sin(from + sweep)) * r, 4.4 * k, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_GlyphPainter old) => old.color != color || old.track != track;
 }

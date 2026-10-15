@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -145,7 +146,7 @@ class _FlowScreenState extends State<FlowScreen> {
   Widget build(BuildContext context) {
     final data = _data[_day];
     return ListView(
-      padding: const EdgeInsets.fromLTRB(32, 36, 32, 40),
+      padding: pagePadding(context),
       children: [
         _Column(children: [
           _header(context),
@@ -181,7 +182,7 @@ class _FlowScreenState extends State<FlowScreen> {
       crossAxisAlignment: WrapCrossAlignment.center,
       alignment: WrapAlignment.spaceBetween,
       children: [
-        Semantics(header: true, child: Text('Flow', style: SkyType.display(34))),
+        Semantics(header: true, child: Text('Flow', style: SkyType.display(isCompact(context) ? 30 : 34))),
         Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
           SegmentedPills<_Day>(
             options: const [(_Day.today, 'Today'), (_Day.yesterday, 'Yesterday')],
@@ -218,7 +219,8 @@ class _FlowScreenState extends State<FlowScreen> {
         icon: Icons.air_rounded,
         title: today ? 'No flow yet today' : 'No flow yesterday',
         body: [
-          'Flow comes from beatsd, the LifePete daemon on this Mac: it notices which app is in '
+          'Flow comes from beatsd, the LifePete daemon on ${Platform.isMacOS ? 'this Mac' : 'your computer'}: '
+              'it notices which app is in '
               'front and how steadily you work, minute by minute. Pair it and run it, and the day fills in here.',
           if (today && y != null) 'Yesterday averaged ${y.avg}, peaking at ${y.peak}.',
         ].join('\n\n'),
