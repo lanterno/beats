@@ -2,7 +2,9 @@
 .DS_Store
 .pijul/
 .idea/
-.claude/
+# Claude Code: local settings and worktrees stay out; the project's skills are shared.
+.claude/*
+!.claude/skills/
 .playwright-mcp/
 
 # Terraform

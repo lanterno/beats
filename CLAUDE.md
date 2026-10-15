@@ -19,17 +19,13 @@ docs/                         Cross-surface design docs
 
 ## Project Management
 
-Work is tracked in Linear: the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), team `AHM`,
-grouped into milestones (Google Play launch, Homebrew tap, Project page
-follow-ups, Work contracts follow-ups, Companion: native & device, macOS).
-Labels name the surface (`api`, `ui`, `companion`, `daemon`, `macos`), what
-blocks an item (`needs-device`, `needs-paid-credentials`, `external`), and
-`decision` for an open question.
-
-The roadmaps in `docs/` keep the decisions, data models and designs; open
-work does not go back into them. A follow-up found while working is a new
-Linear issue, and a commit or PR that closes one names it (`AHM-17`). GitHub
-issues are left to Renovate's Dependency Dashboard.
+Open work lives in Linear — the
+[LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), team `AHM`
+(the server is in `.mcp.json`). Docs and READMEs hold decisions and designs, never
+to-do lists. The `linear` skill (`.claude/skills/linear/`) has the layout and the
+loop: branch `<type>/ahm-<n>-<slug>`, `(AHM-n)` at the end of each commit subject,
+`Fixes AHM-n` in the PR body, and anything found along the way filed as an issue.
+GitHub issues are left to Renovate's Dependency Dashboard.
 
 ## Quick Start
 
