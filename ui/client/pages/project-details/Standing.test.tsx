@@ -1,5 +1,5 @@
 /**
- * The standing's states (docs/project-page-roadmap.md, "The page" and
+ * The standing's states (docs/project-page.md, "The page" and
  * "States"): the balance's tone and proof, the first-week rule, the side
  * project's average, a day job without a contract, the missing-region
  * notice, a past week open, the quiet-project alert. The arithmetic is the

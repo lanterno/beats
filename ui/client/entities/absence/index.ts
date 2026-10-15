@@ -2,7 +2,7 @@
  * Absence Entity - public API
  *
  * A day, or half of one, a day-job contract does not expect work on
- * (docs/work-contracts-roadmap.md). One per (project, date); the API
+ * (docs/work-contracts.md). One per (project, date); the API
  * upserts on date, so recording again on a day replaces what was there.
  */
 export {

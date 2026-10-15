@@ -17,7 +17,7 @@ not this pass would be skipped here with its goal intact and no contract.
 The model and the migration therefore deploy together — never the model on
 its own.
 
-The rules are the roadmap's (docs/work-contracts-roadmap.md, Phase 2):
+The rules are the design's (docs/work-contracts.md, "Migration"):
 
 1. No `weekly_goal` → side_project.
 2. `weekly_goal` with `goal_type == cap` → side_project, goal kept: a cap

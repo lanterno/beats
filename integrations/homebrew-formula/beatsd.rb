@@ -3,13 +3,13 @@
 # Homebrew formula for beatsd, the Beats ambient flow tracking daemon.
 #
 # This file lives in the main beats repo as the canonical source. Copy it
-# verbatim to a separate `homebrew-beats` tap repo (per
-# docs/homebrew-tap.md) under `Formula/beatsd.rb` to make
-# `brew install <user>/beats/beatsd` work.
+# verbatim to a separate `homebrew-beats` tap repo (per the README.md
+# beside it) under `Formula/beatsd.rb` to make
+# `brew install lanterno/beats/beatsd` work.
 #
-# The PLACEHOLDER sha256 lines are filled in by the release-daemon
-# GitHub Action — bump-formula-pr or a hand-edit that points the URLs at
-# a new release tag and updates the sha256s next to them.
+# The PLACEHOLDER sha256 lines are filled in by hand (or with
+# bump-formula-pr) from a release-daemon run: point the URLs at the new
+# release tag and update the sha256s next to them.
 class Beatsd < Formula
   desc "Ambient flow tracking daemon for Beats"
   homepage "https://github.com/lanterno/beats"

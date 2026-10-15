@@ -1,7 +1,7 @@
 /**
  * Contract arithmetic the UI needs before the API answers: which term a day
  * falls under, what a term owes a week, and how to say so. The API owns the
- * expectation and the balance (docs/work-contracts-roadmap.md); this is only
+ * expectation and the balance (docs/work-contracts.md); this is only
  * enough to label a term and to know whether the contract is time-based
  * today, which decides whether the personal goal is shown.
  */

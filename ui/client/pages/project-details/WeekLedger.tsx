@@ -3,7 +3,7 @@
  * its seven day cells, the adjusted expectation (or the goal), the hours,
  * the difference and the running balance; a rule row on the date every
  * term changed, and runs of empty weeks folded into one quiet line. The
- * rows are `ledgerRows` over `/ledger` (docs/project-page-roadmap.md,
+ * rows are `ledgerRows` over `/ledger` (docs/project-page.md,
  * Decision 11): nothing here reconstructs a figure.
  *
  * The goal cell on a week the contract does not govern opens the override

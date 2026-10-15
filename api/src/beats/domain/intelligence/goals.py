@@ -1,7 +1,7 @@
 """The goal a project's week is measured against, for the readers that quote the week's figure.
 
-`Project.effective_goal` is nominal by decision (docs/work-contracts-roadmap.md,
-Phase 5): on a day job the contract governs it is the term's plain weekly
+`Project.effective_goal` is nominal by decision (docs/work-contracts.md,
+"The goal"): on a day job the contract governs it is the term's plain weekly
 hours, before holidays and absences, and the score, the health rail and the
 coach want exactly that. Three readers quote the week's figure — the Inbox's
 planning line, the pacing card and the stale-project card — and there it must
