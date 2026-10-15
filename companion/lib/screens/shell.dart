@@ -162,6 +162,7 @@ class MainWindowState extends State<MainWindow> {
             onOpenCoach: () => show(Section.coach),
             onOpenBody: () => show(Section.body),
             onFind: find,
+            onSettings: openSettings,
           ),
         Section.flow => FlowScreen(client: widget.client),
         Section.coach => CoachScreen(client: widget.client, timer: widget.timer, week: widget.week),
