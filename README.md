@@ -172,6 +172,11 @@ before removing anything that looks like it belongs to only one deployment.
 | [Flutter Companion](docs/flutter-companion.md) | Companion design, the API contract, and the remaining HealthKit / Health Connect work |
 | [Homebrew Tap](docs/homebrew-tap.md) | Publishing `brew install <user>/beats/beatsd` |
 
+## Support
+
+If LifePete is useful to you, you can support its development on
+[GitHub Sponsors](https://github.com/sponsors/lanterno) or [Ko-fi](https://ko-fi.com/lanterno).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
