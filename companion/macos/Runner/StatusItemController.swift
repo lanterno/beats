@@ -84,6 +84,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         button.toolTip = args["tooltip"] as? String
         if let path = args["imagePath"] as? String, let image = NSImage(contentsOfFile: path) {
           image.size = NSSize(width: 18, height: 18)
+          // A template is drawn in the menu bar's own colour from its alpha.
+          image.isTemplate = args["template"] as? Bool ?? false
           button.image = image
         }
       }
