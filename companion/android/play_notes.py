@@ -33,6 +33,14 @@ def play_notes(markdown: str, limit: int = LIMIT) -> str:
     ... **Full Changelog**: https://github.com/lanterno/beats/compare/companion-v1.0.0...companion-v1.1.0''')
     '• Pairing opens without the keyboard\\n• Focus has a Stop button on phones'
 
+    GitHub's comment at the top, and how PR titles are filed, are not for a
+    phone; a title that merely contains a colon keeps it:
+
+    >>> play_notes('<!-- Release notes generated using configuration -->\\n- fix(ui): stop works offline\\n- Companion: the day ring\\n- Menu bar: the idle ring')
+    '• Stop works offline\\n• The day ring\\n• Menu bar: the idle ring'
+    >>> play_notes('feat!: pairing by QR')
+    'Pairing by QR'
+
     >>> play_notes('### Fixes\\n- See [the docs](https://example.com) and `flags`\\n\\n\\n- Faster sync')
     'Fixes\\n• See the docs and flags\\n\\n• Faster sync'
 
