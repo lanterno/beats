@@ -20,6 +20,8 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      # The release notes → Play "What's new" conversion, by its own examples.
+      - run: python3 -m doctest android/play_notes.py
 
   build-web:
     name: Build Web
