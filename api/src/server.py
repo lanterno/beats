@@ -47,6 +47,7 @@ from beats.infrastructure.migrations import (
     migrate_project_kinds,
 )
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
+from beats.infrastructure.sso_migration import retire_home_sso_links
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # day jobs whose contract every reader now takes instead.
     await migrate_project_kinds(Database.get_db())
     await clear_personal_goal_on_day_jobs(Database.get_db())
+    # Single sign-on is OpenID Connect now; the home.space links it replaced
+    # point at an issuer nothing verifies any more.
+    await retire_home_sso_links(Database.get_db())
     await ensure_mutation_log_indexes()
     yield
     # Shutdown: Disconnect from database
@@ -154,7 +158,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The home.space stack serves the SPA and this API from one origin, so it needs
+# A single-origin deployment (the SPA and this API behind one host) needs
 # nothing here. These are for the two cases that are genuinely cross-origin:
 # local development against a separately served UI, and the Cloud Run / Firebase
 # deployment behind lifepete.com, which is split across two origins by design.
@@ -167,17 +171,6 @@ origins = [
     "https://lifepete.com",
     "https://api.lifepete.com",
 ]
-
-# The home.space deployment serves the SPA and this API from ONE origin
-# (nginx in front of both), so CORS is not involved there at all. This regex
-# exists for the split case: running `pnpm dev` on :8080 against the deployed
-# API, and the three names the same stack answers to — `beats.home.space`,
-# `beats.<lan-ip>.nip.io`, and the WAN `beats.home.elghareeb.space`.
-HOME_ORIGIN_REGEX = (
-    r"^https?://([a-z0-9-]+\.)*"
-    r"(home\.space|home\.elghareeb\.space|\d+\.\d+\.\d+\.\d+\.nip\.io)"
-    r"(:\d+)?$"
-)
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
@@ -332,7 +325,6 @@ async def health_check():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=HOME_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- The repository's social preview (Settings → General → Social preview).
+     Render to social-preview.png at 1280×640:
+     "Google Chrome" --headless --hide-scrollbars --window-size=1280,640 \
+       --screenshot=social-preview.png social-preview.html -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&family=Zen+Maru+Gothic:wght@500;700&display=block">
+<style>
+  html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    position: relative;
+    background: linear-gradient(180deg, #8cc1e2 0%, #bcddee 45%, #e4f0f1 75%, #e9f2e6 100%);
+    color: #1a2446;
+    font-family: "Zen Maru Gothic", sans-serif;
+  }
+  .sun { position: absolute; right: 150px; top: 70px; width: 150px; height: 150px; border-radius: 50%;
+         background: radial-gradient(circle, #ffe9a8 0%, #f5c35e 60%, rgba(245,195,94,0) 72%); }
+  .cloud { position: absolute; background: #fff; opacity: .88; border-radius: 999px; }
+  svg.hills { position: absolute; left: 0; bottom: 0; }
+  .content { position: absolute; left: 110px; top: 150px; display: flex; gap: 44px; align-items: center; }
+  .mark { width: 168px; height: 168px; filter: drop-shadow(0 18px 30px rgba(26,36,70,.25)); }
+  h1 { font-family: "M PLUS Rounded 1c", sans-serif; font-weight: 800; font-size: 112px;
+       letter-spacing: -0.02em; margin: 0; line-height: 1; }
+  p { margin: 16px 0 0; font-size: 38px; font-weight: 700; color: #2e3e6e; }
+  .foot { position: absolute; left: 112px; bottom: 54px; font-family: "M PLUS Rounded 1c", sans-serif;
+          font-weight: 700; font-size: 28px; color: #fff; text-shadow: 0 2px 8px rgba(20,50,30,.35); }
+  .foot span { opacity: .85; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="sun"></div>
+  <div class="cloud" style="left:760px;top:120px;width:230px;height:54px"></div>
+  <div class="cloud" style="left:820px;top:94px;width:120px;height:70px"></div>
+  <div class="cloud" style="left:980px;top:270px;width:180px;height:42px"></div>
+  <svg class="hills" width="1280" height="260" viewBox="0 0 1280 260">
+    <path d="M0 120 C 220 40, 420 60, 640 110 S 1060 50, 1280 90 V260 H0Z" fill="#b9d9a8"/>
+    <path d="M0 170 C 260 100, 520 150, 760 140 S 1120 110, 1280 150 V260 H0Z" fill="#8ac07c"/>
+    <path d="M0 210 C 300 170, 640 220, 900 195 S 1180 190, 1280 205 V260 H0Z" fill="#5c9f5e"/>
+  </svg>
+  <div class="content">
+    <svg class="mark" viewBox="0 0 120 120">
+      <rect width="120" height="120" rx="27" fill="#1A2446"/>
+      <circle cx="60" cy="60" r="34" fill="none" stroke="#2E3E6E" stroke-width="8"/>
+      <path d="M60 26A34 34 0 1 1 30.56 77" fill="none" stroke="#F5C35E" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="30.56" cy="77" r="9" fill="#F5C35E"/>
+    </svg>
+    <div>
+      <h1>LifePete</h1>
+      <p>Time tracking that knows when you're in flow.</p>
+    </div>
+  </div>
+  <div class="foot">lifepete.com <span>· open source, MIT · web · Mac · phone · VS Code</span></div>
+</body>
+</html>

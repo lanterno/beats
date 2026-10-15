@@ -14,14 +14,16 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     run without standing up a second connection manager.
     """
     await db.users.create_index("email", unique=True)
-    # One home.space identity maps to exactly one beats account. Partial
-    # rather than plain-unique because most users have no link at all, and
-    # a plain unique index would let only ONE of them hold a null subject.
+    # One identity at a provider maps to exactly one beats account. Partial,
+    # because a multikey index gives every user without identities the same
+    # missing key, and a plain unique index would allow only one of them.
     await db.users.create_index(
-        [("sso_issuer", 1), ("sso_subject", 1)],
+        [("identities.issuer", 1), ("identities.subject", 1)],
         unique=True,
-        partialFilterExpression={"sso_subject": {"$type": "string"}},
+        partialFilterExpression={"identities.subject": {"$type": "string"}},
     )
+    # Sign-ins in progress: single-use, gone ten minutes after they start.
+    await db.sso_flows.create_index("expires_at", expireAfterSeconds=0)
     await db.credentials.create_index("credential_id", unique=True)
     await db.credentials.create_index("user_id")
     await db.pairing_codes.create_index("expires_at", expireAfterSeconds=0)

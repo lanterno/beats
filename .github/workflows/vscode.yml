@@ -1,9 +1,9 @@
 name: VS Code Extension
 on:
   push:
-    paths: [integrations/vscode-beats/**]
+    paths: [integrations/vscode-beats/**, .github/workflows/vscode.yml]
   pull_request:
-    paths: [integrations/vscode-beats/**]
+    paths: [integrations/vscode-beats/**, .github/workflows/vscode.yml]
 
 jobs:
   build:

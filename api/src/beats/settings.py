@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from beats.brand import APP_NAME
@@ -20,6 +21,52 @@ _api_dir = Path(__file__).resolve().parent.parent.parent
 # happened to contain it — a path, a module name, a --latest flag — silently
 # swung the whole application onto test configuration.
 _env_file = _api_dir / os.getenv("BEATS_ENV_FILE", ".env")
+
+
+def _require_https(url: str, what: str) -> None:
+    """HTTPS, except on this machine: a code or a client secret sent in the
+    clear can be read by anyone on the path, and a local IdP for development
+    has no certificate."""
+    parsed = urlparse(url)
+    local = parsed.hostname in ("localhost", "127.0.0.1")
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and local):
+        raise ValueError(f"{what} must be an https:// URL (http:// only for localhost): {url}")
+
+
+class OIDCProviderSettings(BaseModel):
+    """One OpenID Connect provider people can sign in with."""
+
+    # Names the provider in URLs and on a linked identity. Changing it later
+    # leaves existing links working (they are keyed on issuer and subject)
+    # but listed under the old id until the next sign-in through it.
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")
+    # On the button: "Continue with <name>".
+    name: str = Field(min_length=1)
+    # Exactly as the provider's discovery document states it; the ID token's
+    # `iss` must equal it.
+    issuer: str
+    client_id: str = Field(min_length=1)
+    # Empty for a public client. PKCE protects the code either way; a
+    # confidential client adds the secret on top.
+    client_secret: str = ""
+    scopes: str = "openid email profile"
+    # Whether someone the provider vouches for, but who has no account here
+    # yet, gets one. Off unless named: a provider like Google vouches for
+    # everyone with an account there, which is rarely who should get in.
+    allow_signup: bool = False
+
+    @field_validator("issuer")
+    @classmethod
+    def _issuer_https(cls, v: str) -> str:
+        _require_https(v, "issuer")
+        return v.rstrip("/")
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_openid(cls, v: str) -> str:
+        if "openid" not in v.split():
+            raise ValueError("scopes must include openid")
+        return v
 
 
 class Settings(BaseSettings):
@@ -80,66 +127,42 @@ class Settings(BaseSettings):
         validation_alias="FITBIT_REDIRECT_URI",
     )
 
-    # home.space SSO (optional second front door)
+    # Single sign-on through OpenID Connect (optional second front door)
     #
-    # Beats keeps its own email + passkey login exactly as it is. These
-    # settings add a SECOND way in, for the `home.space` stack this
-    # instance is deployed into: the `auth` issuer at auth.home.space
-    # mints an Ed25519 `Home-Session` cookie scoped to `.home.space`,
-    # which every sibling vhost -- including this one -- receives.
+    # Beats keeps its own email + passkey login exactly as it is. Each entry
+    # here adds a "Continue with <name>" button for one OIDC provider —
+    # Google, Microsoft, Keycloak, Authentik, anything that publishes
+    # `/.well-known/openid-configuration`. Empty (the default) means no
+    # buttons and /api/auth/sso/* answering that nothing is configured.
     #
-    # Default OFF. Beats on Cloud Run, or on `localhost:7999` with no
-    # issuer running, behaves precisely as it did before: /api/auth/sso/*
-    # reports disabled and nothing else changes.
-    sso_enabled: bool = Field(default=False, validation_alias="BEATS_SSO_ENABLED")
-
-    # The issuer DID we require in the `iss` claim. Not a URL: the home
-    # stack identifies its issuer as a did:web, and the DID is what is
-    # actually signed into the token.
-    sso_issuer: str = Field(default="did:web:auth.home.space", validation_alias="BEATS_SSO_ISSUER")
-
-    # Where THIS PROCESS reaches the issuer -- loopback inside the home
-    # stack, so introspection never leaves the machine and never depends
-    # on DNS, the ingress or TLS being healthy.
-    sso_auth_base_url: str = Field(
-        default="http://127.0.0.1:6007", validation_alias="BEATS_SSO_AUTH_BASE_URL"
+    # Set as JSON, e.g.
+    #   OIDC_PROVIDERS='[{"id": "google", "name": "Google",
+    #     "issuer": "https://accounts.google.com",
+    #     "client_id": "…", "client_secret": "…"}]'
+    oidc_providers: list[OIDCProviderSettings] = Field(
+        default_factory=list, validation_alias="OIDC_PROVIDERS"
     )
 
-    # Where the BROWSER is sent to obtain a session. Empty means "derive
-    # it from the request's own Host", which is what makes one build work
-    # unchanged on beats.home.space, beats.<lan-ip>.nip.io and
-    # beats.home.elghareeb.space -- the same three-name problem the auth
-    # service solves dynamically in its own cookie-domain logic.
-    sso_login_url: str = Field(default="", validation_alias="BEATS_SSO_LOGIN_URL")
+    # Where every provider sends the browser back: the web app's
+    # `/auth/callback`, which hands the code to the API. Register exactly
+    # this URL with each provider. One per deployment — `https://lifepete.com/auth/callback`
+    # for the split deployment, the same origin as the API for a single-origin
+    # one. Required as soon as one provider is configured: guessing it from
+    # a request's Host would let that header choose where a code is sent.
+    oidc_redirect_uri: str = Field(default="", validation_alias="OIDC_REDIRECT_URI")
 
-    sso_cookie_name: str = Field(default="Home-Session", validation_alias="BEATS_SSO_COOKIE_NAME")
-    sso_provider_name: str = Field(default="home.space", validation_alias="BEATS_SSO_PROVIDER_NAME")
-
-    # Roles allowed to CREATE a beats account on first SSO login. Any
-    # role may still link to an account that already exists -- this gates
-    # provisioning only. `just invite "Visitor" guest 60` deliberately
-    # does not leave a permanent user record behind.
-    sso_provision_roles: str = Field(
-        default="owner,admin", validation_alias="BEATS_SSO_PROVISION_ROLES"
-    )
-
-    # How long a fetched JWKS is trusted before refetching. The cached
-    # copy is kept indefinitely past this as an offline fallback.
-    sso_jwks_ttl_seconds: int = Field(default=300, validation_alias="BEATS_SSO_JWKS_TTL_SECONDS")
-
-    # Timeout for issuer introspection. Loopback, so this is generous;
-    # exceeding it falls back to offline signature verification rather
-    # than failing the login.
-    sso_issuer_timeout_seconds: float = Field(
-        default=2.0, validation_alias="BEATS_SSO_ISSUER_TIMEOUT_SECONDS"
-    )
-
-    @property
-    def sso_provision_role_set(self) -> frozenset[str]:
-        """Roles permitted to auto-provision, lowercased. Empty means any."""
-        return frozenset(
-            r.strip().lower() for r in self.sso_provision_roles.split(",") if r.strip()
-        )
+    @model_validator(mode="after")
+    def _validate_oidc(self) -> Settings:
+        if not self.oidc_providers:
+            return self
+        if not self.oidc_redirect_uri:
+            raise ValueError("OIDC_REDIRECT_URI is required when OIDC_PROVIDERS is set")
+        _require_https(self.oidc_redirect_uri, "OIDC_REDIRECT_URI")
+        ids = [p.id for p in self.oidc_providers]
+        duplicates = sorted({i for i in ids if ids.count(i) > 1})
+        if duplicates:
+            raise ValueError(f"OIDC_PROVIDERS repeats the id(s): {', '.join(duplicates)}")
+        return self
 
     # AI Coach (Stage 2)
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")

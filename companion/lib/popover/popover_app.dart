@@ -55,8 +55,9 @@ class _PopoverAppState extends State<PopoverApp> {
   Future<void> _connect() async {
     final storage = TokenStorage();
     final token = await storage.loadToken();
-    if (token != null) {
-      final client = ApiClient(baseUrl: await storage.loadApiUrl(), deviceToken: token);
+    final apiUrl = await storage.loadApiUrl();
+    if (token != null && apiUrl != null) {
+      final client = ApiClient(baseUrl: apiUrl, deviceToken: token);
       final timer = TimerController(client)..start();
       timer.addListener(_onTimer);
       _timer = timer;

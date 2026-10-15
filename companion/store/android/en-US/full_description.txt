@@ -1,0 +1,28 @@
+LifePete is the phone half of a personal time tracker. Start a timer in one tap, see your day as a single ring, and keep each project's week on pace — the same account you use on lifepete.com and on your computer.
+
+YOUR DAY, ON ONE RING
+Today opens on the day ring: the hours you've tracked against what the day asks for, with the running clock inside it. Stop is one big button. Switch to another project, or say you started earlier, without losing a minute.
+
+START ANYTHING, EVEN LATE
+The gold button opens your projects as tiles. Or type: "kite from 11:00", "spanish 25m ago", "stop 10m ago". LifePete shows what it is about to do before it does it — which session stops, which starts, and when.
+
+THE WEEK, PER PROJECT
+Each project's hours this week against its goal. A day job with a contract shows the hours it expects and your running overtime balance, with holidays and absences taken out.
+
+FLOW
+When LifePete's desktop daemon runs on your computer, your phone shows how focused the day was: your best stretch in a sentence, five-minute flow bars to tap through, and the repo, language and app it happened in.
+
+A COACH, EACH MORNING
+A short brief written from your recent days, calendar and sleep, and a chat to ask about your time ("why did yesterday feel so choppy?"). Rate a brief and the next ones learn from it.
+
+BODY
+Readiness, sleep, HRV, resting heart rate and steps over the week from Oura or Fitbit, and how last night's sleep lined up with the next day's flow.
+
+FOCUS MODE
+The running clock, full screen, at dusk. Tap anywhere to leave.
+
+WHAT YOU NEED
+A LifePete account. Pair this phone by scanning the code in Settings → Daemon on lifepete.com — no password is ever typed on the phone. You can also point it at your own LifePete server. Not ready to pair? Look around with sample data first.
+
+PRIVATE BY DESIGN
+LifePete is a personal, open-source project with no ads, and your data is never sold or shared. It's yours: export it any time, or ask for it to be deleted.

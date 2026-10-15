@@ -701,20 +701,21 @@ function FounderCard() {
 function RoadmapCard() {
 	return (
 		<a
-			href={`${GITHUB_URL}/issues`}
+			href={`${GITHUB_URL}/discussions/categories/ideas`}
 			target="_blank"
 			rel="noreferrer"
 			className="homepage-trust-card homepage-trust-roadmap"
 		>
 			<div className="homepage-trust-card-head">
 				<MapIcon className="w-3.5 h-3.5" aria-hidden />
-				<span>Roadmap, in public</span>
+				<span>Shaped in public</span>
 			</div>
 			<p className="homepage-roadmap-text">
-				Every open issue and milestone lives on GitHub. File a request, vote, or open a PR.
+				Suggest a feature or upvote one on GitHub. Report a bug, or open a PR — every change lands
+				in the open.
 			</p>
 			<span className="homepage-roadmap-link font-mono">
-				View issues
+				Share an idea
 				<ArrowRight className="w-3.5 h-3.5" aria-hidden />
 			</span>
 		</a>
@@ -760,7 +761,7 @@ function ObjectionRow() {
 				</li>
 				<li>
 					<a
-						href={`${GITHUB_URL}/tree/main/api/src/beats/api/routes`}
+						href={`${GITHUB_URL}/blob/main/api/src/beats/api/routers/export.py`}
 						target="_blank"
 						rel="noreferrer"
 						className="homepage-objection"
@@ -840,8 +841,10 @@ function FooterNew() {
 					links={[
 						{ label: "GitHub repo", href: GITHUB_URL },
 						{ label: "MIT License", href: `${GITHUB_URL}/blob/main/LICENSE` },
-						{ label: "Roadmap", href: `${GITHUB_URL}/issues` },
-						{ label: "Changelog", href: `${GITHUB_URL}/commits/main` },
+						{ label: "Changelog", href: `${GITHUB_URL}/releases` },
+						{ label: "Discussions", href: `${GITHUB_URL}/discussions` },
+						{ label: "Contributing", href: `${GITHUB_URL}/blob/main/CONTRIBUTING.md` },
+						{ label: "Support on Ko-fi", href: "https://ko-fi.com/lanterno" },
 					]}
 				/>
 				<FooterCol
@@ -849,6 +852,7 @@ function FooterNew() {
 					links={[
 						{ label: "Privacy", href: `${GITHUB_URL}/blob/main/PRIVACY.md` },
 						{ label: "Data handling", href: `${GITHUB_URL}/blob/main/DATA.md` },
+						{ label: "Security", href: `${GITHUB_URL}/blob/main/SECURITY.md` },
 						{ label: "Contact", href: "mailto:ahmed.elghareeb@proton.me" },
 					]}
 				/>
@@ -900,22 +904,9 @@ function FooterCol({ title, links }: { title: string; links: { label: string; hr
 
 // ───────────────────── homepage root ─────────────────────
 
-/**
- * True when the browser has just come back from the home.space identity
- * service, which redirects to `?sso=callback` after setting its cookie.
- * The modal has to be open for its callback effect to run, so the marker
- * is read once at mount rather than after a click.
- */
-function isSsoCallback(): boolean {
-	if (typeof window === "undefined") return false;
-	return new URLSearchParams(window.location.search).get("sso") === "callback";
-}
-
 export default function HomePage() {
-	const [authOpen, setAuthOpen] = useState(isSsoCallback);
-	const [authMode, setAuthMode] = useState<"login" | "register-email">(() =>
-		isSsoCallback() ? "login" : "register-email",
-	);
+	const [authOpen, setAuthOpen] = useState(false);
+	const [authMode, setAuthMode] = useState<"login" | "register-email">("register-email");
 
 	const open: AuthHandler = (mode) => {
 		setAuthMode(mode);

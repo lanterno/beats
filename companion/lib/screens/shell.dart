@@ -63,6 +63,9 @@ class MainWindow extends StatefulWidget {
   final VoidCallback onUnpaired;
   final Section initial;
 
+  /// Showing sample data: a banner says so, with the way back to pairing.
+  final bool sample;
+
   const MainWindow({
     super.key,
     required this.client,
@@ -72,6 +75,7 @@ class MainWindow extends StatefulWidget {
     required this.hour,
     required this.onUnpaired,
     this.initial = Section.today,
+    this.sample = false,
   });
 
   @override
@@ -205,10 +209,16 @@ class MainWindowState extends State<MainWindow> {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 720;
     final content = Builder(builder: (context) {
-      final page = AnimatedSwitcher(
+      Widget page = AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
         child: KeyedSubtree(key: ValueKey(_section), child: _screen()),
       );
+      if (widget.sample) {
+        page = Column(children: [
+          SafeArea(bottom: false, child: _SampleBanner(onPair: widget.onUnpaired)),
+          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: page)),
+        ]);
+      }
       if (!wide) return page;
       return Row(children: [
         _Sidebar(
@@ -448,6 +458,38 @@ class _Sidebar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Says the data on screen is made up, and offers the way to real data.
+class _SampleBanner extends StatelessWidget {
+  final VoidCallback onPair;
+  const _SampleBanner({required this.onPair});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
+      decoration: BoxDecoration(color: p.sun.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(999)),
+      child: Row(children: [
+        Icon(Icons.visibility_outlined, size: 18, color: p.onSun),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text('Sample data — nothing here is real',
+              style: SkyType.body(13, weight: FontWeight.w700).copyWith(color: p.onSun)),
+        ),
+        TextButton(
+          onPressed: onPair,
+          style: TextButton.styleFrom(foregroundColor: p.onSun, shape: const StadiumBorder()),
+          child: Text('Pair', style: SkyType.body(14, weight: FontWeight.w700).copyWith(
+            decoration: TextDecoration.underline,
+            decorationColor: p.onSun.withValues(alpha: 0.4),
+          )),
+        ),
+      ]),
     );
   }
 }

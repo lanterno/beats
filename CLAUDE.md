@@ -47,7 +47,7 @@ cd daemon && go run ./cmd/beatsd run        # Foreground run (after `beatsd pair
 
 # Companion (Flutter)
 cd companion && flutter test                # Widget + unit tests
-cd companion && flutter run -d macos        # Desktop dev run
+cd companion && flutter run -d macos --dart-define-from-file=config/local.json  # Desktop dev run, against the local API
 
 # VS Code extension
 cd integrations/vscode-beats && npm test    # tsc + node --test
@@ -63,7 +63,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 895 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 888 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -86,7 +86,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | Daemon test            | daemon/                       | `go test ./...`                  |
 | Daemon format          | daemon/                       | `gofmt -w .`                     |
 | Daemon vet             | daemon/                       | `go vet ./...`                   |
-| Daemon staticcheck     | daemon/                       | `go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...` |
+| Daemon staticcheck     | daemon/                       | `go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...` |
 | Companion analyze      | companion/                    | `flutter analyze`                |
 | Companion test         | companion/                    | `flutter test`                   |
 | VS Code extension lint | integrations/vscode-beats/    | `npm run lint`                   |
@@ -95,7 +95,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 895-test suite takes about 30 seconds.
+  the full 888-test suite takes about 30 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -112,7 +112,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 586 of them across 70 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 589 of them across 71 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 30 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
   MongoDB behind it; the dev server starts itself. A `setup` project
@@ -129,7 +129,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
-- **Companion tests** are in `companion/test/` (flutter_test) — 314 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Companion tests** are in `companion/test/` (flutter_test) — 322 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
   The SDK lives at `~/development/flutter` (stable), on `PATH` via `~/.zshrc`
   and symlinked into `~/.local/bin` so the lefthook gates — which run under a
   non-interactive `sh` that reads neither — can find it. `flutter doctor`
@@ -241,10 +241,9 @@ nothing.
   testable without spawning a process. Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
 - Dart: `flutter analyze` (no extra linter config); tests use `flutter_test` package.
 - API auth: JWT Bearer token for all endpoints. Two ways to obtain one — beats'
-  own WebAuthn passkey login, or a home.space SSO exchange. After the exchange the
-  token is an ordinary beats session; nothing downstream distinguishes them except
-  the `sso` claim, which exists so `/api/account/refresh` can re-check the identity
-  against its issuer.
+  own WebAuthn passkey login, or single sign-on through an OpenID Connect provider.
+  Either way the token is an ordinary beats session; nothing downstream knows which
+  door was used.
 - Dates: API sends UTC, UI converts to local timezone on display
 - API errors: every non-2xx response shares the unified envelope `{detail, code, fields?}` (see `api/src/beats/api/errors.py`). The daemon Go client, UI ApiError, and companion ApiException all parse this shape.
 - Contracts: every project has a `kind` (`day_job`, `freelance`, `side_project`) and only a
@@ -316,31 +315,39 @@ an nginx that serves the built SPA and proxies `/api` to the API. **One** publis
 port, 6008. `justfile` at the repo root holds the verbs the stack calls
 (`up-detached`, `down`, `build`, `health`, `logs`, `backup`, `restore`).
 
-The SPA and the API deliberately share one origin. That is not a packaging
-preference: home.space SSO rides on a `Home-Session` cookie scoped to
-`.home.space`, and a browser only attaches it to same-origin requests. The old
-Firebase-plus-Cloud-Run split had two origins joined by CORS; restoring that
-split silently breaks SSO. `ui/Dockerfile` builds with `VITE_API_URL=""` and fails
-the build if the bundle still names `localhost:7999`.
+The SPA and the API share one origin, so the stack publishes one port and needs no
+CORS entry for wherever it is hosted. `ui/Dockerfile` builds with `VITE_API_URL=""`
+and fails the build if the bundle still names `localhost:7999`. Nothing in the code
+depends on the home network: single sign-on, if the stack wants it, is a provider in
+`api/.env` like anywhere else.
 
 `api/compose.yml` is untouched and is still what local development uses.
 
-### home.space SSO
+### Single sign-on (OpenID Connect)
 
-A second, optional door beside beats' own passkey login — see
-`/home/green/lab/home/AGENTS.md` for the full writeup and the four decisions behind
-it. In this repo:
+A second, optional door beside beats' own passkey login: any provider that speaks
+OpenID Connect (Google, Microsoft, Keycloak, Authentik, …). Off unless
+`OIDC_PROVIDERS` names one; `api/.env.example` shows the shape. Each deployment sets
+its own `OIDC_REDIRECT_URI` — the web app's `/auth/callback` — and registers it with
+each provider.
 
-- `src/beats/auth/sso.py` — verifies the cookie (issuer introspection first, offline
-  JWKS signature check as the fallback).
-- `src/beats/auth/sso_accounts.py` — link / provision / unlink.
-- `src/beats/api/routers/sso.py` — the public endpoints.
-- `src/beats/test_sso.py` — unit tests, no DB or network (scripted issuer via
-  `httpx.MockTransport`, real Ed25519 tokens in the issuer's exact format).
-- `TestSSOAPI` in `src/test_api.py` — the HTTP contract.
+The flow is the authorization code flow with PKCE and a nonce. The API keeps each
+sign-in's state, nonce and verifier in `sso_flows` (TTL ten minutes, taken once); the
+provider sends the browser to the web app, which checks the state is one this tab
+started (sessionStorage) and posts the code to `POST /api/auth/sso/complete`. Doing
+the exchange through the web app is what lets one setup serve both topologies.
 
-Off by default (`BEATS_SSO_ENABLED`), so nothing changes for a deployment without an
-identity service. `just sso-doctor` from the repo root diagnoses it.
+- `src/beats/auth/oidc.py` — discovery, the code exchange, and every ID-token check
+  (asymmetric signature, `iss`, `aud`/`azp`, `exp`, `iat`, nonce).
+- `src/beats/auth/sso_accounts.py` — sign in / link / unlink. Identities are keyed on
+  issuer + subject, at most one per provider per account. A provider creates
+  accounts only with `allow_signup`; nothing is ever matched by email.
+- `src/beats/api/routers/sso.py` — the public endpoints; linking and unlinking live in
+  `account.py`, behind a session. A link must finish in the session that started it.
+- `src/beats/infrastructure/sso_migration.py` — the startup pass that cleared the
+  home.space links this replaced, logging any account left with no way in.
+- `src/beats/test_sso.py` and `TestSSOAPI` — against `src/fake_idp.py`, a scripted
+  provider with real RS256 keys.
 
 ### Google Cloud — lifepete.com (also live)
 
@@ -381,7 +388,7 @@ changing anything both ends share.
 | `/api/signals` | Daemon-emitted flow windows and signal summaries |
 | `/api/device` | Wall clock status, favorites, weekly bars, heartbeat, pairing |
 | `/api/export` | CSV/JSON export and import |
-| `/api/account` | User account management (me, refresh, credentials, logout, home.space link) |
+| `/api/account` | User account management (me, refresh, credentials, logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
-| `/api/auth/sso` | home.space SSO config + session exchange (public) |
+| `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
 | `/api/meta` | Static reference data: holiday regions for the contract picker (cacheable, still behind auth) |

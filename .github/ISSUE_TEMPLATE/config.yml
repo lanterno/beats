@@ -1,0 +1,16 @@
+# Issues are for bugs. Everything else has a better home, listed on the
+# "New issue" page in this order.
+blank_issues_enabled: false
+contact_links:
+  - name: Ideas and feature requests
+    url: https://github.com/lanterno/beats/discussions/categories/ideas
+    about: Suggest something new. Ideas that gather interest become tracked work.
+  - name: Questions and self-hosting help
+    url: https://github.com/lanterno/beats/discussions/categories/q-a
+    about: Setting it up, pairing a device, how something works.
+  - name: Your lifepete.com account
+    url: https://github.com/lanterno/beats/blob/main/.github/SUPPORT.md#lifepetecom
+    about: Sign-in, your data or your account on the hosted service. Email, not a public issue.
+  - name: Report a security vulnerability
+    url: https://github.com/lanterno/beats/security/advisories/new
+    about: Privately, never in a public issue. See SECURITY.md.

@@ -1,0 +1,29 @@
+# Sorts a release's generated notes by the labels the labeler puts on each PR.
+# A PR lands in the first category whose label it carries, so Renovate's
+# (labelled dependencies, plus a surface) sort before the surfaces.
+changelog:
+  exclude:
+    labels: [invalid, duplicate, wontfix]
+  categories:
+    - title: Fixes
+      labels: [bug]
+    - title: Dependencies
+      labels: [dependencies]
+    - title: Web app
+      labels: [ui]
+    - title: Desktop and phone app
+      labels: [companion]
+    - title: Daemon
+      labels: [daemon]
+    - title: VS Code extension
+      labels: [vscode]
+    - title: Wall clock
+      labels: [wall-clock]
+    - title: API
+      labels: [api]
+    - title: Docs
+      labels: [docs]
+    - title: Tooling and infrastructure
+      labels: [ci, infra]
+    - title: Other changes
+      labels: ["*"]

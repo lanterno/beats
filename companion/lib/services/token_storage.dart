@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'deployment.dart';
 import 'secure_store.dart';
 
 /// Persists the device token (in OS-level secure storage) and the
@@ -67,9 +68,11 @@ class TokenStorage {
   // (which would legitimately blow away the token but shouldn't reset the
   // user's self-hosted server URL).
 
-  Future<String> loadApiUrl() async {
+  /// The server this device pairs with: the one saved at pairing, else the
+  /// one the build names (deployment.dart), else null — ask, don't guess.
+  Future<String?> loadApiUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_apiUrlKey) ?? 'http://localhost:7999';
+    return prefs.getString(_apiUrlKey) ?? (builtInApiUrl.isEmpty ? null : builtInApiUrl);
   }
 
   Future<void> saveApiUrl(String url) async {
@@ -79,12 +82,12 @@ class TokenStorage {
 
   /// The base URL of the Beats web UI — distinct from the API URL because
   /// deployments commonly host the API and the SPA on different hosts
-  /// (api.example.com vs app.example.com). Default matches the daemon's
-  /// `[ui] base_url` default so a fresh local-dev setup works without
-  /// configuration. Used by the FlowScreen's "open in browser" deep links.
-  Future<String> loadWebUrl() async {
+  /// (api.example.com vs app.example.com): the one saved at pairing, else
+  /// the build's, else null, and then the links into it are hidden. Used by
+  /// Flow's "open in browser" links and Settings' account link.
+  Future<String?> loadWebUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_webUrlKey) ?? 'http://localhost:8080';
+    return prefs.getString(_webUrlKey) ?? (builtInWebUrl.isEmpty ? null : builtInWebUrl);
   }
 
   Future<void> saveWebUrl(String url) async {

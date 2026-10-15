@@ -74,7 +74,7 @@ pre-push:
     # passes over. The tree is clean under it today, so any hit is new.
     daemon-staticcheck:
       root: daemon/
-      run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+      run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
     # The companion has 159 unit/widget tests covering api_client
     # (request shape + error envelope parsing), tag parsing, recent
     # projects, notification dedupe, repo-path display, the pairing

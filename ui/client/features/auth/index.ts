@@ -3,29 +3,32 @@
  *
  * Two independent ways into an account:
  * - WebAuthn/Passkey — Beats' own registration and login.
- * - home.space SSO — the optional federated door, hidden unless the API
- *   reports it enabled. Linking an existing account is done from Settings.
+ * - Single sign-on through OpenID Connect providers — one button per provider
+ *   the API offers, none when it offers none. Linking an identity to an
+ *   existing account is done from Settings; both come back to `/auth/callback`.
  */
 
 // API
 export type {
 	CredentialInfo,
-	SSOConfig,
-	SSOLinkInfo,
-	SSOSessionResponse,
+	LinkedIdentity,
+	SSOComplete,
+	SSOProvider,
 	UserInfo,
 } from "./api/authApi";
 export {
+	completeSso,
 	deleteCredential,
 	getCurrentUser,
 	getLoginOptions,
-	getSsoConfig,
-	linkSsoIdentity,
+	getSsoProviders,
 	listCredentials,
 	logout,
 	refreshToken,
 	registerStart,
-	ssoSignIn,
+	startSsoLink,
+	startSsoSignIn,
+	takeSsoState,
 	unlinkSsoIdentity,
 	verifyLogin,
 	verifyRegistration,

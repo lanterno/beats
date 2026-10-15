@@ -2,9 +2,9 @@ name: UI
 on:
   workflow_dispatch:
   push:
-    paths: [ui/**]
+    paths: [ui/**, .github/workflows/ui.yml]
   pull_request:
-    paths: [ui/**]
+    paths: [ui/**, .github/workflows/ui.yml]
 
 jobs:
   quality:
