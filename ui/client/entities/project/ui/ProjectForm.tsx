@@ -6,7 +6,7 @@
  * Used by both the create dialog (P1.3) and the per-project settings drawer
  * so a project is configured the same way every time it's touched.
  *
- * Work contracts (docs/work-contracts-roadmap.md): a `kind` selector, and on
+ * Work contracts (docs/work-contracts.md): a `kind` selector, and on
  * a day job the contract section. The section has one write path per
  * situation — on a project with no contract yet it creates the first term,
  * behind a "Set up the contract now" switch because a day job may wait for

@@ -181,14 +181,17 @@ before removing anything that looks like it belongs to only one deployment.
 
 ## Design notes
 
+Open work — bugs, follow-ups, open questions — is tracked in
+[Linear](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de). These documents hold the decisions and designs.
+
 | Document | What it covers |
 |----------|----------------|
-| [Work Contracts Roadmap](docs/work-contracts-roadmap.md) | Day-job contracts: percentage of full time, regional holidays, absences, the overtime balance |
-| [Project Page Roadmap](docs/project-page-roadmap.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
-| [Companion Roadmap](docs/companion-roadmap.md) | What's left for the companion: native widgets, Apple Watch, server push |
-| [macOS Roadmap](docs/macos-roadmap.md) | Dock badge, Focus auto-engage, Spotlight and Shortcuts, Live Activities |
-| [Flutter Companion](docs/flutter-companion.md) | Companion design, the API contract, and the remaining HealthKit / Health Connect work |
-| [Homebrew Tap](docs/homebrew-tap.md) | Publishing `brew install <user>/beats/beatsd` |
+| [Work Contracts](docs/work-contracts.md) | Day-job contracts: percentage of full time, regional holidays, absences, the overtime balance |
+| [Project Page](docs/project-page.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
+| [Architecture](ARCHITECTURE.md) | How the API, the web app and the wall clock are put together |
+| [Companion](companion/README.md) | The Flutter companion: what it does on a Mac and a phone, its architecture, pairing and the API |
+| [Daemon](daemon/README.md) | `beatsd`: the flow score, the auto-timer, and its CLI |
+| [Homebrew formula](integrations/homebrew-formula/README.md) | Publishing `brew install lanterno/beats/beatsd` |
 
 ## Community
 

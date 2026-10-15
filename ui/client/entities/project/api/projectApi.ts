@@ -153,7 +153,7 @@ export async function fetchContractWeek(projectId: string, weekOf?: string): Pro
  * The last `weeks` weeks of any project, newest first and ending with the
  * current week in the browser's timezone, with the balance at each week's
  * close on a day job and the balance as of today — every week figure on the
- * project page (docs/project-page-roadmap.md, Decision 11). `weeks` is 1–104;
+ * project page (docs/project-page.md, Decision 11). `weeks` is 1–104;
  * 404 on a project that is not the caller's.
  */
 export async function fetchLedger(projectId: string, weeks: number): Promise<Ledger> {

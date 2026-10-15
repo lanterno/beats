@@ -1,6 +1,6 @@
 /**
  * The standing: what the open week makes of the balance, in figures and in
- * one sentence (docs/project-page-roadmap.md, "The arithmetic"). Pure and
+ * one sentence (docs/project-page.md, "The arithmetic"). Pure and
  * clock-free — `todayIso` is an argument — so every branch is a plain
  * function of a week and a day, and a branch that does not match gives null:
  * the page then shows the figures and no sentence, never a guessed one.

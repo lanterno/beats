@@ -38,6 +38,7 @@ src/beats/
 │   ├── migrations.py    Startup passes: a project without `kind` gets one (a day job its
 │   │                    contract too); a day job whose term governs loses `weekly_goal`
 │   ├── sso_migration.py Startup pass: the home.space SSO links OIDC replaced are cleared
+│   ├── plan_migration.py Startup pass: weekly plans stored under a Sunday move to their Monday
 │   └── repositories.py  Abstract + MongoDB repo implementations
 ├── settings.py   pydantic-settings (reads .env / env vars)
 ├── auth/         WebAuthn + JWT sessions; OpenID Connect sign-in (oidc.py, sso_accounts.py)
@@ -59,7 +60,7 @@ Ten test files cover different layers (888 tests, ~30s for the full run):
 - **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, plus one round trip through the absence repository; 27 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, the row-to-row balance proof; 17 tests.
-- **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, and the one that retired the home.space SSO links; 21 tests.
+- **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, the one that retired the home.space SSO links, and the one that moves weekly plans stored under a Sunday to their Monday; 26 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 140 tests.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.
 - **`src/beats/test_sso.py`** — OpenID Connect sign-in against `src/fake_idp.py` (a scripted provider, real RS256 tokens) and the account rules; 38 tests.

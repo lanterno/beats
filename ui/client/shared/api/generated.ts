@@ -2530,7 +2530,9 @@ export interface components {
          *     distinct from 0, which is a week the contract owed nothing by
          *     circumstance (every weekday a holiday, or after `ended_on`). `balance`
          *     is None on the same rule for today. `remaining` goes negative once the
-         *     week is over its expectation.
+         *     week is over its expectation. `worked` is every hour on the project that
+         *     week; `remaining` subtracts only the hours inside the contract's dates,
+         *     as the balance does, so the two differ on a week it starts or ends.
          */
         ContractWeek: {
             /** Balance */

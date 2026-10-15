@@ -2,7 +2,7 @@
  * Project Details Page — the identity on the sky, the standing, the open
  * week's days and the ledger of earlier weeks, with the contract (or the
  * goal), the time off and the quiet facts in a rail
- * (docs/project-page-roadmap.md, "The page").
+ * (docs/project-page.md, "The page").
  *
  * The page owns the reads the panels share: `/contract/week` for the open
  * week, the current week (the balance is pinned to today) and the next

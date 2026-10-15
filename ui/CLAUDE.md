@@ -114,7 +114,7 @@ flash, and repeats the keys and the dusk sky's hex — change them in both place
 ## The project page
 
 `pages/project-details` answers "where do I stand?" in its first screen
-(`docs/project-page-roadmap.md`). `ProjectDetails.tsx` owns the reads its panels
+(`docs/project-page.md`). `ProjectDetails.tsx` owns the reads its panels
 share — `/contract/week` for the open week, the current week (the balance is pinned to
 today) and the next, the ledger, the sessions and the running timer — and the open
 week, which is the URL's `?week=`, so ‹ ›, a ledger row and a time-off entry all move
