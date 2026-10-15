@@ -38,6 +38,9 @@ floating tab bar instead of the sidebar:
   quick-start field above them, with a card saying what a typed time will do
 - **Focus mode** — a Stop to press, and a tap anywhere leaves
 - **Pairing** — scan the code from the web's Settings → Daemon; typing it is the fallback
+- **Sample data** — "Look around with sample data" on the pairing screen opens every place on
+  a made-up account held in memory (`services/sample_api.dart`), for Play's reviewers and the
+  curious; nothing is stored and a banner says so
 
 ## Platforms
 
@@ -49,6 +52,11 @@ Supported by `flutter_platform_channels`, but actively used on:
 
 The Linux and Windows desktop builds compile but tray-icon support is best-effort.
 
+## Publishing
+
+Google Play: see [store/README.md](store/README.md) — the listing, the signed-bundle
+workflow, and the console's answers.
+
 ## Running
 
 ```bash
@@ -57,13 +65,14 @@ flutter run -d macos        # desktop dev run
 flutter run -d <device>     # mobile
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (314)
+flutter test                # widget + unit tests (322)
 
 # A debug build opens on any surface, for looking at one without clicking:
 open --env LIFEPETE_SECTION=flow   build/macos/Build/Products/Debug/beats_companion.app
 open --env LIFEPETE_ROUTE=settings build/macos/Build/Products/Debug/beats_companion.app   # or focus
 open --env LIFEPETE_POPOVER=panel  build/macos/Build/Products/Debug/beats_companion.app   # or palette
-open --env LIFEPETE_PHONE=1          build/macos/Build/Products/Debug/beats_companion.app   # phone-sized
+open --env LIFEPETE_PHONE=1          build/macos/Build/Products/Debug/beats_companion.app   # phone-sized (or store: 9:16)
+open --env LIFEPETE_SAMPLE=1         build/macos/Build/Products/Debug/beats_companion.app   # sample data (quiet: no banner)
 ```
 
 ## Architecture
