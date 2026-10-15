@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -15,6 +16,10 @@ import 'timer_actions.dart';
 class FocusScreen extends StatelessWidget {
   final TimerController timer;
   const FocusScreen({super.key, required this.timer});
+
+  /// A phone or tablet, where the keyboard hints mean nothing.
+  static bool get _touch =>
+      defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android;
 
   @override
   Widget build(BuildContext context) {
@@ -69,18 +74,38 @@ class FocusScreen extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 26,
+                    left: 24,
+                    right: 24,
+                    bottom: MediaQuery.paddingOf(context).bottom + 26,
                     // Rebuilt with the timer: launched straight into focus, the
                     // first frame comes before the first status read.
                     child: ListenableBuilder(
                       listenable: timer,
-                      builder: (context, _) => Text(
-                        timer.running ? 'esc leave  ·  ⌘. stop  ·  ⌘K switch' : 'esc leave  ·  ⌘K start',
-                        textAlign: TextAlign.center,
-                        style: SkyType.body(14).copyWith(color: p.ink),
-                      ),
+                      builder: (context, _) => _touch
+                          // A phone has no Esc or ⌘: a Stop to press, and a tap anywhere leaves.
+                          ? Column(mainAxisSize: MainAxisSize.min, children: [
+                              if (timer.running) ...[
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 56,
+                                  child: SkyButton(
+                                    label: 'Stop',
+                                    icon: Icons.stop_rounded,
+                                    kind: SkyButtonKind.primary,
+                                    large: true,
+                                    onPressed: () => TimerActions.stop(context, timer),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                              ],
+                              Text('Tap anywhere to leave',
+                                  textAlign: TextAlign.center, style: SkyType.body(14).copyWith(color: p.ink)),
+                            ])
+                          : Text(
+                              timer.running ? 'esc leave  ·  ⌘. stop  ·  ⌘K switch' : 'esc leave  ·  ⌘K start',
+                              textAlign: TextAlign.center,
+                              style: SkyType.body(14).copyWith(color: p.ink),
+                            ),
                     ),
                   ),
                 ]),
@@ -135,7 +160,7 @@ class _Face extends StatelessWidget {
             running ? 'since ${formatTimeOfDay(timer.since!)}' : 'Nothing running',
             style: SkyType.body(18).copyWith(color: p.inkOnSky),
           ),
-          if (!running) ...[
+          if (!running && !FocusScreen._touch) ...[
             const SizedBox(height: 6),
             Text('⌘K to start', style: SkyType.body(15).copyWith(color: p.inkMuted)),
           ],
