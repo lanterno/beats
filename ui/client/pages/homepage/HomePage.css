@@ -178,6 +178,17 @@
 	}
 }
 
+/* copy set straight on the sky glows in the sky's colour (`.on-sky` in global.css) */
+.homepage-hero-title,
+.homepage-hero-subtitle,
+.homepage-section-title,
+.homepage-surface-title,
+.homepage-surface-outcome,
+.homepage-surface-detail,
+.homepage-final-sub {
+	text-shadow: var(--sky-halo-shadow);
+}
+
 /* ─── hero: on the sky itself ─── */
 .homepage-hero {
 	position: relative;

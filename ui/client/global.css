@@ -256,6 +256,11 @@
 		--hill-far: #b9d9a8;
 		--hill-mid: #8ac07c;
 		--hill-near: #5c9f5e;
+		/* text straight on the sky glows in this (`.on-sky`): the band the ink was chosen for */
+		--sky-halo: var(--sky-low);
+		--sky-halo-shadow:
+			0 0 1px var(--sky-halo), 0 0 3px var(--sky-halo), 0 0 6px var(--sky-halo),
+			0 0 12px var(--sky-halo);
 
 		/* the tints: vacation, sick, holiday, other — a fill and its ink */
 		--tint-vacation: #d9ebf6;
@@ -343,6 +348,7 @@
 		--hill-far: #3b5470;
 		--hill-mid: #2c4a44;
 		--hill-near: #1f3a31;
+		--sky-halo: var(--sky-mid);
 
 		--tint-vacation: #2d4a6b;
 		--tint-vacation-ink: #bcd9f0;
@@ -459,6 +465,22 @@
 			var(--sky-low) 78%,
 			var(--sky-ground) 100%
 		);
+	}
+
+	/*
+	  Text straight on the sky. The sky is fixed and the page scrolls over it, so
+	  any line can come to rest over the hills (afternoon) or the warm band above
+	  them (dusk), where no one ink clears 4.5:1. A halo in the sky's own colour
+	  sits under every glyph instead: invisible on the open sky, a mist where the
+	  text crosses a hill, and wide enough that WCAG counts it as the background.
+	  text-shadow inherits, so the class goes on a container; anything painted
+	  inside it (a panel, a pill, a field) turns it off for its own subtree.
+	*/
+	.on-sky {
+		text-shadow: var(--sky-halo-shadow);
+	}
+	.on-sky :is([class*="bg-"], button, input, textarea, select) {
+		text-shadow: none;
 	}
 
 	.sun {
