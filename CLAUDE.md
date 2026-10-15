@@ -37,7 +37,7 @@ cd daemon && go run ./cmd/beatsd run        # Foreground run (after `beatsd pair
 
 # Companion (Flutter)
 cd companion && flutter test                # Widget + unit tests
-cd companion && flutter run -d macos        # Desktop dev run
+cd companion && flutter run -d macos --dart-define-from-file=config/local.json  # Desktop dev run, against the local API
 
 # VS Code extension
 cd integrations/vscode-beats && npm test    # tsc + node --test
