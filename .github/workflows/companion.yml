@@ -69,6 +69,11 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 36500 -dname "CN=Beats CI"
           printf 'storePassword=cipass\nkeyPassword=cipass\nkeyAlias=ci\nstoreFile=ci-upload.jks\n' > key.properties
       - run: flutter build apk --release
+      # The bundle Google Play takes, built here too so a plugin whose
+      # native library isn't 16 KB-aligned fails the PR, not the release.
+      - run: flutter build appbundle --release
+      - name: 16 KB page alignment
+        run: bash android/check-16kb.sh build/app/outputs/bundle/release/app-release.aab
       - uses: actions/upload-artifact@v7
         with:
           name: companion-android
