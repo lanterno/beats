@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:path_provider/path_provider.dart';
 
-/// Renders solid-color circular tray icons on demand and caches them on disk.
+/// Renders the day ring as the tray icon, one colour per project, on demand,
+/// and caches the PNGs on disk.
 ///
 /// macOS / Windows / Linux all want a file path for the menu-bar icon, so we
 /// rasterize a small PNG once per project color and reuse it on subsequent
@@ -20,8 +22,8 @@ class TrayIconRenderer {
   final Map<String, String> _cache = {};
   Directory? _dir;
 
-  /// Returns a path to a colored dot icon for the project. Falls back to a
-  /// neutral gray dot for the idle state or invalid inputs.
+  /// Returns a path to the day ring in the project's colour. Falls back to a
+  /// neutral gray ring for the idle state or invalid inputs.
   Future<String> iconForProject(List<int>? rgb) async {
     final hex = _hexFromRgb(rgb) ?? _idleHex;
     return iconForHex(hex);
@@ -60,9 +62,9 @@ class TrayIconRenderer {
     if (cached != null && File(cached).existsSync()) return cached;
 
     final dir = await _ensureDir();
-    final file = File('${dir.path}/tray_$key.png');
+    final file = File('${dir.path}/tray_ring_$key.png');
     if (!file.existsSync()) {
-      final bytes = await _renderDot(key);
+      final bytes = await _renderRing(key);
       await file.writeAsBytes(bytes, flush: true);
     }
     _cache[key] = file.path;
@@ -79,18 +81,35 @@ class TrayIconRenderer {
     return dir;
   }
 
-  Future<Uint8List> _renderDot(String hex) async {
+  /// The day ring (shared/brand/mark.svg) in one colour: a faint full
+  /// circle, an arc from twelve round two thirds of the dial, and the sun
+  /// where the arc ends.
+  Future<Uint8List> _renderRing(String hex) async {
     final color = _parseHex(hex);
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
 
-    // Inset slightly so the dot doesn't kiss the menu bar edges.
-    const radius = _renderSize / 2.0 - 3.0;
+    // Inset so the sun at the arc's end doesn't kiss the menu bar edges.
+    const radius = 11.5;
+    const sunRadius = 4.4;
+    const start = -math.pi / 2;
+    const sweep = math.pi * 4 / 3;
     final center = ui.Offset(_renderSize / 2.0, _renderSize / 2.0);
-    final paint = ui.Paint()
+    final circle = ui.Rect.fromCircle(center: center, radius: radius);
+    ui.Paint stroke(ui.Color c) => ui.Paint()
+      ..color = c
+      ..isAntiAlias = true
+      ..style = ui.PaintingStyle.stroke
+      ..strokeWidth = 3.6
+      ..strokeCap = ui.StrokeCap.round;
+
+    canvas.drawCircle(center, radius, stroke(color.withValues(alpha: 0.35)));
+    canvas.drawArc(circle, start, sweep, false, stroke(color));
+    final end = center + ui.Offset(math.cos(start + sweep), math.sin(start + sweep)) * radius;
+    final fill = ui.Paint()
       ..color = color
       ..isAntiAlias = true;
-    canvas.drawCircle(center, radius, paint);
+    canvas.drawCircle(end, sunRadius, fill);
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(_renderSize, _renderSize);

@@ -5,8 +5,8 @@ Personal time-tracking system: Python API + React SPA + Go daemon + Flutter comp
 ## Repository Layout
 
 ```
-shared/                       Cross-surface data (app-labels.json)
-scripts/                      Cross-surface codegen (gen_app_labels.py)
+shared/                       Cross-surface data (app-labels.json, brand.json, brand/ — the logo's SVGs)
+scripts/                      Cross-surface codegen (gen_app_labels.py, gen_brand.py, gen_icons.py)
 api/                          Python (FastAPI + PyMongo/MongoDB)
 ui/                           React 19 SPA (Vite + TypeScript)
 daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
@@ -137,6 +137,16 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   literal. `--check` runs in pre-push and the Brand workflow. Build identifiers (bundle
   IDs, package and binary names, `beatsd`, the `beats` repo and database) are not the
   name and stay put.
+- **The logo**, the day ring, is drawn by hand in `shared/brand/` (the tile, a full-bleed
+  copy for launchers that cut their own shape, a heavier 32-grid favicon and the macOS
+  icon on Apple's 1024 grid). `scripts/gen_icons.py` copies and rasterizes them into
+  `ui/public/` and every companion target: the macOS and iOS AppIcon sets, Android's
+  mipmaps, the Windows `.ico` and the Flutter web shell. It needs `rsvg-convert` and has
+  no `--check`, so run it after editing an SVG and commit what it wrote. Android's
+  adaptive icon is drawn again by hand as vector drawables (`res/drawable/ic_launcher_*`),
+  and the Linux runner sets no icon. Two places draw the
+  ring in code, in a project's colour: the running-timer favicon (`useFavicon.ts`) and
+  the menu bar icon (`tray_icon.dart`).
 - **VS Code extension tests** are in `integrations/vscode-beats/src/*.test.ts` (`node --test`, no framework). The pure helpers (`buildInsightsUrl`, `formatStatusBar`) have cross-language parity assertions matching the daemon and companion equivalents.
 
 ### What to test, and what not to
