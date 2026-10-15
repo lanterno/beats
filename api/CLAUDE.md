@@ -37,9 +37,10 @@ src/beats/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
 │   ├── migrations.py    Startup passes: a project without `kind` gets one (a day job its
 │   │                    contract too); a day job whose term governs loses `weekly_goal`
+│   ├── sso_migration.py Startup pass: the home.space SSO links OIDC replaced are cleared
 │   └── repositories.py  Abstract + MongoDB repo implementations
 ├── settings.py   pydantic-settings (reads .env / env vars)
-├── auth/         WebAuthn + JWT session management
+├── auth/         WebAuthn + JWT sessions; OpenID Connect sign-in (oidc.py, sso_accounts.py)
 └── server.py     FastAPI app + lifespan (in src/, not src/beats/)
 ```
 
@@ -52,16 +53,16 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Ten test files cover different layers (895 tests, ~30s for the full run):
+Ten test files cover different layers (888 tests, ~30s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 304 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 292 tests.
 - **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, plus one round trip through the absence repository; 27 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, the row-to-row balance proof; 17 tests.
-- **`src/beats/test_migration.py`** — the two startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, and the one that then clears the personal goal the contract replaced; 19 tests.
+- **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, and the one that retired the home.space SSO links; 21 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 140 tests.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation; 62 tests.
-- **`src/beats/test_sso.py`** — home.space SSO with a scripted issuer (`httpx.MockTransport`) and real Ed25519 tokens; 35 tests.
+- **`src/beats/test_sso.py`** — OpenID Connect sign-in against `src/fake_idp.py` (a scripted provider, real RS256 tokens) and the account rules; 38 tests.
 - **`src/beats/test_middleware.py`** — idempotency middleware, no DB; 8 tests.
 - **`src/beats/test_device_access.py`** — the device-verdict cache; 6 tests.
 
