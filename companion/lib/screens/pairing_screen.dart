@@ -141,7 +141,9 @@ class _PairingScreenState extends State<PairingScreen> {
       backgroundColor: Colors.transparent,
       body: SkyBackdrop(
         hills: true,
-        child: Center(
+        // SafeArea: clear of the status and navigation bars when it scrolls
+        // on a phone, which draws edge to edge.
+        child: SafeArea(child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
             child: ConstrainedBox(
@@ -270,7 +272,7 @@ class _PairingScreenState extends State<PairingScreen> {
               ),
             ),
           ),
-        ),
+        )),
       ),
     );
   }

@@ -62,7 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final p = context.sky;
     final topBar = Padding(
-      padding: EdgeInsets.fromLTRB(20, Platform.isMacOS ? 30 : 16, 20, 8),
+      // On a phone the app draws under the status bar (edge to edge, Android 15+).
+      padding: EdgeInsets.fromLTRB(20, (Platform.isMacOS ? 30 : 16) + MediaQuery.paddingOf(context).top, 20, 8),
       child: Column(children: [
         Row(children: [
           RoundIconButton(
@@ -124,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Platform.isMacOS ? DragToMoveArea(child: topBar) : topBar,
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+                  padding: EdgeInsets.fromLTRB(24, 12, 24, 40 + MediaQuery.paddingOf(context).bottom),
                   children: [
                     Center(
                       child: ConstrainedBox(
