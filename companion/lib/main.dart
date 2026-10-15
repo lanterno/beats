@@ -9,6 +9,7 @@ import 'popover/popover_app.dart';
 import 'services/api_client.dart';
 import 'services/notification_poller.dart';
 import 'services/notifications.dart';
+import 'services/sample_api.dart';
 import 'services/status_menu.dart';
 import 'services/token_storage.dart';
 import 'services/tray_service.dart';
@@ -84,6 +85,10 @@ class _AppShellState extends State<AppShell> {
   final _window = GlobalKey<MainWindowState>();
   bool _loading = true;
   bool _paired = false;
+
+  /// Looking around on SampleApi rather than a paired account: nothing is
+  /// stored, no notifications, and the pairing screen is one tap away.
+  bool _sample = false;
   ApiClient? _client;
   TimerController? _timer;
   WeekController? _week;
@@ -107,6 +112,17 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _checkPairing() async {
+    if (_debugSample() != null) {
+      // Straight into sample data, never touching the keychain: a debug
+      // build shares it with the installed app.
+      setState(() {
+        _sample = true;
+        _paired = true;
+        _loading = false;
+        _connect(SampleApi());
+      });
+      return;
+    }
     String? token;
     try {
       token = await _storage.loadToken();
@@ -234,7 +250,16 @@ class _AppShellState extends State<AppShell> {
     await _initNotifications();
   }
 
+  void _onSample() {
+    setState(() {
+      _sample = true;
+      _paired = true;
+      _connect(SampleApi());
+    });
+  }
+
   void _onUnpaired() {
+    _sample = false;
     _poller?.stop();
     _poller = null;
     _notificationTaps?.cancel();
@@ -255,7 +280,7 @@ class _AppShellState extends State<AppShell> {
     }
 
     if (!_paired || _client == null) {
-      return PairingScreen(onPaired: _onPaired);
+      return PairingScreen(onPaired: _onPaired, onSample: _onSample);
     }
 
     _debugRoute();
@@ -268,6 +293,7 @@ class _AppShellState extends State<AppShell> {
       idle: _idle!,
       hour: widget.hour,
       onUnpaired: _onUnpaired,
+      sample: _sample && _debugSample() != 'quiet',
     );
   }
 }
@@ -280,6 +306,10 @@ void _debugRouteOnce(GlobalKey<MainWindowState> window) {
   if (route == null) return;
   WidgetsBinding.instance.addPostFrameCallback((_) => window.currentState?.showByName(route: route));
 }
+
+/// In a debug build, `LIFEPETE_SAMPLE=1` opens on sample data (`quiet`
+/// leaves out the sample banner, for the store's screenshots).
+String? _debugSample() => kDebugMode ? Platform.environment['LIFEPETE_SAMPLE'] : null;
 
 /// In a debug build, `LIFEPETE_SECTION=flow` (today, flow, coach, body)
 /// opens on that place, so each screen can be looked at without clicking:

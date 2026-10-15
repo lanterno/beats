@@ -16,7 +16,11 @@ import 'shell.dart' show BrandMark;
 /// six-character code the web app shows under Settings → Daemon.
 class PairingScreen extends StatefulWidget {
   final VoidCallback onPaired;
-  const PairingScreen({super.key, required this.onPaired});
+
+  /// Opens the app on made-up data instead (services/sample_api.dart).
+  final VoidCallback? onSample;
+
+  const PairingScreen({super.key, required this.onPaired, this.onSample});
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -248,6 +252,17 @@ class _PairingScreenState extends State<PairingScreen> {
                         label: 'Web app URL (optional)',
                         controller: _webUrlController,
                         hint: 'https://example.com',
+                      ),
+                    ],
+                    if (widget.onSample != null) ...[
+                      const SizedBox(height: 18),
+                      Divider(height: 1, color: p.hairline),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: LinkButton(
+                          label: 'No account yet? Look around with sample data',
+                          onPressed: widget.onSample,
+                        ),
                       ),
                     ],
                   ],
