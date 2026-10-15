@@ -86,6 +86,8 @@ class CompanionApp extends StatelessWidget {
         theme: buildSkyTheme(SkyPalette.afternoon, Brightness.light).copyWith(platform: platform),
         darkTheme: buildSkyTheme(SkyPalette.dusk, Brightness.dark).copyWith(platform: platform),
         themeMode: hour.themeMode,
+        // The launch route is read by AppShell (_launchSample), not pushed.
+        initialRoute: '/',
         home: AppShell(hour: hour),
       ),
     );
@@ -324,21 +326,33 @@ class _AppShellState extends State<AppShell> {
 /// In a debug build, `LIFEPETE_ROUTE=settings` (or `focus`) opens that
 /// over the window once it is up.
 void _debugRouteOnce(GlobalKey<MainWindowState> window) {
-  if (!kDebugMode) return;
-  final route = Platform.environment['LIFEPETE_ROUTE'];
+  final route = (kDebugMode ? Platform.environment['LIFEPETE_ROUTE'] : null) ??
+      switch (_launchSample()) { 'find' || 'focus' || 'settings' => _launchSample(), _ => null };
   if (route == null) return;
   WidgetsBinding.instance.addPostFrameCallback((_) => window.currentState?.showByName(route: route));
 }
 
 /// In a debug build, `LIFEPETE_SAMPLE=1` opens on sample data (`quiet`
 /// leaves out the sample banner, for the store's screenshots).
-String? _debugSample() => kDebugMode ? Platform.environment['LIFEPETE_SAMPLE'] : null;
+String? _debugSample() =>
+    (kDebugMode ? Platform.environment['LIFEPETE_SAMPLE'] : null) ?? (_launchSample() != null ? '1' : null);
+
+/// Sample data asked for by the launch route, as an Android intent's `route`
+/// extra carries it: `/sample`, or `/sample/<place>` (today, flow, coach,
+/// body, or find, focus, settings), which returns the place, or '' for none.
+/// The emulator smoke test opens each place this way, since a tap can't
+/// reach Flutter's widgets from adb reliably. It only ever opens sample data,
+/// which anyone can open from the pairing screen anyway.
+String? _launchSample() {
+  final route = WidgetsBinding.instance.platformDispatcher.defaultRouteName;
+  if (route != '/sample' && !route.startsWith('/sample/')) return null;
+  return route.length > 8 ? route.substring(8) : '';
+}
 
 /// In a debug build, `LIFEPETE_SECTION=flow` (today, flow, coach, body)
 /// opens on that place, so each screen can be looked at without clicking:
 /// `open --env LIFEPETE_SECTION=flow build/macos/…/beats_companion.app`.
 Section _debugSection() {
-  if (!kDebugMode) return Section.today;
-  final name = Platform.environment['LIFEPETE_SECTION'];
+  final name = (kDebugMode ? Platform.environment['LIFEPETE_SECTION'] : null) ?? _launchSample();
   return Section.values.where((s) => s.name == name).firstOrNull ?? Section.today;
 }
