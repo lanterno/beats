@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/quick_parse.dart';
-import '../services/time_format.dart';
+import '../services/quick_preview.dart';
 import '../state/timer_controller.dart';
 import '../theme/sky.dart';
 import '../ui/kit.dart';
@@ -148,40 +148,20 @@ class _QuickStartPaletteState extends State<QuickStartPalette> {
     final cmd = _command;
     final timer = widget.timer;
     final now = DateTime.now();
-    final at = cmd.at;
-    final when = at == null ? '' : ' from ${formatTimeOfDay(at)}';
-    switch (item) {
-      case _StartItem(:final project):
-        final current = timer.current;
-        if (current != null && current.id != project.id) {
-          final stopAt = at ?? now;
-          final ran = stopAt.toUtc().difference(timer.since!);
-          return (
-            'Switch to ${project.name}$when',
-            'Stops ${current.name}${at == null ? '' : ' at ${formatTimeOfDay(at)}'} '
-                '(${formatDuration(ran)})${at == null ? '' : ' · ${project.name} starts ${_ago(now.difference(at))}'}',
-          );
-        }
-        if (current != null && current.id == project.id && at != null) {
-          return ('Restart ${project.name}$when', 'Closes the running session and opens a new one');
-        }
-        return ('Start ${project.name}$when', at == null ? null : 'Starts ${_ago(now.difference(at))}');
-      case _StopItem():
-        final stopAt = at ?? now;
-        return (
-          'Stop ${timer.current!.name}${at == null ? '' : ' at ${formatTimeOfDay(at)}'}',
-          'Logs ${formatDuration(stopAt.toUtc().difference(timer.since!))}',
-        );
-      case _ActionItem(:final action):
-        return (action.label, null);
-      case null:
-        return null;
-    }
-  }
-
-  String _ago(Duration d) {
-    if (d.inMinutes < 1) return 'now';
-    return '${formatDuration(d)} ago';
+    final preview = switch (item) {
+      _StartItem(:final project) => previewStart(
+          project: project.name,
+          now: now,
+          at: cmd.at,
+          running: timer.current?.name,
+          since: timer.since,
+          same: timer.current?.id == project.id,
+        ),
+      _StopItem() => previewStop(running: timer.current!.name, since: timer.since!, now: now, at: cmd.at),
+      _ActionItem(:final action) => QuickPreview(action.label),
+      null => null,
+    };
+    return preview == null ? null : (preview.title, preview.detail);
   }
 
   @override
