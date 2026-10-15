@@ -78,8 +78,14 @@ export function WebhooksSection() {
 								<span className="text-[11.5px] font-medium text-muted-foreground shrink-0">
 									{wh.events.join(", ")}
 								</span>
-								<button type="button" onClick={() => handleDelete(wh.id)} className={REMOVE}>
-									<Trash2 className="w-3 h-3" />
+								<button
+									type="button"
+									onClick={() => handleDelete(wh.id)}
+									className={REMOVE}
+									aria-label={`Delete webhook ${wh.url}`}
+									title="Delete webhook"
+								>
+									<Trash2 className="w-3 h-3" aria-hidden />
 								</button>
 							</div>
 						))}
