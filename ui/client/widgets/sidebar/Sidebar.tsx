@@ -24,7 +24,7 @@ import { useAuth } from "@/features/auth";
 import { APP_NAME } from "@/shared/config";
 import { cn, useInstallPrompt } from "@/shared/lib";
 import { signOut } from "@/shared/session";
-import { SyncStatus } from "@/shared/ui";
+import { BrandMark, SyncStatus } from "@/shared/ui";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
@@ -62,11 +62,12 @@ export function Sidebar(props: SidebarProps) {
 			<div className="flex-1 min-h-0 flex flex-col rounded-[1.625rem] bg-sidebar shadow-soft">
 				{/* Brand + Nav */}
 				<div className="px-4 pt-5 pb-3 space-y-3">
-					<div className="flex items-baseline justify-between px-1">
+					<div className="flex items-center justify-between px-1">
 						<Link
 							to="/app"
-							className="font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground hover:text-sidebar-primary transition-colors"
+							className="flex items-center gap-2.5 font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground hover:text-sidebar-primary transition-colors"
 						>
+							<BrandMark className="w-7 h-7 shrink-0" />
 							{APP_NAME}
 						</Link>
 						<SyncStatus />

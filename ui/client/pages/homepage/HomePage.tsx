@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthModal } from "@/features/auth";
-import { Button, SkyBackdrop } from "@/shared/ui";
+import { BrandMark, Button, SkyBackdrop } from "@/shared/ui";
 import "./HomePage.css";
 import { APP_NAME } from "@/shared/config";
 
@@ -68,7 +68,7 @@ function Nav({ onSignIn }: { onSignIn: () => void }) {
 		<nav className="homepage-nav">
 			<div className="homepage-nav-inner">
 				<a href="#top" className="homepage-wordmark">
-					<Clock className="w-4 h-4 text-accent-ink" aria-hidden />
+					<BrandMark className="w-6 h-6 shrink-0" />
 					<span>{APP_NAME}</span>
 				</a>
 				<div className="homepage-nav-links">

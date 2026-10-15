@@ -22,7 +22,7 @@ import { useAuth } from "@/features/auth";
 import { APP_NAME } from "@/shared/config";
 import { cn, formatSecondsToTime, parseUtcIso, useInstallPrompt } from "@/shared/lib";
 import { signOut } from "@/shared/session";
-import { AnimatedDigits, SyncStatus } from "@/shared/ui";
+import { AnimatedDigits, BrandMark, SyncStatus } from "@/shared/ui";
 import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
@@ -79,8 +79,9 @@ export function MobileHeader(props: MobileHeaderProps) {
 					</button>
 					<Link
 						to="/app"
-						className="font-heading text-base font-extrabold tracking-[-0.01em] text-sidebar-foreground"
+						className="flex items-center gap-2 font-heading text-base font-extrabold tracking-[-0.01em] text-sidebar-foreground"
 					>
+						<BrandMark className="w-6 h-6 shrink-0" />
 						{APP_NAME}
 					</Link>
 					<SyncStatus />
@@ -122,8 +123,9 @@ export function MobileHeader(props: MobileHeaderProps) {
 								<Link
 									to="/app"
 									onClick={closeDrawer}
-									className="font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground"
+									className="flex items-center gap-2.5 font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground"
 								>
+									<BrandMark className="w-7 h-7 shrink-0" />
 									{APP_NAME}
 								</Link>
 								<button

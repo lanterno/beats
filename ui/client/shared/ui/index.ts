@@ -4,6 +4,7 @@
  */
 
 export { AnimatedDigits } from "./animated-digits";
+export { BrandMark } from "./brand-mark";
 export { Button, type ButtonProps, buttonVariants } from "./button";
 export { ColorPicker } from "./color-picker";
 export { type CommandItem, CommandPalette } from "./command-palette";
