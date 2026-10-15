@@ -1,26 +1,49 @@
 import { KeyRound } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { SSOConfig, SSOLinkInfo } from "@/features/auth";
+import type { LinkedIdentity, SSOProvider } from "@/features/auth";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LEAD, LINKISH } from "./styles";
 
-export function HomeIdentitySection() {
-	const [sso, setSso] = useState<SSOConfig | null>(null);
-	const [link, setLink] = useState<SSOLinkInfo | null>(null);
-	const [busy, setBusy] = useState(false);
+interface Row {
+	id: string;
+	name: string;
+	linked: LinkedIdentity | null;
+	/** False for an identity whose provider this instance no longer offers. */
+	offered: boolean;
+}
+
+/**
+ * One row per provider this instance offers, plus any identity linked through
+ * a provider it has since dropped — still listed, so it can be unlinked.
+ */
+function rows(providers: SSOProvider[], identities: LinkedIdentity[]): Row[] {
+	const offered: Row[] = providers.map((p) => ({
+		id: p.id,
+		name: p.name,
+		linked: identities.find((i) => i.provider === p.id) ?? null,
+		offered: true,
+	}));
+	const dropped: Row[] = identities
+		.filter((i) => !providers.some((p) => p.id === i.provider))
+		.map((i) => ({ id: i.provider, name: i.provider_name, linked: i, offered: false }));
+	return [...offered, ...dropped];
+}
+
+export function SingleSignOnSection() {
+	const [providers, setProviders] = useState<SSOProvider[]>([]);
+	const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
+	const [busy, setBusy] = useState<string | null>(null);
 
 	const load = useCallback(async () => {
-		const { getSsoConfig, getCurrentUser } = await import("@/features/auth");
-		const cfg = await getSsoConfig();
-		setSso(cfg);
-		if (!cfg.enabled) return;
+		const { getSsoProviders, getCurrentUser } = await import("@/features/auth");
+		setProviders(await getSsoProviders());
 		try {
-			setLink((await getCurrentUser()).sso);
+			setIdentities((await getCurrentUser()).identities);
 		} catch {
-			setLink(null);
+			setIdentities([]);
 		}
 	}, []);
 
@@ -28,85 +51,79 @@ export function HomeIdentitySection() {
 		load();
 	}, [load]);
 
-	const handleLink = async () => {
-		if (!sso) return;
-		setBusy(true);
+	const handleLink = async (row: Row) => {
+		setBusy(row.id);
 		try {
-			const { linkSsoIdentity } = await import("@/features/auth");
-			const user = await linkSsoIdentity();
-			setLink(user.sso);
-			toast.success(`Linked ${sso.provider_name} identity`);
+			const { startSsoLink } = await import("@/features/auth");
+			// Leaves for the provider; `/auth/callback` brings the browser back here.
+			await startSsoLink(row.id);
 		} catch (err) {
-			const failure = err as Error & { code?: string };
-			// No cookie here yet — go and get one, then come straight back
-			// to this page rather than to the login screen.
-			if (failure.code === "SSO_NO_SESSION" && sso.login_url) {
-				const returnTo = `${window.location.origin}${window.location.pathname}`;
-				window.location.href = `${sso.login_url}/?return_to=${encodeURIComponent(returnTo)}`;
-				return;
-			}
-			toast.error(describeError(err, "Failed to link identity"));
-		} finally {
-			setBusy(false);
+			toast.error(describeError(err, `Couldn't reach ${row.name}`));
+			setBusy(null);
 		}
 	};
 
-	const handleUnlink = async () => {
-		setBusy(true);
+	const handleUnlink = async (row: Row) => {
+		setBusy(row.id);
 		try {
 			const { unlinkSsoIdentity } = await import("@/features/auth");
-			const user = await unlinkSsoIdentity();
-			setLink(user.sso);
-			toast.success("Identity unlinked");
+			setIdentities((await unlinkSsoIdentity(row.id)).identities);
+			toast.success(`${row.name} unlinked`);
 		} catch (err) {
-			toast.error(describeError(err, "Failed to unlink identity"));
+			toast.error(describeError(err, "Failed to unlink"));
 		} finally {
-			setBusy(false);
+			setBusy(null);
 		}
 	};
 
-	if (!sso?.enabled) return null;
+	const list = rows(providers, identities);
+	if (list.length === 0) return null;
 
 	return (
 		<section className="mb-8">
 			<h2 className={HEADING}>
 				<KeyRound className={HEADING_ICON} />
-				{sso.provider_name} identity
+				Single sign-on
 			</h2>
 			<Panel padding="p-5" className="space-y-3">
 				<p className={LEAD}>
-					Link your {sso.provider_name} identity to sign in here with it, alongside your passkeys.
+					Link an account you have elsewhere to sign in here with it, alongside your passkeys.
 					Linking never replaces them — either way in keeps working.
 				</p>
-
-				{link?.linked ? (
-					<>
-						<div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2">
-							<KeyRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-							<span className="text-[12.5px] text-foreground font-bold truncate flex-1">
-								{link.holder_name || "Linked device"}
-							</span>
-							{link.roles.length > 0 && (
-								<span className="text-[11px] text-muted-foreground shrink-0">
-									{link.roles.join(", ")}
-								</span>
+				<ul className="divide-y divide-border">
+					{list.map((row) => (
+						<li key={row.id} className="flex items-center gap-3 py-2.5">
+							<div className="min-w-0 flex-1">
+								<p className="text-[13px] font-bold text-foreground truncate">{row.name}</p>
+								{row.linked && (
+									<p className="text-[11.5px] text-muted-foreground truncate">
+										{row.linked.email || row.linked.name || "Linked"}
+										{!row.offered && " · no longer offered here"}
+									</p>
+								)}
+							</div>
+							{row.linked ? (
+								<button
+									type="button"
+									onClick={() => handleUnlink(row)}
+									disabled={busy !== null}
+									className={cn(LINKISH, "text-muted-foreground hover:text-destructive-ink")}
+								>
+									{busy === row.id ? "Working..." : "Unlink"}
+								</button>
+							) : (
+								<button
+									type="button"
+									onClick={() => handleLink(row)}
+									disabled={busy !== null}
+									className={LINKISH}
+								>
+									{busy === row.id ? "Opening..." : "Link"}
+								</button>
 							)}
-						</div>
-						<p className="text-[11px] text-muted-foreground font-code break-all">{link.did}</p>
-						<button
-							type="button"
-							onClick={handleUnlink}
-							disabled={busy}
-							className={cn(LINKISH, "text-muted-foreground hover:text-destructive-ink")}
-						>
-							{busy ? "Working..." : "Unlink"}
-						</button>
-					</>
-				) : (
-					<button type="button" onClick={handleLink} disabled={busy} className={LINKISH}>
-						{busy ? "Linking..." : `Link my ${sso.provider_name} identity`}
-					</button>
-				)}
+						</li>
+					))}
+				</ul>
 			</Panel>
 		</section>
 	);
