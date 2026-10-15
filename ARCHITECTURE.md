@@ -62,7 +62,8 @@ api/src/
     │   ├── session.py           # JWT session management
     │   ├── storage.py           # WebAuthn credential storage
     │   ├── device_access.py     # Cached device-revocation verdicts
-    │   └── sso.py               # home.space cookie verification
+    │   ├── oidc.py              # OpenID Connect: discovery, code exchange, ID-token checks
+    │   └── sso_accounts.py      # A provider's identity → a beats account (sign in, link, unlink)
     └── api/
         ├── dependencies.py      # FastAPI Depends() wiring
         ├── schemas.py           # Request/response Pydantic models
@@ -83,7 +84,7 @@ api/src/
             ├── meta.py          # Holiday-region list
             ├── account.py       # me, refresh, credentials, logout
             ├── auth.py          # WebAuthn registration/login
-            └── sso.py           # home.space config + session exchange
+            └── sso.py           # SSO providers, start + complete a sign-in
 ```
 
 `calendar.py`, `github.py`, `fitbit.py` and `oura.py` each have a router of the

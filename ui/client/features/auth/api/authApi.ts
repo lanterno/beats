@@ -26,42 +26,41 @@ export interface VerifyResponse {
 export interface UserInfo {
 	email: string;
 	display_name: string | null;
-	sso: SSOLinkInfo;
+	identities: LinkedIdentity[];
+	/** True when a sign-in through a provider created this account. */
+	sso_provisioned: boolean;
 }
 
-// home.space SSO
+// Single sign-on (OpenID Connect)
 
-export interface SSOConfig {
-	enabled: boolean;
+export interface SSOProvider {
+	id: string;
+	name: string;
+}
+
+/** An identity at a provider that signs into this account. */
+export interface LinkedIdentity {
+	provider: string;
+	/** The provider's name, or its id once the instance no longer offers it. */
 	provider_name: string;
-	/** Where to send the browser for a home.space session. "" when it could
-	 *  not be derived (a bare localhost) — the button stays hidden then. */
-	login_url: string;
-	/** Whether the browser already carries a Home-Session cookie. */
-	session_present: boolean;
+	name: string | null;
+	email: string | null;
+	linked_at: string;
 }
 
-export interface SSOLinkInfo {
-	linked: boolean;
-	provider_name: string;
-	did: string | null;
-	holder_name: string | null;
-	roles: string[];
-	linked_at: string | null;
-	provisioned: boolean;
+export interface SSOStart {
+	/** Where to send the browser. */
+	authorize_url: string;
+	/** Comes back on the callback; kept to check the callback is ours. */
+	state: string;
 }
 
-export interface SSOSessionResponse {
-	verified: boolean;
-	token: string;
+export interface SSOComplete {
+	intent: "sign_in" | "link";
+	provider: string;
+	/** A session token, for a sign-in; null for a link. */
+	token: string | null;
 	created: boolean;
-	did: string;
-	holder_name: string;
-	roles: string[];
-	display_name: string | null;
-	/** "issuer" when revocation was checked, "offline" when auth.home.space
-	 *  was unreachable and only the signature could be verified. */
-	verified_by: "issuer" | "offline";
 }
 
 const AUTH_BASE = `${config.apiBaseUrl}/api/auth`;
@@ -105,70 +104,63 @@ export function verifyLogin(credential: unknown): Promise<VerifyResponse> {
 	return authPost("/login/verify", { credential });
 }
 
-// home.space SSO
+// Single sign-on (OpenID Connect)
 //
-// Every call here sends cookies. The `Home-Session` cookie is scoped to
-// `.home.space`, so on the home deployment (where the SPA and the API share
-// an origin) it rides along automatically — but `credentials: "include"`
-// keeps this working when the two are split across ports in development.
+// The API keeps each sign-in's secrets; the browser keeps only its `state`,
+// in sessionStorage, to check that a callback it receives is one this tab
+// started. A link started from Settings goes the same way and is finished
+// with the same session.
 
-/**
- * Whether this instance offers home.space SSO, and where to go for it.
- * Never throws: the login screen calls it on every load, and a deployment
- * without SSO should render exactly as it always did.
- */
-export async function getSsoConfig(): Promise<SSOConfig> {
-	const disabled: SSOConfig = {
-		enabled: false,
-		provider_name: "",
-		login_url: "",
-		session_present: false,
-	};
+const SSO_STATE_KEY = "beats.sso.state";
+
+/** The providers this instance offers. Never throws: none is an empty list. */
+export async function getSsoProviders(): Promise<SSOProvider[]> {
 	try {
-		const response = await fetch(`${AUTH_BASE}/sso/config`, { credentials: "include" });
-		if (!response.ok) return disabled;
-		return await response.json();
+		const response = await fetch(`${AUTH_BASE}/sso/providers`);
+		if (!response.ok) return [];
+		return (await response.json()).providers;
 	} catch {
-		return disabled;
+		return [];
 	}
 }
 
-/**
- * Exchange the browser's home.space session for a beats session token.
- * Throws an ApiError-shaped Error carrying `code` so the caller can tell
- * "no session yet" (redirect) from "not allowed" (explain).
- */
-export async function ssoSignIn(): Promise<SSOSessionResponse> {
-	const response = await fetch(`${AUTH_BASE}/sso/session`, {
-		method: "POST",
-		credentials: "include",
-	});
-	if (!response.ok) {
-		const body = await response.json().catch(() => ({}));
-		const error = new Error(body.detail || "home.space sign-in failed") as Error & {
-			code?: string;
-			status?: number;
-		};
-		error.code = body.code;
-		error.status = response.status;
-		throw error;
-	}
-	return response.json();
+function goToProvider(started: SSOStart): void {
+	sessionStorage.setItem(SSO_STATE_KEY, started.state);
+	window.location.assign(started.authorize_url);
 }
 
-/**
- * Attach the browser's home.space identity to the signed-in beats account.
- * Requires both a beats session token and a Home-Session cookie.
- */
-export async function linkSsoIdentity(): Promise<UserInfo> {
+/** Leave for the provider's sign-in page. */
+export async function startSsoSignIn(providerId: string): Promise<void> {
 	const { post } = await import("@/shared/api");
-	return post<UserInfo>("/api/account/sso/link");
+	goToProvider(await post<SSOStart>(`/api/auth/sso/${encodeURIComponent(providerId)}/start`));
 }
 
-/** Detach the linked home.space identity. */
-export async function unlinkSsoIdentity(): Promise<UserInfo> {
+/** Leave for the provider to link an identity to the signed-in account. */
+export async function startSsoLink(providerId: string): Promise<void> {
+	const { post } = await import("@/shared/api");
+	goToProvider(await post<SSOStart>(`/api/account/sso/${encodeURIComponent(providerId)}/link`));
+}
+
+/**
+ * Whether `state` is the one this tab sent. Read once: the stored value is
+ * removed either way, so a callback can't be replayed into this check.
+ */
+export function takeSsoState(state: string): boolean {
+	const expected = sessionStorage.getItem(SSO_STATE_KEY);
+	sessionStorage.removeItem(SSO_STATE_KEY);
+	return expected !== null && expected === state;
+}
+
+/** Hand the provider's code to the API; sent with the session, if there is one. */
+export async function completeSso(code: string, state: string): Promise<SSOComplete> {
+	const { post } = await import("@/shared/api");
+	return post<SSOComplete>("/api/auth/sso/complete", { code, state });
+}
+
+/** Detach the identity linked through a provider. */
+export async function unlinkSsoIdentity(providerId: string): Promise<UserInfo> {
 	const { del } = await import("@/shared/api");
-	return del<UserInfo>("/api/account/sso/link");
+	return del<UserInfo>(`/api/account/sso/${encodeURIComponent(providerId)}`);
 }
 
 export async function logout(): Promise<void> {

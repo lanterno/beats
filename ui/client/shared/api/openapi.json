@@ -2001,6 +2001,54 @@
         "title": "LedgerWeek",
         "type": "object"
       },
+      "LinkedIdentityInfo": {
+        "description": "An identity at a provider that signs into this account.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "linked_at": {
+            "title": "Linked At",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_name": {
+            "title": "Provider Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_name",
+          "name",
+          "email",
+          "linked_at"
+        ],
+        "title": "LinkedIdentityInfo",
+        "type": "object"
+      },
       "LoginOptionsResponse": {
         "properties": {
           "options": {
@@ -3045,110 +3093,48 @@
         "title": "RhythmSlotResponse",
         "type": "object"
       },
-      "SSOConfigResponse": {
+      "SSOCompleteRequest": {
         "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "login_url": {
-            "title": "Login Url",
+          "code": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Code",
             "type": "string"
           },
-          "provider_name": {
-            "title": "Provider Name",
+          "state": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "State",
             "type": "string"
-          },
-          "session_present": {
-            "title": "Session Present",
-            "type": "boolean"
           }
         },
         "required": [
-          "enabled",
-          "provider_name",
-          "login_url",
-          "session_present"
+          "code",
+          "state"
         ],
-        "title": "SSOConfigResponse",
+        "title": "SSOCompleteRequest",
         "type": "object"
       },
-      "SSOLinkInfo": {
-        "description": "The home.space identity attached to this account, if any.",
-        "properties": {
-          "did": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Did"
-          },
-          "holder_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Holder Name"
-          },
-          "linked": {
-            "title": "Linked",
-            "type": "boolean"
-          },
-          "linked_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Linked At"
-          },
-          "provider_name": {
-            "title": "Provider Name",
-            "type": "string"
-          },
-          "provisioned": {
-            "default": false,
-            "title": "Provisioned",
-            "type": "boolean"
-          },
-          "roles": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Roles",
-            "type": "array"
-          }
-        },
-        "required": [
-          "linked",
-          "provider_name"
-        ],
-        "title": "SSOLinkInfo",
-        "type": "object"
-      },
-      "SSOSessionResponse": {
+      "SSOCompleteResponse": {
         "properties": {
           "created": {
+            "default": false,
             "title": "Created",
             "type": "boolean"
           },
-          "did": {
-            "title": "Did",
+          "intent": {
+            "enum": [
+              "sign_in",
+              "link"
+            ],
+            "title": "Intent",
             "type": "string"
           },
-          "display_name": {
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "token": {
             "anyOf": [
               {
                 "type": "string"
@@ -3157,43 +3143,66 @@
                 "type": "null"
               }
             ],
-            "title": "Display Name"
-          },
-          "holder_name": {
-            "title": "Holder Name",
+            "title": "Token"
+          }
+        },
+        "required": [
+          "intent",
+          "provider"
+        ],
+        "title": "SSOCompleteResponse",
+        "type": "object"
+      },
+      "SSOProviderInfo": {
+        "properties": {
+          "id": {
+            "title": "Id",
             "type": "string"
           },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Roles",
-            "type": "array"
-          },
-          "token": {
-            "title": "Token",
-            "type": "string"
-          },
-          "verified": {
-            "title": "Verified",
-            "type": "boolean"
-          },
-          "verified_by": {
-            "title": "Verified By",
+          "name": {
+            "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "verified",
-          "token",
-          "created",
-          "did",
-          "holder_name",
-          "roles",
-          "display_name",
-          "verified_by"
+          "id",
+          "name"
         ],
-        "title": "SSOSessionResponse",
+        "title": "SSOProviderInfo",
+        "type": "object"
+      },
+      "SSOProvidersResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/SSOProviderInfo"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "title": "SSOProvidersResponse",
+        "type": "object"
+      },
+      "SSOStartResponse": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url",
+          "state"
+        ],
+        "title": "SSOStartResponse",
         "type": "object"
       },
       "ScheduleType": {
@@ -3623,14 +3632,23 @@
             "title": "Email",
             "type": "string"
           },
-          "sso": {
-            "$ref": "#/components/schemas/SSOLinkInfo"
+          "identities": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedIdentityInfo"
+            },
+            "title": "Identities",
+            "type": "array"
+          },
+          "sso_provisioned": {
+            "title": "Sso Provisioned",
+            "type": "boolean"
           }
         },
         "required": [
           "email",
           "display_name",
-          "sso"
+          "identities",
+          "sso_provisioned"
         ],
         "title": "UserResponse",
         "type": "object"
@@ -3964,7 +3982,7 @@
     },
     "/api/account/refresh": {
       "post": {
-        "description": "Exchange a valid session token for a new one.\n\nA session that began as a home.space SSO login carries an `sso` claim,\nand is re-checked against the issuer here before being extended.\nWithout that, revoking a device in `auth`'s `/devices` would stop new\nlogins while leaving an already-issued beats session renewing itself\nforever \u2014 the revocation would be cosmetic.\n\nSessions from beats' own passkey login carry no `sso` claim and are\nuntouched by any of this.",
+        "description": "Exchange a valid session token for a new one.",
         "operationId": "refresh_token_api_account_refresh_post",
         "responses": {
           "200": {
@@ -3984,10 +4002,21 @@
         ]
       }
     },
-    "/api/account/sso/link": {
+    "/api/account/sso/{provider_id}": {
       "delete": {
-        "description": "Detach the linked home.space identity.\n\nRefused if the account holds no passkey, since the link would be the\nonly remaining way in \u2014 the same rule `delete_credential` applies to the\nlast passkey, seen from the other side.",
-        "operationId": "unlink_sso_identity_api_account_sso_link_delete",
+        "description": "Detach the identity linked through a provider.\n\nWorks for a provider that is no longer configured, too. Refused when it\nwould leave no passkey and no other identity \u2014 no way back in.",
+        "operationId": "unlink_identity_api_account_sso__provider_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3998,29 +4027,62 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "summary": "Unlink Sso Identity",
+        "summary": "Unlink Identity",
         "tags": [
           "account"
         ]
-      },
+      }
+    },
+    "/api/account/sso/{provider_id}/link": {
       "post": {
-        "description": "Attach the caller's home.space identity to their beats account.\n\nProves both sides in one request: the Bearer token proves the beats\naccount, the `Home-Session` cookie proves the home.space identity.",
-        "operationId": "link_sso_identity_api_account_sso_link_post",
+        "description": "Begin linking an identity at a provider to this account.\n\nFinished by `POST /api/auth/sso/complete`, sent with this same session.",
+        "operationId": "start_link_api_account_sso__provider_id__link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
+                  "$ref": "#/components/schemas/SSOStartResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "summary": "Link Sso Identity",
+        "summary": "Start Link",
         "tags": [
           "account"
         ]
@@ -4456,45 +4518,108 @@
         ]
       }
     },
-    "/api/auth/sso/config": {
-      "get": {
-        "description": "Whether this instance offers home.space SSO, and where to go for it.\n\nAlways 200, even when disabled: the login screen calls this on every\nload to decide whether to render the second button, and an error there\nwould be noise on every deployment that does not use SSO.",
-        "operationId": "get_sso_config_api_auth_sso_config_get",
+    "/api/auth/sso/complete": {
+      "post": {
+        "description": "Finish a sign-in or a link with the code the provider sent back.",
+        "operationId": "complete_api_auth_sso_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSOCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SSOConfigResponse"
+                  "$ref": "#/components/schemas/SSOCompleteResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "summary": "Get Sso Config",
+        "summary": "Complete",
         "tags": [
           "sso"
         ]
       }
     },
-    "/api/auth/sso/session": {
-      "post": {
-        "description": "Exchange a verified `Home-Session` cookie for a beats session token.",
-        "operationId": "create_sso_session_api_auth_sso_session_post",
+    "/api/auth/sso/providers": {
+      "get": {
+        "description": "The providers people can sign in with here, in configured order.\n\nAlways 200: the login screen asks on every load, and an instance with\nnone configured answers with an empty list.",
+        "operationId": "list_providers_api_auth_sso_providers_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SSOSessionResponse"
+                  "$ref": "#/components/schemas/SSOProvidersResponse"
                 }
               }
             },
             "description": "Successful Response"
           }
         },
-        "summary": "Create Sso Session",
+        "summary": "List Providers",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/api/auth/sso/{provider_id}/start": {
+      "post": {
+        "description": "Begin signing in through a provider.",
+        "operationId": "start_sign_in_api_auth_sso__provider_id__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Sign In",
         "tags": [
           "sso"
         ]

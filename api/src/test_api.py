@@ -3291,12 +3291,9 @@ class TestAccountAPI:
         body = resp.json()
         assert body["email"] == "test@example.com"
         assert body["display_name"] == "Test User"
-        # An account with no linked home.space identity still reports the
-        # block, with linked=False — the UI branches on it, so it must be
-        # present rather than absent.
-        assert body["sso"]["linked"] is False
-        assert body["sso"]["did"] is None
-        assert set(body) == {"email", "display_name", "sso"}
+        assert body["identities"] == []
+        assert body["sso_provisioned"] is False
+        assert set(body) == {"email", "display_name", "identities", "sso_provisioned"}
 
     def test_me_404_when_user_deleted_under_token(self, client, auth_info):
         """Token still validates JWT-wise but the user row is gone — 404
@@ -6405,363 +6402,208 @@ class TestOAuthIntegrationRouters:
 
 
 class TestSSOAPI:
-    """/api/auth/sso/* and /api/account/sso/link.
+    """/api/auth/sso/* and /api/account/sso/*.
 
-    The issuer is scripted with `httpx.MockTransport` (see
-    `beats/test_sso.py` for the token format it mints), so these exercise
-    the real HTTP contract — cookie handling, status codes, error envelope
-    codes — without needing `home-auth.service` running.
+    The provider is `fake_idp.FakeIdP` (a real token endpoint's checks, real
+    RS256 tokens) swapped in through the `get_oidc_registry` dependency, so
+    these exercise the real HTTP contract — the flow stored in Mongo and taken
+    once, status codes, error envelope codes — with the browser's trip through
+    the provider's login page played by `FakeIdP.issue_code`.
     """
 
-    ISSUER = "did:web:auth.home.space"
-    DID = "did:key:z6MkuIntegrationTestDevice"
-
     @pytest.fixture(autouse=True)
-    def _sso_env(self, auth_info, monkeypatch):
-        """Enable SSO and point the shared verifier at a scripted issuer.
-
-        Restores the real verifier afterwards, so a test that leaves SSO on
-        cannot bleed into the rest of the suite.
-        """
-        import os
-
-        import httpx
+    def _sso_env(self, auth_info, mongo, monkeypatch):
         from bson import ObjectId
-        from pymongo import MongoClient
 
-        from beats.api.routers import sso as sso_router
-        from beats.api.routers.auth import _session_manager
-        from beats.auth.sso import HomeSSOVerifier
+        from beats.api.routers.sso import get_oidc_registry
+        from beats.auth.oidc import OIDCRegistry
         from beats.settings import settings
+        from fake_idp import REDIRECT_URI, FakeIdP
+        from server import app
 
-        # Roles the scripted issuer will report; individual tests override.
-        self.roles = ["owner"]
-        self.issuer_status = 200
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            if request.url.path == "/api/session/verify":
-                if self.issuer_status != 200:
-                    return httpx.Response(self.issuer_status)
-                return httpx.Response(
-                    200,
-                    json={
-                        "authenticated": True,
-                        "did": self.DID,
-                        "holder_name": "Integration Laptop",
-                        "roles": self.roles,
-                    },
-                )
-            return httpx.Response(404)
-
-        monkeypatch.setattr(settings, "sso_enabled", True)
-        real = sso_router._verifier
-        sso_router._verifier = HomeSSOVerifier(
-            auth_base_url="http://issuer.test",
-            issuer=self.ISSUER,
-            transport=httpx.MockTransport(handler),
+        self.open_idp = FakeIdP(provider_id="open", name="Open IdP")
+        self.closed_idp = FakeIdP(provider_id="closed", name="Closed IdP")
+        registry = OIDCRegistry(
+            [
+                self.open_idp.provider(allow_signup=True),
+                self.closed_idp.provider(),
+            ]
         )
+        app.dependency_overrides[get_oidc_registry] = lambda: registry
+        monkeypatch.setattr(settings, "oidc_redirect_uri", REDIRECT_URI)
 
-        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
-        db_name = os.environ.get("DB_NAME", "beats_test")
-        sync = MongoClient(dsn)
-        db = sync[db_name]
-        # Drop anything an earlier test in this class linked or provisioned,
-        # but keep the fixture user the JWT in auth_headers points at.
-        db.users.delete_many({"_id": {"$ne": ObjectId(auth_info["user_id"])}})
-        db.users.update_one(
+        # Drop anything an earlier test in this class linked or created, but
+        # keep the fixture user the JWT in auth_info points at.
+        mongo.users.delete_many({"_id": {"$ne": ObjectId(auth_info["user_id"])}})
+        mongo.users.update_one(
             {"_id": ObjectId(auth_info["user_id"])},
-            {
-                "$set": {"email": "test@example.com", "display_name": "Test User"},
-                "$unset": {
-                    "sso_issuer": "",
-                    "sso_subject": "",
-                    "sso_holder_name": "",
-                    "sso_roles": "",
-                    "sso_linked_at": "",
-                    "sso_provisioned": "",
-                },
-            },
+            {"$set": {"identities": []}, "$unset": {"sso_provisioned": ""}},
         )
-        db.credentials.delete_many({})
-        sync.close()
-        _session_manager._revoked_tokens.clear()
-
+        mongo.credentials.delete_many({})
+        mongo.sso_flows.delete_many({})
         yield
+        app.dependency_overrides.pop(get_oidc_registry, None)
 
-        sso_router._verifier = real
+    def _start(self, client, provider: str, headers=None) -> dict:
+        path = f"/api/account/sso/{provider}/link" if headers else f"/api/auth/sso/{provider}/start"
+        resp = client.post(path, headers=headers or {})
+        assert resp.status_code == 200, resp.text
+        return resp.json()
 
-    # -------- config --------
-
-    def test_config_reports_enabled_and_derives_the_issuer_url(self, client):
-        """The login URL is derived from the request Host, so one build
-        works on home.space, nip.io and the WAN name alike."""
-        resp = client.get("/api/auth/sso/config", headers={"Host": "beats.home.space"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["enabled"] is True
-        assert body["login_url"] == "http://auth.home.space"
-        assert body["session_present"] is False
-
-    def test_config_derives_the_issuer_url_on_nip_io(self, client):
-        resp = client.get(
-            "/api/auth/sso/config", headers={"Host": "beats.192.168.1.112.nip.io:8080"}
+    def _round_trip(self, client, idp, *, headers=None, sub="idp-user-1", **claims):
+        """Start, sign in at the provider, and post the code back."""
+        started = self._start(client, idp.provider_id, headers)
+        code = idp.issue_code(started["authorize_url"], sub=sub, **claims)
+        return client.post(
+            "/api/auth/sso/complete",
+            json={"code": code, "state": started["state"]},
+            headers=headers or {},
         )
-        assert resp.json()["login_url"] == "http://auth.192.168.1.112.nip.io:8080"
 
-    def test_config_has_no_login_url_on_a_bare_localhost(self, client):
-        """`localhost:7999` has no sibling to point at. Reported as empty
-        rather than guessed, so the UI hides the button instead of
-        offering a link that 404s."""
-        resp = client.get("/api/auth/sso/config", headers={"Host": "localhost:7999"})
-        assert resp.json()["login_url"] == ""
-
-    def test_config_reports_a_present_cookie(self, client):
-        resp = client.get(
-            "/api/auth/sso/config",
-            headers={"Host": "beats.home.space"},
-            cookies={"Home-Session": "anything"},
-        )
-        assert resp.json()["session_present"] is True
-
-    def test_config_is_public(self, client):
-        """Called by the login screen before any token exists."""
-        resp = client.get("/api/auth/sso/config")
-        assert resp.status_code == 200
-
-    def test_config_reports_disabled_without_erroring(self, client, monkeypatch):
-        from beats.settings import settings
-
-        monkeypatch.setattr(settings, "sso_enabled", False)
-        resp = client.get("/api/auth/sso/config")
-        assert resp.status_code == 200
-        assert resp.json()["enabled"] is False
-        assert resp.json()["login_url"] == ""
-
-    # -------- sign-in --------
-
-    def test_session_without_a_cookie_is_401(self, client):
-        resp = client.post("/api/auth/sso/session")
-        assert resp.status_code == 401
-        assert resp.json()["code"] == "SSO_NO_SESSION"
-
-    def test_session_provisions_an_account_for_an_owner(self, client):
-        resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "valid-token"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["verified"] is True
-        assert body["created"] is True
-        assert body["did"] == self.DID
-        assert body["holder_name"] == "Integration Laptop"
-        assert body["verified_by"] == "issuer"
-        assert body["token"]
-
-        # The minted token is a working beats session.
-        me = client.get("/api/account/me", headers={"Authorization": f"Bearer {body['token']}"})
-        assert me.status_code == 200
-        assert me.json()["sso"]["linked"] is True
-        assert me.json()["sso"]["did"] == self.DID
-
-    def test_second_sign_in_reuses_the_same_account(self, client):
-        first = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert first.json()["created"] is True
-        second = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert second.status_code == 200
-        assert second.json()["created"] is False
-
-    def test_guest_cannot_provision_an_account(self, client):
-        self.roles = ["guest"]
-        resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert resp.status_code == 403
-        assert resp.json()["code"] == "SSO_PROVISION_FORBIDDEN"
-
-    def test_revoked_device_is_rejected(self, client):
-        self.issuer_status = 401
-        resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert resp.status_code == 401
-        assert resp.json()["code"] == "SSO_INVALID_SESSION"
-
-    def test_unreachable_issuer_reports_503_not_401(self, client):
-        """Never tell a user their identity is invalid when we could not
-        look. 503 is retryable; 401 sends them into a re-login that
-        cannot help."""
-        self.issuer_status = 500
-        resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert resp.status_code == 503
-        assert resp.json()["code"] == "SSO_UNAVAILABLE"
-
-    def test_session_is_503_when_sso_is_disabled(self, client, monkeypatch):
-        from beats.settings import settings
-
-        monkeypatch.setattr(settings, "sso_enabled", False)
-        resp = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert resp.status_code == 503
-        assert resp.json()["code"] == "SSO_DISABLED"
-
-    # -------- linking --------
-
-    def test_link_attaches_the_identity_to_the_signed_in_account(self, client, auth_info):
-        """The case this integration was built for: an existing beats
-        account gains a home.space identity without changing anything
-        else about it."""
-        resp = client.post(
-            "/api/account/sso/link",
-            headers=auth_info["headers"],
-            cookies={"Home-Session": "t"},
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["email"] == "test@example.com"  # unchanged
-        assert body["sso"]["linked"] is True
-        assert body["sso"]["did"] == self.DID
-        assert body["sso"]["provisioned"] is False
-
-        # Signing in through SSO now lands on that same account.
-        signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        assert signed_in.json()["created"] is False
-        me = client.get(
-            "/api/account/me",
-            headers={"Authorization": f"Bearer {signed_in.json()['token']}"},
-        )
-        assert me.json()["email"] == "test@example.com"
-
-    def test_link_requires_an_authenticated_beats_session(self, client):
-        """Linking from an unauthenticated SSO arrival is the account
-        takeover shape. It is not offered."""
-        resp = client.post("/api/account/sso/link", cookies={"Home-Session": "t"})
-        assert resp.status_code == 401
-
-    def test_link_requires_a_home_session_cookie(self, client, auth_info):
-        resp = client.post("/api/account/sso/link", headers=auth_info["headers"])
-        assert resp.status_code == 401
-        assert resp.json()["code"] == "SSO_NO_SESSION"
-
-    def test_link_refuses_an_identity_owned_by_another_account(self, client, auth_info):
-        # Provision a separate account holding the DID first.
-        client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-
-        resp = client.post(
-            "/api/account/sso/link",
-            headers=auth_info["headers"],
-            cookies={"Home-Session": "t"},
-        )
-        assert resp.status_code == 409
-        assert resp.json()["code"] == "SSO_ALREADY_LINKED"
-
-    def test_unlink_refuses_when_no_passkey_remains(self, client, auth_info):
-        """The account would have no way back in — the same rule
-        `delete_credential` applies to the last passkey."""
-        client.post(
-            "/api/account/sso/link",
-            headers=auth_info["headers"],
-            cookies={"Home-Session": "t"},
-        )
-        resp = client.delete("/api/account/sso/link", headers=auth_info["headers"])
-        assert resp.status_code == 409
-        assert resp.json()["code"] == "SSO_LAST_CREDENTIAL"
-
-    def test_unlink_succeeds_when_a_passkey_remains(self, client, auth_info):
-        import os
-
-        from pymongo import MongoClient
-
-        client.post(
-            "/api/account/sso/link",
-            headers=auth_info["headers"],
-            cookies={"Home-Session": "t"},
-        )
-        dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
-        sync = MongoClient(dsn)
-        sync[os.environ.get("DB_NAME", "beats_test")].credentials.insert_one(
+    def _passkey(self, mongo, user_id: str) -> None:
+        mongo.credentials.insert_one(
             {
-                "user_id": auth_info["user_id"],
-                "credential_id": "cred-for-unlink",
+                "user_id": user_id,
+                "credential_id": f"cred-{user_id}",
                 "public_key": "k",
                 "sign_count": 0,
                 "created_at": datetime.now(UTC).isoformat(),
                 "device_name": "Laptop",
             }
         )
-        sync.close()
 
-        resp = client.delete("/api/account/sso/link", headers=auth_info["headers"])
+    # -------- providers --------
+
+    def test_lists_the_configured_providers_in_order(self, client):
+        resp = client.get("/api/auth/sso/providers")
         assert resp.status_code == 200
-        assert resp.json()["sso"]["linked"] is False
+        assert resp.json() == {
+            "providers": [
+                {"id": "open", "name": "Open IdP"},
+                {"id": "closed", "name": "Closed IdP"},
+            ]
+        }
+
+    def test_an_unknown_provider_is_404(self, client):
+        resp = client.post("/api/auth/sso/nope/start")
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "SSO_UNKNOWN_PROVIDER"
+
+    def test_an_unreachable_provider_is_503(self, client):
+        self.open_idp.discovery_issuer = "https://elsewhere.test"
+        resp = client.post("/api/auth/sso/open/start")
+        assert resp.status_code == 503
+        assert resp.json()["code"] == "SSO_UNAVAILABLE"
+
+    # -------- sign-in --------
+
+    def test_sign_up_through_an_open_provider_then_sign_in_again(self, client):
+        first = self._round_trip(client, self.open_idp, name="Ada", email="ada@example.com")
+        assert first.status_code == 200, first.text
+        body = first.json()
+        assert (body["intent"], body["provider"], body["created"]) == ("sign_in", "open", True)
+
+        me = client.get(
+            "/api/account/me", headers={"Authorization": f"Bearer {body['token']}"}
+        ).json()
+        assert me["display_name"] == "Ada"
+        assert me["sso_provisioned"] is True
+        assert [(i["provider"], i["provider_name"], i["email"]) for i in me["identities"]] == [
+            ("open", "Open IdP", "ada@example.com")
+        ]
+
+        again = self._round_trip(client, self.open_idp)
+        assert again.status_code == 200
+        assert again.json()["created"] is False
+
+    def test_a_closed_provider_does_not_create_accounts(self, client):
+        resp = self._round_trip(client, self.closed_idp)
+        assert resp.status_code == 403
+        assert resp.json()["code"] == "SSO_SIGNUP_CLOSED"
+
+    def test_a_state_finishes_one_sign_in_and_no_more(self, client):
+        started = self._start(client, "open")
+        code = self.open_idp.issue_code(started["authorize_url"])
+        body = {"code": code, "state": started["state"]}
+        assert client.post("/api/auth/sso/complete", json=body).status_code == 200
+        replay = client.post("/api/auth/sso/complete", json=body)
+        assert replay.status_code == 400
+        assert replay.json()["code"] == "SSO_FLOW_EXPIRED"
+
+    def test_an_expired_flow_is_refused(self, client, mongo):
+        started = self._start(client, "open")
+        code = self.open_idp.issue_code(started["authorize_url"])
+        mongo.sso_flows.update_many(
+            {}, {"$set": {"expires_at": datetime.now(UTC) - timedelta(seconds=1)}}
+        )
+        resp = client.post("/api/auth/sso/complete", json={"code": code, "state": started["state"]})
+        assert resp.json()["code"] == "SSO_FLOW_EXPIRED"
+
+    def test_a_code_the_provider_refuses_is_401(self, client):
+        started = self._start(client, "open")
+        resp = client.post(
+            "/api/auth/sso/complete", json={"code": "forged", "state": started["state"]}
+        )
+        assert resp.status_code == 401
+        assert resp.json()["code"] == "SSO_REJECTED"
+
+    # -------- linking --------
+
+    def test_link_then_sign_in_with_the_identity(self, client, auth_info):
+        resp = self._round_trip(client, self.closed_idp, headers=auth_info["headers"])
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "intent": "link",
+            "provider": "closed",
+            "token": None,
+            "created": False,
+        }
+
+        # Linked, so even the provider that creates no accounts signs in.
+        signed_in = self._round_trip(client, self.closed_idp)
+        assert signed_in.status_code == 200
+        token = signed_in.json()["token"]
+        me = client.get("/api/account/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.json()["email"] == "test@example.com"
+
+    def test_a_link_finishes_only_in_the_session_that_started_it(
+        self, client, auth_info, other_auth_headers
+    ):
+        started = self._start(client, "closed", auth_info["headers"])
+        code = self.closed_idp.issue_code(started["authorize_url"])
+        body = {"code": code, "state": started["state"]}
+        for headers in ({}, other_auth_headers):
+            resp = client.post("/api/auth/sso/complete", json=body, headers=headers)
+            assert resp.status_code in (400, 403)
+        # The first attempt spent the flow; neither linked anything.
+        me = client.get("/api/account/me", headers=auth_info["headers"]).json()
+        assert me["identities"] == []
+
+    def test_an_identity_on_another_account_cannot_be_linked(self, client, auth_info):
+        assert self._round_trip(client, self.open_idp).status_code == 200  # creates an account
+        resp = self._round_trip(client, self.open_idp, headers=auth_info["headers"])
+        assert resp.status_code == 409
+        assert resp.json()["code"] == "SSO_ALREADY_LINKED"
+
+    def test_linking_needs_a_session(self, client):
+        assert client.post("/api/account/sso/open/link").status_code == 401
+
+    # -------- unlinking --------
+
+    def test_unlink_refuses_when_no_way_in_would_remain(self, client, auth_info):
+        self._round_trip(client, self.open_idp, headers=auth_info["headers"])
+        resp = client.delete("/api/account/sso/open", headers=auth_info["headers"])
+        assert resp.status_code == 409
+        assert resp.json()["code"] == "SSO_LAST_CREDENTIAL"
+
+    def test_unlink_with_a_passkey_left(self, client, auth_info, mongo):
+        self._round_trip(client, self.open_idp, headers=auth_info["headers"])
+        self._passkey(mongo, auth_info["user_id"])
+        resp = client.delete("/api/account/sso/open", headers=auth_info["headers"])
+        assert resp.status_code == 200
+        assert resp.json()["identities"] == []
 
     def test_unlink_when_not_linked_is_404(self, client, auth_info):
-        resp = client.delete("/api/account/sso/link", headers=auth_info["headers"])
+        resp = client.delete("/api/account/sso/open", headers=auth_info["headers"])
         assert resp.status_code == 404
         assert resp.json()["code"] == "SSO_NOT_LINKED"
-
-    # -------- refresh re-checks the issuer --------
-
-    def test_refresh_of_an_sso_session_survives_while_the_identity_is_valid(self, client):
-        signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        token = signed_in.json()["token"]
-
-        resp = client.post(
-            "/api/account/refresh",
-            headers={"Authorization": f"Bearer {token}"},
-            cookies={"Home-Session": "t"},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["token"]
-
-    def test_refresh_ends_the_session_once_the_device_is_revoked(self, client):
-        """The point of carrying the `sso` claim: without this check a
-        revoked device keeps renewing its beats session forever."""
-        signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        token = signed_in.json()["token"]
-
-        self.issuer_status = 401
-        resp = client.post(
-            "/api/account/refresh",
-            headers={"Authorization": f"Bearer {token}"},
-            cookies={"Home-Session": "t"},
-        )
-        assert resp.status_code == 401
-        assert resp.json()["code"] == "SSO_SESSION_REVOKED"
-
-    def test_refresh_ends_the_session_when_the_home_cookie_is_gone(self, client):
-        """Logging out at auth.home.space logs you out of beats too."""
-        signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        token = signed_in.json()["token"]
-
-        resp = client.post("/api/account/refresh", headers={"Authorization": f"Bearer {token}"})
-        assert resp.status_code == 401
-        assert resp.json()["code"] == "SSO_SESSION_ENDED"
-
-    def test_refresh_of_a_passkey_session_is_untouched_by_sso(self, client, auth_info):
-        """Beats' own login must be completely unaffected — no cookie,
-        no issuer, no re-check."""
-        resp = client.post("/api/account/refresh", headers=auth_info["headers"])
-        assert resp.status_code == 200
-        assert resp.json()["token"]
-
-    def test_refresh_extends_the_session_when_the_issuer_is_unreachable(self, client):
-        """An outage must not log everyone out — that is the coupling
-        this whole design avoids."""
-        signed_in = client.post("/api/auth/sso/session", cookies={"Home-Session": "t"})
-        token = signed_in.json()["token"]
-
-        self.issuer_status = 503
-        resp = client.post(
-            "/api/account/refresh",
-            headers={"Authorization": f"Bearer {token}"},
-            cookies={"Home-Session": "t"},
-        )
-        assert resp.status_code == 200
-
-    # -------- beats' own login is unchanged --------
-
-    def test_own_registration_still_works_with_sso_enabled(self, client):
-        """Either door. Turning SSO on must not close the other one."""
-        resp = client.post(
-            "/api/auth/register/start",
-            json={"email": "local-signup@example.com", "display_name": "Local"},
-        )
-        assert resp.status_code == 200
-        assert "options" in resp.json()
-
-    def test_login_options_still_public_with_sso_enabled(self, client):
-        resp = client.get("/api/auth/login/options")
-        assert resp.status_code in (200, 400)

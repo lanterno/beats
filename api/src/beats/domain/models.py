@@ -4,19 +4,38 @@ from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from enum import StrEnum
 from itertools import pairwise
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from beats.domain.utils import TzNormalizedModel, normalize_tz
 
 
+class LinkedIdentity(BaseModel):
+    """An identity at an OpenID Connect provider that signs into this account.
+
+    Keyed on (issuer, subject), never on a name or an email: `subject` is the
+    provider's `sub`, stable and never reassigned within its issuer, while a
+    name or an address can change hands. `name` and `email` are refreshed on
+    each sign-in and are shown, not matched.
+    """
+
+    # The configured provider's id it arrived through (`OIDC_PROVIDERS`).
+    provider: str
+    issuer: str
+    subject: str
+    name: str | None = None
+    email: str | None = None
+    linked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class User(TzNormalizedModel):
     """A registered user of the Beats system.
 
     A user may hold two independent ways in: passkeys registered against
-    beats itself (`credentials` collection), and at most one linked
-    `home.space` identity (the `sso_*` fields). Neither implies the other,
-    and either alone is enough to sign in.
+    beats itself (`credentials` collection), and identities at OpenID
+    Connect providers (`identities`, at most one per provider). Neither
+    implies the other, and either alone is enough to sign in.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -26,28 +45,16 @@ class User(TzNormalizedModel):
     display_name: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
-    # --- Linked home.space identity -----------------------------------
-    #
-    # Keyed on (sso_issuer, sso_subject), never on a name or an email.
-    # `sso_subject` is a did:key derived from the device's public key:
-    # stable, unique, and not reassignable. `sso_holder_name` is the
-    # enrollment label ("Primary Laptop") and is refreshed from the
-    # credential on each login, since the issuer owns it.
-    sso_issuer: str | None = None
-    sso_subject: str | None = None
-    sso_holder_name: str | None = None
-    sso_roles: list[str] = Field(default_factory=list)
-    sso_linked_at: datetime | None = None
+    identities: list[LinkedIdentity] = Field(default_factory=list)
 
-    # True when the account was created BY an SSO login rather than
-    # linked to one afterwards. Purely informational — it is what lets
-    # the UI explain why an account has no passkey yet, and what makes
-    # "unlink" refuse on an account that would have no way back in.
+    # True when the account was created BY a sign-in through a provider
+    # rather than linked to one afterwards. Such an account has no passkey
+    # until its owner registers one, and keeps a provider-chosen display name
+    # in step with the provider until then.
     sso_provisioned: bool = False
 
-    @property
-    def has_sso_link(self) -> bool:
-        return bool(self.sso_subject)
+    def identity_for(self, provider: str) -> LinkedIdentity | None:
+        return next((i for i in self.identities if i.provider == provider), None)
 
 
 class GoalType(StrEnum):
@@ -624,6 +631,26 @@ class PairingCode(BaseModel):
     code_hash: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime = Field(default_factory=lambda: datetime.now(UTC) + timedelta(minutes=5))
+
+
+class SSOFlow(BaseModel):
+    """A sign-in through a provider, between leaving for it and coming back.
+
+    Held server-side, so nothing the browser carries back can change what is
+    checked: the nonce the ID token must repeat, the PKCE verifier that
+    proves the code was asked for here, and — for a link — whose account the
+    identity goes on. Keyed by a hash of the `state` sent through the
+    provider, taken exactly once, and expired by a TTL index after ten minutes.
+    """
+
+    state_hash: str
+    provider: str
+    nonce: str
+    code_verifier: str
+    intent: Literal["sign_in", "link"]
+    # Set for a link: the account that asked, which must also finish it.
+    user_id: str | None = None
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(UTC) + timedelta(minutes=10))
 
 
 class DeviceRegistration(BaseModel):

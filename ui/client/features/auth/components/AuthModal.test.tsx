@@ -25,23 +25,16 @@ vi.mock("@simplewebauthn/browser", () => ({
 	startAuthentication: vi.fn(),
 }));
 
-const ssoConfig = {
-	enabled: false,
-	provider_name: "home.space",
-	login_url: "",
-	session_present: false,
-};
-
 vi.mock("../api/authApi", () => ({
 	registerStart: vi.fn(),
 	verifyRegistration: vi.fn(),
 	getLoginOptions: vi.fn(),
 	verifyLogin: vi.fn(),
 	getCurrentUser: vi.fn(() => Promise.resolve({ email: "test@example.com", display_name: "Test" })),
-	// SSO defaults to off, matching a deployment with no identity service —
-	// every pre-existing test below asserts the unchanged single-door UI.
-	getSsoConfig: vi.fn(() => Promise.resolve(ssoConfig)),
-	ssoSignIn: vi.fn(),
+	// No providers by default, matching a deployment without single sign-on —
+	// every test outside the SSO block asserts the single-door UI.
+	getSsoProviders: vi.fn(() => Promise.resolve([])),
+	startSsoSignIn: vi.fn(),
 }));
 
 vi.mock("../stores/authStore", () => ({
@@ -57,9 +50,9 @@ import {
 import { APP_NAME } from "@/shared/config";
 import {
 	getLoginOptions,
-	getSsoConfig,
+	getSsoProviders,
 	registerStart,
-	ssoSignIn,
+	startSsoSignIn,
 	verifyLogin,
 	verifyRegistration,
 } from "../api/authApi";
@@ -343,133 +336,47 @@ describe("AuthModal", () => {
 		});
 	});
 
-	describe("home.space SSO — the second door", () => {
-		/** jsdom refuses real navigation, so `location` is replaced with a
-		 *  plain object whose `href` we can read back. */
-		function captureNavigation(): { current: string } {
-			const captured = { current: "" };
-			const original = window.location;
-			Object.defineProperty(window, "location", {
-				configurable: true,
-				writable: true,
-				value: {
-					...original,
-					origin: "https://beats.home.space",
-					pathname: "/",
-					search: "",
-					set href(value: string) {
-						captured.current = value;
-					},
-					get href() {
-						return captured.current;
-					},
-				},
-			});
-			return captured;
-		}
+	describe("single sign-on — the second door", () => {
+		const providers = [
+			{ id: "google", name: "Google" },
+			{ id: "work", name: "Work" },
+		];
 
-		function enableSso(overrides: Partial<typeof ssoConfig> = {}) {
-			vi.mocked(getSsoConfig).mockResolvedValue({
-				enabled: true,
-				provider_name: "home.space",
-				login_url: "https://auth.home.space",
-				session_present: false,
-				...overrides,
-			});
-		}
-
-		it("hides the SSO button when the instance has no identity service", async () => {
+		it("shows no provider buttons when none is set up", async () => {
 			renderModal({ initialMode: "login" });
-			// Wait for the config fetch to settle before asserting absence,
-			// so this can't pass merely by being early.
-			await vi.waitFor(() => expect(getSsoConfig).toHaveBeenCalled());
+			// Wait for the fetch to settle, so this can't pass merely by being early.
+			await vi.waitFor(() => expect(getSsoProviders).toHaveBeenCalled());
 			expect(screen.queryByRole("button", { name: /Continue with/i })).toBeNull();
 		});
 
-		it("hides the button when SSO is on but no login URL could be derived", async () => {
-			// The bare-localhost case: enabled, but nothing to point at.
-			enableSso({ login_url: "" });
-			renderModal({ initialMode: "login" });
-			await vi.waitFor(() => expect(getSsoConfig).toHaveBeenCalled());
-			expect(screen.queryByRole("button", { name: /Continue with/i })).toBeNull();
-		});
-
-		it("offers the SSO button alongside the passkey login, not instead of it", async () => {
-			enableSso();
+		it("offers one button per provider, alongside the passkey login", async () => {
+			vi.mocked(getSsoProviders).mockResolvedValue(providers);
 			renderModal({ initialMode: "login" });
 
-			expect(await screen.findByRole("button", { name: /Continue with home.space/i })).toBeTruthy();
-			// The whole point of the feature: both doors stay open.
+			expect(await screen.findByRole("button", { name: /Continue with Google/i })).toBeTruthy();
+			expect(screen.getByRole("button", { name: /Continue with Work/i })).toBeTruthy();
+			// Both doors stay open.
 			expect(screen.getByRole("button", { name: /Sign In with Passkey/i })).toBeTruthy();
 		});
 
-		it("sends the browser to the issuer with a return_to when no cookie is present", async () => {
-			const navigation = captureNavigation();
-			enableSso({ session_present: false });
+		it("starts the sign-in with the provider that was clicked", async () => {
+			vi.mocked(getSsoProviders).mockResolvedValue(providers);
+			vi.mocked(startSsoSignIn).mockReturnValue(new Promise(() => {}));
 			renderModal({ initialMode: "login" });
 
-			await userEvent.click(await screen.findByRole("button", { name: /Continue with/i }));
-
-			expect(navigation.current).toContain("https://auth.home.space/?return_to=");
-			expect(decodeURIComponent(navigation.current)).toContain(
-				"https://beats.home.space/?sso=callback",
-			);
+			await userEvent.click(await screen.findByRole("button", { name: /Continue with Work/i }));
+			expect(startSsoSignIn).toHaveBeenCalledWith("work");
 		});
 
-		it("exchanges an existing cookie without leaving the page", async () => {
-			enableSso({ session_present: true });
-			vi.mocked(ssoSignIn).mockResolvedValue({
-				verified: true,
-				token: "beats-session-token",
-				created: false,
-				did: "did:key:z6Mku",
-				holder_name: "Primary Laptop",
-				roles: ["owner"],
-				display_name: "Ahmed",
-				verified_by: "issuer",
-			});
-
+		it("says so when the provider can't be reached, and lets you try again", async () => {
+			vi.mocked(getSsoProviders).mockResolvedValue(providers);
+			vi.mocked(startSsoSignIn).mockRejectedValue(new Error("Google can't be reached right now."));
 			renderModal({ initialMode: "login" });
-			await userEvent.click(await screen.findByRole("button", { name: /Continue with/i }));
 
-			await vi.waitFor(() => {
-				expect(setSessionToken).toHaveBeenCalledWith("beats-session-token");
-				expect(navigate).toHaveBeenCalledWith("/app", { replace: true });
-			});
-		});
-
-		it("explains a refused provisioning instead of bouncing to the issuer", async () => {
-			const navigation = captureNavigation();
-			enableSso({ session_present: true });
-			const refusal = Object.assign(
-				new Error("This home.space identity is not allowed to create a new Beats account."),
-				{ code: "SSO_PROVISION_FORBIDDEN", status: 403 },
-			);
-			vi.mocked(ssoSignIn).mockRejectedValue(refusal);
-
-			renderModal({ initialMode: "login" });
-			await userEvent.click(await screen.findByRole("button", { name: /Continue with/i }));
-
-			expect(await screen.findByText(/not allowed to create a new Beats account/i)).toBeTruthy();
-			// A guest must not be ping-ponged to an issuer that would just
-			// hand back the same credential.
-			expect(navigation.current).toBe("");
-		});
-
-		it("reports an unreachable issuer as retryable rather than as a bad identity", async () => {
-			enableSso({ session_present: true });
-			vi.mocked(ssoSignIn).mockRejectedValue(
-				Object.assign(new Error("The home.space identity service is unreachable."), {
-					code: "SSO_UNAVAILABLE",
-					status: 503,
-				}),
-			);
-
-			renderModal({ initialMode: "login" });
-			await userEvent.click(await screen.findByRole("button", { name: /Continue with/i }));
-
-			expect(await screen.findByText(/unreachable/i)).toBeTruthy();
-			expect(setSessionToken).not.toHaveBeenCalled();
+			const button = await screen.findByRole("button", { name: /Continue with Google/i });
+			await userEvent.click(button);
+			expect(await screen.findByText(/can't be reached/i)).toBeTruthy();
+			expect((button as HTMLButtonElement).disabled).toBe(false);
 		});
 	});
 });

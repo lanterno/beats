@@ -9,10 +9,8 @@ export interface AppConfig {
 	 *
 	 * An empty string means "same origin" — requests go to `/api/…`
 	 * relative to whatever host served the page. That is what the
-	 * home.space deployment uses, where one nginx serves this bundle and
-	 * proxies `/api` to the API behind it, so both share an origin.
-	 * Sharing an origin is what lets the browser attach the
-	 * `Home-Session` cookie to API calls at all.
+	 * single-origin deployment (`compose.home.yml`) uses, where one nginx
+	 * serves this bundle and proxies `/api` to the API behind it.
 	 */
 	apiBaseUrl: string;
 	/** Whether we're in development mode */
@@ -32,11 +30,8 @@ export interface AppConfig {
  *
  * - **dev server** — the API is a separate process on :7999.
  * - **production build** — the API is served from the same origin as this
- *   bundle, by whatever is hosting it. That is what the home.space
- *   deployment relies on, and it has to be the default rather than a flag
- *   somebody remembers to set: the `Home-Session` cookie SSO rides on is
- *   only sent same-origin, so an accidental absolute URL here disables SSO
- *   silently, with every other feature still working.
+ *   bundle, by whatever is hosting it, as in the single-origin compose stack.
+ *   A split deployment (lifepete.com) names its API with `VITE_API_URL`.
  *
  * `import.meta.env.DEV` is replaced with a literal at build time, so the
  * branch not taken is eliminated — which is what lets `ui/Dockerfile` prove

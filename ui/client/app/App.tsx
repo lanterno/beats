@@ -19,6 +19,7 @@ import PlanPage from "@/pages/plan";
 import ProjectDetails from "@/pages/project-details";
 import ProjectsIndex from "@/pages/projects-index";
 import Settings from "@/pages/settings";
+import SsoCallback from "@/pages/sso-callback";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
@@ -85,6 +86,9 @@ export function App() {
 							<Routes>
 								{/* Public routes */}
 								<Route path="/" element={<HomeOrDashboard />} />
+								{/* Where sign-in providers send the browser back: public,
+								    since a sign-in arrives before there is a session. */}
+								<Route path="/auth/callback" element={<SsoCallback />} />
 								{/* Protected routes with persistent layout */}
 								<Route
 									element={

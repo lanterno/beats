@@ -26,9 +26,9 @@ import { DaemonPrivacySection } from "./DaemonPrivacySection";
 import { DaemonSection } from "./DaemonSection";
 import { FitbitSection } from "./FitbitSection";
 import { GitHubSection } from "./GitHubSection";
-import { HomeIdentitySection } from "./HomeIdentitySection";
 import { OuraSection } from "./OuraSection";
 import { PasskeysSection } from "./PasskeysSection";
+import { SingleSignOnSection } from "./SingleSignOnSection";
 import { CHIP_BUTTON, HEADING, HEADING_ICON, LABEL, LEAD } from "./styles";
 import { WebhooksSection } from "./WebhooksSection";
 
@@ -251,8 +251,8 @@ export default function Settings() {
 			{/* Passkeys */}
 			<PasskeysSection />
 
-			{/* Linked home.space identity */}
-			<HomeIdentitySection />
+			{/* Identities at sign-in providers */}
+			<SingleSignOnSection />
 
 			{/* Webhooks */}
 			<WebhooksSection />

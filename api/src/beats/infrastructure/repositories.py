@@ -36,6 +36,7 @@ from beats.domain.models import (
     PendingSuggestion,
     Project,
     SignalSummary,
+    SSOFlow,
     User,
     UserInsights,
     Webhook,
@@ -185,7 +186,7 @@ class UserRepository(Protocol):
 
     async def get_by_id(self, user_id: str) -> User | None: ...
     async def get_by_email(self, email: str) -> User | None: ...
-    async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None: ...
+    async def get_by_identity(self, issuer: str, subject: str) -> User | None: ...
     async def create(self, user: User) -> User: ...
     async def update(self, user: User) -> User: ...
     async def count(self) -> int: ...
@@ -371,13 +372,15 @@ class MongoUserRepository(UserRepository):
     async def get_by_email(self, email: str) -> User | None:
         return await self._find_one({"email": email})
 
-    async def get_by_sso_subject(self, issuer: str, subject: str) -> User | None:
-        """Find the user holding a linked home.space identity.
+    async def get_by_identity(self, issuer: str, subject: str) -> User | None:
+        """Find the user holding a linked identity.
 
-        Matched on the (issuer, subject) pair rather than the subject alone, so
-        that a second issuer added later cannot collide with this one's DIDs.
+        Matched on the (issuer, subject) pair within one array element: a
+        `sub` is only unique within its issuer.
         """
-        return await self._find_one({"sso_issuer": issuer, "sso_subject": subject})
+        return await self._find_one(
+            {"identities": {"$elemMatch": {"issuer": issuer, "subject": subject}}}
+        )
 
     async def create(self, user: User) -> User:
         data = serialize_to_document(user.model_dump(mode="json", exclude_none=True))
@@ -387,10 +390,8 @@ class MongoUserRepository(UserRepository):
     async def update(self, user: User) -> User:
         """Persist a mutated user. Requires `user.id`.
 
-        `exclude_none` is deliberately NOT used here, unlike `create`:
-        unlinking an SSO identity sets the `sso_*` fields back to None, and
-        dropping them from the update would leave the old link in place — the
-        user would still be signed in by a credential they had just detached.
+        `exclude_none` is deliberately NOT used here, unlike `create`: a field
+        set back to None has to reach the document, or the old value stays.
         """
         if not user.id:
             raise ValueError("Cannot update a user without an id")
@@ -565,6 +566,38 @@ class MongoPairingCodeRepository(PairingCodeRepository):
     async def delete(self, code_id: str) -> bool:
         result = await self.collection.delete_one({"_id": ObjectId(code_id)})
         return result.deleted_count > 0
+
+
+class SSOFlowRepository(Protocol):
+    async def create(self, flow: SSOFlow) -> None: ...
+    async def take(self, state_hash: str) -> SSOFlow | None: ...
+
+
+class MongoSSOFlowRepository(SSOFlowRepository):
+    """Not user-scoped: a sign-in finishes before anyone is signed in."""
+
+    def __init__(self, collection: AsyncCollection):
+        self.collection = collection
+
+    async def create(self, flow: SSOFlow) -> None:
+        # `expires_at` stays a BSON date (not the ISO string `model_dump(mode=
+        # "json")` would make it): the TTL index only expires dates.
+        await self.collection.insert_one({"_id": flow.state_hash, **flow.model_dump()})
+
+    async def take(self, state_hash: str) -> SSOFlow | None:
+        """Remove and return the flow, if it exists and hasn't expired.
+
+        One atomic delete, so a state can finish one sign-in and no more,
+        even when two requests carry it at once. The TTL monitor runs about
+        once a minute, hence the explicit expiry check.
+        """
+        doc = await self.collection.find_one_and_delete(
+            {"_id": state_hash, "expires_at": {"$gt": datetime.now(UTC)}}
+        )
+        if doc is None:
+            return None
+        doc.pop("_id")
+        return SSOFlow(**doc)
 
 
 class DeviceRegistrationRepository(Protocol):
