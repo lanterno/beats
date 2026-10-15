@@ -168,12 +168,12 @@ Open work — bugs, follow-ups, open questions — is tracked in
 
 | Document | What it covers |
 |----------|----------------|
-| [Work Contracts Roadmap](docs/work-contracts-roadmap.md) | Day-job contracts: percentage of full time, regional holidays, absences, the overtime balance |
-| [Project Page Roadmap](docs/project-page-roadmap.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
-| [Companion Roadmap](docs/companion-roadmap.md) | The companion's role, and the design notes for its remaining native work |
-| [macOS Roadmap](docs/macos-roadmap.md) | The Mac-only ambition; its ideas are issues in Linear |
-| [Flutter Companion](docs/flutter-companion.md) | Companion design and the API contract |
-| [Homebrew Tap](docs/homebrew-tap.md) | Publishing `brew install <user>/beats/beatsd` |
+| [Work Contracts](docs/work-contracts.md) | Day-job contracts: percentage of full time, regional holidays, absences, the overtime balance |
+| [Project Page](docs/project-page.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
+| [Architecture](ARCHITECTURE.md) | How the API, the web app and the wall clock are put together |
+| [Companion](companion/README.md) | The Flutter companion: what it does on a Mac and a phone, its architecture, pairing and the API |
+| [Daemon](daemon/README.md) | `beatsd`: the flow score, the auto-timer, and its CLI |
+| [Homebrew formula](integrations/homebrew-formula/README.md) | Publishing `brew install lanterno/beats/beatsd` |
 
 ## License
 

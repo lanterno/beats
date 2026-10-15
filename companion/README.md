@@ -2,6 +2,13 @@
 
 Cross-platform Flutter app — desktop tray icon + mobile companion for the Beats time-tracking system.
 
+The companion is for acting — start, stop, see what's running, get nudged — and the web
+is for reflecting: heatmaps, reviews, goals, integrations. It is also the only way health
+data from the phone can reach the API, since a browser can't read HealthKit or Health
+Connect; that ingestion is still to be built (AHM-37 in
+[Linear](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), with the companion's
+other open work under *Companion: native & device*).
+
 ## What it does
 
 On a Mac it is a window with a sidebar and a menu bar item, drawn in the web
@@ -101,15 +108,30 @@ first click, running `popoverMain`. It reads the same token and keeps its own
 
 ## API
 
-Connects to the Beats API via `ApiClient` (`lib/services/api_client.dart`). Pairing flow:
+Connects to the Beats API via `ApiClient` (`lib/services/api_client.dart`), with the same
+device-token auth as the Go daemon. Pairing flow:
 
-1. User runs `beatsd pair-code` (or this app's pairing screen) to get a 6-char code
-2. App POSTs `/api/auth/pair-companion` and receives a JWT
-3. Token persists in the OS keychain (Keychain on macOS/iOS, Keystore on Android, libsecret on Linux)
+1. The web's Settings → Daemon generates a 6-char code (`POST /api/device/pair/code`)
+2. The app sends it to `POST /api/device/pair/exchange` (public) and receives a long-lived
+   device token. Phones can scan a QR instead of typing; `parseQrPairingPayload` takes a bare
+   code, a `beats://pair/CODE` link or `{"code", "api"}` JSON — though the web doesn't draw
+   that QR yet (AHM-43)
+3. The token sits in OS secure storage via `flutter_secure_storage` (Keychain, Android's
+   EncryptedSharedPreferences, libsecret, DPAPI), behind a `SecureStore` interface tests can
+   replace. API URLs stay in `shared_preferences`: not secrets, and they should survive a
+   Keychain wipe
 
-All subsequent requests carry `Authorization: Bearer <jwt>`. The error envelope `{detail, code, fields?}` is parsed into `ApiException` with a `code` field that callers can branch on (mirrors the daemon Go client and UI's `ApiError`).
+All subsequent requests carry `Authorization: Bearer <device_token>`. A device token only
+reaches the routes in `DEVICE_ALLOWED_PREFIXES` (`api/src/server.py`), matched by prefix — so
+`/api/projects` admits each project's `/ledger`, which is where the week and the day-job
+balance on Today come from; append to it when the companion needs a new route. The error envelope `{detail, code, fields?}` is parsed into `ApiException` with a `code` field that callers can branch on (mirrors the daemon Go client and UI's `ApiError`).
 
 Read-only analytics methods (`getHeatmap`, `getFlowWindows`, `getSignalSummaries`, `getBiometrics`) throw `ApiException` on non-200 — callers wrap in try/catch where graceful degradation is desired. `getFlowWindowsSummary` and `getTodayBrief` deliberately return `Map?` for the empty-state render path.
+
+Fitbit on desktop opens the consent URL in the browser; Fitbit redirects to the web's
+`/settings?fitbit=callback`, which exchanges the code, while the app polls the connection
+status every 4 s for up to 3 minutes. `postBiometricDay` (`POST /api/biometrics/daily`) is
+wired but nothing calls it until health ingestion exists.
 
 ## Testing
 
