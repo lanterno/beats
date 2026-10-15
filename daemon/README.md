@@ -27,7 +27,7 @@ go build -o beatsd ./cmd/beatsd
 ./beatsd run             # foreground; ^C to stop
 ```
 
-For background use, install via [Homebrew](../docs/homebrew-tap.md) and
+For background use, install via [Homebrew](../integrations/homebrew-formula/README.md) and
 `brew services start beatsd`.
 
 ## Commands
