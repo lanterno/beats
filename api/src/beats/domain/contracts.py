@@ -101,6 +101,14 @@ class BalanceTerms(NamedTuple):
     balance: float  # opening + worked - expected_through
 
 
+def counts_worked(contract: Contract, day: date) -> bool:
+    """Whether hours worked on `day` count against the contract: from its
+    first term through `ended_on`. The balance and the week's remaining both
+    ask this, so on a week a contract starts or ends mid-week the two agree
+    on what was worked under it."""
+    return day >= contract.starts_on and (contract.ended_on is None or day <= contract.ended_on)
+
+
 def _daily(
     contract: Contract,
     by_day: Mapping[date, Absence],
@@ -113,8 +121,7 @@ def _daily(
     hours it expected. The two running sums under every balance figure come
     from here and nowhere else."""
     for day in _days(contract.starts_on, through):
-        ended = contract.ended_on is not None and day > contract.ended_on
-        counted = 0.0 if ended else worked.get(day, 0.0)
+        counted = worked.get(day, 0.0) if counts_worked(contract, day) else 0.0
         yield day, counted, expected_on(contract, day, holidays, by_day)
 
 
