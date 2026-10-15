@@ -121,7 +121,8 @@ export function Layout() {
 			<MobileHeader {...timerProps} />
 
 			{/* Main content area */}
-			<main className="lg:ml-64" key={location.pathname}>
+			{/* on-sky: the headings and captions the pages set straight on the sky */}
+			<main className="lg:ml-64 on-sky" key={location.pathname}>
 				<div style={{ animation: "fadeSlideIn 200ms ease-out both" }}>
 					<Outlet />
 				</div>
