@@ -21,6 +21,7 @@ import 'focus_screen.dart';
 import 'log_session_dialog.dart';
 import 'palette.dart';
 import 'settings_screen.dart';
+import 'start_sheet.dart';
 import 'timer_actions.dart';
 import 'today_screen.dart';
 
@@ -127,7 +128,14 @@ class MainWindowState extends State<MainWindow> {
 
   void logSession() => showLogSession(context, client: widget.client, timer: widget.timer, week: widget.week);
 
+  /// Start, switch or find: the bottom sheet on a phone, the palette on a
+  /// wider window.
   void find() {
+    if (MediaQuery.sizeOf(context).width < 720) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      showStartSheet(context, timer: widget.timer, week: widget.week, onLog: logSession, onFocus: openFocus);
+      return;
+    }
     final prefix = Platform.isMacOS ? '⌘' : 'Ctrl ';
     showQuickStart(context, timer: widget.timer, actions: [
       for (final (i, s) in Section.values.indexed)
