@@ -1,66 +1,58 @@
-"""Mapping a verified home.space identity onto a beats account.
+"""Mapping an identity a provider vouched for onto a beats account.
 
 Three operations, and the difference between them is *who initiated*:
 
-- `link`   — the user is already signed into beats and asks to attach their
-             home.space identity. Both sides prove themselves in one request.
+- `link`   — the user is already signed into beats and asks to attach an
+             identity at a provider. Started with a beats session, finished
+             with that same session (see `routers/sso.py`).
 - `sign_in`— a verified identity arrives cold. If it is already linked, sign
-             that user in. If it is not, provision a new account, subject to
-             the role gate.
+             that user in. If not, create an account — only when the provider
+             is configured to allow it.
 - `unlink` — detach, refusing if it would leave the account with no way in.
 
-What is deliberately absent is the fourth option: matching an arriving SSO
-identity against an existing account by some shared attribute and linking
-them automatically. That is the standard account-takeover bug in federated
-login — it turns "can set an email/name" into "can take over an account" the
-moment the issuer's claim is unverified.
-
-Beats is structurally immune, and it is worth being explicit about why: the
-`HomeAccessCredential` carries no email at all. Its subject is a `did:key`
-derived from a device public key, and `holderName` is a free-text enrollment
-label ("Primary Laptop"). Neither is matchable against `users.email`, so
-there is nothing to auto-link on even accidentally. Linking is therefore
-always an authenticated, user-initiated act.
+What is deliberately absent is the fourth option: matching an arriving
+identity against an existing account by its email and linking them
+automatically. That is the standard account-takeover bug in federated login.
+Beats' own sign-up doesn't verify addresses, and a provider's `email` is
+whatever that provider lets its users set, so "same address" proves nothing
+about "same person". An identity reaches an existing account only by being
+linked from inside it.
 """
 
+import hashlib
 import logging
-import re
-from datetime import UTC, datetime
 
-from beats.auth.sso import HomeIdentity
+from beats.auth.oidc import OIDCIdentity
 from beats.brand import APP_NAME
-from beats.domain.models import User
+from beats.domain.models import LinkedIdentity, User
 from beats.infrastructure.repositories import UserRepository
 
 logger = logging.getLogger(__name__)
 
-# Namespace for the addresses of auto-provisioned accounts.
+# Namespace for the addresses of accounts a provider created.
 #
 # `users.email` is unique-indexed and reachable from public signup, so an
-# invented address in a namespace someone could actually register is both a
-# future collision and a squatting vector — register the address first and
-# you inherit the account the SSO login would have created. `.invalid` is
-# reserved by RFC 2606 precisely so it can never resolve or be registered,
-# which makes it the one safe choice here.
-SSO_EMAIL_DOMAIN = "sso.home.space.invalid"
-
-_EMAIL_LOCAL_SAFE = re.compile(r"[^A-Za-z0-9._-]")
+# invented address in a namespace someone could register is both a future
+# collision and a squatting vector: register it first and you inherit the
+# account the sign-in would have created. `.invalid` is reserved by RFC 2606
+# so it can never resolve or be registered.
+SSO_EMAIL_DOMAIN = "sso.invalid"
 
 
 class SSOAccountError(Exception):
     """Base for account-mapping failures."""
 
 
-class SSOProvisionForbidden(SSOAccountError):
-    """The identity is valid but not allowed to create a new beats account."""
+class SSOSignupClosed(SSOAccountError):
+    """The identity is valid, but its provider doesn't create accounts."""
 
 
 class SSOAlreadyLinked(SSOAccountError):
     """The identity is already linked to a different beats account."""
 
 
-class SSOLinkConflict(SSOAccountError):
-    """This beats account already has a different identity linked."""
+class SSOProviderLinked(SSOAccountError):
+    """This account already has a different identity at the same provider."""
 
 
 class SSONotLinked(SSOAccountError):
@@ -71,153 +63,141 @@ class SSOLastCredential(SSOAccountError):
     """Unlinking would leave the account with no way to sign in."""
 
 
-def sso_email_for(identity: HomeIdentity) -> str:
-    """A deterministic, non-registerable address for a provisioned account.
+def sso_email_for(identity: OIDCIdentity) -> str:
+    """A deterministic, non-registerable address for an account a provider created.
 
-    Derived from the DID's multibase suffix, which is unique by
-    construction — it *is* the public key. The same identity therefore
-    always lands on the same address, which keeps a re-provision after a
-    database restore idempotent rather than duplicating the user.
+    Hashed from the issuer and subject together, since a `sub` is only unique
+    within its issuer. The same identity always lands on the same address,
+    which keeps a re-provision after a database restore from duplicating the
+    user.
     """
-    suffix = identity.did.rsplit(":", 1)[-1]
-    safe = _EMAIL_LOCAL_SAFE.sub("", suffix) or "unknown"
-    return f"{safe}@{SSO_EMAIL_DOMAIN}"
+    digest = hashlib.sha256(f"{identity.issuer}\n{identity.subject}".encode()).hexdigest()[:24]
+    return f"{identity.provider}-{digest}@{SSO_EMAIL_DOMAIN}"
 
 
 class SSOAccountService:
     """Resolves verified identities to beats users."""
 
-    def __init__(self, user_repo: UserRepository, provision_roles: frozenset[str]):
+    def __init__(self, user_repo: UserRepository):
         self._users = user_repo
-        self._provision_roles = provision_roles
 
-    # Cold arrival: sign in, or provision
+    # Cold arrival: sign in, or create the account
 
-    async def sign_in(self, identity: HomeIdentity) -> tuple[User, bool]:
+    async def sign_in(self, identity: OIDCIdentity, *, allow_signup: bool) -> tuple[User, bool]:
         """Resolve a verified identity to a beats user.
 
-        Returns `(user, created)`. Raises `SSOProvisionForbidden` when the
-        identity is unknown and its roles do not permit provisioning.
+        Returns `(user, created)`. Raises `SSOSignupClosed` when the identity
+        is unknown and its provider does not create accounts.
         """
-        existing = await self._users.get_by_sso_subject(identity.issuer, identity.did)
+        existing = await self._users.get_by_identity(identity.issuer, identity.subject)
         if existing is not None:
             return await self._refresh_claims(existing, identity), False
 
-        if not identity.has_any_role(self._provision_roles):
-            logger.warning(
-                "Refusing to provision beats account for %s: roles %s not in %s",
-                identity.did,
-                identity.roles,
-                sorted(self._provision_roles),
+        if not allow_signup:
+            logger.info(
+                "Refusing to create an account for %s %s: sign-up is off for that provider",
+                identity.provider,
+                identity.subject,
             )
-            raise SSOProvisionForbidden(
-                f"This home.space identity is not allowed to create a new {APP_NAME} account. "
-                "Ask the owner to create one for you, then link it from Settings."
+            raise SSOSignupClosed(
+                f"No {APP_NAME} account is linked to this identity. Sign in with a passkey, "
+                "then link it from Settings."
             )
 
         user = User(
             email=sso_email_for(identity),
-            display_name=identity.holder_name,
-            sso_issuer=identity.issuer,
-            sso_subject=identity.did,
-            sso_holder_name=identity.holder_name,
-            sso_roles=list(identity.roles),
-            sso_linked_at=datetime.now(UTC),
+            display_name=identity.name,
+            identities=[_linked(identity)],
             sso_provisioned=True,
         )
         created = await self._users.create(user)
         logger.info(
-            "Provisioned beats account %s for home.space identity %s (%s)",
-            created.id,
-            identity.did,
-            identity.holder_name,
+            "Created account %s for %s identity %s", created.id, identity.provider, identity.subject
         )
         return created, True
 
     # Warm arrival: link an identity to the account already signed in
 
-    async def link(self, user_id: str, identity: HomeIdentity) -> User:
+    async def link(self, user_id: str, identity: OIDCIdentity) -> User:
         """Attach a verified identity to an existing, authenticated account."""
-        holder = await self._users.get_by_sso_subject(identity.issuer, identity.did)
+        holder = await self._users.get_by_identity(identity.issuer, identity.subject)
         if holder is not None and holder.id != user_id:
             raise SSOAlreadyLinked(
-                f"That home.space identity is already linked to another {APP_NAME} account."
+                f"That identity is already linked to another {APP_NAME} account."
             )
 
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise SSOAccountError("User not found")
 
-        if user.sso_subject and user.sso_subject != identity.did:
-            raise SSOLinkConflict(
-                "This account is already linked to a different home.space identity. "
+        current = user.identity_for(identity.provider)
+        if current is not None and current.subject != identity.subject:
+            raise SSOProviderLinked(
+                "This account is already linked to a different identity at that provider. "
                 "Unlink it first."
             )
+        if current is not None:
+            return await self._refresh_claims(user, identity)
 
-        user.sso_issuer = identity.issuer
-        user.sso_subject = identity.did
-        user.sso_holder_name = identity.holder_name
-        user.sso_roles = list(identity.roles)
-        if user.sso_linked_at is None:
-            user.sso_linked_at = datetime.now(UTC)
-
+        user.identities.append(_linked(identity))
         updated = await self._users.update(user)
-        logger.info("Linked home.space identity %s to beats account %s", identity.did, user_id)
+        logger.info("Linked %s identity %s to %s", identity.provider, identity.subject, user_id)
         return updated
 
-    async def unlink(self, user_id: str, passkey_count: int) -> User:
-        """Detach the linked identity.
+    async def unlink(self, user_id: str, provider: str, passkey_count: int) -> User:
+        """Detach the identity linked through `provider`.
 
         `passkey_count` is the number of beats passkeys the account holds.
-        Refusing at zero mirrors the guard already in
-        `WebAuthnManager.delete_credential` — an account whose only way in
-        is the thing being removed must not be able to remove it.
+        Refused when nothing else would be left to sign in with — the same
+        guard `WebAuthnManager.delete_credential` applies to the last passkey,
+        seen from the other side.
         """
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise SSOAccountError("User not found")
-        if not user.sso_subject:
-            raise SSONotLinked("This account has no linked home.space identity.")
-        if passkey_count < 1:
+        if user.identity_for(provider) is None:
+            raise SSONotLinked("No identity is linked through that provider.")
+        remaining = [i for i in user.identities if i.provider != provider]
+        if passkey_count < 1 and not remaining:
             raise SSOLastCredential(
                 "Unlinking would leave this account with no way to sign in. "
                 "Register a passkey first."
             )
 
-        user.sso_issuer = None
-        user.sso_subject = None
-        user.sso_holder_name = None
-        user.sso_roles = []
-        user.sso_linked_at = None
-        # `sso_provisioned` is left as-is on purpose: it is a fact about how
-        # the account came into being, and stays true after the link is cut.
-
+        user.identities = remaining
+        # `sso_provisioned` stays as it is: it is a fact about how the
+        # account came into being, and stays true after the link is cut.
         updated = await self._users.update(user)
-        logger.info("Unlinked home.space identity from beats account %s", user_id)
+        logger.info("Unlinked %s identity from %s", provider, user_id)
         return updated
 
-    async def _refresh_claims(self, user: User, identity: HomeIdentity) -> User:
-        """Re-sync issuer-owned attributes on each sign-in.
+    async def _refresh_claims(self, user: User, identity: OIDCIdentity) -> User:
+        """Re-sync what the provider owns on each sign-in.
 
-        The issuer is authoritative for the holder name and roles: renaming a
-        device in `/devices`, or re-issuing its credential with a different
-        role, should be reflected here on the next login rather than frozen
-        at whatever they were when the link was made.
-
-        The user's own `display_name` is only overwritten for accounts that
-        SSO provisioned. On a linked account it is the user's own, set during
-        beats registration, and the issuer has no claim on it.
+        The name and address shown for the identity, and the provider id it
+        arrived through (which changes if an operator renames a provider). The
+        account's own `display_name` follows only on an account the provider
+        created; on any other it was set here, and the provider has no say.
         """
-        changed = False
-        if user.sso_holder_name != identity.holder_name:
-            user.sso_holder_name = identity.holder_name
-            if user.sso_provisioned:
-                user.display_name = identity.holder_name
-            changed = True
-        if list(user.sso_roles) != list(identity.roles):
-            user.sso_roles = list(identity.roles)
-            changed = True
-
-        if not changed:
+        linked = next(
+            i
+            for i in user.identities
+            if i.issuer == identity.issuer and i.subject == identity.subject
+        )
+        fresh = (identity.provider, identity.name, identity.email)
+        if (linked.provider, linked.name, linked.email) == fresh:
             return user
+        linked.provider, linked.name, linked.email = fresh
+        if user.sso_provisioned and identity.name:
+            user.display_name = identity.name
         return await self._users.update(user)
+
+
+def _linked(identity: OIDCIdentity) -> LinkedIdentity:
+    return LinkedIdentity(
+        provider=identity.provider,
+        issuer=identity.issuer,
+        subject=identity.subject,
+        name=identity.name,
+        email=identity.email,
+    )
