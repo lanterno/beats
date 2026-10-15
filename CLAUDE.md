@@ -119,7 +119,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
-- **Companion tests** are in `companion/test/` (flutter_test) — 298 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Companion tests** are in `companion/test/` (flutter_test) — 314 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
   The SDK lives at `~/development/flutter` (stable), on `PATH` via `~/.zshrc`
   and symlinked into `~/.local/bin` so the lefthook gates — which run under a
   non-interactive `sh` that reads neither — can find it. `flutter doctor`

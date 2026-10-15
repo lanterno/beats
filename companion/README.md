@@ -27,6 +27,18 @@ app's sky (afternoon or dusk):
 - **Notifications** — the morning brief, drift nudges and auto-timer suggestions,
   each switchable, and held while you're in flow
 
+On a phone (or any window under 720 points) the same four places sit behind a
+floating tab bar instead of the sidebar:
+
+- **Tab bar** — Today, Flow, Coach and Body, with a gold start button in the middle;
+  away from Today the running timer rides above it as a pill with Stop
+- **Today** — the day ring first: today against the target, the running clock inside
+  it and the sun where the arc ends, then one big Stop, Switch and "Started earlier?"
+- **Start sheet** (the gold button) — the projects as tiles with their week, and the
+  quick-start field above them, with a card saying what a typed time will do
+- **Focus mode** — a Stop to press, and a tap anywhere leaves
+- **Pairing** — scan the code from the web's Settings → Daemon; typing it is the fallback
+
 ## Platforms
 
 Supported by `flutter_platform_channels`, but actively used on:
@@ -45,12 +57,13 @@ flutter run -d macos        # desktop dev run
 flutter run -d <device>     # mobile
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (298)
+flutter test                # widget + unit tests (314)
 
 # A debug build opens on any surface, for looking at one without clicking:
 open --env LIFEPETE_SECTION=flow   build/macos/Build/Products/Debug/beats_companion.app
 open --env LIFEPETE_ROUTE=settings build/macos/Build/Products/Debug/beats_companion.app   # or focus
 open --env LIFEPETE_POPOVER=panel  build/macos/Build/Products/Debug/beats_companion.app   # or palette
+open --env LIFEPETE_PHONE=1          build/macos/Build/Products/Debug/beats_companion.app   # phone-sized
 ```
 
 ## Architecture
