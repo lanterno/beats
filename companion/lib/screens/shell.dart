@@ -123,6 +123,8 @@ class MainWindowState extends State<MainWindow> {
         openFocus();
       case 'log':
         logSession();
+      case 'find':
+        find();
     }
   }
 
