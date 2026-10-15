@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- shared/brand/mark.svg at three quarters, centred on the 108dp canvas, so
+     the sun at the arc's end stays inside the 66dp the launcher always shows. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,28.5a25.5,25.5 0,1 1,0 51a25.5,25.5 0,1 1,0 -51z"
+        android:fillColor="#00000000"
+        android:strokeColor="#2E3E6E"
+        android:strokeWidth="6"/>
+    <path
+        android:pathData="M54,28.5A25.5,25.5 0,1 1,31.92 66.75"
+        android:fillColor="#00000000"
+        android:strokeColor="#F5C35E"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M25.17,66.75a6.75,6.75 0,1 0,13.5 0a6.75,6.75 0,1 0,-13.5 0z"
+        android:fillColor="#F5C35E"/>
+</vector>
