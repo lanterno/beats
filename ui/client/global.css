@@ -17,6 +17,20 @@
 }
 
 /*
+  Zen Maru Gothic (and Hiragino, behind it) draws the en and em dash as the
+  full-width Japanese bar: a hairline the width of a character, touching the
+  words either side. This face covers those two characters alone, from a
+  system Latin face, and sits first in the body stack, so every dash in copy
+  reads as a dash while every other character stays Zen Maru's.
+*/
+@font-face {
+  font-family: "Latin Dash";
+  src: local("Helvetica Neue"), local("HelveticaNeue"), local("Segoe UI"), local("Roboto"),
+    local("Arial"), local("DejaVu Sans");
+  unicode-range: U+2013-2014;
+}
+
+/*
   Two typefaces, both rounded. M PLUS Rounded 1c carries the display figures
   and every column of digits — its numerals are one width, so `font-mono`
   keeps aligned figures without `tnum`. Zen Maru Gothic is everything read.
@@ -26,7 +40,7 @@
   --font-heading:
     "M PLUS Rounded 1c", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
   --font-body:
-    "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
+    "Latin Dash", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
   --font-mono: "M PLUS Rounded 1c", "Zen Maru Gothic", system-ui, sans-serif;
   --font-code: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
