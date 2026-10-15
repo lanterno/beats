@@ -97,12 +97,12 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('loadApiUrl returns the default localhost URL when nothing saved', () async {
-      // Default is the local dev API. Self-hosted users override this via
-      // the pairing screen; the constant lives in TokenStorage so the rest
-      // of the app doesn't need a #define.
+    test('loadApiUrl is null when nothing is saved and the build names no server', () async {
+      // The tests are built without --dart-define-from-file, so they have no
+      // server of their own (deployment.dart). Null makes pairing ask, rather
+      // than a localhost guess a phone would try to pair with.
       final s = TokenStorage(secure: MemorySecureStore());
-      expect(await s.loadApiUrl(), 'http://localhost:7999');
+      expect(await s.loadApiUrl(), isNull);
     });
 
     test('saveApiUrl persists the override', () async {
@@ -124,12 +124,9 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('loadWebUrl defaults to http://localhost:8080 when nothing saved', () async {
-      // Matches the daemon's [ui] base_url default. Locked in so a refactor
-      // can't silently flip the local-dev port and break the FlowScreen
-      // deep links.
+    test('loadWebUrl is null when nothing is saved and the build names no web app', () async {
       final s = TokenStorage(secure: MemorySecureStore());
-      expect(await s.loadWebUrl(), 'http://localhost:8080');
+      expect(await s.loadWebUrl(), isNull);
     });
 
     test('saveWebUrl persists the override', () async {
