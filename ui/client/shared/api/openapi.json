@@ -649,7 +649,7 @@
         "type": "object"
       },
       "ContractWeek": {
-        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation.",
+        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation. `worked` is every hour on the project that\nweek; `remaining` subtracts only the hours inside the contract's dates,\nas the balance does, so the two differ on a week it starts or ends.",
         "properties": {
           "balance": {
             "anyOf": [
