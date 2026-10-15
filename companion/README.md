@@ -60,10 +60,18 @@ workflow, and the console's answers.
 
 ## Running
 
+A build names the server it pairs with, from `config/`: `local.json` (the API on
+:7999, the web app on :8080) or `lifepete.json` (lifepete.com). A build
+given neither has no server of its own, and pairing asks for one.
+
 ```bash
 flutter pub get
-flutter run -d macos        # desktop dev run
-flutter run -d <device>     # mobile
+flutter run -d macos --dart-define-from-file=config/local.json      # desktop dev run
+flutter run -d <device> --dart-define-from-file=config/local.json   # mobile
+
+# What ships: the store's bundle (the Release Android workflow does this), the Mac app
+flutter build appbundle --release --dart-define-from-file=config/lifepete.json
+flutter build macos --release --dart-define-from-file=config/lifepete.json
 
 flutter analyze             # zero issues expected
 flutter test                # widget + unit tests (322)
