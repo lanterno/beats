@@ -76,7 +76,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | Daemon test            | daemon/                       | `go test ./...`                  |
 | Daemon format          | daemon/                       | `gofmt -w .`                     |
 | Daemon vet             | daemon/                       | `go vet ./...`                   |
-| Daemon staticcheck     | daemon/                       | `go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...` |
+| Daemon staticcheck     | daemon/                       | `go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...` |
 | Companion analyze      | companion/                    | `flutter analyze`                |
 | Companion test         | companion/                    | `flutter test`                   |
 | VS Code extension lint | integrations/vscode-beats/    | `npm run lint`                   |

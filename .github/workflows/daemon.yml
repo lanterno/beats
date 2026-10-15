@@ -1,9 +1,9 @@
 name: Daemon
 on:
   push:
-    paths: [daemon/**]
+    paths: [daemon/**, .github/workflows/daemon.yml]
   pull_request:
-    paths: [daemon/**]
+    paths: [daemon/**, .github/workflows/daemon.yml]
 
 jobs:
   quality:
@@ -43,7 +43,7 @@ jobs:
       # impossible type assertions, deprecated stdlib calls, dead branches.
       # Pinned rather than @latest so a new release can't fail an unrelated PR.
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
       # The app-label table is generated into three languages from one JSON
       # file; fail if this repo's copy has drifted from the source.
       - name: app-label tables are current
