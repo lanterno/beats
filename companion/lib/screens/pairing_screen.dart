@@ -207,6 +207,10 @@ class _PairingScreenState extends State<PairingScreen> {
                       controller: _codeController,
                       focusNode: _codeFocus,
                       onSubmit: _pair,
+                      // A desktop types the code, so the boxes take the keyboard
+                      // at once; a phone scans it, and a keyboard up from the
+                      // start would cover Pair and the sample-data link.
+                      autofocus: !_qrSupported,
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 10),
@@ -311,8 +315,14 @@ class _CodeBoxes extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onSubmit;
+  final bool autofocus;
 
-  const _CodeBoxes({required this.controller, required this.focusNode, required this.onSubmit});
+  const _CodeBoxes({
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmit,
+    required this.autofocus,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +357,7 @@ class _CodeBoxes extends StatelessWidget {
               key: const Key('pairing-code'),
               controller: controller,
               focusNode: focusNode,
-              autofocus: true,
+              autofocus: autofocus,
               maxLength: 6,
               textCapitalization: TextCapitalization.characters,
               textInputAction: TextInputAction.go,
