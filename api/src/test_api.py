@@ -1040,6 +1040,41 @@ class TestContractWeekAPI:
         assert isinstance(week["balance"], float)
         assert week["balance"] < 0
 
+    def test_remaining_ignores_hours_before_a_midweek_start(self, client, auth_headers):
+        # The balance counts work from starts_on; Remaining used to subtract
+        # Monday's two hours too, so the two disagreed on the first week.
+        project = _day_job(
+            client,
+            auth_headers,
+            terms=[
+                {
+                    "effective_from": "2026-03-04",  # the Wednesday
+                    "schedule_type": "full_time",
+                    "full_time_hours": 40,
+                }
+            ],
+        )
+        _log(client, auth_headers, project["id"], "2026-03-02T09:00:00+00:00", 120)
+        _log(client, auth_headers, project["id"], "2026-03-05T09:00:00+00:00", 180)
+
+        week = self._week(client, auth_headers, project["id"])
+
+        assert week["expected"] == 24
+        assert week["worked"] == 5
+        assert week["remaining"] == 21
+        assert week["balance_worked"] == 3
+
+    def test_remaining_ignores_hours_after_a_midweek_end(self, client, auth_headers):
+        project = _day_job(client, auth_headers, ended_on="2026-03-04")
+        _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 120)
+        _log(client, auth_headers, project["id"], "2026-03-05T09:00:00+00:00", 180)
+
+        week = self._week(client, auth_headers, project["id"])
+
+        assert week["expected"] == 24
+        assert week["worked"] == 5
+        assert week["remaining"] == 22
+
     def test_percentage_change_midweek_shows_in_days(self, client, auth_headers):
         project = _day_job(
             client,
