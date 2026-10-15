@@ -37,7 +37,8 @@ floating tab bar instead of the sidebar:
 - **Start sheet** (the gold button) — the projects as tiles with their week, and the
   quick-start field above them, with a card saying what a typed time will do
 - **Focus mode** — a Stop to press, and a tap anywhere leaves
-- **Pairing** — scan the code from the web's Settings → Daemon; typing it is the fallback
+- **Pairing** — type the code from the web's Settings → Daemon; the phone can scan a QR
+  too, once the web draws one (AHM-43)
 - **Sample data** — "Look around with sample data" on the pairing screen opens every place on
   a made-up account held in memory (`services/sample_api.dart`), for Play's reviewers and the
   curious; nothing is stored and a banner says so
