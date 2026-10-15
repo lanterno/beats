@@ -18,17 +18,44 @@ upload them later); `render.sh` remakes the images.
 
 ## Releasing a build
 
-Tag it, or run **Release Android** from the Actions tab:
+Publish a GitHub release whose tag is `companion-v<version>`:
 
 ```bash
-git tag companion-v1.0.0 && git push origin companion-v1.0.0
+gh release create companion-v1.1.0 --generate-notes                     # → the closed test
+gh release create companion-v1.1.0-rc.1 --prerelease --generate-notes   # → internal testing
 ```
 
-The workflow tests, builds the bundle signed with the upload key, checks the
-native libraries are 16 KB-aligned, and keeps `lifepete-<version>-<code>.aab`
-as an artifact (and on the GitHub release, for a tag). `versionCode` is the
-run number. With `PLAY_SERVICE_ACCOUNT_JSON` set it also uploads to the
-internal testing track as a draft.
+(or *Releases → Draft a new release* on GitHub). **Release Android** then tests,
+builds the bundle signed with the upload key, checks the native libraries are
+16 KB-aligned, attaches `lifepete-<version>-<code>.aab` to the release, and
+uploads it to Google Play with the release notes as *What's new*:
+
+- A **pre-release** goes to **internal testing**.
+- A **full release** goes to the track in the repo variable `PLAY_RELEASE_TRACK`:
+  `alpha` (the closed test) today, `production` once production access is
+  granted (`gh variable set PLAY_RELEASE_TRACK -R lanterno/beats --body production`).
+  Unset, a full release fails instead of guessing.
+
+The upload is a completed release on that track. With managed publishing off,
+Google reviews it and it goes out on approval; to hold a production rollout or
+stage it, use the console. `versionCode` is the workflow's run number,
+`versionName` the tag without `companion-v`. *What's new* is the notes as plain
+text, cut to Play's 500 characters (`android/play_notes.py`): the generated
+notes' "by @someone in <PR>" and "Full Changelog" lines are dropped, so write the
+title of each PR for someone reading it on a phone.
+
+Run by hand from the Actions tab, the workflow only builds and keeps the bundle
+as an artifact.
+
+**Play access** is `play-publisher@beats-476914.iam.gserviceaccount.com`, a
+service account with no Cloud roles. In Play Console → *Users and permissions*
+it has LifePete only: release to testing tracks and to production (which brings
+policy declarations and deep links with it). Its JSON key is
+`play.service_account_json` in the vault, sent to Actions as
+`PLAY_SERVICE_ACCOUNT_JSON` by `vault gh beats`. A leaked key alone can't ship a
+build: Play also needs the upload key's signature. To rotate it, create a new key
+(`gcloud iam service-accounts keys create`) into `vault set beats
+play.service_account_json -`, run `vault gh beats`, then delete the old key.
 
 ## First publication, step by step
 
@@ -58,9 +85,7 @@ These need the account holder; the rest is done.
 7. **Production access.** After 14 days with 12 or more testers, *Dashboard →
    Apply for production*, answer the questions about the test, then create a
    production release from the same bundle and send it for review.
-8. **Automate uploads (optional).** Google Cloud → a service account with a
-   JSON key → invite it in *Users and permissions* with release rights →
-   save the JSON as the `PLAY_SERVICE_ACCOUNT_JSON` repo secret.
+8. **Automated uploads** are set up: see *Releasing a build* above.
 
 ## App content answers
 
