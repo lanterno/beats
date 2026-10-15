@@ -7,7 +7,7 @@
  *
  * Every figure is the API's — `/contract/week` and `/ledger` — and every
  * sentence is `entities/project/model/standing.ts`; this component only
- * lays them out (docs/project-page-roadmap.md, "The page" and "States").
+ * lays them out (docs/project-page.md, "The page" and "States").
  */
 
 import { Loader2, Plus, ZapOff } from "lucide-react";

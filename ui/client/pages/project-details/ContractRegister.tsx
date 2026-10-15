@@ -1,5 +1,5 @@
 /**
- * ContractRegister — the rail's first panel (docs/project-page-roadmap.md,
+ * ContractRegister — the rail's first panel (docs/project-page.md,
  * "The page", Rail). On a day job with a contract it is the register: the
  * term in force and the next one, the terms as a step chart over the
  * contract's life, the full list with edit and remove, "+ Change contract

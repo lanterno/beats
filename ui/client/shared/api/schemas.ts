@@ -16,7 +16,7 @@ export const GoalOverrideSchema = z.object({
 
 export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
 
-// Work contracts (docs/work-contracts-roadmap.md). These mirror the API's
+// Work contracts (docs/work-contracts.md). These mirror the API's
 // `ProjectKind`, `ScheduleType`, `ContractTerm`, `Contract`, `AbsenceType`,
 // `Holiday` and `Region` schemas field for field; the validators behind
 // them (which numbers a schedule type needs, terms in order) are the API's,
@@ -101,7 +101,7 @@ export const ContractWeekSchema = z.object({
 
 export type ApiContractWeek = z.infer<typeof ContractWeekSchema>;
 
-// The ledger (GET /ledger, docs/project-page-roadmap.md): the last N weeks of
+// The ledger (GET /ledger, docs/project-page.md): the last N weeks of
 // any project, newest first, the current week included. These mirror the
 // API's `Ledger`, `LedgerWeek`, `LedgerNote` and `LedgerTotals` models; what
 // each figure means and when it is null is documented on the domain type.
