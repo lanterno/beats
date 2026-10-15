@@ -59,19 +59,3 @@ test:
     cd api && uv run --group dev pytest src/ -q
     cd ui && pnpm test
     cd daemon && go test ./...
-
-# Is the home.space identity service reachable, and does beats agree with it?
-# The first thing to check when "Continue with home.space" misbehaves.
-sso-doctor:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    echo "issuer (host):"
-    curl -sf http://127.0.0.1:6007/health || echo "  UNREACHABLE from the host"
-    echo
-    echo "issuer (from the api container):"
-    {{ compose }} exec -T api sh -c 'curl -sf http://host.docker.internal:6007/health' \
-        || echo "  UNREACHABLE from the container -- check extra_hosts/host-gateway"
-    echo
-    echo "beats sso config:"
-    curl -sf -H 'Host: beats.home.space' http://127.0.0.1:6008/api/auth/sso/config \
-        || echo "  beats not answering on 6008"

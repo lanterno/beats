@@ -1,12 +1,10 @@
-# The SPA, built once and served by nginx — for the home.space deployment.
+# The SPA, built once and served by nginx — for the single-origin deployment
+# (compose.home.yml).
 #
-# Beats used to ship this bundle to Firebase Hosting and the API to Cloud Run,
-# on two different origins joined by CORS. Here they share ONE origin: this
-# nginx serves the bundle at `/` and proxies `/api` to the API container
-# behind it. That is not a packaging preference — the `Home-Session` cookie
-# the home.space identity service mints is what carries SSO, and a browser
-# only attaches it to same-origin requests. Split the origins again and SSO
-# stops working.
+# lifepete.com ships this bundle to Firebase Hosting and the API to Cloud Run,
+# on two origins joined by CORS. Here they share ONE origin: this nginx serves
+# the bundle at `/` and proxies `/api` to the API container behind it, so the
+# stack publishes one port and needs no CORS entry for wherever it is hosted.
 
 FROM node:25-alpine AS build
 
@@ -33,8 +31,7 @@ COPY . .
 RUN pnpm build
 
 # Prove it. A bundle that still names localhost:7999 would fail silently at
-# runtime — every API call from a phone would hit the phone's own port 7999,
-# and SSO would break invisibly because the cookie is only sent same-origin.
+# runtime — every API call from a phone would hit the phone's own port 7999.
 # `import.meta.env.DEV` is a build-time literal, so the dev branch really is
 # eliminated and this grep means what it says.
 RUN if grep -rq "localhost:7999" dist/spa/assets/; then \
