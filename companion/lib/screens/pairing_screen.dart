@@ -145,7 +145,9 @@ class _PairingScreenState extends State<PairingScreen> {
               child: Panel(
                 raised: true,
                 radius: 30,
-                padding: const EdgeInsets.fromLTRB(38, 34, 38, 28),
+                padding: isCompact(context)
+                    ? const EdgeInsets.fromLTRB(22, 28, 22, 22)
+                    : const EdgeInsets.fromLTRB(38, 34, 38, 28),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,9 +173,28 @@ class _PairingScreenState extends State<PairingScreen> {
                     const SizedBox(height: 22),
                     _Step(n: 1, text: 'Open $webHost → Settings → Daemon'),
                     const SizedBox(height: 10),
-                    const _Step(n: 2, text: 'Choose Pair and type the six characters here'),
+                    // A phone scans the code; typing it is the fallback.
+                    _Step(
+                      n: 2,
+                      text: _qrSupported
+                          ? 'Choose Pair, then scan the code it shows'
+                          : 'Choose Pair and type the six characters here',
+                    ),
                     const SizedBox(height: 22),
-                    Text('Pairing code',
+                    if (_qrSupported) ...[
+                      SizedBox(
+                        height: 52,
+                        child: SkyButton(
+                          label: 'Scan the code',
+                          icon: Icons.qr_code_scanner_rounded,
+                          kind: SkyButtonKind.primary,
+                          large: true,
+                          onPressed: _loading ? null : _scanQr,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                    ],
+                    Text(_qrSupported ? 'Or type the six characters' : 'Pairing code',
                         style: SkyType.body(13, weight: FontWeight.w700).copyWith(color: p.inkOnSky)),
                     const SizedBox(height: 8),
                     _CodeBoxes(
@@ -190,7 +211,7 @@ class _PairingScreenState extends State<PairingScreen> {
                       height: 50,
                       child: SkyButton(
                         label: 'Pair',
-                        kind: SkyButtonKind.primary,
+                        kind: _qrSupported ? SkyButtonKind.secondary : SkyButtonKind.primary,
                         large: true,
                         leading: _loading
                             ? SizedBox(
@@ -202,10 +223,6 @@ class _PairingScreenState extends State<PairingScreen> {
                         onPressed: _loading ? null : _pair,
                       ),
                     ),
-                    if (_qrSupported) ...[
-                      const SizedBox(height: 8),
-                      Center(child: LinkButton(label: 'Scan a QR code instead', onPressed: _scanQr)),
-                    ],
                     const SizedBox(height: 14),
                     Wrap(
                       alignment: WrapAlignment.center,
