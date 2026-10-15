@@ -270,8 +270,8 @@ nothing.
   is the Monday-morning figure, read off one running total (`closing_balances`); on the week
   a contract starts or ends mid-week `worked` counts hours the balance does not, so the
   page's +/− is the move between two closes. The decisions are in
-  [docs/work-contracts-roadmap.md](docs/work-contracts-roadmap.md) and
-  [docs/project-page-roadmap.md](docs/project-page-roadmap.md).
+  [docs/work-contracts.md](docs/work-contracts.md) and
+  [docs/project-page.md](docs/project-page.md).
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
   (`:root[data-theme="dusk"]`), picked in Settings beside the density. `useTheme.ts` owns the
   storage keys, and a stored value that is neither hour reads as afternoon. Behind the app and
