@@ -11,8 +11,9 @@ name: Release Android
 # (Play App Signing). The key lives in two repo secrets:
 #   ANDROID_UPLOAD_KEYSTORE_BASE64    the PKCS12 keystore, base64
 #   ANDROID_UPLOAD_KEYSTORE_PASSWORD  its password (the key's is the same)
-# The maintainer's copy is in ~/.config/lifepete/android. Lose both and the
-# upload key can be reset from the Play Console; it can't be recovered.
+# Their source is the maintainer's vault (github.com/lanterno/vault, project
+# beats): `vault gh beats` sets both from it. Lose the vault and the upload
+# key can be reset from the Play Console; it can't be recovered.
 #
 # versionCode is this workflow's run number: it only ever goes up, which is
 # all Play asks of it.

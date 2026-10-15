@@ -14,7 +14,7 @@ upload them later); `render.sh` remakes the images.
 | Phone screenshots, 1080×1920 | `android/en-US/images/phoneScreenshots/` — the app on sample data |
 | Privacy policy | https://github.com/lanterno/beats/blob/main/PRIVACY.md |
 | Signed bundle | the **Release Android** workflow (`.github/workflows/release-android.yml`) |
-| Upload key | repo secrets `ANDROID_UPLOAD_KEYSTORE_BASE64` / `_PASSWORD`; the maintainer's copy in `~/.config/lifepete/android/` |
+| Upload key | repo secrets `ANDROID_UPLOAD_KEYSTORE_BASE64` / `_PASSWORD`, set from the maintainer's vault (`vault gh beats`; the keystore is `vault get-file beats android-upload-keystore`) |
 
 ## Releasing a build
 
