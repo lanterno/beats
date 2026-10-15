@@ -28,14 +28,21 @@ void main() async {
   if (Platform.isMacOS) {
     // The sky runs under a hidden title bar; the traffic lights stay and sit
     // in the sidebar's top corner. A debug build opened with LIFEPETE_PHONE=1
-    // is a phone-sized window, to look at the phone layout without a device.
-    final phone = kDebugMode && Platform.environment['LIFEPETE_PHONE'] == '1';
+    // is a phone-sized window, to look at the phone layout without a device;
+    // LIFEPETE_PHONE=store is 9:16 (1080×1920 on a Retina screen), the shape
+    // Google Play wants its screenshots in. Neither shows the traffic lights.
+    final phone = kDebugMode ? Platform.environment['LIFEPETE_PHONE'] : null;
     await windowManager.waitUntilReadyToShow(
       WindowOptions(
         title: appName,
-        size: phone ? const Size(390, 844) : const Size(1180, 820),
-        minimumSize: phone ? const Size(360, 640) : const Size(880, 620),
+        size: switch (phone) {
+          '1' => const Size(390, 844),
+          'store' => const Size(540, 960),
+          _ => const Size(1180, 820),
+        },
+        minimumSize: phone == null ? const Size(880, 620) : const Size(360, 640),
         titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: phone == null,
       ),
       () async {
         await windowManager.show();
