@@ -1,6 +1,6 @@
 # Privacy
 
-This is a personal, open-source project. I (Ahmed Elghareeb, [@lanterno](https://github.com/lanterno)) am the only operator. This page describes — in plain English — what Beats does with your data.
+This is a personal, open-source project. I (Ahmed Elghareeb, [@lanterno](https://github.com/lanterno)) am the only operator. This page describes — in plain English — what Beats does with your data. Beats is the project's name in code; you meet it as **LifePete** — lifepete.com, the LifePete apps for Mac, Android and iPhone, and the daemon and editor extension that feed them. This policy covers all of them.
 
 For the catalogue of every field stored, see [DATA.md](./DATA.md).
 
@@ -28,9 +28,22 @@ If you connect any of these, the relevant OAuth token is stored in the database 
 - **GitHub** — read commit and repo activity to enrich beats
 - **Google Calendar** — read events to align beats with meetings
 - **Fitbit, Oura** — read biometric data (sleep, HRV, steps)
-- **HealthKit / Health Connect** — read biometrics via the companion app
+
+The phone apps do not read Apple Health or Health Connect today. If they ever do, it will be opt-in, and this page will say so before the release that adds it.
 
 You can disconnect any integration at any time. Disconnecting revokes the token on Beats' side; revoke at the provider too if you want belt-and-braces.
+
+## The phone apps
+
+The LifePete app on Android and iPhone is a window onto your account; it keeps almost nothing of its own.
+
+- **What it stores on the phone**: the device token from pairing (in Android's Keystore or the iOS Keychain), the server's address, your recent projects and a few settings (light or dusk, which notifications you want). Unpairing deletes the token.
+- **What it sends**: requests to your LifePete server — the timer, sessions you log, brief ratings, coach chat — the same as the web app. Pairing sends the phone's name so you can tell devices apart in Settings.
+- **Camera**: used only to scan the pairing code, on the phone. No image is stored or sent anywhere.
+- **Notifications**: the morning brief, nudges and suggestions, built from your own data while the app is open. No push service is involved.
+- **Google libraries**: the code scanner is Google's ML Kit, which runs on the phone and sends Google diagnostics about the scanner itself (device model, OS version, how it performed, under a random ID for this installation that names neither you nor the phone) — never the camera image or anything from your account. The app's two typefaces are fetched from Google Fonts the first time it opens, which shows Google the phone's IP address, as any web page using those fonts does.
+- **Sample data**: "Look around with sample data" is made up on the phone and sends nothing.
+- **No analytics, no ads, no crash reporting** services are built in.
 
 ## The coach
 
@@ -50,7 +63,7 @@ If you do not want any data leaving the Beats database, do not use the coach.
 ## Export and deletion
 
 - **Export**: anytime, via `/api/export` — your projects (contract included) and sessions, as JSON or CSV. Absences, plans, webhooks, signals, biometrics and coach history are not in it yet.
-- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user. I will reply to confirm.
+- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
 
 ## Changes
 

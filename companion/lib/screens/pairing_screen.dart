@@ -16,7 +16,11 @@ import 'shell.dart' show BrandMark;
 /// six-character code the web app shows under Settings → Daemon.
 class PairingScreen extends StatefulWidget {
   final VoidCallback onPaired;
-  const PairingScreen({super.key, required this.onPaired});
+
+  /// Opens the app on made-up data instead (services/sample_api.dart).
+  final VoidCallback? onSample;
+
+  const PairingScreen({super.key, required this.onPaired, this.onSample});
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -42,13 +46,13 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   Future<void> _loadUrls() async {
-    // Hydrate both fields in one trip so the user sees their saved
-    // values (or the defaults). Web URL was added later — existing
-    // users who never set it land on http://localhost:8080.
+    // Hydrate both fields in one trip: the saved values, else the build's
+    // own server. A build without one opens the server fields to be filled.
     final api = await _storage.loadApiUrl();
     final web = await _storage.loadWebUrl();
-    _apiUrlController.text = api;
-    _webUrlController.text = web;
+    _apiUrlController.text = api ?? '';
+    _webUrlController.text = web ?? '';
+    if (api == null && mounted) setState(() => _ownServer = true);
   }
 
   /// True on the platforms where `mobile_scanner` actually works
@@ -137,7 +141,9 @@ class _PairingScreenState extends State<PairingScreen> {
       backgroundColor: Colors.transparent,
       body: SkyBackdrop(
         hills: true,
-        child: Center(
+        // SafeArea: clear of the status and navigation bars when it scrolls
+        // on a phone, which draws edge to edge.
+        child: SafeArea(child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
             child: ConstrainedBox(
@@ -201,6 +207,10 @@ class _PairingScreenState extends State<PairingScreen> {
                       controller: _codeController,
                       focusNode: _codeFocus,
                       onSubmit: _pair,
+                      // A desktop types the code, so the boxes take the keyboard
+                      // at once; a phone scans it, and a keyboard up from the
+                      // start would cover Pair and the sample-data link.
+                      autofocus: !_qrSupported,
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 10),
@@ -250,12 +260,23 @@ class _PairingScreenState extends State<PairingScreen> {
                         hint: 'https://example.com',
                       ),
                     ],
+                    if (widget.onSample != null) ...[
+                      const SizedBox(height: 18),
+                      Divider(height: 1, color: p.hairline),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: LinkButton(
+                          label: 'No account yet? Look around with sample data',
+                          onPressed: widget.onSample,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
-        ),
+        )),
       ),
     );
   }
@@ -294,8 +315,14 @@ class _CodeBoxes extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onSubmit;
+  final bool autofocus;
 
-  const _CodeBoxes({required this.controller, required this.focusNode, required this.onSubmit});
+  const _CodeBoxes({
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmit,
+    required this.autofocus,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -330,7 +357,7 @@ class _CodeBoxes extends StatelessWidget {
               key: const Key('pairing-code'),
               controller: controller,
               focusNode: focusNode,
-              autofocus: true,
+              autofocus: autofocus,
               maxLength: 6,
               textCapitalization: TextCapitalization.characters,
               textInputAction: TextInputAction.go,

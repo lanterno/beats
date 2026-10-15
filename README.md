@@ -88,7 +88,7 @@ cd api && just run-locally          # uvicorn on :7999
 cd ui && pnpm install && pnpm dev   # Vite dev server on :8080
 
 # Desktop app
-cd companion && flutter run -d macos
+cd companion && flutter run -d macos --dart-define-from-file=config/local.json
 ```
 
 A [devcontainer](.devcontainer/devcontainer.json) is included for VS Code and GitHub

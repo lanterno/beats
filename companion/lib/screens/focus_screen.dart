@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,14 +16,15 @@ class FocusScreen extends StatelessWidget {
   final TimerController timer;
   const FocusScreen({super.key, required this.timer});
 
-  /// A phone or tablet, where the keyboard hints mean nothing.
-  static bool get _touch =>
-      defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android;
+  /// A phone or tablet, where the keyboard hints mean nothing. Read off the
+  /// theme, so a phone-sized debug window counts.
+  static bool _touch(BuildContext context) =>
+      const [TargetPlatform.iOS, TargetPlatform.android].contains(Theme.of(context).platform);
 
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: buildSkyTheme(SkyPalette.dusk, Brightness.dark),
+      data: buildSkyTheme(SkyPalette.dusk, Brightness.dark).copyWith(platform: Theme.of(context).platform),
       child: Builder(builder: (context) {
         final p = context.sky;
         return Focus(
@@ -81,7 +81,7 @@ class FocusScreen extends StatelessWidget {
                     // first frame comes before the first status read.
                     child: ListenableBuilder(
                       listenable: timer,
-                      builder: (context, _) => _touch
+                      builder: (context, _) => _touch(context)
                           // A phone has no Esc or ⌘: a Stop to press, and a tap anywhere leaves.
                           ? Column(mainAxisSize: MainAxisSize.min, children: [
                               if (timer.running) ...[
@@ -160,7 +160,7 @@ class _Face extends StatelessWidget {
             running ? 'since ${formatTimeOfDay(timer.since!)}' : 'Nothing running',
             style: SkyType.body(18).copyWith(color: p.inkOnSky),
           ),
-          if (!running && !FocusScreen._touch) ...[
+          if (!running && !FocusScreen._touch(context)) ...[
             const SizedBox(height: 6),
             Text('⌘K to start', style: SkyType.body(15).copyWith(color: p.inkMuted)),
           ],
