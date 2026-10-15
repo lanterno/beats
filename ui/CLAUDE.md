@@ -88,6 +88,11 @@ flash, and repeats the keys and the dusk sky's hex — change them in both place
   and `.homepage-root` do neither. Never `background-attachment: fixed` on `body`:
   iOS Safari paints it black under a `backdrop-filter` overlay (the note in
   `global.css`).
+- **Text on the sky** glows in the sky's colour (`--sky-halo-shadow`), because the page
+  scrolls over the hills and the dusk's warm band, where no ink clears 4.5:1. `Layout`'s
+  `<main>` carries `.on-sky`, which every descendant inherits; any element with a `bg-*`
+  class, and every form control, turns it off for its subtree. The marketing page applies
+  the shadow to its sky copy by class instead.
 - **`Panel`** (`shared/ui/panel.tsx`) is the one card: `rounded-[1.625rem] bg-card
   shadow-soft`, no border, `p-6` unless `padding` says otherwise. Controls are pills,
   separators inside a list are the hairline (`border-border`), highlights are washes
