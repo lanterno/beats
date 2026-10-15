@@ -25,4 +25,4 @@ WHAT YOU NEED
 A LifePete account. Pair this phone by scanning the code in Settings → Daemon on lifepete.com — no password is ever typed on the phone. You can also point it at your own LifePete server. Not ready to pair? Look around with sample data first.
 
 PRIVATE BY DESIGN
-LifePete is a personal, open-source project with no ads and no analytics. Your data is yours: export it any time, or ask for it to be deleted.
+LifePete is a personal, open-source project with no ads, and your data is never sold or shared. It's yours: export it any time, or ask for it to be deleted.
