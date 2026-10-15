@@ -52,7 +52,12 @@ void main() async {
   }
   final hour = HourController();
   await hour.load();
-  runApp(CompanionApp(hour: hour));
+  // A phone-sized debug window draws as Android where the theme decides
+  // (Focus's Stop button instead of keyboard hints, scrolling, transitions),
+  // so a screenshot of it shows what a phone would. Only the theme: the Mac
+  // menu bar and window code still know they run on a Mac.
+  final phone = kDebugMode && Platform.environment['LIFEPETE_PHONE'] != null;
+  runApp(CompanionApp(hour: hour, platform: phone ? TargetPlatform.android : null));
 }
 
 /// The menu bar popover's engine starts here (StatusItemController.swift).
@@ -61,7 +66,11 @@ Future<void> popoverMain() => runPopover();
 
 class CompanionApp extends StatelessWidget {
   final HourController hour;
-  const CompanionApp({super.key, required this.hour});
+
+  /// The platform the theme draws for, when not the one it runs on.
+  final TargetPlatform? platform;
+
+  const CompanionApp({super.key, required this.hour, this.platform});
 
   @override
   Widget build(BuildContext context) {
@@ -70,8 +79,8 @@ class CompanionApp extends StatelessWidget {
       builder: (context, _, _) => MaterialApp(
         title: appName,
         debugShowCheckedModeBanner: false,
-        theme: buildSkyTheme(SkyPalette.afternoon, Brightness.light),
-        darkTheme: buildSkyTheme(SkyPalette.dusk, Brightness.dark),
+        theme: buildSkyTheme(SkyPalette.afternoon, Brightness.light).copyWith(platform: platform),
+        darkTheme: buildSkyTheme(SkyPalette.dusk, Brightness.dark).copyWith(platform: platform),
         themeMode: hour.themeMode,
         home: AppShell(hour: hour),
       ),
