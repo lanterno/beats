@@ -3,12 +3,10 @@
          flutter_local_notifications surfaces the OS prompt when we call
          requestNotificationsPermission(). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Lets the daily EOD prompt fire even while the device is in Doze.
-         Without this we still get scheduled notifications, but they may
-         drift by minutes. Using SCHEDULE_EXACT_ALARM (not USE_EXACT_ALARM)
-         is allowed for ourselves without a user-visible permission flow. -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- No SCHEDULE_EXACT_ALARM or RECEIVE_BOOT_COMPLETED: nothing is
+         scheduled. Notifications come from the poller while the app runs
+         (services/notification_poller.dart). Add them back only with a
+         scheduled notification that needs them; Play asks why. -->
     <!-- mobile_scanner: camera access for QR pairing on the PairingScreen.
          Optional feature — phones without a camera (rare on Android, but
          supported on tablets without rear cameras) just don't see the
