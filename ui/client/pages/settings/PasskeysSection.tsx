@@ -7,7 +7,9 @@ import { Panel } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
 export function PasskeysSection() {
-	const [credentials, setCredentials] = useState<CredentialInfo[]>([]);
+	// null until the first load answers, so an account with no passkeys (one that signs in
+	// through home.space) isn't mistaken for one still loading.
+	const [credentials, setCredentials] = useState<CredentialInfo[] | null>(null);
 	const [loadError, setLoadError] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -59,11 +61,15 @@ export function PasskeysSection() {
 			</h2>
 			<Panel padding="p-5" className="space-y-3">
 				<p className={LEAD}>
-					Passkeys let you sign in securely without a password. You must keep at least one
-					registered.
+					Passkeys let you sign in securely without a password.
+					{credentials?.length ? " You must keep at least one registered." : null}
 				</p>
 
-				{credentials.length === 0 && !loadError && <p className={LEAD}>Loading...</p>}
+				{credentials === null && !loadError && <p className={LEAD}>Loading...</p>}
+
+				{credentials?.length === 0 && (
+					<p className={LEAD}>No passkeys on this account. It signs in through single sign-on.</p>
+				)}
 
 				{loadError && (
 					<div className="flex items-center gap-2">
@@ -74,7 +80,7 @@ export function PasskeysSection() {
 					</div>
 				)}
 
-				{credentials.length > 0 && (
+				{credentials && credentials.length > 0 && (
 					<div className={LIST}>
 						{credentials.map((cred) => (
 							<div key={cred.id} className={ROW}>
