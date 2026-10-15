@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useUpsertWeeklyPlan, useWeeklyPlan } from "@/entities/planning";
 import { useProjects } from "@/entities/project";
-import { formatDuration, getMondayOfWeeksAgo } from "@/shared/lib";
+import { formatDuration, getMondayOfWeeksAgo, toIsoDate } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 
 /** A section heading on the sky: the mockup's `.lbl`, in ink so it reads there. */
@@ -22,8 +22,9 @@ const FIELD =
 /** A project with no colour. */
 const NO_COLOR = "var(--color-muted-foreground)";
 
+/** The week's key: its Monday's local date, as every other page and the API's `tz` read it. */
 function getMonday(weeksAgo: number): string {
-	return getMondayOfWeeksAgo(weeksAgo).toISOString().slice(0, 10);
+	return toIsoDate(getMondayOfWeeksAgo(weeksAgo));
 }
 
 export default function PlanPage() {
