@@ -3,8 +3,10 @@ on:
   workflow_dispatch:
   push:
     paths: [ui/**, .github/workflows/ui.yml]
+  # api/src too, on pull requests only: the generated types follow the API's
+  # schema, and a push to main from an API change must not redeploy the SPA.
   pull_request:
-    paths: [ui/**, .github/workflows/ui.yml]
+    paths: [ui/**, api/src/**, .github/workflows/ui.yml]
 
 jobs:
   quality:

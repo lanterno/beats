@@ -44,9 +44,11 @@ pre-push:
     ui-test:
       root: ui/
       run: pnpm test
+    # The types are generated from the API, so an API-only push can stale them;
+    # rooted at ui/ this check skipped exactly that push.
     ui-api-types:
-      root: ui/
-      run: pnpm gen:types:check
+      glob: "{api/src/**/*.py,ui/client/shared/api/*}"
+      run: cd ui && pnpm gen:types:check
     # The bundle-id → app-name table is one JSON file rendered into Go, TS and
     # Dart. Same shape as ui-api-types: fail if the committed output is stale.
     app-labels:
