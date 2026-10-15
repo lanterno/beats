@@ -96,15 +96,6 @@ export interface paths {
         /**
          * Refresh Token
          * @description Exchange a valid session token for a new one.
-         *
-         *     A session that began as a home.space SSO login carries an `sso` claim,
-         *     and is re-checked against the issuer here before being extended.
-         *     Without that, revoking a device in `auth`'s `/devices` would stop new
-         *     logins while leaving an already-issued beats session renewing itself
-         *     forever — the revocation would be cosmetic.
-         *
-         *     Sessions from beats' own passkey login carry no `sso` claim and are
-         *     untouched by any of this.
          */
         post: operations["refresh_token_api_account_refresh_post"];
         delete?: never;
@@ -113,7 +104,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/account/sso/link": {
+    "/api/account/sso/{provider_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unlink Identity
+         * @description Detach the identity linked through a provider.
+         *
+         *     Works for a provider that is no longer configured, too. Refused when it
+         *     would leave no passkey and no other identity — no way back in.
+         */
+        delete: operations["unlink_identity_api_account_sso__provider_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/account/sso/{provider_id}/link": {
         parameters: {
             query?: never;
             header?: never;
@@ -123,22 +137,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Link Sso Identity
-         * @description Attach the caller's home.space identity to their beats account.
+         * Start Link
+         * @description Begin linking an identity at a provider to this account.
          *
-         *     Proves both sides in one request: the Bearer token proves the beats
-         *     account, the `Home-Session` cookie proves the home.space identity.
+         *     Finished by `POST /api/auth/sso/complete`, sent with this same session.
          */
-        post: operations["link_sso_identity_api_account_sso_link_post"];
-        /**
-         * Unlink Sso Identity
-         * @description Detach the linked home.space identity.
-         *
-         *     Refused if the account holds no passkey, since the link would be the
-         *     only remaining way in — the same rule `delete_credential` applies to the
-         *     last passkey, seen from the other side.
-         */
-        delete: operations["unlink_sso_identity_api_account_sso_link_delete"];
+        post: operations["start_link_api_account_sso__provider_id__link_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -304,31 +309,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/sso/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Sso Config
-         * @description Whether this instance offers home.space SSO, and where to go for it.
-         *
-         *     Always 200, even when disabled: the login screen calls this on every
-         *     load to decide whether to render the second button, and an error there
-         *     would be noise on every deployment that does not use SSO.
-         */
-        get: operations["get_sso_config_api_auth_sso_config_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/sso/session": {
+    "/api/auth/sso/complete": {
         parameters: {
             query?: never;
             header?: never;
@@ -338,10 +319,53 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Sso Session
-         * @description Exchange a verified `Home-Session` cookie for a beats session token.
+         * Complete
+         * @description Finish a sign-in or a link with the code the provider sent back.
          */
-        post: operations["create_sso_session_api_auth_sso_session_post"];
+        post: operations["complete_api_auth_sso_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Providers
+         * @description The providers people can sign in with here, in configured order.
+         *
+         *     Always 200: the login screen asks on every load, and an instance with
+         *     none configured answers with an empty list.
+         */
+        get: operations["list_providers_api_auth_sso_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/{provider_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Sign In
+         * @description Begin signing in through a provider.
+         */
+        post: operations["start_sign_in_api_auth_sso__provider_id__start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3029,6 +3053,22 @@ export interface components {
             /** Worked */
             worked: number;
         };
+        /**
+         * LinkedIdentityInfo
+         * @description An identity at a provider that signs into this account.
+         */
+        LinkedIdentityInfo: {
+            /** Email */
+            email: string | null;
+            /** Linked At */
+            linked_at: string;
+            /** Name */
+            name: string | null;
+            /** Provider */
+            provider: string;
+            /** Provider Name */
+            provider_name: string;
+        };
         /** LoginOptionsResponse */
         LoginOptionsResponse: {
             /** Options */
@@ -3459,61 +3499,48 @@ export interface components {
             /** Slot */
             slot: number;
         };
-        /** SSOConfigResponse */
-        SSOConfigResponse: {
-            /** Enabled */
-            enabled: boolean;
-            /** Login Url */
-            login_url: string;
-            /** Provider Name */
-            provider_name: string;
-            /** Session Present */
-            session_present: boolean;
+        /** SSOCompleteRequest */
+        SSOCompleteRequest: {
+            /** Code */
+            code: string;
+            /** State */
+            state: string;
         };
-        /**
-         * SSOLinkInfo
-         * @description The home.space identity attached to this account, if any.
-         */
-        SSOLinkInfo: {
-            /** Did */
-            did?: string | null;
-            /** Holder Name */
-            holder_name?: string | null;
-            /** Linked */
-            linked: boolean;
-            /** Linked At */
-            linked_at?: string | null;
-            /** Provider Name */
-            provider_name: string;
+        /** SSOCompleteResponse */
+        SSOCompleteResponse: {
             /**
-             * Provisioned
+             * Created
              * @default false
              */
-            provisioned: boolean;
-            /**
-             * Roles
-             * @default []
-             */
-            roles: string[];
-        };
-        /** SSOSessionResponse */
-        SSOSessionResponse: {
-            /** Created */
             created: boolean;
-            /** Did */
-            did: string;
-            /** Display Name */
-            display_name: string | null;
-            /** Holder Name */
-            holder_name: string;
-            /** Roles */
-            roles: string[];
+            /**
+             * Intent
+             * @enum {string}
+             */
+            intent: "sign_in" | "link";
+            /** Provider */
+            provider: string;
             /** Token */
-            token: string;
-            /** Verified */
-            verified: boolean;
-            /** Verified By */
-            verified_by: string;
+            token?: string | null;
+        };
+        /** SSOProviderInfo */
+        SSOProviderInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** SSOProvidersResponse */
+        SSOProvidersResponse: {
+            /** Providers */
+            providers: components["schemas"]["SSOProviderInfo"][];
+        };
+        /** SSOStartResponse */
+        SSOStartResponse: {
+            /** Authorize Url */
+            authorize_url: string;
+            /** State */
+            state: string;
         };
         /**
          * ScheduleType
@@ -3688,7 +3715,10 @@ export interface components {
             display_name: string | null;
             /** Email */
             email: string;
-            sso: components["schemas"]["SSOLinkInfo"];
+            /** Identities */
+            identities: components["schemas"]["LinkedIdentityInfo"][];
+            /** Sso Provisioned */
+            sso_provisioned: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -3903,11 +3933,13 @@ export interface operations {
             };
         };
     };
-    link_sso_identity_api_account_sso_link_post: {
+    unlink_identity_api_account_sso__provider_id__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                provider_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3921,13 +3953,24 @@ export interface operations {
                     "application/json": components["schemas"]["UserResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    unlink_sso_identity_api_account_sso_link_delete: {
+    start_link_api_account_sso__provider_id__link_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                provider_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3938,7 +3981,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserResponse"];
+                    "application/json": components["schemas"]["SSOStartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4185,14 +4237,18 @@ export interface operations {
             };
         };
     };
-    get_sso_config_api_auth_sso_config_get: {
+    complete_api_auth_sso_complete_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSOCompleteRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -4200,12 +4256,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SSOConfigResponse"];
+                    "application/json": components["schemas"]["SSOCompleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    create_sso_session_api_auth_sso_session_post: {
+    list_providers_api_auth_sso_providers_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4220,7 +4285,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SSOSessionResponse"];
+                    "application/json": components["schemas"]["SSOProvidersResponse"];
+                };
+            };
+        };
+    };
+    start_sign_in_api_auth_sso__provider_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOStartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
