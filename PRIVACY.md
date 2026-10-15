@@ -41,7 +41,7 @@ The LifePete app on Android and iPhone is a window onto your account; it keeps a
 - **What it sends**: requests to your LifePete server — the timer, sessions you log, brief ratings, coach chat — the same as the web app. Pairing sends the phone's name so you can tell devices apart in Settings.
 - **Camera**: used only to scan the pairing code, on the phone. No image is stored or sent anywhere.
 - **Notifications**: the morning brief, nudges and suggestions, built from your own data while the app is open. No push service is involved.
-- **Google libraries**: the code scanner is Google's ML Kit, which runs on the phone and may send Google anonymous diagnostics about the scanner itself (device model, OS version, how it performed) — never the camera image or anything from your account. The app's two typefaces are fetched from Google Fonts the first time it opens, which shows Google the phone's IP address, as any web page using those fonts does.
+- **Google libraries**: the code scanner is Google's ML Kit, which runs on the phone and sends Google diagnostics about the scanner itself (device model, OS version, how it performed, under a random ID for this installation that names neither you nor the phone) — never the camera image or anything from your account. The app's two typefaces are fetched from Google Fonts the first time it opens, which shows Google the phone's IP address, as any web page using those fonts does.
 - **Sample data**: "Look around with sample data" is made up on the phone and sends nothing.
 - **No analytics, no ads, no crash reporting** services are built in.
 

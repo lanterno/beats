@@ -103,11 +103,19 @@ shows from the person's own server isn't collected by the app.
     choices, brief ratings, coach chat messages.
   - **App activity → Other actions** — starting, stopping and switching the timer.
   - **Device or other IDs** — the device name sent when pairing.
-- **Check before submitting:** Google ML Kit (the code scanner, via
-  `mobile_scanner`) may collect diagnostics. Look it up in the Google Play SDK
-  Index (play.google.com/sdks) for the version in the bundle, and add what it
-  lists — likely *App info and performance → Diagnostics* and *Device or other
-  IDs*, collected for analytics, by Google.
+- The code scanner adds two more. `mobile_scanner` 7.2 pulls in Google ML Kit's
+  bundled barcode model (`com.google.mlkit:barcode-scanning:17.3.0`; nothing
+  sets `useUnbundled`), and ML Kit sends Google usage diagnostics: device and
+  app info, performance metrics, error codes, and a per-installation ID that
+  isn't meant to identify the person or the phone
+  ([ML Kit's disclosure](https://developers.google.com/ml-kit/android-data-disclosure)).
+  ML Kit says it doesn't pass this to third parties. Both *collected*, *not
+  shared*, *required*, for *Analytics*:
+  - **App info and performance → Diagnostics**
+  - **Device or other IDs** (already ticked above; add *Analytics* to its purposes)
+
+  Switching scanner versions, or to the unbundled model, changes this list;
+  check the disclosure page again when you do.
 
 ## Remaking the images
 
