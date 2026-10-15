@@ -14,10 +14,15 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- allowBackup off: the device token is encrypted with a Keystore key
+         that never leaves this phone, so a restored copy can't be read on
+         another one — and the rest (server, recents, hour) is a re-pair away.
+         Off also means no app data goes to Google Drive backups. -->
     <application
         android:label="LifePete"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
