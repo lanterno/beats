@@ -46,13 +46,13 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   Future<void> _loadUrls() async {
-    // Hydrate both fields in one trip so the user sees their saved
-    // values (or the defaults). Web URL was added later — existing
-    // users who never set it land on http://localhost:8080.
+    // Hydrate both fields in one trip: the saved values, else the build's
+    // own server. A build without one opens the server fields to be filled.
     final api = await _storage.loadApiUrl();
     final web = await _storage.loadWebUrl();
-    _apiUrlController.text = api;
-    _webUrlController.text = web;
+    _apiUrlController.text = api ?? '';
+    _webUrlController.text = web ?? '';
+    if (api == null && mounted) setState(() => _ownServer = true);
   }
 
   /// True on the platforms where `mobile_scanner` actually works

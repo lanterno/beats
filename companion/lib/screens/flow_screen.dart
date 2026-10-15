@@ -55,7 +55,8 @@ class _FlowScreenState extends State<FlowScreen> {
   final _data = <_Day, _DayData>{};
   FlowHeadline? _yesterdaySummary;
   bool _loading = true;
-  String _webUrl = 'http://localhost:8080';
+  /// The web app, for the Insights links; null hides them.
+  String? _webUrl;
   int? _selected;
   Timer? _poll;
 
@@ -189,12 +190,12 @@ class _FlowScreenState extends State<FlowScreen> {
             value: _day,
             onChanged: _switchDay,
           ),
-          Material(
+          if (_webUrl != null) Material(
             color: p.panel,
             shape: const StadiumBorder(),
             child: InkWell(
               customBorder: const StadiumBorder(),
-              onTap: () => launchInsights(context, _webUrl),
+              onTap: () => launchInsights(context, _webUrl!),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -440,23 +441,25 @@ class _FlowScreenState extends State<FlowScreen> {
         label: 'Best repo',
         value: h?.topRepo,
         note: note(byRepo, h?.topRepo),
-        onTap: h?.topRepo == null ? null : () => launchInsights(context, _webUrl, InsightsFilter(repo: h!.topRepo)),
+        onTap: h?.topRepo == null || _webUrl == null
+            ? null
+            : () => launchInsights(context, _webUrl!, InsightsFilter(repo: h!.topRepo)),
       ),
       _Tile(
         label: 'Best language',
         value: h?.topLanguage,
         note: note(byLanguage, h?.topLanguage),
-        onTap: h?.topLanguage == null
+        onTap: h?.topLanguage == null || _webUrl == null
             ? null
-            : () => launchInsights(context, _webUrl, InsightsFilter(language: h!.topLanguage)),
+            : () => launchInsights(context, _webUrl!, InsightsFilter(language: h!.topLanguage)),
       ),
       _Tile(
         label: 'Best app',
         value: h?.topBundle == null ? null : shortBundleLabel(h!.topBundle!),
         note: note(byBundle, h?.topBundle),
-        onTap: h?.topBundle == null
+        onTap: h?.topBundle == null || _webUrl == null
             ? null
-            : () => launchInsights(context, _webUrl, InsightsFilter(bundle: h!.topBundle)),
+            : () => launchInsights(context, _webUrl!, InsightsFilter(bundle: h!.topBundle)),
       ),
     ];
     return LayoutBuilder(builder: (context, box) {

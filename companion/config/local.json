@@ -1,0 +1,4 @@
+{
+  "LIFEPETE_API_URL": "http://localhost:7999",
+  "LIFEPETE_WEB_URL": "http://localhost:8080"
+}

@@ -146,9 +146,11 @@ class _AppShellState extends State<AppShell> {
     String? token;
     try {
       token = await _storage.loadToken();
+      final apiUrl = await _storage.loadApiUrl();
+      // A token without a server can't be used: pair again.
+      if (token != null && apiUrl == null) token = null;
       if (token != null) {
-        final apiUrl = await _storage.loadApiUrl();
-        _connect(ApiClient(baseUrl: apiUrl, deviceToken: token));
+        _connect(ApiClient(baseUrl: apiUrl!, deviceToken: token));
         await _initNotifications();
       }
     } catch (_) {
@@ -262,7 +264,8 @@ class _AppShellState extends State<AppShell> {
 
   void _onPaired() async {
     final token = await _storage.loadToken();
-    final apiUrl = await _storage.loadApiUrl();
+    // Pairing saved the server it paired with, so there is one.
+    final apiUrl = (await _storage.loadApiUrl())!;
     setState(() {
       _paired = true;
       _connect(ApiClient(baseUrl: apiUrl, deviceToken: token));

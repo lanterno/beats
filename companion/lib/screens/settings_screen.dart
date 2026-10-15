@@ -805,6 +805,14 @@ class _AccountTabState extends State<_AccountTab> {
 
   Future<void> _openWeb() async {
     final base = await _storage.loadWebUrl();
+    if (base == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No web app address was set when this device paired.')),
+        );
+      }
+      return;
+    }
     final trimmed = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
     await launchUrl(Uri.parse('$trimmed/settings'), mode: LaunchMode.externalApplication);
   }
