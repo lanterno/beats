@@ -3,7 +3,7 @@
 Pure functions over a `Contract`, its absences, and the region's holidays as
 a `set[date]`. Nothing here reads a clock or a calendar library — `today` is
 a parameter and the holidays are injected — so every rule is a plain function
-of its inputs. The rules themselves are the roadmap's:
+of its inputs. The rules are docs/work-contracts.md's ("The arithmetic"):
 
     expected(d) for a weekday d:
         term  = the term with the latest effective_from <= d     (none -> 0)
