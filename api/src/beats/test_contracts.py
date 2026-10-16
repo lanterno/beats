@@ -9,6 +9,10 @@ because the arithmetic leans on the library's observed-day behaviour — a
 substitute Monday comes back as an ordinary holiday, and being a weekday it
 costs its day — and that dependency should be visible from the suite.
 
+`contract_calendar` is tested on the library's GB calendar too, because what
+it adds is ours: how the region's days, the ones the employer does not give
+and the company's own combine into the one set every figure reads.
+
 The region check is not here: it runs where a contract is written, so it is
 tested with `ProjectService` in `test_domain.py`.
 """
@@ -20,10 +24,16 @@ import pytest
 from pymongo import AsyncMongoClient
 
 from beats.domain.contracts import balance, expected_hours, term_on
-from beats.domain.holidays import named_holidays_between
+from beats.domain.holidays import (
+    HolidaySource,
+    contract_calendar,
+    contract_holidays,
+    named_holidays_between,
+)
 from beats.domain.models import (
     Absence,
     AbsenceType,
+    CompanyHoliday,
     Contract,
     ContractTerm,
     ScheduleType,
@@ -157,6 +167,81 @@ class TestHolidaysBetween:
         ]
 
 
+# December 2026 in GB: Christmas on the Friday, Boxing Day on the Saturday
+# and observed on Monday the 28th, New Year's Day on a Friday.
+DEC_1, DEC_31 = date(2026, 12, 1), date(2026, 12, 31)
+CHRISTMAS_EVE, CHRISTMAS, BOXING_DAY = date(2026, 12, 24), date(2026, 12, 25), date(2026, 12, 26)
+BOXING_OBSERVED = date(2026, 12, 28)
+
+
+def _gb(**fields) -> Contract:
+    return _contract(holiday_country="GB", **fields)
+
+
+def _company(day: date, name: str = "Christmas Eve") -> CompanyHoliday:
+    return CompanyHoliday(date=day, name=name)
+
+
+class TestContractCalendar:
+    def test_company_days_join_and_days_not_given_leave(self):
+        contract = _gb(
+            company_holidays=[_company(CHRISTMAS_EVE)], holidays_not_given=[BOXING_OBSERVED]
+        )
+        assert contract_holidays(contract, DEC_1, DEC_31) == {
+            CHRISTMAS_EVE: "Christmas Eve",
+            CHRISTMAS: "Christmas Day",
+            BOXING_DAY: "Boxing Day",
+        }
+
+    def test_without_a_region_only_the_company_days_count(self):
+        # The not-given list is kept but has nothing to take away.
+        contract = _contract(
+            company_holidays=[_company(CHRISTMAS_EVE)], holidays_not_given=[CHRISTMAS]
+        )
+        assert contract_holidays(contract, DEC_1, DEC_31) == {CHRISTMAS_EVE: "Christmas Eve"}
+
+    def test_a_company_day_on_a_region_holiday_is_one_entry_under_the_region_name(self):
+        contract = _gb(company_holidays=[_company(CHRISTMAS, "Office closed")])
+        calendar = contract_calendar(contract, CHRISTMAS, CHRISTMAS)
+        assert [(h.name, h.source, h.given) for h in calendar] == [
+            ("Christmas Day", HolidaySource.REGION, True)
+        ]
+
+    def test_a_company_day_on_a_date_not_given_wins(self):
+        contract = _gb(
+            company_holidays=[_company(BOXING_OBSERVED, "Winter closing")],
+            holidays_not_given=[BOXING_OBSERVED],
+        )
+        for include_not_given in (False, True):
+            calendar = contract_calendar(
+                contract, BOXING_OBSERVED, BOXING_OBSERVED, include_not_given=include_not_given
+            )
+            assert [(h.name, h.source, h.given) for h in calendar] == [
+                ("Winter closing", HolidaySource.COMPANY, True)
+            ]
+
+    def test_a_date_not_given_that_the_region_does_not_have_changes_nothing(self):
+        removed = contract_holidays(_gb(holidays_not_given=[CHRISTMAS_EVE]), DEC_1, DEC_31)
+        assert removed == contract_holidays(_gb(), DEC_1, DEC_31)
+
+    def test_a_range_spanning_new_year_reads_both_years(self):
+        new_years_eve = date(2026, 12, 31)
+        contract = _gb(
+            company_holidays=[_company(new_years_eve, "New Year's Eve")],
+            holidays_not_given=[date(2027, 1, 1)],
+        )
+        found = contract_holidays(contract, date(2026, 12, 30), date(2027, 1, 4))
+        assert found == {new_years_eve: "New Year's Eve"}
+
+    def test_include_not_given_lists_the_removed_day_as_not_given(self):
+        contract = _gb(holidays_not_given=[BOXING_OBSERVED])
+        assert BOXING_OBSERVED not in {h.date for h in contract_calendar(contract, DEC_1, DEC_31)}
+        calendar = contract_calendar(contract, DEC_1, DEC_31, include_not_given=True)
+        removed = next(h for h in calendar if h.date == BOXING_OBSERVED)
+        assert (removed.source, removed.given) == (HolidaySource.REGION, False)
+        assert [h.date for h in calendar] == sorted(h.date for h in calendar)
+
+
 class TestBalance:
     def test_excludes_today_expectation_and_includes_today_work(self):
         contract = _contract(_full_time(MON), opening_balance_hours=10)
@@ -209,6 +294,24 @@ class TestContractValidation:
     def test_subdivision_without_country_rejected(self):
         with pytest.raises(ValueError, match="holiday_country"):
             _contract(holiday_subdivision="ZH")
+
+    def test_two_company_holidays_on_one_date_rejected(self):
+        with pytest.raises(ValueError, match="one date"):
+            _contract(company_holidays=[_company(CHRISTMAS_EVE), _company(CHRISTMAS_EVE, "Eve")])
+
+    @pytest.mark.parametrize("name", ["", "   "], ids=["empty", "whitespace"])
+    def test_company_holiday_without_a_name_rejected(self, name):
+        with pytest.raises(ValueError, match="at least 1 character"):
+            _company(CHRISTMAS_EVE, name)
+
+    def test_a_date_not_given_twice_rejected(self):
+        with pytest.raises(ValueError, match="twice"):
+            _contract(holidays_not_given=[CHRISTMAS, CHRISTMAS])
+
+    def test_dates_not_given_need_no_region(self):
+        # Inert without one, and kept: an older client that clears the region
+        # must not make the contract impossible to save.
+        assert _contract(holidays_not_given=[CHRISTMAS]).holidays_not_given == [CHRISTMAS]
 
 
 class TestMongoAbsenceRepository:

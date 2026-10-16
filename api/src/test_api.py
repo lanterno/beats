@@ -823,6 +823,22 @@ def _day_job(client, headers, terms=None, **contract) -> dict:
     )
 
 
+# A Wednesday in WEEK for a company day, and a GB (England) bank holiday on a
+# weekday after the contract starts, for a region holiday the employer keeps open.
+COMPANY_DAY = {"date": "2026-03-04", "name": "Founders' Day"}
+EASTER_MONDAY = "2026-04-06"
+
+
+def _put_contract(client, headers, project_id: str, **contract) -> dict:
+    resp = client.put(
+        f"/api/projects/{project_id}/contract",
+        json={"terms": FULL_TIME, **contract},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["contract"]
+
+
 def _log(client, headers, project_id: str, start: str, minutes: int) -> None:
     begun = datetime.fromisoformat(start)
     resp = client.post(
@@ -968,6 +984,114 @@ class TestContractAPI:
         assert resp.status_code == 400, resp.text
         assert resp.json()["code"] == "UNKNOWN_HOLIDAY_REGION"
         assert "XX" in resp.json()["detail"]
+
+    @staticmethod
+    def _send_contract(client, headers, route: str, project: dict, contract: dict) -> dict:
+        """One contract write, through PUT /{id}/contract or PUT /api/projects."""
+        if route == "contract":
+            resp = client.put(
+                f"/api/projects/{project['id']}/contract", json=contract, headers=headers
+            )
+        else:
+            resp = client.put(
+                "/api/projects/",
+                json={
+                    "id": project["id"],
+                    "name": project["name"],
+                    "kind": "day_job",
+                    "contract": contract,
+                },
+                headers=headers,
+            )
+        assert resp.status_code == 200, resp.text
+        return resp.json()["contract"]
+
+    @pytest.mark.parametrize("route", ["contract", "project"])
+    def test_a_contract_without_the_holiday_lists_keeps_them(self, client, auth_headers, route):
+        # An SPA that predates the lists rebuilds the whole contract on every
+        # term edit and sends neither: they must survive it. `[]` clears.
+        project = _day_job(client, auth_headers)
+        _put_contract(
+            client,
+            auth_headers,
+            project["id"],
+            holiday_country="GB",
+            company_holidays=[COMPANY_DAY],
+            holidays_not_given=[EASTER_MONDAY],
+        )
+        old_spa_body = {"terms": FULL_TIME, "holiday_country": "GB", "opening_balance_hours": 3}
+
+        kept = self._send_contract(client, auth_headers, route, project, old_spa_body)
+        assert kept["opening_balance_hours"] == 3
+        assert kept["company_holidays"] == [COMPANY_DAY]
+        assert kept["holidays_not_given"] == [EASTER_MONDAY]
+
+        cleared = self._send_contract(
+            client,
+            auth_headers,
+            route,
+            project,
+            {**old_spa_body, "company_holidays": [], "holidays_not_given": []},
+        )
+        assert (cleared["company_holidays"], cleared["holidays_not_given"]) == ([], [])
+
+    @pytest.mark.parametrize("route", ["contract", "project"])
+    def test_an_old_spa_clearing_the_region_keeps_the_project_readable(
+        self, client, auth_headers, route
+    ):
+        # The not-given list stays behind with no region to take from: inert,
+        # not invalid — every project of the user is re-validated on read.
+        project = _day_job(client, auth_headers)
+        _put_contract(
+            client,
+            auth_headers,
+            project["id"],
+            holiday_country="GB",
+            holiday_subdivision="ENG",
+            holidays_not_given=[EASTER_MONDAY],
+        )
+
+        contract = self._send_contract(
+            client, auth_headers, route, project, {"terms": FULL_TIME, "holiday_country": None}
+        )
+        assert contract["holiday_country"] is None
+        assert contract["holidays_not_given"] == [EASTER_MONDAY]
+
+        listed = client.get("/api/projects/", headers=auth_headers)
+        assert listed.status_code == 200, listed.text
+        assert any(p["id"] == project["id"] for p in listed.json())
+        resp = client.get(
+            f"/api/projects/{project['id']}/contract/week",
+            params={"week_of": EASTER_MONDAY},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["expected"] == 40  # no region: nothing to take away
+
+    @pytest.mark.parametrize(
+        ("route", "prefix"),
+        [("contract", ""), ("project", "contract.")],
+        ids=["contract", "project"],
+    )
+    def test_a_blank_company_holiday_name_is_422_at_its_row(
+        self, client, auth_headers, route, prefix
+    ):
+        project = _day_job(client, auth_headers)
+        contract = {"terms": FULL_TIME, "company_holidays": [{"date": "2026-12-24", "name": " "}]}
+        if route == "contract":
+            resp = client.put(
+                f"/api/projects/{project['id']}/contract", json=contract, headers=auth_headers
+            )
+        else:
+            resp = client.put(
+                "/api/projects/",
+                json={"id": project["id"], "name": project["name"], "contract": contract},
+                headers=auth_headers,
+            )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == [f"{prefix}company_holidays.0.name"]
 
 
 class TestContractWeekAPI:
@@ -1260,6 +1384,79 @@ class TestContractWeekAPI:
         assert off >= 1
         assert week["expected"] == 40 - 8 * off
 
+    def test_a_company_holiday_is_named_and_zeroes_its_day(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        _put_contract(client, auth_headers, project["id"], company_holidays=[COMPANY_DAY])
+
+        week = self._week(client, auth_headers, project["id"])
+
+        wednesday = week["days"][2]
+        assert (wednesday["holiday"], wednesday["expected"]) == ("Founders' Day", 0)
+        assert week["expected"] == 32
+
+    def test_a_region_holiday_not_given_is_owed_and_moves_the_balance(self, client, auth_headers):
+        project = _day_job(client, auth_headers, holiday_country="GB", holiday_subdivision="ENG")
+        given = self._week(client, auth_headers, project["id"], week_of=EASTER_MONDAY)
+        assert given["days"][0]["holiday"] == "Easter Monday"
+
+        _put_contract(
+            client,
+            auth_headers,
+            project["id"],
+            holiday_country="GB",
+            holiday_subdivision="ENG",
+            holidays_not_given=[EASTER_MONDAY],
+        )
+        worked = self._week(client, auth_headers, project["id"], week_of=EASTER_MONDAY)
+
+        assert (worked["days"][0]["holiday"], worked["days"][0]["expected"]) == (None, 8)
+        assert worked["expected"] == given["expected"] + 8
+        assert worked["balance"] == pytest.approx(given["balance"] - 8)
+
+    def test_holidays_list_company_days_without_a_region(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        _put_contract(client, auth_headers, project["id"], company_holidays=[COMPANY_DAY])
+        resp = client.get(
+            f"/api/projects/{project['id']}/holidays",
+            params={"year": 2026},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == [{**COMPANY_DAY, "source": "company", "given": True}]
+
+    def test_holidays_leave_out_days_not_given_unless_asked(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        _put_contract(
+            client,
+            auth_headers,
+            project["id"],
+            holiday_country="GB",
+            holiday_subdivision="ENG",
+            company_holidays=[COMPANY_DAY],
+            holidays_not_given=[EASTER_MONDAY],
+        )
+        url = f"/api/projects/{project['id']}/holidays"
+
+        default = client.get(url, params={"year": 2026}, headers=auth_headers).json()
+        assert EASTER_MONDAY not in {h["date"] for h in default}
+        assert all(h["given"] for h in default)
+        by_date = {h["date"]: h for h in default}
+        assert by_date[COMPANY_DAY["date"]]["source"] == "company"
+        assert by_date["2026-12-25"]["source"] == "region"
+
+        resp = client.get(url, params={"year": 2026, "include": "not_given"}, headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        removed = next(h for h in resp.json() if h["date"] == EASTER_MONDAY)
+        assert (removed["name"], removed["source"], removed["given"]) == (
+            "Easter Monday",
+            "region",
+            False,
+        )
+
+        resp = client.get(url, params={"year": 2026, "include": "bogus"}, headers=auth_headers)
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["include"]
+
     def test_this_week_include_carries_contract_fields_for_day_jobs(self, client, auth_headers):
         # Both day jobs also carry a personal goal, and the governed one an
         # override on this very week; on the wire the contract must win.
@@ -1401,6 +1598,23 @@ class TestLedgerAPI:
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["expected"] == current["contract_expected"]
+
+    def test_a_company_holiday_is_a_holiday_note(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        wednesday = (self._this_monday() + timedelta(days=2)).isoformat()
+        _put_contract(
+            client,
+            auth_headers,
+            project["id"],
+            company_holidays=[{"date": wednesday, "name": "Company day"}],
+        )
+
+        current = self._ledger(client, auth_headers, project["id"], weeks=1)["weeks"][0]
+
+        assert current["notes"] == [
+            {"date": wednesday, "kind": "holiday", "half_day": None, "name": "Company day"}
+        ]
+        assert current["contract_expected"] == 32
 
     def test_weeks_out_of_range_is_422_naming_the_parameter(self, client, auth_headers):
         project = _day_job(client, auth_headers)
