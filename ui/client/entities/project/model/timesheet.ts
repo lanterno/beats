@@ -12,6 +12,7 @@
 
 import { APP_NAME } from "@/shared/config";
 import { addIsoDays, formatDateShort, parseIsoDate } from "@/shared/lib";
+import { sortTerms } from "./contract";
 import type { Contract } from "./types";
 
 export interface TimesheetMonth {
@@ -48,11 +49,8 @@ function nextMonth(month: string): string {
  * today or later.
  */
 export function timesheetMonths(contract: Contract, todayIso: string): TimesheetMonth[] {
-	if (contract.terms.length === 0) return [];
-	const startsOn = contract.terms.reduce(
-		(first, term) => (term.effectiveFrom < first ? term.effectiveFrom : first),
-		contract.terms[0].effectiveFrom,
-	);
+	const startsOn = sortTerms(contract.terms)[0]?.effectiveFrom;
+	if (startsOn === undefined) return [];
 	const yesterday = addIsoDays(todayIso, -1);
 	const covered =
 		contract.endedOn !== undefined && contract.endedOn < yesterday ? contract.endedOn : yesterday;
