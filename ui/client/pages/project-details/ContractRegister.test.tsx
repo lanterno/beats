@@ -287,6 +287,27 @@ describe("ContractRegister on a day job", () => {
 		expect(onOpenHolidays).toHaveBeenCalled();
 	});
 
+	it("does not count a date not given that a company day covers", () => {
+		// The calendar lists both rows for the date; the company day wins.
+		holidays.mockReturnValue([
+			{ date: "2026-12-25", name: "Christmas Day", source: "region", given: false },
+			{ date: "2026-12-25", name: "Firm Christmas", source: "company", given: true },
+		]);
+		renderRegister(
+			project({
+				contract: {
+					...CONTRACT,
+					companyHolidays: [{ date: "2026-12-25", name: "Firm Christmas" }],
+					holidaysNotGiven: ["2026-12-25"],
+				},
+			}),
+		);
+		const region = screen.getByRole("region", { name: "Contract" });
+
+		expect(region).toHaveTextContent("Zürich · 1 company day · Brought forward");
+		expect(region).not.toHaveTextContent("not given");
+	});
+
 	it("offers to add a contract on a day job without one", async () => {
 		const onOpenSettings = renderRegister(project({ contract: undefined }));
 		const region = screen.getByRole("region", { name: "Contract" });
