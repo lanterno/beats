@@ -1787,8 +1787,10 @@ export interface paths {
          *     absence booking: the region's public holidays the employer gives
          *     (`source: region`) and the employer's own (`source: company`), all with
          *     `given: true`. With `include=not_given`, the region holidays on the
-         *     contract's `holidays_not_given` too, with `given: false`. Empty when the
-         *     day job has no contract; only the company days when it names no region.
+         *     contract's `holidays_not_given` too, with `given: false` — a date a
+         *     company day covers is then listed twice, the region's row first. Empty
+         *     when the day job has no contract; only the company days when it names no
+         *     region.
          *     409 on a project that is not a day job.
          */
         get: operations["get_holidays_api_projects__project_id__holidays_get"];

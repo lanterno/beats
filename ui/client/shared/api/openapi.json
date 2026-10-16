@@ -7945,7 +7945,7 @@
     },
     "/api/projects/{project_id}/holidays": {
       "get": {
-        "description": "The contract's holidays for a year, by date, for the calendar and the\nabsence booking: the region's public holidays the employer gives\n(`source: region`) and the employer's own (`source: company`), all with\n`given: true`. With `include=not_given`, the region holidays on the\ncontract's `holidays_not_given` too, with `given: false`. Empty when the\nday job has no contract; only the company days when it names no region.\n409 on a project that is not a day job.",
+        "description": "The contract's holidays for a year, by date, for the calendar and the\nabsence booking: the region's public holidays the employer gives\n(`source: region`) and the employer's own (`source: company`), all with\n`given: true`. With `include=not_given`, the region holidays on the\ncontract's `holidays_not_given` too, with `given: false` \u2014 a date a\ncompany day covers is then listed twice, the region's row first. Empty\nwhen the day job has no contract; only the company days when it names no\nregion.\n409 on a project that is not a day job.",
         "operationId": "get_holidays_api_projects__project_id__holidays_get",
         "parameters": [
           {
