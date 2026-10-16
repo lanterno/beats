@@ -15,7 +15,6 @@ import type { ApiProject } from "@/shared/api";
 
 vi.mock("./projectApi", () => ({
 	fetchProjects: vi.fn(),
-	fetchProjectTotal: vi.fn(() => Promise.resolve(0)),
 	updateProject: vi.fn(),
 	updateGoalOverrides: vi.fn(),
 }));
