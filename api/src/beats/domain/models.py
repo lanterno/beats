@@ -595,6 +595,7 @@ class LedgerWeek(BaseModel):
     effective_goal_overridden: bool
     contract_expected: float | None
     balance_end: float | None
+    balance_moved: float | None
     notes: list[LedgerNote]
     adjustments: list[LedgerAdjustment]
 

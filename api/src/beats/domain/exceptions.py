@@ -201,6 +201,22 @@ class AdjustmentNotFound(DomainException):
             super().__init__()
 
 
+class BackupOfAnotherAccount(DomainException):
+    """Raised when a backup being imported holds a project or a session whose
+    id is another account's. A restore keeps ids, so writing it would
+    collide with that account's record, or, unscoped, take it over."""
+
+    status_code = 409
+    message = "This backup holds projects or sessions of another account"
+    code = "BACKUP_OF_ANOTHER_ACCOUNT"
+
+    def __init__(self, projects: int, beats: int):
+        super().__init__(
+            f"This backup holds {projects} project(s) and {beats} session(s) of another "
+            "account; import it into the account it was exported from"
+        )
+
+
 # Beat-related exceptions
 class BeatNotFound(DomainException):
     """Raised when a beat cannot be found by ID."""

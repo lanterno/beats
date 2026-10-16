@@ -182,6 +182,10 @@ export const LedgerWeekSchema = z.object({
 	effective_goal_overridden: z.boolean(),
 	contract_expected: z.number().nullable(),
 	balance_end: z.number().nullable(),
+	// What the week's work moved the balance by, null exactly when
+	// `balance_end` is. Optional for an API that predates it, which leaves
+	// the SPA to read the move off the closes.
+	balance_moved: z.number().nullable().optional(),
 	notes: z.array(LedgerNoteSchema),
 	// Defaults, like `adjusted` and `ended_balance` below, for an API that
 	// predates balance adjustments: it keeps none, so these are the true

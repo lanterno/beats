@@ -15,8 +15,9 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
+import { describeError } from "@/shared/api";
 import { config, publicApiBase } from "@/shared/config";
-import { cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
+import { browserTimeZone, cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
 import { Button, buttonVariants, Panel } from "@/shared/ui";
 import { CalendarSection } from "./CalendarSection";
@@ -26,6 +27,7 @@ import { DaemonPrivacySection } from "./DaemonPrivacySection";
 import { DaemonSection } from "./DaemonSection";
 import { FitbitSection } from "./FitbitSection";
 import { GitHubSection } from "./GitHubSection";
+import { describeImport, type ImportResult } from "./importSummary";
 import { OuraSection } from "./OuraSection";
 import { PasskeysSection } from "./PasskeysSection";
 import { SingleSignOnSection } from "./SingleSignOnSection";
@@ -72,17 +74,25 @@ export default function Settings() {
 			const formData = new FormData();
 			formData.append("file", file);
 			const token = sessionToken();
-			const res = await fetch(`${apiBase}/api/export/import`, {
+			// `tz` is the today an adjustment in the backup is checked against:
+			// one dated today here may still be tomorrow in UTC.
+			const tz = encodeURIComponent(browserTimeZone());
+			const res = await fetch(`${apiBase}/api/export/import?tz=${tz}`, {
 				method: "POST",
 				headers: token ? { Authorization: `Bearer ${token}` } : {},
 				body: formData,
 			});
-			if (!res.ok) throw new Error("Import failed");
-			const result = await res.json();
-			const { imported } = result;
-			toast.success(`Imported ${imported.projects} projects, ${imported.beats} sessions`);
-		} catch {
-			toast.error("Import failed — check the file format");
+			if (!res.ok) {
+				// The envelope's detail names what the import refused: a record
+				// that does not parse, or a contract the stored adjustments forbid.
+				const body = await res.json().catch(() => null);
+				throw new Error(typeof body?.detail === "string" ? body.detail : undefined);
+			}
+			const { message, leftOut } = describeImport((await res.json()) as ImportResult);
+			if (leftOut) toast.warning(message, { description: leftOut });
+			else toast.success(message);
+		} catch (err) {
+			toast.error(`Import failed — ${describeError(err, "check the file format")}`);
 		} finally {
 			setImporting(false);
 			e.target.value = "";
@@ -202,7 +212,8 @@ export default function Settings() {
 							<div className="flex-1 min-w-0">
 								<p className="text-sm font-bold text-foreground">Full JSON Backup</p>
 								<p className={cn(LEAD, "mt-0.5")}>
-									Complete dump of all projects and sessions. Re-importable for disaster recovery.
+									Every project, contract included, every session, and a day job's time off and
+									balance adjustments. Re-importable for disaster recovery.
 								</p>
 								<Button variant="secondary" size="sm" onClick={handleExportJSON} className="mt-3">
 									Download backup

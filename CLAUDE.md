@@ -273,12 +273,13 @@ nothing.
   closing balance is the Sunday close, before Monday's adjustment, read off one running
   total (`running_balance`) with today's terms and every adjustment's `applied`; on the week
   a contract starts or ends mid-week `worked` counts hours the balance does not, so the
-  page's +/− is the move between two closes, less the week's adjustments. A contract may
-  carry a `vacation` entitlement — days per year for a five-day week, a carry-over rule,
-  and a dated opening where counting starts (nothing before it is reconstructed) — that
-  `domain/vacation.py` reads one calendar year at a time; only `vacation` absences cost
-  it. A contract write that leaves out `vacation` or a holiday list keeps the stored one
-  (`keep_unsent_contract_fields`), and both writes refuse an opening left outside the
+  page's +/− is each week's `balance_moved`: the move between two closes, less the
+  adjustments between, read off the same pass even for the oldest week shown. A contract
+  may carry a `vacation` entitlement — days per year for a five-day week, a carry-over
+  rule, and a dated opening where counting starts (nothing before it is reconstructed) —
+  that `domain/vacation.py` reads one calendar year at a time; only `vacation` absences
+  cost it. A contract write that leaves out `vacation` or a holiday list keeps the stored
+  one (`keep_unsent_contract_fields`), and both writes refuse an opening left outside the
   contract's dates (409). The decisions are in
   [docs/work-contracts.md](docs/work-contracts.md) and
   [docs/project-page.md](docs/project-page.md).

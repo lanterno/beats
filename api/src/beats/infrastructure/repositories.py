@@ -12,6 +12,7 @@ hold exactly one document per user.
 """
 
 import builtins
+from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol
 
@@ -158,15 +159,18 @@ class MongoStore[ModelT: BaseModel]:
         result = await self.collection.delete_many(self._q())
         return result.deleted_count
 
-    async def _upsert_raw(self, data: dict) -> None:
-        """Import/restore path: write a document that arrived as a dict."""
-        doc = serialize_to_document(dict(data))
-        doc["user_id"] = self.user_id
-        doc_id = doc.pop("_id", None)
-        if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
-        else:
-            await self.collection.insert_one(doc)
+    async def _ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        """Which of these ids another user's document already has. Unscoped on
+        purpose, and the one read that is: a restore keeps a record's id, so
+        an id someone else holds has to be found before anything is written.
+        The ids must already be valid ObjectIds."""
+        oids = [ObjectId(i) for i in ids]
+        if not oids:
+            return set()
+        docs = await self.collection.find(
+            {"_id": {"$in": oids}, "user_id": {"$ne": self.user_id}}, {"_id": 1}
+        ).to_list(length=None)
+        return {str(doc["_id"]) for doc in docs}
 
 
 class MongoSingletonStore[ModelT: BaseModel](MongoStore[ModelT]):
@@ -211,7 +215,8 @@ class BeatRepository(Protocol):
     ) -> dict[str, builtins.list[Beat]]: ...
     async def list_all_completed(self) -> builtins.list[Beat]: ...
     async def list_completed_in_range(self, start: date, end: date) -> builtins.list[Beat]: ...
-    async def upsert(self, data: dict) -> None: ...
+    async def restore(self, beat: Beat) -> None: ...
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
 
 
 class ProjectRepository(Protocol):
@@ -222,7 +227,7 @@ class ProjectRepository(Protocol):
     async def create(self, project: Project) -> Project: ...
     async def update(self, project: Project) -> Project: ...
     async def list(self, archived: bool = False) -> builtins.list[Project]: ...
-    async def upsert(self, data: dict) -> None: ...
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
 
 
 class MongoBeatRepository(MongoStore[Beat], BeatRepository):
@@ -308,8 +313,21 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
             }
         )
 
-    async def upsert(self, data: dict) -> None:
-        await self._upsert_raw(data)
+    async def restore(self, beat: Beat) -> None:
+        """Write a beat read from a backup, keeping its id: a replace that
+        inserts when there is none, scoped to this user like every other
+        write, so an id another user holds cannot move their beat across.
+        Through `_dump`, so `start` and `end` are stored as dates, as a
+        tracked beat's are, and the date-range reads find it."""
+        if beat.id is None:
+            await self._insert(beat)
+            return
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(beat.id)}), self._dump(beat), upsert=True
+        )
+
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        return await self._ids_held_elsewhere(ids)
 
 
 class MongoProjectRepository(MongoStore[Project], ProjectRepository):
@@ -349,8 +367,8 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
     async def list(self, archived: bool = False) -> builtins.list[Project]:
         return await self._find_many({"archived": archived})
 
-    async def upsert(self, data: dict) -> None:
-        await self._upsert_raw(data)
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        return await self._ids_held_elsewhere(ids)
 
 
 class MongoUserRepository(UserRepository):
@@ -769,6 +787,7 @@ class MongoBiometricDayRepository(MongoStore[BiometricDay], BiometricDayReposito
 
 class AbsenceRepository(Protocol):
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
+    async def list_all(self) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
 
@@ -784,6 +803,11 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
             },
             sort=("date", 1),
         )
+
+    async def list_all(self) -> list[Absence]:
+        # Every project's, for the full export: an absence outlives a kind
+        # change away from day_job, and a backup keeps it all the same.
+        return await self._find_many(sort=("date", 1))
 
     async def upsert(self, absence: Absence) -> Absence:
         # A replace rather than the shared `$set` merge: the document IS the
@@ -817,6 +841,7 @@ class AdjustmentRepository(Protocol):
     async def list_by_project(
         self, project_id: str, start: date, end: date
     ) -> list[BalanceAdjustment]: ...
+    async def list_all(self) -> list[BalanceAdjustment]: ...
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
     async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
     async def earliest(self, project_id: str, on_or_after: date) -> date | None: ...
@@ -836,6 +861,10 @@ class MongoAdjustmentRepository(MongoStore[BalanceAdjustment], AdjustmentReposit
             },
             sort=("date", 1),
         )
+
+    async def list_all(self) -> list[BalanceAdjustment]:
+        # Every project's, for the full export.
+        return await self._find_many(sort=("date", 1))
 
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment:
         # A replace, as an absence's: the document IS the adjustment, so a
