@@ -212,13 +212,28 @@ class TestContractCalendar:
             company_holidays=[_company(BOXING_OBSERVED, "Winter closing")],
             holidays_not_given=[BOXING_OBSERVED],
         )
-        for include_not_given in (False, True):
-            calendar = contract_calendar(
-                contract, BOXING_OBSERVED, BOXING_OBSERVED, include_not_given=include_not_given
-            )
-            assert [(h.name, h.source, h.given) for h in calendar] == [
-                ("Winter closing", HolidaySource.COMPANY, True)
-            ]
+        calendar = contract_calendar(contract, BOXING_OBSERVED, BOXING_OBSERVED)
+        assert [(h.name, h.source, h.given) for h in calendar] == [
+            ("Winter closing", HolidaySource.COMPANY, True)
+        ]
+        assert contract_holidays(contract, BOXING_OBSERVED, BOXING_OBSERVED) == {
+            BOXING_OBSERVED: "Winter closing"
+        }
+
+    def test_include_not_given_still_lists_the_region_day_a_company_day_covers(self):
+        # Pinned where it broke: without the region's row the editor took the
+        # date for a left-over removal and could not clear either mark.
+        contract = _gb(
+            company_holidays=[_company(BOXING_OBSERVED, "Winter closing")],
+            holidays_not_given=[BOXING_OBSERVED],
+        )
+        calendar = contract_calendar(
+            contract, BOXING_OBSERVED, BOXING_OBSERVED, include_not_given=True
+        )
+        assert [(h.source, h.given) for h in calendar] == [
+            (HolidaySource.REGION, False),
+            (HolidaySource.COMPANY, True),
+        ]
 
     def test_a_date_not_given_that_the_region_does_not_have_changes_nothing(self):
         removed = contract_holidays(_gb(holidays_not_given=[CHRISTMAS_EVE]), DEC_1, DEC_31)
