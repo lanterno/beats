@@ -397,8 +397,9 @@ write, beside the region check.
 
 **What leaves Beats.** The coach sends a day job's goal as one line
 (`Acme: 33.6h/week (contract, 80%)`), not absences, the region, the
-company holidays or the balance. `/api/export` carries the contract but not absences.
-`PRIVACY.md` and `DATA.md` state this; a change happens there first.
+company holidays or the balance. `/api/export` carries the contract but
+not absences. `PRIVACY.md` and `DATA.md` state this; a change happens
+there first.
 
 ---
 
@@ -408,5 +409,5 @@ Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/projec
 contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, vacation
 entitlement, the ledger's write side, the coach seeing the balance, the
 companion's week card, and whether `hours_per_day` should be configurable
-for a 4-day full-time week. The balance ledger's
-read side was built by [project-page.md](project-page.md).
+for a 4-day full-time week. The balance ledger's read side was built by
+[project-page.md](project-page.md).
