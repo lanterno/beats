@@ -10,6 +10,7 @@ The coach is mounted under `/api/coach/*`; this directory is the implementation 
 coach/
 ├── prompts.py          COACH_PERSONA + per-purpose prompt templates
 ├── repos.py            CoachRepos dataclass + collection-name constants + fmt_minutes
+│                        (`contracts` is a ContractService, behind ContractWeeksReader)
 ├── gateway.py          THE single entry point for client.messages.* — caching,
 │                        cost math, retries, budget gate
 ├── usage.py            UsageTracker — records every LLM call, enforces the
@@ -18,11 +19,24 @@ coach/
 ├── memory_rewrite.py   Weekly compaction: 7-day data → new memory doc via LLM
 ├── context.py          build_system_block / build_user_context /
 │                        build_day_context / build_coach_messages
+├── contract_section.py The day context's day-job lines: the week after holidays
+│                        and days off, the balance, its by-Sunday projection, and
+│                        describe_balance (the SPA's describeBalance, in Python)
 ├── brief.py            generate_brief / get_brief / list_briefs
 ├── chat.py             handle_chat_turn — the streaming tool-use loop
 ├── tools.py            TOOL_SCHEMAS + per-tool dispatch handlers + execute_tool
 └── README.md           ← you are here
 ```
+
+## The day job's week
+
+`build_day_context` carries a "Day-job contracts" section for each day job with a contract: what this week expects after holidays and days off, the hours worked under the contract and what is left, the days that made the week shorter, today's expected hours, the running balance, and where it would stand by Sunday. The figures come from `ContractService.current_weeks`, the project page's own read, and `contract_section.py` words them.
+
+- **Today only, by the service's clock.** `current_weeks` answers nothing unless the day asked for is today in the request timezone by `ContractService`'s clock, so a backdated brief carries no section, and a test that fixes that clock fixes both the gate and the figures.
+- **Uncached.** The section is in the day context, never in `build_user_context`: the figures move with every session and are the request timezone's, and putting them in message 0 would break the prompt cache on every turn.
+- **Projection, not the bare balance.** The balance counts today's hours but charges today's expected hours only tomorrow, so it reads high all day. `_by_sunday` is the twin of `projection()` in the SPA's `standing.ts`, and `COACH_PERSONA` tells the coach to plan from "to go" and "by Sunday". A change to either twin is made in both.
+- **What leaves Beats** is what `PRIVACY.md` lists. A public holiday goes by its name, a company holiday only as "company holiday", and a day off only as "day off" or "half day off". The region's codes, the opening balance, other weeks' days and a contract that ended before this week are not sent.
+- Best-effort, like the calendar and biometric sections: a failing read drops the section, not the brief.
 
 ## Streaming protocol (UI-facing)
 
@@ -150,7 +164,7 @@ Every collection name is a constant in `repos.py`:
 
 Two test files cover this directory:
 
-- **`src/beats/test_coach.py`** — module-level tests with mocked LLM. Covers fmt_minutes, MemoryStore, UsageTracker (incl. budget invariants), brief, the chat tool-use loop with fake gateway responses, the tools dispatch, the context builders, and the gateway integration (cache-control + budget).
+- **`src/beats/test_coach.py`** — module-level tests with mocked LLM. Covers fmt_minutes, MemoryStore, UsageTracker (incl. budget invariants), brief, the chat tool-use loop with fake gateway responses, the tools dispatch, the context builders (the contract section runs the real `ContractService` over in-memory stores on a fixed clock), `describe_balance`'s parity with the SPA, and the gateway integration (cache-control + budget).
 - **`src/test_api.py::TestCoachEndpoints` + `TestCoachRouterGapFill`** — HTTP-level tests against the real API client. Covers the auth wall, the `/chat/history` pagination, the `/usage` aggregation shape, and the `BUDGET_EXCEEDED` 429 envelope across `/brief` and `/memory/rewrite`.
 
 Both files use the same `_FakeCoachRepos` / fake-Anthropic-client pattern. No test ever spends real LLM tokens.
