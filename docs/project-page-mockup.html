@@ -456,7 +456,7 @@ b,strong{font-weight:700}
     <tr><th>Today</th><th>Now</th><th>Why</th></tr>
     <tr><td>Week card + "This wk" table row + header ring</td><td>The standing and the open week, once</td><td>The same seven figures were drawn two or three times in different shapes.</td></tr>
     <tr><td>Lifetime total in accent in the header</td><td>All-time line at the ledger's foot</td><td>It was the largest number on the page and not a balance term.</td></tr>
-    <tr><td>Project health card (alert, sparkline, focus today)</td><td>An alert line in the standing when there is one; a focus mark on today's sessions</td><td>The ledger is the trend with real figures; the aggregate focus score said less than the score on each session.</td></tr>
+    <tr><td>Project health card (alert, sparkline, focus today)</td><td>An alert line in the standing when there is one; a focus mark on each session in Days, whichever week is open</td><td>The ledger is the trend with real figures; the aggregate focus score said less than the score on each session.</td></tr>
     <tr><td>Stats tiles (avg, longest, count, last tracked)</td><td>The all-time line</td><td>Shape, not standing; they held the space above the fold that the balance needed.</td></tr>
     <tr><td>Absence month grid on the page</td><td>Upcoming list + tally; the grid is the picker in the dialog</td><td>An input surface pretending to be a reading surface, and a second time navigator.</td></tr>
     <tr><td>Planned and Commits columns</td><td>An annotation line on the open week ("Planned 28 h · 9 commits")</td><td>Context about a week, not part of its arithmetic; two of the columns that made the table scroll sideways. <b>This demotes the weekly plan's column here; say if you want it back.</b></td></tr>
@@ -689,7 +689,7 @@ function renderWeek(s){
     const car = (d.sessions||d.cnt)? `<span class="car">›</span>` : `<span class="car" style="visibility:hidden">›</span>`;
     const sess = (d.sessions||[]).map(x=>`<div class="sess">
         <span class="t">${x.t}</span>
-        <span class="note">${x.note}${x.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}${x.focus?`<span class="focus" title="Focus score from the daemon">◦ ${x.focus}</span>`:''}</span>
+        <span class="note">${x.note}${x.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}${x.focus?`<span class="focus" title="Focus score">◦ ${x.focus}</span>`:''}</span>
         <span class="dur">${x.live?'<span class="live"></span>':''}${x.dur}<span class="ops"><button type="button" aria-label="Edit session">${ICON.edit}</button><button type="button" aria-label="Delete session">${ICON.trash}</button></span></span>
       </div>`).join('');
     return `<div class="day ${d.today?'today':''} ${d.open?'open':''} ${d.weekend?'weekend':''}" data-day>

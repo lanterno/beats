@@ -81,6 +81,7 @@ vi.mock("@/entities/github", () => ({
 vi.mock("@/entities/intelligence", () => ({
 	useProjectHealth: () => ({ data: [] }),
 	useFocusScores: () => ({ data: [] }),
+	useRefreshFocusScores: () => () => {},
 	useDismissInboxItem: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/features/timer", () => ({

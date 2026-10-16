@@ -2592,13 +2592,21 @@ class TestFocusScoreForBeat:
 
 class TestComputeFocusScores:
     """compute_focus_scores threads three pieces together: load the
-    target day's beats, derive peak_block from 30 days of recent
-    activity, and score each beat in chronological order."""
+    range's beats, derive each day's peak_block from its own 30 days of
+    recent activity, and score each beat in chronological order."""
+
+    ZURICH = ZoneInfo("Europe/Zurich")
+
+    @classmethod
+    def _beat(cls, id_: str, d: date, hour: int, minute: int, minutes: int) -> Beat:
+        """A beat starting at local `hour:minute` on `d` in Zurich, stored in UTC."""
+        s = datetime(d.year, d.month, d.day, hour, minute, tzinfo=cls.ZURICH).astimezone(UTC)
+        return Beat(id=id_, project_id="p1", start=s, end=s + timedelta(minutes=minutes))
 
     async def test_empty_day_returns_empty(self):
         target = date(2026, 5, 1)
         svc = _intel_service()
-        assert await svc.compute_focus_scores(target) == []
+        assert await svc.compute_focus_scores(target, target) == []
 
     async def test_returns_one_row_per_beat_with_components(self):
         """One beat on the target day → one row with score and
@@ -2608,7 +2616,7 @@ class TestComputeFocusScores:
         s = datetime.combine(target, datetime.min.time(), tzinfo=UTC).replace(hour=9)
         beats = [Beat(id="b1", project_id="p1", start=s, end=s + timedelta(minutes=60))]
         svc = _intel_service(beats=beats)
-        result = await svc.compute_focus_scores(target)
+        result = await svc.compute_focus_scores(target, target)
         assert len(result) == 1
         assert result[0]["beat_id"] == "b1"
         assert "score" in result[0]
@@ -2639,11 +2647,130 @@ class TestComputeFocusScores:
         )
         # Repo returns them out of order
         svc = _intel_service(beats=[late, early])
-        result = await svc.compute_focus_scores(target)
+        result = await svc.compute_focus_scores(target, target)
         # Result is sorted: early first, then late
         assert [r["beat_id"] for r in result] == ["early", "late"]
         # Late has a 3-min gap from early → frag penalty
         assert result[1]["components"]["fragmentation"] == 15
+
+    async def test_peak_window_is_thirty_local_days(self):
+        """The peak block's 30 days are local days. In Zurich (UTC+2 in
+        May), two hours at 00:30 local on the window's first day, May 1, are
+        stored on April 30 in UTC. They outweigh the afternoon block, so the
+        peak is midnight and the afternoon session on the target day scores
+        10 for peak hours. A window read by UTC date dropped them, made the
+        afternoon the peak, and scored the same session 30."""
+        tz = ZoneInfo("Europe/Zurich")
+        target = date(2026, 5, 31)
+
+        def at(d: date, hour: int, minute: int = 0) -> datetime:
+            return datetime(d.year, d.month, d.day, hour, minute, tzinfo=tz).astimezone(UTC)
+
+        edge = at(date(2026, 5, 1), 0, 30)
+        assert edge.date() == date(2026, 4, 30)  # the UTC day before the window
+        mid = at(date(2026, 5, 15), 14)
+        today = at(target, 14, 30)
+        beats = [
+            Beat(id="edge", project_id="p1", start=edge, end=edge + timedelta(minutes=120)),
+            Beat(id="mid", project_id="p1", start=mid, end=mid + timedelta(minutes=60)),
+            Beat(id="today", project_id="p1", start=today, end=today + timedelta(minutes=30)),
+        ]
+        result = await _intel_service(beats=beats).compute_focus_scores(target, target, tz=tz)
+        assert [r["beat_id"] for r in result] == ["today"]
+        assert result[0]["components"]["peak_hours"] == 10
+
+    async def test_a_week_scores_each_day_as_it_would_alone(self):
+        """The project page asks for a week and the Today feed for a day; the
+        two must agree on every session. Ten hours at 08:00 on August 8 sit
+        in Monday's 30-day window and leave Tuesday's, so Monday's peak is
+        the morning and Tuesday's the afternoon. One peak block shared by the
+        whole week would score both the same."""
+        monday = date(2026, 9, 7)
+        beats = [self._beat("history", date(2026, 8, 8), 8, 0, 600)]
+        for offset in range(7):
+            d = monday + timedelta(days=offset)
+            beats.append(self._beat(f"pm-{offset}", d, 14, 0, 60))
+            beats.append(self._beat(f"pm2-{offset}", d, 15, 3, 25))
+        svc = _intel_service(beats=beats)
+
+        week = await svc.compute_focus_scores(monday, monday + timedelta(days=6), tz=self.ZURICH)
+        days = []
+        for offset in range(7):
+            d = monday + timedelta(days=offset)
+            days.extend(await svc.compute_focus_scores(d, d, tz=self.ZURICH))
+
+        assert week == days
+        peak = {r["beat_id"]: r["components"]["peak_hours"] for r in week}
+        assert (peak["pm-0"], peak["pm-1"]) == (10, 30)
+
+    async def test_fragmentation_stops_at_midnight(self):
+        """Three minutes between sessions is a fragmentation penalty within a
+        day, and none across local midnight: each day is scored on its own."""
+        monday = date(2026, 9, 7)
+        tuesday, wednesday = monday + timedelta(days=1), monday + timedelta(days=2)
+        beats = [
+            self._beat("late", monday, 23, 28, 30),  # ends 23:58
+            self._beat("early", tuesday, 0, 1, 30),
+            self._beat("first", wednesday, 10, 0, 30),  # ends 10:30
+            self._beat("second", wednesday, 10, 33, 30),
+        ]
+        result = await _intel_service(beats=beats).compute_focus_scores(
+            monday, monday + timedelta(days=6), tz=self.ZURICH
+        )
+        frag = {r["beat_id"]: r["components"]["fragmentation"] for r in result}
+        assert frag == {"late": 30, "early": 30, "first": 15, "second": 15}
+
+    async def test_a_week_is_bucketed_by_local_day_at_both_ends(self):
+        """Zurich is ahead of UTC, so 00:30 on a Monday is stored under the
+        Sunday before. The week's own Monday-morning session belongs to it;
+        the next Monday's, stored under this week's Sunday, does not."""
+        monday = date(2026, 9, 7)
+        next_monday = monday + timedelta(days=7)
+        first = self._beat("first", monday, 0, 30, 30)
+        last = self._beat("last", next_monday - timedelta(days=1), 23, 0, 30)
+        after = self._beat("after", next_monday, 0, 30, 30)
+        assert first.start.date() == monday - timedelta(days=1)
+        assert after.start.date() == next_monday - timedelta(days=1)
+
+        result = await _intel_service(beats=[after, last, first]).compute_focus_scores(
+            monday, monday + timedelta(days=6), tz=self.ZURICH
+        )
+        assert [r["beat_id"] for r in result] == ["first", "last"]
+
+    async def test_a_week_behind_utc_keeps_its_sunday_evening(self):
+        """New York is behind UTC, so 23:30 on a Sunday is stored under the
+        Monday after the week. It belongs to the week; 00:30 on that Monday,
+        stored on the same UTC day, does not."""
+        tz = ZoneInfo("America/New_York")
+        monday = date(2026, 9, 7)
+        sunday, next_monday = monday + timedelta(days=6), monday + timedelta(days=7)
+
+        def beat(id_: str, d: date, hour: int, minute: int) -> Beat:
+            s = datetime(d.year, d.month, d.day, hour, minute, tzinfo=tz).astimezone(UTC)
+            return Beat(id=id_, project_id="p1", start=s, end=s + timedelta(minutes=20))
+
+        late = beat("late", sunday, 23, 30)
+        after = beat("after", next_monday, 0, 30)
+        assert late.start.date() == after.start.date() == next_monday
+
+        result = await _intel_service(beats=[after, late]).compute_focus_scores(
+            monday, sunday, tz=tz
+        )
+        assert [r["beat_id"] for r in result] == ["late"]
+
+    async def test_a_week_is_ordered_by_day_then_start(self):
+        monday = date(2026, 9, 7)
+        tuesday, wednesday = monday + timedelta(days=1), monday + timedelta(days=2)
+        beats = [
+            self._beat("wed-9", wednesday, 9, 0, 30),
+            self._beat("mon-15", monday, 15, 0, 30),
+            self._beat("mon-9", monday, 9, 0, 30),
+            self._beat("tue-12", tuesday, 12, 0, 30),
+        ]
+        result = await _intel_service(beats=beats).compute_focus_scores(
+            monday, monday + timedelta(days=6), tz=self.ZURICH
+        )
+        assert [r["beat_id"] for r in result] == ["mon-9", "mon-15", "tue-12", "wed-9"]
 
 
 class TestGetProjectHealth:

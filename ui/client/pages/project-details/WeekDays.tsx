@@ -16,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ABSENCE_TYPE_LABELS } from "@/entities/absence";
 import { useProjectGitActivityByWeek } from "@/entities/github";
-import { useFocusScores } from "@/entities/intelligence";
+import { useFocusScores, useRefreshFocusScores } from "@/entities/intelligence";
 import { useProjectPlannedByWeek } from "@/entities/planning";
 import type {
 	ContractDay,
@@ -237,7 +237,8 @@ export function WeekDays({
 	const { data: allProjects } = useProjects();
 	const updateSession = useUpdateSession();
 	const deleteSession = useDeleteSession();
-	const { data: focusScores } = useFocusScores();
+	const { data: focusScores } = useFocusScores(weekOf);
+	const refreshFocusScores = useRefreshFocusScores();
 	const { byMondayIso: planned } = useProjectPlannedByWeek(project.id, [weekOf]);
 	const { byMondayIso: commits } = useProjectGitActivityByWeek(project.id, [weekOf]);
 	const now = useNow();
@@ -269,6 +270,7 @@ export function WeekDays({
 			});
 			toast.success("Session updated");
 			refetch();
+			refreshFocusScores();
 			setEditing(null);
 		} catch {
 			toast.error("Failed to update session");
@@ -280,6 +282,7 @@ export function WeekDays({
 			await deleteSession.mutateAsync(sessionId);
 			toast.success("Session deleted");
 			refetch();
+			refreshFocusScores();
 		} catch (err) {
 			toast.error(describeError(err, "Failed to delete session"));
 		}
@@ -481,10 +484,10 @@ export function WeekDays({
 															#{tag}
 														</span>
 													))}
-													{day.isToday && focusByBeat.has(session.id) && (
+													{focusByBeat.has(session.id) && (
 														<span
 															className="text-[10.5px] font-bold text-muted-foreground bg-tint-other rounded-full px-1.5"
-															title="Focus score from the daemon"
+															title="Focus score"
 														>
 															◦ {Math.round(focusByBeat.get(session.id) ?? 0)}
 														</span>

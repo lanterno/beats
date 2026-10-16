@@ -26,8 +26,9 @@ export const intelligenceKeys = {
 	patterns: () => [...intelligenceKeys.all, "patterns"] as const,
 	suggestions: (date?: string) =>
 		[...intelligenceKeys.all, "suggestions", date ?? "today"] as const,
-	focusScores: (date?: string) =>
-		[...intelligenceKeys.all, "focus-scores", date ?? "today"] as const,
+	focusScoresAll: () => [...intelligenceKeys.all, "focus-scores"] as const,
+	focusScores: (weekOf?: string) =>
+		[...intelligenceKeys.focusScoresAll(), weekOf ?? "today"] as const,
 	projectHealth: () => [...intelligenceKeys.all, "project-health"] as const,
 	inbox: () => [...intelligenceKeys.all, "inbox"] as const,
 };
@@ -139,12 +140,23 @@ export function useDismissInboxItem() {
 	});
 }
 
-export function useFocusScores(date?: string) {
+/** Today's focus scores, or the week of `weekOf` (a Monday). */
+export function useFocusScores(weekOf?: string) {
 	return useQuery({
-		queryKey: intelligenceKeys.focusScores(date),
-		queryFn: () => fetchFocusScores(date),
+		queryKey: intelligenceKeys.focusScores(weekOf),
+		queryFn: () => fetchFocusScores(weekOf),
 		staleTime: 5 * 60_000, // 5 minutes
 	});
+}
+
+/**
+ * Refresh every cached focus score: today's and each week's. An edited
+ * session moves the peak hours of the 30 days after it, and can move into
+ * another week, so refreshing only the open week would leave the rest stale.
+ */
+export function useRefreshFocusScores() {
+	const queryClient = useQueryClient();
+	return () => queryClient.invalidateQueries({ queryKey: intelligenceKeys.focusScoresAll() });
 }
 
 export function useProjectHealth() {

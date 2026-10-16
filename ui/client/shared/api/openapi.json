@@ -6440,12 +6440,13 @@
     },
     "/api/intelligence/focus-scores": {
       "get": {
-        "description": "Get focus quality scores for all sessions on a date (defaults to today).",
+        "description": "Focus quality scores for every session today, or in the week of `week_of`.\n\nEach day is scored as it would be alone, against its own 30-day peak\nhours, so a session scores the same whichever way it is asked for. Rows\nare ordered by local day, then by start.",
         "operationId": "get_focus_scores_api_intelligence_focus_scores_get",
         "parameters": [
           {
+            "description": "Monday of the week to score, Monday to Sunday in `tz`. Defaults to today alone.",
             "in": "query",
-            "name": "date",
+            "name": "week_of",
             "required": false,
             "schema": {
               "anyOf": [
@@ -6457,7 +6458,8 @@
                   "type": "null"
                 }
               ],
-              "title": "Date"
+              "description": "Monday of the week to score, Monday to Sunday in `tz`. Defaults to today alone.",
+              "title": "Week Of"
             }
           },
           {

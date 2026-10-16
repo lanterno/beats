@@ -5,10 +5,12 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response
+from pydantic import AfterValidator
 
 from beats.api.dependencies import (
     InsightsRepoDep,
     IntelligenceServiceDep,
+    MondayDate,
     TimezoneDep,
     WeeklyDigestRepoDep,
 )
@@ -24,6 +26,7 @@ from beats.api.schemas import (
     SuggestionResponse,
     WeeklyDigestResponse,
 )
+from beats.domain.intelligence.focus import EARLIEST_SCORABLE_DAY
 from beats.domain.models import UserInsights
 
 router = APIRouter(prefix="/api/intelligence", tags=["intelligence"])
@@ -177,15 +180,38 @@ async def get_suggestions(
     return [SuggestionResponse(**r) for r in results]
 
 
+def _within_focus_reach(day: date | None) -> date | None:
+    """A week's scores read a month of history before it; a `week_of` whose
+    history would start before the calendar does is a 422, not an overflow."""
+    if day is not None and day < EARLIEST_SCORABLE_DAY:
+        msg = "week_of is too close to the start of the calendar"
+        raise ValueError(msg)
+    return day
+
+
 @router.get("/focus-scores", response_model=list[FocusScoreResponse])
 async def get_focus_scores(
     service: IntelligenceServiceDep,
     tz: TimezoneDep,
-    target_date: Annotated[date | None, Query(alias="date")] = None,
+    week_of: Annotated[
+        MondayDate,
+        AfterValidator(_within_focus_reach),
+        Query(
+            description="Monday of the week to score, Monday to Sunday in `tz`. "
+            "Defaults to today alone."
+        ),
+    ] = None,
 ) -> list[FocusScoreResponse]:
-    """Get focus quality scores for all sessions on a date (defaults to today)."""
-    d = target_date or datetime.now(tz).date()
-    results = await service.compute_focus_scores(d, tz=tz)
+    """Focus quality scores for every session today, or in the week of `week_of`.
+
+    Each day is scored as it would be alone, against its own 30-day peak
+    hours, so a session scores the same whichever way it is asked for. Rows
+    are ordered by local day, then by start."""
+    if week_of is not None:
+        start, end = week_of, week_of + timedelta(days=6)
+    else:
+        start = end = datetime.now(tz).date()
+    results = await service.compute_focus_scores(start, end, tz=tz)
     return [FocusScoreResponse(**r) for r in results]
 
 

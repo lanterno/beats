@@ -1231,7 +1231,11 @@ export interface paths {
         };
         /**
          * Get Focus Scores
-         * @description Get focus quality scores for all sessions on a date (defaults to today).
+         * @description Focus quality scores for every session today, or in the week of `week_of`.
+         *
+         *     Each day is scored as it would be alone, against its own 30-day peak
+         *     hours, so a session scores the same whichever way it is asked for. Rows
+         *     are ordered by local day, then by start.
          */
         get: operations["get_focus_scores_api_intelligence_focus_scores_get"];
         put?: never;
@@ -5688,7 +5692,8 @@ export interface operations {
     get_focus_scores_api_intelligence_focus_scores_get: {
         parameters: {
             query?: {
-                date?: string | null;
+                /** @description Monday of the week to score, Monday to Sunday in `tz`. Defaults to today alone. */
+                week_of?: string | null;
                 /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
                 tz?: string | null;
             };
