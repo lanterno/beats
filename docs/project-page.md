@@ -350,7 +350,12 @@ match shows the figures and no sentence — never a guessed one. The code is
   adjustments in brackets** ("+8.5 h (+2.0 h brought forward, −40.0 h
   adjusted)"), so it adds up to the standing's balance. The standing's
   proof gets a fourth line, "−40.0 h adjusted", only when the adjusted
-  figure is not 0 at one decimal.
+  figure is not 0 at one decimal. Its worked, like the standing's "worked
+  since", is the balance's: the hours through `ended_on` under a term
+  that owes hours. A stretch under an objective or 0-hour term is in the
+  week rows and not in it. The wording stays "worked": on a contract
+  whose every term owes hours, the usual case, it is every hour worked,
+  and the line is the balance's proof, not a tally.
 - **The ended rule's final balance is `ended_balance`**, the close on the
   end day, so a settlement after the end appears as its own row and not
   inside the "final" figure; an API without it falls back to the totals.
