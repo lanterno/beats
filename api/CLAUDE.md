@@ -21,6 +21,7 @@ src/beats/
 │   ├── contracts.py     Work-contract arithmetic: term in force, expected hours, balance adjustments, and one running pass for the balance, its terms and the closes
 │   ├── ledger.py        Pure assembly of the project page's weeks (goal, expectation, closing balance and its move, adjustments)
 │   ├── vacation.py      Vacation arithmetic: a year of the entitlement from its dated opening, the carry-over, what a day off costs
+│   ├── timesheet.py     Pure assembly of a day job's month: a row per finished day, brought and carried forward, off the ledger's one pass
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions, and a contract's holiday set (`contract_calendar`, `contract_holidays`)
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
 │   ├── flow.py          Pure aggregation over the daemon's flow windows, for the coach
@@ -60,6 +61,7 @@ Eleven test files cover different layers (896 tests, ~30s for the full run):
 - **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, balance adjustments among them, plus one round trip through the absence repository; 28 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, balance adjustments and a settlement, the row-to-row balance proof; 17 tests.
+- **`src/beats/test_timesheet.py`** — the monthly timesheet on fixed dates: four months worked out by hand (a mid-month start and term change, weekend work, a vacation week, a half day, a payout, Easter), the month-to-month and row-to-row proofs, the range's clipping, the null rule under an objective term.
 - **`src/beats/test_vacation.py`** — the vacation arithmetic on fixed dates: the opening on a contract started years before it, each carry-over rule, the end year's pro-rating and rounding, which days cost leave.
 - **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, and the one that moves weekly plans stored under a Sunday to their Monday; 24 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 141 tests.
