@@ -1319,13 +1319,15 @@ class TestContractWeekAPI:
                 "balance_opening",
                 "balance_worked",
                 "balance_expected_through",
+                "balance_adjusted",
             )
         )
 
     def test_week_carries_the_proof_under_the_balance(self, client, auth_headers):
-        # The three terms beside the balance are what the standing shows
-        # under the figure; each is rounded on its own, so the sum lands on
-        # the balance to the cent. Odd minutes, so the rounding is exercised.
+        # The four terms beside the balance are what the standing shows
+        # under the figure; each and the balance are rounded on their own,
+        # so the sum lands within 0.025 of it. Odd minutes, so the rounding
+        # is exercised.
         project = _day_job(client, auth_headers, opening_balance_hours=2.25)
         _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 47)
         _log(client, auth_headers, project["id"], "2026-03-04T09:00:00+00:00", 323)
@@ -1336,9 +1338,14 @@ class TestContractWeekAPI:
         assert week["balance_opening"] == 2.25
         assert week["balance_worked"] == pytest.approx(round((47 + 323) / 60, 2))
         assert week["balance_expected_through"] > 0
-        assert week["balance_opening"] + week["balance_worked"] - week[
-            "balance_expected_through"
-        ] == pytest.approx(week["balance"], abs=0.01)
+        assert week["balance_adjusted"] == 0
+        proof = (
+            week["balance_opening"]
+            + week["balance_worked"]
+            - week["balance_expected_through"]
+            + week["balance_adjusted"]
+        )
+        assert proof == pytest.approx(week["balance"], abs=0.025)
 
     def test_holidays_are_empty_without_a_region(self, client, auth_headers):
         project = _day_job(client, auth_headers)
@@ -1555,8 +1562,9 @@ class TestLedgerAPI:
         )
         assert ledger["since"] == CONTRACT_START
         totals = ledger["totals"]
-        assert 2.25 + totals["worked"] - totals["expected"] == pytest.approx(
-            totals["balance"], abs=0.01
+        assert totals["adjusted"] == 0
+        assert 2.25 + totals["worked"] - totals["expected"] + totals["adjusted"] == pytest.approx(
+            totals["balance"], abs=0.025
         )
         # The current week is the week route's, to the decimal, and so is
         # today's balance.
