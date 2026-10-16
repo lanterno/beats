@@ -421,9 +421,11 @@ What the shape settles:
   though the ledger does not hold the week before; reconstructed from the
   rows, that row could only fall back to worked − expected, which counts
   the hours after `ended_on` the balance does not (AHM-81). On the first
-  close it moves from the opening balance, and when the week holding the
-  first day has no close, the week after moves from it, so a weekend
-  start's hours are in a +/−.
+  close it moves from the opening balance, and when the week before has
+  no close, from the day before the first day in it the balance counts —
+  a time-based term starting on that weekend, the contract's first or one
+  after a term that owes nothing — so a weekend start's hours are in a
+  +/−.
 - **An adjustment's `applied` is filled wherever it falls** — the current
   week, a week with no close, a ledger of one week — because the pass
   runs through today and the last adjustment, not only to the last closed
