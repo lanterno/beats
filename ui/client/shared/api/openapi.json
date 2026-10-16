@@ -1841,6 +1841,101 @@
         "title": "HolidaySource",
         "type": "string"
       },
+      "ImportCounts": {
+        "description": "How many of each record a backup import wrote.",
+        "properties": {
+          "absences": {
+            "title": "Absences",
+            "type": "integer"
+          },
+          "balance_adjustments": {
+            "title": "Balance Adjustments",
+            "type": "integer"
+          },
+          "beats": {
+            "title": "Beats",
+            "type": "integer"
+          },
+          "projects": {
+            "title": "Projects",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "projects",
+          "beats",
+          "absences",
+          "balance_adjustments"
+        ],
+        "title": "ImportCounts",
+        "type": "object"
+      },
+      "ImportResponse": {
+        "description": "What `POST /api/export/import` did with a backup.",
+        "properties": {
+          "imported": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ImportSkip"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "imported",
+          "skipped"
+        ],
+        "title": "ImportResponse",
+        "type": "object"
+      },
+      "ImportSkip": {
+        "description": "An absence or a balance adjustment in a backup that the import left\nout, because the rule its own route applies refused it: `code` and\n`detail` are what that route would have answered. An absence on a\nproject that is no longer a day job is one; an adjustment dated outside\nthe contract the backup restored is another.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "collection": {
+            "enum": [
+              "absences",
+              "balance_adjustments"
+            ],
+            "title": "Collection",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection",
+          "project_id",
+          "date",
+          "code",
+          "detail"
+        ],
+        "title": "ImportSkip",
+        "type": "object"
+      },
       "InboxItemResponse": {
         "description": "A single card in the unified Inbox.\n\nNormalizes outputs from the intelligence module (patterns, suggestions,\nproject health alerts) into one shape the dashboard can render.",
         "properties": {
@@ -6170,7 +6265,7 @@
     },
     "/api/export/full": {
       "get": {
-        "description": "Export everything as JSON for backup.",
+        "description": "Export everything a balance is made of, as JSON for backup: the\nprojects (contract included), the sessions, the absences and the balance\nadjustments.",
         "operationId": "export_full_json_api_export_full_get",
         "responses": {
           "200": {
@@ -6190,8 +6285,28 @@
     },
     "/api/export/import": {
       "post": {
-        "description": "Import a full JSON backup. Upserts by ID \u2014 safe to re-import.",
+        "description": "Import a full JSON backup, version 1.0 or 1.1. Safe to re-import:\nprojects and beats are upserted by id, and an absence or an adjustment\nreplaces the one on its project and date, as its own route does.\n\nThe whole file is validated first, so a malformed record is a 422 that\nnames it and nothing is written. Projects are then written as a project\nwrite is \u2014 the contract's checks and the reconcile against the contract\nit replaces apply, so their refusal is that write's error \u2014 and the\nabsences and adjustments through their own routes' rules, against the\nprojects as restored. A record those rules refuse (an absence on a\nproject that is no longer a day job; an adjustment outside the\ncontract's first day through today in `tz`) is left out and listed under\n`skipped` with the code its route would answer.",
         "operationId": "import_full_json_api_export_import_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -6206,7 +6321,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
               }
             },
             "description": "Successful Response"

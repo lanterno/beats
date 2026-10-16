@@ -971,7 +971,9 @@ export interface paths {
         };
         /**
          * Export Full Json
-         * @description Export everything as JSON for backup.
+         * @description Export everything a balance is made of, as JSON for backup: the
+         *     projects (contract included), the sessions, the absences and the balance
+         *     adjustments.
          */
         get: operations["export_full_json_api_export_full_get"];
         put?: never;
@@ -993,7 +995,19 @@ export interface paths {
         put?: never;
         /**
          * Import Full Json
-         * @description Import a full JSON backup. Upserts by ID — safe to re-import.
+         * @description Import a full JSON backup, version 1.0 or 1.1. Safe to re-import:
+         *     projects and beats are upserted by id, and an absence or an adjustment
+         *     replaces the one on its project and date, as its own route does.
+         *
+         *     The whole file is validated first, so a malformed record is a 422 that
+         *     names it and nothing is written. Projects are then written as a project
+         *     write is — the contract's checks and the reconcile against the contract
+         *     it replaces apply, so their refusal is that write's error — and the
+         *     absences and adjustments through their own routes' rules, against the
+         *     projects as restored. A record those rules refuse (an absence on a
+         *     project that is no longer a day job; an adjustment outside the
+         *     contract's first day through today in `tz`) is left out and listed under
+         *     `skipped` with the code its route would answer.
          */
         post: operations["import_full_json_api_export_import_post"];
         delete?: never;
@@ -3073,6 +3087,60 @@ export interface components {
          * @enum {string}
          */
         HolidaySource: "region" | "company";
+        /**
+         * ImportCounts
+         * @description How many of each record a backup import wrote.
+         */
+        ImportCounts: {
+            /** Absences */
+            absences: number;
+            /** Balance Adjustments */
+            balance_adjustments: number;
+            /** Beats */
+            beats: number;
+            /** Projects */
+            projects: number;
+        };
+        /**
+         * ImportResponse
+         * @description What `POST /api/export/import` did with a backup.
+         */
+        ImportResponse: {
+            imported: components["schemas"]["ImportCounts"];
+            /** Skipped */
+            skipped: components["schemas"]["ImportSkip"][];
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+        };
+        /**
+         * ImportSkip
+         * @description An absence or a balance adjustment in a backup that the import left
+         *     out, because the rule its own route applies refused it: `code` and
+         *     `detail` are what that route would have answered. An absence on a
+         *     project that is no longer a day job is one; an adjustment dated outside
+         *     the contract the backup restored is another.
+         */
+        ImportSkip: {
+            /** Code */
+            code: string;
+            /**
+             * Collection
+             * @enum {string}
+             */
+            collection: "absences" | "balance_adjustments";
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Detail */
+            detail: string;
+            /** Project Id */
+            project_id: string;
+        };
         /**
          * InboxItemResponse
          * @description A single card in the unified Inbox.
@@ -5507,7 +5575,10 @@ export interface operations {
     };
     import_full_json_api_export_import_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5524,7 +5595,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ImportResponse"];
                 };
             };
             /** @description Validation Error */
