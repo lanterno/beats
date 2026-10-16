@@ -162,10 +162,10 @@ func TestFormatUptimeShort_Magnitudes(t *testing.T) {
 	}
 }
 
-func TestDaemonStatusDetail_ReadsHealthAndRendersCounts(t *testing.T) {
-	// Stand up a fake /health endpoint on a free port and have
-	// daemonStatusDetail probe it. Catches a regression in the
-	// JSON parsing or the rendered string format.
+func TestDaemonLine_ReadsHealthAndRendersCounts(t *testing.T) {
+	// Stand up a fake /health endpoint on a free port, probe it, and
+	// render the line `beatsd status` prints. Catches a regression in
+	// the JSON parsing or the rendered string format.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/health" {
 			http.NotFound(w, r)
@@ -184,7 +184,7 @@ func TestDaemonStatusDetail_ReadsHealthAndRendersCounts(t *testing.T) {
 
 	// Extract the port the test server bound to.
 	port := portFromURL(t, srv.URL)
-	got := daemonStatusDetail(port)
+	got := daemonLine(probedDaemon(port))
 
 	// Lock in the prefix and the components — order matters for the
 	// status line readability.
@@ -195,11 +195,11 @@ func TestDaemonStatusDetail_ReadsHealthAndRendersCounts(t *testing.T) {
 	}
 }
 
-func TestDaemonStatusDetail_FallsBackToPlainRunningOnError(t *testing.T) {
-	// Probe a port nothing is bound to. daemonStatusDetail must NOT
-	// hang or surface the error — just degrade to "running" so the
+func TestDaemonLine_FallsBackToPlainRunningOnError(t *testing.T) {
+	// Probe a port nothing is bound to. The probe must NOT hang or
+	// surface the error, and the line degrades to "running" so the
 	// status command never wedges on an unreachable loopback.
-	got := daemonStatusDetail(1) // port 1, not bindable by users; refused
+	got := daemonLine(probedDaemon(1)) // port 1, not bindable by users; refused
 	if got != "running" {
 		t.Errorf("expected fallback to 'running' on probe failure, got: %s", got)
 	}
@@ -208,8 +208,7 @@ func TestDaemonStatusDetail_FallsBackToPlainRunningOnError(t *testing.T) {
 // probeOwnDaemonHealth is the structured-counters form (uptime,
 // emitted, dropped) that powers the JSON status path and the
 // "0 emissions on long uptime" / windows_dropped diagnostics.
-// daemonStatusDetail covers the human-string wrapper above; this
-// test pins the full triple-return so a regression in the JSON
+// daemonLine covers the human string above; this test pins the full triple-return so a regression in the JSON
 // decode can't quietly drop windows_dropped (added in fc50109).
 
 func TestProbeOwnDaemonHealth_DecodesAllThreeCounters(t *testing.T) {
@@ -492,4 +491,18 @@ func TestIsStaleNoEmissions_DoesNotFireWhenDaemonNotRunning(t *testing.T) {
 	if isStaleNoEmissions(daemonStatus{Running: false, UptimeSec: 0, WindowsEmitted: 0}) {
 		t.Error("expected no stale flag when the daemon is not running")
 	}
+}
+
+// flowStatusLine is the flow line `beatsd status` prints, through the
+// same two steps runStatus and printStatusHuman take.
+func flowStatusLine(ctx context.Context, c *client.Client) string {
+	return renderFlowLine(collectFlowStatus(ctx, c))
+}
+
+// probedDaemon is the daemon half of the report runStatus builds for
+// a daemon that is running.
+func probedDaemon(port int) daemonStatus {
+	d := daemonStatus{Running: true}
+	d.UptimeSec, d.WindowsEmitted, d.WindowsDropped = probeOwnDaemonHealth(port)
+	return d
 }
