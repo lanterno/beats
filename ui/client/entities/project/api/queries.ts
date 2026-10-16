@@ -7,6 +7,7 @@ import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/
 import type { ContractWeek, Ledger, ProjectWithDuration } from "../model";
 import { toProject } from "../model";
 import {
+	type AdjustmentInput,
 	archiveProject,
 	createProject,
 	fetchContractWeek,
@@ -14,6 +15,8 @@ import {
 	fetchLedger,
 	fetchProjectHolidays,
 	fetchProjects,
+	recordAdjustment,
+	removeAdjustment,
 	unarchiveProject,
 	updateContract,
 	updateGoalOverrides,
@@ -239,6 +242,43 @@ export function useUpdateContract() {
 			await queryClient.refetchQueries({ queryKey: projectKeys.list() });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 		},
+	});
+}
+
+/**
+ * A balance adjustment moves the balance from its day on, so a write
+ * invalidates what reads the balance: the weeks against the contract (the
+ * standing's figure and its proof), the ledger (the adjustment's row, every
+ * close after it) and the project list, whose `this_week` include carries
+ * the index's balance chip.
+ */
+function useInvalidateAfterAdjustmentWrite() {
+	const queryClient = useQueryClient();
+	return (projectId: string) =>
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: projectKeys.contractWeeks(projectId) }),
+			queryClient.invalidateQueries({ queryKey: projectKeys.ledger(projectId) }),
+			queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
+		]);
+}
+
+/** Record a balance adjustment; one already on its date is replaced. */
+export function useRecordAdjustment() {
+	const invalidate = useInvalidateAfterAdjustmentWrite();
+	return useMutation({
+		mutationFn: ({ projectId, input }: { projectId: string; input: AdjustmentInput }) =>
+			recordAdjustment(projectId, input),
+		onSuccess: (_data, { projectId }) => invalidate(projectId),
+	});
+}
+
+/** Remove a balance adjustment by id. */
+export function useRemoveAdjustment() {
+	const invalidate = useInvalidateAfterAdjustmentWrite();
+	return useMutation({
+		mutationFn: ({ projectId, adjustmentId }: { projectId: string; adjustmentId: string }) =>
+			removeAdjustment(projectId, adjustmentId),
+		onSuccess: (_data, { projectId }) => invalidate(projectId),
 	});
 }
 

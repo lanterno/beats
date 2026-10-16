@@ -2,19 +2,23 @@
  * WeekLedger — "Earlier weeks", newest first: one line per closed week with
  * its seven day cells, the adjusted expectation (or the goal), the hours,
  * the difference and the running balance; a rule row on the date every
- * term changed, and runs of empty weeks folded into one quiet line. The
+ * term changed, a row for every balance adjustment with the hours it moved
+ * the balance by, and runs of empty weeks folded into one quiet line. The
  * rows are `ledgerRows` over `/ledger` (docs/project-page.md,
  * Decision 11): nothing here reconstructs a figure.
  *
  * The goal cell on a week the contract does not govern opens the override
  * popover; on a governed week the figure is the contract's and not offered.
+ * "Adjust balance" and an adjustment's row open the AdjustmentDialog.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
+	AdjustmentRow,
 	GoalOverride,
 	Ledger,
+	LedgerAdjustment,
 	LedgerNote,
 	LedgerNoteKind,
 	LedgerWeek,
@@ -34,6 +38,7 @@ import {
 import { describeError } from "@/shared/api";
 import { addIsoDays, cn, mondayOfIso, parseIsoDate } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
+import { AdjustmentDialog } from "./AdjustmentDialog";
 import { hoursTotal, longDate, shortDate } from "./dates";
 import { GoalOverridePopover } from "./GoalOverridePopover";
 import { CELL_TINT, LABEL, LINKISH, SUB, TINT, TONE } from "./styles";
@@ -157,6 +162,49 @@ function RulePill({ row }: { row: RuleRow }) {
 	);
 }
 
+/**
+ * An adjustment row as a pill, a button that opens it to change or remove.
+ * In the table its +/− sits in the column beside it, and rides at the pill's
+ * end only in the two-line grid, which has no such column (`inlineDelta`
+ * "narrow"); off the table it always does.
+ */
+function AdjustmentPill({
+	row,
+	onOpen,
+	inlineDelta,
+}: {
+	row: AdjustmentRow;
+	onOpen: () => void;
+	inlineDelta: "always" | "narrow";
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onOpen}
+			aria-label={`Change adjustment: ${row.text}${row.sub ? `, ${row.sub}` : ""}`}
+			className={cn(
+				"w-full flex items-baseline gap-2 rounded-full px-3.5 py-[9px] font-body text-[12.5px] font-bold text-left",
+				"bg-secondary text-foreground hover:bg-sidebar-accent",
+				"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+			)}
+		>
+			<span className="min-w-0">
+				{row.text}
+				{row.sub && " "}
+				{row.sub && <span className="text-muted-foreground ml-2 font-medium">{row.sub}</span>}
+			</span>
+			<span
+				className={cn(
+					"ml-auto font-mono",
+					inlineDelta === "narrow" && "hidden @max-[640px]/content:inline",
+				)}
+			>
+				<Delta delta={row.delta} />
+			</span>
+		</button>
+	);
+}
+
 function Delta({ delta }: { delta: number | null }) {
 	if (delta === null) return <span className="text-muted-foreground font-medium">—</span>;
 	const tone = balanceTone(delta);
@@ -182,6 +230,9 @@ export function WeekLedger({
 	sessionCount,
 }: WeekLedgerProps) {
 	const [popoverWeek, setPopoverWeek] = useState<string | null>(null);
+	// The dialog's subject: undefined for a new adjustment, null while closed.
+	const [adjusting, setAdjusting] = useState<LedgerAdjustment | undefined | null>(null);
+	const adjustButton = useRef<HTMLButtonElement>(null);
 	const updateGoalOverrides = useUpdateGoalOverrides();
 
 	const dayJob = project.kind === "day_job";
@@ -279,6 +330,14 @@ export function WeekLedger({
 	const totals = ledger?.totals ?? null;
 	const opening = contract?.openingBalanceHours ?? 0;
 	const allTime = hoursTotal((project.totalMinutes || 0) / 60);
+	const carried = [
+		balanceTone(opening) !== "even" ? `${formatSignedHours(opening)} brought forward` : null,
+		totals && balanceTone(totals.adjusted) !== "even"
+			? `${formatSignedHours(totals.adjusted)} adjusted`
+			: null,
+	].filter((part): part is string => part !== null);
+	const allAdjustments = ledger ? ledger.weeks.flatMap((w) => w.adjustments) : [];
+	const canAdjust = withBalance && since !== null;
 
 	return (
 		<Panel role="region" aria-label="Earlier weeks" padding="px-6 py-[22px]">
@@ -308,6 +367,16 @@ export function WeekLedger({
 							Copy as CSV
 						</button>
 					)}
+					{canAdjust && (
+						<button
+							ref={adjustButton}
+							type="button"
+							onClick={() => setAdjusting(undefined)}
+							className={cn(LINKISH, "ml-2.5 whitespace-nowrap")}
+						>
+							Adjust balance
+						</button>
+					)}
 				</div>
 			</div>
 
@@ -320,10 +389,19 @@ export function WeekLedger({
 			) : weekRows.length === 0 ? (
 				<div className="mt-3 flex flex-col gap-1.5">
 					{rows
-						.filter((r): r is RuleRow => r.type === "rule")
-						.map((row) => (
-							<RulePill key={`${row.rule}-${row.date}`} row={row} />
-						))}
+						.filter((r): r is RuleRow | AdjustmentRow => r.type !== "week" && r.type !== "quiet")
+						.map((row) =>
+							row.type === "rule" ? (
+								<RulePill key={`${row.rule}-${row.date}`} row={row} />
+							) : (
+								<AdjustmentPill
+									key={`adjustment-${row.adjustment.id}`}
+									row={row}
+									onOpen={() => setAdjusting(row.adjustment)}
+									inlineDelta="always"
+								/>
+							),
+						)}
 					<p className="px-1.5 text-[13px] text-muted-foreground">
 						{since && mondayOfIso(since) >= thisMonday
 							? "No earlier weeks — the contract started this week."
@@ -355,6 +433,28 @@ export function WeekLedger({
 										<td colSpan={columns} className={`px-0 py-1 @max-[640px]/content:block`}>
 											<RulePill row={row} />
 										</td>
+									</tr>
+								);
+							}
+							if (row.type === "adjustment") {
+								return (
+									<tr
+										key={`adjustment-${row.adjustment.id}`}
+										className={`@max-[640px]/content:block @max-[640px]/content:my-1.5`}
+									>
+										<td colSpan={4} className={`px-0 py-1 @max-[640px]/content:block`}>
+											<AdjustmentPill
+												row={row}
+												onOpen={() => setAdjusting(row.adjustment)}
+												inlineDelta="narrow"
+											/>
+										</td>
+										<td
+											className={`px-2 py-1 text-[13.5px] font-bold text-right whitespace-nowrap align-middle font-mono @max-[640px]/content:hidden`}
+										>
+											<Delta delta={row.delta} />
+										</td>
+										{withBalance && <td className={`@max-[640px]/content:hidden`} />}
 									</tr>
 								);
 							}
@@ -536,7 +636,7 @@ export function WeekLedger({
 						<b className="text-foreground font-extrabold">
 							{formatSignedHours(totals.worked - totals.expected)}
 						</b>
-						{balanceTone(opening) !== "even" && ` (${formatSignedHours(opening)} brought forward)`}
+						{carried.length > 0 && ` (${carried.join(", ")})`}
 					</span>
 				)}
 				<span>
@@ -546,6 +646,18 @@ export function WeekLedger({
 					</b>
 				</span>
 			</div>
+
+			{adjusting !== null && since !== null && (
+				<AdjustmentDialog
+					projectId={project.id}
+					since={since}
+					todayIso={todayIso}
+					adjustments={allAdjustments}
+					editing={adjusting}
+					onClose={() => setAdjusting(null)}
+					returnFocus={() => adjustButton.current}
+				/>
+			)}
 		</Panel>
 	);
 }

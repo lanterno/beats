@@ -8,6 +8,8 @@
  * - UI: presentational components
  */
 
+// Model layer
+export type { AdjustmentInput } from "./api";
 // API layer
 export {
 	projectKeys,
@@ -19,13 +21,16 @@ export {
 	useProjectHolidays,
 	useProjectLedger,
 	useProjects,
+	useRecordAdjustment,
+	useRemoveAdjustment,
 	useUnarchiveProject,
 	useUpdateContract,
 	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "./api";
-// Model layer
 export type {
+	AdjustmentKind,
+	AdjustmentRow,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -38,6 +43,7 @@ export type {
 	Holiday,
 	HolidayRegion,
 	Ledger,
+	LedgerAdjustment,
 	LedgerNote,
 	LedgerNoteKind,
 	LedgerWeek,

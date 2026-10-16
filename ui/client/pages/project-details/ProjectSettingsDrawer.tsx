@@ -54,7 +54,7 @@ interface ProjectSettingsDrawerProps {
 }
 
 const KIND_CHANGE_NOTICE =
-	"Changing the kind deletes the contract: its terms, region and opening balance are not kept.";
+	"Changing the kind deletes the contract: its terms, region, opening balance and balance adjustments are not kept.";
 
 export function ProjectSettingsDrawer({
 	project,
