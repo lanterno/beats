@@ -51,7 +51,7 @@ jobs:
   # why `origins` in api/src/server.py lists both — drop either half and the
   # site breaks in a browser while everything in CI stays green.
   #
-  # The API half of this same deployment ships separately, via cloudbuild.yaml.
+  # The API half of this same deployment ships separately, via api/cloudbuild.yaml.
   deploy:
     name: Deploy to Firebase Hosting
     needs: quality

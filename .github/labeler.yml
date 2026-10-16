@@ -21,7 +21,7 @@ wall-clock:
 infra:
   - changed-files:
       - any-glob-to-any-file:
-          ["terraform/**", "compose*.yml", "cloudbuild.yaml", "justfile", "**/Dockerfile"]
+          ["terraform/**", "**/compose*.yml", "**/cloudbuild.yaml", "justfile", "**/Dockerfile"]
 ci:
   - changed-files:
       - any-glob-to-any-file: [".github/**", "lefthook.yml", "renovate.json", ".devcontainer/**"]
