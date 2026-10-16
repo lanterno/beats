@@ -16,7 +16,6 @@ export {
 	fetchHolidayRegions,
 	fetchProjectHolidays,
 	fetchProjects,
-	fetchProjectTotal,
 	holidayRegionKeys,
 	projectKeys,
 	unarchiveProject,

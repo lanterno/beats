@@ -17,7 +17,6 @@ import {
 	get,
 	HolidayListSchema,
 	LedgerSchema,
-	ProjectTotalSchema,
 	parseApiResponse,
 	post,
 	put,
@@ -181,28 +180,4 @@ export async function updateGoalOverrides(
 ): Promise<ApiProject> {
 	const data = await put<unknown>(`/api/projects/${projectId}/goal-overrides`, overrides);
 	return parseApiResponse(ApiProjectSchema, data);
-}
-
-export async function fetchProjectTotal(projectId: string): Promise<number> {
-	try {
-		const data = await get<unknown>(`/api/projects/${projectId}/total/`);
-		const parsed = parseApiResponse(ProjectTotalSchema, data);
-
-		if (typeof parsed.total_minutes === "number") {
-			return parsed.total_minutes;
-		}
-
-		// Fallback: sum durations_per_month (legacy support)
-		if (parsed.durations_per_month) {
-			const totalHours = Object.values(parsed.durations_per_month).reduce<number>(
-				(sum, h) => sum + (h || 0),
-				0,
-			);
-			return Math.round(totalHours * 60);
-		}
-
-		return 0;
-	} catch {
-		return 0;
-	}
 }

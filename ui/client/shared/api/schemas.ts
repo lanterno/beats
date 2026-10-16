@@ -232,13 +232,6 @@ export const TimerStatusSchema = z.object({
 
 export type TimerStatus = z.infer<typeof TimerStatusSchema>;
 
-export const ProjectTotalSchema = z.object({
-	total_minutes: z.number().optional(),
-	durations_per_month: z.record(z.string(), z.number()).optional(),
-});
-
-export type ProjectTotal = z.infer<typeof ProjectTotalSchema>;
-
 export const HeatmapDaySchema = z.object({
 	date: z.string(),
 	total_minutes: z.number(),

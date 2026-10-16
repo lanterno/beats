@@ -7,7 +7,6 @@ export {
 	fetchLedger,
 	fetchProjectHolidays,
 	fetchProjects,
-	fetchProjectTotal,
 	unarchiveProject,
 	updateContract,
 } from "./projectApi";
