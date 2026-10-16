@@ -45,7 +45,8 @@ interface CompanyRow {
 	name: string;
 }
 
-type RowErrors = Partial<Record<"date" | "name", string>>;
+/** `notGiven` marks a date refused for being on the days not given, which the row offers to clear. */
+type RowErrors = Partial<Record<"date" | "name", string>> & { notGiven?: true };
 
 const FIELD =
 	"w-full min-w-0 bg-secondary border-0 rounded-xl text-foreground px-3 py-2 text-[13px] font-medium focus:outline-hidden focus:ring-[3px] focus:ring-accent";
@@ -69,7 +70,10 @@ function validate(rows: CompanyRow[], notGiven: Set<string>): Map<number, RowErr
 		} else if (seen.has(row.date)) {
 			own.date = "Another company holiday is on this day";
 		} else if (notGiven.has(row.date)) {
-			own.date = "You marked this public holiday as not given — re-tick it above instead";
+			// The mark may sit on no row this page draws (a date the region has
+			// no holiday on, or a year that failed to load), so the row clears it.
+			own.date = "This day is marked as a holiday not given";
+			own.notGiven = true;
 		}
 		if (parseIsoDate(row.date)) seen.set(row.date, row.key);
 		if (own.date || own.name) errors.set(row.key, own);
@@ -124,14 +128,17 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 		: [];
 	const shown = rows.filter((r) => r.year === year);
 
-	const setRow = (key: number, patch: Partial<CompanyRow>) => {
-		setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+	const clearErrors = (key: number) =>
 		setErrors((all) => {
 			if (!all.has(key)) return all;
 			const next = new Map(all);
 			next.delete(key);
 			return next;
 		});
+
+	const setRow = (key: number, patch: Partial<CompanyRow>) => {
+		setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+		clearErrors(key);
 	};
 
 	const toggleGiven = (date: string, given: boolean) =>
@@ -347,6 +354,20 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 										>
 											{[own.date, own.name, already].filter(Boolean).join(" · ")}
 										</p>
+									)}
+									{own.notGiven && (
+										<button
+											type="button"
+											onClick={() => {
+												toggleGiven(row.date, true);
+												clearErrors(row.key);
+											}}
+											disabled={saving}
+											aria-label={`Clear the mark on ${shortDate(row.date)}`}
+											className="mt-1 text-xs font-bold text-accent-ink underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+										>
+											Clear the mark
+										</button>
 									)}
 								</li>
 							);
