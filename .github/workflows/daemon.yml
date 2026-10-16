@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
+          # go.mod is in daemon/, not at the root setup-go looks in.
+          cache-dependency-path: daemon/go.sum
       # gofmt is enforced locally via lefthook, but a contributor
       # without the hook installed could push unformatted Go through
       # to CI otherwise. `gofmt -l` prints any unformatted file; if
@@ -70,6 +72,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
+          # go.mod is in daemon/, not at the root setup-go looks in.
+          cache-dependency-path: daemon/go.sum
       - run: go test ./... -v
 
   build:
@@ -117,6 +121,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
+          # go.mod is in daemon/, not at the root setup-go looks in.
+          cache-dependency-path: daemon/go.sum
       - run: go build -o beatsd-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./cmd/beatsd/
       - uses: actions/upload-artifact@v7
         with:
