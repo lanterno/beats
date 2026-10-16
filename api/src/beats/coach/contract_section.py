@@ -5,7 +5,9 @@ module only words them, and decides what of them leaves Beats. PRIVACY.md
 is the list, and a change to what is sent is made there first:
 
 - the week's expected hours after holidays and days off, the hours worked
-  under the contract (on its days only) and what is left;
+  under the contract (on its days only, marked so on a week the contract
+  starts or ends inside) and what is left, to the hundredth, labelled by
+  the term the goal line names;
 - the dates of this week's holidays and days off that made it shorter —
   a public holiday by its name, which can name the region (Augsburg Peace
   Festival), a company holiday only as "company holiday" (its name is the
@@ -18,9 +20,11 @@ is the list, and a change to what is sent is made there first:
 
 The balance is a sum, opening + worked − expected + adjusted, and only
 the sum is sent; on a contract's first day it is the opening balance.
-Never the region's codes, the opening balance or an adjustment as a
-figure of its own, another week's days, or a contract that ended before
-this week.
+Never a country code (though a subdivision's code can be the place name
+a holiday's name contains: Augsburg, Pesaro, South Canterbury), the
+opening balance or an adjustment as a figure of its own, another week's
+days, or a contract that ended before this week. "This week" and "today"
+are the request timezone's, which every caller passes.
 
 Two rules here are the SPA's too, and a change to either is made in both:
 `describe_balance` is `describeBalance` (ui/client/entities/project/model/
