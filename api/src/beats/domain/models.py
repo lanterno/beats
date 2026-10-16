@@ -374,8 +374,13 @@ class BalanceAdjustmentFields(BaseModel):
 
     date: date_type
     kind: AdjustmentKind
+    # Strict, so `true` is a 422 and not a 1 h payout: lax mode reads a bool
+    # (and a numeric string) as a number. An int still reads as hours.
     hours: float = Field(
-        allow_inf_nan=False, ge=-_ADJUSTMENT_HOURS_BOUND, le=_ADJUSTMENT_HOURS_BOUND
+        strict=True,
+        allow_inf_nan=False,
+        ge=-_ADJUSTMENT_HOURS_BOUND,
+        le=_ADJUSTMENT_HOURS_BOUND,
     )
     note: str | None = None
 
