@@ -781,6 +781,12 @@ class TestModelPricing:
         """A response naming a dated snapshot bills at its base rate."""
         assert pricing_for("claude-sonnet-5-20260101") is MODEL_PRICING["claude-sonnet-5"]
 
+    def test_dated_suffix_takes_the_longest_known_prefix(self):
+        """`claude-opus-5` is a prefix of `claude-opus-5-5`, and bills more:
+        a dated Opus 5.5 must not be charged as Opus 5."""
+        assert pricing_for("claude-opus-5-5-20261001") is MODEL_PRICING["claude-opus-5-5"]
+        assert pricing_for("claude-opus-5-20260101") is MODEL_PRICING["claude-opus-5"]
+
     def test_unknown_model_bills_at_the_highest_known_rate(self):
         """Fail expensive, not cheap: over-estimating stops the coach at
         the budget ceiling, under-estimating spends past it unnoticed."""

@@ -51,9 +51,12 @@ class ModelPricing:
 
 
 MODEL_PRICING: dict[str, ModelPricing] = {
+    "claude-fable-5-1": ModelPricing.standard(10.0, 50.0),
+    "claude-opus-5-5": ModelPricing.standard(4.0, 20.0),
     "claude-opus-5": ModelPricing.standard(5.0, 25.0),
     "claude-opus-4-8": ModelPricing.standard(5.0, 25.0),
     "claude-opus-4-7": ModelPricing.standard(5.0, 25.0),
+    "claude-sonnet-5-5": ModelPricing.standard(2.0, 10.0),
     "claude-sonnet-5": ModelPricing.standard(2.0, 10.0),
     "claude-sonnet-4-6": ModelPricing.standard(3.0, 15.0),
     "claude-haiku-4-5": ModelPricing.standard(1.0, 5.0),
@@ -63,17 +66,24 @@ MODEL_PRICING: dict[str, ModelPricing] = {
 # budget ceiling is the reason: over-estimating a new model stops the coach
 # early and visibly, where under-estimating would let it spend past the cap
 # with nothing to show it had happened.
-UNKNOWN_MODEL_PRICING = ModelPricing.standard(5.0, 25.0)
+UNKNOWN_MODEL_PRICING = ModelPricing.standard(
+    max(p.input for p in MODEL_PRICING.values()),
+    max(p.output for p in MODEL_PRICING.values()),
+)
 
 
 def pricing_for(model: str) -> ModelPricing:
-    """Resolve a model id to its rates, tolerating dated suffixes."""
+    """Resolve a model id to its rates, tolerating dated suffixes.
+
+    The longest known prefix wins: `claude-opus-5-5-20261001` is Opus 5.5,
+    not Opus 5, whose id is a prefix of it and which bills more.
+    """
     exact = MODEL_PRICING.get(model)
     if exact is not None:
         return exact
-    for known, pricing in MODEL_PRICING.items():
+    for known in sorted(MODEL_PRICING, key=len, reverse=True):
         if model.startswith(known):
-            return pricing
+            return MODEL_PRICING[known]
     logger.warning("No pricing for model %s; billing at the highest known rate", model)
     return UNKNOWN_MODEL_PRICING
 
