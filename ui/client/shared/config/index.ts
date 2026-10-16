@@ -43,6 +43,39 @@ function resolveApiBaseUrl(): string {
 	return import.meta.env.DEV ? "http://localhost:7999" : "";
 }
 
+/**
+ * The API's address as someone outside this page would use it, e.g. a phone
+ * scanning a pairing QR.
+ *
+ * `apiBaseUrl` is empty on the same-origin build, which only means something
+ * to `fetch` on this page; spelled out, it is the page's own origin. A
+ * configured base is returned as it is. On the split deployment that is
+ * `https://api.lifepete.com`, never the SPA's origin.
+ */
+export function publicApiBase(apiBaseUrl: string, origin: string): string {
+	return apiBaseUrl === "" ? origin : apiBaseUrl;
+}
+
+/**
+ * Whether `url` names this machine (`localhost`, a `*.localhost` name,
+ * 127.0.0.0/8 or `[::1]`), which another device cannot reach by that name.
+ * A string that is not a URL is not loopback.
+ */
+export function isLoopbackUrl(url: string): boolean {
+	let hostname: string;
+	try {
+		hostname = new URL(url).hostname.toLowerCase();
+	} catch {
+		return false;
+	}
+	return (
+		hostname === "localhost" ||
+		hostname.endsWith(".localhost") ||
+		/^127(\.\d{1,3}){3}$/.test(hostname) ||
+		hostname === "[::1]"
+	);
+}
+
 export const config: AppConfig = {
 	apiBaseUrl: resolveApiBaseUrl(),
 	isDev: import.meta.env.DEV,
