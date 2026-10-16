@@ -92,7 +92,9 @@ async def export_full_json(
     projects (contract included), the sessions, the absences and the balance
     adjustments."""
     beats = await beat_repo.list()
-    projects = await project_repo.list()
+    # Archived too: archiving is how a finished day job leaves the readers,
+    # and its final balance, settlement included, is still the user's.
+    projects = await project_repo.list(archived=False) + await project_repo.list(archived=True)
     absences = await absence_repo.list_all()
     adjustments = await adjustment_repo.list_all()
     data = {
