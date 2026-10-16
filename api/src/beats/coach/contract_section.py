@@ -176,7 +176,11 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
         # drifts (87 s on two days and an hour today sum to 1.04 h, where
         # the week counts 1.05 h with 30.95 h to go).
         worked = round_hours(week.expected - week.remaining)
-        term = term_on(contract, max(today, contract.starts_on))
+        # Labelled as the goal line labels it: by the term in force on the
+        # week's Monday (or its first day under the contract), since a term
+        # changing mid-week governs from the next Monday. Today's term would
+        # send a second percentage the goal line does not show.
+        term = term_on(contract, max(week.week_of, contract.starts_on))
         label = fmt_contract_goal(term) if term is not None else "contract"
         lines.append(
             f"  {name} ({label}): this week expects {_hundredths(week.expected)} h after"
