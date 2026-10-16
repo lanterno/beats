@@ -245,7 +245,10 @@ screen as the week, and "You need 32.0h more" beside a ring against
 adjusted expectation through `WeekExpectationReader`
 (`ContractService.expected_for_week`, mapped in `intelligence/goals.py`).
 A governed line reads "You need 25.6h more this week under your
-contract" — a contract is not "hit".
+contract" — a contract is not "hit". The coach gets both: the nominal
+goal in its cached profile, and beside today, in the day context, the
+adjusted week, what is left of it, the balance and its by-Sunday
+projection (`coach/contract_section.py`).
 
 ---
 
@@ -396,13 +399,22 @@ write, beside the region check.
   behind "Set up the contract now", so renaming does not demand one.
 - **Balance wording.** `describeBalance` rounds to the decimal shown
   before judging the sign — −0.04 h reads "even" — and never prints a
-  bare signed number: "+4.5 h over", "−2.0 h owed".
+  bare signed number: "+4.5 h over", "−2.0 h owed". The API's twin, for
+  the coach, is `describe_balance` in `coach/contract_section.py`; a
+  change to either is made in both.
 
 **What leaves Beats.** The coach sends a day job's goal as one line
-(`Acme: 33.6h/week (contract, 80%)`), not absences, the region, the
-company holidays or the balance. `/api/export` carries the contract but
-not absences. `PRIVACY.md` and `DATA.md` state this; a change happens
-there first.
+(`Acme: 33.6h/week (contract, 80%)`), and on a day job with a contract
+the current week against it: what it expects after holidays and days
+off, what was worked under it and what is left, today's expected hours,
+the running balance and its by-Sunday projection, and the dates of this
+week's holidays and days off that shortened it. A public holiday goes by
+its name; a company holiday only as "company holiday", never the name
+the user typed; a day off only as "day off" or "half day off", never its
+type or note. The region's codes, the opening balance, other weeks'
+holidays and absences, and a contract that ended before the current week
+are not sent. `/api/export` carries the contract but not absences.
+`PRIVACY.md` states this; a change happens there first.
 
 ---
 
@@ -410,7 +422,7 @@ there first.
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
 contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, vacation
-entitlement, the ledger's write side, the coach seeing the balance, the
-companion's week card, and whether `hours_per_day` should be configurable
-for a 4-day full-time week. The balance ledger's read side was built by
+entitlement, the ledger's write side, the companion's week card, and
+whether `hours_per_day` should be configurable for a 4-day full-time
+week. The balance ledger's read side was built by
 [project-page.md](project-page.md).
