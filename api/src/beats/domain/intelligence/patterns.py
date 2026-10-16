@@ -218,7 +218,8 @@ def detect_goal_pacing(
 
     `goals` is what each project's week asks for (`week_goals`): on a day job
     the contract governs, the week's expectation after holidays and absences,
-    so the hours "to go" are the week card's. Left out, the nominal goals.
+    counted against the hours of the days the balance counts, so the hours
+    "to go" are the week card's Remaining. Left out, the nominal goals.
     """
     monday = _monday_of(today)
     days_left = 7 - (today - monday).days
@@ -227,10 +228,12 @@ def detect_goal_pacing(
     if goals is None:
         goals = nominal_week_goals(projects, monday)
 
-    week_beats = [b for b in beats if local_date(b.start, tz) >= monday]
     project_hours: dict[str, float] = defaultdict(float)
-    for b in week_beats:
-        project_hours[b.project_id] += b.duration.total_seconds() / 3600
+    for b in beats:
+        day = local_date(b.start, tz)
+        week_goal = goals.get(b.project_id)
+        if day >= monday and (week_goal is None or week_goal.counts(day)):
+            project_hours[b.project_id] += b.duration.total_seconds() / 3600
 
     results = []
     for p in projects:
