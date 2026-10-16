@@ -3878,6 +3878,49 @@ class TestIntelligenceAPI:
         assert resp.status_code == 200
         assert resp.json() == []
 
+    def test_focus_scores_for_a_week_cover_monday_to_sunday(self, client, auth_headers):
+        project = _create_project(client, auth_headers)
+
+        def log(start: str) -> str:
+            begun = datetime.fromisoformat(start)
+            resp = client.post(
+                "/api/beats/",
+                json={
+                    "project_id": project["id"],
+                    "start": begun.isoformat(),
+                    "end": (begun + timedelta(minutes=45)).isoformat(),
+                },
+                headers=auth_headers,
+            )
+            assert resp.status_code == 201, resp.text
+            return resp.json()["id"]
+
+        monday = log("2026-09-07T09:00:00+00:00")
+        thursday = log("2026-09-10T14:00:00+00:00")
+        log("2026-09-14T09:00:00+00:00")  # the next Monday
+
+        resp = client.get(
+            "/api/intelligence/focus-scores",
+            params={"week_of": "2026-09-07", "tz": "UTC"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert [r["beat_id"] for r in resp.json()] == [monday, thursday]
+
+    @pytest.mark.parametrize("week_of", ["2026-09-08", "2026-13-01"])
+    def test_focus_scores_week_of_must_be_a_monday(self, client, auth_headers, week_of):
+        """A Tuesday, or no date at all, is a 422 naming `week_of`, the same
+        rule /contract/week keeps."""
+        resp = client.get(
+            "/api/intelligence/focus-scores",
+            params={"week_of": week_of},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["week_of"]
+
     def test_project_health_returns_list_for_empty_user(self, client, auth_headers):
         """GET /project-health with no projects → []. Pin the empty
         contract for first-run users."""
