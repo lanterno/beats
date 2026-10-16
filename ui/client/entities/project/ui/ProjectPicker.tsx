@@ -264,6 +264,7 @@ export function ProjectPicker({
 					<ul
 						ref={listRef}
 						id={listboxId}
+						// biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the WAI-ARIA combobox pattern's popup is a listbox, and a <ul> of options is its usual markup.
 						role="listbox"
 						aria-label={ariaLabel}
 						className="max-h-64 overflow-y-auto py-1"
@@ -280,6 +281,7 @@ export function ProjectPicker({
 									<li
 										key={p.id}
 										id={optionId(p.id)}
+										// biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: each <li> is one of the listbox's options.
 										role="option"
 										aria-selected={isSelected}
 										onClick={() => handleSelect(p.id)}

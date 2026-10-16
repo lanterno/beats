@@ -61,8 +61,8 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
   middleware and a browser tab carries no bearer token, so it is not reachable
   from the SPA — read `shared/api/openapi.json` instead.
 - **Linting**: Biome (replaces ESLint+Prettier) — tabs, line width 100. Covers
-  `client/`, `e2e/` and the root config files; accessibility rules are on, with
-  seven at `warn` pending per-component decisions (see `biome.json`).
+  `client/`, `e2e/` and the root config files; accessibility rules fail the
+  check, all but `noAutofocus` (dialogs focus their first field on purpose).
 - **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives (see
   Theme below)
 - **PWA**: vite-plugin-pwa with workbox runtime caching
