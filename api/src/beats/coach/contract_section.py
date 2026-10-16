@@ -175,7 +175,9 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
         # Worked under the contract — on the days it covers, what "to go"
         # and the balance count — read back off the week's own figures, so
         # worked and to go add up to the expectation; all three are printed
-        # to the hundredth, so they add up as printed too. Not summed from
+        # to the hundredth, so they add up as printed too, and on a week the
+        # contract covers whole this is the wire's `worked` to the decimal
+        # (`remaining` is taken off the rounded hours). Not summed from
         # the days: each is already rounded to the hundredth, and the sum
         # drifts (87 s on two days and an hour today sum to 1.04 h, where
         # the week counts 1.05 h with 30.95 h to go).

@@ -771,7 +771,13 @@ class ContractService:
         # The same function every other reader of the figure goes through,
         # so the card, the history row and the planning line cannot drift.
         expected = week_expectation(contract, absences, holiday_days, week_of)
-        remaining = round_hours(expected_raw - counted_raw) if expected is not None else None
+        # What is left of the two wire figures, not of the raw sums: rounded
+        # each on its own, 8.545 h worked of 40 h read 8.54 worked and 31.45
+        # remaining, which do not add up and disagree with each other at the
+        # tenth the page shows (8.5 against 31.4, where the coach, deriving
+        # worked from the other two, read 8.55).
+        counted = round_hours(counted_raw)
+        remaining = round_hours(expected - counted) if expected is not None else None
         running = (
             balance_terms(contract, absences, holiday_days, worked, adjustments, today)
             if owes(term_on(contract, today))
