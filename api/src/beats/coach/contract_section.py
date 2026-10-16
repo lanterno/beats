@@ -5,9 +5,11 @@ module only words them, and decides what of them leaves Beats. PRIVACY.md
 is the list, and a change to what is sent is made there first:
 
 - the week's expected hours after holidays and days off, the hours worked
-  under the contract (on its days only, marked so on a week the contract
-  starts or ends inside) and what is left, to the hundredth, labelled by
-  the term the goal line names;
+  and what is left, labelled by the term the goal line names — the
+  page's Expected, Worked and Remaining, each the API's own figure at the
+  tenth the page shows, so they need not add up as printed; on a week the
+  contract starts or ends inside, a note that it counts only its own days
+  (what is left does, the page's Worked does not);
 - the dates of this week's holidays and days off that made it shorter —
   a public holiday by its name, which can name the region (Augsburg Peace
   Festival), a company holiday only as "company holiday" (its name is the
@@ -27,9 +29,10 @@ another week's days, or a contract that ended before this week. "This
 week" and "today" are the request timezone's, which every caller passes,
 and so is the goal line's week in the user context.
 
-Two rules here are the SPA's too, and a change to either is made in both:
+Three rules here are the SPA's too, and a change to any is made in both:
 `describe_balance` is `describeBalance` (ui/client/entities/project/model/
-contract.ts), and `_by_sunday` is `projection()` (…/model/standing.ts).
+contract.ts), `_by_sunday` is `projection()` (…/model/standing.ts), and
+`_hours` is `hours1` (…/model/weekDates.ts).
 """
 
 from collections.abc import Iterable, Mapping
@@ -48,7 +51,7 @@ _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def _one_decimal(hours: float) -> Decimal:
-    """`Number(hours.toFixed(1))`, as the SPA rounds a figure it shows.
+    """`hours.toFixed(1)`, as the SPA rounds a figure it shows.
 
     `toFixed` rounds the float's exact binary value, ties away from zero;
     `Decimal(hours)` is that exact value, so 0.25 h reads 0.3 on both sides
@@ -59,18 +62,11 @@ def _one_decimal(hours: float) -> Decimal:
 
 
 def _hours(hours: float) -> str:
+    """ "8.5 h": a figure as the page prints it (`hours1`), from the API's own
+    figure for it. Never re-derived from two other figures: each is rounded
+    on its own, so 8.545 h worked of 40 reads 8.5 worked and 31.4 to go on
+    the page, and the coach says the same, not a 31.5 that would add up."""
     return f"{_one_decimal(hours)} h"
-
-
-def _hundredths(hours: float) -> str:
-    """A week figure as the wire carries it, to the hundredth — "40.0",
-    "23.75", "6.4" — so the week's line adds up as printed: rounding
-    23.75 h worked and 16.25 h to go to the tenth each would read 23.8
-    and 16.3 against 40.0. The page's tenth is this figure rounded.
-    """
-    exact = Decimal(repr(round_hours(hours))).quantize(Decimal("0.01")) + 0  # −0.00 → 0.00
-    text = f"{exact:.2f}"
-    return text[:-1] if text.endswith("0") else text
 
 
 def describe_balance(hours: float) -> str:
@@ -87,25 +83,27 @@ def describe_balance(hours: float) -> str:
 
 
 def _left(remaining: float) -> str:
-    """What is left of the week: "6.4 h to go", "week met", "week done, 0.45 h
-    over" — judged at the tenth, as the SPA's `doneSentence` is, and given to
-    the hundredth, as the week's other figures are."""
+    """What is left of the week: "6.4 h to go", "week met", "week done, 0.4 h
+    over" — judged and given at the tenth, as the page's Remaining and its
+    `doneSentence` are."""
     rounded = _one_decimal(remaining)
     if rounded > 0:
-        return f"{_hundredths(remaining)} h to go"
+        return f"{_hours(remaining)} to go"
     if rounded == 0:
         return "week met"
-    return f"week done, {_hundredths(-remaining)} h over"
+    return f"week done, {_hours(-remaining)} over"
 
 
 def _its_days_only(contract: Contract, week: ContractWeek) -> str:
-    """A note that the worked figure leaves days out, on a week the contract
-    starts or ends inside: the project page's Worked counts the whole week,
-    so the coach's smaller figure is not a contradiction."""
+    """A note on a week the contract starts or ends inside: what is left
+    counts only the contract's days, while worked, the page's Worked, is the
+    whole week's, so worked and to go are not meant to make the expectation."""
     sunday = week.week_of + timedelta(days=6)
     starts_inside = contract.starts_on > week.week_of
     ends_inside = contract.ended_on is not None and contract.ended_on < sunday
-    return " (its days this week only)" if starts_inside or ends_inside else ""
+    return (
+        " (the contract counts only its own days this week)" if starts_inside or ends_inside else ""
+    )
 
 
 def _by_sunday(week: ContractWeek, today: date) -> tuple[float, float] | None:
@@ -173,26 +171,19 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
     # `expected` and `remaining` are None together (ContractWeek); both are
     # named so the type checker knows it.
     if week.expected is not None and week.remaining is not None:
-        # Worked under the contract — on the days it covers, what "to go"
-        # and the balance count — read back off the week's own figures, so
-        # worked and to go add up to the expectation; all three are printed
-        # to the hundredth, so they add up as printed too, and on a week the
-        # contract covers whole this is the wire's `worked` to the decimal
-        # (`remaining` is taken off the rounded hours). Not summed from
-        # the days: each is already rounded to the hundredth, and the sum
-        # drifts (87 s on two days and an hour today sum to 1.04 h, where
-        # the week counts 1.05 h with 30.95 h to go).
-        worked = round_hours(week.expected - week.remaining)
-        # Labelled as the goal line labels it: by the term in force on the
-        # week's Monday (or its first day under the contract), since a term
-        # changing mid-week governs from the next Monday. Today's term would
-        # send a second percentage the goal line does not show.
+        # The page's three figures, each the API's own and printed as the
+        # page prints it; worked is the page's Worked, never read back off
+        # the other two (`_hours`). Labelled as the goal line labels it: by
+        # the term in force on the week's Monday (or its first day under the
+        # contract), since a term changing mid-week governs from the next
+        # Monday. Today's term would send a second percentage the goal line
+        # does not show.
         term = term_on(contract, max(week.week_of, contract.starts_on))
         label = fmt_contract_goal(term) if term is not None else "contract"
         lines.append(
-            f"  {name} ({label}): this week expects {_hundredths(week.expected)} h after"
-            f" holidays and days off — {_hundredths(worked)} h worked under the"
-            f" contract{_its_days_only(contract, week)}, {_left(week.remaining)}"
+            f"  {name} ({label}): this week expects {_hours(week.expected)} after"
+            f" holidays and days off — {_hours(week.worked)} worked,"
+            f" {_left(week.remaining)}{_its_days_only(contract, week)}"
         )
         # Which of this week's days off came from the employer's own list:
         # their names are the user's words, so only the fact is sent.
