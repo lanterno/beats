@@ -42,7 +42,7 @@ function hoursLabel(hours: number): string {
  * Off a day job the goal is the one in force this week, as the Goal panel
  * reads it: a permanent override, else the project's own.
  */
-export function kindChip(
+function kindChip(
 	project: Pick<
 		ProjectWithDuration,
 		"kind" | "contract" | "weeklyGoal" | "goalType" | "goalOverrides"

@@ -19,7 +19,7 @@ export interface IntegrationStatus {
 	[field: string]: unknown;
 }
 
-export const integrationKeys = {
+const integrationKeys = {
 	all: ["integration"] as const,
 	status: (name: string) => ["integration", name, "status"] as const,
 };

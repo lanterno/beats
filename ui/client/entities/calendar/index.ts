@@ -1,5 +1,4 @@
 export {
-	calendarKeys,
 	fetchCalendarAuthUrl,
 	useCalendarStatus,
 	useConnectCalendar,

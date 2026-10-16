@@ -25,8 +25,5 @@ export {
 // Low-level API functions
 export {
 	type DriftEvent,
-	deleteBeat,
 	fetchBeats,
-	fetchRecentDrift,
-	updateBeat,
 } from "./sessionApi";

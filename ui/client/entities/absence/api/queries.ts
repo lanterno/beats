@@ -12,7 +12,7 @@ import {
 	recordAbsence,
 } from "./absenceApi";
 
-export const absenceKeys = {
+const absenceKeys = {
 	all: ["absences"] as const,
 	project: (projectId: string) => [...absenceKeys.all, projectId] as const,
 	range: (projectId: string, range: AbsenceRange) =>

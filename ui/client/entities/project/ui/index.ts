@@ -1,8 +1,6 @@
-export {
-	AdvancedFields,
-	type AdvancedFieldsProps,
-	type AdvancedFieldsValues,
-	isValidGithubRepo,
+export type {
+	AdvancedFieldsProps,
+	AdvancedFieldsValues,
 } from "./AdvancedFields";
 export { BalanceChip } from "./BalanceChip";
 export { ContractTermFields, type ContractTermFieldsProps } from "./ContractTermFields";
@@ -17,6 +15,5 @@ export {
 export { ProjectPicker, type ProjectPickerProps } from "./ProjectPicker";
 export {
 	type ProjectFormErrors,
-	projectFormFieldErrors,
 	projectWriteFromForm,
 } from "./projectFormWire";

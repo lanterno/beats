@@ -36,7 +36,7 @@ export const projectKeys = {
 };
 
 /** The holiday-region list changes only with a release of the API's calendar library. */
-export const holidayRegionKeys = {
+const holidayRegionKeys = {
 	all: ["meta", "holiday-regions"] as const,
 };
 

@@ -25,7 +25,7 @@ export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
 export const ProjectKindSchema = z.enum(["day_job", "freelance", "side_project"]);
 export type ApiProjectKind = z.infer<typeof ProjectKindSchema>;
 
-export const ScheduleTypeSchema = z.enum(["full_time", "part_time", "custom", "objective"]);
+const ScheduleTypeSchema = z.enum(["full_time", "part_time", "custom", "objective"]);
 
 export const ContractTermSchema = z.object({
 	effective_from: z.string(), // YYYY-MM-DD
@@ -48,7 +48,7 @@ export const ContractSchema = z.object({
 
 export type ApiContract = z.infer<typeof ContractSchema>;
 
-export const AbsenceTypeSchema = z.enum(["vacation", "sick", "other"]);
+const AbsenceTypeSchema = z.enum(["vacation", "sick", "other"]);
 
 export const ApiAbsenceSchema = z.object({
 	id: z.string(),
@@ -68,7 +68,7 @@ export const ApiAbsenceListSchema = z.array(ApiAbsenceSchema);
 // contract owed nothing by circumstance. `balance` is as of today whatever
 // week is asked for.
 
-export const DayAbsenceSchema = z.object({
+const DayAbsenceSchema = z.object({
 	type: AbsenceTypeSchema,
 	half_day: z.boolean(),
 	note: z.string().nullable().optional(),
@@ -106,7 +106,7 @@ export type ApiContractWeek = z.infer<typeof ContractWeekSchema>;
 // API's `Ledger`, `LedgerWeek`, `LedgerNote` and `LedgerTotals` models; what
 // each figure means and when it is null is documented on the domain type.
 
-export const LedgerNoteKindSchema = z.enum(["vacation", "sick", "other", "holiday"]);
+const LedgerNoteKindSchema = z.enum(["vacation", "sick", "other", "holiday"]);
 
 export const LedgerNoteSchema = z.object({
 	date: z.string(), // YYYY-MM-DD, a weekday
@@ -131,7 +131,7 @@ export const LedgerWeekSchema = z.object({
 
 export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
 
-export const LedgerTotalsSchema = z.object({
+const LedgerTotalsSchema = z.object({
 	expected: z.number(),
 	worked: z.number(),
 	balance: z.number(),
@@ -147,19 +147,19 @@ export const LedgerSchema = z.object({
 
 export type ApiLedger = z.infer<typeof LedgerSchema>;
 
-export const HolidaySchema = z.object({
+const HolidaySchema = z.object({
 	date: z.string(), // YYYY-MM-DD
 	name: z.string(),
 });
 
 export const HolidayListSchema = z.array(HolidaySchema);
 
-export const SubdivisionSchema = z.object({
+const SubdivisionSchema = z.object({
 	code: z.string(),
 	name: z.string(),
 });
 
-export const RegionSchema = z.object({
+const RegionSchema = z.object({
 	code: z.string(), // ISO 3166-1 alpha-2
 	name: z.string(),
 	subdivisions: z.array(SubdivisionSchema),
@@ -281,7 +281,7 @@ export const FlowWindowListSchema = z.array(FlowWindowSchema);
 
 /** One bucket inside FlowWindowSummary — the highest-count entry on
  * its grouping axis (top_repo / top_language / top_bundle). */
-export const FlowTopBucketSchema = z.object({
+const FlowTopBucketSchema = z.object({
 	key: z.string(),
 	avg: z.number(),
 	count: z.number(),
@@ -322,7 +322,7 @@ export type ScoreHistoryItem = z.infer<typeof ScoreHistoryItemSchema>;
 
 export const ScoreHistorySchema = z.array(ScoreHistoryItemSchema);
 
-export const ProjectBreakdownEntrySchema = z.object({
+const ProjectBreakdownEntrySchema = z.object({
 	project_id: z.string(),
 	name: z.string(),
 	hours: z.number(),
@@ -353,7 +353,7 @@ export type WeeklyDigest = z.infer<typeof WeeklyDigestSchema>;
 
 export const WeeklyDigestListSchema = z.array(WeeklyDigestSchema);
 
-export const InsightCardSchema = z.object({
+const InsightCardSchema = z.object({
 	id: z.string(),
 	type: z.string(),
 	title: z.string(),

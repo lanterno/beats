@@ -1,19 +1,7 @@
 // Low-level API functions
-export {
-	archiveProject,
-	createProject,
-	fetchContractWeek,
-	fetchHolidayRegions,
-	fetchLedger,
-	fetchProjectHolidays,
-	fetchProjects,
-	unarchiveProject,
-	updateContract,
-} from "./projectApi";
 
 // TanStack Query hooks
 export {
-	holidayRegionKeys,
 	projectKeys,
 	useArchivedProjects,
 	useArchiveProject,

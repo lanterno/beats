@@ -20,18 +20,12 @@ export {
 	completeSso,
 	deleteCredential,
 	getCurrentUser,
-	getLoginOptions,
 	getSsoProviders,
 	listCredentials,
 	logout,
-	refreshToken,
-	registerStart,
 	startSsoLink,
-	startSsoSignIn,
 	takeSsoState,
 	unlinkSsoIdentity,
-	verifyLogin,
-	verifyRegistration,
 } from "./api/authApi";
 // Components
 export { default as AuthModal } from "./components/AuthModal";
@@ -42,7 +36,6 @@ export {
 	getAuthUserKey,
 	getSessionToken,
 	initializeAuth,
-	isAuthenticated,
 	setSessionToken,
 	setUser,
 	subscribeToAuth,

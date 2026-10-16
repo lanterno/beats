@@ -37,7 +37,6 @@ export {
 	type FlowSummary,
 	flowBaseline,
 	type HourlyFlow,
-	localDateKey,
 	type RepoStat,
 	shortRepoPath,
 	summarizeFlow,
@@ -49,17 +48,13 @@ export {
 	formatDuration,
 	formatSecondsToTime,
 	isValidTimeRange,
-	parseTimedeltaToMinutes,
 } from "./format";
 // Fuzzy matching (command palette)
 export { fuzzyRank } from "./fuzzyMatch";
 // Offline mutation queue
-export {
-	drainPending,
-	enqueueMutation,
-	type HttpMethod,
-	newClientId,
-	type PendingMutation,
+export type {
+	HttpMethod,
+	PendingMutation,
 } from "./mutationQueue";
 // Hooks
 export { type CommandContext, useCommandActions } from "./useCommandActions";

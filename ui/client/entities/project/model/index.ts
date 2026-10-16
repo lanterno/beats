@@ -9,7 +9,6 @@ export {
 	describeTerm,
 	displayTermOn,
 	formatSignedHours,
-	fromPercent,
 	isTimeBased,
 	isTimeBasedOn,
 	SCHEDULE_TYPE_LABELS,
@@ -48,17 +47,16 @@ export {
 	weekDelta,
 } from "./ledger";
 // Mappers
-export { toApiContract, toContract, toContractWeek, toLedger, toProject } from "./mappers";
+export { toApiContract, toContractWeek, toLedger, toProject } from "./mappers";
 // Picker recents (user-scoped localStorage)
-export { clearPickerRecents, readPickerRecents, recordPickerRecent } from "./pickerRecents";
+export { readPickerRecents, recordPickerRecent } from "./pickerRecents";
 // Project pins (user-scoped localStorage + custom-event sync)
-export { clearPins, isPinned, readPins, togglePin, usePinnedProjects } from "./pins";
+export { usePinnedProjects } from "./pins";
 // Selectors
 export {
 	extractCategories,
 	type FilterAndRankOptions,
 	filterAndRankProjects,
-	isVisibleProject,
 	partitionByArchived,
 	type SearchField,
 	sortProjectsForList,

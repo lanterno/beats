@@ -8,7 +8,7 @@ import {
 	fetchProjectGitActivity,
 } from "./githubApi";
 
-export const githubKeys = {
+const githubKeys = {
 	all: ["github"] as const,
 	status: () => [...githubKeys.all, "status"] as const,
 	gitActivity: (projectId: string, start: string, end: string) =>

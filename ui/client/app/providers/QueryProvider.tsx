@@ -31,9 +31,7 @@ interface QueryProviderProps {
 export function QueryProvider({ children }: QueryProviderProps) {
 	return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
-
 /**
  * Export the query client for use in components that need direct access
  * (e.g., for cache invalidation after mutations)
  */
-export { queryClient };

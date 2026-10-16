@@ -1,11 +1,7 @@
 // Low-level API functions
-export {
-	fetchProductivityScore,
-	generateDigest,
-} from "./intelligenceApi";
+
 // TanStack Query hooks
 export {
-	intelligenceKeys,
 	useDigests,
 	useDismissInboxItem,
 	useDismissPattern,

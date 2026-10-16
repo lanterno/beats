@@ -3,7 +3,6 @@
  * Structured weekly time budgets (numeric planned hours per project).
  */
 export {
-	planningKeys,
 	useProjectPlannedByWeek,
 	useUpsertWeeklyPlan,
 	useWeeklyPlan,
