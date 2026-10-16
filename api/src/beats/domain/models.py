@@ -402,8 +402,9 @@ class Contract(BaseModel):
 
 
 class AbsenceType(StrEnum):
-    """Why a day was not worked. For the record and the calendar's colour only —
-    the arithmetic treats all three the same."""
+    """Why a day was not worked. The expectation treats all three the same: a
+    day off is a day off. Only the vacation count reads the type, and counts
+    `vacation` alone against the entitlement (`domain/vacation.py`)."""
 
     VACATION = "vacation"
     SICK = "sick"
@@ -622,6 +623,26 @@ class Ledger(BaseModel):
     # `ended_on`, while `ended_on` is still to come, and when no balance is
     # kept on that day (`week_expectation`'s null rule for the term then).
     ended_balance: float | None
+
+
+class VacationYear(BaseModel):
+    """`GET /{id}/vacation`: one calendar year of a day job's vacation
+    entitlement, in days, every figure a whole or half day. See
+    `domain/vacation.py` for how each is worked out. Only what the client
+    cannot derive: the days per year, the opening and the end date are on
+    the contract it already holds."""
+
+    year: int
+    # The year's share of `days_per_year`, pro-rated only in the year of
+    # `ended_on`; None in the opening year, whose figure is the opening's.
+    accrued: float | None
+    # What the year before left, after the carry-over rule; a deficit carries
+    # whole. 0 in the opening year, whose opening already includes it.
+    carried_in: float
+    available: float  # (the opening, or accrued) + carried_in
+    # The vacation days in the year that cost a day, past and planned.
+    booked: float
+    remaining: float  # available - booked; negative when overdrawn
 
 
 class Beat(TzNormalizedModel):
