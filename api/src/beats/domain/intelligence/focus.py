@@ -10,6 +10,9 @@ from beats.domain.utils import local_date, local_dt
 
 from ._support import UTC_TZ, _beats_covering
 
+# A session's peak hours come from the local days up to and including it.
+PEAK_WINDOW_DAYS = 30
+
 
 async def compute_focus_scores(
     beat_repo: RangeBeatReader, start: date, end: date, tz: ZoneInfo = UTC_TZ
@@ -27,7 +30,7 @@ async def compute_focus_scores(
     then by start.
     """
     window = sorted(
-        await _beats_covering(beat_repo, start - timedelta(days=30), end),
+        await _beats_covering(beat_repo, start - timedelta(days=PEAK_WINDOW_DAYS), end),
         key=lambda b: b.start,
     )
     dated = [(local_date(b.start, tz), b) for b in window]
@@ -38,7 +41,7 @@ async def compute_focus_scores(
 
     results = []
     for d in sorted(by_day):
-        since = d - timedelta(days=30)
+        since = d - timedelta(days=PEAK_WINDOW_DAYS)
         peak_block = find_peak_block([b for bd, b in dated if since <= bd <= d], tz)
         day_beats = by_day[d]
         for i, b in enumerate(day_beats):
