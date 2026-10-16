@@ -101,7 +101,11 @@ export function sortTerms(terms: ContractTerm[]): ContractTerm[] {
 	return [...terms].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
 }
 
-/** A percentage stored as a fraction (0.8), shown as a percent (80). */
+/**
+ * A percentage stored as a fraction (0.8), shown as a percent (80). The
+ * coach's twin is `fmt_percent` in api/src/beats/coach/repos.py, which names
+ * a part-time term as the page does; a change to either is made in both.
+ */
 export function toPercent(fraction: number): number {
 	return Math.round(fraction * 10000) / 100;
 }
