@@ -4065,6 +4065,17 @@ class TestIntelligenceAPI:
         # days back), so week_of is in the past
         assert body["week_of"] < datetime.now(UTC).date().isoformat()
 
+    def test_generate_digest_refuses_a_week_of_that_is_not_a_monday(self, client, auth_headers):
+        """Digests are keyed by their Monday: one generated for a Tuesday was
+        stored under a week no reader asks for."""
+        resp = client.post(
+            "/api/intelligence/digests/generate?week_of=2026-09-08",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["fields"][0]["path"] == "week_of"
+        assert client.get("/api/intelligence/digests", headers=auth_headers).json() == []
+
     def test_suggestions_returns_list_for_empty_user(self, client, auth_headers):
         """GET /suggestions on a user with no projects → []. Pin so
         a fresh account doesn't 500 on the dashboard's Daily Plan

@@ -6327,7 +6327,7 @@
     },
     "/api/intelligence/digests/generate": {
       "post": {
-        "description": "Generate (or regenerate) a weekly digest. Defaults to last completed week.",
+        "description": "Generate (or regenerate) a weekly digest. Defaults to last completed week.\n\nDigests are keyed by their Monday, so any other day is a 422: one generated\nfor a Tuesday would be stored under a week no reader asks for.",
         "operationId": "generate_digest_api_intelligence_digests_generate_post",
         "parameters": [
           {

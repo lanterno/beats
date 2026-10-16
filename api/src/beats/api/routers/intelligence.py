@@ -80,9 +80,13 @@ async def generate_digest(
     service: IntelligenceServiceDep,
     digest_repo: WeeklyDigestRepoDep,
     tz: TimezoneDep,
-    week_of: Annotated[date | None, Query()] = None,
+    week_of: Annotated[MondayDate, Query()] = None,
 ) -> WeeklyDigestResponse:
-    """Generate (or regenerate) a weekly digest. Defaults to last completed week."""
+    """Generate (or regenerate) a weekly digest. Defaults to last completed week.
+
+    Digests are keyed by their Monday, so any other day is a 422: one generated
+    for a Tuesday would be stored under a week no reader asks for.
+    """
     if week_of is None:
         today = datetime.now(tz).date()
         # Last completed week's Monday

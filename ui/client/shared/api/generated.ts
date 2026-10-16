@@ -1194,6 +1194,9 @@ export interface paths {
         /**
          * Generate Digest
          * @description Generate (or regenerate) a weekly digest. Defaults to last completed week.
+         *
+         *     Digests are keyed by their Monday, so any other day is a 422: one generated
+         *     for a Tuesday would be stored under a week no reader asks for.
          */
         post: operations["generate_digest_api_intelligence_digests_generate_post"];
         delete?: never;
