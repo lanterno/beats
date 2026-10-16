@@ -21,10 +21,11 @@ is the list, and a change to what is sent is made there first:
 The balance is a sum, opening + worked − expected + adjusted, and only
 the sum is sent; on a contract's first day it is the opening balance.
 Never a country code (though a subdivision's code can be the place name
-a holiday's name contains: Augsburg, Pesaro, South Canterbury), the
-opening balance or an adjustment as a figure of its own, another week's
-days, or a contract that ended before this week. "This week" and "today"
-are the request timezone's, which every caller passes.
+a holiday's name contains: Augsburg, Pesaro, Andria, South Canterbury,
+Yap), the opening balance or an adjustment as a figure of its own,
+another week's days, or a contract that ended before this week. "This
+week" and "today" are the request timezone's, which every caller passes,
+and so is the goal line's week in the user context.
 
 Two rules here are the SPA's too, and a change to either is made in both:
 `describe_balance` is `describeBalance` (ui/client/entities/project/model/
