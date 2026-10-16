@@ -96,7 +96,7 @@ client/
 │   └── sidebar/                Desktop Sidebar + Mobile drawer header
 │
 ├── features/
-│   ├── timer/                  Start/stop timer (ProjectSelector, TimerManager)
+│   ├── timer/                  Timer state and status (useTimer); its UI is the sidebar's
 │   └── auth/                   AuthModal + WebAuthn flow + auth store
 │
 ├── entities/

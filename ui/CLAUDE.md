@@ -142,9 +142,8 @@ branch. Tests and E2E specs find the panels by their region names, never by clas
 - Mocking pattern: see `client/features/auth/components/AuthModal.test.tsx`
   for the canonical setup — vi.mock the API module, the auth store, and
   `useNavigate`; render under `MemoryRouter`; assert on visible DOM via
-  `screen.findByRole` / `findByText`. Layout.test.tsx and
-  TimerManager.test.tsx mirror this shape for hook-heavy and child-component-
-  heavy components respectively.
+  `screen.findByRole` / `findByText`. Layout.test.tsx mirrors this shape for a
+  hook-heavy component.
 
 Before adding a test, see **What to test, and what not to** in the repo-root
 `CLAUDE.md` — in particular that configuration, framework behaviour, and
