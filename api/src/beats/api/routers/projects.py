@@ -60,9 +60,9 @@ async def list_projects(
 ):
     """List projects, optionally augmented with aggregation fields.
 
-    Backward compatible: without `include`, the response carries the same
-    fields as ProjectResponse plus null aggregation slots — older clients
-    that ignore unknown null fields keep working.
+    Without `include` the response is slim: the fields of ProjectResponse
+    plus null aggregation slots, and no beats are read. The daemon and the
+    companion list projects this way.
 
     P3.0 of the project-management revamp. First cut loops per-project
     server-side; if profiling shows it's needed, a follow-up (P3.0b)
