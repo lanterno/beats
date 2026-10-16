@@ -1021,7 +1021,7 @@ class TestHandleChatTurn:
         """Records every tool call and returns a deterministic string."""
         calls: list[tuple] = []
 
-        async def fake_execute(_user_id, name, tool_input, *, repos, projects):
+        async def fake_execute(_user_id, name, tool_input, *, repos, projects, tz):
             calls.append((name, tool_input))
             return f"<{name} result>"
 
@@ -2039,7 +2039,7 @@ class TestBuildCoachMessages:
         async def fake_build_repos(_user_id):
             return _fake_coach_repos()
 
-        async def fake_user_ctx(_user_id, _repos):
+        async def fake_user_ctx(_user_id, _repos, _tz=None):
             return "USER_CTX_BLOCK"
 
         async def fake_day_ctx(_user_id, _repos, _target_date, _tz=None):
@@ -2126,7 +2126,7 @@ class TestBuildCoachMessages:
         async def fake_build_repos(_user_id):
             return _fake_coach_repos()
 
-        async def fake_user_ctx(_user_id, _repos):
+        async def fake_user_ctx(_user_id, _repos, _tz=None):
             return "USER"
 
         async def fake_day_ctx(_user_id, _repos, target_date, _tz=None):
@@ -2324,6 +2324,67 @@ class TestBuildUserContext:
         repos = _fake_coach_repos(projects=[_project("p1", "Alpha", weekly_goal=None)])
         result = await context_module.build_user_context("user-1", repos)
         assert "(No goals set)" in result
+
+    async def test_goal_line_and_contract_week_name_one_term_on_sunday_evening(self, monkeypatch):
+        """80 % of 42 h until Sunday 18 October, full-time from Monday 19. At
+        01:00 UTC on the 19th it is still Sunday evening in Los Angeles: the
+        goal line, the contract week's label and get_projects all name the
+        user's week's term, where UTC's Monday would have put next week's
+        "full-time" beside this week's 33.6 h."""
+        from beats.domain.models import Contract, ContractTerm, Project, ProjectKind, ScheduleType
+        from beats.domain.services import ContractService
+
+        los_angeles = ZoneInfo("America/Los_Angeles")
+        instant = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        monkeypatch.setattr(context_module, "datetime", _At)
+        monkeypatch.setattr(tools_module, "datetime", _At)
+        terms = [
+            ContractTerm(
+                effective_from=date(2026, 1, 5),
+                schedule_type=ScheduleType.PART_TIME,
+                full_time_hours=42,
+                percentage=0.8,
+            ),
+            ContractTerm(
+                effective_from=date(2026, 10, 19),
+                schedule_type=ScheduleType.FULL_TIME,
+                full_time_hours=42,
+            ),
+        ]
+        job = Project(
+            id="job", name="Acme", kind=ProjectKind.DAY_JOB, contract=Contract(terms=terms)
+        )
+        repos = _fake_coach_repos(
+            projects=[job],
+            contracts=ContractService(
+                project_repo=_FakeProjectRepoForTools([job]),
+                beat_repo=_FakeBeatRepoForTools([]),
+                absence_repo=_FakeAbsenceStoreForCoach([]),
+                adjustment_repo=_FakeAdjustmentStoreForCoach([]),
+                now=lambda tz: instant.astimezone(tz),
+            ),
+        )
+
+        user_ctx = await context_module.build_user_context("user-1", repos, los_angeles)
+        day_ctx = await context_module.build_day_context("user-1", repos, tz=los_angeles)
+        tool = await tools_module.execute_tool(
+            "user-1", "get_projects", {}, repos=repos, projects=[job], tz=los_angeles
+        )
+
+        assert "  Acme: 33.6h/week (contract, 80%)" in user_ctx.splitlines()
+        assert "  Acme (contract, 80%): this week expects 33.6 h" in day_ctx
+        assert "(goal: 33.6h/wk, contract, 80%)" in tool
+        for text in (user_ctx, day_ctx, tool):
+            assert "full-time" not in text
+        # The same instant on UTC's week is the full-time term's.
+        utc_ctx = await context_module.build_user_context("user-1", repos)
+        assert "  Acme: 42h/week (contract, full-time)" in utc_ctx.splitlines()
 
 
 class TestGatewayBudgetInvariant:
