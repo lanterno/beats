@@ -8763,6 +8763,81 @@
         ]
       }
     },
+    "/api/projects/{project_id}/timesheet.csv": {
+      "get": {
+        "description": "A day job's month as a timesheet, for the employer: one row per\nfinished day of the month inside the contract \u2014 through yesterday in\n`tz`, from the first term, through `ended_on` \u2014 with the hours expected,\nworked and their difference, the weekday holiday's name and absence\ntype, the balance adjustment and what it moved, and the balance at the\nday's close; a \"brought forward\" row first and a \"total\" row last. A\nfigure the contract has no expectation for is blank. Worked hours are\nbucketed by the local day each beat started on, in `tz`, and a running\ntimer counts up to now, as on `/ledger`. The file is sent as an\nattachment without a filename; the caller names it.\n409 on a project that is not a day job (NOT_A_DAY_JOB), without a\ncontract (NO_CONTRACT), or for a month with no finished day inside the\ncontract (OUTSIDE_CONTRACT).",
+        "operationId": "get_timesheet_csv_api_projects__project_id__timesheet_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "description": "The month wanted, as YYYY-MM.",
+              "examples": [
+                "2026-09"
+              ],
+              "format": "date",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "The month as CSV, one row per finished day."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Timesheet Csv",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
     "/api/projects/{project_id}/today/": {
       "get": {
         "description": "Get total time spent on project today.",
