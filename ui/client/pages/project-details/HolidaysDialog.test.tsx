@@ -2,8 +2,8 @@
  * The Holidays dialog: unticking a public holiday sends its date as not
  * given, a company day without a name is refused before anything is sent,
  * another year's entries go out untouched, a date not given that is no
- * longer a holiday of the region is listed and can be removed, and a 422 on
- * a company day lands on its row.
+ * longer a holiday of the region is listed and can be removed — but only once
+ * the year's calendar is in — and a 422 on a company day lands on its row.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -13,7 +13,12 @@ import { ApiError } from "@/shared/api";
 import { HolidaysDialog } from "./HolidaysDialog";
 
 const { hooks } = vi.hoisted(() => ({
-	hooks: { mutate: vi.fn(), holidays: vi.fn() },
+	hooks: {
+		mutate: vi.fn(),
+		holidays: vi.fn(),
+		// How the year's read stands: "loaded", still "loading", or the error it failed with.
+		read: "loaded" as "loaded" | "loading" | Error,
+	},
 }));
 
 vi.mock("@/entities/project", async () => {
@@ -24,10 +29,16 @@ vi.mock("@/entities/project", async () => {
 		useHolidayRegions: () => ({
 			data: [{ code: "CH", name: "Switzerland", subdivisions: [{ code: "ZH", name: "Zürich" }] }],
 		}),
-		useProjectHolidays: (_id: string, year: number, options: { includeNotGiven?: boolean }) => ({
-			data: options.includeNotGiven ? hooks.holidays(year) : [],
-			isLoading: false,
-		}),
+		useProjectHolidays: (_id: string, year: number, options: { includeNotGiven?: boolean }) =>
+			hooks.read === "loaded"
+				? {
+						data: options.includeNotGiven ? hooks.holidays(year) : [],
+						isLoading: false,
+						error: null,
+					}
+				: hooks.read === "loading"
+					? { data: undefined, isLoading: true, error: null }
+					: { data: undefined, isLoading: false, error: hooks.read },
 	};
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -72,6 +83,7 @@ const sentContract = () => hooks.mutate.mock.calls[0][0].contract;
 
 beforeEach(() => {
 	hooks.mutate.mockReset();
+	hooks.read = "loaded";
 	hooks.holidays.mockImplementation((year: number) => (year === 2026 ? ZURICH_2026 : []));
 });
 afterEach(cleanup);
@@ -137,6 +149,28 @@ describe("HolidaysDialog", () => {
 		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
 
 		expect(sentContract().holidays_not_given).toEqual([]);
+	});
+
+	it("lists no date as left over while the year's calendar is loading", () => {
+		hooks.read = "loading";
+		renderDialog({ holidaysNotGiven: ["2026-12-25"] });
+
+		expect(dialog()).toHaveTextContent("Loading…");
+		expect(
+			within(dialog()).queryByRole("region", { name: "No longer a holiday here" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("says the calendar failed to load rather than that the year has no holidays", () => {
+		hooks.read = new ApiError(400, "Unknown holiday region CH-ZH", "UNKNOWN_HOLIDAY_REGION");
+		renderDialog({ holidaysNotGiven: ["2026-12-25"] });
+
+		const publicList = within(dialog()).getByRole("region", { name: /Public holidays/ });
+		expect(within(publicList).getByRole("alert")).toHaveTextContent("Unknown holiday region CH-ZH");
+		expect(publicList).not.toHaveTextContent("None in 2026.");
+		expect(
+			within(dialog()).queryByRole("region", { name: "No longer a holiday here" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("puts a 422 on a company day's name beside that row", async () => {
