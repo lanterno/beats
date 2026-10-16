@@ -161,10 +161,19 @@ export async function fetchLedger(projectId: string, weeks: number): Promise<Led
 	return toLedger(parseApiResponse(LedgerSchema, data));
 }
 
-/** The contract region's public holidays for a year; empty without a region. */
-export async function fetchProjectHolidays(projectId: string, year: number): Promise<Holiday[]> {
-	const tz = encodeURIComponent(browserTimeZone());
-	const data = await get<unknown>(`/api/projects/${projectId}/holidays?year=${year}&tz=${tz}`);
+/**
+ * The contract's holidays for a year, by date: the region's the employer
+ * gives and the company's own. `includeNotGiven` adds the region's the
+ * employer does not give, with `given: false`, for the Holidays dialog.
+ */
+export async function fetchProjectHolidays(
+	projectId: string,
+	year: number,
+	{ includeNotGiven = false }: { includeNotGiven?: boolean } = {},
+): Promise<Holiday[]> {
+	const params = new URLSearchParams({ year: String(year), tz: browserTimeZone() });
+	if (includeNotGiven) params.set("include", "not_given");
+	const data = await get<unknown>(`/api/projects/${projectId}/holidays?${params.toString()}`);
 	return parseApiResponse(HolidayListSchema, data);
 }
 

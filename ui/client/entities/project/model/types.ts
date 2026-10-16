@@ -34,6 +34,12 @@ export interface ContractTerm {
 	note?: string;
 }
 
+/** A day off the employer gives that the region's calendar does not. */
+export interface CompanyHoliday {
+	date: string; // YYYY-MM-DD
+	name: string;
+}
+
 /** A day job's terms as they changed over time, plus what frames them. */
 export interface Contract {
 	/** In ascending order of effectiveFrom, never empty. */
@@ -44,6 +50,14 @@ export interface Contract {
 	openingBalanceHours: number;
 	/** Freezes the balance from this day on. */
 	endedOn?: string;
+	/**
+	 * The employer's own days off, and the region holidays it does not give —
+	 * a date there that matches no region holiday does nothing. Required, not
+	 * optional: every write sends the whole contract, and a list sent empty
+	 * clears what is stored.
+	 */
+	companyHolidays: CompanyHoliday[];
+	holidaysNotGiven: string[]; // YYYY-MM-DD
 }
 
 /** An absence as the week route reports it on a day: what kind, and whether half of it. */
@@ -154,10 +168,16 @@ export interface Ledger {
 	weeks: LedgerWeek[];
 }
 
-/** One public holiday of the contract's region. */
+/**
+ * One holiday of the contract: a region's public holiday or the employer's
+ * own. `given` is false only for a region holiday the employer does not
+ * give, which the API lists only when asked (`includeNotGiven`).
+ */
 export interface Holiday {
 	date: string; // YYYY-MM-DD
 	name: string;
+	source: "region" | "company";
+	given: boolean;
 }
 
 /** One country in the region picker, with the subdivisions that change its calendar. */

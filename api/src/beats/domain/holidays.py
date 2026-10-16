@@ -1,9 +1,11 @@
-"""Public holidays for a contract's region — the only importer of the `holidays` package.
+"""A contract's holidays — the only importer of the `holidays` package.
 
 Everything downstream takes holidays as a plain `set[date]`, so the arithmetic
 in `contracts.py` never touches this module and the library is exchangeable
 from one place. What is exposed: the dates in a range for one region, the
-list of regions for a picker, and the check the project service runs on a
+holidays of one contract (`contract_calendar`, `contract_holidays` — the one
+place the region's calendar meets the employer's own additions and removals),
+the list of regions for a picker, and the check the project service runs on a
 (country, subdivision) pair before a contract is written. Each holiday comes
 with its name; a caller that only wants the dates takes the mapping's keys.
 
@@ -17,6 +19,7 @@ locale, so a container on `C` answered "Fronleichnam" where a laptop on
 """
 
 from datetime import date
+from enum import StrEnum
 from functools import cache
 
 import holidays as holidays_lib
@@ -24,13 +27,26 @@ from holidays import registry
 from pydantic import BaseModel
 
 from beats.domain.exceptions import UnknownHolidayRegion
+from beats.domain.models import Contract
+
+
+class HolidaySource(StrEnum):
+    """Where a contract's holiday comes from: the region's public calendar,
+    or the employer's own list on the contract."""
+
+    REGION = "region"
+    COMPANY = "company"
 
 
 class Holiday(BaseModel):
-    """One public holiday, as the calendar shows it."""
+    """One holiday of a contract, as the calendar shows it. `given` is false
+    only for a region holiday the employer does not give — a working day,
+    listed so it can be shown by name."""
 
     date: date
     name: str
+    source: HolidaySource
+    given: bool
 
 
 class Subdivision(BaseModel):
@@ -62,6 +78,50 @@ def named_holidays_between(
             if start <= day <= end
         )
     return found
+
+
+def contract_calendar(
+    contract: Contract, start: date, end: date, *, include_not_given: bool = False
+) -> list[Holiday]:
+    """The contract's holidays within [start, end], by date: the region's,
+    less the ones the employer does not give, plus the company's.
+
+    A region holiday on `holidays_not_given` is a working day; it is left
+    out, or with `include_not_given` listed as `given=False`. A removal
+    that matches no region holiday does nothing. A company day on a date
+    the region already gives changes nothing and the region's name stands;
+    on a removed date it wins, under its own name — the employer gives
+    that day off after all. With `include_not_given` the region's row is
+    still listed beside it, as not given, so that date comes twice: the
+    editor must see both marks to clear one. Without a region only the
+    company days count.
+    Raises `UnknownHolidayRegion` when the library no longer knows the region.
+    """
+    company = {day.date: day.name for day in contract.company_holidays if start <= day.date <= end}
+    not_given = set(contract.holidays_not_given)
+    found: list[Holiday] = []
+    given_by_region: set[date] = set()
+    if contract.holiday_country is not None:
+        region = named_holidays_between(
+            contract.holiday_country, contract.holiday_subdivision, start, end
+        )
+        for day, name in region.items():
+            given = day not in not_given
+            if given:
+                given_by_region.add(day)
+            if given or include_not_given:
+                found.append(Holiday(date=day, name=name, source=HolidaySource.REGION, given=given))
+    for day, name in company.items():
+        if day not in given_by_region:
+            found.append(Holiday(date=day, name=name, source=HolidaySource.COMPANY, given=True))
+    # On a date listed twice the region's row, not given, comes first.
+    return sorted(found, key=lambda h: (h.date, h.given))
+
+
+def contract_holidays(contract: Contract, start: date, end: date) -> dict[date, str]:
+    """The days within [start, end] the contract treats as holidays, by name —
+    the set every week figure is computed from."""
+    return {h.date: h.name for h in contract_calendar(contract, start, end) if h.given}
 
 
 @cache

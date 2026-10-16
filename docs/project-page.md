@@ -126,10 +126,12 @@ Rail        CONTRACT   Part time · 80% of 42 h / 33.6 h/week · since Mon Aug 3
                        From Aug 3, 2026 · … · IN FORCE · "Four days a week from August"
                        From Jan 4, 2027 · … · PLANNED
                        [+ Change contract from…]
-                       Holidays Switzerland · Zürich · Brought forward +2.0 h · Ended — · Edit
+                       Holidays Switzerland · Zürich · 2 company days · 1 not given
+                         · Brought forward +2.0 h · Ended — · Holidays · Edit
             TIME OFF   upcoming                                          + Book
                        Tomorrow · Fri Sep 11 · Vacation · Zürich trip          vacation
                        Mon Oct 5 – Fri Oct 9 · Vacation · 5 days               vacation
+                       Thu Dec 24 · Christmas Eve · company holiday             holiday
                        Fri Dec 25 · Christmas Day · public holiday · Zürich     holiday
                        2026: 21 d vacation booked · ½ d sick
             FACTS      Last tracked today 11:52 · Focus today 74
@@ -213,8 +215,24 @@ yet — start the timer in the sidebar."
   the weeks the contract does not — so they can be removed.
 - **Time off** makes one absence read, `[Jan 1, today + 365]`, for the
   upcoming list and the year's tally. A run of one type bridges weekends
-  and public holidays. A holiday row opens its week in Days (it has nothing
-  to book); an absence row opens the dialog on the run.
+  and holidays. A holiday row — public, or a company day reading "company
+  holiday" — opens its week in Days (it has nothing to book); an absence
+  row opens the dialog on the run.
+- **The Holidays dialog** (`HolidaysDialog`, from the register's
+  constants) edits the contract's company days and the public holidays the
+  employer does not give, one year at a time (‹ 2026 ›), and saves with one
+  whole-contract `PUT …/contract`, other years' entries untouched. A
+  weekday public holiday has a "Day off at work" tick; a weekend one costs
+  nothing and has none. A date still marked not given that matches no
+  holiday of the region — left by a region change, a cleared region or a
+  library upgrade — is listed under "No longer a holiday here" so it can be
+  seen and removed, but only once that year's calendar is in: until then,
+  or when it fails to load, every date not given would look left over. A
+  company day on a date marked not given is refused, and its row offers
+  "Clear the mark". A region change in the settings form clears neither
+  list. The constants' "2 company days · 1 not given" are counted off
+  `/holidays?include=not_given`, not the raw lists, so a leftover date is
+  never counted, nor a date not given that a company day covers.
 - **The booking dialog records with `POST …/absences`**, the API's upsert,
   one weekday at a time, as one mutation with one invalidation at the end.
   The first failure stops the run and keeps the dialog open ("2 of 5 days

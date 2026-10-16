@@ -26,6 +26,7 @@ export {
 } from "./api";
 // Model layer
 export type {
+	CompanyHoliday,
 	Contract,
 	ContractDay,
 	ContractFieldErrors,

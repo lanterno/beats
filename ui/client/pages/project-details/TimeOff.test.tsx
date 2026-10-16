@@ -2,7 +2,8 @@
  * Time off: absences still to come and weekday holidays in one list by date,
  * a run of one type across a weekend or a holiday as one row counted in
  * halves, "Tomorrow" on the first row, next year's dates with their year,
- * the year's tally counting a half day as a half, and what a row opens.
+ * the year's tally counting a half day as a half, a company holiday named
+ * as one, and what a row opens.
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -59,13 +60,17 @@ const ABSENCES: Absence[] = [
 	absence("2026-12-28", "vacation"),
 ];
 
+function holiday(date: string, name: string, source: Holiday["source"] = "region"): Holiday {
+	return { date, name, source, given: true };
+}
+
 const HOLIDAYS: Record<number, Holiday[]> = {
 	2026: [
-		{ date: "2026-08-01", name: "Swiss National Day" },
-		{ date: "2026-12-25", name: "Christmas Day" },
-		{ date: "2026-12-26", name: "St. Stephen's Day" },
+		holiday("2026-08-01", "Swiss National Day"),
+		holiday("2026-12-25", "Christmas Day"),
+		holiday("2026-12-26", "St. Stephen's Day"),
 	],
-	2027: [{ date: "2027-01-01", name: "New Year's Day" }],
+	2027: [holiday("2027-01-01", "New Year's Day")],
 };
 
 const PROJECT: ProjectWithDuration = {
@@ -83,6 +88,8 @@ const PROJECT: ProjectWithDuration = {
 		holidayCountry: "CH",
 		holidaySubdivision: "ZH",
 		openingBalanceHours: 0,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	},
 	totalMinutes: 0,
 	weeklyMinutes: 0,
@@ -141,6 +148,21 @@ describe("TimeOff", () => {
 		});
 		await userEvent.click(screen.getByRole("button", { name: /Christmas Day/ }));
 		expect(props.onOpenWeek).toHaveBeenCalledWith("2026-12-25");
+	});
+
+	it("names a company holiday as the employer's, and opens its week like any holiday", async () => {
+		hooks.holidays.mockImplementation((year: number) =>
+			year === 2026 ? [holiday("2026-12-24", "Christmas Eve", "company")] : [],
+		);
+		hooks.absences.mockReturnValue([]);
+		const props = renderTimeOff();
+
+		const row = screen.getByRole("button", { name: /Christmas Eve/ });
+		expect(row).toHaveTextContent("Christmas Eve · company holiday");
+		expect(row).not.toHaveTextContent("public holiday");
+		expect(row).not.toHaveTextContent("Zürich");
+		await userEvent.click(row);
+		expect(props.onOpenWeek).toHaveBeenCalledWith("2026-12-24");
 	});
 
 	it("says nothing is booked, and that holidays wait for a region", () => {

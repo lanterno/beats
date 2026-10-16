@@ -77,6 +77,7 @@ export {
 } from "./standing";
 // Types
 export type {
+	CompanyHoliday,
 	Contract,
 	ContractDay,
 	ContractDayAbsence,

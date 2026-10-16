@@ -36,6 +36,8 @@ const CONTRACT: Contract = {
 	holidayCountry: "CH",
 	holidaySubdivision: "ZH",
 	openingBalanceHours: 2,
+	companyHolidays: [],
+	holidaysNotGiven: [],
 };
 
 const BASE: ProjectWithDuration = {

@@ -2,10 +2,11 @@
  * AbsenceDialog — booking time off on a day job (the mockup's renderDialog):
  * the type, From and Through, the month grid as their picker, half day, a
  * note, and a line saying what the booking does to the week. Saving records
- * one absence per weekday in the range — weekends and the region's public
- * holidays are skipped, since the contract owes nothing on them — as one run
- * of writes with one toast at the end. A range whose every weekday is already
- * booked can be removed, and so can an absence stored on a holiday.
+ * one absence per weekday in the range — weekends and the contract's
+ * holidays, public or company, are skipped, since the contract owes nothing
+ * on them — as one run of writes with one toast at the end. A range whose
+ * every weekday is already booked can be removed, and so can an absence
+ * stored on a holiday.
  *
  * A booked day keeps its own note unless one is typed: the field starts from
  * the note the days share, or empty when they differ, and an untouched field
@@ -110,7 +111,7 @@ function hoursDue(contract: Contract, iso: string): number {
 
 /**
  * "This week's expectation drops by 6.7 h, to 26.9 h. One weekday; weekends
- * and public holidays are skipped." — the booking's cost against what is
+ * and holidays are skipped." — the booking's cost against what is
  * already booked on those days, named against the week when the range sits
  * in one.
  */
@@ -125,7 +126,7 @@ function costLine(input: {
 }): string {
 	const { contract, bookable, halfDay, existing, week, todayIso } = input;
 	if (!contract) return "Counts once a contract is set.";
-	if (bookable.length === 0) return "Nothing to book: weekends and public holidays are skipped.";
+	if (bookable.length === 0) return "Nothing to book: weekends and holidays are skipped.";
 	let delta = 0;
 	let due = false;
 	for (const iso of bookable) {
@@ -150,7 +151,7 @@ function costLine(input: {
 			? `${whose} stays as it is.`
 			: `${whose} ${delta > 0 ? "drops" : "rises"} by ${amount} h${to}.`;
 	const n = bookable.length;
-	return `${head} ${COUNT_WORDS[n] ?? n} weekday${n === 1 ? "" : "s"}; weekends and public holidays are skipped.`;
+	return `${head} ${COUNT_WORDS[n] ?? n} weekday${n === 1 ? "" : "s"}; weekends and holidays are skipped.`;
 }
 
 export function AbsenceDialog({
@@ -198,7 +199,7 @@ export function AbsenceDialog({
 			...(monthHolidays.data ?? []),
 			...(fromHolidays.data ?? []),
 			...(throughHolidays.data ?? []),
-		].map((h) => [h.date, h.name]),
+		].map((h) => [h.date, h]),
 	);
 	const holidaysLoading = fromHolidays.isLoading || throughHolidays.isLoading;
 
@@ -446,7 +447,9 @@ export function AbsenceDialog({
 							const selected = valid && iso >= from && iso <= through && !holiday;
 							const label = [
 								longDate(iso),
-								holiday ? `public holiday: ${holiday}` : null,
+								holiday
+									? `${holiday.source === "company" ? "company" : "public"} holiday: ${holiday.name}`
+									: null,
 								absence
 									? `${ABSENCE_TYPE_LABELS[absence.type]}${absence.halfDay ? ", half day" : ""} booked`
 									: null,

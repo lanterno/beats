@@ -54,6 +54,19 @@ goal. Git history has the plans.
     history of how a goal changed over time.
 11. **Timesheets and export are a follow-up.** The product goal of this
     iteration is the *week*: expected, worked, remaining, balance.
+12. **Employer holidays are dated full days on the contract.** Where an
+    employer's days off differ from its region's, the contract says so in
+    two lists: `company_holidays` adds days (Christmas Eve, a bridge day),
+    each with a name, and `holidays_not_given` takes region holidays away
+    as bare dates. No recurrence — a policy changes from year to year, and
+    a rule would apply to years nobody checked — and no half days: a half
+    day is a half-day absence of type `other`, which already costs
+    `base / 2`. Each list is valid on its own. A removal that matches no
+    region holiday, or is kept while there is no region, does nothing and
+    is kept; a company day on a removed date wins, under its own name.
+    The calendar's `include=not_given` still lists that region day, as
+    not given, beside the company day: an editor that could see only one
+    of the two marks could not clear the other.
 
 ---
 
@@ -86,6 +99,12 @@ class Contract(BaseModel):
     holiday_subdivision: str | None   # ISO 3166-2 part, e.g. "ZH"
     opening_balance_hours: float = 0  # hours banked before Beats
     ended_on: date | None             # freezes the balance
+    company_holidays: list[CompanyHoliday] = []  # the employer's own days off
+    holidays_not_given: list[date] = []          # region holidays it does not give
+
+class CompanyHoliday(BaseModel):
+    date: date
+    name: str                         # stripped, 1-80 characters
 
 class Project(BaseModel):
     ...
@@ -106,6 +125,18 @@ not before the first term; `full_time` fills in `percentage = 1` and
 refuses anything else; `part_time` needs a percentage below 1; `custom`
 needs `weekly_hours` and takes no basis; `objective` takes none of the
 numbers; `holiday_subdivision` needs a `holiday_country`.
+
+The two holiday lists have one rule each, and it is their own: no date
+twice. Neither is checked against the region, the calendar, the
+contract's dates or the other list, and none may ever be. A contract
+write that leaves a list out keeps the stored one (see "Omitted is not
+null" below), merged with `model_copy`, which does not re-validate; that
+is safe only while every rule on these lists is per-list, since the
+stored list already passed them. A rule tying a list to another field
+would let the merge produce a contract that fails the next read — and
+with it the user's whole project list — so it would need the merge to
+re-validate and answer a 422. Both lists are additive on the stored
+document, so no startup pass runs for them.
 
 That the region codes are ones the library knows is checked by
 `ProjectService` when a contract is written, not by the model. The model
@@ -128,14 +159,18 @@ day jobs. On a time-based day job the contract is the goal.
 Everything reduces to one function over a date range
 (`domain/contracts.py`, pure: holidays arrive as a `set[date]` and
 `today` is a parameter; `domain/holidays.py` is the only importer of
-the library).
+the library). The set's one source is `contract_holidays` in
+`domain/holidays.py`: the region's holidays, less the ones the employer
+does not give, plus the company's. The week, the ledger, the balance,
+the index and the Inbox and pacing readers all take it from there.
 
 ```
 expected(d) for a weekday d:
     term  = the term with the latest effective_from <= d     (none → 0)
     base  = term.hours_per_day                                (objective → 0)
     if d < first term's effective_from or d > ended_on:      0
-    if d is a public holiday in the contract's region:        0
+    if d is a holiday of the contract:                        0
+        (the region's, less the ones not given, plus the company's)
     if an absence exists on d:                                0, or base/2 if half_day
     else                                                      base
 
@@ -289,10 +324,10 @@ write, beside the region check.
 |---|---|
 | `POST/PUT /api/projects` | `kind` and `contract` on create/update; 422 from the validators, at the term's path (`contract.terms.0`) |
 | `GET /api/projects?include=this_week` | adds `contract_expected`, `contract_worked`, `contract_remaining`, `balance` for the current week |
-| `PUT /api/projects/{id}/contract` | replace terms / region / opening balance / `ended_on` as one object; `kind` untouched |
+| `PUT /api/projects/{id}/contract` | replace terms / region / company holidays / holidays not given / opening balance / `ended_on` as one object; `kind` untouched |
 | `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, days: [{date, expected, worked, holiday, absence}]}` |
 | `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected` and `balance_end`; `since`; `totals` as of today |
-| `GET /api/projects/{id}/holidays?year=` | the region's holidays as `[{date, name}]`; `[]` without a region |
+| `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`, even where a company day covers the date, which is then listed twice, the region's row first. Only company days without a region; `[]` without a contract |
 | `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
 | `GET /api/meta/holiday-regions` | `[{code, name, subdivisions: [{code, name}]}]`; `Cache-Control: public, max-age=86400`; behind the normal auth |
 
@@ -300,7 +335,13 @@ write, beside the region check.
   send `kind` or `contract`, so the route reads `model_fields_set`: left
   out keeps the stored value, `contract: null` clears it. Requests carry
   the domain `Contract` itself — its validators produce the 422, and a
-  mirror would drift.
+  mirror would drift. The same holds inside a sent contract for
+  `company_holidays` and `holidays_not_given`, on `PUT /api/projects` and
+  `PUT /{id}/contract` alike (`keep_unsent_holiday_changes`): an SPA that
+  predates them rebuilds the whole contract on every term edit, and must
+  not delete them; `[]` clears. An API revision without the lists drops
+  them when it rewrites a project — the rollback loss the migration
+  already accepts.
 - **A contract lives only on a day job.** One sent with any other kind
   is 409 `NOT_A_DAY_JOB`, and a `PUT` moving a day job to another kind
   without mentioning `contract` clears it. Nothing dormant is kept for
@@ -331,7 +372,8 @@ write, beside the region check.
   goal's, completed beats only, by UTC date.
 - **Holidays are cached per region and year**: the balance rebuilds
   every year since the contract started on each request, and some
-  regions cost ~10 ms a year.
+  regions cost ~10 ms a year. Company days and the dates not given come
+  from the contract the request already read, and cost nothing.
 - **Device tokens** reach every route under `/api/projects`, since
   `DEVICE_ALLOWED_PREFIXES` matches by prefix. That exposes nothing new:
   a device could already `PUT /api/projects`. `/api/meta` is
@@ -357,9 +399,10 @@ write, beside the region check.
   bare signed number: "+4.5 h over", "−2.0 h owed".
 
 **What leaves Beats.** The coach sends a day job's goal as one line
-(`Acme: 33.6h/week (contract, 80%)`), not absences, the region or the
-balance. `/api/export` carries the contract but not absences.
-`PRIVACY.md` and `DATA.md` state this; a change happens there first.
+(`Acme: 33.6h/week (contract, 80%)`), not absences, the region, the
+company holidays or the balance. `/api/export` carries the contract but
+not absences. `PRIVACY.md` and `DATA.md` state this; a change happens
+there first.
 
 ---
 
@@ -367,7 +410,7 @@ balance. `/api/export` carries the contract but not absences.
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
 contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, vacation
-entitlement, the ledger's write side, employer-specific holidays, the coach
-seeing the balance, the companion's week card, and whether `hours_per_day`
-should be configurable for a 4-day full-time week. The balance ledger's
-read side was built by [project-page.md](project-page.md).
+entitlement, the ledger's write side, the coach seeing the balance, the
+companion's week card, and whether `hours_per_day` should be configurable
+for a 4-day full-time week. The balance ledger's read side was built by
+[project-page.md](project-page.md).

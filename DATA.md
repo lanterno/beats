@@ -35,9 +35,11 @@ No passwords are stored — Beats does not have a password login path.
   `side_project`. A day job may also carry a **contract**: `terms[]`, each with
   `effective_from`, `schedule_type`, `full_time_hours`, `percentage`, `weekly_hours` and
   a `note`; `holiday_country` and `holiday_subdivision` (ISO codes — the holidays are
-  derived from them on request, no calendar is stored); `opening_balance_hours`;
-  `ended_on`. On a day job whose contract governs the week, `weekly_goal` is cleared at
-  startup: the contract is the goal.
+  derived from them on request, no calendar is stored); `company_holidays[]`, the
+  employer's own days off, each a `date` and the `name` you gave it;
+  `holidays_not_given[]`, the dates of region holidays the employer does not give;
+  `opening_balance_hours`; `ended_on`. On a day job whose contract governs the week,
+  `weekly_goal` is cleared at startup: the contract is the goal.
 - **Absences**: one document per day off on a day-job project — `user_id`, `project_id`,
   `date`, `half_day`, `type` (`vacation`, `sick`, `other`), `note`. Unique on
   `(user_id, project_id, date)`, so a second absence on a day replaces the first.

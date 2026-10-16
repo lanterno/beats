@@ -38,12 +38,22 @@ export const ContractTermSchema = z.object({
 
 export type ApiContractTerm = z.infer<typeof ContractTermSchema>;
 
+const CompanyHolidaySchema = z.object({
+	date: z.string(), // YYYY-MM-DD
+	name: z.string(),
+});
+
+// The two holiday lists default to empty so an API that predates them still
+// parses; the SPA always sends both (`toApiContract`), since a list left out
+// of a write is kept and one sent empty is cleared.
 export const ContractSchema = z.object({
 	terms: z.array(ContractTermSchema),
 	holiday_country: z.string().nullable().optional(),
 	holiday_subdivision: z.string().nullable().optional(),
 	opening_balance_hours: z.number().optional().default(0),
 	ended_on: z.string().nullable().optional(),
+	company_holidays: z.array(CompanyHolidaySchema).optional().default([]),
+	holidays_not_given: z.array(z.string()).optional().default([]),
 });
 
 export type ApiContract = z.infer<typeof ContractSchema>;
@@ -147,9 +157,13 @@ export const LedgerSchema = z.object({
 
 export type ApiLedger = z.infer<typeof LedgerSchema>;
 
+// `source` and `given` default to an older API's only answer: a region
+// holiday the contract gives.
 const HolidaySchema = z.object({
 	date: z.string(), // YYYY-MM-DD
 	name: z.string(),
+	source: z.enum(["region", "company"]).optional().default("region"),
+	given: z.boolean().optional().default(true),
 });
 
 export const HolidayListSchema = z.array(HolidaySchema);

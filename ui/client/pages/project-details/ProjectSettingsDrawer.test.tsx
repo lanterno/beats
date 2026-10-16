@@ -60,6 +60,8 @@ const DAY_JOB: Project = {
 			},
 		],
 		openingBalanceHours: 2,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	},
 };
 

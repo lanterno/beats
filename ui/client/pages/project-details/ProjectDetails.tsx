@@ -10,7 +10,8 @@
  * The open week is the URL's (`?week=`), so a ledger row, ‹ ›, a holiday in
  * the time off and a link all move the same navigator. It also owns the
  * booking dialog, which every "Book time off" and "Change" opens, and knows
- * where focus goes when a save takes away the control that opened it.
+ * where focus goes when a save takes away the control that opened it — and
+ * the Holidays dialog the contract's constants open.
  */
 
 import { ChevronLeft, Clock } from "lucide-react";
@@ -35,6 +36,7 @@ import {
 import { type AbsenceBooking, AbsenceDialog } from "./AbsenceDialog";
 import { ContractRegister } from "./ContractRegister";
 import { nextWeekdayAfter } from "./dates";
+import { HolidaysDialog } from "./HolidaysDialog";
 import { ProjectHeader } from "./ProjectHeader";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { QuietFacts } from "./QuietFacts";
@@ -85,6 +87,7 @@ export default function ProjectDetails() {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [settingsFocus, setSettingsFocus] = useState<ProjectFormAutoFocusField>("name");
 	const [booking, setBooking] = useState<Booking | null>(null);
+	const [holidaysOpen, setHolidaysOpen] = useState(false);
 	const bookings = useRef(0);
 	// "Change contract…" in the settings form lands on the register's own
 	// button: terms are edited there, not in the form.
@@ -253,6 +256,7 @@ export default function ProjectDetails() {
 							todayIso={today}
 							firstTrackedIso={firstTrackedIso}
 							onOpenSettings={openSettings}
+							onOpenHolidays={() => setHolidaysOpen(true)}
 							changeButtonRef={changeContractButtonRef}
 						/>
 						{project.kind === "day_job" && (
@@ -277,6 +281,14 @@ export default function ProjectDetails() {
 				autoFocusField={settingsFocus}
 				onChangeContract={project.contract ? handleChangeContract : undefined}
 			/>
+
+			{holidaysOpen && project.kind === "day_job" && project.contract && (
+				<HolidaysDialog
+					project={{ id: project.id, contract: project.contract }}
+					todayIso={today}
+					onClose={() => setHolidaysOpen(false)}
+				/>
+			)}
 
 			{/* A dialog's close shuts only the booking it was opened on. */}
 			{booking && project.kind === "day_job" && (

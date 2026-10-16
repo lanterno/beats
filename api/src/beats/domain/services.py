@@ -27,7 +27,12 @@ from beats.domain.exceptions import (
     TimerAlreadyRunning,
     UnknownHolidayRegion,
 )
-from beats.domain.holidays import Holiday, check_region, named_holidays_between
+from beats.domain.holidays import (
+    Holiday,
+    check_region,
+    contract_calendar,
+    contract_holidays,
+)
 from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
     Absence,
@@ -271,6 +276,33 @@ def _check_contract(project: Project) -> None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
 
 
+_HOLIDAY_CHANGES = ("company_holidays", "holidays_not_given")
+
+
+def keep_unsent_holiday_changes(incoming: Contract, stored: Contract | None) -> Contract:
+    """`incoming`, with each holiday list it left out taken from `stored`.
+
+    Omitted is not null: a client that predates the lists (an old SPA tab,
+    which rebuilds the whole contract on every term edit) sends neither, and
+    must not delete them; an explicit `[]` clears. Which keys were sent is
+    the model's `model_fields_set`.
+
+    `model_copy` does not re-validate, and that is safe only because each
+    list's rules are its own (see `Contract`): the stored list passed them on
+    its way in and on every read since, so any incoming contract plus a
+    stored list is valid. A rule tying a list to another field would need
+    this merge to re-validate and turn a failure into a 422.
+    """
+    if stored is None:
+        return incoming
+    unsent = {
+        field: getattr(stored, field)
+        for field in _HOLIDAY_CHANGES
+        if field not in incoming.model_fields_set
+    }
+    return incoming.model_copy(update=unsent) if unsent else incoming
+
+
 class ProjectService:
     """Service for managing project operations and analytics."""
 
@@ -292,13 +324,15 @@ class ProjectService:
         """Replace a day job's whole contract — terms, region, opening balance, end.
 
         Whole rather than patched, like goal overrides: the terms are a history
-        that only makes sense as one list. The kind is not touched here; a
-        project that is not a day job has no contract to replace (409).
+        that only makes sense as one list. The holiday lists are the exception:
+        one the body leaves out is kept (`keep_unsent_holiday_changes`). The
+        kind is not touched here; a project that is not a day job has no
+        contract to replace (409).
         """
         project = await self.project_repo.get_by_id(project_id)
         if project.kind is not ProjectKind.DAY_JOB:
             raise NotADayJob()
-        project.contract = contract
+        project.contract = keep_unsent_holiday_changes(contract, project.contract)
         return await self.update_project(project)
 
     async def archive_project(self, project_id: str) -> Project:
@@ -523,11 +557,7 @@ class ContractService:
         start = min(contract.starts_on, week_of)
         end = max(today, week_of + timedelta(days=6))
         absences = await self.absence_repo.list_by_project(project.id, start, end)
-        holidays: dict[date, str] = {}
-        if contract.holiday_country is not None:
-            holidays = named_holidays_between(
-                contract.holiday_country, contract.holiday_subdivision, start, end
-            )
+        holidays = contract_holidays(contract, start, end)
         worked = worked_by_local_day(beats, tz)
         return self._assemble(contract, absences, holidays, worked, week_of, today)
 
@@ -556,10 +586,7 @@ class ContractService:
             start = min(contract.starts_on, monday - timedelta(weeks=weeks - 1))
             end = max(today, monday + timedelta(days=6))
             absences = await self.absence_repo.list_by_project(project.id, start, end)
-            if contract.holiday_country is not None:
-                holidays = named_holidays_between(
-                    contract.holiday_country, contract.holiday_subdivision, start, end
-                )
+            holidays = contract_holidays(contract, start, end)
         worked = worked_by_local_day(beats, tz)
         return assemble_ledger(project, contract, absences, holidays, worked, today, weeks)
 
@@ -604,19 +631,11 @@ class ContractService:
         contract = project.contract
         end = week_of + timedelta(days=6)
         absences = await self.absence_repo.list_by_project(project.id, week_of, end)
-        holidays: set[date] = set()
-        if contract.holiday_country is not None:
-            try:
-                holidays = set(
-                    named_holidays_between(
-                        contract.holiday_country, contract.holiday_subdivision, week_of, end
-                    )
-                )
-            except UnknownHolidayRegion:
-                logger.warning(
-                    "project %s: contract region unknown, expectation skipped", project.id
-                )
-                return None
+        try:
+            holidays = set(contract_holidays(contract, week_of, end))
+        except UnknownHolidayRegion:
+            logger.warning("project %s: contract region unknown, expectation skipped", project.id)
+            return None
         return week_expectation(contract, absences, holidays, week_of)
 
     @staticmethod
@@ -678,23 +697,22 @@ class ContractService:
             balance_expected_through=(round_hours(running.expected_through) if running else None),
         )
 
-    async def holidays(self, project_id: str, year: int | None, tz: ZoneInfo) -> list[Holiday]:
-        """The contract region's public holidays in `year` (None for the current
-        year in `tz`), for the calendar. Empty when there is no contract or it
-        names no region."""
+    async def holidays(
+        self, project_id: str, year: int | None, tz: ZoneInfo, *, include_not_given: bool = False
+    ) -> list[Holiday]:
+        """The contract's holidays in `year` (None for the current year in
+        `tz`), by date, for the calendar: the region's the employer gives and
+        the company's own, and with `include_not_given` the region's it does
+        not give as well. Empty when there is no contract."""
         project = await self._day_job(project_id)
         contract = project.contract
-        if contract is None or contract.holiday_country is None:
+        if contract is None:
             return []
         if year is None:
             year = self._now(tz).year
-        found = named_holidays_between(
-            contract.holiday_country,
-            contract.holiday_subdivision,
-            date(year, 1, 1),
-            date(year, 12, 31),
+        return contract_calendar(
+            contract, date(year, 1, 1), date(year, 12, 31), include_not_given=include_not_given
         )
-        return [Holiday(date=day, name=name) for day, name in sorted(found.items())]
 
     async def list_absences(
         self, project_id: str, start: date | None, end: date | None, tz: ZoneInfo

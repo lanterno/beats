@@ -43,6 +43,8 @@ const CONTRACT: Contract = {
 		{ effectiveFrom: "2027-01-04", scheduleType: "full_time", fullTimeHours: 42, percentage: 1 },
 	],
 	openingBalanceHours: 2,
+	companyHolidays: [],
+	holidaysNotGiven: [],
 };
 const DAY_JOB = { kind: "day_job" as const, contract: CONTRACT };
 
@@ -104,6 +106,8 @@ describe("ledgerRows: rule rows", () => {
 		const contract: Contract = {
 			terms: [{ effectiveFrom: "2026-01-10", scheduleType: "custom", weeklyHours: 32 }],
 			openingBalanceHours: 2,
+			companyHolidays: [],
+			holidaysNotGiven: [],
 		};
 		// The week of Jan 5 holds the Saturday; it expects nothing (before the
 		// contract on both counts) and the rule sits under it.
@@ -323,6 +327,8 @@ describe("ledgerRows: the +/− cell", () => {
 		const wednesday: Contract = {
 			terms: [{ effectiveFrom: "2026-08-05", scheduleType: "custom", weeklyHours: 30 }],
 			openingBalanceHours: 2,
+			companyHolidays: [],
+			holidaysNotGiven: [],
 		};
 		const mid = ledgerRows(
 			ledger(
@@ -353,6 +359,8 @@ describe("ledgerRows: the +/− cell", () => {
 		const saturday: Contract = {
 			terms: [{ effectiveFrom: "2026-01-10", scheduleType: "custom", weeklyHours: 32 }],
 			openingBalanceHours: 2,
+			companyHolidays: [],
+			holidaysNotGiven: [],
 		};
 		const weekend = ledgerRows(
 			ledger(

@@ -38,7 +38,7 @@ vi.mock("@/entities/project", async () => {
 	return {
 		...actual,
 		useProjectHolidays: () => ({
-			data: [{ date: "2026-09-21", name: "Knabenschiessen" }],
+			data: [{ date: "2026-09-21", name: "Knabenschiessen", source: "region", given: true }],
 			isLoading: false,
 		}),
 		useContractWeek: (_id: string, weekOf: string, options: { enabled?: boolean }) => ({
@@ -57,6 +57,8 @@ const CONTRACT: Contract = {
 	holidayCountry: "CH",
 	holidaySubdivision: "ZH",
 	openingBalanceHours: 0,
+	companyHolidays: [],
+	holidaysNotGiven: [],
 };
 const THIS_WEEK: Pick<ContractWeek, "weekOf" | "expected"> = {
 	weekOf: "2026-09-07",
@@ -113,7 +115,7 @@ describe("AbsenceDialog", () => {
 		expect(within(dialog()).getByLabelText("From")).toHaveValue("2026-09-18");
 		expect(within(dialog()).getByLabelText("Through")).toHaveValue("2026-09-22");
 		expect(cost()).toHaveTextContent(
-			"The expectation drops by 13.4 h. Two weekdays; weekends and public holidays are skipped.",
+			"The expectation drops by 13.4 h. Two weekdays; weekends and holidays are skipped.",
 		);
 		// Half days cost half: two of them one day's hours.
 		await userEvent.click(within(dialog()).getByRole("checkbox", { name: "Half day" }));
@@ -168,7 +170,7 @@ describe("AbsenceDialog", () => {
 	it("says what the booking costs the week, or why it costs nothing", () => {
 		renderDialog();
 		expect(cost()).toHaveTextContent(
-			"This week's expectation drops by 6.7 h, to 26.9 h. One weekday; weekends and public holidays are skipped.",
+			"This week's expectation drops by 6.7 h, to 26.9 h. One weekday; weekends and holidays are skipped.",
 		);
 		cleanup();
 

@@ -4,9 +4,17 @@ from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from enum import StrEnum
 from itertools import pairwise
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from beats.domain.utils import TzNormalizedModel, normalize_tz
 
@@ -216,6 +224,14 @@ class ContractTerm(BaseModel):
         return self.hours_per_week is not None
 
 
+class CompanyHoliday(BaseModel):
+    """A day off the employer gives that the region's calendar does not —
+    Christmas Eve, a bridge day, a company day. A whole day, on one date."""
+
+    date: date_type
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
 class Contract(BaseModel):
     """A day job's terms as they changed over time, plus what frames them.
 
@@ -230,6 +246,19 @@ class Contract(BaseModel):
     make one contract un-editable, not every project of the user unreadable.
     `opening_balance_hours` is what was banked (or owed) before Beats started
     counting; `ended_on` freezes the balance from that day on.
+
+    Where the employer's days off differ from the region's, two lists say
+    how: `company_holidays` adds days, `holidays_not_given` takes region
+    holidays away (`domain/holidays.contract_calendar` combines the three).
+    A removal that matches no region holiday — or is kept while there is no
+    region — does nothing; a company day on a removed date wins. Each list's
+    only rule is its own (no date twice), and no rule may ever tie either
+    list to another field or to the other list: an incoming contract that
+    leaves a list out keeps the stored one (`keep_unsent_holiday_changes`),
+    merged without re-validating, which is safe only while every rule on
+    these lists is per-list. A cross-field rule would need that merge to
+    re-validate and answer a 422 — otherwise a merged contract could fail
+    the next read, and every project of the user with it.
     """
 
     terms: list[ContractTerm]
@@ -237,6 +266,24 @@ class Contract(BaseModel):
     holiday_subdivision: str | None = None  # ISO 3166-2 part, e.g. "ZH"
     opening_balance_hours: float = Field(default=0, allow_inf_nan=False)
     ended_on: date_type | None = None
+    company_holidays: list[CompanyHoliday] = Field(default_factory=list, max_length=400)
+    holidays_not_given: list[date_type] = Field(default_factory=list, max_length=400)
+
+    @field_validator("company_holidays")
+    @classmethod
+    def one_company_holiday_a_day(cls, days: list[CompanyHoliday]) -> list[CompanyHoliday]:
+        if len({day.date for day in days}) != len(days):
+            msg = "two company holidays on one date"
+            raise ValueError(msg)
+        return days
+
+    @field_validator("holidays_not_given")
+    @classmethod
+    def no_date_given_twice(cls, days: list[date_type]) -> list[date_type]:
+        if len(set(days)) != len(days):
+            msg = "a date is listed twice"
+            raise ValueError(msg)
+        return days
 
     @model_validator(mode="after")
     def validate_terms(self) -> Contract:
@@ -357,7 +404,7 @@ class ContractWeek(BaseModel):
 
 class LedgerNoteKind(StrEnum):
     """Why a weekday of a ledger week owed less: the three absence types, or a
-    public holiday."""
+    holiday of the contract (the region's or the company's)."""
 
     VACATION = "vacation"
     SICK = "sick"
@@ -367,7 +414,7 @@ class LedgerNoteKind(StrEnum):
 
 class LedgerNote(BaseModel):
     """One weekday of a ledger week that owed less than its term: an absence
-    (with `half_day`) or a named public holiday (with `name`)."""
+    (with `half_day`) or a named holiday (with `name`)."""
 
     date: date_type
     kind: LedgerNoteKind

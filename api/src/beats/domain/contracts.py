@@ -1,15 +1,17 @@
 """The contract arithmetic: what a day job expected, and the running balance.
 
-Pure functions over a `Contract`, its absences, and the region's holidays as
-a `set[date]`. Nothing here reads a clock or a calendar library — `today` is
+Pure functions over a `Contract`, its absences, and its holidays as a
+`set[date]`. Nothing here reads a clock or a calendar library — `today` is
 a parameter and the holidays are injected — so every rule is a plain function
-of its inputs. The rules are docs/work-contracts.md's ("The arithmetic"):
+of its inputs. The set's one source is `holidays.contract_holidays`: the
+region's holidays, less the ones the employer does not give, plus the
+company's. The rules are docs/work-contracts.md's ("The arithmetic"):
 
     expected(d) for a weekday d:
         term  = the term with the latest effective_from <= d     (none -> 0)
         base  = term.hours_per_day                                (objective -> 0)
         if d is before the first term or after ended_on:          0
-        if d is a public holiday in the contract's region:        0
+        if d is a holiday of the contract:                        0
         if an absence exists on d:                                0, or base/2 if half_day
         else                                                      base
     expected(d) for Saturday / Sunday:                            0
