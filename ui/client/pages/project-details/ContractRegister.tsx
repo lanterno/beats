@@ -3,7 +3,8 @@
  * "The page", Rail). On a day job with a contract it is the register: the
  * term in force and the next one, the terms as a step chart over the
  * contract's life, the full list with edit and remove, "+ Change contract
- * from…", and the constants (region, this year's company days and public
+ * from…", the month's timesheet to download (`TimesheetDownload`), and the
+ * constants (region, this year's company days and public
  * holidays not given, what was brought forward, the vacation entitlement if
  * one is tracked, the end), with "Holidays" opening the dialog that edits
  * the two lists.
@@ -57,6 +58,7 @@ import { Button, Dialog, Panel } from "@/shared/ui";
 import { longDate, plainDate } from "./dates";
 import { type ChartStep, stepChartGeometry } from "./stepChart";
 import { LABEL, LINKISH } from "./styles";
+import { TimesheetDownload } from "./TimesheetDownload";
 
 export interface ContractRegisterProps {
 	project: ProjectWithDuration;
@@ -553,6 +555,8 @@ function ContractVariant({
 					Change contract from…
 				</Button>
 			</div>
+
+			<TimesheetDownload project={project} contract={contract} todayIso={todayIso} />
 
 			{(project.goalOverrides ?? []).length > 0 && (
 				<div className="mt-4">

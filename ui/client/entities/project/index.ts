@@ -11,6 +11,7 @@
 // API layer
 export {
 	type AdjustmentInput,
+	downloadTimesheet,
 	projectKeys,
 	useArchivedProjects,
 	useArchiveProject,
@@ -90,11 +91,15 @@ export {
 	sortProjectsForList,
 	sortTerms,
 	standingGoalOn,
+	type TimesheetMonth,
 	termFormDefaults,
 	termFromForm,
 	termHoursPerDay,
 	termHoursPerWeek,
 	termOn,
+	timesheetFilename,
+	timesheetMonthLabel,
+	timesheetMonths,
 	toApiContract,
 	toPercent,
 	usePinnedProjects,
