@@ -610,38 +610,49 @@ region check, and every project write reconciles the adjustments
 (`Acme: 33.6h/week (contract, 80%)`), and on a day job with a contract
 the current week against it, labelled as the goal line is (by the term
 in force on the week's Monday): what it expects after holidays and days
-off, what was worked under it and what is left, today's expected hours,
-the running balance and its by-Sunday projection, the dates of this
-week's holidays and days off that shortened it, and `ended_on` once it
-falls inside the week. The balance is opening + worked − expected +
+off, the hours worked and what is left, today's expected hours, the
+running balance and its by-Sunday projection, the dates of this week's
+holidays and days off that shortened it, and `ended_on` once it falls
+inside the week. Each figure is the API's own, from the week the page
+reads, and is printed as the page prints it (one decimal, as `toFixed`
+rounds the binary value; the balance through `describe_balance`), so the
+coach says what the page says even where the page's figures do not add
+up at that decimal. The hours worked are the page's Worked, the whole
+week's; on a week the contract starts or ends inside, what is left
+counts only the contract's days, and the line says "(the contract counts
+only its own days this week)", which with no `ended_on` beside it says
+the contract started this week. In the contract's first seven days the
+page shows no projection, and the coach sends "first week under the
+contract" in its place. The balance is opening + worked − expected +
 adjusted, and only the sum is sent: the opening balance and the
 adjustments (their dates, kinds and notes) are not sent as figures of
 their own, though the sum is the opening balance on a contract's first
 day and moves by a payout on its date. A public holiday goes by its
-name. The region is not sent as a field of its own, but some regional
-holidays name it ("Augsburg Peace Festival" in DE-Augsburg, "Saint
-Terentius of Pesaro's Day" in IT-Pesaro, "South Canterbury Anniversary
-Day" in NZ's "South Canterbury", "Yap Day" in FM-YAP), and for those
-subdivisions the library's code is the place name, so the holiday's
-name contains the code. No country code is sent. A company holiday goes only as "company
+name. The region is not sent as a field of its own, but a regional
+holiday's name can name it, for example "Augsburg Peace Festival" in
+DE-Augsburg or "Yap Day" in FM-YAP, and for some subdivisions the
+library's code is the place name, so the holiday's name contains the
+code. No country code is sent. A company holiday goes only as "company
 holiday", never the name the user typed; a day off only as "day off" or
 "half day off", never its type or note. Other weeks' holidays and
-absences are not sent. On a week the contract starts or ends inside,
-the worked figure is marked "(its days this week only)", which with no
-`ended_on` beside it says the contract started this week. The week and
-today are the request timezone's, for the goal line and `get_projects`
-as for the contract section, so the label and the goal line name one
-term on a Sunday evening west of UTC too: the SPA sends `tz` with a
-brief, a chat message and a memory rewrite, and a client that sends
-none gets UTC's. A contract that ended earlier in the current week sends only
-its final balance and its end date; one that ended before it sends none
-of the week, though its goal line stays in the profile and in
+absences are not sent. A contract that ended earlier in the current week
+sends only its final balance and its end date; one that ended before it
+sends none of the week, though its goal line stays in the profile and in
 `get_projects` until the project is archived (`goal_term` does not
-consult `ended_on`).
-The vacation entitlement is not sent. `/api/export/full` carries the
-contract, its entitlement included, the absences and the balance
-adjustments, so a backup restores the same balance. `PRIVACY.md` and
-`DATA.md` state this; a change happens
+consult `ended_on`). The vacation entitlement is not sent.
+
+Every day and week the coach reads is the request timezone's: the
+contract section's week and today, the goal line's week and the weekly
+totals in the profile, the productivity score, and the tools'
+(`get_projects`' week, the dates `get_beats` takes and prints, the
+patterns'). So the label and the goal line name one term on a Sunday
+evening west of UTC too. The SPA sends `tz` with a brief, a chat message
+and a memory rewrite; a client that sends none, the companion's chat for
+now, gets UTC's.
+
+`/api/export/full` carries the contract, its entitlement included, the
+absences and the balance adjustments, so a backup restores the same
+balance. `PRIVACY.md` and `DATA.md` state this; a change happens
 there first.
 
 ---
