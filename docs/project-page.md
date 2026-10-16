@@ -316,17 +316,18 @@ match shows the figures and no sentence — never a guessed one. The code is
   no line beats a wrong one. Past two days off it counts them by kind
   ("3 days vacation 20.2 h − 2 holidays 13.4 h"), a kind with one day
   keeping its name, so a week of Christmas stays one line.
-- **The ledger's +/− (`weekDelta`) is the move between two closes** when
-  the row and the one before both have one. On the contract's first close
-  it is the move from the opening balance. Only then does it fall back to
-  worked − expected, else worked − goal. Worked − expected is wrong on the
-  week a contract starts or ends mid-week, because `worked` counts hours
-  the balance does not (see *The ledger route*). Either move leaves out
-  the balance adjustments inside it, which are rows of their own: the
-  week's own between two closes; on the first close every one from
-  `since` through the week's Sunday, since a weekend start leaves the
-  start week without a close and an adjustment filed there is still
-  inside the next week's move.
+- **The ledger's +/− (`weekDelta`) is the API's `balance_moved`** on a
+  week with a close, adjustments left out (they are rows of their own).
+  On a week without one it falls back to worked − expected, else worked −
+  goal. Worked − expected is wrong on the week a contract starts or ends
+  mid-week, because `worked` counts hours the balance does not (see *The
+  ledger route*). Against an API that predates `balance_moved`, the SPA
+  reads the move off the closes: between two when the row and the one
+  before both have one, from the opening balance on the contract's first
+  close, each less the adjustments inside it — the week's own between two
+  closes; on the first close every one from `since` through the week's
+  Sunday, since a weekend start leaves the start week without a close and
+  an adjustment filed there is still inside the next week's move.
 - **The since line is worked − expected with the opening and the
   adjustments in brackets** ("+8.5 h (+2.0 h brought forward, −40.0 h
   adjusted)"), so it adds up to the standing's balance. The standing's
@@ -362,6 +363,10 @@ null.
                                           // week and whenever contract_expected is null (one rule for the
                                           // row); after ended_on the final balance, moved only
                                           // by an adjustment after the end
+    "balance_moved": -0.7,                // the +/−: the close less the Sunday close before, less
+                                          // the adjustments between; from the opening balance on the
+                                          // first close (a weekend start's hours included); null
+                                          // exactly when balance_end is
     "notes": [ {"date":"2026-08-18","kind":"sick","half_day":true},
                {"date":"2026-05-25","kind":"holiday","name":"Whit Monday"} ],
     "adjustments": [ {"id": "…", "date": "2026-08-31", "kind": "delta", "hours": -40.0,
@@ -379,7 +384,8 @@ null.
 does not call them optional. The SPA parses the three new figures
 (`adjustments`, `adjusted`, `balance_adjusted`) and `ended_balance` as
 optional, so it reads an API that predates them: such an API keeps no
-adjustments, and `[]` and 0 are its true figures.
+adjustments, and `[]` and 0 are its true figures. `balance_moved` is
+optional to the SPA too, which reads the move off the closes without it.
 
 What the shape settles:
 
@@ -392,6 +398,14 @@ What the shape settles:
   total over the per-day rule, so the proof is one rule in one place.
   Between two closes it reads `balance_end − the close before − Σ applied
   = worked − contract_expected` on a full week.
+- **A week's move is the API's, not the SPA's.** `balance_moved` reads
+  the close before off the same pass, so the oldest row shown has it
+  though the ledger does not hold the week before; reconstructed from the
+  rows, that row could only fall back to worked − expected, which counts
+  the hours after `ended_on` the balance does not (AHM-81). On the first
+  close it moves from the opening balance, and when the week holding the
+  first day has no close, the week after moves from it, so a weekend
+  start's hours are in a +/−.
 - **An adjustment's `applied` is filled wherever it falls** — the current
   week, a week with no close, a ledger of one week — because the pass
   runs through today and the last adjustment, not only to the last closed

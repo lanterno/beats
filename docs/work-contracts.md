@@ -263,7 +263,10 @@ balance at the end of it, before the next day's adjustment. A week's
 **closing balance** is its Sunday close. On the week a contract starts or
 ends mid-week, `worked` counts hours the balance does not, so the move
 between two closes is not `worked − expected`; on any week it also
-includes the week's adjustments.
+includes the week's adjustments. The ledger therefore sends each closed
+week's **move**, `balance_moved`: the close less the one before, less the
+adjustments between, read off the same pass whether or not the week
+before is shown.
 
 **Day boundaries** use the request timezone (`tz`, default UTC). A beat
 belongs whole to the local day it started on, and a running timer counts
@@ -389,7 +392,7 @@ region check, and every project write reconciles the adjustments
 | `GET /api/projects?include=this_week` | adds `contract_expected`, `contract_worked`, `contract_remaining`, `balance` for the current week |
 | `PUT /api/projects/{id}/contract` | replace terms / region / company holidays / holidays not given / opening balance / `ended_on` as one object; `kind` untouched |
 | `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, balance_adjusted, days: [{date, expected, worked, holiday, absence}]}` |
-| `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected`, `balance_end` and its `adjustments` (each with `applied`); `since`; `totals` as of today, `adjusted` among them; `ended_balance` |
+| `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected`, `balance_end`, `balance_moved` and its `adjustments` (each with `applied`); `since`; `totals` as of today, `adjusted` among them; `ended_balance` |
 | `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`, even where a company day covers the date, which is then listed twice, the region's row first. Only company days without a region; `[]` without a contract |
 | `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
 | `POST /api/projects/{id}/adjustments?tz=` | a delta, reset or cap (upsert on date, keeps the id, 201); `tz` required |
