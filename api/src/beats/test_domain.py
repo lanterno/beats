@@ -9,6 +9,8 @@ import pytest
 
 from beats.domain.analytics import AnalyticsService
 from beats.domain.exceptions import (
+    AdjustmentBeforeStart,
+    AdjustmentOutsideBalance,
     DomainException,
     InvalidEndTime,
     NoActiveTimer,
@@ -32,6 +34,8 @@ from beats.domain.intelligence import (
 from beats.domain.models import (
     Absence,
     AbsenceType,
+    AdjustmentKind,
+    BalanceAdjustment,
     Beat,
     BiometricDay,
     Contract,
@@ -3414,19 +3418,73 @@ class TestBeatServiceCrud:
         assert [b.id for b in result] == ["b2"]
 
 
-def _project_service(*, projects: list[Project] | None = None, beats: list[Beat] | None = None):
+class _FakeAdjustmentRepo:
+    """In-memory balance adjustments: the store the contract service reads
+    and writes, and the two calls a contract write makes. Keyed on
+    (project, date) like the real one's unique index."""
+
+    def __init__(self, adjustments: builtins.list[BalanceAdjustment] | None = None):
+        self._adjustments: list[BalanceAdjustment] = list(adjustments or [])
+
+    async def list_by_project(
+        self, project_id: str, start: date, end: date
+    ) -> builtins.list[BalanceAdjustment]:
+        return sorted(
+            (a for a in self._adjustments if a.project_id == project_id and start <= a.date <= end),
+            key=lambda a: a.date,
+        )
+
+    async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment:
+        key = (adjustment.project_id, adjustment.date)
+        self._adjustments = [a for a in self._adjustments if (a.project_id, a.date) != key]
+        self._adjustments.append(adjustment)
+        return adjustment
+
+    async def delete(self, project_id: str, adjustment_id: str) -> bool:
+        before = len(self._adjustments)
+        self._adjustments = [
+            a
+            for a in self._adjustments
+            if not (a.project_id == project_id and a.id == adjustment_id)
+        ]
+        return len(self._adjustments) < before
+
+    async def earliest(self, project_id: str, on_or_after: date) -> date | None:
+        days = [
+            a.date
+            for a in self._adjustments
+            if a.project_id == project_id and a.date >= on_or_after
+        ]
+        return min(days, default=None)
+
+    async def delete_by_project(self, project_id: str) -> int:
+        before = len(self._adjustments)
+        self._adjustments = [a for a in self._adjustments if a.project_id != project_id]
+        return before - len(self._adjustments)
+
+
+def _project_service(
+    *,
+    projects: list[Project] | None = None,
+    beats: list[Beat] | None = None,
+    adjustments: _FakeAdjustmentRepo | None = None,
+):
     from beats.domain.services import ProjectService
 
     return ProjectService(
         project_repo=_FakeProjectRepoForServices(projects),
         beat_repo=_FakeBeatRepoForServices(beats),
+        adjustments=adjustments or _FakeAdjustmentRepo(),
     )
 
 
-def _day_job(id_: str | None = None, **region) -> Project:
+CONTRACT_START = date(2026, 1, 5)
+
+
+def _day_job(id_: str | None = None, *, starts_on: date = CONTRACT_START, **region) -> Project:
     """A day job on one full-time term, with the given holiday region."""
     term = ContractTerm(
-        effective_from=date(2026, 1, 5), schedule_type=ScheduleType.FULL_TIME, full_time_hours=40
+        effective_from=starts_on, schedule_type=ScheduleType.FULL_TIME, full_time_hours=40
     )
     contract = Contract(terms=[term], **region)
     return Project(id=id_, name="Day job", kind=ProjectKind.DAY_JOB, contract=contract)
@@ -3460,9 +3518,12 @@ class TestProjectServiceCrud:
             )
 
     async def test_update_refuses_an_unknown_holiday_region(self):
-        svc = _project_service(projects=[_day_job("p1", holiday_country="GB")])
+        stored = _day_job("p1", holiday_country="GB")
+        svc = _project_service(projects=[stored])
         with pytest.raises(UnknownHolidayRegion):
-            await svc.update_project(_day_job("p1", holiday_country="XX"))
+            await svc.update_project(
+                _day_job("p1", holiday_country="XX"), previous_contract=stored.contract
+            )
 
     async def test_create_round_trips(self):
         svc = _project_service()
@@ -3476,7 +3537,7 @@ class TestProjectServiceCrud:
         p = _project("p1", "Alpha", weekly_goal=5.0)
         svc = _project_service(projects=[p])
         renamed = p.model_copy(update={"name": "Alpha 2", "weekly_goal": 10.0})
-        result = await svc.update_project(renamed)
+        result = await svc.update_project(renamed, previous_contract=None)
         assert result.name == "Alpha 2"
         assert result.weekly_goal == 10.0
 
@@ -3586,6 +3647,7 @@ class TestContractServiceIndex:
             project_repo=_FakeProjectRepoForServices([known, unknown, side]),
             beat_repo=_FakeBeatRepoForServices(),
             absence_repo=_FakeAbsenceRepo(),
+            adjustment_repo=_FakeAdjustmentRepo(),
         )
         weeks = await service.weeks_for([known, unknown, side], {}, ZoneInfo("UTC"))
         assert set(weeks) == {"p1"}
@@ -3613,6 +3675,7 @@ class TestContractServiceLedger:
             project_repo=_FakeProjectRepoForServices([project or _day_job("p1")]),
             beat_repo=_FakeBeatRepoForServices(list(beats)),
             absence_repo=_FakeAbsenceRepo(list(absences)),
+            adjustment_repo=_FakeAdjustmentRepo(),
             now=lambda tz: at.astimezone(tz),
         )
 
@@ -3670,6 +3733,119 @@ class TestContractServiceLedger:
         )
         with pytest.raises(UnknownHolidayRegion):
             await service.ledger("p2", 1, self.UTC_TZ)
+
+
+def _adjustment(day: date, project_id: str = "p1") -> BalanceAdjustment:
+    return BalanceAdjustment(
+        id=f"a-{day}", project_id=project_id, date=day, kind=AdjustmentKind.DELTA, hours=-8
+    )
+
+
+class TestRecordAdjustment:
+    """The date rule is "from the first day through today in the request's
+    timezone". The HTTP suite runs on the server's clock, so whose today it
+    is can only be pinned here, at a fixed instant: 23:30 UTC on Sunday 8
+    March is already Monday 9 March in Berlin."""
+
+    @staticmethod
+    def _service(repo: _FakeAdjustmentRepo):
+        from beats.domain.services import ContractService
+
+        at = datetime(2026, 3, 8, 23, 30, tzinfo=UTC)
+        return ContractService(
+            project_repo=_FakeProjectRepoForServices([_day_job("p1")]),
+            beat_repo=_FakeBeatRepoForServices(),
+            absence_repo=_FakeAbsenceRepo(),
+            adjustment_repo=repo,
+            now=lambda tz: at.astimezone(tz),
+        )
+
+    async def test_today_is_the_request_timezones(self):
+        repo = _FakeAdjustmentRepo()
+        service = self._service(repo)
+        monday = date(2026, 3, 9)
+
+        with pytest.raises(AdjustmentOutsideBalance):
+            await service.record_adjustment(_adjustment(monday), ZoneInfo("UTC"))
+        await service.record_adjustment(_adjustment(monday), ZoneInfo("Europe/Berlin"))
+
+        assert [a.date for a in await repo.list_by_project("p1", monday, monday)] == [monday]
+
+
+class TestReconcileAdjustments:
+    """A contract write against the balance adjustments of the contract it
+    replaces. The drawer resends the whole contract on every edit, so the
+    one thing this must never do is refuse a write that leaves the first
+    day where it was."""
+
+    async def _write(self, stored: Project, new: Contract | None, repo: _FakeAdjustmentRepo):
+        svc = _project_service(projects=[stored], adjustments=repo)
+        project = stored.model_copy(update={"contract": new})
+        return await svc.update_project(project, previous_contract=stored.contract)
+
+    async def test_an_unchanged_contract_never_reads_its_adjustments(self):
+        # An orphan dated before the first day (a raw import can leave one)
+        # is ignored by the arithmetic, and must not block a rename.
+        stored = _day_job("p1")
+        orphan = _adjustment(CONTRACT_START - timedelta(days=30))
+        repo = _FakeAdjustmentRepo([orphan])
+
+        await self._write(stored, stored.contract, repo)
+
+        assert await repo.earliest("p1", date.min) == orphan.date
+
+    async def test_a_contract_from_none_clears_what_is_left_over(self):
+        stored = Project(id="p1", name="Day job", kind=ProjectKind.DAY_JOB)
+        repo = _FakeAdjustmentRepo(
+            [_adjustment(date(2026, 2, 2)), _adjustment(date(2026, 2, 2), "p2")]
+        )
+
+        await self._write(stored, _day_job("p1").contract, repo)
+
+        assert await repo.earliest("p1", date.min) is None
+        assert await repo.earliest("p2", date.min) == date(2026, 2, 2)
+
+    async def test_the_contract_going_takes_its_adjustments(self):
+        stored = _day_job("p1")
+        repo = _FakeAdjustmentRepo([_adjustment(date(2026, 2, 2))])
+
+        saved = await self._write(stored, None, repo)
+
+        assert saved.contract is None
+        assert await repo.earliest("p1", date.min) is None
+
+    @pytest.mark.parametrize(
+        ("new_start", "refused"),
+        [
+            (date(2026, 2, 9), True),  # past the adjustment on 2 February
+            (date(2026, 2, 2), False),  # onto it: it still counts
+            (date(2025, 12, 1), False),  # earlier
+        ],
+        ids=["later past one", "later onto one", "earlier"],
+    )
+    async def test_the_first_day_moved_later_past_an_adjustment_is_refused(
+        self, new_start, refused
+    ):
+        stored = _day_job("p1")
+        repo = _FakeAdjustmentRepo([_adjustment(date(2026, 2, 2))])
+        new = _day_job("p1", starts_on=new_start).contract
+
+        if refused:
+            with pytest.raises(AdjustmentBeforeStart):
+                await self._write(stored, new, repo)
+        else:
+            saved = await self._write(stored, new, repo)
+            assert saved.contract == new
+        assert await repo.earliest("p1", date.min) == date(2026, 2, 2)
+
+    async def test_the_first_day_moved_later_past_none_is_written(self):
+        stored = _day_job("p1")
+        repo = _FakeAdjustmentRepo([_adjustment(date(2026, 3, 2))])
+        new = _day_job("p1", starts_on=date(2026, 2, 2)).contract
+
+        saved = await self._write(stored, new, repo)
+
+        assert saved.contract == new
 
 
 class TestProjectServiceTimeAggregations:

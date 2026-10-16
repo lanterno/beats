@@ -1739,6 +1739,203 @@ class TestAbsencesAPI:
         assert resp.json()["code"] == "NOT_A_DAY_JOB"
 
 
+class TestAdjustmentsAPI:
+    """/api/projects/{id}/adjustments — the write side of the ledger, and what
+    the balance makes of it on the two reads. The arithmetic is tested on
+    fixed dates in `test_contracts.py` and `test_ledger.py`, and whose today
+    the date rule reads in `test_domain.py`; this is the wire."""
+
+    @staticmethod
+    def _last_monday() -> date:
+        today = datetime.now(UTC).date()
+        return today - timedelta(days=today.weekday() + 7)
+
+    @staticmethod
+    def _post(client, headers, project_id: str, tz: str | None = "UTC", **body):
+        params = {} if tz is None else {"tz": tz}
+        return client.post(
+            f"/api/projects/{project_id}/adjustments", params=params, json=body, headers=headers
+        )
+
+    def _record(self, client, headers, project_id: str, **body) -> dict:
+        resp = self._post(client, headers, project_id, **body)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    @staticmethod
+    def _ledger(client, headers, project_id: str) -> dict:
+        resp = client.get(
+            f"/api/projects/{project_id}/ledger", params={"weeks": 2}, headers=headers
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def test_a_payout_moves_the_balance_and_shows_in_its_week(self, client, auth_headers):
+        project = _day_job(client, auth_headers, opening_balance_hours=10)
+        monday = self._last_monday().isoformat()
+
+        created = self._record(
+            client, auth_headers, project["id"], date=monday, kind="delta", hours=-4, note="paid"
+        )
+
+        assert created == {
+            "id": created["id"],
+            "project_id": project["id"],
+            "date": monday,
+            "kind": "delta",
+            "hours": -4,
+            "note": "paid",
+        }
+        resp = client.get(f"/api/projects/{project['id']}/contract/week", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        week = resp.json()
+        assert week["balance_adjusted"] == -4
+        proof = (
+            week["balance_opening"]
+            + week["balance_worked"]
+            - week["balance_expected_through"]
+            + week["balance_adjusted"]
+        )
+        assert proof == pytest.approx(week["balance"], abs=0.025)
+        ledger = self._ledger(client, auth_headers, project["id"])
+        assert ledger["totals"]["adjusted"] == -4
+        assert ledger["totals"]["balance"] == week["balance"]
+        assert ledger["weeks"][0]["adjustments"] == []
+        assert ledger["weeks"][1]["adjustments"] == [
+            {
+                "id": created["id"],
+                "date": monday,
+                "kind": "delta",
+                "hours": -4,
+                "note": "paid",
+                "applied": -4,
+            }
+        ]
+        assert ledger["ended_balance"] is None
+
+    def test_a_second_post_on_a_date_replaces_the_first(self, client, auth_headers):
+        # Two writes, one record: the unique index the fake cannot see.
+        project = _day_job(client, auth_headers)
+        monday = self._last_monday().isoformat()
+        first = self._record(
+            client, auth_headers, project["id"], date=monday, kind="delta", hours=-4, note="x"
+        )
+        second = self._record(
+            client, auth_headers, project["id"], date=monday, kind="reset", hours=0
+        )
+
+        assert second["id"] == first["id"]
+        (adjustment,) = self._ledger(client, auth_headers, project["id"])["weeks"][1]["adjustments"]
+        assert (adjustment["kind"], adjustment["hours"], adjustment["note"]) == ("reset", 0, None)
+
+    def test_without_a_balance_there_is_nothing_to_adjust(self, client, auth_headers):
+        monday = self._last_monday().isoformat()
+        side = _create_project(client, auth_headers)
+        resp = self._post(client, auth_headers, side["id"], date=monday, kind="delta", hours=1)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+
+        no_contract = _create_project(client, auth_headers, kind="day_job")
+        resp = self._post(
+            client, auth_headers, no_contract["id"], date=monday, kind="delta", hours=1
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NO_CONTRACT"
+
+    @pytest.mark.parametrize(
+        "day",
+        [date(2026, 1, 4), datetime.now(UTC).date() + timedelta(days=2)],
+        ids=["before the first term", "after today"],
+    )
+    def test_a_date_outside_the_balance_is_409(self, client, auth_headers, day):
+        project = _day_job(client, auth_headers)
+        resp = self._post(
+            client, auth_headers, project["id"], date=day.isoformat(), kind="cap", hours=0
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "ADJUSTMENT_OUTSIDE_BALANCE"
+
+    def test_a_body_that_means_nothing_is_422_naming_hours(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        monday = self._last_monday().isoformat()
+        resp = self._post(client, auth_headers, project["id"], date=monday, kind="delta", hours=0)
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["hours"]
+
+    def test_tz_is_required(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        monday = self._last_monday().isoformat()
+        resp = self._post(
+            client, auth_headers, project["id"], tz=None, date=monday, kind="delta", hours=1
+        )
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["tz"]
+
+    def test_delete_is_204_then_404_and_scoped_to_the_project(
+        self, client, auth_headers, other_auth_headers
+    ):
+        project = _day_job(client, auth_headers)
+        other_job = _day_job(client, auth_headers)
+        monday = self._last_monday().isoformat()
+        created = self._record(
+            client, auth_headers, project["id"], date=monday, kind="delta", hours=2
+        )
+        url = f"/api/projects/{project['id']}/adjustments"
+
+        for headers, path in [
+            (auth_headers, f"/api/projects/{other_job['id']}/adjustments/{created['id']}"),
+            (other_auth_headers, f"{url}/{created['id']}"),
+            (auth_headers, f"{url}/{'0' * 24}"),
+            (auth_headers, f"{url}/not-an-id"),
+        ]:
+            resp = client.delete(path, headers=headers)
+            assert resp.status_code == 404, (path, resp.text)
+
+        resp = client.delete(f"{url}/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 204, resp.text
+        assert self._ledger(client, auth_headers, project["id"])["weeks"][1]["adjustments"] == []
+        resp = client.delete(f"{url}/{created['id']}", headers=auth_headers)
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_a_first_term_moved_past_an_adjustment_is_409(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        self._record(client, auth_headers, project["id"], date="2026-02-02", kind="delta", hours=1)
+        later = [{**FULL_TIME[0], "effective_from": "2026-02-09"}]
+
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract", json={"terms": later}, headers=auth_headers
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "ADJUSTMENT_BEFORE_START"
+
+    def test_a_rename_keeps_them_and_a_kind_change_takes_them(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        monday = self._last_monday().isoformat()
+        self._record(client, auth_headers, project["id"], date=monday, kind="delta", hours=1)
+
+        def put(**fields) -> None:
+            resp = client.put(
+                "/api/projects/",
+                json={"id": project["id"], "name": "Renamed", **fields},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 200, resp.text
+
+        # The drawer resends the whole contract on every edit.
+        put(kind="day_job", contract={"terms": FULL_TIME})
+        assert (
+            len(self._ledger(client, auth_headers, project["id"])["weeks"][1]["adjustments"]) == 1
+        )
+
+        put(kind="side_project")
+        put(kind="day_job", contract={"terms": FULL_TIME})
+        ledger = self._ledger(client, auth_headers, project["id"])
+        assert ledger["weeks"][1]["adjustments"] == []
+        assert ledger["totals"]["adjusted"] == 0
+
+
 class TestHolidayRegionsAPI:
     def test_regions_are_listed_and_cacheable(self, client, auth_headers):
         resp = client.get("/api/meta/holiday-regions", headers=auth_headers)
