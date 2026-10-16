@@ -5606,8 +5606,28 @@
     },
     "/api/coach/chat": {
       "post": {
-        "description": "Streaming chat with tool use. Returns SSE.",
+        "description": "Streaming chat with tool use. Returns SSE. ``tz`` names the user's\ntoday and each day job's contract week in the coach's context.",
         "operationId": "coach_chat_api_coach_chat_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5768,6 +5788,26 @@
       "post": {
         "description": "Trigger the coach to rewrite its memory from the last 7 days.",
         "operationId": "rewrite_memory_api_coach_memory_rewrite_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5778,6 +5818,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Rewrite Memory",
