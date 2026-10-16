@@ -4,9 +4,9 @@
  * note, and a line saying what the booking does to the week. Saving records
  * one absence per weekday in the range — weekends and the contract's
  * holidays, public or company, are skipped, since the contract owes nothing
- * on them — as one run
- * of writes with one toast at the end. A range whose every weekday is already
- * booked can be removed, and so can an absence stored on a holiday.
+ * on them — as one run of writes with one toast at the end. A range whose
+ * every weekday is already booked can be removed, and so can an absence
+ * stored on a holiday.
  *
  * A booked day keeps its own note unless one is typed: the field starts from
  * the note the days share, or empty when they differ, and an untouched field

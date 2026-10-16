@@ -8,11 +8,11 @@
  * Saving PUTs the whole contract with both lists; entries in other years go
  * out untouched. A weekend holiday costs nothing either way, so it has no
  * tick — unless the contract already stores it as not given (through the
- * API, say), when the tick stays so the date can be taken back. A date left over from a region change — or kept with no region at
- * all — is listed so it can be seen and removed: on its own it does nothing,
- * but a later region with a holiday that day would quietly make it a working
- * day. While a save is in flight the dialog stays open, as the booking
- * dialog does.
+ * API, say), when the tick stays so the date can be taken back. A date left
+ * over from a region change — or kept with no region at all — is listed so
+ * it can be seen and removed: on its own it does nothing, but a later region
+ * with a holiday that day would quietly make it a working day. While a save
+ * is in flight the dialog stays open, as the booking dialog does.
  */
 
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
@@ -45,7 +45,7 @@ interface CompanyRow {
 	name: string;
 }
 
-/** `notGiven` marks a date refused for being on the days not given, which the row offers to clear. */
+/** `notGiven`: refused for a date on the days not given, which the row offers to clear. */
 type RowErrors = Partial<Record<"date" | "name", string>> & { notGiven?: true };
 
 const FIELD =
