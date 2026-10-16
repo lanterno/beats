@@ -1,5 +1,5 @@
 /**
- * An account that signs in through home.space has no passkeys. The section once
+ * An account that signs in through single sign-on has no passkeys. The section once
  * read "no passkeys" as "still loading" and said Loading... forever.
  */
 import { cleanup, render, screen } from "@testing-library/react";
