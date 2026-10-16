@@ -129,12 +129,18 @@ class Running(NamedTuple):
     applied: dict[date, float]
 
 
+def within_contract(contract: Contract, day: date) -> bool:
+    """Whether `day` falls inside the contract's dates: from its first term
+    through `ended_on`, whatever the term in force."""
+    return day >= contract.starts_on and (contract.ended_on is None or day <= contract.ended_on)
+
+
 def counts_worked(contract: Contract, day: date) -> bool:
-    """Whether hours worked on `day` count against the contract: from its
-    first term through `ended_on`. The balance and the week's remaining both
+    """Whether hours worked on `day` count against the contract: inside its
+    dates (`within_contract`). The balance and the week's remaining both
     ask this, so on a week a contract starts or ends mid-week the two agree
     on what was worked under it."""
-    return day >= contract.starts_on and (contract.ended_on is None or day <= contract.ended_on)
+    return within_contract(contract, day)
 
 
 def adjustments_by_day(adjustments: Iterable[BalanceAdjustment]) -> dict[date, BalanceAdjustment]:
