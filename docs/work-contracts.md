@@ -64,6 +64,9 @@ goal. Git history has the plans.
     `base / 2`. Each list is valid on its own. A removal that matches no
     region holiday, or is kept while there is no region, does nothing and
     is kept; a company day on a removed date wins, under its own name.
+    The calendar's `include=not_given` still lists that region day, as
+    not given, beside the company day: an editor that could see only one
+    of the two marks could not clear the other.
 
 ---
 
@@ -324,7 +327,7 @@ write, beside the region check.
 | `PUT /api/projects/{id}/contract` | replace terms / region / company holidays / holidays not given / opening balance / `ended_on` as one object; `kind` untouched |
 | `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, days: [{date, expected, worked, holiday, absence}]}` |
 | `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected` and `balance_end`; `since`; `totals` as of today |
-| `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`. Only company days without a region; `[]` without a contract |
+| `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`, even where a company day covers the date, which is then listed twice, the region's row first. Only company days without a region; `[]` without a contract |
 | `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
 | `GET /api/meta/holiday-regions` | `[{code, name, subdivisions: [{code, name}]}]`; `Cache-Control: public, max-age=86400`; behind the normal auth |
 

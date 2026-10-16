@@ -226,10 +226,13 @@ yet — start the timer in the sidebar."
   nothing and has none. A date still marked not given that matches no
   holiday of the region — left by a region change, a cleared region or a
   library upgrade — is listed under "No longer a holiday here" so it can be
-  seen and removed. A region change in the settings form clears neither
+  seen and removed, but only once that year's calendar is in: until then,
+  or when it fails to load, every date not given would look left over. A
+  company day on a date marked not given is refused, and its row offers
+  "Clear the mark". A region change in the settings form clears neither
   list. The constants' "2 company days · 1 not given" are counted off
   `/holidays?include=not_given`, not the raw lists, so a leftover date is
-  never counted.
+  never counted, nor a date not given that a company day covers.
 - **The booking dialog records with `POST …/absences`**, the API's upsert,
   one weekday at a time, as one mutation with one invalidation at the end.
   The first failure stops the run and keeps the dialog open ("2 of 5 days
