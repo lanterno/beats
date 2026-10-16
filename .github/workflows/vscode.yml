@@ -5,6 +5,10 @@ on:
   pull_request:
     paths: [integrations/vscode-beats/**, .github/workflows/vscode.yml]
 
+# Read the code, nothing more; a job that needs a write asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Compile + Package

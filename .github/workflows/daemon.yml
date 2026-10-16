@@ -5,6 +5,10 @@ on:
   pull_request:
     paths: [daemon/**, .github/workflows/daemon.yml]
 
+# Read the code, nothing more; a job that needs a write asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Vet & Test
