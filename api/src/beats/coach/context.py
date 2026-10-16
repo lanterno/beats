@@ -37,8 +37,15 @@ def build_system_block() -> str:
     return COACH_PERSONA
 
 
-async def build_user_context(user_id: str, repos: CoachRepos) -> str:
-    """30-day aggregates + coach memory. Designed to be cached."""
+async def build_user_context(user_id: str, repos: CoachRepos, tz: ZoneInfo = UTC_TZ) -> str:
+    """30-day aggregates + coach memory. Designed to be cached.
+
+    ``tz`` decides one thing here: which week the goal line is this week's.
+    It must be the day context's, since that context's contract week is
+    labelled by the term this line names; on UTC's week a user west of
+    Greenwich would read next week's term on Sunday evening beside this
+    week's figures. The rest of the block is UTC's.
+    """
     db = Database.get_db()
 
     projects = await repos.project.list()
@@ -85,9 +92,11 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         logger.debug("Productivity score unavailable", exc_info=True)
         score_line = "Productivity score: unavailable"
 
-    # Goals — this week's: the contract's hours on a day job it governs, the
+    # Goals — this week's in the request timezone, as the day context's
+    # contract week is: the contract's hours on a day job it governs, the
     # personal goal elsewhere. One line either way.
-    monday = now.date() - timedelta(days=now.weekday())
+    local_today = now.astimezone(tz).date()
+    monday = local_today - timedelta(days=local_today.weekday())
     goals = []
     for p in active:
         term = p.goal_term(monday)
@@ -319,15 +328,17 @@ async def build_coach_messages(
 
     Used by both brief.py and chat.py to avoid duplicating the context assembly.
     Returns (system, messages, cache_spec). ``tz`` controls the local-day
-    bucketing of the (uncached) day context; the cached user-context block is
-    timezone-independent so the prompt cache isn't fragmented per timezone.
+    bucketing of the (uncached) day context, and in the cached user-context
+    block only which week the goal line is for — the same week as UTC's but
+    for the hours between the two Mondays, so the cache is not fragmented
+    per timezone in practice.
     """
     from beats.coach.gateway import CacheSpec
 
     repos = await build_repos(user_id)
 
     system = build_system_block()
-    user_ctx = await build_user_context(user_id, repos)
+    user_ctx = await build_user_context(user_id, repos, tz)
     day_ctx = await build_day_context(user_id, repos, target_date, tz)
 
     preamble = [

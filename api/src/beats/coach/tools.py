@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
+
+UTC_TZ = ZoneInfo("UTC")
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -96,9 +99,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 class _ToolContext:
     """Shared state for a single tool execution round."""
 
-    def __init__(self, repos: CoachRepos, projects: list) -> None:
+    def __init__(self, repos: CoachRepos, projects: list, tz: ZoneInfo) -> None:
         self.repos = repos
         self.projects = projects
+        self.tz = tz
         self.project_map = {p.id: p.name for p in projects}
 
     def _build_intel(self):
@@ -111,7 +115,9 @@ class _ToolContext:
 async def _handle_get_projects(ctx: _ToolContext, tool_input: dict) -> str:
     include_archived = tool_input.get("include_archived", False)
     filtered = ctx.projects if include_archived else [p for p in ctx.projects if not p.archived]
-    today = datetime.now(UTC).date()
+    # This week in the request timezone, as the goal line and the day
+    # context's contract week are, so the three name the same term.
+    today = datetime.now(ctx.tz).date()
     monday = today - timedelta(days=today.weekday())
     lines = []
     for p in filtered:
@@ -223,13 +229,16 @@ async def execute_tool(
     *,
     repos: CoachRepos | None = None,
     projects: list | None = None,
+    tz: ZoneInfo = UTC_TZ,
 ) -> str:
-    """Execute a tool and return the result as a string for the LLM."""
+    """Execute a tool and return the result as a string for the LLM.
+
+    ``tz`` is the request's timezone, which decides `get_projects`' week."""
     if repos is None:
         repos = await build_repos(user_id)
     if projects is None:
         projects = await repos.project.list()
-    ctx = _ToolContext(repos, projects)
+    ctx = _ToolContext(repos, projects, tz)
 
     handler = _TOOL_HANDLERS.get(tool_name)
     if handler:

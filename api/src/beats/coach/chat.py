@@ -190,7 +190,7 @@ async def handle_chat_turn(
         for tb in tool_use_blocks:
             try:
                 result_text = await execute_tool(
-                    user_id, tb["name"], tb["input"], repos=repos, projects=projects
+                    user_id, tb["name"], tb["input"], repos=repos, projects=projects, tz=tz
                 )
             except Exception as exc:  # noqa: BLE001
                 result_text = f"Error: {exc}"
