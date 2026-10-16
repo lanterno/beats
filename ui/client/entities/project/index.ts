@@ -8,10 +8,9 @@
  * - UI: presentational components
  */
 
-// Model layer
-export type { AdjustmentInput } from "./api";
 // API layer
 export {
+	type AdjustmentInput,
 	projectKeys,
 	useArchivedProjects,
 	useArchiveProject,
@@ -28,6 +27,7 @@ export {
 	useUpdateGoalOverrides,
 	useUpdateProject,
 } from "./api";
+// Model layer
 export type {
 	AdjustmentKind,
 	AdjustmentRow,
