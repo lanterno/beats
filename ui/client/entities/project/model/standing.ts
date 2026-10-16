@@ -83,11 +83,24 @@ function dayOffReason(day: ContractDay): string | undefined {
 	return undefined;
 }
 
+/** Past this many days off the nominal line counts them by kind instead of naming each. */
+const NAMED_DAYS_OFF = 2;
+
+/** "2", "2½", "½": a count of days off, to the half day. */
+function halfDays(days: number): string {
+	const halves = Math.round(days * 2);
+	const whole = Math.floor(halves / 2);
+	if (halves % 2 === 0) return String(whole);
+	return `${whole === 0 ? "" : whole}½`;
+}
+
 /**
  * "33.6 h nominal − Fri vacation 6.7 h": the term's hours and what each
  * holiday and absence took off them, only when the week expects less than
- * the term says (a half day takes half). Null when they agree, when there is
- * no expectation, and when the named days do not account for the whole
+ * the term says (a half day takes half). Past two days off it counts them by
+ * kind — "− 3 days vacation 20.2 h − 2 holidays 13.4 h" — so a week of
+ * Christmas stays one line. Null when they agree, when there is no
+ * expectation, and when the named days do not account for the whole
  * difference (a term change or the contract's first or last day mid-week —
  * the ledger's rule row says so there).
  */
@@ -96,23 +109,41 @@ export function nominalLine(week: ContractWeek, term: ContractTerm): string | nu
 	if (nominal == null || week.expected === undefined) return null;
 	if (Math.abs(week.expected - nominal) < 0.005) return null;
 	const perDay = termHoursPerDay(term) ?? 0;
-	const deductions: string[] = [];
-	let cuts = 0;
+	const daysOff: { date: string; reason: string; kind: string; cut: number }[] = [];
 	for (const day of week.days) {
 		if (!isWeekday(day.date)) continue;
 		const reason = dayOffReason(day);
 		if (!reason) continue;
 		const cut = roundHours(perDay - day.expected);
 		if (cut < 0.005) continue;
-		cuts += cut;
-		deductions.push(`${weekdayShort(day.date)} ${reason} ${hours1(cut)}`);
+		const kind = day.holiday ? "holiday" : reason;
+		daysOff.push({ date: day.date, reason, kind, cut });
 	}
-	if (deductions.length === 0) return null;
+	if (daysOff.length === 0) return null;
 	// The named days must account for the whole difference: a term change
 	// mid-week moves the per-day hours, and a line that does not add up to
 	// Expected is worse than none.
+	const cuts = daysOff.reduce((sum, d) => sum + d.cut, 0);
 	if (Math.abs(nominal - cuts - week.expected) > 0.05) return null;
-	return `${hours1(nominal)} nominal − ${deductions.join(" − ")}`;
+	if (daysOff.length <= NAMED_DAYS_OFF) {
+		const named = daysOff.map((d) => `${weekdayShort(d.date)} ${d.reason} ${hours1(d.cut)}`);
+		return `${hours1(nominal)} nominal − ${named.join(" − ")}`;
+	}
+	const byKind = new Map<string, (typeof daysOff)[number][]>();
+	for (const d of daysOff) byKind.set(d.kind, [...(byKind.get(d.kind) ?? []), d]);
+	const counted = [...byKind].map(([kind, group]) => {
+		const cut = group.reduce((sum, d) => sum + d.cut, 0);
+		// A kind with a single day keeps its day and name.
+		if (group.length === 1) {
+			return `${weekdayShort(group[0].date)} ${group[0].reason} ${hours1(cut)}`;
+		}
+		const days = halfDays(perDay > 0 ? cut / perDay : group.length);
+		const one = days === "1" || days === "½";
+		const noun =
+			kind === "holiday" ? (one ? "holiday" : "holidays") : `${one ? "day" : "days"} ${kind}`;
+		return `${days} ${noun} ${hours1(roundHours(cut))}`;
+	});
+	return `${hours1(nominal)} nominal − ${counted.join(" − ")}`;
 }
 
 /**
