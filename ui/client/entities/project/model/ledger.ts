@@ -278,8 +278,9 @@ function appliedBetween(ledger: Ledger, from: string, to: string): number {
  * A week's +/−: on a week with a close, the API's `balanceMoved` — what the
  * balance counted that week less what it expected, adjustments left out,
  * read off the close before even when the ledger does not hold that week.
- * The balance counts only the contract's days, so on the week a contract
- * starts or ends worked − expected is not what moved it.
+ * The balance counts only the contract's days under a term that owes hours,
+ * so on the week a contract starts or ends, or a term that owes nothing
+ * begins or ends, worked − expected is not what moved it.
  *
  * An API that predates `balanceMoved` leaves the SPA to read the move off
  * the closes: between its close and the one before when both are in the
