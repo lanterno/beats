@@ -3234,7 +3234,7 @@ class TestBuildDayContext:
         """What PRIVACY.md promises stays home: a sick day with a note reads
         "day off", a company holiday reads "company holiday" without the name
         the user typed, and neither the region's codes nor the opening
-        balance appear anywhere in the day context."""
+        balance as a figure of its own appear anywhere in the day context."""
         job = self._job(opening=1.6, company=[(date(2026, 5, 27), "Founders' picnic at Lake")])
         absences = [self._off(date(2026, 5, 29), type_="sick", note="flu")]
         out = await self._day_context(projects=[job], beats=self._week_beats(), absences=absences)
@@ -3243,6 +3243,19 @@ class TestBuildDayContext:
         assert "    Fri 2026-05-29: day off" in out
         for secret in ("Founders", "picnic", "sick", "flu", "CH", "ZH", "1.6"):
             assert secret not in out
+
+    async def test_on_a_contracts_first_day_the_balance_is_the_opening_balance(self):
+        """PRIVACY.md says the opening balance is not sent as a figure of its
+        own but the running balance sums it: with nothing worked yet and
+        nothing charged yet, the one is the other, and the end date this
+        week is listed."""
+        job = self._job(
+            starts=CONTRACT_TODAY, region=None, opening=12.5, ended_on=date(2026, 5, 29)
+        )
+        out = await self._day_context(projects=[job])
+
+        assert "  Acme running balance: +12.5 h over" in out.splitlines()
+        assert "  Acme: contract ends 2026-05-29" in out.splitlines()
 
     async def test_by_sunday_charges_today_and_the_rest_of_the_week(self):
         """The bare balance counts this morning's 4 h but not today's 8 h, so
