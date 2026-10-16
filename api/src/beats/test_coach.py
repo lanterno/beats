@@ -3305,6 +3305,31 @@ class TestBuildDayContext:
         for secret in ("Founders", "picnic", "sick", "flu", "CH", "ZH", "1.6"):
             assert secret not in out
 
+    async def test_worked_is_the_pages_on_a_half_way_hundredth(self):
+        """8 h 32 m 42 s is 8.545 h. Rounded each from the raw sums, the page
+        read 8.54 worked and 31.45 remaining, and the coach, reading worked
+        back off the other two, said 8.55. Remaining is now taken off the
+        rounded hours, so the page's three figures add up and the coach's
+        worked is the page's."""
+        from beats.domain.services import ContractService
+
+        job = self._job(region=None)
+        beats = [self._work(date(2026, 5, 26), 30762 / 3600)]
+        page = await ContractService(
+            project_repo=_FakeProjectRepoForTools([job]),
+            beat_repo=_FakeBeatRepoForTools(beats),
+            absence_repo=_FakeAbsenceStoreForCoach([]),
+            adjustment_repo=_FakeAdjustmentStoreForCoach([]),
+            now=lambda tz: CONTRACT_NOW.astimezone(tz),
+        ).week("job", None, ZURICH)
+        out = await self._day_context(projects=[job], beats=beats)
+
+        assert (page.expected, page.worked, page.remaining) == (40.0, 8.54, 31.46)
+        assert (
+            "this week expects 40.0 h after holidays and days off"
+            " — 8.54 h worked under the contract, 31.46 h to go\n" in out
+        )
+
     async def test_on_a_contracts_first_day_the_balance_is_the_opening_balance(self):
         """PRIVACY.md says the opening balance is not sent as a figure of its
         own but the running balance sums it: with nothing worked yet and
