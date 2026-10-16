@@ -769,6 +769,7 @@ class MongoBiometricDayRepository(MongoStore[BiometricDay], BiometricDayReposito
 
 class AbsenceRepository(Protocol):
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
+    async def list_all(self) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
 
@@ -784,6 +785,11 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
             },
             sort=("date", 1),
         )
+
+    async def list_all(self) -> list[Absence]:
+        # Every project's, for the full export: an absence outlives a kind
+        # change away from day_job, and a backup keeps it all the same.
+        return await self._find_many(sort=("date", 1))
 
     async def upsert(self, absence: Absence) -> Absence:
         # A replace rather than the shared `$set` merge: the document IS the
@@ -817,6 +823,7 @@ class AdjustmentRepository(Protocol):
     async def list_by_project(
         self, project_id: str, start: date, end: date
     ) -> list[BalanceAdjustment]: ...
+    async def list_all(self) -> list[BalanceAdjustment]: ...
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
     async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
     async def earliest(self, project_id: str, on_or_after: date) -> date | None: ...
@@ -836,6 +843,10 @@ class MongoAdjustmentRepository(MongoStore[BalanceAdjustment], AdjustmentReposit
             },
             sort=("date", 1),
         )
+
+    async def list_all(self) -> list[BalanceAdjustment]:
+        # Every project's, for the full export.
+        return await self._find_many(sort=("date", 1))
 
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment:
         # A replace, as an absence's: the document IS the adjustment, so a

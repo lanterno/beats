@@ -8,7 +8,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
-from beats.api.dependencies import BeatRepoDep, ProjectRepoDep
+from beats.api.dependencies import (
+    AbsenceRepoDep,
+    AdjustmentRepoDep,
+    BeatRepoDep,
+    ProjectRepoDep,
+)
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -61,19 +66,32 @@ async def export_sessions_csv(
     )
 
 
+# The backup's format. 1.1 added `absences` and `balance_adjustments`; a 1.0
+# file, which has neither, still imports, as a backup with none of them.
+_BACKUP_VERSION = "1.1"
+
+
 @router.get("/full")
 async def export_full_json(
     beat_repo: BeatRepoDep,
     project_repo: ProjectRepoDep,
+    absence_repo: AbsenceRepoDep,
+    adjustment_repo: AdjustmentRepoDep,
 ):
-    """Export everything as JSON for backup."""
+    """Export everything a balance is made of, as JSON for backup: the
+    projects (contract included), the sessions, the absences and the balance
+    adjustments."""
     beats = await beat_repo.list()
     projects = await project_repo.list()
+    absences = await absence_repo.list_all()
+    adjustments = await adjustment_repo.list_all()
     data = {
         "exported_at": datetime.now(UTC).isoformat(),
-        "version": "1.0",
+        "version": _BACKUP_VERSION,
         "projects": [p.model_dump(mode="json") for p in projects],
         "beats": [b.model_dump(mode="json") for b in beats],
+        "absences": [a.model_dump(mode="json") for a in absences],
+        "balance_adjustments": [a.model_dump(mode="json") for a in adjustments],
     }
 
     output = json.dumps(data, indent=2, default=str)
