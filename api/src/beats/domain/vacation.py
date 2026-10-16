@@ -49,7 +49,11 @@ def round_half(value: Fraction) -> float:
 
 
 def vacation_cost(
-    contract: Contract, day: date, holidays: set[date], absence: Absence | None
+    entitlement: VacationEntitlement,
+    contract: Contract,
+    day: date,
+    holidays: set[date],
+    absence: Absence | None,
 ) -> float:
     """What the absence on `day` costs the entitlement: 1, ½ for a half day,
     or 0.
@@ -61,8 +65,7 @@ def vacation_cost(
     contract — or its falling outside what is counted: before the opening,
     before the first term, after `ended_on`.
     """
-    entitlement = contract.vacation
-    if entitlement is None or absence is None or absence.type is not AbsenceType.VACATION:
+    if absence is None or absence.type is not AbsenceType.VACATION:
         return 0.0
     if day < entitlement.opening_on or day.weekday() >= 5 or day in holidays:
         return 0.0
@@ -93,7 +96,8 @@ def carry(left: float, entitlement: VacationEntitlement) -> float:
     if entitlement.carry_over is CarryOver.NONE:
         return 0.0
     cap = entitlement.carry_over_max_days
-    return left if cap is None else min(left, cap)
+    assert cap is not None  # `capped` requires one: VacationEntitlement.cap_only_when_capped
+    return min(left, cap)
 
 
 def vacation_year(
@@ -116,7 +120,7 @@ def vacation_year(
 
     booked: dict[int, float] = {}
     for day, absence in absences_by_day(absences).items():
-        cost = vacation_cost(contract, day, holidays, absence)
+        cost = vacation_cost(entitlement, contract, day, holidays, absence)
         if cost:
             booked[day.year] = booked.get(day.year, 0.0) + cost
 
