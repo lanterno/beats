@@ -363,6 +363,26 @@ class TestLedgerAdjustments:
         assert _ledger(_day_job(planned)).ended_balance is None
         assert _ledger().ended_balance is None
 
+    @pytest.mark.parametrize(
+        "last_term",
+        [
+            ContractTerm(effective_from=SECOND_TERM, schedule_type=ScheduleType.OBJECTIVE),
+            ContractTerm(
+                effective_from=SECOND_TERM, schedule_type=ScheduleType.CUSTOM, weekly_hours=0
+            ),
+        ],
+        ids=["objective", "0 h"],
+    )
+    def test_no_ended_balance_when_the_last_term_owes_nothing(self, last_term):
+        # Six weeks under the first term left a running figure, but the term
+        # in force on the end day keeps no balance, so there is no final
+        # one to settle.
+        ended = _contract(
+            _term(FIRST_TERM, 0.6), last_term, ended_on=SECOND_TERM + timedelta(days=2)
+        )
+        ledger = _ledger(_day_job(ended), absences=[], today=TODAY + timedelta(weeks=1), weeks=4)
+        assert ledger.ended_balance is None
+
 
 class TestLedgerUngoverned:
     def test_objective_term_has_the_personal_goal_and_no_balance(self):
