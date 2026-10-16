@@ -2645,6 +2645,32 @@ class TestComputeFocusScores:
         # Late has a 3-min gap from early → frag penalty
         assert result[1]["components"]["fragmentation"] == 15
 
+    async def test_peak_window_is_thirty_local_days(self):
+        """The peak block's 30 days are local days. In Zurich (UTC+2 in
+        May), two hours at 00:30 local on the window's first day, May 1, are
+        stored on April 30 in UTC. They outweigh the afternoon block, so the
+        peak is midnight and the afternoon session on the target day scores
+        10 for peak hours. A window read by UTC date dropped them, made the
+        afternoon the peak, and scored the same session 30."""
+        tz = ZoneInfo("Europe/Zurich")
+        target = date(2026, 5, 31)
+
+        def at(d: date, hour: int, minute: int = 0) -> datetime:
+            return datetime(d.year, d.month, d.day, hour, minute, tzinfo=tz).astimezone(UTC)
+
+        edge = at(date(2026, 5, 1), 0, 30)
+        assert edge.date() == date(2026, 4, 30)  # the UTC day before the window
+        mid = at(date(2026, 5, 15), 14)
+        today = at(target, 14, 30)
+        beats = [
+            Beat(id="edge", project_id="p1", start=edge, end=edge + timedelta(minutes=120)),
+            Beat(id="mid", project_id="p1", start=mid, end=mid + timedelta(minutes=60)),
+            Beat(id="today", project_id="p1", start=today, end=today + timedelta(minutes=30)),
+        ]
+        result = await _intel_service(beats=beats).compute_focus_scores(target, tz=tz)
+        assert [r["beat_id"] for r in result] == ["today"]
+        assert result[0]["components"]["peak_hours"] == 10
+
 
 class TestGetProjectHealth:
     """get_project_health surfaces stale projects and downward
