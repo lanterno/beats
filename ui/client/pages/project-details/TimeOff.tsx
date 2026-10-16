@@ -1,19 +1,21 @@
 /**
  * TimeOff — the rail's "Time off · upcoming" on a day job, contract or not:
- * the absences still to come and the region's public holidays in one list by
+ * the absences still to come and the contract's holidays — the region's
+ * public ones the employer gives and its own company days — in one list by
  * date, a run of weekday absences of one type as one row ("Mon Oct 5 – Fri
  * Oct 9 · Vacation · 5 days"), and the calendar year's tally. The month grid
  * is not here: it is the date picker inside the booking dialog (Decision 10).
  *
- * An absence row opens the booking dialog on its days; a holiday has nothing
- * to book, so its row opens its week in Days instead. A date outside the
- * calendar year carries its year, since the list runs a year ahead.
+ * An absence row opens the booking dialog on its days; a holiday, public or
+ * company, has nothing to book, so its row opens its week in Days instead. A
+ * date outside the calendar year carries its year, since the list runs a
+ * year ahead.
  */
 
 import { type Ref, useState } from "react";
 import type { Absence, AbsenceType } from "@/entities/absence";
 import { ABSENCE_TYPE_LABELS, useAbsences } from "@/entities/absence";
-import type { ProjectWithDuration } from "@/entities/project";
+import type { Holiday, ProjectWithDuration } from "@/entities/project";
 import { useHolidayRegions, useProjectHolidays } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { addIsoDays, cn } from "@/shared/lib";
@@ -47,7 +49,9 @@ export interface TimeOffProps {
 const SHOWN = 6;
 const TYPES: AbsenceType[] = ["vacation", "sick", "other"];
 
-type Entry = ({ kind: "absence" } & AbsenceRun) | { kind: "holiday"; date: string; name: string };
+type Entry =
+	| ({ kind: "absence" } & AbsenceRun)
+	| { kind: "holiday"; date: string; name: string; source: Holiday["source"] };
 
 /** "21", "½", "2½" — days counted in halves. */
 function days(n: number): string {
@@ -60,7 +64,7 @@ function dayCount(run: AbsenceRun): number {
 	return run.absences.reduce((sum, a) => sum + (a.halfDay ? 0.5 : 1), 0);
 }
 
-/** The next day a run of absences could continue on: skips weekends and public holidays. */
+/** The next day a run of absences could continue on: skips weekends and holidays. */
 function nextWorkday(iso: string, holidays: Set<string>): string {
 	let next = addIsoDays(iso, 1);
 	for (let i = 0; i < 14 && (!isWeekdayIso(next) || holidays.has(next)); i += 1) {
@@ -164,7 +168,7 @@ export function TimeOff({
 			.map((run): Entry => ({ kind: "absence", ...run })),
 		...holidays
 			.filter((h) => h.date >= todayIso && isWeekdayIso(h.date))
-			.map((h): Entry => ({ kind: "holiday", date: h.date, name: h.name })),
+			.map((h): Entry => ({ kind: "holiday", date: h.date, name: h.name, source: h.source })),
 	].sort((a, b) => {
 		const da = a.kind === "absence" ? a.from : a.date;
 		const db = b.kind === "absence" ? b.from : b.date;
@@ -215,7 +219,10 @@ export function TimeOff({
 						let tint: keyof typeof TINT;
 						if (entry.kind === "holiday") {
 							when = dateOf(entry.date);
-							what = `${entry.name} · public holiday${regionName ? ` · ${regionName}` : ""}`;
+							what =
+								entry.source === "company"
+									? `${entry.name} · company holiday`
+									: `${entry.name} · public holiday${regionName ? ` · ${regionName}` : ""}`;
 							tint = "holiday";
 						} else {
 							const single = entry.absences.length === 1;
