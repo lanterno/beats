@@ -264,12 +264,16 @@ nothing.
   local date each beat started on, in the request timezone (`tz`, default UTC); the holiday
   region is the employer's, whatever the timezone. `GET /{id}/ledger` is the project page's
   one read for every week figure — `domain/ledger.py` assembles N weeks from one worked map,
-  one absence list and one holiday calendar, and `/contract/week` carries the three terms
-  under its balance (`balance_opening + balance_worked - balance_expected_through`, equal
-  to `balance` within 0.01, since each term is rounded on its own). A week's closing balance
-  is the Monday-morning figure, read off one running total (`closing_balances`); on the week
+  one absence list, one adjustment list and one holiday calendar, and `/contract/week`
+  carries the four terms under its balance (`balance_opening + balance_worked -
+  balance_expected_through + balance_adjusted`, equal to `balance` within 0.025, since each
+  term is rounded on its own). A day job's balance takes dated balance adjustments (a
+  signed `delta`, a `reset` to a value, a `cap` at a ceiling), one per day, each applied at
+  the start of its day against the day before's close; they go with the contract. A week's
+  closing balance is the Sunday close, before Monday's adjustment, read off one running
+  total (`running_balance`) with today's terms and every adjustment's `applied`; on the week
   a contract starts or ends mid-week `worked` counts hours the balance does not, so the
-  page's +/− is the move between two closes. The decisions are in
+  page's +/− is the move between two closes, less the week's adjustments. The decisions are in
   [docs/work-contracts.md](docs/work-contracts.md) and
   [docs/project-page.md](docs/project-page.md).
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
@@ -366,7 +370,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences` |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments) |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
