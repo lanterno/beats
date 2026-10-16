@@ -107,8 +107,8 @@ holds the hours worked and expected, the balance adjustment's kind and what it m
 the public holiday's name (a company holiday reads `company holiday`, not the name typed
 for it), the absence type and half-day flag (never the absence's note), and the balance.
 
-Plans, webhooks, signals, biometrics and coach history are in neither; they stay in the
-database until deleted.
+Plans, webhooks, signals, biometrics and coach history are in neither export; they stay
+in the database until deleted.
 
 `POST /api/export/import` takes a `/full` file back, a `1.1` one or a `1.0` one from
 before absences and adjustments were exported, into the account that sends it.
