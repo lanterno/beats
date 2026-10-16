@@ -490,17 +490,24 @@ region check, and every project write reconciles the adjustments
 (`Acme: 33.6h/week (contract, 80%)`), and on a day job with a contract
 the current week against it: what it expects after holidays and days
 off, what was worked under it and what is left, today's expected hours,
-the running balance (balance adjustments included) and its by-Sunday
-projection, and the dates of this week's holidays and days off that
-shortened it. A public holiday goes by its name; a company holiday only
-as "company holiday", never the name the user typed; a day off only as
-"day off" or "half day off", never its type or note. The adjustments
-themselves (their dates, kinds and notes), the region's codes, the
-opening balance, and other weeks' holidays and absences are not sent. A
-contract that ended earlier in the current week sends only its final
-balance; one that ended before it sends none of the week, though its
-goal line stays in the profile and in `get_projects` until the project
-is archived (`goal_term` does not consult `ended_on`).
+the running balance and its by-Sunday projection, the dates of this
+week's holidays and days off that shortened it, and `ended_on` once it
+falls inside the week. The balance is opening + worked − expected +
+adjusted, and only the sum is sent: the opening balance and the
+adjustments (their dates, kinds and notes) are not sent as figures of
+their own, though the sum is the opening balance on a contract's first
+day and moves by a payout on its date. A public holiday goes by its
+name, and the region's codes are not sent, but some regional holidays
+name the region (DE-Augsburg's "Augsburg Peace Festival", IT-Pesaro's
+"Saint Terentius of Pesaro's Day", NZ-STC's "South Canterbury
+Anniversary Day"). A company holiday goes only as "company holiday",
+never the name the user typed; a day off only as "day off" or "half day
+off", never its type or note. Other weeks' holidays and absences are
+not sent. A contract that ended earlier in the current week sends only
+its final balance and its end date; one that ended before it sends none
+of the week, though its goal line stays in the profile and in
+`get_projects` until the project is archived (`goal_term` does not
+consult `ended_on`).
 `/api/export` carries the contract but not absences or balance
 adjustments. `PRIVACY.md` and `DATA.md` state this; a change happens
 there first.
