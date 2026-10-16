@@ -8,7 +8,7 @@ import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./style
 
 export function PasskeysSection() {
 	// null until the first load answers, so an account with no passkeys (one that signs in
-	// through home.space) isn't mistaken for one still loading.
+	// through single sign-on) isn't mistaken for one still loading.
 	const [credentials, setCredentials] = useState<CredentialInfo[] | null>(null);
 	const [loadError, setLoadError] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);

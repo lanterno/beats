@@ -9,7 +9,7 @@ export interface AppConfig {
 	 *
 	 * An empty string means "same origin" — requests go to `/api/…`
 	 * relative to whatever host served the page. That is what the
-	 * single-origin deployment (`compose.home.yml`) uses, where one nginx
+	 * self-hosted stack (`compose.selfhost.yml`) uses, where one nginx
 	 * serves this bundle and proxies `/api` to the API behind it.
 	 */
 	apiBaseUrl: string;

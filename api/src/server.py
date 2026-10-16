@@ -48,7 +48,6 @@ from beats.infrastructure.migrations import (
 )
 from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
-from beats.infrastructure.sso_migration import retire_home_sso_links
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +140,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # day jobs whose contract every reader now takes instead.
     await migrate_project_kinds(Database.get_db())
     await clear_personal_goal_on_day_jobs(Database.get_db())
-    # Single sign-on is OpenID Connect now; the home.space links it replaced
-    # point at an issuer nothing verifies any more.
-    await retire_home_sso_links(Database.get_db())
     # The Plan page stored a week under its Monday's UTC date, a Sunday east of
     # Greenwich; it now uses the local date, so those plans move to the Monday.
     await move_sunday_plans_to_monday(Database.get_db())

@@ -1,32 +1,24 @@
-# beats -- the verbs the home.space stack calls.
-#
-# services.toml names verbs; it never reimplements one. Everything about how
-# beats actually starts lives here and in compose.home.yml, so rewriting the
-# compose file changes nothing at the root.
-#
-# The per-surface justfiles (api/justfile) are untouched and still do what
-# they always did for local development.
+# LifePete's root verbs: the self-hosted stack (compose.selfhost.yml) and the
+# cross-surface test sweep. The per-surface justfiles (api/justfile) are
+# untouched and still do what they always did for local development.
 
 set dotenv-load := false
 
-compose := "docker compose -f compose.home.yml"
+compose := "docker compose -f compose.selfhost.yml"
 
 default:
     @just --list
 
-# --- what the stack calls -------------------------------------------------
+# --- the self-hosted stack -----------------------------------------------
 
-# Start the stack. Detached, because docker keeps the processes and systemd
-# only fires the verb -- `kind = "oneshot"` in services.toml, same shape as
-# classophile.
+# Start the stack, detached: docker keeps the processes running.
 up-detached:
     {{ compose }} up -d --remove-orphans
 
 down:
     {{ compose }} down
 
-# Build the images. The UI build is the slow one (pnpm install + vite build),
-# which is why services.toml gives beats a generous start_timeout.
+# Build the images. The UI build is the slow one (pnpm install + vite build).
 build:
     {{ compose }} build
 
@@ -39,16 +31,15 @@ health:
 logs:
     {{ compose }} logs --tail=200 -f
 
-# Snapshot Mongo into the stack's backup directory. mongodump runs INSIDE the
-# db container -- the database is not published on the LAN and there is no
-# host mongo client to rely on.
+# Snapshot Mongo into a backup directory. mongodump runs INSIDE the db
+# container -- the database is not published outside the stack and there is
+# no host mongo client to rely on.
 backup dest:
     mkdir -p {{ dest }}
     {{ compose }} exec -T db sh -c 'mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --db beats --archive --gzip' > {{ dest }}/beats-mongo.archive.gz
 
-# Restore a snapshot taken by `just backup`. Not called by the stack -- this
-# is the disaster-recovery half, and it is destructive, so it is never wired
-# to a timer.
+# Restore a snapshot taken by `just backup`. Destructive: it drops what is
+# there first, so it is never wired to a timer.
 restore archive:
     {{ compose }} exec -T db sh -c 'mongorestore --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --drop --archive --gzip' < {{ archive }}
 

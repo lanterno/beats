@@ -63,7 +63,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 897 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 895 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -95,7 +95,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 897-test suite takes about 30 seconds.
+  the full 895-test suite takes about 30 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -290,41 +290,32 @@ nothing.
 
 ## Infrastructure
 
-**Two deployments are live.** Read that before deleting anything that looks
-like it belongs to only one of them.
+**One deployment is live: lifepete.com** on Google Cloud — API on Cloud Run
+(shipped by `cloudbuild.yaml` + `terraform/`), SPA on Firebase Hosting (shipped
+by the `deploy` job in `.github/workflows/ui.yml`). **Two origins**,
+`lifepete.com` and `api.lifepete.com`, joined by CORS.
 
-- **home.space** (`compose.home.yml`) on the home network, at
-  `/home/green/lab/home` — the primary. SPA and API behind one nginx, **one
-  origin**, one published port.
-- **lifepete.com** on Google Cloud — API on Cloud Run (shipped by
-  `cloudbuild.yaml` + `terraform/`), SPA on Firebase Hosting (shipped by the
-  `deploy` job in `.github/workflows/ui.yml`). **Two origins**,
-  `lifepete.com` and `api.lifepete.com`, joined by CORS.
+Nothing you run locally resembles it, and that is the trap: the entries in
+`origins` (`api/src/server.py`) that keep lifepete.com working read as dead
+config from inside the repo. They are not: removing them breaks the site in a
+browser with every test still green. The same goes for the Firebase `deploy`
+job and `ui/firebase.json`. A change that touches origins, hosts, auth cookies,
+or the deploy pipeline has to be considered against that topology.
 
-The second one is the trap, because nothing you run locally resembles it. The
-home stack is same-origin, so CORS is never exercised in development or in the
-test suite, and the entries in `origins` (`api/src/server.py`) that keep
-lifepete.com working read as dead config from inside the repo. They are not:
-removing them breaks that site in a browser with every test still green. The
-same goes for the Firebase `deploy` job and `ui/firebase.json`.
+Anything else LifePete talks to — another identity provider, a service of
+your own — connects through single sign-on or an integration.
+`api/compose.yml` is what local development uses.
 
-A change that touches origins, hosts, auth cookies, or either deploy pipeline
-has to be considered against **both** topologies.
+### Self-hosted
 
-### Home deployment (current)
-
-`compose.home.yml` at the repo root: Mongo and the API on an internal network, plus
-an nginx that serves the built SPA and proxies `/api` to the API. **One** published
-port, 6008. `justfile` at the repo root holds the verbs the stack calls
+`compose.selfhost.yml` is for anyone running LifePete themselves: Mongo and the
+API on an internal network, plus an nginx that serves the built SPA and proxies
+`/api`, on **one** published port, 6008. The root `justfile` wraps it
 (`up-detached`, `down`, `build`, `health`, `logs`, `backup`, `restore`).
-
-The SPA and the API share one origin, so the stack publishes one port and needs no
-CORS entry for wherever it is hosted. `ui/Dockerfile` builds with `VITE_API_URL=""`
-and fails the build if the bundle still names `localhost:7999`. Nothing in the code
-depends on the home network: single sign-on, if the stack wants it, is a provider in
-`api/.env` like anywhere else.
-
-`api/compose.yml` is untouched and is still what local development uses.
+`BEATS_DB_PASSWORD`, `BEATS_RP_ID` and `BEATS_ORIGIN` are required; the rest
+comes from `api/.env`. The SPA and the API share one origin, so it needs no CORS
+entry: `ui/Dockerfile` builds with `VITE_API_URL=""` and fails the build if the
+bundle still names `localhost:7999`.
 
 ### Single sign-on (OpenID Connect)
 
@@ -338,7 +329,8 @@ The flow is the authorization code flow with PKCE and a nonce. The API keeps eac
 sign-in's state, nonce and verifier in `sso_flows` (TTL ten minutes, taken once); the
 provider sends the browser to the web app, which checks the state is one this tab
 started (sessionStorage) and posts the code to `POST /api/auth/sso/complete`. Doing
-the exchange through the web app is what lets one setup serve both topologies.
+the exchange through the web app keeps the provider's redirect on the web app's
+origin, whichever origin the API is on.
 
 - `src/beats/auth/oidc.py` — discovery, the code exchange, and every ID-token check
   (asymmetric signature, `iss`, `aud`/`azp`, `exp`, `iat`, nonce).
@@ -347,18 +339,15 @@ the exchange through the web app is what lets one setup serve both topologies.
   accounts only with `allow_signup`; nothing is ever matched by email.
 - `src/beats/api/routers/sso.py` — the public endpoints; linking and unlinking live in
   `account.py`, behind a session. A link must finish in the session that started it.
-- `src/beats/infrastructure/sso_migration.py` — the startup pass that cleared the
-  home.space links this replaced, logging any account left with no way in.
 - `src/beats/test_sso.py` and `TestSSOAPI` — against `src/fake_idp.py`, a scripted
   provider with real RS256 keys.
 
-### Google Cloud — lifepete.com (also live)
+### Google Cloud — lifepete.com
 
-Split across two origins, unlike the home stack: the SPA on Firebase Hosting at
-`lifepete.com`, the API on Cloud Run at `api.lifepete.com`. Both are listed in
-`origins` in `api/src/server.py`, and the SPA is built with
-`VITE_API_URL=https://api.lifepete.com` — the opposite of `ui/Dockerfile`, which
-builds with an empty `VITE_API_URL` because the home stack is same-origin.
+Split across two origins: the SPA on Firebase Hosting at `lifepete.com`, the API
+on Cloud Run at `api.lifepete.com`. Both are listed in `origins` in
+`api/src/server.py`, and the SPA is built with
+`VITE_API_URL=https://api.lifepete.com`.
 
 The two halves ship independently: the SPA on every push to `main` that touches
 `ui/**` (the `deploy` job in `.github/workflows/ui.yml`, needing the

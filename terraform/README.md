@@ -8,8 +8,8 @@ It does **not** deploy the frontend. The SPA at `lifepete.com` is served by
 Firebase Hosting and shipped by `.github/workflows/ui.yml` — see
 [UI Deployment](#ui-deployment).
 
-This is one of two live deployments; the other, `home.space`, uses
-`compose.home.yml` and no cloud infrastructure at all. The repo-root
+This is LifePete's one live deployment. The self-hosted stack
+(`compose.selfhost.yml`) uses no cloud infrastructure at all. The repo-root
 `CLAUDE.md` covers both.
 
 ## File Structure

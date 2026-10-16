@@ -392,54 +392,6 @@ class TestClearPersonalGoalOnDayJobs:
         assert project.effective_goal(date(2026, 9, 7)) == (20.0, project.goal_type)
 
 
-class TestRetireHomeSSOLinks:
-    """The pass that clears the home.space links OpenID Connect replaced."""
-
-    @pytest.fixture(autouse=True)
-    def _users(self, mongo):
-        mongo.users.delete_many({"email": {"$regex": "@retire.test$"}})
-        mongo.credentials.delete_many({"credential_id": {"$regex": "^retire-"}})
-
-    def _legacy_user(self, mongo, email: str, **extra: Any) -> ObjectId:
-        return mongo.users.insert_one(
-            {
-                "email": email,
-                "sso_issuer": "did:web:auth.home.space",
-                "sso_subject": f"did:key:{email}",
-                "sso_holder_name": "Laptop",
-                "sso_roles": ["owner"],
-                "sso_linked_at": datetime.now(UTC),
-                "sso_provisioned": True,
-                **extra,
-            }
-        ).inserted_id
-
-    async def test_unsets_the_link_and_keeps_the_rest(self, db, mongo):
-        from beats.infrastructure.sso_migration import LEGACY_FIELDS, retire_home_sso_links
-
-        uid = self._legacy_user(mongo, "a@retire.test", display_name="Ada")
-        await retire_home_sso_links(db)
-        doc = mongo.users.find_one({"_id": uid})
-        assert not set(LEGACY_FIELDS) & set(doc)
-        assert (doc["email"], doc["display_name"], doc["sso_provisioned"]) == (
-            "a@retire.test",
-            "Ada",
-            True,
-        )
-
-    async def test_names_the_accounts_left_with_no_way_in(self, db, mongo):
-        from beats.infrastructure.sso_migration import retire_home_sso_links
-
-        stranded = self._legacy_user(mongo, "s@retire.test")
-        with_passkey = self._legacy_user(mongo, "p@retire.test")
-        mongo.credentials.insert_one(
-            {"user_id": str(with_passkey), "credential_id": "retire-p", "public_key": "k"}
-        )
-        assert await retire_home_sso_links(db) == [str(stranded)]
-        # A second boot has nothing left to do.
-        assert await retire_home_sso_links(db) == []
-
-
 class TestMoveSundayPlans:
     """The Plan page stored weeks under their UTC Monday, a Sunday east of Greenwich."""
 

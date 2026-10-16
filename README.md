@@ -139,8 +139,8 @@ integrations/vscode-beats/    VS Code extension
 wall-clock/                   ESP32 firmware
 shared/                       Data shared across surfaces: app labels, brand name, logo
 scripts/                      Codegen that stamps shared/ into each surface
-compose.home.yml              Self-hosted deployment (Mongo + API + SPA on one port)
-justfile                      Deployment verbs: build, up, health, logs, backup
+compose.selfhost.yml          Self-hosted stack (Mongo + API + SPA on one port)
+justfile                      Stack verbs (build, up, health, logs, backup) and the test sweep
 terraform/                    Google Cloud infrastructure (lifepete.com)
 docs/                         Design notes
 ```
@@ -162,10 +162,14 @@ the same checks on every pull request.
 
 ## Deployment
 
-**Self-hosted.** `compose.home.yml` runs MongoDB, the API, and an nginx that serves
-the SPA and proxies `/api`, all on one port (`http://localhost:6008`):
+**Self-hosted.** `compose.selfhost.yml` runs MongoDB, the API, and an nginx that serves
+the SPA and proxies `/api`, all on one port (`http://localhost:6008`). Copy
+`api/.env.example` to `api/.env` and set its secrets, then name the database password
+and the host the browser sees; the stack refuses to start without them:
 
 ```bash
+export BEATS_DB_PASSWORD=<a long random string>
+export BEATS_RP_ID=localhost BEATS_ORIGIN=http://localhost:6008
 just build          # build the images
 just up-detached    # start Mongo, the API and the SPA
 just health         # check the API through the same nginx a browser uses
@@ -177,7 +181,7 @@ just backup <dir>   # mongodump into <dir>
 Terraform owning its config, and the SPA on Firebase Hosting, shipped from
 `.github/workflows/ui.yml`. That splits the SPA and API across two origins joined by
 CORS, which nothing local resembles. Read Infrastructure in [CLAUDE.md](CLAUDE.md)
-before removing anything that looks like it belongs to only one deployment.
+before removing anything that looks like dead config.
 
 ## Design notes
 

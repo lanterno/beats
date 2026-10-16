@@ -14,8 +14,9 @@ Public, like the rest of `/api/auth`. Three steps, the same for every provider:
    a flow started from Settings, links the identity.
 
 The code is redeemed here rather than at the API's own URL so one setup works
-for both deployments: same origin at home, and two origins behind lifepete.com,
-where nothing the API sets in the browser would reach the web app.
+whether the web app and the API share an origin (the self-hosted stack) or not
+(lifepete.com, where nothing the API sets in the browser would reach the web
+app).
 
 From the token on, nothing else in the API knows which door was used.
 Linking starts in `account.py`, because it needs a signed-in account.
