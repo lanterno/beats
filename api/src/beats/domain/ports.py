@@ -15,10 +15,12 @@ there is nothing to register.
 """
 
 import builtins
+from collections.abc import Iterable
 from datetime import date, datetime
 from typing import Protocol
+from zoneinfo import ZoneInfo
 
-from beats.domain.models import Absence, Beat, FlowWindow, Project
+from beats.domain.models import Absence, Beat, ContractWeek, FlowWindow, Project
 
 
 class CompletedBeatReader(Protocol):
@@ -120,3 +122,14 @@ class WeekExpectationReader(Protocol):
     card — read this and nothing else of a contract."""
 
     async def expected_for_week(self, project: Project, week_of: date) -> float | None: ...
+
+
+class ContractWeeksReader(Protocol):
+    """What the coach reads of a contract: the current week of each day job
+    among `projects`, by project id, the same figures the project page shows
+    — and nothing unless `as_of` is today in `tz` by the reader's own clock
+    (`ContractService.current_weeks`)."""
+
+    async def current_weeks(
+        self, projects: Iterable[Project], tz: ZoneInfo, as_of: date
+    ) -> dict[str, ContractWeek]: ...
