@@ -411,10 +411,14 @@ the running balance and its by-Sunday projection, and the dates of this
 week's holidays and days off that shortened it. A public holiday goes by
 its name; a company holiday only as "company holiday", never the name
 the user typed; a day off only as "day off" or "half day off", never its
-type or note. The region's codes, the opening balance, other weeks'
-holidays and absences, and a contract that ended before the current week
-are not sent. `/api/export` carries the contract but not absences.
-`PRIVACY.md` states this; a change happens there first.
+type or note. The region's codes, the opening balance, and other weeks'
+holidays and absences are not sent. A contract that ended earlier in the
+current week sends only its final balance; one that ended before it
+sends none of the week, though its goal line stays in the profile and
+in `get_projects` until the project is archived (`goal_term` does not
+consult `ended_on`).
+`/api/export` carries the contract but not absences. `PRIVACY.md`
+states this; a change happens there first.
 
 ---
 
