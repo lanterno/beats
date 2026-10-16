@@ -3604,6 +3604,32 @@ class TestBackupImport:
         assert after[0]["balance"] is not None
         assert _without_ids(after) == _without_ids(before)
 
+    def test_an_archived_day_job_survives_a_round_trip(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        # A finished job is archived, with the settlement that paid out its
+        # final balance: both are the user's, and both come back.
+        project = _day_job(client, auth_headers, ended_on="2026-03-06")
+        self._adjust(client, auth_headers, project["id"], date="2026-03-09", kind="reset", hours=0)
+        resp = client.post(f"/api/projects/{project['id']}/archive", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        before = self._standing(client, auth_headers, project["id"])
+
+        backup = self._export(client, auth_headers)
+        for collection in ("projects", "timeLogs", "absences", "balance_adjustments"):
+            mongo[collection].delete_many({"user_id": auth_info["user_id"]})
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["skipped"] == []
+        archived = client.get(
+            "/api/projects/", params={"archived": True}, headers=auth_headers
+        ).json()
+        assert [p["id"] for p in archived] == [project["id"]]
+        assert _without_ids(self._standing(client, auth_headers, project["id"])) == _without_ids(
+            before
+        )
+
     def test_a_backup_from_the_previous_build_imports(self, client, auth_headers):
         # 1.0 had no absences or adjustments; a file without the keys is a
         # backup with none of them, not a 422.
