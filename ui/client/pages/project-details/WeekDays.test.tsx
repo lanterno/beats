@@ -1,10 +1,10 @@
 /**
  * The open week's days: today open and the others toggled by click and
  * keyboard, a governed day's figure and its delta, a day off with its tint,
- * the folded weekend, the running beat's live row, ‹ › and Today, and the
- * session actions reachable without a mouse.
+ * the folded weekend, the running beat's live row, ‹ › and Today, the
+ * session actions reachable without a mouse, and each session's focus mark.
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContractDay, ContractWeek, ProjectWithDuration } from "@/entities/project";
@@ -16,6 +16,8 @@ const { hooks } = vi.hoisted(() => ({
 		useSessions: vi.fn(),
 		updateSession: vi.fn(),
 		deleteSession: vi.fn(),
+		useFocusScores: vi.fn(),
+		refreshFocusScores: vi.fn(),
 	},
 }));
 
@@ -33,11 +35,8 @@ vi.mock("@/entities/project", async () => {
 	return { ...actual, useProjects: () => ({ data: [] }) };
 });
 vi.mock("@/entities/intelligence", () => ({
-	useFocusScores: () => ({
-		data: [
-			{ beat_id: "thu", score: 74, components: { length: 1, peak_hours: 1, fragmentation: 1 } },
-		],
-	}),
+	useFocusScores: (weekOf?: string) => hooks.useFocusScores(weekOf),
+	useRefreshFocusScores: () => hooks.refreshFocusScores,
 }));
 vi.mock("@/entities/planning", () => ({
 	useProjectPlannedByWeek: () => ({ byMondayIso: new Map([["2026-09-07", 28]]) }),
@@ -154,6 +153,14 @@ beforeEach(() => {
 	hooks.useSessions.mockReturnValue({ data: SESSIONS, refetch: vi.fn() });
 	hooks.updateSession.mockReset();
 	hooks.deleteSession.mockReset();
+	hooks.refreshFocusScores.mockReset();
+	const components = { length: 1, peak_hours: 1, fragmentation: 1 };
+	hooks.useFocusScores.mockReturnValue({
+		data: [
+			{ beat_id: "mon1", score: 61, components },
+			{ beat_id: "thu", score: 74, components },
+		],
+	});
 });
 afterEach(cleanup);
 
@@ -290,6 +297,32 @@ describe("WeekDays", () => {
 
 		await userEvent.click(screen.getByRole("button", { name: "Edit session" }));
 		expect(screen.getByLabelText("Start")).toBeInTheDocument();
+	});
+
+	it("marks a session with its focus score on any day of the open week, not only today", async () => {
+		renderDays();
+		const region = screen.getByRole("region", { name: "Days" });
+		expect(hooks.useFocusScores).toHaveBeenCalledWith(WEEK_OF);
+		expect(region).toHaveTextContent("◦ 74");
+		expect(region).not.toHaveTextContent("◦ 61");
+
+		await userEvent.click(row("Mon"));
+		expect(region).toHaveTextContent("◦ 61");
+	});
+
+	it("refreshes the focus scores after a session is deleted or edited", async () => {
+		hooks.deleteSession.mockResolvedValue(undefined);
+		hooks.updateSession.mockResolvedValue(undefined);
+		renderDays();
+
+		await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
+		await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+		await waitFor(() => expect(hooks.refreshFocusScores).toHaveBeenCalledTimes(1));
+
+		await userEvent.click(screen.getByRole("button", { name: "Edit session" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save" }));
+		expect(hooks.updateSession).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(hooks.refreshFocusScores).toHaveBeenCalledTimes(2));
 	});
 
 	it("shows worked alone on a project the contract does not govern, with nothing to book", () => {
