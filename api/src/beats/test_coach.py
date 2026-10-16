@@ -1871,6 +1871,39 @@ class TestToolsDispatch:
         assert "Beta" not in result
         assert "1 sessions" in result
 
+    async def test_get_beats_reads_the_users_days(self, monkeypatch):
+        """At noon on Monday 19 October in Tokyo, a session from 07:00 that
+        morning began at 22:00 UTC on the Sunday. It is Monday's, at 07:00,
+        as the day context files it, not Sunday's at 22:00."""
+        tokyo = ZoneInfo("Asia/Tokyo")
+        instant = datetime(2026, 10, 19, 3, 0, tzinfo=UTC)
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        monkeypatch.setattr(tools_module, "datetime", _At)
+        projects = [_project("p1", "Alpha")]
+        repos = _fake_coach_repos(
+            projects=projects, beats=[_completed_beat("2026-10-18T22:00:00", 60, "p1")]
+        )
+
+        default = await tools_module.execute_tool(
+            "user-1", "get_beats", {}, repos=repos, projects=projects, tz=tokyo
+        )
+        monday = await tools_module.execute_tool(
+            "user-1",
+            "get_beats",
+            {"start_date": "2026-10-19", "end_date": "2026-10-19"},
+            repos=repos,
+            projects=projects,
+            tz=tokyo,
+        )
+
+        assert default.splitlines()[0] == "2026-10-19 07:00 | Alpha | 1h 0m"
+        assert monday.splitlines()[0] == "2026-10-19 07:00 | Alpha | 1h 0m"
+
     async def test_get_beats_empty_returns_friendly_text(self):
         repos = _fake_coach_repos(projects=[], beats=[])
         result = await tools_module.execute_tool(
@@ -1881,7 +1914,7 @@ class TestToolsDispatch:
     # -- get_productivity_score --
 
     async def test_get_productivity_score_formats_components(self, monkeypatch):
-        async def fake_score(_self):
+        async def fake_score(_self, tz):
             return {
                 "score": 87,
                 "components": {
@@ -1912,7 +1945,7 @@ class TestToolsDispatch:
         to the user instead of seeing a 500."""
         from beats.domain.intelligence import IntelligenceService
 
-        async def boom(_self):
+        async def boom(_self, tz):
             raise ValueError("score broke")
 
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", boom)
@@ -1931,7 +1964,7 @@ class TestToolsDispatch:
         from beats.domain.intelligence import IntelligenceService
         from beats.domain.models import InsightCard
 
-        async def fake_detect(_self):
+        async def fake_detect(_self, tz):
             return [
                 InsightCard(
                     id="i1", type="day_pattern", title="Tuesdays peak", body="b1", priority=1
@@ -1951,7 +1984,7 @@ class TestToolsDispatch:
     async def test_get_patterns_empty_returns_friendly_text(self, monkeypatch):
         from beats.domain.intelligence import IntelligenceService
 
-        async def fake_detect(_self):
+        async def fake_detect(_self, tz):
             return []
 
         monkeypatch.setattr(IntelligenceService, "detect_patterns", fake_detect)
@@ -2165,7 +2198,7 @@ class TestBuildUserContext:
         change coach behavior."""
         from beats.domain.intelligence import IntelligenceService
 
-        async def fake_score(_self):
+        async def fake_score(_self, tz):
             return {
                 "score": 75,
                 "components": {
@@ -2204,7 +2237,7 @@ class TestBuildUserContext:
         break the coach for new users."""
         from beats.domain.intelligence import IntelligenceService
 
-        async def boom(_self):
+        async def boom(_self, tz):
             raise ValueError("fresh user")
 
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", boom)
@@ -2222,7 +2255,7 @@ class TestBuildUserContext:
         from beats.domain.intelligence import IntelligenceService
         from beats.domain.models import FlowWindow
 
-        async def fake_score(_self):
+        async def fake_score(_self, tz):
             return {"score": 70, "components": {"consistency": 70, "goals": 70, "quality": 70}}
 
         monkeypatch.setattr(IntelligenceService, "compute_productivity_score", fake_score)
@@ -2259,7 +2292,7 @@ class TestBuildUserContext:
         context expects."""
         from beats.domain.intelligence import IntelligenceService
 
-        async def fake_score(_self):
+        async def fake_score(_self, tz):
             return {
                 "score": 50,
                 "components": {
@@ -2282,7 +2315,7 @@ class TestBuildUserContext:
         personality from the cache."""
         from beats.domain.intelligence import IntelligenceService
 
-        async def fake_score(_self):
+        async def fake_score(_self, tz):
             return {
                 "score": 60,
                 "components": {
@@ -2309,7 +2342,7 @@ class TestBuildUserContext:
     async def test_no_goals_renders_no_goals_set(self, monkeypatch):
         from beats.domain.intelligence import IntelligenceService
 
-        async def fake_score(_self):
+        async def fake_score(_self, tz):
             return {
                 "score": 50,
                 "components": {
@@ -2386,6 +2419,30 @@ class TestBuildUserContext:
         # The same instant on UTC's week is the full-time term's.
         utc_ctx = await context_module.build_user_context("user-1", repos)
         assert "  Acme: 42h/week (contract, full-time)" in utc_ctx.splitlines()
+
+    async def test_weekly_totals_are_the_users_weeks(self, monkeypatch):
+        """At 18:00 on Tuesday 20 October in Los Angeles, an hour from 20:00
+        on Sunday the 18th belongs to the week of 12 October there, though
+        it began at 03:00 UTC on Monday the 19th."""
+        los_angeles = ZoneInfo("America/Los_Angeles")
+        instant = datetime(2026, 10, 21, 1, 0, tzinfo=UTC)
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        monkeypatch.setattr(context_module, "datetime", _At)
+        repos = _fake_coach_repos(
+            projects=[_project("p1", "Alpha")],
+            beats=[_completed_beat("2026-10-19T03:00:00", 60, "p1")],
+        )
+
+        result = await context_module.build_user_context("user-1", repos, los_angeles)
+
+        lines = result.splitlines()
+        assert "  Week of Oct 12: 1.0h" in lines
+        assert "  Week of Oct 05: 0.0h" in lines
 
 
 class TestGatewayBudgetInvariant:
