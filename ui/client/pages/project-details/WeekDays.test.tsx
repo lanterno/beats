@@ -342,6 +342,7 @@ describe("WeekDays", () => {
 				contractExpected: null,
 				balanceEnd: null,
 				notes: [],
+				adjustments: [],
 			},
 		});
 		expect(dayRow("Mon")).toHaveTextContent("7.1 h");
