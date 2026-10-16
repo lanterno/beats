@@ -1903,26 +1903,37 @@ class TestTimesheetAPI:
     def test_a_month_brings_forward_what_the_one_before_carried(self, client, auth_headers):
         # Work logged before both months and in each, and a payout in the
         # later one: the month before's close is last month's opening only if
-        # the read runs over the contract's whole life, not the month's.
-        project = _day_job(client, auth_headers, opening_balance_hours=1.25)
+        # the read runs over the contract's whole life, not the month's. The
+        # month before also has an absence, an adjustment and a company
+        # holiday, one for each read besides the beats: any of them read from
+        # the later month's 1st would move its brought-forward figure.
         before, last = self._month(2), self._month(1)
-        payday = self._first_weekday(last)
-        _log(client, auth_headers, project["id"], f"{CONTRACT_START}T09:00:00+00:00", 300)
-        _log(
+        weekdays = [d for d in (before + timedelta(days=n) for n in range(28)) if d.weekday() < 5]
+        worked_day, off_day, adjusted_day, company_day = weekdays[:4]
+        project = _day_job(
             client,
             auth_headers,
-            project["id"],
-            f"{self._first_weekday(before)}T09:00:00+00:00",
-            600,
+            opening_balance_hours=1.25,
+            company_holidays=[{"date": company_day.isoformat(), "name": "Founders' Day"}],
         )
+        payday = self._first_weekday(last)
+        _log(client, auth_headers, project["id"], f"{CONTRACT_START}T09:00:00+00:00", 300)
+        _log(client, auth_headers, project["id"], f"{worked_day}T09:00:00+00:00", 600)
         _log(client, auth_headers, project["id"], f"{payday}T09:00:00+00:00", 450)
         resp = client.post(
-            f"/api/projects/{project['id']}/adjustments",
-            params={"tz": "UTC"},
-            json={"date": payday.isoformat(), "kind": "delta", "hours": -3.5},
+            f"/api/projects/{project['id']}/absences",
+            json={"date": off_day.isoformat(), "type": "vacation"},
             headers=auth_headers,
         )
         assert resp.status_code == 201, resp.text
+        for day, hours in ((adjusted_day, 2.0), (payday, -3.5)):
+            resp = client.post(
+                f"/api/projects/{project['id']}/adjustments",
+                params={"tz": "UTC"},
+                json={"date": day.isoformat(), "kind": "delta", "hours": hours},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 201, resp.text
 
         earlier = self._rows(client, auth_headers, project["id"], before)
         later = self._rows(client, auth_headers, project["id"], last)
