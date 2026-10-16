@@ -3224,6 +3224,8 @@ export interface components {
             adjustments: components["schemas"]["LedgerAdjustment"][];
             /** Balance End */
             balance_end: number | null;
+            /** Balance Moved */
+            balance_moved: number | null;
             /** Contract Expected */
             contract_expected: number | null;
             /** Days */
