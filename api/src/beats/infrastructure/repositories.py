@@ -24,6 +24,7 @@ from pymongo.asynchronous.collection import AsyncCollection
 from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
 from beats.domain.models import (
     Absence,
+    BalanceAdjustment,
     Beat,
     BiometricDay,
     CalendarIntegration,
@@ -810,3 +811,66 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
         except InvalidId:
             return False
         return await self._delete_one({"_id": oid, "project_id": project_id})
+
+
+class AdjustmentRepository(Protocol):
+    async def list_by_project(
+        self, project_id: str, start: date, end: date
+    ) -> list[BalanceAdjustment]: ...
+    async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
+    async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
+    async def earliest(self, project_id: str, on_or_after: date) -> date | None: ...
+    async def delete_by_project(self, project_id: str) -> int: ...
+
+
+class MongoAdjustmentRepository(MongoStore[BalanceAdjustment], AdjustmentRepository):
+    model = BalanceAdjustment
+
+    async def list_by_project(
+        self, project_id: str, start: date, end: date
+    ) -> list[BalanceAdjustment]:
+        return await self._find_many(
+            {
+                "project_id": project_id,
+                "date": {"$gte": start.isoformat(), "$lte": end.isoformat()},
+            },
+            sort=("date", 1),
+        )
+
+    async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment:
+        # A replace, as an absence's: the document IS the adjustment, so a
+        # reset posted over a payout that carried a note must not keep the
+        # note. The (user, project, date) unique index makes this filter the
+        # document's identity, and the id survives the replace.
+        data = self._dump(adjustment)
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_replace(
+            self._q({"project_id": data["project_id"], "date": data["date"]}),
+            data,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if result is None:
+            raise RuntimeError("upsert of BalanceAdjustment returned no document")
+        return self._load(result)
+
+    async def delete(self, project_id: str, adjustment_id: str) -> bool:
+        # Scoped to the project in the URL as well as the user; a malformed
+        # id is "no such adjustment", as it is for an absence.
+        try:
+            oid = ObjectId(adjustment_id)
+        except InvalidId:
+            return False
+        return await self._delete_one({"_id": oid, "project_id": project_id})
+
+    async def earliest(self, project_id: str, on_or_after: date) -> date | None:
+        # ISO dates sort as strings, so the first by date is the earliest.
+        doc = await self.collection.find_one(
+            self._q({"project_id": project_id, "date": {"$gte": on_or_after.isoformat()}}),
+            sort=[("date", 1)],
+        )
+        return None if doc is None else date.fromisoformat(doc["date"])
+
+    async def delete_by_project(self, project_id: str) -> int:
+        result = await self.collection.delete_many(self._q({"project_id": project_id}))
+        return result.deleted_count

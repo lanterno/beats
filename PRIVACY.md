@@ -8,7 +8,7 @@ For the catalogue of every field stored, see [DATA.md](./DATA.md).
 
 Beats is a self-tracking system. It records what you work on, for how long, and (optionally) how you felt while doing it. It is not a productivity app sold to employers, and there is no analytics product built on top of your data.
 
-If you mark a project as a day job, Beats also stores its contract — the hours owed each week as a percentage of a full-time basis, the dates those terms changed, an opening balance — the employer's holiday region as two ISO codes, the employer's own days off where they differ from that region's (dates, with the names you give them, and the region's holidays the employer does not give), and the days you were absent (vacation, sick or other, whole or half). From those it works out what the week expects of you and a running overtime balance.
+If you mark a project as a day job, Beats also stores its contract — the hours owed each week as a percentage of a full-time basis, the dates those terms changed, an opening balance — the employer's holiday region as two ISO codes, the employer's own days off where they differ from that region's (dates, with the names you give them, and the region's holidays the employer does not give), and the days you were absent (vacation, sick or other, whole or half), and any dated adjustments you make to the balance (a payout, a reset or a cap, with a note if you give one). From those it works out what the week expects of you and a running overtime balance.
 
 ## Who can see your data
 
@@ -50,7 +50,7 @@ The LifePete app on Android and iPhone is a window onto your account; it keeps a
 The coach feature sends prompts to the [Anthropic Claude API](https://www.anthropic.com/) to generate briefs, weekly reviews, and chat replies. What the prompt carries is assembled in `api/src/beats/coach/context.py`, and it is more than the timer data:
 
 - your sessions — project name, start time, duration, and the session note if there is one
-- your projects' weekly goals — on a day job, that is the contract's weekly hours and where they come from (the percentage of a part-time term, `full-time`, or just `contract` for custom hours), in one line (`Acme: 33.6h/week (contract, 80%)`). Absences, the holiday region, company holidays and the overtime balance are not sent.
+- your projects' weekly goals — on a day job, that is the contract's weekly hours and where they come from (the percentage of a part-time term, `full-time`, or just `contract` for custom hours), in one line (`Acme: 33.6h/week (contract, 80%)`). Absences, the holiday region, company holidays, balance adjustments and the overtime balance are not sent.
 - 30-day aggregates, plus anything stored in coach memory
 - **calendar event titles and times for the day**, if Google Calendar is connected
 - last night's biometrics — sleep, HRV, resting heart rate, readiness — if a health source is connected
@@ -62,8 +62,8 @@ If you do not want any data leaving the Beats database, do not use the coach.
 
 ## Export and deletion
 
-- **Export**: anytime, via `/api/export` — your projects (contract included) and sessions, as JSON or CSV. Absences, plans, webhooks, signals, biometrics and coach history are not in it yet.
-- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
+- **Export**: anytime, via `/api/export` — your projects (contract included) and sessions, as JSON or CSV. Absences, balance adjustments, plans, webhooks, signals, biometrics and coach history are not in it yet.
+- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, balance adjustments, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
 
 ## Changes
 

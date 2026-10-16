@@ -43,6 +43,10 @@ No passwords are stored — Beats does not have a password login path.
 - **Absences**: one document per day off on a day-job project — `user_id`, `project_id`,
   `date`, `half_day`, `type` (`vacation`, `sick`, `other`), `note`. Unique on
   `(user_id, project_id, date)`, so a second absence on a day replaces the first.
+- **Balance adjustments**: one document per dated change to a day job's balance —
+  `user_id`, `project_id`, `date`, `kind` (`delta`, `reset`, `cap`), `hours` (signed for a
+  delta, the target for a reset or a cap), `note`. Unique on `(user_id, project_id, date)`,
+  so a second adjustment on a day replaces the first. Deleted with the contract.
 - **Beats (sessions)**: start, end, project id, source (manual / daemon / editor), tags, notes
 - **Timer state**: the currently-running beat per user
 - **Plans**: weekly plans — a per-project hour target for a given week
@@ -85,7 +89,7 @@ Beats does not auto-delete anything. Beats, notes, coach history, and biometrics
 
 ## Export
 
-`/api/export` returns the authenticated user's projects — contract included — and sessions: `/full` as JSON, `/csv/sessions` as a CSV of the completed sessions alone. Nothing is held back behind a tier, but nothing else is in it yet either: absences, plans, webhooks, signals, biometrics and coach history stay in the database until deleted.
+`/api/export` returns the authenticated user's projects — contract included — and sessions: `/full` as JSON, `/csv/sessions` as a CSV of the completed sessions alone. Nothing is held back behind a tier, but nothing else is in it yet either: absences, balance adjustments, plans, webhooks, signals, biometrics and coach history stay in the database until deleted.
 
 ## Deletion
 

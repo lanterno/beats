@@ -189,7 +189,7 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
         category=request.category,
         autostart_repos=request.autostart_repos,
     )
-    updated = await service.update_project(project)
+    updated = await service.update_project(project, previous_contract=existing.contract)
     return updated.model_dump()
 
 
@@ -210,7 +210,9 @@ async def update_goal_overrides(
         )
         for o in overrides
     ]
-    updated = await service.update_project(project)
+    # The contract is the one just read and goes back unchanged, so nothing
+    # about its balance adjustments is reconciled.
+    updated = await service.update_project(project, previous_contract=project.contract)
     return updated.model_dump()
 
 
@@ -221,7 +223,8 @@ async def replace_contract(project_id: str, contract: Contract, service: Project
     date, in one shape, like goal-overrides. A holiday list the body leaves
     out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
     not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
-    does not know is a 400 (UNKNOWN_HOLIDAY_REGION)."""
+    does not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term
+    later past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START)."""
     updated = await service.replace_contract(project_id, contract)
     return updated.model_dump()
 

@@ -10,6 +10,7 @@
 
 // API layer
 export {
+	type AdjustmentInput,
 	projectKeys,
 	useArchivedProjects,
 	useArchiveProject,
@@ -19,6 +20,8 @@ export {
 	useProjectHolidays,
 	useProjectLedger,
 	useProjects,
+	useRecordAdjustment,
+	useRemoveAdjustment,
 	useUnarchiveProject,
 	useUpdateContract,
 	useUpdateGoalOverrides,
@@ -26,6 +29,8 @@ export {
 } from "./api";
 // Model layer
 export type {
+	AdjustmentKind,
+	AdjustmentRow,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -38,6 +43,7 @@ export type {
 	Holiday,
 	HolidayRegion,
 	Ledger,
+	LedgerAdjustment,
 	LedgerNote,
 	LedgerNoteKind,
 	LedgerWeek,

@@ -9,6 +9,7 @@ import type {
 	ApiContractWeek,
 	ApiGoalOverride,
 	ApiLedger,
+	ApiLedgerAdjustment,
 	ApiLedgerNote,
 	ApiLedgerWeek,
 	ApiProject,
@@ -21,6 +22,7 @@ import type {
 	ContractWeek,
 	GoalOverride,
 	Ledger,
+	LedgerAdjustment,
 	LedgerNote,
 	LedgerWeek,
 	Project,
@@ -149,6 +151,8 @@ export function toContractWeek(api: ApiContractWeek): ContractWeek {
 		balanceOpening: api.balance_opening ?? undefined,
 		balanceWorked: api.balance_worked ?? undefined,
 		balanceExpectedThrough: api.balance_expected_through ?? undefined,
+		// An API without adjustments sends none, and kept none: 0 is its figure.
+		balanceAdjusted: api.balance === null ? undefined : (api.balance_adjusted ?? 0),
 		days: api.days.map(toContractDay),
 	};
 }
@@ -159,6 +163,17 @@ function toLedgerNote(api: ApiLedgerNote): LedgerNote {
 		kind: api.kind,
 		halfDay: api.half_day ?? false,
 		name: api.name ?? undefined,
+	};
+}
+
+function toLedgerAdjustment(api: ApiLedgerAdjustment): LedgerAdjustment {
+	return {
+		id: api.id,
+		date: api.date,
+		kind: api.kind,
+		hours: api.hours,
+		note: api.note ?? undefined,
+		applied: api.applied,
 	};
 }
 
@@ -173,6 +188,7 @@ function toLedgerWeek(api: ApiLedgerWeek): LedgerWeek {
 		contractExpected: api.contract_expected,
 		balanceEnd: api.balance_end,
 		notes: api.notes.map(toLedgerNote),
+		adjustments: api.adjustments.map(toLedgerAdjustment),
 	};
 }
 
@@ -181,6 +197,7 @@ export function toLedger(api: ApiLedger): Ledger {
 	return {
 		since: api.since,
 		totals: api.totals,
+		endedBalance: api.ended_balance ?? null,
 		weeks: api.weeks.map(toLedgerWeek),
 	};
 }

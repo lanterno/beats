@@ -1,4 +1,5 @@
 // Low-level API functions
+export type { AdjustmentInput } from "./projectApi";
 
 // TanStack Query hooks
 export {
@@ -12,6 +13,8 @@ export {
 	useProjectHolidays,
 	useProjectLedger,
 	useProjects,
+	useRecordAdjustment,
+	useRemoveAdjustment,
 	useUnarchiveProject,
 	useUpdateContract,
 	useUpdateGoalOverrides,

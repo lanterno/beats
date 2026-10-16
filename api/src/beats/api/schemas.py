@@ -5,7 +5,14 @@ from datetime import date as date_type
 
 from pydantic import BaseModel, Field
 
-from beats.domain.models import AbsenceType, Contract, GoalType, ProjectBreakdownEntry, ProjectKind
+from beats.domain.models import (
+    AbsenceType,
+    AdjustmentKind,
+    Contract,
+    GoalType,
+    ProjectBreakdownEntry,
+    ProjectKind,
+)
 
 
 class RecordTimeRequest(BaseModel):
@@ -196,6 +203,19 @@ class AbsenceResponse(BaseModel):
     date: date_type
     type: AbsenceType
     half_day: bool = False
+    note: str | None = None
+
+
+class AdjustmentResponse(BaseModel):
+    """Response schema for a balance adjustment: the record as stored. What
+    it moved the balance by is the ledger's (`applied`), worked out on every
+    read."""
+
+    id: str
+    project_id: str
+    date: date_type
+    kind: AdjustmentKind
+    hours: float
     note: str | None = None
 
 

@@ -639,7 +639,8 @@ export function ProjectForm({
 											id="project-form-opening-balance-hint"
 											className="mt-1 text-[11px] text-muted-foreground/70"
 										>
-											Hours banked before {APP_NAME} started counting; negative if owed.
+											Hours banked before {APP_NAME} started counting; negative if owed. For a
+											payout or reset later, use Adjust balance on the project page.
 										</p>
 									)}
 								</div>

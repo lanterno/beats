@@ -291,6 +291,13 @@ function Balance({
 					</b>{" "}
 					expected through {through}
 				</span>
+				{/* Shown only when an adjustment moved the balance, so the lines still add up. */}
+				{balanceTone(week.balanceAdjusted ?? 0) !== "even" && (
+					<span className="block">
+						<b className="text-foreground font-extrabold">{signed(week.balanceAdjusted ?? 0)}</b>{" "}
+						adjusted
+					</span>
+				)}
 			</p>
 			{firstWeek ? (
 				<p className={PROJ}>

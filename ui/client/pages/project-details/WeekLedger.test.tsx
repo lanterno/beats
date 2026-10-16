@@ -2,7 +2,8 @@
  * The ledger panel: rule and quiet rows among the weeks, the goal cell that
  * opens the override popover only where the contract does not govern, the
  * CSV, a week opened from its label, the count back to the opening balance
- * and the two foot lines. The row shapes are the entity's (ledger.test.ts).
+ * and the two foot lines, and the adjustment rows that open their dialog.
+ * The row shapes are the entity's (ledger.test.ts).
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -13,7 +14,12 @@ import { WeekLedger, type WeekLedgerProps } from "./WeekLedger";
 const overrides = vi.fn();
 vi.mock("@/entities/project", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/project")>("@/entities/project");
-	return { ...actual, useUpdateGoalOverrides: () => ({ mutate: overrides, isPending: false }) };
+	return {
+		...actual,
+		useUpdateGoalOverrides: () => ({ mutate: overrides, isPending: false }),
+		useRecordAdjustment: () => ({ mutateAsync: vi.fn() }),
+		useRemoveAdjustment: () => ({ mutateAsync: vi.fn() }),
+	};
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -63,13 +69,15 @@ function week(weekOf: string, patch: Partial<LedgerWeek> = {}): LedgerWeek {
 		contractExpected: 33.6,
 		balanceEnd: 5,
 		notes: [],
+		adjustments: [],
 		...patch,
 	};
 }
 
 const LEDGER: Ledger = {
 	since: "2026-01-05",
-	totals: { expected: 840, worked: 848.5, balance: 10.5 },
+	totals: { expected: 840, worked: 848.5, adjusted: 0, balance: 10.5 },
+	endedBalance: null,
 	weeks: [
 		week("2026-09-07", { balanceEnd: null }),
 		week("2026-08-31", { worked: 32.9, days: [6.9, 6.4, 6.7, 6.5, 6.4, 0, 0], balanceEnd: 5.7 }),
@@ -178,10 +186,43 @@ describe("WeekLedger on a day job", () => {
 		await userEvent.click(screen.getByRole("button", { name: /^Open W31/ }));
 		expect(props.onOpenWeek).toHaveBeenCalledWith("2026-07-27");
 	});
+
+	it("shows an adjustment under its week, counts it in the foot line, and opens it", async () => {
+		const payout = {
+			id: "a1",
+			date: "2026-09-02",
+			kind: "delta" as const,
+			hours: -10,
+			note: "August",
+			applied: -10,
+		};
+		renderLedger({
+			ledger: {
+				...LEDGER,
+				totals: { expected: 840, worked: 848.5, adjusted: -10, balance: 0.5 },
+				weeks: LEDGER.weeks.map((w) =>
+					w.weekOf === "2026-08-31" ? { ...w, adjustments: [payout] } : w,
+				),
+			},
+		});
+		const region = screen.getByRole("region", { name: "Earlier weeks" });
+		const rows = within(region).getAllByRole("row").slice(1);
+		expect(rows[0]).toHaveTextContent(/^W36/);
+		// The pill, and its hours in the +/− column; the balance cell is blank.
+		const [pill, ...figures] = within(rows[1]).getAllByRole("cell");
+		expect(pill).toHaveTextContent("Wed Sep 2 · Adjusted −10.0 h “August”");
+		expect(figures.map((c) => c.textContent)).toEqual(["−10.0", ""]);
+		expect(region).toHaveTextContent("+8.5 h (+2.0 h brought forward, −10.0 h adjusted)");
+
+		await userEvent.click(within(rows[1]).getByRole("button", { name: /^Change adjustment/ }));
+		const dialog = screen.getByRole("dialog", { name: "Change adjustment" });
+		expect(within(dialog).getByLabelText("Hours")).toHaveValue(10);
+		expect(within(dialog).getByRole("button", { name: "Remove" })).toBeInTheDocument();
+	});
 });
 
 describe("WeekLedger on a contract that started this week", () => {
-	it("shows the opening rule and says there are no earlier weeks yet", () => {
+	it("shows the opening rule and says there are no earlier weeks yet", async () => {
 		const fresh: ProjectWithDuration = {
 			...DAY_JOB,
 			totalMinutes: 148,
@@ -204,8 +245,16 @@ describe("WeekLedger on a contract that started this week", () => {
 			sessionCount: 1,
 			ledger: {
 				since: "2026-09-07",
-				totals: { expected: 42, worked: 2.5, balance: -39.5 },
-				weeks: [week("2026-09-07", { worked: 2.5, contractExpected: 42, balanceEnd: null })],
+				totals: { expected: 42, worked: 2.5, adjusted: 5, balance: -34.5 },
+				endedBalance: null,
+				weeks: [
+					week("2026-09-07", {
+						worked: 2.5,
+						contractExpected: 42,
+						balanceEnd: null,
+						adjustments: [{ id: "a1", date: "2026-09-08", kind: "delta", hours: 5, applied: 5 }],
+					}),
+				],
 			},
 		});
 		const region = screen.getByRole("region", { name: "Earlier weeks" });
@@ -214,6 +263,14 @@ describe("WeekLedger on a contract that started this week", () => {
 		expect(within(region).queryByRole("table")).toBeNull();
 		expect(within(region).queryByRole("button", { name: "Copy as CSV" })).toBeNull();
 		expect(region).toHaveTextContent("All time 2.5 h · 1 session");
+		// What it records this week can still be opened, and more added.
+		expect(
+			within(region).getByRole("button", {
+				name: "Change adjustment: Tue Sep 8 · Adjusted +5.0 h",
+			}),
+		).toHaveTextContent("+5.0");
+		await userEvent.click(within(region).getByRole("button", { name: "Adjust balance" }));
+		expect(screen.getByRole("dialog", { name: "Adjust balance" })).toBeInTheDocument();
 	});
 });
 
@@ -228,6 +285,7 @@ describe("WeekLedger on a side project", () => {
 	const ledger: Ledger = {
 		since: null,
 		totals: null,
+		endedBalance: null,
 		weeks: [
 			week("2026-09-07", { effectiveGoal: 8, contractExpected: null, balanceEnd: null }),
 			week("2026-08-31", {
@@ -254,6 +312,7 @@ describe("WeekLedger on a side project", () => {
 		expect(region).not.toHaveTextContent("Expected");
 		expect(within(region).queryByRole("columnheader", { name: "Balance" })).toBeNull();
 		expect(region).not.toHaveTextContent("back to the opening balance");
+		expect(within(region).queryByRole("button", { name: "Adjust balance" })).toBeNull();
 
 		const noGoal = within(region).getByRole("button", { name: "No goal" });
 		expect(noGoal).toHaveAttribute("title", "Goal override active — click to edit");

@@ -11,9 +11,11 @@ import type {
 	ApiProjectListItem,
 } from "@/shared/api";
 import {
+	ApiAdjustmentSchema,
 	ApiProjectListSchema,
 	ApiProjectSchema,
 	ContractWeekSchema,
+	del,
 	get,
 	HolidayListSchema,
 	LedgerSchema,
@@ -23,7 +25,7 @@ import {
 	RegionListSchema,
 } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
-import type { ContractWeek, Holiday, HolidayRegion, Ledger } from "../model";
+import type { AdjustmentKind, ContractWeek, Holiday, HolidayRegion, Ledger } from "../model";
 import { toContractWeek, toLedger } from "../model";
 
 /**
@@ -133,6 +135,36 @@ export async function updateContract(
 ): Promise<ApiProject> {
 	const data = await put<unknown>(`/api/projects/${projectId}/contract`, contract);
 	return parseApiResponse(ApiProjectSchema, data);
+}
+
+export interface AdjustmentInput {
+	date: string; // YYYY-MM-DD
+	kind: AdjustmentKind;
+	/** Signed for a delta (a payout is negative); the target for a reset or a cap. */
+	hours: number;
+	note?: string;
+}
+
+/**
+ * Record a balance adjustment on a day job. One per date: posting on a date
+ * that already has one replaces it, keeps its id and still answers 201. The
+ * date must fall from the contract's first day through today in the
+ * browser's timezone (409 ADJUSTMENT_OUTSIDE_BALANCE); 409 NO_CONTRACT
+ * without a contract. What it moved the balance by is the ledger's to say.
+ */
+export async function recordAdjustment(projectId: string, input: AdjustmentInput): Promise<void> {
+	const params = new URLSearchParams({ tz: browserTimeZone() });
+	const data = await post<unknown>(`/api/projects/${projectId}/adjustments?${params.toString()}`, {
+		date: input.date,
+		kind: input.kind,
+		hours: input.hours,
+		note: input.note?.trim() ? input.note.trim() : null,
+	});
+	parseApiResponse(ApiAdjustmentSchema, data);
+}
+
+export async function removeAdjustment(projectId: string, adjustmentId: string): Promise<void> {
+	await del<void>(`/api/projects/${projectId}/adjustments/${adjustmentId}`);
 }
 
 /**
