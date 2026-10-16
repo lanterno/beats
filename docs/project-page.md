@@ -40,12 +40,12 @@ checked in beside this file; the artifact link is a convenience.
    the same rule as the balance so signs never disagree.
 4. **The Planned column is demoted** to an annotation on the open week
    ("Planned 28 h · 9 commits"). The weekly plan page is untouched.
-5. **The health sparkline and the "Focus today" aggregate are cut.** The
-   stale-project alert survives as one line in the standing with its
-   Snooze; the per-session focus score survives as a small mark on today's
-   session rows. The Avg / Longest / Sessions / Last-tracked tiles become
-   one muted all-time line under the ledger and a "Last tracked" fact in
-   the rail.
+5. **The health card is cut.** Its goal sparkline goes. Its stale-project
+   alert survives as one line in the standing with its Snooze, and its
+   "Focus today" average as a figure in the rail's quiet facts; the
+   per-session focus score survives as a small mark on today's session
+   rows. The Avg / Longest / Sessions / Last-tracked tiles become one muted
+   all-time line under the ledger and a "Last tracked" fact in the rail.
 6. **Two hours, and no other themes.** `afternoon` (light, the default) and
    `dusk` (dark), on `data-theme`. There is no separate colour mode and no
    third hour; density is its own axis. Any stored value that is not one of
