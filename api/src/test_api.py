@@ -2474,6 +2474,91 @@ class TestCoachRouterGapFill:
         line = f"{project['name']} running balance: {describe_balance(week['balance'])}"
         assert line in prompt
 
+    @staticmethod
+    def _zone_off_utcs_day() -> str:
+        """A timezone whose calendar day is not UTC's right now: UTC+14 is
+        a day ahead from 10:00 UTC, UTC−11 a day behind until 11:00 UTC."""
+        from zoneinfo import ZoneInfo
+
+        utc_today = datetime.now(UTC).date()
+        for name in ("Pacific/Kiritimati", "Pacific/Pago_Pago"):
+            if datetime.now(ZoneInfo(name)).date() != utc_today:
+                return name
+        raise AssertionError("no zone off UTC's day")  # pragma: no cover
+
+    def _assert_day_context_in(self, client, headers, project, sent, tz) -> None:
+        from zoneinfo import ZoneInfo
+
+        from beats.coach.contract_section import describe_balance
+
+        prompt = "\n".join(m["content"] for m in sent if isinstance(m["content"], str))
+        today = datetime.now(ZoneInfo(tz)).date()
+        assert f"## Today: {today.isoformat()}" in prompt
+        week = client.get(
+            f"/api/projects/{project['id']}/contract/week", params={"tz": tz}, headers=headers
+        ).json()
+        line = f"{project['name']} running balance: {describe_balance(week['balance'])}"
+        assert line in prompt
+
+    def test_chat_reads_the_contract_week_in_the_request_timezone(
+        self, client, auth_info, monkeypatch
+    ):
+        """The chat's day context is the user's day, not UTC's: before the
+        route took a tz, a Monday morning in Auckland sent last week's days
+        off and contracts that had ended before the user's week, and the
+        balance missed an adjustment dated the user's today."""
+        from types import SimpleNamespace
+
+        from anthropic.types import TextBlock
+
+        from beats.coach import chat as chat_module
+
+        headers = auth_info["headers"]
+        project = _day_job(client, headers, opening_balance_hours=10)
+        sent: list[dict] = []
+
+        async def fake_complete(**kwargs):
+            sent.extend(kwargs["messages"])
+            return SimpleNamespace(content=[TextBlock(type="text", text="Hi.")])
+
+        monkeypatch.setattr(chat_module, "complete", fake_complete)
+
+        tz = self._zone_off_utcs_day()
+        with client.stream(
+            "POST", "/api/coach/chat", params={"tz": tz}, json={"message": "hi"}, headers=headers
+        ) as resp:
+            assert resp.status_code == 200
+            "".join(resp.iter_text())
+
+        self._assert_day_context_in(client, headers, project, sent, tz)
+
+    def test_memory_rewrite_reads_the_contract_week_in_the_request_timezone(
+        self, client, auth_info, monkeypatch
+    ):
+        """The memory rewrite's day context is the user's day, as the chat's
+        and the brief's are."""
+        from types import SimpleNamespace
+
+        from anthropic.types import TextBlock
+
+        from beats.coach import memory_rewrite as memory_rewrite_module
+
+        headers = auth_info["headers"]
+        project = _day_job(client, headers, opening_balance_hours=10)
+        sent: list[dict] = []
+
+        async def fake_complete(**kwargs):
+            sent.extend(kwargs["messages"])
+            return SimpleNamespace(content=[TextBlock(type="text", text="# Coach memory")])
+
+        monkeypatch.setattr(memory_rewrite_module, "complete", fake_complete)
+
+        tz = self._zone_off_utcs_day()
+        resp = client.post("/api/coach/memory/rewrite", params={"tz": tz}, headers=headers)
+        assert resp.status_code == 200, resp.text
+
+        self._assert_day_context_in(client, headers, project, sent, tz)
+
     def test_memory_rewrite_budget_exceeded_uses_envelope_code(
         self, client, auth_info, monkeypatch
     ):
@@ -2486,7 +2571,7 @@ class TestCoachRouterGapFill:
         from beats.api.routers import coach as coach_router
         from beats.coach.usage import BudgetExceeded
 
-        async def fake_rewrite(_user_id):
+        async def fake_rewrite(_user_id, **_kwargs):
             raise BudgetExceeded(spent=20.0, limit=10.0)
 
         monkeypatch.setattr(coach_router, "rewrite_coach_memory", fake_rewrite)
