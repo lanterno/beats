@@ -447,8 +447,14 @@ region check, and every project write reconciles the adjustments
   purge left); and moving the first term later past one is 409
   `ADJUSTMENT_BEFORE_START`. Anything else — a rename resending the
   contract unchanged, a first day moved earlier — reads nothing.
-  `POST /api/export/import` restores raw documents past these rules, as it
-  does for absences.
+- **A backup goes back through these rules.** `POST /api/export/import`
+  restores a project as a project write (`ProjectService.restore_project`:
+  the contract checks, and the reconcile above against the contract it
+  replaces) and then the absences and adjustments through
+  `ContractService`'s record methods, in the request's `tz`. A record they
+  refuse is left out and listed under `skipped` with its route's code, not
+  a failure of the file: an absence outlives a kind change away from
+  `day_job`, so an honest export carries one its route now refuses.
 - **`this_week` on the index** is the week route's current week, null on
   anything but a day job with a contract. `contract_worked` sits beside
   `weekly_minutes` because they differ: `weekly_minutes` is the personal
@@ -483,9 +489,10 @@ region check, and every project write reconciles the adjustments
 
 **What leaves Beats.** The coach sends a day job's goal as one line
 (`Acme: 33.6h/week (contract, 80%)`), not absences, the region, the
-company holidays, the balance adjustments or the balance. `/api/export`
-carries the contract but not absences or balance adjustments.
-`PRIVACY.md` and `DATA.md` state this; a change happens there first.
+company holidays, the balance adjustments or the balance. `/api/export/full`
+carries the contract, the absences and the balance adjustments, so a backup
+restores the same balance. `PRIVACY.md` and `DATA.md` state this; a change
+happens there first.
 
 ---
 
