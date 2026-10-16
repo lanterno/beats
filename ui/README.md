@@ -125,7 +125,6 @@ client/
 | Alias | Path |
 |-------|------|
 | `@/*` | `client/*` |
-| `@shared/*` | `shared/*` (legacy, prefer `@/shared/*`) |
 
 ## Conventions
 

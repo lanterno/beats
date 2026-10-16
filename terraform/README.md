@@ -170,12 +170,6 @@ VITE_API_URL=https://api.lifepete.com pnpm build
 npx firebase-tools deploy --only hosting
 ```
 
-> This section previously described a Cloud Storage bucket behind a Load
-> Balancer with Cloud CDN, driven by `ui/deploy.sh` and the `ui_bucket_name`
-> / `ui_ip_address` outputs. That stack was replaced by Firebase Hosting and
-> none of those things exist any more — the script, both outputs, and the
-> `build:client` npm script are all gone.
-
 ### DNS Configuration
 
 - **UI Domain**: `lifepete.com` → Automatically configured via Cloudflare DNS
