@@ -1,6 +1,8 @@
 /**
  * The Holidays dialog: unticking a public holiday sends its date as not
- * given, a company day without a name is refused before anything is sent,
+ * given, a company day without a name, on another's date or on a date not
+ * given is refused before anything is sent (the last with the mark cleared
+ * from its row, and a refusal on another year's page opens that year),
  * another year's entries go out untouched, a date not given that is no
  * longer a holiday of the region is listed and can be removed — but only once
  * the year's calendar is in — and a 422 on a company day lands on its row.
@@ -134,6 +136,77 @@ describe("HolidaysDialog", () => {
 
 		expect(hooks.mutate).not.toHaveBeenCalled();
 		expect(dialog()).toHaveTextContent("Name the day");
+	});
+
+	it("refuses two company days on one date", async () => {
+		renderDialog({ companyHolidays: [{ date: "2026-12-24", name: "Christmas Eve" }] });
+
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Add a day" }));
+		fireEvent.change(within(dialog()).getByLabelText("Company holiday 2: date"), {
+			target: { value: "2026-12-24" },
+		});
+		fireEvent.change(within(dialog()).getByLabelText("Company holiday 2: name"), {
+			target: { value: "Eve again" },
+		});
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
+
+		expect(hooks.mutate).not.toHaveBeenCalled();
+		expect(within(dialog()).getByLabelText("Company holiday 2: date")).toHaveAccessibleDescription(
+			"Another company holiday is on this day",
+		);
+		expect(within(dialog()).getByLabelText("Company holiday 1: date")).not.toHaveAttribute(
+			"aria-invalid",
+		);
+	});
+
+	it("shows a public holiday not given that a company day covers, and clears the mark from the row", async () => {
+		// The API accepts this shape and lists the date twice; the dialog never builds it.
+		hooks.holidays.mockReturnValue([
+			holiday("2026-12-25", "Christmas Day", false),
+			{ date: "2026-12-25", name: "Firm Christmas", source: "company", given: true },
+		]);
+		const firm = { date: "2026-12-25", name: "Firm Christmas" };
+		renderDialog({ companyHolidays: [firm], holidaysNotGiven: ["2026-12-25"] });
+
+		// Christmas is the region's, unticked: not a left-over removal.
+		expect(within(dialog()).getByRole("checkbox", { name: /Christmas Day/ })).not.toBeChecked();
+		expect(
+			within(dialog()).queryByRole("region", { name: "No longer a holiday here" }),
+		).not.toBeInTheDocument();
+
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
+		expect(hooks.mutate).not.toHaveBeenCalled();
+		expect(within(dialog()).getByLabelText("Company holiday 1: date")).toHaveAccessibleDescription(
+			"This day is marked as a holiday not given",
+		);
+
+		await userEvent.click(
+			within(dialog()).getByRole("button", { name: "Clear the mark on Fri Dec 25" }),
+		);
+		expect(within(dialog()).getByRole("checkbox", { name: /Christmas Day/ })).toBeChecked();
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
+
+		expect(hooks.mutate).toHaveBeenCalledTimes(1);
+		expect(sentContract().holidays_not_given).toEqual([]);
+		expect(sentContract().company_holidays).toEqual([firm]);
+	});
+
+	it("moves to the year of a refused row on another page", async () => {
+		renderDialog({
+			companyHolidays: [{ date: "2027-12-24", name: "Christmas Eve" }],
+			holidaysNotGiven: ["2027-12-24"],
+		});
+		expect(within(dialog()).queryByDisplayValue("Christmas Eve")).not.toBeInTheDocument();
+
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
+
+		expect(hooks.mutate).not.toHaveBeenCalled();
+		expect(dialog()).toHaveTextContent("2027");
+		expect(within(dialog()).getByDisplayValue("Christmas Eve")).toBeInTheDocument();
+		expect(within(dialog()).getByLabelText("Company holiday 1: date")).toHaveAttribute(
+			"aria-invalid",
+			"true",
+		);
 	});
 
 	it("lists a date not given that the region no longer has, and removing it drops it", async () => {
