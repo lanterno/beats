@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from beats.coach.contract_section import contract_section
 from beats.coach.feedback import brief_feedback_lines, recent_rated_briefs
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
@@ -158,7 +159,8 @@ async def build_day_context(
     user_id: str, repos: CoachRepos, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
 ) -> str:
     """Today's raw signals. Small and NOT cached."""
-    project_map = {p.id: p.name for p in await repos.project.list()}
+    projects = await repos.project.list()
+    project_map = {p.id: p.name for p in projects}
 
     today = target_date or datetime.now(tz).date()
     yesterday = today - timedelta(days=1)
@@ -243,6 +245,19 @@ async def build_day_context(
 
     if calendar_lines:
         lines += ["", "### Calendar today", *calendar_lines]
+
+    # Each day job's week against its contract (best-effort, like the
+    # sections around it). Here and not in the cached user context: the
+    # figures move with every session and are the request timezone's. The
+    # contract service's clock decides whether `today` is today, so a
+    # backdated brief gets no section rather than today's balance.
+    try:
+        weeks = await repos.contracts.current_weeks(projects, tz, today)
+        section = contract_section(projects, weeks, today)
+        if section:
+            lines += ["", *section]
+    except Exception:
+        logger.debug("Contract weeks unavailable for day context", exc_info=True)
 
     # Biometric data (if available)
     try:
