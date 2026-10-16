@@ -7,11 +7,13 @@ list of regions for a picker, and the check the project service runs on a
 (country, subdivision) pair before a contract is written. Each holiday comes
 with its name; a caller that only wants the dates takes the mapping's keys.
 
-Codes are the library's own: ISO 3166-1 alpha-2 for the country and the
-ISO 3166-2 part for the subdivision (`GB`/`ENG`, `CH`/`ZH`). Substitute days
-— a Monday off for a Christmas that fell on a Sunday — come back as ordinary
-holidays, which is exactly what the arithmetic wants: they are weekdays and
-cost their day.
+Names are in English, which is what the app speaks: a region whose own
+language is English keeps its spelling (the UK's "Boxing Day"), any other
+gives its US English names where the library has them ("Second Day of
+Christmas" for "Zweiter Weihnachtstag"), and the rest keep the region's own.
+The language is always passed: left out, the library follows the process
+locale, so a container on `C` answered "Fronleichnam" where a laptop on
+`en_US` answered "Corpus Christi".
 """
 
 from datetime import date
@@ -71,7 +73,9 @@ def _year(country: str, subdivision: str | None, year: int) -> dict[date, str]:
     (region, year) is a few hundred bytes, so the cache stays small.
     """
     try:
-        calendar = holidays_lib.country_holidays(country, subdiv=subdivision, years=year)
+        calendar = holidays_lib.country_holidays(
+            country, subdiv=subdivision, years=year, language=_language(country)
+        )
     except NotImplementedError:
         # The region passed `check_region` when the contract was written; a
         # library upgrade can still stop knowing it. Surface that as the
@@ -79,6 +83,21 @@ def _year(country: str, subdivision: str | None, year: int) -> dict[date, str]:
         # costs — the week route reports it, the project index skips it.
         raise UnknownHolidayRegion(country, subdivision) from None
     return dict(calendar.items())
+
+
+@cache
+def _language(country: str) -> str | None:
+    """The language to name the region's holidays in: English where the
+    library has it, the region's own default otherwise.
+
+    An English-speaking region keeps its own English; the library names no
+    default only for those, and offers no translations there.
+    """
+    calendar = holidays_lib.country_holidays(country)
+    default = calendar.default_language
+    if default is None or default.startswith("en"):
+        return default
+    return "en_US" if "en_US" in calendar.supported_languages else default
 
 
 def check_region(country: str, subdivision: str | None) -> None:

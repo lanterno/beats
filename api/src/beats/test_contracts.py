@@ -1,9 +1,10 @@
 """Tests for the contract arithmetic — the interesting inputs only.
 
 Holidays arrive as a `set[date]`, so no test here asserts that a region *has*
-a holiday; that is the library's suite. Two tests go through
+a holiday; that is the library's suite. Three tests go through
 `named_holidays_between` all the same. One is for range logic that is ours: a week
-spanning New Year must consult both years' calendars. The other is there
+spanning New Year must consult both years' calendars. One is for our choice of
+language: English names, but an English-speaking region's own. The third is there
 because the arithmetic leans on the library's observed-day behaviour — a
 substitute Monday comes back as an ordinary holiday, and being a weekday it
 costs its day — and that dependency should be visible from the suite.
@@ -138,6 +139,22 @@ class TestHolidaysBetween:
         # both bounds inclusive.
         found = named_holidays_between("GB", None, date(2025, 12, 25), date(2026, 1, 1))
         assert set(found) == {date(2025, 12, 25), date(2025, 12, 26), date(2026, 1, 1)}
+
+    def test_names_are_english_and_an_english_region_keeps_its_own(self, monkeypatch):
+        # Germany's default is German; the UK's British spelling is not US English.
+        # Left to itself the library names holidays in the process locale's
+        # language, so the locale is pinned to one the answer must not follow.
+        monkeypatch.setenv("LANGUAGE", "de_DE")
+        monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+        christmas = (date(2026, 12, 25), date(2026, 12, 26))
+        assert list(named_holidays_between("DE", "BY", *christmas).values()) == [
+            "Christmas Day",
+            "Second Day of Christmas",
+        ]
+        assert list(named_holidays_between("GB", "ENG", *christmas).values()) == [
+            "Christmas Day",
+            "Boxing Day",
+        ]
 
 
 class TestBalance:
