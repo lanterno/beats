@@ -273,7 +273,13 @@ nothing.
   closing balance is the Sunday close, before Monday's adjustment, read off one running
   total (`running_balance`) with today's terms and every adjustment's `applied`; on the week
   a contract starts or ends mid-week `worked` counts hours the balance does not, so the
-  page's +/− is the move between two closes, less the week's adjustments. The decisions are in
+  page's +/− is the move between two closes, less the week's adjustments. A contract may
+  carry a `vacation` entitlement — days per year for a five-day week, a carry-over rule,
+  and a dated opening where counting starts (nothing before it is reconstructed) — that
+  `domain/vacation.py` reads one calendar year at a time; only `vacation` absences cost
+  it. A contract write that leaves out `vacation` or a holiday list keeps the stored one
+  (`keep_unsent_contract_fields`), and both writes refuse an opening left outside the
+  contract's dates (409). The decisions are in
   [docs/work-contracts.md](docs/work-contracts.md) and
   [docs/project-page.md](docs/project-page.md).
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
@@ -370,7 +376,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments) |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments), `/{id}/vacation` (one year of the vacation entitlement, in days) |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
