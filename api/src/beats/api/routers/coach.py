@@ -23,7 +23,7 @@ from beats.coach.repos import (
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
 )
-from beats.coach.usage import BudgetExceeded, UsageTracker
+from beats.coach.usage import BudgetExceeded, UsageTracker, budget_message
 from beats.infrastructure.database import Database
 from beats.settings import settings
 
@@ -152,7 +152,7 @@ async def trigger_brief_generation(
         # "monthly LLM budget reached", not "slow down your requests".
         raise HTTPException(
             status_code=429,
-            detail={"code": "BUDGET_EXCEEDED", "message": str(exc)},
+            detail={"code": "BUDGET_EXCEEDED", "message": budget_message(exc.spent, exc.limit)},
         ) from exc
     except Exception as exc:
         logger.exception("Brief generation failed for user=%s", user_id)
@@ -184,7 +184,10 @@ async def coach_chat(
             async for event in event_stream:
                 yield f"data: {json.dumps(event)}\n\n"
         except BudgetExceeded as exc:
-            error = {"type": "error", "error": str(exc), "code": 429}
+            # Built from the figures, never str(exc): an exception's text is
+            # not something to hand a client.
+            message = budget_message(exc.spent, exc.limit)
+            error = {"type": "error", "error": message, "code": 429}
             yield f"data: {json.dumps(error)}\n\n"
         except Exception:
             logger.exception("Chat stream failed for user=%s", user_id)
@@ -311,7 +314,7 @@ async def rewrite_memory(user_id: CurrentUserId):
         # detail used to map to.
         raise HTTPException(
             status_code=429,
-            detail={"code": "BUDGET_EXCEEDED", "message": str(exc)},
+            detail={"code": "BUDGET_EXCEEDED", "message": budget_message(exc.spent, exc.limit)},
         ) from exc
     except Exception as exc:
         logger.exception("Memory rewrite failed for user=%s", user_id)
