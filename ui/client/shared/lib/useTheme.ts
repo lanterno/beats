@@ -29,8 +29,8 @@ export const DENSITIES: { id: Density; label: string }[] = [
 
 /**
  * Read a stored choice, falling back when it is missing or not one of the
- * offered ids. A value from before the two hours ("ember", "midnight", …)
- * reads as the fallback; nothing is written back until the user picks.
+ * offered ids — localStorage holds whatever was last written to it. Nothing
+ * is written back until the user picks.
  */
 function getStored<T extends string>(key: string, offered: readonly { id: T }[], fallback: T): T {
 	try {

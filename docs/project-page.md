@@ -46,10 +46,10 @@ checked in beside this file; the artifact link is a convenience.
    session rows. The Avg / Longest / Sessions / Last-tracked tiles become
    one muted all-time line under the ledger and a "Last tracked" fact in
    the rail.
-6. **Two hours replace five themes.** `afternoon` (light, the default) and
-   `dusk` (dark). The theme axis keeps its attribute (`data-theme`) and
-   storage key; the separate colour-mode axis goes; density stays. Any
-   stored value that is not one of the two reads as `afternoon`.
+6. **Two hours, and no other themes.** `afternoon` (light, the default) and
+   `dusk` (dark), on `data-theme`. There is no separate colour mode and no
+   third hour; density is its own axis. Any stored value that is not one of
+   the two reads as `afternoon`.
 7. **No boxes, no borders, no textures.** Surfaces are rounded panels
    (radius 1.5–1.875 rem) separated by air and shadow; controls are pills;
    highlights are washes; row separators inside a list are a hairline at
@@ -454,6 +454,5 @@ rules of its own there. The accent is its running beat and primary button.
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Project
 page follow-ups*. The ledger's write side, vacation entitlement and the
-companion's week card are under *Work contracts follow-ups*. The two open
-questions, a third hour for `sunset`'s users and
-`apple-mobile-web-app-status-bar-style`, are AHM-28 and AHM-29.
+companion's week card are under *Work contracts follow-ups*. The open
+question, `apple-mobile-web-app-status-bar-style` under the sky, is AHM-29.

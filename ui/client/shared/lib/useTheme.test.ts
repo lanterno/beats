@@ -58,12 +58,12 @@ describe("useTheme", () => {
 		expect(result.current.theme).toBe("dusk");
 	});
 
-	it("reads a theme from before the two hours as the afternoon, and writes nothing back", () => {
-		store.beats_theme = "midnight";
+	it("reads a stored value that is not an hour as the afternoon, and writes nothing back", () => {
+		store.beats_theme = "neon";
 		const { result } = renderHook(() => useTheme());
 		expect(result.current.theme).toBe("afternoon");
 		expect(mockStorage.setItem).not.toHaveBeenCalledWith("beats_theme", expect.anything());
-		expect(store.beats_theme).toBe("midnight");
+		expect(store.beats_theme).toBe("neon");
 	});
 
 	it("setTheme persists, applies data-theme and moves theme-color with the hour", () => {
