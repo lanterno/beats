@@ -57,6 +57,17 @@ def _hours(hours: float) -> str:
     return f"{_one_decimal(hours)} h"
 
 
+def _hundredths(hours: float) -> str:
+    """A week figure as the wire carries it, to the hundredth — "40.0",
+    "23.75", "6.4" — so the week's line adds up as printed: rounding
+    23.75 h worked and 16.25 h to go to the tenth each would read 23.8
+    and 16.3 against 40.0. The page's tenth is this figure rounded.
+    """
+    exact = Decimal(repr(round_hours(hours))).quantize(Decimal("0.01")) + 0  # −0.00 → 0.00
+    text = f"{exact:.2f}"
+    return text[:-1] if text.endswith("0") else text
+
+
 def describe_balance(hours: float) -> str:
     """A balance with its sign made unmistakable: "+4.5 h over", "−2.0 h owed"
     (U+2212) or "even" — the twin of `describeBalance` in the SPA's
@@ -71,14 +82,15 @@ def describe_balance(hours: float) -> str:
 
 
 def _left(remaining: float) -> str:
-    """What is left of the week: "6.4 h to go", "week met", "week done, 0.4 h
-    over" — judged at the decimal shown, as the SPA's `doneSentence` is."""
+    """What is left of the week: "6.4 h to go", "week met", "week done, 0.45 h
+    over" — judged at the tenth, as the SPA's `doneSentence` is, and given to
+    the hundredth, as the week's other figures are."""
     rounded = _one_decimal(remaining)
     if rounded > 0:
-        return f"{rounded} h to go"
+        return f"{_hundredths(remaining)} h to go"
     if rounded == 0:
         return "week met"
-    return f"week done, {-rounded} h over"
+    return f"week done, {_hundredths(-remaining)} h over"
 
 
 def _its_days_only(contract: Contract, week: ContractWeek) -> str:
@@ -158,16 +170,17 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
     if week.expected is not None and week.remaining is not None:
         # Worked under the contract — on the days it covers, what "to go"
         # and the balance count — read back off the week's own figures, so
-        # worked and to go add up to the expectation before display rounds
-        # them. Not summed from the days: each is already rounded to the
-        # hundredth, and the sum drifts (87 s on two days and an hour today
-        # sum to 1.04 h, where the week counts 1.05 h with 30.95 h to go).
+        # worked and to go add up to the expectation; all three are printed
+        # to the hundredth, so they add up as printed too. Not summed from
+        # the days: each is already rounded to the hundredth, and the sum
+        # drifts (87 s on two days and an hour today sum to 1.04 h, where
+        # the week counts 1.05 h with 30.95 h to go).
         worked = round_hours(week.expected - week.remaining)
         term = term_on(contract, max(today, contract.starts_on))
         label = fmt_contract_goal(term) if term is not None else "contract"
         lines.append(
-            f"  {name} ({label}): this week expects {_hours(week.expected)} after holidays"
-            f" and days off — {_hours(worked)} worked under the"
+            f"  {name} ({label}): this week expects {_hundredths(week.expected)} h after"
+            f" holidays and days off — {_hundredths(worked)} h worked under the"
             f" contract{_its_days_only(contract, week)}, {_left(week.remaining)}"
         )
         # Which of this week's days off came from the employer's own list:
