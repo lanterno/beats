@@ -55,7 +55,7 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Eleven test files cover different layers (896 tests, ~30s for the full run):
+Twelve test files cover different layers (896 tests, ~30s for the full run):
 
 - **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 295 tests.
 - **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 277 tests.
