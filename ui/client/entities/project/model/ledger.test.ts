@@ -283,6 +283,47 @@ describe("ledgerRows: the quiet collapse", () => {
 });
 
 describe("ledgerRows: the +/− cell", () => {
+	it("is the API's move on a week with a close, the oldest row shown included", () => {
+		// AHM-81. Full time 40 h from Jan 5, ended Wed Feb 4, 8 h every
+		// weekday through Fri Feb 6, read on Mar 5. The oldest row logged
+		// 40 h against 24 expected, but the balance counts Mon–Wed only and
+		// did not move: +16.0 from worked − expected would be wrong.
+		const ended: Contract = {
+			terms: [{ effectiveFrom: "2026-01-05", scheduleType: "full_time", fullTimeHours: 40 }],
+			openingBalanceHours: 0,
+			endedOn: "2026-02-04",
+			companyHolidays: [],
+			holidaysNotGiven: [],
+		};
+		const after = { worked: 0, contractExpected: 0, balanceEnd: 0, balanceMoved: 0 };
+		const rows = ledgerRows(
+			ledger(
+				[
+					week("2026-03-02", { ...after, balanceEnd: null, balanceMoved: null }),
+					week("2026-02-23", after),
+					week("2026-02-16", after),
+					week("2026-02-09", after),
+					week("2026-02-02", {
+						worked: 40,
+						contractExpected: 24,
+						balanceEnd: 0,
+						balanceMoved: 0,
+					}),
+				],
+				{ totals: null, endedBalance: 0 },
+			),
+			{ kind: "day_job", contract: ended },
+			"2026-03-05",
+		);
+		const oldest = rows[rows.length - 1];
+		expect(oldest?.type === "week" && [oldest.week.weekOf, oldest.delta]).toEqual([
+			"2026-02-02",
+			0,
+		]);
+	});
+
+	// The fixtures below send no `balanceMoved`, as an API that predates it
+	// does: the SPA reads the move off the closes.
 	it("reads the move between two closes when it has both, else worked − expected, else worked − goal", () => {
 		const rows = ledgerRows(
 			ledger([
