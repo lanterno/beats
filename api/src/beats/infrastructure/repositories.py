@@ -12,6 +12,7 @@ hold exactly one document per user.
 """
 
 import builtins
+from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol
 
@@ -158,6 +159,19 @@ class MongoStore[ModelT: BaseModel]:
         result = await self.collection.delete_many(self._q())
         return result.deleted_count
 
+    async def _ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        """Which of these ids another user's document already has. Unscoped on
+        purpose, and the one read that is: a restore keeps a record's id, so
+        an id someone else holds has to be found before anything is written.
+        The ids must already be valid ObjectIds."""
+        oids = [ObjectId(i) for i in ids]
+        if not oids:
+            return set()
+        docs = await self.collection.find(
+            {"_id": {"$in": oids}, "user_id": {"$ne": self.user_id}}, {"_id": 1}
+        ).to_list(length=None)
+        return {str(doc["_id"]) for doc in docs}
+
 
 class MongoSingletonStore[ModelT: BaseModel](MongoStore[ModelT]):
     """A collection holding exactly one document per user."""
@@ -202,6 +216,7 @@ class BeatRepository(Protocol):
     async def list_all_completed(self) -> builtins.list[Beat]: ...
     async def list_completed_in_range(self, start: date, end: date) -> builtins.list[Beat]: ...
     async def restore(self, beat: Beat) -> None: ...
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
 
 
 class ProjectRepository(Protocol):
@@ -212,6 +227,7 @@ class ProjectRepository(Protocol):
     async def create(self, project: Project) -> Project: ...
     async def update(self, project: Project) -> Project: ...
     async def list(self, archived: bool = False) -> builtins.list[Project]: ...
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
 
 
 class MongoBeatRepository(MongoStore[Beat], BeatRepository):
@@ -310,6 +326,9 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
             self._q({"_id": ObjectId(beat.id)}), self._dump(beat), upsert=True
         )
 
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        return await self._ids_held_elsewhere(ids)
+
 
 class MongoProjectRepository(MongoStore[Project], ProjectRepository):
     """MongoDB implementation of ProjectRepository."""
@@ -347,6 +366,9 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
 
     async def list(self, archived: bool = False) -> builtins.list[Project]:
         return await self._find_many({"archived": archived})
+
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        return await self._ids_held_elsewhere(ids)
 
 
 class MongoUserRepository(UserRepository):

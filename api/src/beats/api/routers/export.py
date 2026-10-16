@@ -4,12 +4,13 @@ import csv
 import io
 import json
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
+from bson import ObjectId
 from fastapi import APIRouter, Query, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from beats.api.dependencies import (
     AbsenceRepoDep,
@@ -22,7 +23,7 @@ from beats.api.dependencies import (
 )
 from beats.api.errors import error_code
 from beats.api.schemas import ImportCounts, ImportResponse, ImportSkip
-from beats.domain.exceptions import DomainException
+from beats.domain.exceptions import BackupOfAnotherAccount, DomainException
 from beats.domain.models import Absence, BalanceAdjustment, Beat, Project
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -111,14 +112,34 @@ async def export_full_json(
     )
 
 
+def _object_id(value: str | None) -> str | None:
+    if value is not None and not ObjectId.is_valid(value):
+        raise ValueError("an id in a backup is one this API issued: 24 hexadecimal digits")
+    return value
+
+
+# A project's and a beat's id are kept on restore, so each has to be one
+# Mongo can store as an `_id`. An absence's and an adjustment's are not
+# read: their project and date are their identity.
+_KeptId = Annotated[str | None, AfterValidator(_object_id)]
+
+
+class _BackupProject(Project):
+    id: _KeptId = None
+
+
+class _BackupBeat(Beat):
+    id: _KeptId = None
+
+
 class _Backup(BaseModel):
     """A backup file as the import reads it. Every list may be missing, so a
     1.0 file, made before absences and adjustments were exported, reads as a
     backup with none of them. A beat's derived fields (`is_active`,
     `duration`, `day`) are in the file but not read back."""
 
-    projects: list[Project] = Field(default_factory=list)
-    beats: list[Beat] = Field(default_factory=list)
+    projects: list[_BackupProject] = Field(default_factory=list)
+    beats: list[_BackupBeat] = Field(default_factory=list)
     absences: list[Absence] = Field(default_factory=list)
     balance_adjustments: list[BalanceAdjustment] = Field(default_factory=list)
 
@@ -141,6 +162,7 @@ def _skip(
 async def import_full_json(
     file: UploadFile,
     beat_repo: BeatRepoDep,
+    project_repo: ProjectRepoDep,
     project_service: ProjectServiceDep,
     contract_service: ContractServiceDep,
     tz: TimezoneDep,
@@ -150,19 +172,32 @@ async def import_full_json(
     an absence or an adjustment replaces the one on its project and date, as
     its own route does.
 
-    The whole file is validated first, so a malformed record is a 422 that
-    names it and nothing is written. Projects are then written as a project
-    write is — the contract's checks and the reconcile against the contract
-    it replaces apply, so their refusal is that write's error — and the
-    absences and adjustments through their own routes' rules, against the
-    projects as restored. A record those rules refuse (an absence on a
-    project that is no longer a day job; an adjustment outside the
-    contract's first day through today in `tz`) is left out and listed under
-    `skipped` with the code its route would answer."""
+    The whole file is checked first, and a file that fails writes nothing:
+    a malformed record, a project's or a session's id included, is a 422
+    that names it, and a file holding a project or a session whose id is
+    another account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`. Projects are then
+    written as a project write is — the contract's checks and the reconcile
+    against the contract it replaces apply, so their refusal is that write's
+    error — and the absences and adjustments through their own routes'
+    rules, against the projects as restored. A record those rules refuse (an
+    absence on a project that is no longer a day job; an adjustment outside
+    the contract's first day through today in `tz`) is left out and listed
+    under `skipped` with the code its route would answer."""
     try:
         backup = _Backup.model_validate_json(await file.read())
     except ValidationError as exc:
         raise RequestValidationError(exc.errors(include_url=False)) from None
+
+    # Every write is scoped to the caller, so a record of someone else's
+    # would not move across but collide with theirs, partway through.
+    foreign_projects = await project_repo.ids_held_elsewhere(
+        p.id for p in backup.projects if p.id is not None
+    )
+    foreign_beats = await beat_repo.ids_held_elsewhere(
+        b.id for b in backup.beats if b.id is not None
+    )
+    if foreign_projects or foreign_beats:
+        raise BackupOfAnotherAccount(len(foreign_projects), len(foreign_beats))
 
     counts = ImportCounts(projects=0, beats=0, absences=0, balance_adjustments=0)
     skipped: list[ImportSkip] = []
