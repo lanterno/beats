@@ -177,10 +177,9 @@ def _daily(
 ) -> Iterator[tuple[date, float, float, float]]:
     """Every day from the contract's first through `through`, with the hours
     worked on it that the balance counts (`counts_worked`: none after
-    `ended_on`, none under a term that owes nothing), the hours
-    it expected, and what the day's adjustment moved the balance by (0
-    without one). The running sums under every balance figure come from
-    here and nowhere else.
+    `ended_on`, none under a term that owes nothing), the hours it expected,
+    and what the day's adjustment moved the balance by (0 without one). The
+    running sums under every balance figure come from here alone.
 
     An adjustment takes effect as its day starts, against the close of the
     day before; the day's work and expectation come after it. That is why
@@ -213,14 +212,13 @@ def running_balance(
     Today's work counts as soon as it happens; today's expectation is charged
     tomorrow, so the balance does not read −8 h every morning. Today's
     adjustment counts from the start of today. `ended_on` freezes work and
-    expectation: nothing is expected after it, and time tracked on the
-    project after it does not count as overtime either. Nor does time
-    tracked under an objective or 0-hour term, which expects nothing: a
-    time-based term after it starts from the balance the last one left,
-    not from the hours worked in between. Adjustments count
-    from the contract's first day on, whatever `ended_on` says, so a payout
-    after the end settles the frozen balance; one dated before the first day
-    falls outside the pass and is ignored.
+    expectation: nothing is expected after it, and time tracked on the project
+    after it does not count as overtime either. Nor does time tracked under an
+    objective or 0-hour term, which expects nothing: a time-based term after
+    it starts from the balance the last one left, not from the hours worked in
+    between. Adjustments count from the contract's first day on, whatever
+    `ended_on` says, so a payout after the end settles the frozen balance; one
+    dated before the first day falls outside the pass and is ignored.
 
     A close is the balance at the end of its day — the opening balance, plus
     the work, less the expectation, plus the adjustments through it — and so
