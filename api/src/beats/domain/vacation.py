@@ -25,6 +25,7 @@ is five days whatever the percentage, so a part-time job's figure is not
 scaled again here.
 """
 
+from calendar import isleap
 from collections.abc import Iterable
 from datetime import date
 from fractions import Fraction
@@ -78,7 +79,9 @@ def accrued_days(entitlement: VacationEntitlement, contract: Contract, year: int
     if contract.ended_on is not None and contract.ended_on < last:
         last = contract.ended_on
     covered = max(0, (last - first).days + 1)
-    days_in_year = (date(year + 1, 1, 1) - first).days
+    # Not `date(year + 1, 1, 1) - first`: the route accepts 9999, the last
+    # year `date` can hold, and an open-ended contract chains up to it.
+    days_in_year = 366 if isleap(year) else 365
     return round_half(Fraction(entitlement.days_per_year) * covered / days_in_year)
 
 
