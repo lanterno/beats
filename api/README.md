@@ -10,14 +10,13 @@ See `CLAUDE.md` for the architecture, runtime, and testing conventions, and the 
 
 ## Infrastructure
 
-The API runs in **two** live deployments — see the repo-root `CLAUDE.md`
-before changing anything either one depends on:
+The API's live deployment is **lifepete.com**: Cloud Run at
+`api.lifepete.com`, with the SPA on Firebase Hosting at `lifepete.com`. Two
+origins, joined by CORS; both are listed in `origins` in `src/server.py`. See
+the repo-root `CLAUDE.md` before changing anything it depends on.
 
-- **home.space** — `compose.home.yml`, behind one nginx that also serves
-  the SPA. Same origin, so CORS is not involved.
-- **lifepete.com** — Cloud Run at `api.lifepete.com`, with the SPA on
-  Firebase Hosting at `lifepete.com`. Two origins, joined by CORS; both
-  are listed in `origins` in `src/server.py`.
+The self-hosted stack (`compose.selfhost.yml`) puts the API behind one nginx
+that also serves the SPA. Same origin, so CORS is not involved.
 
 For the Cloud Run deployment, the API, Artifact Registry and the MongoDB
 Atlas cluster all live in `europe-west1` (Belgium) — already
