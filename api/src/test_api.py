@@ -3897,6 +3897,7 @@ class TestIntelligenceAPI:
 
         monday = log("2026-09-07T09:00:00+00:00")
         thursday = log("2026-09-10T14:00:00+00:00")
+        sunday = log("2026-09-13T20:00:00+00:00")
         log("2026-09-14T09:00:00+00:00")  # the next Monday
 
         resp = client.get(
@@ -3905,7 +3906,7 @@ class TestIntelligenceAPI:
             headers=auth_headers,
         )
         assert resp.status_code == 200, resp.text
-        assert [r["beat_id"] for r in resp.json()] == [monday, thursday]
+        assert [r["beat_id"] for r in resp.json()] == [monday, thursday, sunday]
 
     @pytest.mark.parametrize("week_of", ["2026-09-08", "2026-13-01", "0001-01-29"])
     def test_focus_scores_rejects_a_week_of_it_cannot_score(self, client, auth_headers, week_of):
