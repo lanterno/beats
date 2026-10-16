@@ -3322,7 +3322,9 @@ export interface components {
          * @description The balance as of today and the three terms that move it, since the
          *     contract started — the standing's "worked since · expected through ·
          *     adjusted" lines and the ledger's foot. The opening balance is the
-         *     contract's own.
+         *     contract's own. `worked` is the hours the balance counts: through
+         *     `ended_on`, under a term that owes hours. Hours worked under an
+         *     objective or 0-hour term are in the weeks' `worked` and not here.
          */
         LedgerTotals: {
             /** Adjusted */

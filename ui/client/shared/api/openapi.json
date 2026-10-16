@@ -2231,7 +2231,7 @@
         "type": "string"
       },
       "LedgerTotals": {
-        "description": "The balance as of today and the three terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through \u00b7\nadjusted\" lines and the ledger's foot. The opening balance is the\ncontract's own.",
+        "description": "The balance as of today and the three terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through \u00b7\nadjusted\" lines and the ledger's foot. The opening balance is the\ncontract's own. `worked` is the hours the balance counts: through\n`ended_on`, under a term that owes hours. Hours worked under an\nobjective or 0-hour term are in the weeks' `worked` and not here.",
         "properties": {
           "adjusted": {
             "title": "Adjusted",
