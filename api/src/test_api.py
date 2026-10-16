@@ -3413,12 +3413,37 @@ class TestCsvAndJsonExport:
             "version",
             "projects",
             "beats",
+            "absences",
+            "balance_adjustments",
         }
-        # version is a string
-        assert isinstance(body["version"], str)
-        # The JSON-format export uses the legacy "1.0" version
-        # (the signed SQLite export uses "sqlite-1")
-        assert body["version"] == "1.0"
+        # 1.1 is the format that carries absences and balance adjustments.
+        assert body["version"] == "1.1"
+
+    def test_full_json_export_carries_absences_and_adjustments(self, client, auth_headers):
+        """What a day job's balance is made of beyond its contract and its
+        sessions is in the backup: every absence and every adjustment, with
+        the fields the import needs to write them back."""
+        project = _day_job(client, auth_headers)
+        absence = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-04", "type": "vacation", "half_day": True, "note": "dentist"},
+            headers=auth_headers,
+        )
+        assert absence.status_code == 201, absence.text
+        adjustment = client.post(
+            f"/api/projects/{project['id']}/adjustments",
+            params={"tz": "UTC"},
+            json={"date": "2026-03-02", "kind": "delta", "hours": -4, "note": "paid out"},
+            headers=auth_headers,
+        )
+        assert adjustment.status_code == 201, adjustment.text
+
+        body = client.get("/api/export/full", headers=auth_headers).json()
+
+        assert [a for a in body["absences"] if a["project_id"] == project["id"]] == [absence.json()]
+        assert [a for a in body["balance_adjustments"] if a["project_id"] == project["id"]] == [
+            adjustment.json()
+        ]
 
     def test_full_json_round_trip(self, client, auth_headers):
         """Export → Import round-trip: posting the exported JSON
