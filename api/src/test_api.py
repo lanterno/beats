@@ -3735,6 +3735,58 @@ class TestBackupImport:
         listed = client.get("/api/projects/", headers=auth_headers).json()
         assert next(p for p in listed if p["id"] == project["id"])["name"] == project["name"]
 
+    def test_another_accounts_records_are_refused_and_stay_theirs(
+        self, client, auth_headers, other_auth_headers
+    ):
+        # The other account's file, imported here: a restore keeps ids, and
+        # these are theirs. Before, the session moved into this account.
+        theirs = _create_project(client, other_auth_headers)
+        _log(client, other_auth_headers, theirs["id"], "2026-03-02T08:00:00+00:00", 60)
+        their_backup = self._export(client, other_auth_headers)
+        mine = _create_project(client, auth_headers)
+        my_backup = self._export(client, auth_headers)
+        for record in my_backup["projects"]:
+            if record["id"] == mine["id"]:
+                record["name"] = "renamed by the backup"
+
+        for backup in (
+            {"beats": their_backup["beats"]},
+            {"projects": their_backup["projects"]},
+            # Mine first: nothing of it is written either.
+            {"projects": my_backup["projects"] + their_backup["projects"]},
+        ):
+            resp = self._import(client, auth_headers, backup)
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["code"] == "BACKUP_OF_ANOTHER_ACCOUNT"
+
+        their_sessions = client.get("/api/beats/", headers=other_auth_headers).json()
+        assert [b["id"] for b in their_sessions] == [b["id"] for b in their_backup["beats"]]
+        their_projects = client.get("/api/projects/", headers=other_auth_headers).json()
+        assert [(p["id"], p["name"]) for p in their_projects] == [(theirs["id"], theirs["name"])]
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert theirs["id"] not in {p["id"] for p in listed}
+        assert next(p for p in listed if p["id"] == mine["id"])["name"] == mine["name"]
+
+    def test_a_malformed_id_is_a_422_naming_it_and_writes_nothing(self, client, auth_headers):
+        project = _create_project(client, auth_headers)
+        _log(client, auth_headers, project["id"], "2026-03-02T08:00:00+00:00", 60)
+        backup = self._export(client, auth_headers)
+        for record in backup["projects"]:
+            if record["id"] == project["id"]:
+                record["name"] = "renamed by the backup"
+        backup["projects"].append({"id": "not-an-id", "name": "x"})
+        backup["beats"][0]["id"] = "zz"
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == [
+            f"projects.{len(backup['projects']) - 1}.id",
+            "beats.0.id",
+        ]
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == project["id"])["name"] == project["name"]
+
     def test_restoring_a_contract_reconciles_its_adjustments(self, client, auth_headers):
         # Since the export, the contract started earlier and an adjustment
         # was dated in the weeks it gained. Restoring the later first day
