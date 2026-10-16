@@ -4,7 +4,7 @@ import csv
 import io
 import json
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Query, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -23,13 +23,9 @@ from beats.api.dependencies import (
 from beats.api.errors import error_code
 from beats.api.schemas import ImportCounts, ImportResponse, ImportSkip
 from beats.domain.exceptions import DomainException
-from beats.domain.models import Absence, BalanceAdjustment, Project
+from beats.domain.models import Absence, BalanceAdjustment, Beat, Project
 
 router = APIRouter(prefix="/api/export", tags=["export"])
-
-# Present on the model but derived from start/end, so they are not part of a
-# backup and must not be fed back in on import.
-_COMPUTED_FIELDS = ("is_active", "duration", "day")
 
 
 @router.get("/csv/sessions")
@@ -118,11 +114,11 @@ async def export_full_json(
 class _Backup(BaseModel):
     """A backup file as the import reads it. Every list may be missing, so a
     1.0 file, made before absences and adjustments were exported, reads as a
-    backup with none of them. Beats stay documents: they are written back
-    as they were exported."""
+    backup with none of them. A beat's derived fields (`is_active`,
+    `duration`, `day`) are in the file but not read back."""
 
     projects: list[Project] = Field(default_factory=list)
-    beats: list[dict[str, Any]] = Field(default_factory=list)
+    beats: list[Beat] = Field(default_factory=list)
     absences: list[Absence] = Field(default_factory=list)
     balance_adjustments: list[BalanceAdjustment] = Field(default_factory=list)
 
@@ -149,9 +145,10 @@ async def import_full_json(
     contract_service: ContractServiceDep,
     tz: TimezoneDep,
 ):
-    """Import a full JSON backup, version 1.0 or 1.1. Safe to re-import:
-    projects and beats are upserted by id, and an absence or an adjustment
-    replaces the one on its project and date, as its own route does.
+    """Import a full JSON backup, version 1.0 or 1.1, into the caller's
+    account. Safe to re-import: projects and beats are written by id, and
+    an absence or an adjustment replaces the one on its project and date, as
+    its own route does.
 
     The whole file is validated first, so a malformed record is a 422 that
     names it and nothing is written. Projects are then written as a project
@@ -175,9 +172,7 @@ async def import_full_json(
         counts.projects += 1
 
     for beat in backup.beats:
-        for k in _COMPUTED_FIELDS:
-            beat.pop(k, None)
-        await beat_repo.upsert(beat)
+        await beat_repo.restore(beat)
         counts.beats += 1
 
     # The id is not the record's identity, its project and date are: the

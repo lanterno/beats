@@ -211,7 +211,7 @@ class BeatRepository(Protocol):
     ) -> dict[str, builtins.list[Beat]]: ...
     async def list_all_completed(self) -> builtins.list[Beat]: ...
     async def list_completed_in_range(self, start: date, end: date) -> builtins.list[Beat]: ...
-    async def upsert(self, data: dict) -> None: ...
+    async def restore(self, beat: Beat) -> None: ...
 
 
 class ProjectRepository(Protocol):
@@ -307,8 +307,18 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
             }
         )
 
-    async def upsert(self, data: dict) -> None:
-        await self._upsert_raw(data)
+    async def restore(self, beat: Beat) -> None:
+        """Write a beat read from a backup, keeping its id: a replace that
+        inserts when there is none, scoped to this user like every other
+        write, so an id another user holds cannot move their beat across.
+        Through `_dump`, so `start` and `end` are stored as dates, as a
+        tracked beat's are, and the date-range reads find it."""
+        if beat.id is None:
+            await self._insert(beat)
+            return
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(beat.id)}), self._dump(beat), upsert=True
+        )
 
 
 class MongoProjectRepository(MongoStore[Project], ProjectRepository):
