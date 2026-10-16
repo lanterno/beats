@@ -59,13 +59,17 @@ const ABSENCES: Absence[] = [
 	absence("2026-12-28", "vacation"),
 ];
 
+function holiday(date: string, name: string, source: Holiday["source"] = "region"): Holiday {
+	return { date, name, source, given: true };
+}
+
 const HOLIDAYS: Record<number, Holiday[]> = {
 	2026: [
-		{ date: "2026-08-01", name: "Swiss National Day" },
-		{ date: "2026-12-25", name: "Christmas Day" },
-		{ date: "2026-12-26", name: "St. Stephen's Day" },
+		holiday("2026-08-01", "Swiss National Day"),
+		holiday("2026-12-25", "Christmas Day"),
+		holiday("2026-12-26", "St. Stephen's Day"),
 	],
-	2027: [{ date: "2027-01-01", name: "New Year's Day" }],
+	2027: [holiday("2027-01-01", "New Year's Day")],
 };
 
 const PROJECT: ProjectWithDuration = {
@@ -83,6 +87,8 @@ const PROJECT: ProjectWithDuration = {
 		holidayCountry: "CH",
 		holidaySubdivision: "ZH",
 		openingBalanceHours: 0,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	},
 	totalMinutes: 0,
 	weeklyMinutes: 0,

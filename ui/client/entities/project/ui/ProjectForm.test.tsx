@@ -150,6 +150,8 @@ describe("ProjectForm", () => {
 				},
 			],
 			openingBalanceHours: 0,
+			companyHolidays: [],
+			holidaysNotGiven: [],
 		};
 
 		it("hides the personal goal on a time-based day job and shows it on an objective one", async () => {

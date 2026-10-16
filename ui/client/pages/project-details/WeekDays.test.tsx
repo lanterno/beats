@@ -69,6 +69,8 @@ const PROJECT: ProjectWithDuration = {
 			},
 		],
 		openingBalanceHours: 0,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	},
 	totalMinutes: 0,
 	weeklyMinutes: 0,

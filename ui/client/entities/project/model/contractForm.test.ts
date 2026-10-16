@@ -77,12 +77,30 @@ describe("term form ↔ domain", () => {
 				{ effectiveFrom: "2026-04-01", scheduleType: "objective" },
 				{ effectiveFrom: "2026-01-05", scheduleType: "objective" },
 			],
+			{ companyHolidays: [], holidaysNotGiven: [] },
 		);
 		expect(contract.terms.map((t) => t.effectiveFrom)).toEqual(["2026-01-05", "2026-04-01"]);
 		expect(contract.openingBalanceHours).toBe(0);
 		// A subdivision without a country is what the API rejects; it goes with it.
 		expect(contract).not.toHaveProperty("holidayCountry");
 		expect(contract).not.toHaveProperty("holidaySubdivision");
+	});
+
+	it("carries the holiday lists it keeps unchanged, the region cleared or not", () => {
+		const kept = {
+			companyHolidays: [{ date: "2026-12-24", name: "Christmas Eve" }],
+			holidaysNotGiven: ["2026-12-26"],
+		};
+		const terms = [{ effectiveFrom: "2026-01-05", scheduleType: "objective" as const }];
+		for (const holidayCountry of ["CH", ""]) {
+			const contract = contractFromForm(
+				{ holidayCountry, holidaySubdivision: "", openingBalanceHours: "", endedOn: "" },
+				terms,
+				kept,
+			);
+			expect(contract.companyHolidays).toEqual(kept.companyHolidays);
+			expect(contract.holidaysNotGiven).toEqual(kept.holidaysNotGiven);
+		}
 	});
 });
 

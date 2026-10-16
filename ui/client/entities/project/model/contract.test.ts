@@ -55,6 +55,8 @@ describe("termOn", () => {
 			},
 		],
 		openingBalanceHours: 0,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	};
 
 	it("picks the latest term starting on or before the day", () => {
@@ -87,6 +89,8 @@ describe("isTimeBasedOn", () => {
 				{ effectiveFrom: "2026-04-01", scheduleType: "objective" },
 			],
 			openingBalanceHours: 0,
+			companyHolidays: [],
+			holidaysNotGiven: [],
 		};
 		expect(isTimeBasedOn(contract, "2026-01-04")).toBe(true);
 		expect(isTimeBasedOn(contract, "2026-02-01")).toBe(true);

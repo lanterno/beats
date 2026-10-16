@@ -54,7 +54,7 @@ describe("Project mapper round-trip", () => {
 		expect(backToWire.autostart_repos).toEqual([]);
 	});
 
-	it("carries a day job's contract both ways, and none on any other kind", () => {
+	it("carries a day job's contract both ways, holiday lists too, and none on any other kind", () => {
 		const fromWire: ApiProject = {
 			id: "p3",
 			name: "Employer",
@@ -78,6 +78,8 @@ describe("Project mapper round-trip", () => {
 				holiday_subdivision: "ZH",
 				opening_balance_hours: 4.5,
 				ended_on: null,
+				company_holidays: [{ date: "2026-12-24", name: "Christmas Eve" }],
+				holidays_not_given: ["2026-12-26"],
 			},
 		};
 		const domain = toProject(fromWire);
@@ -94,7 +96,11 @@ describe("Project mapper round-trip", () => {
 			holidayCountry: "CH",
 			holidaySubdivision: "ZH",
 			openingBalanceHours: 4.5,
+			companyHolidays: [{ date: "2026-12-24", name: "Christmas Eve" }],
+			holidaysNotGiven: ["2026-12-26"],
 		});
+		// Every term edit rebuilds the contract through this mapper: a list it
+		// dropped would be cleared on the next write that sent it empty.
 		expect(toApiProject(domain).contract).toEqual(fromWire.contract);
 
 		// The wire never carries a contract on a side project; should one

@@ -45,6 +45,8 @@ const DAY_JOB: ProjectWithDuration = {
 		],
 		holidayCountry: "CH",
 		openingBalanceHours: 2,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	},
 	totalMinutes: 77_040,
 	weeklyMinutes: 0,
@@ -193,6 +195,8 @@ describe("WeekLedger on a contract that started this week", () => {
 					},
 				],
 				openingBalanceHours: 0,
+				companyHolidays: [],
+				holidaysNotGiven: [],
 			},
 		};
 		renderLedger({

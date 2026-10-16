@@ -57,6 +57,8 @@ const CONTRACT: Contract = {
 	holidayCountry: "CH",
 	holidaySubdivision: "ZH",
 	openingBalanceHours: 0,
+	companyHolidays: [],
+	holidaysNotGiven: [],
 };
 const THIS_WEEK: Pick<ContractWeek, "weekOf" | "expected"> = {
 	weekOf: "2026-09-07",

@@ -69,6 +69,8 @@ describe("isFirstWeek", () => {
 			{ effectiveFrom: "2026-09-07", scheduleType: "full_time", fullTimeHours: 42, percentage: 1 },
 		],
 		openingBalanceHours: 0,
+		companyHolidays: [],
+		holidaysNotGiven: [],
 	};
 
 	it("is the seven days from the first term's start, not the day before nor the eighth", () => {
