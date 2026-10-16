@@ -344,6 +344,22 @@ class ProjectService:
             await self.adjustments.delete_by_project(project.id)
         return updated
 
+    async def restore_project(self, project: Project) -> Project:
+        """Write a project read from a backup, keeping its id: an update when
+        the id is one of this user's projects, a create otherwise. Either way
+        it is an ordinary project write — the contract's checks, and on an
+        update the reconcile against the contract it replaces — so a backup
+        cannot leave adjustments behind that a contract write would have
+        purged or refused."""
+        if project.id is not None:
+            try:
+                existing = await self.project_repo.get_by_id(project.id)
+            except ProjectNotFound:
+                pass
+            else:
+                return await self.update_project(project, previous_contract=existing.contract)
+        return await self.create_project(project)
+
     async def _reconcile_adjustments(
         self, project_id: str | None, previous: Contract | None, new: Contract | None
     ) -> bool:

@@ -4,16 +4,26 @@ import csv
 import io
 import json
 from datetime import UTC, datetime
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, ValidationError
 
 from beats.api.dependencies import (
     AbsenceRepoDep,
     AdjustmentRepoDep,
     BeatRepoDep,
+    ContractServiceDep,
     ProjectRepoDep,
+    ProjectServiceDep,
+    TimezoneDep,
 )
+from beats.api.errors import error_code
+from beats.api.schemas import ImportCounts, ImportResponse, ImportSkip
+from beats.domain.exceptions import DomainException
+from beats.domain.models import Absence, BalanceAdjustment, Project
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -103,28 +113,87 @@ async def export_full_json(
     )
 
 
-@router.post("/import")
+class _Backup(BaseModel):
+    """A backup file as the import reads it. Every list may be missing, so a
+    1.0 file, made before absences and adjustments were exported, reads as a
+    backup with none of them. Beats stay documents: they are written back
+    as they were exported."""
+
+    projects: list[Project] = Field(default_factory=list)
+    beats: list[dict[str, Any]] = Field(default_factory=list)
+    absences: list[Absence] = Field(default_factory=list)
+    balance_adjustments: list[BalanceAdjustment] = Field(default_factory=list)
+
+
+def _skip(
+    collection: Literal["absences", "balance_adjustments"],
+    record: Absence | BalanceAdjustment,
+    exc: DomainException,
+) -> ImportSkip:
+    return ImportSkip(
+        collection=collection,
+        project_id=record.project_id,
+        date=record.date,
+        code=error_code(exc.status_code, exc.code),
+        detail=exc.message,
+    )
+
+
+@router.post("/import", response_model=ImportResponse)
 async def import_full_json(
     file: UploadFile,
     beat_repo: BeatRepoDep,
-    project_repo: ProjectRepoDep,
+    project_service: ProjectServiceDep,
+    contract_service: ContractServiceDep,
+    tz: TimezoneDep,
 ):
-    """Import a full JSON backup. Upserts by ID — safe to re-import."""
-    content = await file.read()
-    data = json.loads(content)
+    """Import a full JSON backup, version 1.0 or 1.1. Safe to re-import:
+    projects and beats are upserted by id, and an absence or an adjustment
+    replaces the one on its project and date, as its own route does.
 
-    counts = {"projects": 0, "beats": 0}
+    The whole file is validated first, so a malformed record is a 422 that
+    names it and nothing is written. Projects are then written as a project
+    write is — the contract's checks and the reconcile against the contract
+    it replaces apply, so their refusal is that write's error — and the
+    absences and adjustments through their own routes' rules, against the
+    projects as restored. A record those rules refuse (an absence on a
+    project that is no longer a day job; an adjustment outside the
+    contract's first day through today in `tz`) is left out and listed under
+    `skipped` with the code its route would answer."""
+    try:
+        backup = _Backup.model_validate_json(await file.read())
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors(include_url=False)) from None
 
-    for proj in data.get("projects", []):
-        for k in _COMPUTED_FIELDS:
-            proj.pop(k, None)
-        await project_repo.upsert(proj)
-        counts["projects"] += 1
+    counts = ImportCounts(projects=0, beats=0, absences=0, balance_adjustments=0)
+    skipped: list[ImportSkip] = []
 
-    for beat in data.get("beats", []):
+    for project in backup.projects:
+        await project_service.restore_project(project)
+        counts.projects += 1
+
+    for beat in backup.beats:
         for k in _COMPUTED_FIELDS:
             beat.pop(k, None)
         await beat_repo.upsert(beat)
-        counts["beats"] += 1
+        counts.beats += 1
 
-    return {"status": "ok", "imported": counts}
+    # The id is not the record's identity, its project and date are: the
+    # write keeps the stored one's id, or makes a new one.
+    for absence in backup.absences:
+        try:
+            await contract_service.record_absence(absence.model_copy(update={"id": None}))
+        except DomainException as exc:
+            skipped.append(_skip("absences", absence, exc))
+        else:
+            counts.absences += 1
+
+    for adjustment in backup.balance_adjustments:
+        try:
+            await contract_service.record_adjustment(adjustment.model_copy(update={"id": None}), tz)
+        except DomainException as exc:
+            skipped.append(_skip("balance_adjustments", adjustment, exc))
+        else:
+            counts.balance_adjustments += 1
+
+    return ImportResponse(status="ok", imported=counts, skipped=skipped)

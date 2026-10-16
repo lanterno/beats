@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from datetime import date as date_type
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -217,6 +218,37 @@ class AdjustmentResponse(BaseModel):
     kind: AdjustmentKind
     hours: float
     note: str | None = None
+
+
+class ImportCounts(BaseModel):
+    """How many of each record a backup import wrote."""
+
+    projects: int
+    beats: int
+    absences: int
+    balance_adjustments: int
+
+
+class ImportSkip(BaseModel):
+    """An absence or a balance adjustment in a backup that the import left
+    out, because the rule its own route applies refused it: `code` and
+    `detail` are what that route would have answered. An absence on a
+    project that is no longer a day job is one; an adjustment dated outside
+    the contract the backup restored is another."""
+
+    collection: Literal["absences", "balance_adjustments"]
+    project_id: str
+    date: date_type
+    code: str
+    detail: str
+
+
+class ImportResponse(BaseModel):
+    """What `POST /api/export/import` did with a backup."""
+
+    status: Literal["ok"]
+    imported: ImportCounts
+    skipped: list[ImportSkip]
 
 
 class TimerStatusResponse(BaseModel):
