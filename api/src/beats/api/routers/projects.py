@@ -5,12 +5,12 @@ from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from pydantic import AfterValidator
 
 from beats.api.dependencies import (
     BeatRepoDep,
     ContractServiceDep,
     GitHubServiceDep,
+    MondayDate,
     ProjectServiceDep,
     TimerServiceDep,
     TimezoneDep,
@@ -219,25 +219,11 @@ async def replace_contract(project_id: str, contract: Contract, service: Project
     return updated.model_dump()
 
 
-def _monday(day: date | None) -> date | None:
-    if day is None:
-        return None
-    if day.weekday() != 0:
-        msg = "week_of must be a Monday"
-        raise ValueError(msg)
-    if day > date.max - timedelta(days=6):
-        # Its seven days cannot even be enumerated; keep the answer a 422.
-        msg = "week_of is past the end of the calendar"
-        raise ValueError(msg)
-    return day
-
-
 # Validated as a query parameter so a Tuesday is a 422 naming `week_of` in
 # `fields`, the same envelope a bad body gets.
 WeekOfQuery = Annotated[
-    date | None,
+    MondayDate,
     Query(description="Monday of the week wanted. Defaults to the current week in `tz`."),
-    AfterValidator(_monday),
 ]
 
 

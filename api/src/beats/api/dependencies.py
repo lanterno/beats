@@ -1,11 +1,13 @@
 """FastAPI dependency injection configuration."""
 
 from collections.abc import Callable
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, HTTPException, Query, Request, status
+from pydantic import AfterValidator
 
 from beats.domain.analytics import AnalyticsService
 from beats.domain.calendar import CalendarService
@@ -125,6 +127,26 @@ def get_timezone(
 
 
 TimezoneDep = Annotated[ZoneInfo, Depends(get_timezone)]
+
+
+def monday_or_none(day: date | None) -> date | None:
+    """Pass a Monday (or nothing) through; anything else is a ValueError, which
+    a query parameter turns into a 422 naming the parameter in `fields`."""
+    if day is None:
+        return None
+    if day.weekday() != 0:
+        msg = "week_of must be a Monday"
+        raise ValueError(msg)
+    if day > date.max - timedelta(days=6):
+        # Its seven days cannot even be enumerated; keep the answer a 422.
+        msg = "week_of is past the end of the calendar"
+        raise ValueError(msg)
+    return day
+
+
+# The type of an optional `week_of`. Each route wraps it in its own `Query`,
+# since what an absent week means differs from route to route.
+MondayDate = Annotated[date | None, AfterValidator(monday_or_none)]
 
 
 get_beat_repository = _user_scoped(MongoBeatRepository, "timeLogs")
