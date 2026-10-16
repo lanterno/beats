@@ -3907,10 +3907,11 @@ class TestIntelligenceAPI:
         assert resp.status_code == 200, resp.text
         assert [r["beat_id"] for r in resp.json()] == [monday, thursday]
 
-    @pytest.mark.parametrize("week_of", ["2026-09-08", "2026-13-01"])
-    def test_focus_scores_week_of_must_be_a_monday(self, client, auth_headers, week_of):
-        """A Tuesday, or no date at all, is a 422 naming `week_of`, the same
-        rule /contract/week keeps."""
+    @pytest.mark.parametrize("week_of", ["2026-09-08", "2026-13-01", "0001-01-29"])
+    def test_focus_scores_rejects_a_week_of_it_cannot_score(self, client, auth_headers, week_of):
+        """A Tuesday, or a string that is not a date, is a 422 naming `week_of`,
+        the same rule /contract/week keeps. So is a Monday in the calendar's
+        first month: its 30 days of peak hours would start before year 1."""
         resp = client.get(
             "/api/intelligence/focus-scores",
             params={"week_of": week_of},
