@@ -524,8 +524,8 @@ class ContractWeek(BaseModel):
     week is over its expectation. `worked` is every hour on the project that
     week; `remaining` subtracts only the hours inside the contract's dates,
     as the balance does, so the two differ on a week it starts or ends.
-    `remaining` is `expected` less those hours as rounded, so on a week the
-    contract covers whole `worked + remaining == expected` to the hundredth.
+    Each figure is rounded on its own, so `worked + remaining` can miss
+    `expected` by a hundredth.
     """
 
     week_of: date_type
