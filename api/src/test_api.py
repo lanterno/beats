@@ -3808,16 +3808,39 @@ class TestBackupImport:
         # was dated in the weeks it gained. Restoring the later first day
         # would leave that adjustment counting for nothing: refused, as the
         # contract route refuses it.
+        #
+        # Ahead of it in the file, a project renamed since: there is no
+        # transaction, so that one is restored before the refusal, and the
+        # session after it is not.
+        ahead = _create_project(client, auth_headers)
         project = _day_job(client, auth_headers)
+        _log(client, auth_headers, project["id"], "2026-03-02T08:00:00+00:00", 60)
         backup = self._export(client, auth_headers)
+        backup["projects"] = [
+            next(p for p in backup["projects"] if p["id"] == pid)
+            for pid in (ahead["id"], project["id"])
+        ]
+        backup["beats"] = [b for b in backup["beats"] if b["project_id"] == project["id"]]
+        resp = client.put(
+            "/api/projects/", json={**ahead, "name": "renamed since"}, headers=auth_headers
+        )
+        assert resp.status_code == 200, resp.text
         earlier = [{**FULL_TIME[0], "effective_from": "2025-12-01"}]
         _put_contract(client, auth_headers, project["id"], terms=earlier)
         self._adjust(client, auth_headers, project["id"], date="2025-12-01", kind="delta", hours=5)
+        resp = client.delete(f"/api/beats/{backup['beats'][0]['id']}", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
 
         resp = self._import(client, auth_headers, backup)
 
         assert resp.status_code == 409, resp.text
         assert resp.json()["code"] == "ADJUSTMENT_BEFORE_START"
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == ahead["id"])["name"] == ahead["name"]
+        sessions = client.get(
+            "/api/beats/", params={"project_id": project["id"]}, headers=auth_headers
+        )
+        assert sessions.json() == []
 
 
 class TestIntelligenceInbox:
