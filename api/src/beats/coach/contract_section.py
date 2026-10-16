@@ -12,7 +12,8 @@ is the list, and a change to what is sent is made there first:
   off" or "half day off" (its type can be health data, its note is free
   text, and the arithmetic treats them all alike);
 - today's expected hours, the running balance and its by-Sunday
-  projection.
+  projection — or, once the contract has ended (earlier this week), only
+  its final balance.
 
 Never the region's codes, the opening balance, another week's days, or a
 contract that ended before this week.
@@ -123,6 +124,19 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
     sunday = week.week_of + timedelta(days=6)
     if contract.ended_on is not None and contract.ended_on < week.week_of:
         return []  # a finished job; its frozen balance is not live news
+    # Ended earlier this week: nothing worked from here on counts, so the
+    # balance is final and the week's figures, today's expectation and the
+    # projection are left out, as the project page leaves them out. On the
+    # last day itself the page already says "Final balance", but today's
+    # hours still count and today's expectation is still charged tomorrow,
+    # so here that day stays live and its projection is the true close.
+    if contract.ended_on is not None and contract.ended_on < today:
+        if week.balance is None or week.balance_as_of != today:
+            return []
+        return [
+            f"  {name} final balance: {describe_balance(week.balance)}"
+            f" (contract ended {contract.ended_on})"
+        ]
     lines: list[str] = []
 
     # `expected` and `remaining` are None together (ContractWeek); both are
