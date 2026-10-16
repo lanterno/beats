@@ -41,6 +41,11 @@ _DEFAULT_CODES: dict[int, str] = {
 }
 
 
+def error_code(status_code: int, code: str | None = None) -> str:
+    """The envelope's `code`: the one given, else the status default."""
+    return code or _DEFAULT_CODES.get(status_code, f"HTTP_{status_code}")
+
+
 def envelope(
     *,
     status_code: int,
@@ -51,7 +56,7 @@ def envelope(
     """Build a normalized error response."""
     body: dict[str, Any] = {
         "detail": detail,
-        "code": code or _DEFAULT_CODES.get(status_code, f"HTTP_{status_code}"),
+        "code": error_code(status_code, code),
     }
     if fields is not None:
         body["fields"] = fields
