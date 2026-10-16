@@ -28,7 +28,15 @@ from beats.api.schemas import (
     UpdateProjectRequest,
 )
 from beats.domain.holidays import Holiday
-from beats.domain.models import Contract, ContractWeek, GoalOverride, Ledger, Project, ProjectKind
+from beats.domain.models import (
+    Contract,
+    ContractWeek,
+    GoalOverride,
+    Ledger,
+    Project,
+    ProjectKind,
+    VacationYear,
+)
 from beats.domain.services import keep_unsent_contract_fields
 
 router = APIRouter(
@@ -303,6 +311,28 @@ async def get_holidays(
     region.
     409 on a project that is not a day job."""
     return await service.holidays(project_id, year, tz, include_not_given=include == "not_given")
+
+
+@router.get("/{project_id}/vacation", response_model=VacationYear)
+async def get_vacation(
+    project_id: str,
+    service: ContractServiceDep,
+    tz: TimezoneDep,
+    year: int | None = Query(
+        default=None, ge=1, le=9999, description="Defaults to the current year in `tz`."
+    ),
+):
+    """One calendar year of a day job's vacation entitlement, in days: what
+    the year gives (`accrued`, pro-rated in the year the contract ends; null
+    in the opening year, whose figure is the opening's), what the year
+    before carried in, what is available, what is booked (the `vacation`
+    days, past and planned, on weekdays inside the contract's dates that are
+    not its holidays) and what remains. Every figure is a whole or half day.
+    409 on a project that is not a day job (NOT_A_DAY_JOB), without a
+    contract (NO_CONTRACT) or an entitlement (NO_VACATION_ENTITLEMENT), and
+    for a year before the opening's or after the contract's end
+    (VACATION_YEAR_OUT_OF_RANGE)."""
+    return await service.vacation(project_id, year, tz)
 
 
 @router.get("/{project_id}/git-activity")

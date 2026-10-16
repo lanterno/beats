@@ -129,6 +129,33 @@ class VacationOpeningOutsideContract(DomainException):
         )
 
 
+class NoVacationEntitlement(DomainException):
+    """Raised when a day job's vacation year is asked for and its contract
+    tracks no vacation entitlement."""
+
+    status_code = 409
+    message = "This contract has no vacation entitlement"
+    code = "NO_VACATION_ENTITLEMENT"
+
+
+class VacationYearOutOfRange(DomainException):
+    """Raised when a vacation year is asked for outside the years counted:
+    before the opening's, or after the year the contract ends."""
+
+    status_code = 409
+    message = "Vacation is not counted in that year"
+    code = "VACATION_YEAR_OUT_OF_RANGE"
+
+    def __init__(self, first: int, last: int | None):
+        if last is None:
+            span = f"from {first} on"
+        elif last == first:
+            span = f"in {first} only"
+        else:
+            span = f"from {first} through {last}"
+        super().__init__(f"Vacation is counted {span}")
+
+
 class AbsenceNotFound(DomainException):
     """Raised when an absence cannot be found by ID."""
 

@@ -26,10 +26,12 @@ from beats.domain.exceptions import (
     NoContract,
     NoObjectMatched,
     NotADayJob,
+    NoVacationEntitlement,
     ProjectNotFound,
     TimerAlreadyRunning,
     UnknownHolidayRegion,
     VacationOpeningOutsideContract,
+    VacationYearOutOfRange,
 )
 from beats.domain.holidays import (
     Holiday,
@@ -40,6 +42,7 @@ from beats.domain.holidays import (
 from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
     Absence,
+    AbsenceType,
     BalanceAdjustment,
     Beat,
     Contract,
@@ -49,6 +52,7 @@ from beats.domain.models import (
     Ledger,
     Project,
     ProjectKind,
+    VacationYear,
 )
 from beats.domain.ports import (
     AbsenceStore,
@@ -63,6 +67,7 @@ from beats.domain.ports import (
     TimerProjectReader,
 )
 from beats.domain.utils import local_date, normalize_tz
+from beats.domain.vacation import vacation_year
 
 logger = logging.getLogger(__name__)
 
@@ -578,7 +583,7 @@ class ContractService:
     user-scoped repository, so someone else's project is not found (404)
     rather than forbidden — the same answer as for a project that does not
     exist. Absences and balance adjustments are kept here because their only
-    readers are the week and the ledger.
+    readers are the week, the ledger and the vacation year.
     """
 
     def __init__(
@@ -799,6 +804,41 @@ class ContractService:
         return contract_calendar(
             contract, date(year, 1, 1), date(year, 12, 31), include_not_given=include_not_given
         )
+
+    async def vacation(self, project_id: str, year: int | None, tz: ZoneInfo) -> VacationYear:
+        """One year of the contract's vacation entitlement (None for the
+        current year in `tz`, the only thing the clock is read for), from
+        the opening on: `domain/vacation.py` chains every year before it.
+
+        One absence read, from the opening through the end of `year` (or
+        `ended_on`), and one calendar build over the span of the vacation
+        days in it alone, so a chain of many years does not build a
+        calendar for each. 409 without a contract, without an entitlement,
+        or for a year before the opening's or after the one the contract
+        ends in.
+        """
+        project = await self._day_job(project_id)
+        contract = project.contract
+        if contract is None:
+            raise NoContract()
+        entitlement = contract.vacation
+        if entitlement is None:
+            raise NoVacationEntitlement()
+        if year is None:
+            year = self._now(tz).year
+        first = entitlement.opening_on.year
+        last = contract.ended_on.year if contract.ended_on is not None else None
+        if year < first or (last is not None and year > last):
+            raise VacationYearOutOfRange(first, last)
+        end = date(year, 12, 31)
+        if contract.ended_on is not None:
+            end = min(end, contract.ended_on)
+        absences = await self.absence_repo.list_by_project(project_id, entitlement.opening_on, end)
+        days_off = [a.date for a in absences if a.type is AbsenceType.VACATION]
+        holidays = (
+            set(contract_holidays(contract, min(days_off), max(days_off))) if days_off else set()
+        )
+        return vacation_year(contract, absences, holidays, year)
 
     async def list_absences(
         self, project_id: str, start: date | None, end: date | None, tz: ZoneInfo
