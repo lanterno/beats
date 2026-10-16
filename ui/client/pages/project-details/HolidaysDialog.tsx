@@ -100,7 +100,11 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 
 	const updateContract = useUpdateContract();
 	const { data: regions } = useHolidayRegions();
-	const { data: calendar, isLoading } = useProjectHolidays(project.id, year, {
+	const {
+		data: calendar,
+		isLoading,
+		error: calendarError,
+	} = useProjectHolidays(project.id, year, {
 		includeNotGiven: true,
 	});
 
@@ -113,9 +117,11 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const region = (calendar ?? []).filter((h) => h.source === "region");
 	const regionDates = new Set(region.map((h) => h.date));
 	const givenRegionDates = new Set(region.filter((h) => h.given).map((h) => h.date));
-	const leftovers = [...notGiven]
-		.filter((d) => d.startsWith(`${year}-`) && !regionDates.has(d))
-		.sort();
+	// Only a loaded year can say a date is not the region's: until then, or
+	// when the read fails, every date not given would look left over.
+	const leftovers = calendar
+		? [...notGiven].filter((d) => d.startsWith(`${year}-`) && !regionDates.has(d)).sort()
+		: [];
 	const shown = rows.filter((r) => r.year === year);
 
 	const setRow = (key: number, patch: Partial<CompanyRow>) => {
@@ -242,6 +248,10 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 						</p>
 					) : isLoading ? (
 						<p className="mt-2 text-[12.5px] text-muted-foreground">Loading…</p>
+					) : calendarError ? (
+						<p className="mt-2 text-[12.5px] text-destructive-ink font-medium" role="alert">
+							{describeError(calendarError, `Failed to load the holidays for ${year}`)}
+						</p>
 					) : region.length === 0 ? (
 						<p className="mt-2 text-[12.5px] text-muted-foreground font-medium">None in {year}.</p>
 					) : (
