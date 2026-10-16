@@ -1281,9 +1281,8 @@ export interface paths {
          *     ``suggestion:<project>:<date>`` or ``project_health:<project>``).
          *
          *     Persists the id so the item stays gone across reloads and devices —
-         *     replacing the UI's per-day localStorage workaround. Pattern items can
-         *     also be dismissed here by their ``pattern:<id>`` form; the legacy
-         *     /patterns/{id}/dismiss route (bare id) keeps working too.
+         *     replacing the UI's per-day localStorage workaround. A pattern dismissed
+         *     here by its ``pattern:<id>`` form is gone from ``/patterns`` too.
          */
         post: operations["dismiss_inbox_item_api_intelligence_inbox__item_id__dismiss_post"];
         delete?: never;
