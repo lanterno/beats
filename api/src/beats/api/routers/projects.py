@@ -159,8 +159,9 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
     # unless the edit moves the project away from day_job, in which case the
     # contract goes with it: a contract lives only on a day job, and the
     # service refuses one sent with any other kind (409 NOT_A_DAY_JOB).
-    # Inside a sent contract the same rule holds for the holiday lists: one
-    # left out is kept, so an older client's term edit does not delete them.
+    # Inside a sent contract the same rule holds for the holiday lists and the
+    # vacation entitlement: one left out is kept, so an older client's term
+    # edit does not delete them.
     existing = await service.project_repo.get_by_id(request.id)
     sent = request.model_fields_set
     kind = request.kind if request.kind is not None else existing.kind
@@ -219,12 +220,15 @@ async def update_goal_overrides(
 @router.put("/{project_id}/contract", response_model=ProjectResponse)
 async def replace_contract(project_id: str, contract: Contract, service: ProjectServiceDep):
     """Replace a day job's whole contract: terms, holiday region, company
-    holidays and the region holidays not given, opening balance and end
-    date, in one shape, like goal-overrides. A holiday list the body leaves
-    out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
-    not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
-    does not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term
-    later past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START)."""
+    holidays and the region holidays not given, opening balance, end date
+    and vacation entitlement, in one shape, like goal-overrides. A holiday
+    list or a `vacation` the body leaves out is kept; `[]` or `null` clears
+    it. Leaves `kind` alone; on a project that is not a day job it is a 409
+    (NOT_A_DAY_JOB), and a region the calendar does not know is a 400
+    (UNKNOWN_HOLIDAY_REGION). Moving the first term later past a balance
+    adjustment is a 409 (ADJUSTMENT_BEFORE_START), and leaving the vacation
+    count's opening outside the contract's dates a 409
+    (VACATION_OPENING_OUTSIDE_CONTRACT)."""
     updated = await service.replace_contract(project_id, contract)
     return updated.model_dump()
 

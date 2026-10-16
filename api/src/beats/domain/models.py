@@ -233,6 +233,79 @@ class CompanyHoliday(BaseModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 
 
+class CarryOver(StrEnum):
+    """What becomes of the vacation days left at the end of a year."""
+
+    ALL = "all"  # every unused day carries into the next year
+    CAPPED = "capped"  # up to `carry_over_max_days` carry
+    NONE = "none"  # unused days lapse on 31 December
+
+
+# Far beyond any real figure, and a bound on what a typo can do to a chain of years.
+_VACATION_DAYS_BOUND = 366
+
+
+class VacationEntitlement(BaseModel):
+    """The vacation days a day job gives, counted the way the arithmetic
+    counts a day off: for a five-day week (decision 3), so a week off is
+    five days whatever the percentage, and a 4-day week with 20 days is
+    entered as 25.
+
+    Counting starts on `opening_on`, with `opening_days` left for the rest
+    of that calendar year (carry-over included, negative when overdrawn) —
+    the figure off the contract or an HR statement. Nothing before it is
+    reconstructed: a contract the migration started at the first beat,
+    years back, must not be credited years of leave nobody recorded.
+
+    Every figure is a whole or half day. The rules are field constraints,
+    so a 422 names the leaf. The one rule tying the entitlement to the rest
+    of the contract — `opening_on` inside its dates — is checked where a
+    contract is written (`ProjectService`), for the reason the region is:
+    this model is re-validated on every read, and a stored entitlement can
+    be paired with new terms by the keep-unsent merge.
+    """
+
+    days_per_year: float = Field(
+        strict=True, gt=0, le=_VACATION_DAYS_BOUND, multiple_of=0.5, allow_inf_nan=False
+    )
+    carry_over: CarryOver
+    # Only with `capped`, and required there. Positive: a cap of 0 is `none`.
+    # Defaulted, so a stored entitlement that carries everything (the cap
+    # dropped by the store's exclude_none) reads back.
+    carry_over_max_days: float | None = Field(
+        default=None,
+        strict=True,
+        gt=0,
+        le=_VACATION_DAYS_BOUND,
+        multiple_of=0.5,
+        allow_inf_nan=False,
+        validate_default=True,
+    )
+    opening_on: date_type
+    opening_days: float = Field(
+        strict=True,
+        ge=-_VACATION_DAYS_BOUND,
+        le=_VACATION_DAYS_BOUND,
+        multiple_of=0.5,
+        allow_inf_nan=False,
+    )
+
+    @field_validator("carry_over_max_days")
+    @classmethod
+    def cap_only_when_capped(cls, cap: float | None, info: ValidationInfo) -> float | None:
+        # A field validator rather than a model one, so the 422 names the
+        # cap. `carry_over` is declared first and so is in `info.data` —
+        # unless it failed, and then its own error is the answer.
+        carry_over = info.data.get("carry_over")
+        if carry_over is CarryOver.CAPPED and cap is None:
+            msg = "say how many days carry over"
+            raise ValueError(msg)
+        if carry_over in (CarryOver.ALL, CarryOver.NONE) and cap is not None:
+            msg = "only a capped carry-over takes a number of days"
+            raise ValueError(msg)
+        return cap
+
+
 class Contract(BaseModel):
     """A day job's terms as they changed over time, plus what frames them.
 
@@ -260,6 +333,11 @@ class Contract(BaseModel):
     these lists is per-list. A cross-field rule would need that merge to
     re-validate and answer a 422 — otherwise a merged contract could fail
     the next read, and every project of the user with it.
+
+    `vacation` is the leave the job gives (`VacationEntitlement`), None when
+    nothing is tracked. It is kept when left out the same way, and so has no
+    rule here tying it to the terms or `ended_on`: that its opening falls
+    inside the contract's dates is checked after the merge, on the write.
     """
 
     terms: list[ContractTerm]
@@ -269,6 +347,7 @@ class Contract(BaseModel):
     ended_on: date_type | None = None
     company_holidays: list[CompanyHoliday] = Field(default_factory=list, max_length=400)
     holidays_not_given: list[date_type] = Field(default_factory=list, max_length=400)
+    vacation: VacationEntitlement | None = None
 
     @field_validator("company_holidays")
     @classmethod

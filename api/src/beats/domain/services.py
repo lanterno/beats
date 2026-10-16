@@ -29,6 +29,7 @@ from beats.domain.exceptions import (
     ProjectNotFound,
     TimerAlreadyRunning,
     UnknownHolidayRegion,
+    VacationOpeningOutsideContract,
 )
 from beats.domain.holidays import (
     Holiday,
@@ -272,6 +273,13 @@ def _check_contract(project: Project) -> None:
     library knows moves with its version. A code it stops recognising must
     make one contract un-editable until it is fixed, not every project of the
     user unreadable.
+
+    The vacation count's opening must fall inside the contract's dates, and
+    is checked here for the same reason, and because it runs after the
+    keep-unsent merge (`keep_unsent_contract_fields`): an older client that
+    removes the first term, inserts an earlier one or moves `ended_on`
+    sends no entitlement, keeps the stored one, and must be refused (409)
+    rather than have the count's start silently fall outside the job.
     """
     contract = project.contract
     if contract is None:
@@ -280,9 +288,12 @@ def _check_contract(project: Project) -> None:
         raise NotADayJob()
     if contract.holiday_country is not None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
+    vacation = contract.vacation
+    if vacation is not None and not counts_worked(contract, vacation.opening_on):
+        raise VacationOpeningOutsideContract(vacation.opening_on)
 
 
-_KEPT_WHEN_UNSENT = ("company_holidays", "holidays_not_given")
+_KEPT_WHEN_UNSENT = ("company_holidays", "holidays_not_given", "vacation")
 
 
 def keep_unsent_contract_fields(incoming: Contract, stored: Contract | None) -> Contract:
@@ -294,10 +305,12 @@ def keep_unsent_contract_fields(incoming: Contract, stored: Contract | None) -> 
     sent is the model's `model_fields_set`.
 
     `model_copy` does not re-validate, and that is safe only because each
-    list's rules are its own (see `Contract`): the stored list passed them on
-    its way in and on every read since, so any incoming contract plus a
-    stored list is valid. A rule tying a list to another field would need
-    this merge to re-validate and turn a failure into a 422.
+    kept field's rules are its own (see `Contract`): the stored value passed
+    them on its way in and on every read since, so any incoming contract
+    plus a stored value is valid. A model rule tying one to another field
+    would need this merge to re-validate and turn a failure into a 422. The
+    entitlement's one tie to the rest, its opening inside the contract's
+    dates, is a write-time check after the merge instead (`_check_contract`).
     """
     if stored is None:
         return incoming
@@ -378,8 +391,9 @@ class ProjectService:
         """Replace a day job's whole contract — terms, region, opening balance, end.
 
         Whole rather than patched, like goal overrides: the terms are a history
-        that only makes sense as one list. The holiday lists are the exception:
-        one the body leaves out is kept (`keep_unsent_contract_fields`). The
+        that only makes sense as one list. The holiday lists and the vacation
+        entitlement are the exception: one the body leaves out is kept
+        (`keep_unsent_contract_fields`); `[]` or `null` clears it. The
         kind is not touched here; a project that is not a day job has no
         contract to replace (409).
         """
