@@ -222,7 +222,6 @@ class ProjectRepository(Protocol):
     async def create(self, project: Project) -> Project: ...
     async def update(self, project: Project) -> Project: ...
     async def list(self, archived: bool = False) -> builtins.list[Project]: ...
-    async def upsert(self, data: dict) -> None: ...
 
 
 class MongoBeatRepository(MongoStore[Beat], BeatRepository):
@@ -348,9 +347,6 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
 
     async def list(self, archived: bool = False) -> builtins.list[Project]:
         return await self._find_many({"archived": archived})
-
-    async def upsert(self, data: dict) -> None:
-        await self._upsert_raw(data)
 
 
 class MongoUserRepository(UserRepository):
