@@ -64,10 +64,12 @@ What a week carries, and when a figure is None:
                       worked − contract_expected on a full week.
 
 `worked` is every hour logged in the week; the balance counts only the hours
-from the contract's first day through `ended_on`. On the week a contract
-starts or ends mid-week the row's worked − contract_expected is therefore not
-the balance's move: the hours before the first day or after the last are
-shown, and charged nothing. `balance_moved` is the move.
+from the contract's first day through `ended_on`, on days whose term owes
+hours (`counts_worked`). On the week a contract starts or ends mid-week, or a
+term that owes nothing begins or ends, the row's worked − contract_expected
+is therefore not the balance's move: the hours before the first day, after
+the last or under an objective or 0-hour term are shown, and charged
+nothing. `balance_moved` is the move.
 
 `since` is the contract's first day, or None. `totals` is the balance as of
 today with the three terms that move it, or None when there is no balance

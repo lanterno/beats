@@ -759,7 +759,7 @@ class ContractService:
         days: list[ContractDay] = []
         expected_raw = 0.0
         worked_raw = 0.0
-        counted_raw = 0.0  # worked inside the contract's dates, as the balance counts it
+        counted_raw = 0.0  # worked as the balance counts it (`counts_worked`)
         for offset in range(7):
             day = week_of + timedelta(days=offset)
             expected_day = expected_on(contract, day, holiday_days, by_day)

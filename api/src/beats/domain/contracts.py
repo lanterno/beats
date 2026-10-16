@@ -17,9 +17,13 @@ company's. The rules are docs/work-contracts.md's ("The arithmetic"):
     expected(d) for Saturday / Sunday:                            0
 
     balance(today) = opening_balance_hours
-                   + worked(start .. min(today, ended_on))
+                   + counted(start .. min(today, ended_on))
                    - expected(start .. yesterday)
                    + adjusted(start .. today)
+
+    counted(d) = worked(d) when the term in force on d owes hours (`owes`),
+                 else 0 — an objective or 0-hour term expects nothing, so
+                 the hours worked under it are not overtime either
 
     adjusted(d), at the start of d, against b = the close of d - 1:
         delta  -> hours
@@ -136,11 +140,14 @@ def within_contract(contract: Contract, day: date) -> bool:
 
 
 def counts_worked(contract: Contract, day: date) -> bool:
-    """Whether hours worked on `day` count against the contract: inside its
-    dates (`within_contract`). The balance and the week's remaining both
-    ask this, so on a week a contract starts or ends mid-week the two agree
-    on what was worked under it."""
-    return within_contract(contract, day)
+    """Whether hours worked on `day` count toward the balance: inside the
+    contract's dates (`within_contract`), under a term that owes hours
+    (`owes`). An objective or 0-hour term expects nothing of its days, so
+    what is worked on them is not overtime either — the hours stay in the
+    week's `worked` and move no balance. The balance and the week's
+    remaining both ask this, so on a week a contract starts or ends, or a
+    term that owes nothing begins or ends, the two agree on what counted."""
+    return within_contract(contract, day) and owes(term_on(contract, day))
 
 
 def adjustments_by_day(adjustments: Iterable[BalanceAdjustment]) -> dict[date, BalanceAdjustment]:
@@ -169,7 +176,8 @@ def _daily(
     through: date,
 ) -> Iterator[tuple[date, float, float, float]]:
     """Every day from the contract's first through `through`, with the hours
-    worked on it that the balance counts — none after `ended_on` — the hours
+    worked on it that the balance counts (`counts_worked`: none after
+    `ended_on`, none under a term that owes nothing), the hours
     it expected, and what the day's adjustment moved the balance by (0
     without one). The running sums under every balance figure come from
     here and nowhere else.
@@ -206,7 +214,10 @@ def running_balance(
     tomorrow, so the balance does not read −8 h every morning. Today's
     adjustment counts from the start of today. `ended_on` freezes work and
     expectation: nothing is expected after it, and time tracked on the
-    project after it does not count as overtime either. Adjustments count
+    project after it does not count as overtime either. Nor does time
+    tracked under an objective or 0-hour term, which expects nothing: a
+    time-based term after it starts from the balance the last one left,
+    not from the hours worked in between. Adjustments count
     from the contract's first day on, whatever `ended_on` says, so a payout
     after the end settles the frozen balance; one dated before the first day
     falls outside the pass and is ignored.
