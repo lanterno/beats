@@ -1,5 +1,5 @@
-# The SPA, built once and served by nginx — for the single-origin deployment
-# (compose.home.yml).
+# The SPA, built once and served by nginx — for the self-hosted stack
+# (compose.selfhost.yml).
 #
 # lifepete.com ships this bundle to Firebase Hosting and the API to Cloud Run,
 # on two origins joined by CORS. Here they share ONE origin: this nginx serves
@@ -42,9 +42,9 @@ RUN if grep -rq "localhost:7999" dist/spa/assets/; then \
 FROM nginx:1.31-alpine
 
 COPY --from=build /app/dist/spa /usr/share/nginx/html
-COPY nginx.home.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # 6008 inside the container as well as outside, so the published mapping is a
 # plain 6008:6008 and `http://localhost:6008` means the same thing in both
-# places — the same correction classophile's UI needed when it joined the stack.
+# places.
 EXPOSE 6008
