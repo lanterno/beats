@@ -3553,6 +3553,12 @@ class TestBackupImport:
         return week.json(), ledger.json()
 
     @staticmethod
+    def _sessions_on(client, headers, day: str) -> list[dict]:
+        resp = client.get("/api/beats/", params={"date_filter": day}, headers=headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    @staticmethod
     def _adjust(client, headers, project_id: str, **body) -> dict:
         resp = client.post(
             f"/api/projects/{project_id}/adjustments",
@@ -3585,6 +3591,8 @@ class TestBackupImport:
         self._adjust(client, auth_headers, pid, date="2026-03-02", kind="delta", hours=-4)
         self._adjust(client, auth_headers, pid, date="2026-06-01", kind="reset", hours=2)
         before = self._standing(client, auth_headers, pid)
+        on_the_day = self._sessions_on(client, auth_headers, "2026-03-02")
+        assert len(on_the_day) == 1
 
         backup = self._export(client, auth_headers)
         # A restore into an empty account: what a backup holds, gone.
@@ -3603,6 +3611,10 @@ class TestBackupImport:
         after = self._standing(client, auth_headers, pid)
         assert after[0]["balance"] is not None
         assert _without_ids(after) == _without_ids(before)
+        # The week and the ledger read beats by project; the heatmap, the
+        # rhythm, the wall clock's bars and the day's list read them by a
+        # range of dates, which matches only a session stored with dates.
+        assert self._sessions_on(client, auth_headers, "2026-03-02") == on_the_day
 
     def test_an_archived_day_job_survives_a_round_trip(
         self, client, auth_headers, auth_info, mongo
@@ -3704,6 +3716,22 @@ class TestBackupImport:
 
         assert resp.status_code == 422, resp.text
         assert [f["path"] for f in resp.json()["fields"]] == ["balance_adjustments.0.hours"]
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == project["id"])["name"] == project["name"]
+
+    def test_a_malformed_session_is_a_422_naming_it_and_writes_nothing(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        _log(client, auth_headers, project["id"], "2026-03-02T08:00:00+00:00", 60)
+        backup = self._export(client, auth_headers)
+        for record in backup["projects"]:
+            if record["id"] == project["id"]:
+                record["name"] = "renamed by the backup"
+        backup["beats"][0]["start"] = "the second of March"
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["beats.0.start"]
         listed = client.get("/api/projects/", headers=auth_headers).json()
         assert next(p for p in listed if p["id"] == project["id"])["name"] == project["name"]
 
