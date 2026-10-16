@@ -7,7 +7,8 @@
  *
  * Saving PUTs the whole contract with both lists; entries in other years go
  * out untouched. A weekend holiday costs nothing either way, so it has no
- * tick. A date left over from a region change — or kept with no region at
+ * tick — unless the contract already stores it as not given (through the
+ * API, say), when the tick stays so the date can be taken back. A date left over from a region change — or kept with no region at
  * all — is listed so it can be seen and removed: on its own it does nothing,
  * but a later region with a holiday that day would quietly make it a working
  * day. While a save is in flight the dialog stays open, as the booking
@@ -81,6 +82,9 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const contract = project.contract;
 	const [year, setYear] = useState(Number(todayIso.slice(0, 4)));
 	const [notGiven, setNotGiven] = useState(() => new Set(contract.holidaysNotGiven));
+	// What the contract stored on opening: a weekend row keeps its tick while
+	// it is being taken back, rather than vanishing on the first click.
+	const [storedNotGiven] = useState(() => new Set(contract.holidaysNotGiven));
 	const [rows, setRows] = useState<CompanyRow[]>(() =>
 		contract.companyHolidays.map((h, i) => ({
 			key: i,
@@ -253,7 +257,7 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 											{h.name}
 										</small>
 									</span>
-									{isWeekdayIso(h.date) ? (
+									{isWeekdayIso(h.date) || storedNotGiven.has(h.date) ? (
 										<label className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap">
 											<input
 												type="checkbox"
