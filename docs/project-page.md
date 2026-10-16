@@ -270,7 +270,9 @@ match shows the figures and no sentence — never a guessed one. The code is
   each weekday's expectation actually lost, so a half day comes out right,
   and is null unless the named days add up to Expected within 0.05 h. A
   mid-week term change measures a day against the wrong per-day hours, and
-  no line beats a wrong one.
+  no line beats a wrong one. Past two days off it counts them by kind
+  ("3 days vacation 20.2 h − 2 holidays 13.4 h"), a kind with one day
+  keeping its name, so a week of Christmas stays one line.
 - **The ledger's +/− (`weekDelta`) is the move between two closes** when
   the row and the one before both have one. On the contract's first close
   it is the move from the opening balance. Only then does it fall back to
