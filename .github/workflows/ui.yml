@@ -46,12 +46,10 @@ jobs:
 
   # Deploys the SPA to Firebase Hosting, which is what serves lifepete.com.
   #
-  # This is the second live deployment, and the one that is easy to forget from
-  # inside the repo: compose.home.yml serves the SPA and the API from a single
-  # origin, so nothing local resembles it. Here they are split across
-  # lifepete.com and api.lifepete.com, which is why `origins` in
-  # api/src/server.py lists both — drop either half and the site breaks in a
-  # browser while everything in CI stays green.
+  # This is the live deployment, and nothing local resembles it: here the SPA
+  # and the API are split across lifepete.com and api.lifepete.com, which is
+  # why `origins` in api/src/server.py lists both — drop either half and the
+  # site breaks in a browser while everything in CI stays green.
   #
   # The API half of this same deployment ships separately, via cloudbuild.yaml.
   deploy:
@@ -78,9 +76,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      # Unlike the home stack (ui/Dockerfile builds with VITE_API_URL="" because
-      # it is same-origin), this deployment is cross-origin and has to name the
-      # API explicitly.
+      # Unlike the self-hosted stack (ui/Dockerfile builds with VITE_API_URL=""
+      # because it is same-origin), this deployment is cross-origin and has to
+      # name the API explicitly.
       - run: pnpm build
         env:
           VITE_API_URL: https://api.lifepete.com
