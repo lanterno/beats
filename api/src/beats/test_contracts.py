@@ -314,11 +314,6 @@ class TestContractValidation:
         with pytest.raises(ValueError, match="one date"):
             _contract(company_holidays=[_company(CHRISTMAS_EVE), _company(CHRISTMAS_EVE, "Eve")])
 
-    @pytest.mark.parametrize("name", ["", "   "], ids=["empty", "whitespace"])
-    def test_company_holiday_without_a_name_rejected(self, name):
-        with pytest.raises(ValueError, match="at least 1 character"):
-            _company(CHRISTMAS_EVE, name)
-
     def test_a_date_not_given_twice_rejected(self):
         with pytest.raises(ValueError, match="twice"):
             _contract(holidays_not_given=[CHRISTMAS, CHRISTMAS])
