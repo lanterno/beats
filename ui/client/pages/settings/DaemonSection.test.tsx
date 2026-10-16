@@ -5,21 +5,29 @@
  * clears it at a wall-clock deadline, and must do so even when the tab's
  * timers never got the chance to fire: a laptop that slept through the
  * deadline comes back to a hidden-then-visible tab, not to a ticking one.
+ *
+ * Beside the code is a QR for the companion, drawn only when the API it
+ * names is one a phone could reach.
  */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { get, post, del, toastSuccess, toastError } = vi.hoisted(() => ({
+const { get, post, del, toastSuccess, toastError, appConfig } = vi.hoisted(() => ({
 	get: vi.fn(),
 	post: vi.fn(),
 	del: vi.fn(),
 	toastSuccess: vi.fn(),
 	toastError: vi.fn(),
+	appConfig: { apiBaseUrl: "", isDev: true },
 }));
 
 vi.mock("@/shared/api", async () => {
 	const actual = await vi.importActual<typeof import("@/shared/api")>("@/shared/api");
 	return { ...actual, get, post, del };
+});
+vi.mock("@/shared/config", async () => {
+	const actual = await vi.importActual<typeof import("@/shared/config")>("@/shared/config");
+	return { ...actual, config: appConfig };
 });
 vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
 
@@ -43,6 +51,8 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "Date"] });
 	get.mockResolvedValue([]);
 	post.mockResolvedValue({ code: "ABC234", expires_in_seconds: 300 });
+	// The dev server's API, which is loopback: no QR unless a test says so.
+	appConfig.apiBaseUrl = "http://localhost:7999";
 });
 
 afterEach(() => {
@@ -73,5 +83,22 @@ describe("DaemonSection pairing code", () => {
 		});
 
 		expect(screen.queryByText("ABC234")).not.toBeInTheDocument();
+	});
+});
+
+describe("DaemonSection pairing QR", () => {
+	it("draws the QR beside the code when the API is one a phone can reach", async () => {
+		appConfig.apiBaseUrl = "https://api.lifepete.com";
+		await showCode();
+
+		expect(screen.getByTitle("Pairing QR code")).toBeInTheDocument();
+		expect(screen.getByText("Points at https://api.lifepete.com")).toBeInTheDocument();
+	});
+
+	it("draws no QR for a loopback API, which would send the phone to itself", async () => {
+		await showCode();
+
+		expect(screen.queryByTitle("Pairing QR code")).not.toBeInTheDocument();
+		expect(screen.getByText(/Your phone can't reach localhost:7999/)).toBeInTheDocument();
 	});
 });
