@@ -6,6 +6,7 @@ Centralizing here avoids duplicating the constructor calls.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from beats.domain.models import ContractTerm, ScheduleType
@@ -57,13 +58,25 @@ def fmt_minutes(minutes: float) -> str:
     return f"{h}h {m}m" if h > 0 else f"{m}m"
 
 
+def fmt_percent(fraction: float) -> str:
+    """A stored fraction (0.875) as the page prints it ("87.5"): the SPA's
+    `toPercent`, `Math.round(fraction * 10000) / 100`, written out as
+    JavaScript writes a number. To the hundredth, a tie rounded up, and no
+    trailing zeros, so 0.8 is "80" and 0.6875 "68.75", never "88" or "69"."""
+    scaled = fraction * 10000
+    whole = math.floor(scaled)
+    if scaled - whole >= 0.5:
+        whole += 1
+    return repr(whole / 100).removesuffix(".0")
+
+
 def fmt_contract_goal(term: ContractTerm) -> str:
     """A time-based term as the coach names a goal's origin, in one breath:
     "contract, 80%" for part-time, "contract, full-time", or just "contract"
     for a custom term, whose hours say all there is. The hours themselves are
     the caller's to print — the two coach surfaces lay them out differently."""
     if term.schedule_type is ScheduleType.PART_TIME and term.percentage is not None:
-        return f"contract, {term.percentage:.0%}"
+        return f"contract, {fmt_percent(term.percentage)}%"
     if term.schedule_type is ScheduleType.FULL_TIME:
         return "contract, full-time"
     return "contract"
