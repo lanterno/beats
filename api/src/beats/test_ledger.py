@@ -17,6 +17,8 @@ from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
     Absence,
     AbsenceType,
+    AdjustmentKind,
+    BalanceAdjustment,
     Contract,
     ContractTerm,
     GoalOverride,
@@ -87,6 +89,7 @@ def _ledger(
     absences=None,
     holidays=None,
     worked=None,
+    adjustments=(),
     today: date = TODAY,
     weeks: int = 10,
 ):
@@ -99,8 +102,15 @@ def _ledger(
         _vacation() if absences is None else absences,
         holidays or {},
         _worked() if worked is None else worked,
+        adjustments,
         today,
         weeks,
+    )
+
+
+def _adjust(day: date, kind: AdjustmentKind, hours: float, note: str | None = None):
+    return BalanceAdjustment(
+        id=f"a-{day}", project_id="p1", date=day, kind=kind, hours=hours, note=note
     )
 
 
@@ -235,7 +245,20 @@ class TestLedgerTotals:
         worked = {_monday(1): 7 + 47 / 60, _monday(1) + timedelta(days=1): 5 + 23 / 60}
         totals = _ledger(absences=[], worked=worked).totals
         assert totals is not None
-        assert OPENING + totals.worked - totals.expected == pytest.approx(totals.balance, abs=0.01)
+        assert totals.adjusted == 0
+        assert OPENING + totals.worked - totals.expected == pytest.approx(totals.balance, abs=0.02)
+
+    def test_the_four_terms_add_up_to_the_balance(self):
+        # The same odd fractions and a reset to an odd target: four terms
+        # and the balance, each rounded on its own, agree within 0.025.
+        worked = {_monday(1): 7 + 47 / 60, _monday(1) + timedelta(days=1): 5 + 23 / 60}
+        reset = [_adjust(_monday(1) + timedelta(days=1), AdjustmentKind.RESET, 3.333)]
+        totals = _ledger(absences=[], worked=worked, adjustments=reset).totals
+        assert totals is not None
+        assert totals.adjusted != 0
+        assert OPENING + totals.worked - totals.expected + totals.adjusted == pytest.approx(
+            totals.balance, abs=0.025
+        )
 
 
 class TestLedgerEndedOn:
@@ -263,6 +286,82 @@ class TestLedgerEndedOn:
             pytest.approx(171.36),
             final,
         )
+
+
+class TestLedgerAdjustments:
+    def test_each_close_moves_by_its_weeks_difference_and_adjustments(self):
+        # A payout on a Wednesday and a cap on a Sunday: the row-to-row proof
+        # gains Σ applied, and the Sunday's closes with its own week, so the
+        # week after moves by its own worked − expected alone.
+        sunday = SECOND_TERM + timedelta(days=6)
+        payout = _adjust(_monday(5) + timedelta(days=2), AdjustmentKind.DELTA, -4, "paid out")
+        cap = _adjust(sunday, AdjustmentKind.CAP, 20)
+        weeks = _ledger(adjustments=[payout, cap]).weeks
+        by_monday = {w.week_of: w for w in weeks}
+        assert [a.id for a in by_monday[_monday(5)].adjustments] == [payout.id]
+        assert by_monday[_monday(5)].adjustments[0].note == "paid out"
+        # Saturday's close, 30.8 − 4 + 30 − 33.6 = 23.2, capped to 20.
+        assert [a.applied for a in by_monday[SECOND_TERM].adjustments] == [pytest.approx(-3.2)]
+        assert by_monday[SECOND_TERM].balance_end == pytest.approx(20)
+        assert by_monday[VACATION].balance_end == pytest.approx(20)
+        pairs = [
+            (a, b)
+            for a, b in pairwise(weeks)
+            if a.balance_end is not None and b.balance_end is not None
+        ]
+        assert len(pairs) == 7
+        for week, before in pairs:
+            applied = sum(a.applied for a in week.adjustments)
+            assert week.contract_expected is not None
+            assert week.balance_end - before.balance_end - applied == pytest.approx(
+                week.worked - week.contract_expected, abs=0.01
+            )
+
+    def test_a_reset_this_week_is_applied_against_that_mornings_balance(self):
+        # One week asked for, so no close is: the pass still runs through
+        # today. Tuesday's reset meets Monday's close — last week's 27.2,
+        # plus 6 worked, less 6.72 — and today's balance starts from 0.
+        tuesday = MONDAY + timedelta(days=1)
+        ledger = _ledger(adjustments=[_adjust(tuesday, AdjustmentKind.RESET, 0)], weeks=1)
+        (adjustment,) = ledger.weeks[0].adjustments
+        assert adjustment.applied == pytest.approx(-(27.2 + 6 - 6.72))
+        assert ledger.totals is not None
+        assert ledger.totals.balance == pytest.approx(6 + 3 - 2 * 6.72)
+
+    def test_an_adjustment_before_the_contract_is_neither_counted_nor_shown(self):
+        early = _adjust(FIRST_TERM - timedelta(days=3), AdjustmentKind.DELTA, 50)
+        ledger = _ledger(adjustments=[early])
+        assert all(w.adjustments == [] for w in ledger.weeks)
+        assert ledger.totals is not None
+        assert (ledger.totals.adjusted, ledger.totals.balance) == (0, pytest.approx(22.04))
+
+    @pytest.mark.parametrize(
+        "paid_on",
+        [SECOND_TERM + timedelta(days=4), MONDAY],
+        ids=["in the week it ended", "weeks later"],
+    )
+    def test_a_settlement_after_the_end_pays_out_the_final_balance(self, paid_on):
+        # Ended on Wednesday 18 February at 28.64 (see TestLedgerEndedOn).
+        # The payout counts though it is after the end; `ended_balance`
+        # keeps the figure it settled, even from the end week itself, whose
+        # Sunday close is already after it.
+        ended = _contract(ended_on=SECOND_TERM + timedelta(days=2))
+        payout = _adjust(paid_on, AdjustmentKind.DELTA, -28.64)
+        ledger = _ledger(
+            _day_job(ended),
+            absences=[],
+            adjustments=[payout],
+            today=TODAY + timedelta(weeks=1),
+            weeks=4,
+        )
+        assert ledger.ended_balance == pytest.approx(28.64)
+        assert ledger.totals is not None
+        assert (ledger.totals.adjusted, ledger.totals.balance) == (-28.64, 0)
+
+    def test_ended_balance_waits_for_the_end(self):
+        planned = _contract(ended_on=TODAY + timedelta(days=1))
+        assert _ledger(_day_job(planned)).ended_balance is None
+        assert _ledger().ended_balance is None
 
 
 class TestLedgerUngoverned:
