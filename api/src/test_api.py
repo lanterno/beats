@@ -4,6 +4,8 @@ Tests all endpoints: Projects, Beats, and Timer APIs
 """
 
 import contextlib
+import csv
+import io
 import json
 import time
 from datetime import UTC, date, datetime, timedelta
@@ -3372,6 +3374,20 @@ class TestCsvAndJsonExport:
         assert "CSV Probe" in data_row
         # 30-minute duration
         assert ",30," in data_row
+
+    def test_csv_sessions_export_names_an_archived_projects_sessions(self, client, auth_headers):
+        # A finished day job is archived; its sessions are still exported,
+        # under its name rather than "Unknown".
+        project_id = self._create_project(client, auth_headers, "CSV Archived")
+        _log(client, auth_headers, project_id, "2026-04-15T09:00:00+00:00", 30)
+        resp = client.post(f"/api/projects/{project_id}/archive", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+
+        resp = client.get("/api/export/csv/sessions", headers=auth_headers)
+
+        assert resp.status_code == 200
+        rows = list(csv.reader(io.StringIO(resp.text)))
+        assert [r[1] for r in rows[1:] if r[0] == "2026-04-15"] == ["CSV Archived"]
 
     def test_csv_sessions_export_filters_by_project(self, client, auth_headers):
         """`?project_id=X` scopes the export to one project. Pin so
