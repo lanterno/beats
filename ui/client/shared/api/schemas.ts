@@ -210,6 +210,19 @@ export const LedgerSchema = z.object({
 
 export type ApiLedger = z.infer<typeof LedgerSchema>;
 
+// GET /{id}/vacation: one calendar year of the entitlement, in whole or half
+// days. `accrued` is null in the opening year, whose figure is the opening's.
+export const VacationYearSchema = z.object({
+	year: z.number(),
+	accrued: z.number().nullable(),
+	carried_in: z.number(),
+	available: z.number(),
+	booked: z.number(),
+	remaining: z.number(),
+});
+
+export type ApiVacationYear = z.infer<typeof VacationYearSchema>;
+
 // `source` and `given` default to an older API's only answer: a region
 // holiday the contract gives.
 const HolidaySchema = z.object({

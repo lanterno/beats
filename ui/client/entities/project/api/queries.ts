@@ -4,7 +4,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/api";
-import type { ContractWeek, Ledger, ProjectWithDuration } from "../model";
+import type { ContractWeek, Ledger, ProjectWithDuration, VacationYear } from "../model";
 import { toProject } from "../model";
 import {
 	type AdjustmentInput,
@@ -15,6 +15,7 @@ import {
 	fetchLedger,
 	fetchProjectHolidays,
 	fetchProjects,
+	fetchVacationYear,
 	recordAdjustment,
 	removeAdjustment,
 	unarchiveProject,
@@ -43,6 +44,9 @@ export const projectKeys = {
 	contractWeeks: (id: string) => [...projectKeys.all, "contract-week", id] as const,
 	contractWeek: (id: string, weekOf: string | undefined) =>
 		[...projectKeys.contractWeeks(id), weekOf ?? "current"] as const,
+	/** Every vacation year of one project — what an absence write invalidates. */
+	vacation: (id: string) => [...projectKeys.all, "vacation", id] as const,
+	vacationYear: (id: string, year: number) => [...projectKeys.vacation(id), year] as const,
 };
 
 /** The holiday-region list changes only with a release of the API's calendar library. */
@@ -347,6 +351,26 @@ export function useProjectHolidays(
 		enabled: !!projectId,
 		// Changes only with the contract, and a contract write invalidates it.
 		staleTime: 60 * 60_000,
+	});
+}
+
+/**
+ * One calendar year of a day job's vacation entitlement. Only meaningful
+ * when the contract carries one and the year is within its range — pass
+ * `enabled: false` elsewhere rather than let the API answer 409. Invalidated
+ * by every project write (`projectKeys.all`: the entitlement is on the
+ * contract) and by absence writes through `projectKeys.vacation`.
+ */
+export function useVacationYear(
+	projectId: string | undefined,
+	year: number,
+	options: { enabled?: boolean } = {},
+) {
+	return useQuery({
+		queryKey: projectKeys.vacationYear(projectId || "", year),
+		queryFn: (): Promise<VacationYear> => fetchVacationYear(projectId as string, year),
+		enabled: !!projectId && (options.enabled ?? true),
+		staleTime: 60_000,
 	});
 }
 

@@ -26,6 +26,7 @@ export {
 	useUpdateContract,
 	useUpdateGoalOverrides,
 	useUpdateProject,
+	useVacationYear,
 } from "./api";
 // Model layer
 export type {
@@ -57,6 +58,8 @@ export type {
 	TermFieldErrors,
 	TermFormValues,
 	VacationEntitlement,
+	VacationYear,
+	VacationYearWords,
 	WeekGoalView,
 } from "./model";
 export {
@@ -68,6 +71,7 @@ export {
 	describeEntitlement,
 	describeLedgerNote,
 	describeTerm,
+	describeVacationYear,
 	displayTermOn,
 	extractCategories,
 	type FilterAndRankOptions,

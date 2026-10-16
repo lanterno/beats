@@ -14,6 +14,7 @@ import type {
 	ApiLedgerWeek,
 	ApiProject,
 	ApiVacationEntitlement,
+	ApiVacationYear,
 } from "@/shared/api";
 import { assignColor } from "./colors";
 import type {
@@ -28,6 +29,7 @@ import type {
 	LedgerWeek,
 	Project,
 	VacationEntitlement,
+	VacationYear,
 } from "./types";
 
 export function toProject(apiProject: ApiProject): Project {
@@ -146,6 +148,17 @@ export function toApiContract(contract: Contract): ApiContract {
 		company_holidays: contract.companyHolidays.map((h) => ({ date: h.date, name: h.name })),
 		holidays_not_given: [...contract.holidaysNotGiven],
 		vacation: contract.vacation ? toApiVacationEntitlement(contract.vacation) : null,
+	};
+}
+
+export function toVacationYear(api: ApiVacationYear): VacationYear {
+	return {
+		year: api.year,
+		accrued: api.accrued,
+		carriedIn: api.carried_in,
+		available: api.available,
+		booked: api.booked,
+		remaining: api.remaining,
 	};
 }
 

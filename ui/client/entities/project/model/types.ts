@@ -58,6 +58,23 @@ export interface VacationEntitlement {
 	openingDays: number; // may be negative
 }
 
+/**
+ * One calendar year of a day job's vacation entitlement, as the API works
+ * it out (GET /{id}/vacation), in whole or half days.
+ */
+export interface VacationYear {
+	year: number;
+	/** The year's share of the entitlement; null in the opening year. */
+	accrued: number | null;
+	/** What the year before left after the carry-over rule; negative for a deficit. */
+	carriedIn: number;
+	available: number;
+	/** The vacation days in the year that cost a day, past and planned. */
+	booked: number;
+	/** Negative when overdrawn. */
+	remaining: number;
+}
+
 /** A day job's terms as they changed over time, plus what frames them. */
 export interface Contract {
 	/** In ascending order of effectiveFrom, never empty. */

@@ -34,6 +34,7 @@ export type {
 	ApiProjectKind,
 	ApiProjectListItem,
 	ApiVacationEntitlement,
+	ApiVacationYear,
 	CalendarStatus,
 	FlowTopBucket,
 	FlowWindow,
@@ -80,6 +81,7 @@ export {
 	RhythmSlotListSchema,
 	ScoreHistorySchema,
 	TimerStatusSchema,
+	VacationYearSchema,
 	WeeklyDigestListSchema,
 	WeeklyDigestSchema,
 } from "./schemas";
