@@ -503,17 +503,19 @@ day and moves by a payout on its date. A public holiday goes by its
 name. The region is not sent as a field of its own, but some regional
 holidays name it ("Augsburg Peace Festival" in DE-Augsburg, "Saint
 Terentius of Pesaro's Day" in IT-Pesaro, "South Canterbury Anniversary
-Day" in NZ's "South Canterbury"), and for those subdivisions the
-library's code is the place name, so the holiday's name contains the
-code. No country code is sent. A company holiday goes only as "company
+Day" in NZ's "South Canterbury", "Yap Day" in FM-YAP), and for those
+subdivisions the library's code is the place name, so the holiday's
+name contains the code. No country code is sent. A company holiday goes only as "company
 holiday", never the name the user typed; a day off only as "day off" or
 "half day off", never its type or note. Other weeks' holidays and
 absences are not sent. On a week the contract starts or ends inside,
 the worked figure is marked "(its days this week only)", which with no
 `ended_on` beside it says the contract started this week. The week and
-today are the request timezone's: the SPA sends `tz` with a brief, a
-chat message and a memory rewrite, and a client that sends none gets
-UTC's. A contract that ended earlier in the current week sends only
+today are the request timezone's, for the goal line and `get_projects`
+as for the contract section, so the label and the goal line name one
+term on a Sunday evening west of UTC too: the SPA sends `tz` with a
+brief, a chat message and a memory rewrite, and a client that sends
+none gets UTC's. A contract that ended earlier in the current week sends only
 its final balance and its end date; one that ended before it sends none
 of the week, though its goal line stays in the profile and in
 `get_projects` until the project is archived (`goal_term` does not
