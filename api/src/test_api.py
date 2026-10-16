@@ -6453,7 +6453,7 @@ class TestOAuthIntegrationRouters:
         assert resp.status_code == 401
 
 
-# home.space SSO — the second front door
+# Single sign-on — the second front door
 
 
 class TestSSOAPI:
