@@ -70,8 +70,7 @@ checked in beside this file; the artifact link is a convenience.
 11. **One ledger route.** Every week figure on the page comes from
     `GET /api/projects/{id}/ledger`, bucketed by the request timezone and
     including the running timer, exactly as `/contract/week` already is.
-    Nothing reconstructs a balance client-side. The old `GET …/week/`
-    breakdown it replaced is gone.
+    Nothing reconstructs a balance client-side.
 12. **Every existing action survives**: colour, name, description, repo,
     kind, term add / edit / remove, absence record / change / remove,
     session edit / delete, goal overrides on weeks the contract does not
@@ -347,9 +346,8 @@ What the shape settles:
 - A paired device can read the ledger, as it can the week: `/api/projects`
   is in `DEVICE_ALLOWED_PREFIXES`.
 - The projects index (`include=this_week`) does not read the ledger. Its
-  `weekly_minutes` and goal come from `ProjectService._this_week_from_beats`,
-  on the old week route's rule: completed beats, the current week by
-  server date.
+  `weekly_minutes` and goal come from `ProjectService._this_week_from_beats`:
+  completed beats, the current week by server date.
 
 ---
 
