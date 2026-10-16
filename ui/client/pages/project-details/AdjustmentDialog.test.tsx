@@ -116,7 +116,23 @@ describe("AdjustmentDialog", () => {
 		expect(hooks.remove).toHaveBeenCalledWith({ projectId: "p1", adjustmentId: "a1" });
 	});
 
-	it("saves on the same day with one post, and keeps the old one when the post fails", async () => {
+	it("saves on the same day with one post and deletes nothing", async () => {
+		const { props, dialog } = renderDialog({ adjustments: [PAYOUT], editing: PAYOUT });
+		await userEvent.click(within(dialog).getByRole("button", { name: "Reset to" }));
+		await userEvent.clear(within(dialog).getByLabelText("Hours"));
+		await userEvent.type(within(dialog).getByLabelText("Hours"), "0");
+		await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+		await waitFor(() => expect(props.onClose).toHaveBeenCalled());
+		expect(hooks.record).toHaveBeenCalledTimes(1);
+		expect(hooks.record).toHaveBeenCalledWith({
+			projectId: "p1",
+			input: { date: PAYOUT.date, kind: "reset", hours: 0, note: "August" },
+		});
+		expect(hooks.remove).not.toHaveBeenCalled();
+	});
+
+	it("keeps the old one when the post on a moved day fails", async () => {
 		hooks.record.mockRejectedValueOnce(
 			new ApiError(
 				409,
@@ -125,9 +141,9 @@ describe("AdjustmentDialog", () => {
 			),
 		);
 		const { props, dialog } = renderDialog({ adjustments: [PAYOUT], editing: PAYOUT });
-		await userEvent.click(within(dialog).getByRole("button", { name: "Reset to" }));
-		await userEvent.clear(within(dialog).getByLabelText("Hours"));
-		await userEvent.type(within(dialog).getByLabelText("Hours"), "0");
+		const day = within(dialog).getByLabelText("Day");
+		await userEvent.clear(day);
+		await userEvent.type(day, "2026-09-02");
 		await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
 		expect(await within(dialog).findByRole("alert")).toHaveTextContent(
@@ -135,7 +151,7 @@ describe("AdjustmentDialog", () => {
 		);
 		expect(hooks.record).toHaveBeenCalledWith({
 			projectId: "p1",
-			input: { date: PAYOUT.date, kind: "reset", hours: 0, note: "August" },
+			input: { date: "2026-09-02", kind: "delta", hours: -40, note: "August" },
 		});
 		expect(hooks.remove).not.toHaveBeenCalled();
 		expect(props.onClose).not.toHaveBeenCalled();
