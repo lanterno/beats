@@ -91,25 +91,31 @@ def contract_calendar(
     that matches no region holiday does nothing. A company day on a date
     the region already gives changes nothing and the region's name stands;
     on a removed date it wins, under its own name — the employer gives
-    that day off after all. Without a region only the company days count.
+    that day off after all. With `include_not_given` the region's row is
+    still listed beside it, as not given, so that date comes twice: the
+    editor must see both marks to clear one. Without a region only the
+    company days count.
     Raises `UnknownHolidayRegion` when the library no longer knows the region.
     """
     company = {day.date: day.name for day in contract.company_holidays if start <= day.date <= end}
     not_given = set(contract.holidays_not_given)
-    found: dict[date, Holiday] = {}
+    found: list[Holiday] = []
+    given_by_region: set[date] = set()
     if contract.holiday_country is not None:
         region = named_holidays_between(
             contract.holiday_country, contract.holiday_subdivision, start, end
         )
         for day, name in region.items():
             given = day not in not_given
-            if given or (include_not_given and day not in company):
-                found[day] = Holiday(date=day, name=name, source=HolidaySource.REGION, given=given)
+            if given:
+                given_by_region.add(day)
+            if given or include_not_given:
+                found.append(Holiday(date=day, name=name, source=HolidaySource.REGION, given=given))
     for day, name in company.items():
-        held = found.get(day)
-        if held is None or not held.given:
-            found[day] = Holiday(date=day, name=name, source=HolidaySource.COMPANY, given=True)
-    return [found[day] for day in sorted(found)]
+        if day not in given_by_region:
+            found.append(Holiday(date=day, name=name, source=HolidaySource.COMPANY, given=True))
+    # On a date listed twice the region's row, not given, comes first.
+    return sorted(found, key=lambda h: (h.date, h.given))
 
 
 def contract_holidays(contract: Contract, start: date, end: date) -> dict[date, str]:

@@ -304,8 +304,10 @@ async def get_holidays(
     absence booking: the region's public holidays the employer gives
     (`source: region`) and the employer's own (`source: company`), all with
     `given: true`. With `include=not_given`, the region holidays on the
-    contract's `holidays_not_given` too, with `given: false`. Empty when the
-    day job has no contract; only the company days when it names no region.
+    contract's `holidays_not_given` too, with `given: false` — a date a
+    company day covers is then listed twice, the region's row first. Empty
+    when the day job has no contract; only the company days when it names no
+    region.
     409 on a project that is not a day job."""
     return await service.holidays(project_id, year, tz, include_not_given=include == "not_given")
 
