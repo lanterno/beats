@@ -36,6 +36,7 @@ coach/
 - **Uncached.** The section is in the day context, never in `build_user_context`: the figures move with every session and are the request timezone's, and putting them in message 0 would break the prompt cache on every turn.
 - **Projection, not the bare balance.** The balance counts today's hours but charges today's expected hours only tomorrow, so it reads high all day. `_by_sunday` is the twin of `projection()` in the SPA's `standing.ts`, and `COACH_PERSONA` tells the coach to plan from "to go" and "by Sunday". A change to either twin is made in both.
 - **What leaves Beats** is what `PRIVACY.md` lists. A public holiday goes by its name, a company holiday only as "company holiday", and a day off only as "day off" or "half day off". The region's codes, the opening balance, other weeks' days and a contract that ended before this week are not sent.
+- **An ended contract is not live.** Once `ended_on` is before today nothing more counts, so a contract that ended earlier this week sends only "final balance: … (contract ended …)": no "to go", no today line, no projection, as the project page shows it. The last day stays live, since its hours still count and its expectation is charged the next morning.
 - Best-effort, like the calendar and biometric sections: a failing read drops the section, not the brief.
 
 ## Streaming protocol (UI-facing)
