@@ -24,7 +24,7 @@ export const NAV_BUTTON =
 
 /** A native select as a pill on a panel, the height of a small `Button` beside it. */
 export const SELECT_PILL =
-	"h-9 min-w-0 max-w-full rounded-full bg-secondary pl-3 pr-2 text-[13px] font-bold text-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+	"h-9 min-w-0 max-w-full rounded-full bg-sidebar-accent pl-3 pr-2 text-sm font-bold text-foreground transition-colors hover:bg-[color-mix(in_srgb,var(--color-sidebar-accent),var(--color-foreground)_8%)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 /** `.tint` — a small pill for a day off, by why. */
 export const TINT: Record<LedgerNoteKind, string> = {
