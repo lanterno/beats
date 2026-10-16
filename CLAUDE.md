@@ -271,8 +271,10 @@ nothing.
   signed `delta`, a `reset` to a value, a `cap` at a ceiling), one per day, each applied at
   the start of its day against the day before's close; they go with the contract. A week's
   closing balance is the Sunday close, before Monday's adjustment, read off one running
-  total (`running_balance`) with today's terms and every adjustment's `applied`; on the week
-  a contract starts or ends mid-week `worked` counts hours the balance does not, so the
+  total (`running_balance`) with today's terms and every adjustment's `applied`. The balance
+  counts a day's hours only under a term that owes hours (`counts_worked`): what is worked
+  under an objective or 0-hour term is not overtime. On the week a contract starts or ends
+  mid-week, or such a term begins or ends, `worked` counts hours the balance does not, so the
   page's +/− is each week's `balance_moved`: the move between two closes, less the
   adjustments between, read off the same pass even for the oldest week shown. A contract
   may carry a `vacation` entitlement — days per year for a five-day week, a carry-over

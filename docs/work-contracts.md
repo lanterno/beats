@@ -48,7 +48,11 @@ goal. Git history has the plans.
    breaks, no rounding, no manual day entries.
 8. **Objective-based day jobs** have no expectation and no balance —
    but the user may still set a *personal* weekly goal on them, which
-   is the existing `weekly_goal` field doing what it always did.
+   is the existing `weekly_goal` field doing what it always did. The
+   same holds day by day on a contract that changes: hours worked under
+   an objective term, or a term of 0 hours, count toward no balance, so
+   a time-based term after one starts from the balance the last left
+   and not from overtime the stretch never owed.
 9. **Contract changes are first-class.** Part-time → 80% → full-time is
    the normal life of a contract, and every calculation is term-aware
    down to the day.
@@ -288,9 +292,11 @@ worked(range)   = Σ beat duration on this project, by local day
 
 ```
 balance(today) = opening_balance_hours
-               + worked(start .. min(today, ended_on))
+               + counted(start .. min(today, ended_on))
                - expected(start .. yesterday)
                + adjusted(start .. today)
+
+counted(d) = worked(d) if the term in force on d owes hours, else 0
 
 adjusted(d), at the start of d, against b = the close of d − 1:
     delta → hours
@@ -302,6 +308,17 @@ Today's expectation is charged tomorrow, so the balance does not read
 −6 h every morning; today's work counts at once. `start` is the first
 term's `effective_from`. `ended_on` freezes work and expectation: nothing
 is expected after it, and time tracked after it is not overtime either.
+
+**A term that owes nothing counts no work.** An objective term, or one
+of 0 hours, expects nothing of its days, so the hours worked under it
+are not overtime: they are in the week's `worked`, and in no balance,
+`balance_worked`, close, `balance_moved` or `remaining`. A time-based
+term that follows starts from the close the last one left. Under the
+personal goal those hours never carried forward either, which is what
+Decision 10 asks of the 0-hour terms the migration wrote. Leave is
+counted apart: a day off under such a term still costs vacation
+(Decision 14). `counts_worked` in `contracts.py` decides it for every
+reader of the running pass.
 
 **Adjustments apply at the start of their day**, against the previous
 day's close, before the day's work. They count from `start` on, whatever
@@ -324,12 +341,12 @@ every adjustment's `applied` together, so no two can disagree and a
 ledger of a hundred weeks costs what one does. A day's **close** is the
 balance at the end of it, before the next day's adjustment. A week's
 **closing balance** is its Sunday close. On the week a contract starts or
-ends mid-week, `worked` counts hours the balance does not, so the move
-between two closes is not `worked − expected`; on any week it also
-includes the week's adjustments. The ledger therefore sends each closed
-week's **move**, `balance_moved`: the close less the one before, less the
-adjustments between, read off the same pass whether or not the week
-before is shown.
+ends mid-week, or a term that owes nothing begins or ends, `worked`
+counts hours the balance does not, so the move between two closes is not
+`worked − expected`; on any week it also includes the week's adjustments.
+The ledger therefore sends each closed week's **move**, `balance_moved`:
+the close less the one before, less the adjustments between, read off
+the same pass whether or not the week before is shown.
 
 **Day boundaries** use the request timezone (`tz`, default UTC). A beat
 belongs whole to the local day it started on, and a running timer counts
@@ -424,7 +441,8 @@ must be stored once and then owned by the user. Per project:
      — the ObjectId's date if it has none; `custom`;
      `weekly_hours = weekly_goal`.
    - every `effective_from` override becomes a `custom` term on that
-     date at its hours; `weekly_goal is None` → `weekly_hours = 0`. An
+     date at its hours; `weekly_goal is None` → `weekly_hours = 0`, a
+     term that owes nothing and so counts no hours toward the balance. An
      override dated on or before the base date was already in force,
      so it *replaces* the base term's hours — the latest such override
      wins, as it did under `effective_goal` — and the project's own
