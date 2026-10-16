@@ -25,8 +25,7 @@
 			"preset": "recommended",
 			"a11y": {
 				"preset": "recommended",
-				"noAutofocus": "off",
-				"noNoninteractiveElementToInteractiveRole": "off"
+				"noAutofocus": "off"
 			},
 			"suspicious": {
 				"noArrayIndexKey": "off"
