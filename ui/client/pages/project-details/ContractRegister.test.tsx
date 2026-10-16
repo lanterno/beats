@@ -3,18 +3,20 @@
  * state after `ended_on`, the term list's add / edit / remove as
  * whole-contract PUTs (the last term is never removable, no two start on one
  * day), the goal overrides a day job still stores, the missing-region state
- * and a day job without a contract, and the Goal variant's next goal and its
- * overrides with their identity-based remove.
+ * and a day job without a contract, this year's company days and public
+ * holidays not given counted off the calendar, and the Goal variant's next
+ * goal and its overrides with their identity-based remove.
  * The chart's geometry is stepChart.test's.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Contract, ContractTerm, ProjectWithDuration } from "@/entities/project";
+import type { Contract, ContractTerm, Holiday, ProjectWithDuration } from "@/entities/project";
 import { ContractRegister } from "./ContractRegister";
 
 const updateContract = vi.fn();
 const updateOverrides = vi.fn();
+const holidays = vi.fn<() => Holiday[]>(() => []);
 
 vi.mock("@/entities/project", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/project")>("@/entities/project");
@@ -25,6 +27,7 @@ vi.mock("@/entities/project", async () => {
 		useHolidayRegions: () => ({
 			data: [{ code: "CH", name: "Switzerland", subdivisions: [{ code: "ZH", name: "Zürich" }] }],
 		}),
+		useProjectHolidays: () => ({ data: holidays() }),
 	};
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -81,7 +84,11 @@ function project(extra: Partial<ProjectWithDuration>): ProjectWithDuration {
 	};
 }
 
-function renderRegister(p: ProjectWithDuration, firstTrackedIso?: string) {
+function renderRegister(
+	p: ProjectWithDuration,
+	firstTrackedIso?: string,
+	onOpenHolidays = vi.fn(),
+) {
 	const onOpenSettings = vi.fn();
 	render(
 		<ContractRegister
@@ -89,6 +96,7 @@ function renderRegister(p: ProjectWithDuration, firstTrackedIso?: string) {
 			todayIso={TODAY}
 			firstTrackedIso={firstTrackedIso}
 			onOpenSettings={onOpenSettings}
+			onOpenHolidays={onOpenHolidays}
 		/>,
 	);
 	return onOpenSettings;
@@ -100,6 +108,7 @@ const sentTerms = () =>
 beforeEach(() => {
 	updateContract.mockReset();
 	updateOverrides.mockReset();
+	holidays.mockReturnValue([]);
 });
 afterEach(cleanup);
 
@@ -242,6 +251,40 @@ describe("ContractRegister on a day job", () => {
 
 		await userEvent.click(within(region).getByRole("button", { name: "Set region" }));
 		expect(onOpenSettings).toHaveBeenCalledWith("holidayCountry");
+	});
+
+	it("counts this year's company days and days not given off the calendar, and opens Holidays", async () => {
+		// The contract also keeps a date not given that its region has no
+		// holiday on: it does nothing, the calendar does not return it, and it
+		// is not counted.
+		holidays.mockReturnValue([
+			{ date: "2026-08-01", name: "Swiss National Day", source: "region", given: true },
+			{ date: "2026-12-24", name: "Christmas Eve", source: "company", given: true },
+			{ date: "2026-12-26", name: "St. Stephen's Day", source: "region", given: false },
+			{ date: "2026-12-31", name: "Company closing", source: "company", given: true },
+		]);
+		const onOpenHolidays = vi.fn();
+		renderRegister(
+			project({
+				contract: {
+					...CONTRACT,
+					companyHolidays: [
+						{ date: "2026-12-24", name: "Christmas Eve" },
+						{ date: "2026-12-31", name: "Company closing" },
+					],
+					holidaysNotGiven: ["2026-12-26", "2026-03-04"],
+				},
+			}),
+			undefined,
+			onOpenHolidays,
+		);
+		const region = screen.getByRole("region", { name: "Contract" });
+
+		expect(region).toHaveTextContent(
+			"Holidays Switzerland · Zürich · 2 company days · 1 not given · Brought forward +2.0 h",
+		);
+		await userEvent.click(within(region).getByRole("button", { name: /^Holidays/ }));
+		expect(onOpenHolidays).toHaveBeenCalled();
 	});
 
 	it("offers to add a contract on a day job without one", async () => {
