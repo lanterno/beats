@@ -1,5 +1,6 @@
 """Intelligence API router — productivity scoring, patterns, digests, and suggestions."""
 
+from collections.abc import Collection
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
@@ -89,6 +90,13 @@ async def generate_digest(
     return WeeklyDigestResponse.model_validate(digest, from_attributes=True)
 
 
+def _pattern_dismissed(insight_id: str, dismissed: Collection[str]) -> bool:
+    """A pattern is dismissed under either of its two ids: the bare one the
+    Insights page's cards post to `/patterns/{id}/dismiss`, or the inbox id
+    `pattern:<id>` the dashboard's Inbox posts to `/inbox/{id}/dismiss`."""
+    return insight_id in dismissed or f"pattern:{insight_id}" in dismissed
+
+
 @router.get("/patterns", response_model=PatternsResponse)
 async def get_patterns(
     insights_repo: InsightsRepoDep,
@@ -101,7 +109,7 @@ async def get_patterns(
         insights=[
             InsightCardResponse(**i.model_dump())
             for i in user_insights.insights
-            if i.id not in user_insights.dismissed_ids
+            if not _pattern_dismissed(i.id, user_insights.dismissed_ids)
         ],
         generated_at=user_insights.generated_at,
     )
@@ -122,7 +130,11 @@ async def refresh_patterns(
     await insights_repo.upsert(new_insights)
 
     return PatternsResponse(
-        insights=[InsightCardResponse(**i.model_dump()) for i in insights if i.id not in dismissed],
+        insights=[
+            InsightCardResponse(**i.model_dump())
+            for i in insights
+            if not _pattern_dismissed(i.id, dismissed)
+        ],
         generated_at=new_insights.generated_at,
     )
 
@@ -146,9 +158,8 @@ async def dismiss_inbox_item(
     ``suggestion:<project>:<date>`` or ``project_health:<project>``).
 
     Persists the id so the item stays gone across reloads and devices —
-    replacing the UI's per-day localStorage workaround. Pattern items can
-    also be dismissed here by their ``pattern:<id>`` form; the legacy
-    /patterns/{id}/dismiss route (bare id) keeps working too.
+    replacing the UI's per-day localStorage workaround. A pattern dismissed
+    here by its ``pattern:<id>`` form is gone from ``/patterns`` too.
     """
     await insights_repo.dismiss_insight(item_id)
     return Response(status_code=204)
@@ -213,17 +224,16 @@ async def get_inbox(
     items: list[InboxItemResponse] = []
 
     # Dismissals are a single flat set shared across all inbox kinds. Patterns
-    # are additionally skipped by their bare insight.id below (the legacy
-    # /patterns/{id}/dismiss stores bare ids); the post-filter before the sort
-    # then drops any item whose full prefixed inbox id was dismissed — which is
-    # how suggestion and project_health dismissals take effect.
+    # are skipped under either of their ids below; the post-filter before the
+    # sort drops any other item whose inbox id was dismissed — which is how
+    # suggestion and project_health dismissals take effect.
     user_insights = await insights_repo.get()
     dismissed = set(user_insights.dismissed_ids) if user_insights else set()
 
     # Patterns (honor dismissed)
     if user_insights:
         for insight in user_insights.insights:
-            if insight.id in dismissed:
+            if _pattern_dismissed(insight.id, dismissed):
                 continue
             items.append(
                 InboxItemResponse(
@@ -282,9 +292,8 @@ async def get_inbox(
             )
         )
 
-    # Drop any item whose full inbox id was dismissed. Patterns are already
-    # filtered by bare id above; this catches suggestion / project_health
-    # dismissals (and patterns dismissed by their prefixed id).
+    # Drop any item whose inbox id was dismissed: suggestion and
+    # project_health dismissals (patterns were filtered above).
     items = [it for it in items if it.id not in dismissed]
 
     # Order: high → medium → low, preserving within-group order
