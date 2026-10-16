@@ -50,7 +50,7 @@ No passwords are stored — Beats does not have a password login path.
 ### Intelligence and coach
 
 - **Signals**: flow windows and summaries emitted by the daemon
-- **Focus scores**: per-day scores derived from signals
+- **Focus scores**: per-session scores derived from sessions, computed on request and not stored
 - **Inbox items**: surfaced patterns and suggestions
 - **Weekly digests**: the generated summary of a week — hours, session count,
   top project, and the observation written alongside them

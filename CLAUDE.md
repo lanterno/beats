@@ -368,7 +368,7 @@ changing anything both ends share.
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
-| `/api/intelligence` | Digests, score, patterns, suggestions, focus scores, inbox |
+| `/api/intelligence` | Digests, score, patterns, suggestions, focus scores (a day, or a week), inbox |
 | `/api/plans` | Weekly plans (structured per-project hour targets) |
 | `/api/webhooks` | Webhook CRUD |
 | `/api/coach` | Brief generation and feedback (`PUT /brief/{date}/feedback`, which recent briefs' context reads), streaming chat, usage, memory |
