@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from beats.domain.models import Beat
 from beats.domain.ports import RangeBeatReader
-from beats.domain.utils import local_dt
+from beats.domain.utils import local_date, local_dt
 
 from ._support import UTC_TZ, _beats_in_local_range
 
@@ -14,17 +14,24 @@ from ._support import UTC_TZ, _beats_in_local_range
 async def compute_focus_scores(
     beat_repo: RangeBeatReader, target_date: date, tz: ZoneInfo = UTC_TZ
 ) -> list[dict]:
-    """Compute focus quality scores for all sessions on a given local date."""
-    beats = await _beats_in_local_range(beat_repo, target_date, target_date, tz)
-    if not beats:
+    """Compute focus quality scores for all sessions on a given local date.
+
+    The peak block comes from the 30 local days up to and including the
+    target, read in local dates like the day itself, so a session just after
+    local midnight 30 days back counts wherever UTC filed it. The window is
+    sorted by start so a tie between two blocks breaks the same way on every
+    run, whatever order the store returned them in.
+    """
+    recent_beats = sorted(
+        await _beats_in_local_range(beat_repo, target_date - timedelta(days=30), target_date, tz),
+        key=lambda b: b.start,
+    )
+    sorted_beats = [b for b in recent_beats if local_date(b.start, tz) == target_date]
+    if not sorted_beats:
         return []
 
-    # Compute user's peak hours from recent data
-    recent_start = target_date - timedelta(days=30)
-    recent_beats = await beat_repo.list_completed_in_range(recent_start, target_date)
     peak_block = find_peak_block(recent_beats, tz)
 
-    sorted_beats = sorted(beats, key=lambda b: b.start)
     results = []
     for i, b in enumerate(sorted_beats):
         score = focus_score_for_beat(b, sorted_beats, i, peak_block, tz)
