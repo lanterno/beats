@@ -166,10 +166,9 @@ class Settings(BaseSettings):
 
     # AI Coach (Stage 2)
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
-    # Current-generation Sonnet: newer and cheaper than the 4-6 it replaces
-    # ($2/$10 per Mtok against $3/$15). Set COACH_MODEL=claude-opus-5 for the
-    # stronger model at $5/$25 — gateway.MODEL_PRICING bills either correctly.
-    coach_model: str = Field(default="claude-sonnet-5", validation_alias="COACH_MODEL")
+    # Sonnet 5.5, at $2/$10 per Mtok. Set COACH_MODEL=claude-opus-5-5 for the
+    # stronger model at $4/$20 — gateway.MODEL_PRICING bills either correctly.
+    coach_model: str = Field(default="claude-sonnet-5-5", validation_alias="COACH_MODEL")
     coach_monthly_budget_usd: float = Field(
         default=10.0, validation_alias="COACH_MONTHLY_BUDGET_USD"
     )
