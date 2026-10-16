@@ -35,7 +35,14 @@ Four rules here are the SPA's too, and a change to any is made in both:
 `describe_balance` is `describeBalance` (ui/client/entities/project/model/
 contract.ts), `_by_sunday` is `projection()` and `_is_first_week` is
 `isFirstWeek` (…/model/standing.ts), and `_hours` is `hours1`
-(…/model/weekDates.ts).
+(…/model/weekDates.ts). The label's percentage is a fifth, kept beside
+`fmt_contract_goal` in repos.py: `fmt_percent` is `toPercent`
+(…/model/contract.ts).
+
+Another week can still reach the prompt from outside this module: the
+user context's rated briefs (feedback.py) each carry their opening
+sentence, which can repeat what that day's brief said of its own week.
+PRIVACY.md lists them.
 """
 
 from collections.abc import Iterable, Mapping
