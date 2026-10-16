@@ -2,7 +2,7 @@
 
 import http
 from datetime import date, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import AfterValidator
@@ -29,6 +29,7 @@ from beats.api.schemas import (
 )
 from beats.domain.holidays import Holiday
 from beats.domain.models import Contract, ContractWeek, GoalOverride, Ledger, Project, ProjectKind
+from beats.domain.services import keep_unsent_holiday_changes
 
 router = APIRouter(
     prefix="/api/projects",
@@ -158,11 +159,15 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
     # unless the edit moves the project away from day_job, in which case the
     # contract goes with it: a contract lives only on a day job, and the
     # service refuses one sent with any other kind (409 NOT_A_DAY_JOB).
+    # Inside a sent contract the same rule holds for the holiday lists: one
+    # left out is kept, so an older client's term edit does not delete them.
     existing = await service.project_repo.get_by_id(request.id)
     sent = request.model_fields_set
     kind = request.kind if request.kind is not None else existing.kind
     if "contract" in sent:
         contract = request.contract
+        if contract is not None:
+            contract = keep_unsent_holiday_changes(contract, existing.contract)
     else:
         contract = existing.contract if kind is ProjectKind.DAY_JOB else None
     project = Project(
@@ -211,10 +216,12 @@ async def update_goal_overrides(
 
 @router.put("/{project_id}/contract", response_model=ProjectResponse)
 async def replace_contract(project_id: str, contract: Contract, service: ProjectServiceDep):
-    """Replace a day job's whole contract: terms, holiday region, opening
-    balance and end date, in one shape, like goal-overrides. Leaves `kind`
-    alone; on a project that is not a day job it is a 409 (NOT_A_DAY_JOB),
-    and a region the calendar does not know is a 400 (UNKNOWN_HOLIDAY_REGION)."""
+    """Replace a day job's whole contract: terms, holiday region, company
+    holidays and the region holidays not given, opening balance and end
+    date, in one shape, like goal-overrides. A holiday list the body leaves
+    out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
+    not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
+    does not know is a 400 (UNKNOWN_HOLIDAY_REGION)."""
     updated = await service.replace_contract(project_id, contract)
     return updated.model_dump()
 
@@ -285,11 +292,22 @@ async def get_holidays(
     year: int | None = Query(
         default=None, ge=1, le=9999, description="Defaults to the current year in `tz`."
     ),
+    include: Literal["not_given"] | None = Query(
+        default=None,
+        description=(
+            "'not_given' also lists the region holidays the employer does not give, "
+            "with `given: false`."
+        ),
+    ),
 ):
-    """The contract region's public holidays for a year, for the absence
-    calendar. Empty when the contract names no region. 409 on a project
-    that is not a day job."""
-    return await service.holidays(project_id, year, tz)
+    """The contract's holidays for a year, by date, for the calendar and the
+    absence booking: the region's public holidays the employer gives
+    (`source: region`) and the employer's own (`source: company`), all with
+    `given: true`. With `include=not_given`, the region holidays on the
+    contract's `holidays_not_given` too, with `given: false`. Empty when the
+    day job has no contract; only the company days when it names no region.
+    409 on a project that is not a day job."""
+    return await service.holidays(project_id, year, tz, include_not_given=include == "not_given")
 
 
 @router.get("/{project_id}/git-activity")
