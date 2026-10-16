@@ -17,8 +17,10 @@ is the list, and a change to what is sent is made there first:
   type can be health data, its note is free text, and the arithmetic
   treats them all alike);
 - today's expected hours, the running balance and its by-Sunday
-  projection — or, once the contract has ended (earlier this week), only
-  its final balance — and the end date when it falls in this week.
+  projection — in the contract's first seven days, as on the page, that
+  it is the first week under the contract instead of the projection; or,
+  once the contract has ended (earlier this week), only its final
+  balance — and the end date when it falls in this week.
 
 The balance is a sum, opening + worked − expected + adjusted, and only
 the sum is sent; on a contract's first day it is the opening balance.
@@ -29,10 +31,11 @@ another week's days, or a contract that ended before this week. "This
 week" and "today" are the request timezone's, which every caller passes,
 and so is the goal line's week in the user context.
 
-Three rules here are the SPA's too, and a change to any is made in both:
+Four rules here are the SPA's too, and a change to any is made in both:
 `describe_balance` is `describeBalance` (ui/client/entities/project/model/
-contract.ts), `_by_sunday` is `projection()` (…/model/standing.ts), and
-`_hours` is `hours1` (…/model/weekDates.ts).
+contract.ts), `_by_sunday` is `projection()` and `_is_first_week` is
+`isFirstWeek` (…/model/standing.ts), and `_hours` is `hours1`
+(…/model/weekDates.ts).
 """
 
 from collections.abc import Iterable, Mapping
@@ -127,6 +130,17 @@ def _by_sunday(week: ContractWeek, today: date) -> tuple[float, float] | None:
     return round_hours(stop_now), round_hours(stop_now + max(remaining, 0.0))
 
 
+def _is_first_week(contract: Contract, today: date) -> bool:
+    """The contract's first seven days, counted from its first term, as the
+    page's `isFirstWeek` counts them: the balance is charged a day at a time
+    and has not had a full week to settle, so the page shows "First week
+    under the contract." in place of the by-Sunday projection. False once
+    the contract has ended, as on the page."""
+    if contract.ended_on is not None and contract.ended_on <= today:
+        return False
+    return contract.starts_on <= today < contract.starts_on + timedelta(days=7)
+
+
 def _day_off(day: ContractDay, company_days: set[date]) -> str | None:
     """Why a day owed less, in the words that may leave Beats; the holiday
     wins over an absence on the same day, as `expected_on` decides."""
@@ -207,8 +221,12 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
                 else f"  {name} today: nothing expected"
             )
         lines.append(f"  {name} running balance: {describe_balance(week.balance)}")
-        projected = _by_sunday(week, today)
-        if projected is not None:
+        if _is_first_week(contract, today):
+            lines.append(
+                f"  {name}: first week under the contract — each day is charged as it"
+                " closes, and the balance settles once a full week is in"
+            )
+        elif (projected := _by_sunday(week, today)) is not None:
             stop_now, met = projected
             lines.append(
                 f"  {name} by Sunday: {describe_balance(stop_now)} if you stop now,"
