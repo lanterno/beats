@@ -25,6 +25,8 @@ from pymongo import MongoClient
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from beats.auth.session import SessionManager
+from beats.domain.models import FlowWindow
+from beats.infrastructure.repositories import serialize_to_document
 
 EMAIL = "e2e@example.test"
 
@@ -71,6 +73,42 @@ def _seed_content(db, user_id: str) -> None:
     )
 
 
+def _seed_flow(db, user_id: str) -> None:
+    """A week of the daemon's flow windows, for the flow charts on Insights.
+
+    Those cards render nothing without windows, and their bars are what the
+    suite measures: jsdom has no layout, so only a browser can see a bar
+    collapse to no height. A window an hour through a working day, at scores
+    that rise and fall, gives every day and eight hours a bar of its own
+    height, and the 56 windows clear Flow by weekday's floor of 50. Written
+    through the model and the repository's serialiser, so the stored shape is
+    the API's.
+    """
+    if db.flow_windows.find_one({"user_id": user_id}):
+        return
+    project = db.projects.find_one({"user_id": user_id})
+    project_id = str(project["_id"]) if project else None
+    morning = datetime.now(UTC).replace(hour=9, minute=0, second=0, microsecond=0)
+    scores = (0.35, 0.5, 0.65, 0.8, 0.7, 0.55, 0.45, 0.3)
+    docs = []
+    # The seven days before today: today's working hours may not have
+    # happened yet, and a window after now is outside every range read.
+    for day in range(1, 8):
+        for hour, score in enumerate(scores):
+            start = morning - timedelta(days=day) + timedelta(hours=hour)
+            window = FlowWindow(
+                window_start=start,
+                window_end=start + timedelta(minutes=1),
+                flow_score=min(score + day * 0.02, 1.0),
+                dominant_bundle_id="com.microsoft.VSCode",
+                dominant_category="coding",
+                active_project_id=project_id,
+            )
+            doc = serialize_to_document(window.model_dump(mode="json", exclude_none=True))
+            docs.append({**doc, "user_id": user_id})
+    db.flow_windows.insert_many(docs)
+
+
 def main() -> int:
     dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "beats")
@@ -96,6 +134,7 @@ def main() -> int:
                 }
             )
         _seed_content(client[db_name], user_id)
+        _seed_flow(client[db_name], user_id)
     finally:
         client.close()
 
