@@ -1403,6 +1403,24 @@ class TestRecentDataSummary:
         out = await memory_rewrite_module._recent_data_summary("user-1")
         assert "? (45m)" in out
 
+    async def test_sessions_are_filed_under_the_users_days(self, patch_repos):
+        """22:00 UTC is 07:00 the next morning in Tokyo: the rewrite files
+        the session under Tokyo's date, as get_beats and the day context
+        do, not the UTC date it read as before (AHM-77)."""
+        tokyo = ZoneInfo("Asia/Tokyo")
+        start = (datetime.now(UTC) - timedelta(days=2)).replace(
+            hour=22, minute=0, second=0, microsecond=0
+        )
+        beats = [_completed_beat(start.isoformat()[:19], 45, project_id="p1")]
+        patch_repos(_fake_coach_repos(projects=[_project("p1", "Alpha")], beats=beats))
+
+        out = await memory_rewrite_module._recent_data_summary("user-1", tokyo)
+
+        local_day = start.astimezone(tokyo).date()
+        assert local_day == start.date() + timedelta(days=1)
+        assert f"**{local_day.isoformat()}** (0.8h): Alpha (45m)" in out
+        assert f"**{start.date().isoformat()}**" not in out
+
 
 class TestRewriteCoachMemory:
     """Nightly memory compaction. Reads the last 7 days, asks the LLM
@@ -1420,7 +1438,7 @@ class TestRewriteCoachMemory:
         # repos to build the per-day/intention/mood/review prompt
         # block. Tested independently at the IntelligenceService /
         # repo level; here we just need a deterministic stub.
-        async def fake_summary(_user_id):
+        async def fake_summary(_user_id, _tz=None):
             return "## Recent\nfoo did things"
 
         monkeypatch.setattr(memory_rewrite_module, "_recent_data_summary", fake_summary)
@@ -1524,7 +1542,7 @@ class TestRewriteCoachMemory:
         summary or builds the prompt without it doesn't silently
         produce stale memory."""
 
-        async def fake_summary(_user_id):
+        async def fake_summary(_user_id, _tz=None):
             return "## SENTINEL DATA\nproject X dominated"
 
         monkeypatch.setattr(memory_rewrite_module, "_recent_data_summary", fake_summary)
