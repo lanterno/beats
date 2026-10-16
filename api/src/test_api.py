@@ -2239,7 +2239,7 @@ class TestCoachDeleteAndChatSse:
         assert '"type": "text"' in body
         assert '"type": "error"' in body
         assert '"code": 429' in body
-        # The exception's stringified body propagates to the SSE event
+        # The message names the spend and the limit, built from the figures
         assert "$12.50" in body
         assert "$10.00" in body
         assert body.rstrip().endswith("data: [DONE]")
