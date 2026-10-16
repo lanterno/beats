@@ -483,9 +483,39 @@
         "title": "ChatRequest",
         "type": "object"
       },
-      "Contract": {
-        "description": "A day job's terms as they changed over time, plus what frames them.\n\n`terms` is the history \u2014 part-time, then 80%, then full-time \u2014 kept in\norder of `effective_from` with no two starting on the same day, because\nthe day decides which term applies. The region names the employer's\npublic holidays: `holiday_subdivision` only means something inside a\n`holiday_country`. Both must be codes the holidays library knows, but\nthat is checked where a contract is written (`ProjectService`), not\nhere: this model is re-validated on every read, and the set of codes the\nlibrary knows moves with its version \u2014 a code it stops recognising must\nmake one contract un-editable, not every project of the user unreadable.\n`opening_balance_hours` is what was banked (or owed) before Beats started\ncounting; `ended_on` freezes the balance from that day on.",
+      "CompanyHoliday": {
+        "description": "A day off the employer gives that the region's calendar does not \u2014\nChristmas Eve, a bridge day, a company day. A whole day, on one date.",
         "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "name"
+        ],
+        "title": "CompanyHoliday",
+        "type": "object"
+      },
+      "Contract": {
+        "description": "A day job's terms as they changed over time, plus what frames them.\n\n`terms` is the history \u2014 part-time, then 80%, then full-time \u2014 kept in\norder of `effective_from` with no two starting on the same day, because\nthe day decides which term applies. The region names the employer's\npublic holidays: `holiday_subdivision` only means something inside a\n`holiday_country`. Both must be codes the holidays library knows, but\nthat is checked where a contract is written (`ProjectService`), not\nhere: this model is re-validated on every read, and the set of codes the\nlibrary knows moves with its version \u2014 a code it stops recognising must\nmake one contract un-editable, not every project of the user unreadable.\n`opening_balance_hours` is what was banked (or owed) before Beats started\ncounting; `ended_on` freezes the balance from that day on.\n\nWhere the employer's days off differ from the region's, two lists say\nhow: `company_holidays` adds days, `holidays_not_given` takes region\nholidays away (`domain/holidays.contract_calendar` combines the three).\nA removal that matches no region holiday \u2014 or is kept while there is no\nregion \u2014 does nothing; a company day on a removed date wins. Each list's\nonly rule is its own (no date twice), and no rule may ever tie either\nlist to another field or to the other list: an incoming contract that\nleaves a list out keeps the stored one (`keep_unsent_holiday_changes`),\nmerged without re-validating, which is safe only while every rule on\nthese lists is per-list. A cross-field rule would need that merge to\nre-validate and answer a 422 \u2014 otherwise a merged contract could fail\nthe next read, and every project of the user with it.",
+        "properties": {
+          "company_holidays": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyHoliday"
+            },
+            "maxItems": 400,
+            "title": "Company Holidays",
+            "type": "array"
+          },
           "ended_on": {
             "anyOf": [
               {
@@ -519,6 +549,15 @@
               }
             ],
             "title": "Holiday Subdivision"
+          },
+          "holidays_not_given": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "maxItems": 400,
+            "title": "Holidays Not Given",
+            "type": "array"
           },
           "opening_balance_hours": {
             "default": 0,
@@ -1661,24 +1700,42 @@
         "type": "object"
       },
       "Holiday": {
-        "description": "One public holiday, as the calendar shows it.",
+        "description": "One holiday of a contract, as the calendar shows it. `given` is false\nonly for a region holiday the employer does not give \u2014 a working day,\nlisted so it can be shown by name.",
         "properties": {
           "date": {
             "format": "date",
             "title": "Date",
             "type": "string"
           },
+          "given": {
+            "title": "Given",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HolidaySource"
           }
         },
         "required": [
           "date",
-          "name"
+          "name",
+          "source",
+          "given"
         ],
         "title": "Holiday",
         "type": "object"
+      },
+      "HolidaySource": {
+        "description": "Where a contract's holiday comes from: the region's public calendar,\nor the employer's own list on the contract.",
+        "enum": [
+          "region",
+          "company"
+        ],
+        "title": "HolidaySource",
+        "type": "string"
       },
       "InboxItemResponse": {
         "description": "A single card in the unified Inbox.\n\nNormalizes outputs from the intelligence module (patterns, suggestions,\nproject health alerts) into one shape the dashboard can render.",
@@ -1845,7 +1902,7 @@
         "type": "object"
       },
       "LedgerNote": {
-        "description": "One weekday of a ledger week that owed less than its term: an absence\n(with `half_day`) or a named public holiday (with `name`).",
+        "description": "One weekday of a ledger week that owed less than its term: an absence\n(with `half_day`) or a named holiday (with `name`).",
         "properties": {
           "date": {
             "format": "date",
@@ -1886,7 +1943,7 @@
         "type": "object"
       },
       "LedgerNoteKind": {
-        "description": "Why a weekday of a ledger week owed less: the three absence types, or a\npublic holiday.",
+        "description": "Why a weekday of a ledger week owed less: the three absence types, or a\nholiday of the contract (the region's or the company's).",
         "enum": [
           "vacation",
           "sick",
@@ -7583,7 +7640,7 @@
     },
     "/api/projects/{project_id}/contract": {
       "put": {
-        "description": "Replace a day job's whole contract: terms, holiday region, opening\nbalance and end date, in one shape, like goal-overrides. Leaves `kind`\nalone; on a project that is not a day job it is a 409 (NOT_A_DAY_JOB),\nand a region the calendar does not know is a 400 (UNKNOWN_HOLIDAY_REGION).",
+        "description": "Replace a day job's whole contract: terms, holiday region, company\nholidays and the region holidays not given, opening balance and end\ndate, in one shape, like goal-overrides. A holiday list the body leaves\nout is kept; `[]` clears it. Leaves `kind` alone; on a project that is\nnot a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar\ndoes not know is a 400 (UNKNOWN_HOLIDAY_REGION).",
         "operationId": "replace_contract_api_projects__project_id__contract_put",
         "parameters": [
           {
@@ -7888,7 +7945,7 @@
     },
     "/api/projects/{project_id}/holidays": {
       "get": {
-        "description": "The contract region's public holidays for a year, for the absence\ncalendar. Empty when the contract names no region. 409 on a project\nthat is not a day job.",
+        "description": "The contract's holidays for a year, by date, for the calendar and the\nabsence booking: the region's public holidays the employer gives\n(`source: region`) and the employer's own (`source: company`), all with\n`given: true`. With `include=not_given`, the region holidays on the\ncontract's `holidays_not_given` too, with `given: false`. Empty when the\nday job has no contract; only the company days when it names no region.\n409 on a project that is not a day job.",
         "operationId": "get_holidays_api_projects__project_id__holidays_get",
         "parameters": [
           {
@@ -7918,6 +7975,25 @@
               ],
               "description": "Defaults to the current year in `tz`.",
               "title": "Year"
+            }
+          },
+          {
+            "description": "'not_given' also lists the region holidays the employer does not give, with `given: false`.",
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "not_given",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "'not_given' also lists the region holidays the employer does not give, with `given: false`.",
+              "title": "Include"
             }
           },
           {

@@ -1674,10 +1674,12 @@ export interface paths {
         get?: never;
         /**
          * Replace Contract
-         * @description Replace a day job's whole contract: terms, holiday region, opening
-         *     balance and end date, in one shape, like goal-overrides. Leaves `kind`
-         *     alone; on a project that is not a day job it is a 409 (NOT_A_DAY_JOB),
-         *     and a region the calendar does not know is a 400 (UNKNOWN_HOLIDAY_REGION).
+         * @description Replace a day job's whole contract: terms, holiday region, company
+         *     holidays and the region holidays not given, opening balance and end
+         *     date, in one shape, like goal-overrides. A holiday list the body leaves
+         *     out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
+         *     not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
+         *     does not know is a 400 (UNKNOWN_HOLIDAY_REGION).
          */
         put: operations["replace_contract_api_projects__project_id__contract_put"];
         post?: never;
@@ -1781,9 +1783,13 @@ export interface paths {
         };
         /**
          * Get Holidays
-         * @description The contract region's public holidays for a year, for the absence
-         *     calendar. Empty when the contract names no region. 409 on a project
-         *     that is not a day job.
+         * @description The contract's holidays for a year, by date, for the calendar and the
+         *     absence booking: the region's public holidays the employer gives
+         *     (`source: region`) and the employer's own (`source: company`), all with
+         *     `given: true`. With `include=not_given`, the region holidays on the
+         *     contract's `holidays_not_given` too, with `given: false`. Empty when the
+         *     day job has no contract; only the company days when it names no region.
+         *     409 on a project that is not a day job.
          */
         get: operations["get_holidays_api_projects__project_id__holidays_get"];
         put?: never;
@@ -2435,6 +2441,20 @@ export interface components {
             message: string;
         };
         /**
+         * CompanyHoliday
+         * @description A day off the employer gives that the region's calendar does not —
+         *     Christmas Eve, a bridge day, a company day. A whole day, on one date.
+         */
+        CompanyHoliday: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * Contract
          * @description A day job's terms as they changed over time, plus what frames them.
          *
@@ -2449,14 +2469,31 @@ export interface components {
          *     make one contract un-editable, not every project of the user unreadable.
          *     `opening_balance_hours` is what was banked (or owed) before Beats started
          *     counting; `ended_on` freezes the balance from that day on.
+         *
+         *     Where the employer's days off differ from the region's, two lists say
+         *     how: `company_holidays` adds days, `holidays_not_given` takes region
+         *     holidays away (`domain/holidays.contract_calendar` combines the three).
+         *     A removal that matches no region holiday — or is kept while there is no
+         *     region — does nothing; a company day on a removed date wins. Each list's
+         *     only rule is its own (no date twice), and no rule may ever tie either
+         *     list to another field or to the other list: an incoming contract that
+         *     leaves a list out keeps the stored one (`keep_unsent_holiday_changes`),
+         *     merged without re-validating, which is safe only while every rule on
+         *     these lists is per-list. A cross-field rule would need that merge to
+         *     re-validate and answer a 422 — otherwise a merged contract could fail
+         *     the next read, and every project of the user with it.
          */
         Contract: {
+            /** Company Holidays */
+            company_holidays?: components["schemas"]["CompanyHoliday"][];
             /** Ended On */
             ended_on?: string | null;
             /** Holiday Country */
             holiday_country?: string | null;
             /** Holiday Subdivision */
             holiday_subdivision?: string | null;
+            /** Holidays Not Given */
+            holidays_not_given?: string[];
             /**
              * Opening Balance Hours
              * @default 0
@@ -2903,7 +2940,9 @@ export interface components {
         };
         /**
          * Holiday
-         * @description One public holiday, as the calendar shows it.
+         * @description One holiday of a contract, as the calendar shows it. `given` is false
+         *     only for a region holiday the employer does not give — a working day,
+         *     listed so it can be shown by name.
          */
         Holiday: {
             /**
@@ -2911,9 +2950,19 @@ export interface components {
              * Format: date
              */
             date: string;
+            /** Given */
+            given: boolean;
             /** Name */
             name: string;
+            source: components["schemas"]["HolidaySource"];
         };
+        /**
+         * HolidaySource
+         * @description Where a contract's holiday comes from: the region's public calendar,
+         *     or the employer's own list on the contract.
+         * @enum {string}
+         */
+        HolidaySource: "region" | "company";
         /**
          * InboxItemResponse
          * @description A single card in the unified Inbox.
@@ -2992,7 +3041,7 @@ export interface components {
         /**
          * LedgerNote
          * @description One weekday of a ledger week that owed less than its term: an absence
-         *     (with `half_day`) or a named public holiday (with `name`).
+         *     (with `half_day`) or a named holiday (with `name`).
          */
         LedgerNote: {
             /**
@@ -3009,7 +3058,7 @@ export interface components {
         /**
          * LedgerNoteKind
          * @description Why a weekday of a ledger week owed less: the three absence types, or a
-         *     public holiday.
+         *     holiday of the contract (the region's or the company's).
          * @enum {string}
          */
         LedgerNoteKind: "vacation" | "sick" | "other" | "holiday";
@@ -6638,6 +6687,8 @@ export interface operations {
             query?: {
                 /** @description Defaults to the current year in `tz`. */
                 year?: number | null;
+                /** @description 'not_given' also lists the region holidays the employer does not give, with `given: false`. */
+                include?: "not_given" | null;
                 /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
                 tz?: string | null;
             };
