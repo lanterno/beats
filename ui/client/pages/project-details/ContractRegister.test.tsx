@@ -27,7 +27,10 @@ vi.mock("@/entities/project", async () => {
 		useHolidayRegions: () => ({
 			data: [{ code: "CH", name: "Switzerland", subdivisions: [{ code: "ZH", name: "Zürich" }] }],
 		}),
-		useProjectHolidays: () => ({ data: holidays() }),
+		// As the API answers: the region's days not given only when asked for.
+		useProjectHolidays: (_id: string, _year: number, options?: { includeNotGiven?: boolean }) => ({
+			data: options?.includeNotGiven ? holidays() : holidays().filter((h) => h.given),
+		}),
 	};
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
