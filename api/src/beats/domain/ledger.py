@@ -43,13 +43,15 @@ What a week carries, and when a figure is None:
                       close less the Sunday close before it, less the
                       adjustments dated in between, which are figures of
                       their own. On the contract's first close it is read
-                      from the opening balance, and when the week holding
-                      the first day has no close (a weekend start) the
-                      week after reads from it too, so those weekend hours
-                      land in the first week that closes. None exactly
-                      when `balance_end` is. The close before is read off
-                      the same pass whether or not its week is in the
-                      ledger, so the oldest row shown has its move too.
+                      from the opening balance, and when the week before
+                      has no close — a time-based term starting on its
+                      weekend, the contract's first or one after a term
+                      that owes nothing — it is read from the day before
+                      that term, so those weekend hours land in the first
+                      week that closes. None exactly when `balance_end`
+                      is. The close before is read off the same pass
+                      whether or not its week is in the ledger, so the
+                      oldest row shown has its move too.
     notes             the absences and named public holidays on the week's
                       weekdays, by date; an absence carries `half_day`, a
                       holiday its `name`. Weekends are left out: they owe
@@ -86,6 +88,7 @@ from datetime import date, timedelta
 
 from beats.domain.contracts import (
     absences_by_day,
+    counts_worked,
     owes,
     round_hours,
     running_balance,
@@ -209,18 +212,18 @@ def _move_from(
     week_of: date,
 ) -> date:
     """The day whose close the move of the week starting `week_of` is read
-    from: the Sunday before it — or, when the week before holds the
-    contract's first day and has no close, the day before the first, which
-    closes at the opening balance. A week holding the first day itself reads
-    from its own Sunday before, which is before the contract and so closes at
-    the opening balance as well."""
+    from: the Sunday before it — or, when the week before has no close, the
+    day before the first day in it the balance counts (`counts_worked`), so
+    the weekend hours of a time-based term that starts on that weekend — the
+    contract's first, or one after a term that owes nothing — are in this
+    week's +/−. The Sunday before the contract's first day closes at the
+    opening balance, as the day before it does."""
     week_before = week_of - timedelta(weeks=1)
-    starts_on = contract.starts_on
-    if (
-        week_before <= starts_on < week_of
-        and week_expectation(contract, by_day.values(), holidays, week_before) is None
-    ):
-        return starts_on - timedelta(days=1)
+    if week_expectation(contract, by_day.values(), holidays, week_before) is None:
+        for offset in range(7):
+            day = week_before + timedelta(days=offset)
+            if counts_worked(contract, day):
+                return day - timedelta(days=1)
     return week_of - timedelta(days=1)
 
 
