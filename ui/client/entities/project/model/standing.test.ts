@@ -120,6 +120,29 @@ describe("nominalLine", () => {
 		);
 	});
 
+	it("counts the days off by kind past two, keeping a lone day's name", () => {
+		const holiday = (name: string): DayPatch => ({ expected: 0, holiday: name });
+		const christmas = week({
+			0: VACATION,
+			1: VACATION,
+			2: VACATION,
+			3: holiday("Christmas Day"),
+			4: holiday("St. Stephen's Day"),
+		});
+		expect(nominalLine(christmas, TERM)).toBe(
+			"33.6 h nominal − 3 days vacation 20.2 h − 2 holidays 13.4 h",
+		);
+		const mixed = week({
+			0: { expected: 3.36, absence: { type: "vacation", halfDay: true } },
+			1: VACATION,
+			2: { expected: 3.36, absence: { type: "vacation", halfDay: true } },
+			4: holiday("Swiss National Day"),
+		});
+		expect(nominalLine(mixed, TERM)).toBe(
+			"33.6 h nominal − 2 days vacation 13.4 h − Fri Swiss National Day 6.7 h",
+		);
+	});
+
 	it("says nothing when the named days do not add up to the week's expectation", () => {
 		// 60 % until Tuesday, 80 % from Wed Sep 9, Friday off: 5.04 + 5.04 + 6.72
 		// + 6.72 = 23.52 expected. Neither term's nominal less Friday gives that.
