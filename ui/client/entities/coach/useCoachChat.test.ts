@@ -60,3 +60,31 @@ describe("useCoachChat history restore", () => {
 		expect(result.current.conversationId).toBeNull();
 	});
 });
+
+describe("useCoachChat sending", () => {
+	beforeEach(() => fetchChatHistoryMock.mockResolvedValue([]));
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	it("names the browser's timezone, so the coach's today is the user's", async () => {
+		// Without it the route falls back to UTC, and the coach reads another
+		// day's contract week than the project page shows.
+		const resolved = Intl.DateTimeFormat().resolvedOptions();
+		vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockReturnValue({
+			...resolved,
+			timeZone: "Pacific/Auckland",
+		});
+		const fetchMock = vi.fn().mockResolvedValue(new Response("data: [DONE]\n\n"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useCoachChat());
+		await waitFor(() => expect(result.current.loadingHistory).toBe(false));
+		await result.current.sendMessage("hi");
+
+		const url = new URL(String(fetchMock.mock.calls[0][0]), "http://localhost");
+		expect(url.pathname).toBe("/api/coach/chat");
+		expect(url.searchParams.get("tz")).toBe("Pacific/Auckland");
+	});
+});
