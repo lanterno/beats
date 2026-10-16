@@ -3421,14 +3421,17 @@ class TestBeatServiceCrud:
 class _FakeAdjustmentRepo:
     """In-memory balance adjustments: the store the contract service reads
     and writes, and the two calls a contract write makes. Keyed on
-    (project, date) like the real one's unique index."""
+    (project, date) like the real one's unique index. `calls` names every
+    read and bulk delete, so a test can say a write touched none of them."""
 
     def __init__(self, adjustments: builtins.list[BalanceAdjustment] | None = None):
         self._adjustments: list[BalanceAdjustment] = list(adjustments or [])
+        self.calls: list[str] = []
 
     async def list_by_project(
         self, project_id: str, start: date, end: date
     ) -> builtins.list[BalanceAdjustment]:
+        self.calls.append("list_by_project")
         return sorted(
             (a for a in self._adjustments if a.project_id == project_id and start <= a.date <= end),
             key=lambda a: a.date,
@@ -3450,6 +3453,7 @@ class _FakeAdjustmentRepo:
         return len(self._adjustments) < before
 
     async def earliest(self, project_id: str, on_or_after: date) -> date | None:
+        self.calls.append("earliest")
         days = [
             a.date
             for a in self._adjustments
@@ -3458,6 +3462,7 @@ class _FakeAdjustmentRepo:
         return min(days, default=None)
 
     async def delete_by_project(self, project_id: str) -> int:
+        self.calls.append("delete_by_project")
         before = len(self._adjustments)
         self._adjustments = [a for a in self._adjustments if a.project_id != project_id]
         return before - len(self._adjustments)
@@ -3784,14 +3789,16 @@ class TestReconcileAdjustments:
         return await svc.update_project(project, previous_contract=stored.contract)
 
     async def test_an_unchanged_contract_never_reads_its_adjustments(self):
-        # An orphan dated before the first day (a raw import can leave one)
-        # is ignored by the arithmetic, and must not block a rename.
+        # A rename resends the contract as it is: no adjustment is read or
+        # deleted. An orphan dated before the first day (a raw import can
+        # leave one) is ignored by the arithmetic, and must not block it.
         stored = _day_job("p1")
         orphan = _adjustment(CONTRACT_START - timedelta(days=30))
         repo = _FakeAdjustmentRepo([orphan])
 
         await self._write(stored, stored.contract, repo)
 
+        assert repo.calls == []
         assert await repo.earliest("p1", date.min) == orphan.date
 
     async def test_a_contract_from_none_clears_what_is_left_over(self):
