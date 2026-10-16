@@ -6,6 +6,12 @@
  * Oct 9 · Vacation · 5 days"), and the calendar year's tally. The month grid
  * is not here: it is the date picker inside the booking dialog (Decision 10).
  *
+ * With a vacation entitlement on the contract, and the year within what it
+ * counts, the tally reads the API's year of it ("2026: 8 of 23½ d vacation ·
+ * 15½ left · ½ d sick") with where the figure came from under it; the
+ * vacation days are then the API's, which leaves out weekends, holidays and
+ * days before the opening. Without one it counts the recorded days.
+ *
  * An absence row opens the booking dialog on its days; a holiday, public or
  * company, has nothing to book, so its row opens its week in Days instead. A
  * date outside the calendar year carries its year, since the list runs a
@@ -15,8 +21,14 @@
 import { type Ref, useState } from "react";
 import type { Absence, AbsenceType } from "@/entities/absence";
 import { ABSENCE_TYPE_LABELS, useAbsences } from "@/entities/absence";
-import type { Holiday, ProjectWithDuration } from "@/entities/project";
-import { useHolidayRegions, useProjectHolidays } from "@/entities/project";
+import type { Holiday, ProjectWithDuration, VacationYearWords } from "@/entities/project";
+import {
+	describeVacationYear,
+	halfDays,
+	useHolidayRegions,
+	useProjectHolidays,
+	useVacationYear,
+} from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { addIsoDays, cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
@@ -52,13 +64,6 @@ const TYPES: AbsenceType[] = ["vacation", "sick", "other"];
 type Entry =
 	| ({ kind: "absence" } & AbsenceRun)
 	| { kind: "holiday"; date: string; name: string; source: Holiday["source"] };
-
-/** "21", "½", "2½" — days counted in halves. */
-function days(n: number): string {
-	const whole = Math.floor(n);
-	const half = n - whole >= 0.5 ? "½" : "";
-	return whole === 0 ? half || "0" : `${whole}${half}`;
-}
 
 function dayCount(run: AbsenceRun): number {
 	return run.absences.reduce((sum, a) => sum + (a.halfDay ? 0.5 : 1), 0);
@@ -119,16 +124,43 @@ function bookingOf(run: AbsenceRun): AbsenceBooking {
 	};
 }
 
-/** "2026: 21 d vacation booked · ½ d sick" — half days count a half. */
-function tally(absences: Absence[], year: number): string {
+/** "½ d sick", one per type with days recorded in the year — half days count a half. */
+function recorded(absences: Absence[], year: number, types: AbsenceType[]): string[] {
 	const inYear = absences.filter((a) => a.date.startsWith(`${year}-`));
-	const parts = TYPES.map((type) => {
-		const n = inYear.filter((a) => a.type === type).reduce((s, a) => s + (a.halfDay ? 0.5 : 1), 0);
-		return n > 0 ? `${days(n)} d ${type}` : null;
-	}).filter((part): part is string => part !== null);
+	return types
+		.map((type) => {
+			const n = inYear
+				.filter((a) => a.type === type)
+				.reduce((s, a) => s + (a.halfDay ? 0.5 : 1), 0);
+			return n > 0 ? `${halfDays(n)} d ${type}` : null;
+		})
+		.filter((part): part is string => part !== null);
+}
+
+/** "2026: 21 d vacation booked · ½ d sick" — without an entitlement. */
+function tally(absences: Absence[], year: number): string {
+	const parts = recorded(absences, year, TYPES);
 	if (parts.length === 0) return `Nothing booked yet in ${year}`;
 	parts[0] = `${parts[0]} booked`;
 	return `${year}: ${parts.join(" · ")}`;
+}
+
+/** "2026: 8 of 23½ d vacation · 15½ left · ½ d sick", and under it where the figure came from. */
+function VacationTally({
+	words,
+	year,
+	others,
+}: {
+	words: VacationYearWords;
+	year: number;
+	others: string[];
+}) {
+	return (
+		<>
+			<p>{[`${year}: ${words.headline}`, ...others].join(" · ")}</p>
+			<p className="text-xs text-muted-foreground/80">{words.detail}</p>
+		</>
+	);
 }
 
 export function TimeOff({
@@ -154,6 +186,13 @@ export function TimeOff({
 	const { data: regions } = useHolidayRegions();
 
 	const contract = project.contract;
+	const vacation = contract?.vacation;
+	// The years the entitlement counts: from the opening's through the end's.
+	const counted =
+		vacation !== undefined &&
+		year >= Number(vacation.openingOn.slice(0, 4)) &&
+		(!contract?.endedOn || year <= Number(contract.endedOn.slice(0, 4)));
+	const vacationYear = useVacationYear(project.id, year, { enabled: counted });
 	const holidays = [...(thisYear ?? []), ...(nextYear ?? [])];
 	const holidayDates = new Set(holidays.map((h) => h.date));
 	const country = regions?.find((r) => r.code === contract?.holidayCountry);
@@ -235,7 +274,7 @@ export function TimeOff({
 								: `${dateOf(entry.from)} – ${dateOf(entry.through)}`;
 							what = [
 								`${ABSENCE_TYPE_LABELS[entry.type]}${single && first.halfDay ? " ½" : ""}`,
-								single ? null : `${days(count)} day${count <= 1 ? "" : "s"}`,
+								single ? null : `${halfDays(count)} day${count <= 1 ? "" : "s"}`,
 								note || null,
 							]
 								.filter((part): part is string => part !== null)
@@ -280,9 +319,25 @@ export function TimeOff({
 				</button>
 			)}
 
-			<p className="mt-2.5 pt-2.5 border-t border-border text-[12.5px] leading-[1.6] font-medium text-muted-foreground">
-				{absences ? tally(absences, year) : "…"}
-			</p>
+			<div className="mt-2.5 pt-2.5 border-t border-border text-[12.5px] leading-[1.6] font-medium text-muted-foreground">
+				{counted && vacation ? (
+					vacationYear.error ? (
+						<p role="alert" className="text-destructive-ink">
+							{describeError(vacationYear.error, "Could not load the vacation count")}
+						</p>
+					) : vacationYear.data && absences ? (
+						<VacationTally
+							words={describeVacationYear(vacationYear.data, vacation, contract?.endedOn)}
+							year={year}
+							others={recorded(absences, year, ["sick", "other"])}
+						/>
+					) : (
+						<p>…</p>
+					)
+				) : (
+					<p>{absences ? tally(absences, year) : "…"}</p>
+				)}
+			</div>
 			{!contract?.holidayCountry && (
 				<p className="mt-1 text-xs text-muted-foreground font-medium leading-normal">
 					Public holidays appear once the contract has a region.

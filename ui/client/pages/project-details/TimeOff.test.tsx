@@ -3,17 +3,18 @@
  * a run of one type across a weekend or a holiday as one row counted in
  * halves, "Tomorrow" on the first row, next year's dates with their year,
  * the year's tally counting a half day as a half, a company holiday named
- * as one, and what a row opens.
+ * as one, and what a row opens. With a vacation entitlement the tally is the
+ * API's year of it, read only for a year the entitlement counts.
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Absence } from "@/entities/absence";
-import type { Holiday, ProjectWithDuration } from "@/entities/project";
+import type { Holiday, ProjectWithDuration, VacationYear } from "@/entities/project";
 import { TimeOff, type TimeOffProps } from "./TimeOff";
 
 const { hooks } = vi.hoisted(() => ({
-	hooks: { absences: vi.fn(), holidays: vi.fn() },
+	hooks: { absences: vi.fn(), holidays: vi.fn(), vacationYear: vi.fn() },
 }));
 
 vi.mock("@/entities/absence", async () => {
@@ -28,6 +29,11 @@ vi.mock("@/entities/project", async () => {
 	return {
 		...actual,
 		useProjectHolidays: (_id: string, year: number) => ({ data: hooks.holidays(year) }),
+		// Answers, and records the year asked for, only when the page lets it read.
+		useVacationYear: (_id: string, year: number, options: { enabled?: boolean } = {}) =>
+			options.enabled === false
+				? { data: undefined, error: null }
+				: { data: hooks.vacationYear(year), error: null },
 		useHolidayRegions: () => ({
 			data: [{ code: "CH", name: "Switzerland", subdivisions: [{ code: "ZH", name: "Zürich" }] }],
 		}),
@@ -109,6 +115,7 @@ function renderTimeOff(overrides: Partial<TimeOffProps> = {}) {
 }
 
 beforeEach(() => {
+	hooks.vacationYear.mockReset();
 	hooks.absences.mockReturnValue(ABSENCES);
 	hooks.holidays.mockImplementation((year: number) => HOLIDAYS[year] ?? []);
 });
@@ -163,6 +170,54 @@ describe("TimeOff", () => {
 		expect(row).not.toHaveTextContent("Zürich");
 		await userEvent.click(row);
 		expect(props.onOpenWeek).toHaveBeenCalledWith("2026-12-24");
+	});
+
+	it("counts the year against the entitlement when the contract has one", () => {
+		const opening: VacationYear = {
+			year: 2026,
+			accrued: null,
+			carriedIn: 0,
+			available: 12,
+			booked: 11.5,
+			remaining: 0.5,
+		};
+		hooks.vacationYear.mockReturnValue(opening);
+		const contract = PROJECT.contract;
+		if (!contract) throw new Error("the fixture has a contract");
+		renderTimeOff({
+			project: {
+				...PROJECT,
+				contract: {
+					...contract,
+					vacation: { daysPerYear: 25, carryOver: "all", openingOn: "2026-03-02", openingDays: 12 },
+				},
+			},
+		});
+		const region = screen.getByRole("region", { name: "Time off" });
+
+		expect(hooks.vacationYear).toHaveBeenCalledWith(2026);
+		// The vacation figure is the API's; sick days stay the recorded count.
+		expect(region).toHaveTextContent("2026: 11½ of 12 d vacation · ½ left · 1½ d sick");
+		expect(region).toHaveTextContent("12 d left on Mar 2");
+		expect(region).not.toHaveTextContent("booked");
+	});
+
+	it("keeps the plain tally, and reads nothing, for a year before the entitlement counts", () => {
+		const contract = PROJECT.contract;
+		if (!contract) throw new Error("the fixture has a contract");
+		renderTimeOff({
+			project: {
+				...PROJECT,
+				contract: {
+					...contract,
+					vacation: { daysPerYear: 25, carryOver: "all", openingOn: "2027-01-04", openingDays: 25 },
+				},
+			},
+		});
+		const region = screen.getByRole("region", { name: "Time off" });
+
+		expect(hooks.vacationYear).not.toHaveBeenCalled();
+		expect(region).toHaveTextContent("2026: 11½ d vacation booked · 1½ d sick");
 	});
 
 	it("says nothing is booked, and that holidays wait for a region", () => {

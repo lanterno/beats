@@ -48,7 +48,7 @@ export {
 	weekDelta,
 } from "./ledger";
 // Mappers
-export { toApiContract, toContractWeek, toLedger, toProject } from "./mappers";
+export { toApiContract, toContractWeek, toLedger, toProject, toVacationYear } from "./mappers";
 // Picker recents (user-scoped localStorage)
 export { readPickerRecents, recordPickerRecent } from "./pickerRecents";
 // Project pins (user-scoped localStorage + custom-event sync)
@@ -65,6 +65,7 @@ export {
 } from "./selectors";
 // The standing: the sentence, the projection, the first week, the labels
 export {
+	halfDays,
 	isFirstWeek,
 	nominalLine,
 	type Projection,
@@ -79,6 +80,7 @@ export {
 // Types
 export type {
 	AdjustmentKind,
+	CarryOver,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -98,6 +100,10 @@ export type {
 	ProjectKind,
 	ProjectWithDuration,
 	ScheduleType,
+	VacationEntitlement,
+	VacationYear,
 } from "./types";
+// The vacation entitlement in words
+export { describeEntitlement, describeVacationYear, type VacationYearWords } from "./vacation";
 // This-week figures for a list row: contract or personal goal
 export { type WeekGoalView, weekGoalView } from "./weekGoal";

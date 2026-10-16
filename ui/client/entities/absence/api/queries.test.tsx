@@ -59,7 +59,8 @@ describe("useRecordAbsences", () => {
 			"2026-09-16",
 			"2026-09-16",
 		]);
-		// The absences, the contract weeks, the ledger and the list: once each.
-		expect(invalidate).toHaveBeenCalledTimes(4);
+		// The absences, the contract weeks, the ledger, the vacation years and
+		// the list: once each.
+		expect(invalidate).toHaveBeenCalledTimes(5);
 	});
 });

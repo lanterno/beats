@@ -1,5 +1,15 @@
 """Domain exceptions - unified exception hierarchy for business rule violations."""
 
+from datetime import date
+
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _spoken(day: date) -> str:
+    """A date the way a message says it, "Mar 2, 2026" — spelled out here
+    rather than with `%b`, which follows the process locale."""
+    return f"{_MONTHS[day.month - 1]} {day.day}, {day.year}"
+
 
 class DomainException(Exception):
     """Base exception for all domain-level errors.
@@ -99,6 +109,51 @@ class NoContract(DomainException):
     status_code = 409
     message = "This day job has no contract yet"
     code = "NO_CONTRACT"
+
+
+class VacationOpeningOutsideContract(DomainException):
+    """Raised when a contract write leaves the vacation count's opening date
+    outside the contract's dates — before the first term, or after
+    `ended_on`. A stored entitlement is kept when a write leaves it out, so
+    this is how a term removed, a term inserted earlier, or an end moved
+    surfaces, rather than the count being silently reinterpreted."""
+
+    status_code = 409
+    message = "The vacation count starts outside the contract's dates"
+    code = "VACATION_OPENING_OUTSIDE_CONTRACT"
+
+    def __init__(self, opening_on: date):
+        super().__init__(
+            f"The vacation count starts on {_spoken(opening_on)}, outside the contract's "
+            "dates; change it in the project settings first"
+        )
+
+
+class NoVacationEntitlement(DomainException):
+    """Raised when a day job's vacation year is asked for and its contract
+    tracks no vacation entitlement."""
+
+    status_code = 409
+    message = "This contract has no vacation entitlement"
+    code = "NO_VACATION_ENTITLEMENT"
+
+
+class VacationYearOutOfRange(DomainException):
+    """Raised when a vacation year is asked for outside the years counted:
+    before the opening's, or after the year the contract ends."""
+
+    status_code = 409
+    message = "Vacation is not counted in that year"
+    code = "VACATION_YEAR_OUT_OF_RANGE"
+
+    def __init__(self, first: int, last: int | None):
+        if last is None:
+            span = f"from {first} on"
+        elif last == first:
+            span = f"in {first} only"
+        else:
+            span = f"from {first} through {last}"
+        super().__init__(f"Vacation is counted {span}")
 
 
 class AbsenceNotFound(DomainException):

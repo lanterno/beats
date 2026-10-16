@@ -13,6 +13,8 @@ import type {
 	ApiLedgerNote,
 	ApiLedgerWeek,
 	ApiProject,
+	ApiVacationEntitlement,
+	ApiVacationYear,
 } from "@/shared/api";
 import { assignColor } from "./colors";
 import type {
@@ -26,6 +28,8 @@ import type {
 	LedgerNote,
 	LedgerWeek,
 	Project,
+	VacationEntitlement,
+	VacationYear,
 } from "./types";
 
 export function toProject(apiProject: ApiProject): Project {
@@ -102,14 +106,37 @@ function toContract(api: ApiContract): Contract {
 		endedOn: api.ended_on ?? undefined,
 		companyHolidays: api.company_holidays.map((h) => ({ date: h.date, name: h.name })),
 		holidaysNotGiven: [...api.holidays_not_given],
+		vacation: api.vacation ? toVacationEntitlement(api.vacation) : undefined,
+	};
+}
+
+function toVacationEntitlement(api: ApiVacationEntitlement): VacationEntitlement {
+	return {
+		daysPerYear: api.days_per_year,
+		carryOver: api.carry_over,
+		carryOverMaxDays: api.carry_over_max_days ?? undefined,
+		openingOn: api.opening_on,
+		openingDays: api.opening_days,
+	};
+}
+
+function toApiVacationEntitlement(vacation: VacationEntitlement): ApiVacationEntitlement {
+	return {
+		days_per_year: vacation.daysPerYear,
+		carry_over: vacation.carryOver,
+		carry_over_max_days:
+			vacation.carryOver === "capped" ? (vacation.carryOverMaxDays ?? null) : null,
+		opening_on: vacation.openingOn,
+		opening_days: vacation.openingDays,
 	};
 }
 
 /**
- * Domain → wire for every contract write. Both holiday lists are always
- * sent: every term edit rebuilds the contract through here, and a list
+ * Domain → wire for every contract write. Both holiday lists and the
+ * vacation entitlement are always sent — the entitlement as null when there
+ * is none: every term edit rebuilds the contract through here, and a field
  * dropped on the way would be kept by today's API but cleared by any write
- * that sent it empty.
+ * that sent it empty, so this SPA never leans on the keep-unsent rule.
  */
 export function toApiContract(contract: Contract): ApiContract {
 	return {
@@ -120,6 +147,18 @@ export function toApiContract(contract: Contract): ApiContract {
 		ended_on: contract.endedOn ?? null,
 		company_holidays: contract.companyHolidays.map((h) => ({ date: h.date, name: h.name })),
 		holidays_not_given: [...contract.holidaysNotGiven],
+		vacation: contract.vacation ? toApiVacationEntitlement(contract.vacation) : null,
+	};
+}
+
+export function toVacationYear(api: ApiVacationYear): VacationYear {
+	return {
+		year: api.year,
+		accrued: api.accrued,
+		carriedIn: api.carried_in,
+		available: api.available,
+		booked: api.booked,
+		remaining: api.remaining,
 	};
 }
 

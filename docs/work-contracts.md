@@ -39,7 +39,8 @@ goal. Git history has the plans.
    code, with the library's own substitute-day rules. We store two codes
    and derive everything.
 5. **Absences are one flat list**, all reducing the expectation the same
-   way. No entitlement, no leave balance this iteration.
+   way. Only `vacation` is counted against anything: the entitlement of
+   Decision 14. Sick and other days have no allowance.
 6. **Time off in lieu is not a feature.** A comp day is a weekday with
    no absence recorded and no work done: expectation stands, worked is
    zero, the balance goes down by itself.
@@ -81,6 +82,43 @@ goal. Git history has the plans.
     write. They belong to the contract's balance and go with the contract
     (a kind change, `contract: null`); absences stay, being facts about
     days.
+14. **Vacation is counted in days for a five-day week, from a dated
+    opening.** A contract may carry a `vacation` entitlement: days per
+    year, what happens to unused days, and an opening — the days left on a
+    date the owner picks, off the contract or an HR statement.
+    - *The unit* is Decision 3's day: a week off is five absences whatever
+      the percentage, and a part-time day is already a shorter day. So the
+      entitlement is not scaled by the percentage — that would count the
+      cut twice (80% of 25 is 20 days, four weeks) — and a 4-day week with
+      20 days is entered as 25. The percentage shows in hours, not days.
+      If `hours_per_day` becomes configurable for a 4-day week (AHM-36),
+      this unit follows it.
+    - *Counting starts at the opening*, which is required with the
+      entitlement. Nothing before it is reconstructed: every contract the
+      migration made starts at the project's first beat, possibly years
+      back, and a pro-rated first year from `starts_on` would credit years
+      of leave nobody recorded. Years before the opening's are out of
+      range; days off before the opening cost nothing.
+    - *The leave year is the calendar year.* The opening year is the
+      opening figure as typed, even when the job ends in it. Every later
+      year gives the full entitlement, pro-rated by calendar days only in
+      the year of `ended_on`, rounded half up to the half day, so every
+      figure is a whole or half day.
+    - *Carry-over* is `all`, `capped` (up to `carry_over_max_days`) or
+      `none` (unused days lapse on 31 December). A deficit carries whole
+      whatever the rule: the rule limits what is kept, not what is owed. No
+      expiry date ("use by 31 March") this iteration.
+    - *A day costs leave* when it is a `vacation` absence — 1, or ½ for a
+      half day — on a weekday inside the contract's dates, on or after the
+      opening, that is not a holiday of the contract, whatever the term. An
+      objective or 0-hour term owes no hours, but a day off under it is
+      still leave: the entitlement belongs to the employment, not the
+      schedule. Unpaid stretches still accrue and still cost.
+    - *One figure for the contract's whole life*, on the contract, not per
+      term: a per-term field would be dropped by every term edit from an
+      SPA that predates it. So changing the days per year or the rule
+      re-derives every year since the opening, and moving the opening
+      re-anchors the chain.
 
 ---
 
@@ -115,10 +153,23 @@ class Contract(BaseModel):
     ended_on: date | None             # freezes the balance
     company_holidays: list[CompanyHoliday] = []  # the employer's own days off
     holidays_not_given: list[date] = []          # region holidays it does not give
+    vacation: VacationEntitlement | None = None  # Decision 14; None tracks nothing
 
 class CompanyHoliday(BaseModel):
     date: date
     name: str                         # stripped, 1-80 characters
+
+class CarryOver(StrEnum):
+    ALL = "all"                       # every unused day carries
+    CAPPED = "capped"                 # up to carry_over_max_days
+    NONE = "none"                     # unused days lapse on 31 December
+
+class VacationEntitlement(BaseModel):
+    days_per_year: float              # > 0, <= 366, whole or half
+    carry_over: CarryOver
+    carry_over_max_days: float | None # required with capped, and only there; > 0
+    opening_on: date                  # counting starts here, inside the contract
+    opening_days: float               # left that morning for the year; may be < 0
 
 class Project(BaseModel):
     ...
@@ -165,6 +216,18 @@ with it the user's whole project list — so it would need the merge to
 re-validate and answer a 422. Both lists are additive on the stored
 document, so no startup pass runs for them.
 
+The vacation entitlement's rules are field constraints — every figure a
+whole or half day, finite and bounded — so a 422 names the leaf
+(`contract.vacation.days_per_year`). The cap is checked against the rule
+by a validator on the cap itself, for the same reason, and is defaulted
+to null rather than required: the store writes with `exclude_none`, so an
+entitlement that carries everything is stored without it. The entitlement
+is kept when a write leaves it out, like the lists, so its one tie to the
+rest of the contract — `opening_on` inside the contract's dates — is not a
+model rule but a write-time check after the merge (below). It is additive
+on the stored document: no startup pass, and no entitlement is guessed for
+a migrated day job.
+
 That the region codes are ones the library knows is checked by
 `ProjectService` when a contract is written, not by the model. The model
 is re-validated on every read, and a code a library upgrade stops
@@ -172,8 +235,8 @@ knowing must make one contract un-editable, not the user's whole project
 list unreadable.
 
 Absences are unique on `(user_id, project_id, date)`: a second absence
-on a day replaces the first. The type is for the record and the
-calendar's colour; the arithmetic treats all three identically.
+on a day replaces the first. The expectation treats the three types
+alike; the vacation count reads only `vacation`.
 
 Balance adjustments are unique on `(user_id, project_id, date)` the same
 way, and the repository's upsert is a replace on that key, so the id
@@ -311,6 +374,35 @@ adjusted expectation through `WeekExpectationReader`
 A governed line reads "You need 25.6h more this week under your
 contract" — a contract is not "hit".
 
+### Vacation
+
+`domain/vacation.py`, pure like the rest: absences and a `set[date]` of
+the contract's holidays in, one year out. Decision 14 is the rule.
+
+```
+the opening year (opening_on's):
+    available = opening_days                      (accrued: null)
+every later year y, through ended_on's:
+    accrued   = days_per_year × days covered / days in y, half up to ½
+                (covered is the whole year except in ended_on's)
+    carried   = what y − 1 left: all, min(left, cap), or 0 — a deficit whole
+    available = accrued + carried
+booked    = Σ cost(d) for d in y
+remaining = available − booked
+
+cost(d) = 1, or ½ for a half day, for a vacation absence on a weekday d
+          with opening_on <= d, starts_on <= d <= ended_on, and d not a
+          holiday of the contract; else 0
+```
+
+The chain runs from the opening year to the year asked for, and each
+year's accrual is arithmetic, so a year far ahead on an open-ended
+contract costs no calendar. The calendar is built once, over the span of
+the vacation days read, from `contract_holidays` like every other figure:
+a company holiday costs no leave either. `booked` counts planned days as
+well as taken ones; there is no split by today, so the clock is read only
+for the default year.
+
 ---
 
 ## Migration
@@ -390,10 +482,11 @@ region check, and every project write reconciles the adjustments
 |---|---|
 | `POST/PUT /api/projects` | `kind` and `contract` on create/update; 422 from the validators, at the term's path (`contract.terms.0`) |
 | `GET /api/projects?include=this_week` | adds `contract_expected`, `contract_worked`, `contract_remaining`, `balance` for the current week |
-| `PUT /api/projects/{id}/contract` | replace terms / region / company holidays / holidays not given / opening balance / `ended_on` as one object; `kind` untouched |
+| `PUT /api/projects/{id}/contract` | replace terms / region / company holidays / holidays not given / opening balance / `ended_on` / vacation entitlement as one object, except a holiday list or `vacation` the request leaves out; `kind` untouched |
 | `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, balance_adjusted, days: [{date, expected, worked, holiday, absence}]}` |
 | `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected`, `balance_end`, `balance_moved` and its `adjustments` (each with `applied`); `since`; `totals` as of today, `adjusted` among them; `ended_balance` |
 | `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`, even where a company day covers the date, which is then listed twice, the region's row first. Only company days without a region; `[]` without a contract |
+| `GET /api/projects/{id}/vacation?year=` | one year of the entitlement in days: `{year, accrued, carried_in, available, booked, remaining}`; `year` defaults to the current one in `tz` |
 | `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
 | `POST /api/projects/{id}/adjustments?tz=` | a delta, reset or cap (upsert on date, keeps the id, 201); `tz` required |
 | `DELETE /api/projects/{id}/adjustments/{adjustment_id}` | 204, or 404 when it is not on this project |
@@ -404,19 +497,29 @@ region check, and every project write reconciles the adjustments
   out keeps the stored value, `contract: null` clears it. Requests carry
   the domain `Contract` itself — its validators produce the 422, and a
   mirror would drift. The same holds inside a sent contract for
-  `company_holidays` and `holidays_not_given`, on `PUT /api/projects` and
-  `PUT /{id}/contract` alike (`keep_unsent_holiday_changes`): an SPA that
-  predates them rebuilds the whole contract on every term edit, and must
-  not delete them; `[]` clears. An API revision without the lists drops
-  them when it rewrites a project — the rollback loss the migration
-  already accepts.
+  `company_holidays`, `holidays_not_given` and `vacation`, on
+  `PUT /api/projects` and `PUT /{id}/contract` alike
+  (`keep_unsent_contract_fields`): an SPA that predates them rebuilds the
+  whole contract on every term edit, and must not delete them; `[]` or
+  `vacation: null` clears. An API revision without them drops them when
+  it rewrites a project — the rollback loss the migration already accepts.
+- **The vacation opening stays inside the contract.** Because a kept
+  entitlement can meet new terms, both writes check, after the merge, that
+  `opening_on` falls between the first term and `ended_on`, and answer 409
+  `VACATION_OPENING_OUTSIDE_CONTRACT` otherwise ("The vacation count starts
+  on Mar 2, 2026, outside the contract's dates; change it in the project
+  settings first"). Removing the first term, inserting an earlier one or
+  moving `ended_on` is refused, never silently reinterpreted.
 - **A contract lives only on a day job.** One sent with any other kind
   is 409 `NOT_A_DAY_JOB`, and a `PUT` moving a day job to another kind
   without mentioning `contract` clears it. Nothing dormant is kept for
   an undo: it would be a contract no route could read.
 - **Wrong kind is a 409**, not a 400: `NOT_A_DAY_JOB` on the contract,
-  week, holidays and absence routes; `NO_CONTRACT` for the week of a day
-  job without one. An unknown region is 400 `UNKNOWN_HOLIDAY_REGION`;
+  week, holidays, vacation and absence routes; `NO_CONTRACT` for the week
+  or the vacation year of a day job without one. The vacation year is also
+  409 `NO_VACATION_ENTITLEMENT` on a contract without one, and
+  `VACATION_YEAR_OUT_OF_RANGE` for a year before the opening's or after
+  `ended_on`'s ("Vacation is counted from 2026 through 2028"). An unknown region is 400 `UNKNOWN_HOLIDAY_REGION`;
   the index logs it and leaves that project's contract fields null.
 - **Every non-2xx is in the envelope.** A malformed project id is a 404
   like an unknown one; someone else's project is a 404, never a 403.
@@ -496,18 +599,20 @@ region check, and every project write reconciles the adjustments
 
 **What leaves Beats.** The coach sends a day job's goal as one line
 (`Acme: 33.6h/week (contract, 80%)`), not absences, the region, the
-company holidays, the balance adjustments or the balance. `/api/export/full`
-carries the contract, the absences and the balance adjustments, so a backup
-restores the same balance. `PRIVACY.md` and `DATA.md` state this; a change
-happens there first.
+company holidays, the vacation entitlement, the balance adjustments or
+the balance. `/api/export/full` carries the contract, its entitlement
+included, the absences and the balance adjustments, so a backup restores
+the same balance. `PRIVACY.md` and `DATA.md` state this; a change happens
+there first.
 
 ---
 
 ## Follow-ups and open questions
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
-contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, vacation
-entitlement, the coach seeing the balance, the companion's week card, and
-whether `hours_per_day` should be configurable for a 4-day full-time week.
+contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, the coach
+seeing the balance, the companion's week card, and whether `hours_per_day`
+should be configurable for a 4-day full-time week. Vacation entitlement
+is Decision 14.
 The balance ledger's read side was built by
 [project-page.md](project-page.md), its write side by Decision 13.

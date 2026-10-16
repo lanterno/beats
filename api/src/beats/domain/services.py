@@ -26,9 +26,12 @@ from beats.domain.exceptions import (
     NoContract,
     NoObjectMatched,
     NotADayJob,
+    NoVacationEntitlement,
     ProjectNotFound,
     TimerAlreadyRunning,
     UnknownHolidayRegion,
+    VacationOpeningOutsideContract,
+    VacationYearOutOfRange,
 )
 from beats.domain.holidays import (
     Holiday,
@@ -39,6 +42,7 @@ from beats.domain.holidays import (
 from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
     Absence,
+    AbsenceType,
     BalanceAdjustment,
     Beat,
     Contract,
@@ -48,6 +52,7 @@ from beats.domain.models import (
     Ledger,
     Project,
     ProjectKind,
+    VacationYear,
 )
 from beats.domain.ports import (
     AbsenceStore,
@@ -62,6 +67,7 @@ from beats.domain.ports import (
     TimerProjectReader,
 )
 from beats.domain.utils import local_date, normalize_tz
+from beats.domain.vacation import vacation_year
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +278,13 @@ def _check_contract(project: Project) -> None:
     library knows moves with its version. A code it stops recognising must
     make one contract un-editable until it is fixed, not every project of the
     user unreadable.
+
+    The vacation count's opening must fall inside the contract's dates, and
+    is checked here for the same reason, and because it runs after the
+    keep-unsent merge (`keep_unsent_contract_fields`): an older client that
+    removes the first term, inserts an earlier one or moves `ended_on`
+    sends no entitlement, keeps the stored one, and must be refused (409)
+    rather than have the count's start silently fall outside the job.
     """
     contract = project.contract
     if contract is None:
@@ -280,30 +293,35 @@ def _check_contract(project: Project) -> None:
         raise NotADayJob()
     if contract.holiday_country is not None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
+    vacation = contract.vacation
+    if vacation is not None and not counts_worked(contract, vacation.opening_on):
+        raise VacationOpeningOutsideContract(vacation.opening_on)
 
 
-_HOLIDAY_CHANGES = ("company_holidays", "holidays_not_given")
+_KEPT_WHEN_UNSENT = ("company_holidays", "holidays_not_given", "vacation")
 
 
-def keep_unsent_holiday_changes(incoming: Contract, stored: Contract | None) -> Contract:
-    """`incoming`, with each holiday list it left out taken from `stored`.
+def keep_unsent_contract_fields(incoming: Contract, stored: Contract | None) -> Contract:
+    """`incoming`, with each later-added field it left out taken from `stored`.
 
-    Omitted is not null: a client that predates the lists (an old SPA tab,
-    which rebuilds the whole contract on every term edit) sends neither, and
-    must not delete them; an explicit `[]` clears. Which keys were sent is
-    the model's `model_fields_set`.
+    Omitted is not cleared: a client that predates a field (an old SPA tab,
+    which rebuilds the whole contract on every term edit) does not send it,
+    and must not delete it; an explicit empty value clears. Which keys were
+    sent is the model's `model_fields_set`.
 
     `model_copy` does not re-validate, and that is safe only because each
-    list's rules are its own (see `Contract`): the stored list passed them on
-    its way in and on every read since, so any incoming contract plus a
-    stored list is valid. A rule tying a list to another field would need
-    this merge to re-validate and turn a failure into a 422.
+    kept field's rules are its own (see `Contract`): the stored value passed
+    them on its way in and on every read since, so any incoming contract
+    plus a stored value is valid. A model rule tying one to another field
+    would need this merge to re-validate and turn a failure into a 422. The
+    entitlement's one tie to the rest, its opening inside the contract's
+    dates, is a write-time check after the merge instead (`_check_contract`).
     """
     if stored is None:
         return incoming
     unsent = {
         field: getattr(stored, field)
-        for field in _HOLIDAY_CHANGES
+        for field in _KEPT_WHEN_UNSENT
         if field not in incoming.model_fields_set
     }
     return incoming.model_copy(update=unsent) if unsent else incoming
@@ -394,8 +412,9 @@ class ProjectService:
         """Replace a day job's whole contract — terms, region, opening balance, end.
 
         Whole rather than patched, like goal overrides: the terms are a history
-        that only makes sense as one list. The holiday lists are the exception:
-        one the body leaves out is kept (`keep_unsent_holiday_changes`). The
+        that only makes sense as one list. The holiday lists and the vacation
+        entitlement are the exception: one the body leaves out is kept
+        (`keep_unsent_contract_fields`); `[]` or `null` clears it. The
         kind is not touched here; a project that is not a day job has no
         contract to replace (409).
         """
@@ -403,7 +422,7 @@ class ProjectService:
         if project.kind is not ProjectKind.DAY_JOB:
             raise NotADayJob()
         previous = project.contract
-        project.contract = keep_unsent_holiday_changes(contract, previous)
+        project.contract = keep_unsent_contract_fields(contract, previous)
         return await self.update_project(project, previous_contract=previous)
 
     async def archive_project(self, project_id: str) -> Project:
@@ -580,7 +599,7 @@ class ContractService:
     user-scoped repository, so someone else's project is not found (404)
     rather than forbidden — the same answer as for a project that does not
     exist. Absences and balance adjustments are kept here because their only
-    readers are the week and the ledger.
+    readers are the week, the ledger and the vacation year.
     """
 
     def __init__(
@@ -801,6 +820,41 @@ class ContractService:
         return contract_calendar(
             contract, date(year, 1, 1), date(year, 12, 31), include_not_given=include_not_given
         )
+
+    async def vacation(self, project_id: str, year: int | None, tz: ZoneInfo) -> VacationYear:
+        """One year of the contract's vacation entitlement (None for the
+        current year in `tz`, the only thing the clock is read for), from
+        the opening on: `domain/vacation.py` chains every year before it.
+
+        One absence read, from the opening through the end of `year` (or
+        `ended_on`), and one calendar build over the span of the vacation
+        days in it alone, so a chain of many years does not build a
+        calendar for each. 409 without a contract, without an entitlement,
+        or for a year before the opening's or after the one the contract
+        ends in.
+        """
+        project = await self._day_job(project_id)
+        contract = project.contract
+        if contract is None:
+            raise NoContract()
+        entitlement = contract.vacation
+        if entitlement is None:
+            raise NoVacationEntitlement()
+        if year is None:
+            year = self._now(tz).year
+        first = entitlement.opening_on.year
+        last = contract.ended_on.year if contract.ended_on is not None else None
+        if year < first or (last is not None and year > last):
+            raise VacationYearOutOfRange(first, last)
+        end = date(year, 12, 31)
+        if contract.ended_on is not None:
+            end = min(end, contract.ended_on)
+        absences = await self.absence_repo.list_by_project(project_id, entitlement.opening_on, end)
+        days_off = [a.date for a in absences if a.type is AbsenceType.VACATION]
+        holidays = (
+            set(contract_holidays(contract, min(days_off), max(days_off))) if days_off else set()
+        )
+        return vacation_year(contract, absences, holidays, year)
 
     async def list_absences(
         self, project_id: str, start: date | None, end: date | None, tz: ZoneInfo

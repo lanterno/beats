@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiContractWeek, ApiProject } from "@/shared/api";
-import { toApiProject, toContractWeek, toProject } from "./mappers";
+import { toApiContract, toApiProject, toContractWeek, toProject } from "./mappers";
 
 describe("Project mapper round-trip", () => {
 	it("preserves the previously-invisible fields across toProject → toApiProject", () => {
@@ -80,6 +80,7 @@ describe("Project mapper round-trip", () => {
 				ended_on: null,
 				company_holidays: [{ date: "2026-12-24", name: "Christmas Eve" }],
 				holidays_not_given: ["2026-12-26"],
+				vacation: null,
 			},
 		};
 		const domain = toProject(fromWire);
@@ -108,6 +109,66 @@ describe("Project mapper round-trip", () => {
 		const stray = toProject({ ...fromWire, kind: "side_project" });
 		expect(stray.contract).toBeUndefined();
 		expect(toApiProject(stray).contract).toBeNull();
+	});
+});
+
+describe("toApiContract and the vacation entitlement", () => {
+	const terms = [{ effectiveFrom: "2026-01-05", scheduleType: "objective" as const }];
+
+	it("always sends the vacation key, null when no entitlement is tracked", () => {
+		// The API keeps a stored entitlement when the key is left out, so a
+		// write that meant "none" must say so.
+		const wire = toApiContract({
+			terms,
+			openingBalanceHours: 0,
+			companyHolidays: [],
+			holidaysNotGiven: [],
+		});
+		expect(wire).toHaveProperty("vacation", null);
+	});
+
+	it("carries an entitlement both ways, the cap only with a capped carry-over", () => {
+		const vacation = {
+			days_per_year: 25,
+			carry_over: "capped" as const,
+			carry_over_max_days: 5,
+			opening_on: "2026-03-02",
+			opening_days: -1.5,
+		};
+		const fromWire: ApiProject = {
+			id: "p4",
+			name: "Employer",
+			archived: false,
+			goal_type: "target",
+			goal_overrides: [],
+			autostart_repos: [],
+			kind: "day_job",
+			contract: {
+				terms: [{ effective_from: "2026-01-05", schedule_type: "objective" }],
+				opening_balance_hours: 0,
+				company_holidays: [],
+				holidays_not_given: [],
+				vacation,
+			},
+		};
+		const contract = toProject(fromWire).contract;
+		expect(contract?.vacation).toEqual({
+			daysPerYear: 25,
+			carryOver: "capped",
+			carryOverMaxDays: 5,
+			openingOn: "2026-03-02",
+			openingDays: -1.5,
+		});
+		if (!contract?.vacation) throw new Error("no entitlement read");
+		expect(toApiContract(contract).vacation).toEqual(vacation);
+
+		// A cap left behind by a switch to "all" must not reach the wire,
+		// which refuses a cap on any other rule.
+		const all = toApiContract({
+			...contract,
+			vacation: { ...contract.vacation, carryOver: "all" },
+		});
+		expect(all.vacation).toEqual({ ...vacation, carry_over: "all", carry_over_max_days: null });
 	});
 });
 

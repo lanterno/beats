@@ -1750,12 +1750,15 @@ export interface paths {
         /**
          * Replace Contract
          * @description Replace a day job's whole contract: terms, holiday region, company
-         *     holidays and the region holidays not given, opening balance and end
-         *     date, in one shape, like goal-overrides. A holiday list the body leaves
-         *     out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
-         *     not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
-         *     does not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term
-         *     later past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START).
+         *     holidays and the region holidays not given, opening balance, end date
+         *     and vacation entitlement, in one shape, like goal-overrides. A holiday
+         *     list or a `vacation` the body leaves out is kept; `[]` or `null` clears
+         *     it. Leaves `kind` alone; on a project that is not a day job it is a 409
+         *     (NOT_A_DAY_JOB), and a region the calendar does not know is a 400
+         *     (UNKNOWN_HOLIDAY_REGION). Moving the first term later past a balance
+         *     adjustment is a 409 (ADJUSTMENT_BEFORE_START), and leaving the vacation
+         *     count's opening outside the contract's dates a 409
+         *     (VACATION_OPENING_OUTSIDE_CONTRACT).
          */
         put: operations["replace_contract_api_projects__project_id__contract_put"];
         post?: never;
@@ -2001,6 +2004,35 @@ export interface paths {
          *     silently dropping fields they don't yet manage via a generic update.
          */
         post: operations["unarchive_project_api_projects__project_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/vacation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Vacation
+         * @description One calendar year of a day job's vacation entitlement, in days: what
+         *     the year gives (`accrued`, pro-rated in the year the contract ends; null
+         *     in the opening year, whose figure is the opening's), what the year
+         *     before carried in, what is available, what is booked (the `vacation`
+         *     days, past and planned, on weekdays inside the contract's dates that are
+         *     not its holidays) and what remains. Every figure is a whole or half day.
+         *     409 on a project that is not a day job (NOT_A_DAY_JOB), without a
+         *     contract (NO_CONTRACT) or an entitlement (NO_VACATION_ENTITLEMENT), and
+         *     for a year before the opening's or after the contract's end
+         *     (VACATION_YEAR_OUT_OF_RANGE).
+         */
+        get: operations["get_vacation_api_projects__project_id__vacation_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2412,8 +2444,9 @@ export interface components {
         };
         /**
          * AbsenceType
-         * @description Why a day was not worked. For the record and the calendar's colour only —
-         *     the arithmetic treats all three the same.
+         * @description Why a day was not worked. The expectation treats all three the same: a
+         *     day off is a day off. Only the vacation count reads the type, and counts
+         *     `vacation` alone against the entitlement (`domain/vacation.py`).
          * @enum {string}
          */
         AbsenceType: "vacation" | "sick" | "other";
@@ -2561,6 +2594,12 @@ export interface components {
             /** Output Tokens */
             output_tokens?: number | null;
         };
+        /**
+         * CarryOver
+         * @description What becomes of the vacation days left at the end of a year.
+         * @enum {string}
+         */
+        CarryOver: "all" | "capped" | "none";
         /** ChatRequest */
         ChatRequest: {
             /** Conversation Id */
@@ -2605,11 +2644,16 @@ export interface components {
          *     region — does nothing; a company day on a removed date wins. Each list's
          *     only rule is its own (no date twice), and no rule may ever tie either
          *     list to another field or to the other list: an incoming contract that
-         *     leaves a list out keeps the stored one (`keep_unsent_holiday_changes`),
+         *     leaves a list out keeps the stored one (`keep_unsent_contract_fields`),
          *     merged without re-validating, which is safe only while every rule on
          *     these lists is per-list. A cross-field rule would need that merge to
          *     re-validate and answer a 422 — otherwise a merged contract could fail
          *     the next read, and every project of the user with it.
+         *
+         *     `vacation` is the leave the job gives (`VacationEntitlement`), None when
+         *     nothing is tracked. It is kept when left out the same way, and so has no
+         *     rule here tying it to the terms or `ended_on`: that its opening falls
+         *     inside the contract's dates is checked after the merge, on the write.
          */
         Contract: {
             /** Company Holidays */
@@ -2629,6 +2673,7 @@ export interface components {
             opening_balance_hours: number;
             /** Terms */
             terms: components["schemas"]["ContractTerm"][];
+            vacation?: components["schemas"]["VacationEntitlement"] | null;
         };
         /**
          * ContractDay
@@ -3985,6 +4030,62 @@ export interface components {
             identities: components["schemas"]["LinkedIdentityInfo"][];
             /** Sso Provisioned */
             sso_provisioned: boolean;
+        };
+        /**
+         * VacationEntitlement
+         * @description The vacation days a day job gives, counted the way the arithmetic
+         *     counts a day off: for a five-day week (decision 3), so a week off is
+         *     five days whatever the percentage, and a 4-day week with 20 days is
+         *     entered as 25.
+         *
+         *     Counting starts on `opening_on`, with `opening_days` left for the rest
+         *     of that calendar year (carry-over included, negative when overdrawn) —
+         *     the figure off the contract or an HR statement. Nothing before it is
+         *     reconstructed: a contract the migration started at the first beat,
+         *     years back, must not be credited years of leave nobody recorded.
+         *
+         *     Every figure is a whole or half day. The rules are field constraints,
+         *     so a 422 names the leaf. The one rule tying the entitlement to the rest
+         *     of the contract — `opening_on` inside its dates — is checked where a
+         *     contract is written (`ProjectService`), for the reason the region is:
+         *     this model is re-validated on every read, and a stored entitlement can
+         *     be paired with new terms by the keep-unsent merge.
+         */
+        VacationEntitlement: {
+            carry_over: components["schemas"]["CarryOver"];
+            /** Carry Over Max Days */
+            carry_over_max_days?: number | null;
+            /** Days Per Year */
+            days_per_year: number;
+            /** Opening Days */
+            opening_days: number;
+            /**
+             * Opening On
+             * Format: date
+             */
+            opening_on: string;
+        };
+        /**
+         * VacationYear
+         * @description `GET /{id}/vacation`: one calendar year of a day job's vacation
+         *     entitlement, in days, every figure a whole or half day. See
+         *     `domain/vacation.py` for how each is worked out. Only what the client
+         *     cannot derive: the days per year, the opening and the end date are on
+         *     the contract it already holds.
+         */
+        VacationYear: {
+            /** Accrued */
+            accrued: number | null;
+            /** Available */
+            available: number;
+            /** Booked */
+            booked: number;
+            /** Carried In */
+            carried_in: number;
+            /** Remaining */
+            remaining: number;
+            /** Year */
+            year: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -7246,6 +7347,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vacation_api_projects__project_id__vacation_get: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the current year in `tz`. */
+                year?: number | null;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VacationYear"];
                 };
             };
             /** @description Not found */

@@ -8,7 +8,7 @@
 
 import { parseIsoDate, todayIso } from "@/shared/lib";
 import { fromPercent, sortTerms, toPercent } from "./contract";
-import type { Contract, ContractTerm, ScheduleType } from "./types";
+import type { CarryOver, Contract, ContractTerm, ScheduleType, VacationEntitlement } from "./types";
 
 /** One term as its inputs hold it. Percentage is a percent here (80), a fraction on the wire. */
 export interface TermFormValues {
@@ -22,12 +22,23 @@ export interface TermFormValues {
 
 export type TermFieldErrors = Partial<Record<keyof TermFormValues, string>>;
 
-/** The contract's frame — everything but the terms, which have their own editor. */
+/**
+ * The contract's frame — everything but the terms, which have their own
+ * editor. The `vacation…` fields are the entitlement: an empty days per
+ * year means none is tracked, and the rest are then ignored. The carry-over
+ * starts unchosen, and neither opening field is prefilled: each is a figure
+ * off the contract or an HR statement, not a guess.
+ */
 export interface ContractFrameValues {
 	holidayCountry: string;
 	holidaySubdivision: string;
 	openingBalanceHours: string;
 	endedOn: string;
+	vacationDaysPerYear: string;
+	vacationCarryOver: CarryOver | "";
+	vacationCarryOverMax: string;
+	vacationOpeningOn: string;
+	vacationOpeningDays: string;
 }
 
 export type ContractFrameErrors = Partial<Record<keyof ContractFrameValues, string>>;
@@ -54,7 +65,33 @@ export function contractFrameDefaults(contract?: Contract): ContractFrameValues 
 		openingBalanceHours:
 			contract && contract.openingBalanceHours !== 0 ? String(contract.openingBalanceHours) : "",
 		endedOn: contract?.endedOn ?? "",
+		...vacationFrameDefaults(contract?.vacation),
 	};
+}
+
+function vacationFrameDefaults(
+	vacation: VacationEntitlement | undefined,
+): Pick<
+	ContractFrameValues,
+	| "vacationDaysPerYear"
+	| "vacationCarryOver"
+	| "vacationCarryOverMax"
+	| "vacationOpeningOn"
+	| "vacationOpeningDays"
+> {
+	return {
+		vacationDaysPerYear: vacation ? String(vacation.daysPerYear) : "",
+		vacationCarryOver: vacation?.carryOver ?? "",
+		vacationCarryOverMax:
+			vacation?.carryOverMaxDays != null ? String(vacation.carryOverMaxDays) : "",
+		vacationOpeningOn: vacation?.openingOn ?? "",
+		vacationOpeningDays: vacation ? String(vacation.openingDays) : "",
+	};
+}
+
+/** Whether `n` is a whole or half number — what every vacation figure must be. */
+function isHalves(n: number): boolean {
+	return Number.isFinite(n) && Number.isInteger(n * 2);
 }
 
 function numberOrNaN(raw: string): number {
@@ -141,7 +178,58 @@ export function validateContractFrame(
 			errors.endedOn = "The contract cannot end before its first term starts";
 		}
 	}
+	if (values.vacationDaysPerYear.trim() !== "") {
+		validateVacation(values, firstTermStarts, errors);
+	}
 	return errors;
+}
+
+/** The entitlement's rules, as the API states them, when days per year are given. */
+function validateVacation(
+	values: ContractFrameValues,
+	firstTermStarts: string | undefined,
+	errors: ContractFrameErrors,
+): void {
+	const days = Number(values.vacationDaysPerYear);
+	if (!isHalves(days) || days <= 0 || days > 366) {
+		errors.vacationDaysPerYear = "Enter the days per year, in whole or half days";
+	}
+	if (values.vacationCarryOver === "") {
+		errors.vacationCarryOver = "Choose what happens to unused days";
+	} else if (values.vacationCarryOver === "capped") {
+		const cap = numberOrNaN(values.vacationCarryOverMax);
+		if (!isHalves(cap) || cap <= 0 || cap > 366) {
+			errors.vacationCarryOverMax = "Enter how many days carry over, in whole or half days";
+		}
+	}
+	const openingOn = values.vacationOpeningOn.trim();
+	const endedOn = values.endedOn.trim();
+	if (!parseIsoDate(openingOn)) {
+		errors.vacationOpeningOn = "Enter the day counting starts";
+	} else if (firstTermStarts && openingOn < firstTermStarts) {
+		errors.vacationOpeningOn = "Counting cannot start before the contract does";
+	} else if (endedOn && parseIsoDate(endedOn) && openingOn > endedOn) {
+		errors.vacationOpeningOn = "Counting cannot start after the contract ends";
+	}
+	const opening = numberOrNaN(values.vacationOpeningDays);
+	if (!isHalves(opening) || Math.abs(opening) > 366) {
+		errors.vacationOpeningDays = "Enter the days left that morning (negative if overdrawn)";
+	}
+}
+
+/** Form → domain for the entitlement; none when days per year are left empty. */
+function vacationFromForm(frame: ContractFrameValues): VacationEntitlement | undefined {
+	if (frame.vacationDaysPerYear.trim() === "" || frame.vacationCarryOver === "") return undefined;
+	const vacation: VacationEntitlement = {
+		daysPerYear: Number(frame.vacationDaysPerYear),
+		carryOver: frame.vacationCarryOver,
+		openingOn: frame.vacationOpeningOn.trim(),
+		openingDays: Number(frame.vacationOpeningDays),
+	};
+	if (frame.vacationCarryOver === "capped") {
+		vacation.carryOverMaxDays = Number(frame.vacationCarryOverMax);
+	}
+	return vacation;
 }
 
 /**
@@ -151,7 +239,9 @@ export function validateContractFrame(
  * holiday lists, edited only in the Holidays dialog: the existing
  * contract's, or empty ones on create, carried through unchanged. A region
  * change — "No region" included — clears neither: a date not given that the
- * new region does not have simply does nothing.
+ * new region does not have simply does nothing. The vacation entitlement is
+ * the frame's own: empty days per year leave it out, which the wire sends
+ * as null and so clears it.
  */
 export function contractFromForm(
 	frame: ContractFrameValues,
@@ -173,6 +263,8 @@ export function contractFromForm(
 	}
 	const endedOn = frame.endedOn.trim();
 	if (endedOn) contract.endedOn = endedOn;
+	const vacation = vacationFromForm(frame);
+	if (vacation) contract.vacation = vacation;
 	return contract;
 }
 
@@ -190,6 +282,14 @@ const FRAME_LEAVES: Record<string, keyof ContractFrameValues> = {
 	holiday_subdivision: "holidaySubdivision",
 	opening_balance_hours: "openingBalanceHours",
 	ended_on: "endedOn",
+};
+
+const VACATION_LEAVES: Record<string, keyof ContractFrameValues> = {
+	days_per_year: "vacationDaysPerYear",
+	carry_over: "vacationCarryOver",
+	carry_over_max_days: "vacationCarryOverMax",
+	opening_on: "vacationOpeningOn",
+	opening_days: "vacationOpeningDays",
 };
 
 export interface ContractFieldErrors {
@@ -229,7 +329,12 @@ export function contractFieldErrors(
 			}
 			continue;
 		}
-		const frameLeaf = FRAME_LEAVES[parts[0]];
+		const frameLeaf =
+			parts[0] === "vacation"
+				? parts.length === 2
+					? VACATION_LEAVES[parts[1]]
+					: undefined
+				: FRAME_LEAVES[parts[0]];
 		if (frameLeaf) out.frame[frameLeaf] = message;
 		else out.general.push(message);
 	}

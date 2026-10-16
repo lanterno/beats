@@ -26,11 +26,13 @@ export {
 	useUpdateContract,
 	useUpdateGoalOverrides,
 	useUpdateProject,
+	useVacationYear,
 } from "./api";
 // Model layer
 export type {
 	AdjustmentKind,
 	AdjustmentRow,
+	CarryOver,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -55,6 +57,9 @@ export type {
 	ScheduleType,
 	TermFieldErrors,
 	TermFormValues,
+	VacationEntitlement,
+	VacationYear,
+	VacationYearWords,
 	WeekGoalView,
 } from "./model";
 export {
@@ -63,13 +68,16 @@ export {
 	contractFieldErrors,
 	contractFrameDefaults,
 	contractGovernsWeek,
+	describeEntitlement,
 	describeLedgerNote,
 	describeTerm,
+	describeVacationYear,
 	displayTermOn,
 	extractCategories,
 	type FilterAndRankOptions,
 	filterAndRankProjects,
 	formatSignedHours,
+	halfDays,
 	isFirstWeek,
 	isTimeBasedOn,
 	ledgerCsv,
