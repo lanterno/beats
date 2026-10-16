@@ -327,8 +327,10 @@ match shows the figures and no sentence — never a guessed one. The code is
   balance with `describe_balance` beside it. It prints the week's figures
   with `_hours`, `hours1`'s twin, so it says the tenth the page shows, and
   in the first week it sends no projection, by `_is_first_week`, the twin
-  of `isFirstWeek`. A change to `projection()`, `describeBalance`,
-  `hours1` or `isFirstWeek` is made there too.
+  of `isFirstWeek`. It names a part-time term's percentage with
+  `fmt_percent` (`coach/repos.py`), `toPercent`'s twin. A change to
+  `projection()`, `describeBalance`, `hours1`, `isFirstWeek` or
+  `toPercent` is made there too.
 - **A cap has no sentence.** The personal-goal path serves every kind, and
   a day job under an objective term or before its first term, over the
   calendar days left.

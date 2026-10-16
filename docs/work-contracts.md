@@ -607,9 +607,11 @@ region check, and every project write reconciles the adjustments
   change to either is made in both.
 
 **What leaves Beats.** The coach sends a day job's goal as one line
-(`Acme: 33.6h/week (contract, 80%)`), and on a day job with a contract
-the current week against it, labelled as the goal line is (by the term
-in force on the week's Monday): what it expects after holidays and days
+(`Acme: 33.6h/week (contract, 80%)`), its percentage to the hundredth as
+the page's `toPercent` prints it (87.5%, never "88%"; `fmt_percent` is
+the twin), and on a day job with a contract the current week against
+it, labelled as the goal line is (by the term in force on the week's
+Monday): what it expects after holidays and days
 off, the hours worked and what is left, today's expected hours, the
 running balance and its by-Sunday projection, the dates of this week's
 holidays and days off that shortened it, and `ended_on` once it falls
@@ -635,20 +637,23 @@ library's code is the place name, so the holiday's name contains the
 code. No country code is sent. A company holiday goes only as "company
 holiday", never the name the user typed; a day off only as "day off" or
 "half day off", never its type or note. Other weeks' holidays and
-absences are not sent. A contract that ended earlier in the current week
-sends only its final balance and its end date; one that ended before it
-sends none of the week, though its goal line stays in the profile and in
+absences are not sent by the contract section, though the last 14 rated
+briefs go with every prompt, each with its opening sentence, and a brief
+that opened on a day off or a balance repeats it; `PRIVACY.md` lists
+them. A contract that ended earlier in the current week sends only its
+final balance and its end date; one that ended before it sends none of
+the week, though its goal line stays in the profile and in
 `get_projects` until the project is archived (`goal_term` does not
 consult `ended_on`). The vacation entitlement is not sent.
 
 Every day and week the coach reads is the request timezone's: the
 contract section's week and today, the goal line's week and the weekly
-totals in the profile, the productivity score, and the tools'
-(`get_projects`' week, the dates `get_beats` takes and prints, the
-patterns'). So the label and the goal line name one term on a Sunday
-evening west of UTC too. The SPA sends `tz` with a brief, a chat message
-and a memory rewrite; a client that sends none, the companion's chat for
-now, gets UTC's.
+totals in the profile, the productivity score, the memory rewrite's last
+seven days, and the tools' (`get_projects`' week, the dates `get_beats`
+takes and prints, the patterns'). So the label and the goal line name
+one term on a Sunday evening west of UTC too. The SPA sends `tz` with a
+brief, a chat message and a memory rewrite; a client that sends none,
+the companion's chat for now, gets UTC's.
 
 `/api/export/full` carries the contract, its entitlement included, the
 absences and the balance adjustments, so a backup restores the same
