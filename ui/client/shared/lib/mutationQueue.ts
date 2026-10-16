@@ -6,15 +6,10 @@
  * retries (Stage 1.4). The queue is intentionally ordering-preserving (FIFO)
  * and drain-stops on the first persistent failure — so a write that cannot
  * ever succeed blocks later writes instead of silently dropping them.
- *
- * Upgrade note: v1 of this module stored timer-specific `{type, payload}`
- * shapes under the same `beats_offline` DB name and object store. The v2
- * schema below is strictly broader, so opening the existing DB without a
- * version bump would silently see legacy rows. We bump DB_VERSION and drop
- * any legacy store on upgrade — a clean break is fine for an offline buffer.
  */
 
 const DB_NAME = "beats_offline";
+// Never lower: a browser that has opened the database at 2 refuses to open it at 1.
 const DB_VERSION = 2;
 const STORE_NAME = "mutations";
 
@@ -36,10 +31,6 @@ function openDb(): Promise<IDBDatabase> {
 		const request = indexedDB.open(DB_NAME, DB_VERSION);
 		request.onupgradeneeded = () => {
 			const db = request.result;
-			// Drop legacy v1 store if present, then create the v2 store.
-			if (db.objectStoreNames.contains("events")) {
-				db.deleteObjectStore("events");
-			}
 			if (!db.objectStoreNames.contains(STORE_NAME)) {
 				db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
 			}

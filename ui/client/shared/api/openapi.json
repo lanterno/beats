@@ -7115,7 +7115,7 @@
     },
     "/api/projects/": {
       "get": {
-        "description": "List projects, optionally augmented with aggregation fields.\n\nBackward compatible: without `include`, the response carries the same\nfields as ProjectResponse plus null aggregation slots \u2014 older clients\nthat ignore unknown null fields keep working.\n\nP3.0 of the project-management revamp. First cut loops per-project\nserver-side; if profiling shows it's needed, a follow-up (P3.0b)\nmoves to a Mongo $facet pipeline for true batched aggregation.",
+        "description": "List projects, optionally augmented with aggregation fields.\n\nWithout `include` the response is slim: the fields of ProjectResponse\nplus null aggregation slots, and no beats are read. The daemon and the\ncompanion list projects this way.\n\nP3.0 of the project-management revamp. First cut loops per-project\nserver-side; if profiling shows it's needed, a follow-up (P3.0b)\nmoves to a Mongo $facet pipeline for true batched aggregation.",
         "operationId": "list_projects_api_projects__get",
         "parameters": [
           {
