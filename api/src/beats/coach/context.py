@@ -40,11 +40,12 @@ def build_system_block() -> str:
 async def build_user_context(user_id: str, repos: CoachRepos, tz: ZoneInfo = UTC_TZ) -> str:
     """30-day aggregates + coach memory. Designed to be cached.
 
-    ``tz`` decides one thing here: which week the goal line is this week's.
-    It must be the day context's, since that context's contract week is
+    ``tz`` is the request's, and every week here is a week in it: the goal
+    line's, the weekly totals' and the productivity score's. The goal line
+    must be the day context's week, since that context's contract week is
     labelled by the term this line names; on UTC's week a user west of
     Greenwich would read next week's term on Sunday evening beside this
-    week's figures. The rest of the block is UTC's.
+    week's figures. Only the 30-day window is a span of time, not of days.
     """
     db = Database.get_db()
 
@@ -64,16 +65,21 @@ async def build_user_context(user_id: str, repos: CoachRepos, tz: ZoneInfo = UTC
         name = project_map.get(b.project_id, "Unknown")
         project_hours[name] = project_hours.get(name, 0) + b.duration.total_seconds() / 3600
 
-    # Weekly totals for the last 4 weeks
+    # Weekly totals for the last 4 weeks: the user's Monday-to-Sunday weeks,
+    # each session on the local day it started, as the project page counts
+    # them. From every beat, not the 30-day window, which cuts the fourth.
+    local_today = now.astimezone(tz).date()
+    monday = local_today - timedelta(days=local_today.weekday())
     week_totals: list[str] = []
     for w in range(4):
-        start = now - timedelta(days=now.weekday() + 7 * (w + 1))
+        start = monday - timedelta(days=7 * (w + 1))
         end = start + timedelta(days=7)
         week_hours = sum(
-            b.duration.total_seconds() / 3600 for b in recent_beats if start <= b.start < end
+            b.duration.total_seconds() / 3600
+            for b in beats
+            if start <= local_date(b.start, tz) < end
         )
-        week_label = start.strftime("%b %d")
-        week_totals.append(f"  Week of {week_label}: {week_hours:.1f}h")
+        week_totals.append(f"  Week of {start.strftime('%b %d')}: {week_hours:.1f}h")
 
     # Productivity score
     intel = IntelligenceService(
@@ -81,7 +87,7 @@ async def build_user_context(user_id: str, repos: CoachRepos, tz: ZoneInfo = UTC
         project_repo=repos.project,
     )
     try:
-        score_data = await intel.compute_productivity_score()
+        score_data = await intel.compute_productivity_score(tz=tz)
         score_line = (
             f"Productivity score: {score_data['score']}/100 "
             f"(consistency={score_data['components']['consistency']}, "
@@ -95,8 +101,6 @@ async def build_user_context(user_id: str, repos: CoachRepos, tz: ZoneInfo = UTC
     # Goals — this week's in the request timezone, as the day context's
     # contract week is: the contract's hours on a day job it governs, the
     # personal goal elsewhere. One line either way.
-    local_today = now.astimezone(tz).date()
-    monday = local_today - timedelta(days=local_today.weekday())
     goals = []
     for p in active:
         term = p.goal_term(monday)
@@ -327,11 +331,11 @@ async def build_coach_messages(
     """Build the full (system, messages, cache_spec) tuple for a coach call.
 
     Used by both brief.py and chat.py to avoid duplicating the context assembly.
-    Returns (system, messages, cache_spec). ``tz`` controls the local-day
-    bucketing of the (uncached) day context, and in the cached user-context
-    block only which week the goal line is for — the same week as UTC's but
-    for the hours between the two Mondays, so the cache is not fragmented
-    per timezone in practice.
+    Returns (system, messages, cache_spec). ``tz`` is the request's, and
+    every day and week of the coach's is that timezone's: the (uncached) day
+    context's, and in the cached user-context block the goal line's, the
+    weekly totals' and the score's. That block is one user's own anyway, so
+    the timezone splits its cache only when the user's timezone changes.
     """
     from beats.coach.gateway import CacheSpec
 

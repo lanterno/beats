@@ -6,12 +6,13 @@ requests it. Tool schemas are Anthropic-format JSON for the `tools` parameter.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
+from beats.domain.utils import local_date, local_dt
 
 UTC_TZ = ZoneInfo("UTC")
 
@@ -136,14 +137,17 @@ async def _handle_get_projects(ctx: _ToolContext, tool_input: dict) -> str:
 
 
 async def _handle_get_beats(ctx: _ToolContext, tool_input: dict) -> str:
-    today = datetime.now(UTC).date()
+    # The user's days, as the day context's: a session belongs to the local
+    # date it started on and is listed at its local time, so the dates the
+    # coach is asked about and the ones it answers with are the user's.
+    today = datetime.now(ctx.tz).date()
     start_str = tool_input.get("start_date")
     end_str = tool_input.get("end_date")
     start_d = date.fromisoformat(start_str) if start_str else today - timedelta(days=7)
     end_d = date.fromisoformat(end_str) if end_str else today
 
     beats = await ctx.repos.beat.list_all_completed()
-    filtered = [b for b in beats if start_d <= b.day <= end_d]
+    filtered = [b for b in beats if start_d <= local_date(b.start, ctx.tz) <= end_d]
 
     proj_filter = tool_input.get("project_name", "").lower()
     if proj_filter:
@@ -157,7 +161,8 @@ async def _handle_get_beats(ctx: _ToolContext, tool_input: dict) -> str:
         name = ctx.project_map.get(b.project_id, "?")
         dur = fmt_minutes(b.duration.total_seconds() / 60)
         note = f" — {b.note}" if b.note else ""
-        lines.append(f"{b.day.isoformat()} {b.start.strftime('%H:%M')} | {name} | {dur}{note}")
+        start = local_dt(b.start, ctx.tz)
+        lines.append(f"{start.date().isoformat()} {start.strftime('%H:%M')} | {name} | {dur}{note}")
 
     total_h = sum(b.duration.total_seconds() / 3600 for b in filtered)
     summary = f"\n{len(filtered)} sessions, {total_h:.1f}h total."
@@ -167,7 +172,7 @@ async def _handle_get_beats(ctx: _ToolContext, tool_input: dict) -> str:
 async def _handle_get_productivity_score(ctx: _ToolContext, _tool_input: dict) -> str:
     intel = ctx._build_intel()
     try:
-        score = await intel.compute_productivity_score()
+        score = await intel.compute_productivity_score(tz=ctx.tz)
         c = score["components"]
         return (
             f"Score: {score['score']}/100\n"
@@ -182,7 +187,7 @@ async def _handle_get_productivity_score(ctx: _ToolContext, _tool_input: dict) -
 async def _handle_get_patterns(ctx: _ToolContext, _tool_input: dict) -> str:
     intel = ctx._build_intel()
     try:
-        patterns = await intel.detect_patterns()
+        patterns = await intel.detect_patterns(tz=ctx.tz)
         if not patterns:
             return "No patterns detected yet."
         lines = []
@@ -209,7 +214,7 @@ async def _handle_search_beats(ctx: _ToolContext, tool_input: dict) -> str:
         name = ctx.project_map.get(b.project_id, "?")
         dur = fmt_minutes(b.duration.total_seconds() / 60)
         note = f" — {b.note}" if b.note else ""
-        lines.append(f"{b.day.isoformat()} | {name} | {dur}{note}")
+        lines.append(f"{local_date(b.start, ctx.tz).isoformat()} | {name} | {dur}{note}")
     return "\n".join(lines) if lines else f"No sessions matching '{query}'."
 
 
@@ -233,7 +238,9 @@ async def execute_tool(
 ) -> str:
     """Execute a tool and return the result as a string for the LLM.
 
-    ``tz`` is the request's timezone, which decides `get_projects`' week."""
+    ``tz`` is the request's timezone, and every tool reads the user's days
+    and weeks in it: `get_projects`' week, the dates `get_beats` takes and
+    prints, and the score's and the patterns' weeks and days."""
     if repos is None:
         repos = await build_repos(user_id)
     if projects is None:
