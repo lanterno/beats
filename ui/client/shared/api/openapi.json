@@ -1841,6 +1841,101 @@
         "title": "HolidaySource",
         "type": "string"
       },
+      "ImportCounts": {
+        "description": "How many of each record a backup import wrote.",
+        "properties": {
+          "absences": {
+            "title": "Absences",
+            "type": "integer"
+          },
+          "balance_adjustments": {
+            "title": "Balance Adjustments",
+            "type": "integer"
+          },
+          "beats": {
+            "title": "Beats",
+            "type": "integer"
+          },
+          "projects": {
+            "title": "Projects",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "projects",
+          "beats",
+          "absences",
+          "balance_adjustments"
+        ],
+        "title": "ImportCounts",
+        "type": "object"
+      },
+      "ImportResponse": {
+        "description": "What `POST /api/export/import` did with a backup.",
+        "properties": {
+          "imported": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ImportSkip"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "imported",
+          "skipped"
+        ],
+        "title": "ImportResponse",
+        "type": "object"
+      },
+      "ImportSkip": {
+        "description": "An absence or a balance adjustment in a backup that the import left\nout, because the rule its own route applies refused it: `code` and\n`detail` are what that route would have answered. An absence on a\nproject that is no longer a day job is one; an adjustment dated outside\nthe contract the backup restored is another.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "collection": {
+            "enum": [
+              "absences",
+              "balance_adjustments"
+            ],
+            "title": "Collection",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection",
+          "project_id",
+          "date",
+          "code",
+          "detail"
+        ],
+        "title": "ImportSkip",
+        "type": "object"
+      },
       "InboxItemResponse": {
         "description": "A single card in the unified Inbox.\n\nNormalizes outputs from the intelligence module (patterns, suggestions,\nproject health alerts) into one shape the dashboard can render.",
         "properties": {
@@ -6182,7 +6277,7 @@
     },
     "/api/export/full": {
       "get": {
-        "description": "Export everything as JSON for backup.",
+        "description": "Export everything a balance is made of, as JSON for backup: the\nprojects (contract included), the sessions, the absences and the balance\nadjustments.",
         "operationId": "export_full_json_api_export_full_get",
         "responses": {
           "200": {
@@ -6202,8 +6297,28 @@
     },
     "/api/export/import": {
       "post": {
-        "description": "Import a full JSON backup. Upserts by ID \u2014 safe to re-import.",
+        "description": "Import a full JSON backup, version 1.0 or 1.1, into the caller's\naccount. Safe to re-import: projects and beats are written by id, and\nan absence or an adjustment replaces the one on its project and date, as\nits own route does.\n\nThe whole file is checked first, and a file that fails writes nothing:\na malformed record, a project's or a session's id included, is a 422\nthat names it, and a file holding a project or a session whose id is\nanother account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`.\n\nProjects are then written as a project write is: the contract's checks,\nand the reconcile against the contract it replaces. A refusal there is\nthat write's error and stops the import, with no transaction: the\nprojects before it in the file stay written, and no beat, absence or\nadjustment is. Absences and adjustments go through their own routes'\nrules, against the projects as restored, and one those rules refuse (an\nabsence on a project that is no longer a day job; an adjustment outside\nthe contract's first day through today in `tz`) is left out and listed\nunder `skipped` with the code its route would answer.",
         "operationId": "import_full_json_api_export_import_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -6218,7 +6333,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
               }
             },
             "description": "Successful Response"

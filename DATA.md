@@ -89,7 +89,34 @@ Beats does not auto-delete anything. Beats, notes, coach history, and biometrics
 
 ## Export
 
-`/api/export` returns the authenticated user's projects — contract included — and sessions: `/full` as JSON, `/csv/sessions` as a CSV of the completed sessions alone. Nothing is held back behind a tier, but nothing else is in it yet either: absences, balance adjustments, plans, webhooks, signals, biometrics and coach history stay in the database until deleted.
+`/api/export` returns the authenticated user's data. Nothing is held back behind a tier.
+
+- **`/full`**, a JSON backup (version `1.1`), holds everything a day job's balance is
+  made of: every project, archived ones too, with its contract; every session; every
+  absence, including one kept from when its project was a day job; every balance
+  adjustment.
+- **`/csv/sessions`** is a CSV of the completed sessions alone.
+
+Plans, webhooks, signals, biometrics and coach history are in neither; they stay in the
+database until deleted.
+
+`POST /api/export/import` takes a `/full` file back, a `1.1` one or a `1.0` one from
+before absences and adjustments were exported, into the account that sends it.
+Re-importing is safe: projects and sessions are matched by id, an absence or an
+adjustment by its project and date. The file is checked whole first, and a file that
+fails writes nothing: a malformed record, a malformed id included, is a 422, and a
+file holding projects or sessions of another account is a 409
+`BACKUP_OF_ANOTHER_ACCOUNT`.
+
+The rest goes through the same rules as the app's own writes: the projects first, each
+as a project write, then the sessions, then absences and adjustments, against the
+projects as restored and the `tz` sent. A project write those rules refuse (a contract
+that would strand an adjustment, say) stops the import with that write's error: the
+projects before it in the file are already restored, and nothing after it is written,
+no sessions, absences or adjustments. Fixing the conflict and importing the file again
+is safe. A refused absence or adjustment does not stop it (time off on a project that
+is no longer a day job, an adjustment outside its contract): it is left out, and the
+response lists it under `skipped`.
 
 ## Deletion
 
