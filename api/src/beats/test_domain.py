@@ -30,6 +30,7 @@ from beats.domain.intelligence import (
     focus_score_for_beat,
     generate_observation,
     suggest_daily_plan,
+    week_goals,
 )
 from beats.domain.models import (
     Absence,
@@ -1017,6 +1018,34 @@ class _FakeWeekExpectationReader:
         return self._expected.get(project.id or "")
 
 
+def _split_week() -> tuple[Project, list[Beat]]:
+    """A day job on full time whose term turns objective on Wednesday 4
+    March 2026, with 6 h tracked on that Monday and 4 h on the Wednesday.
+    The week owes Monday and Tuesday alone, 16 h, and the week card counts
+    only Monday's 6 h against them (`counts_worked`): 10 h to go, not 6."""
+    terms = [
+        ContractTerm(
+            effective_from=date(2026, 1, 5),
+            schedule_type=ScheduleType.FULL_TIME,
+            full_time_hours=40,
+        ),
+        ContractTerm(effective_from=date(2026, 3, 4), schedule_type=ScheduleType.OBJECTIVE),
+    ]
+    project = Project(
+        id="p1", name="Day job", kind=ProjectKind.DAY_JOB, contract=Contract(terms=terms)
+    )
+    beats = [
+        Beat(
+            id=f"b{day}",
+            project_id="p1",
+            start=datetime(2026, 3, day, 9, tzinfo=UTC),
+            end=datetime(2026, 3, day, 9 + hours, tzinfo=UTC),
+        )
+        for day, hours in ((2, 6), (4, 4))
+    ]
+    return project, beats
+
+
 def _intel_service(
     *,
     beats: list | None = None,
@@ -1863,6 +1892,18 @@ class TestPatternDetectorsGoalPacing:
             "You need 31.0h more on Day job this week under your contract — 3 days left."
         )
 
+    async def test_hours_under_a_term_that_owes_nothing_are_not_counted_toward_the_week(self):
+        # AHM-82. The pacing card's hours to go are the week card's
+        # Remaining: Wednesday's 4 h under the objective term owe the week
+        # nothing, so 10 h of its 16 are to go, and 6 h is under half.
+        project, beats = _split_week()
+        monday = date(2026, 3, 2)
+        goals = await week_goals([project], monday, _FakeWeekExpectationReader({"p1": 16.0}))
+
+        cards = detect_goal_pacing(beats, [project], monday + timedelta(days=4), goals=goals)
+
+        assert [card.data["remaining"] for card in cards] == [10.0]
+
     async def test_friday_with_high_progress_skips(self):
         """≥ 50% progress by Friday → no nag."""
         from beats.domain.intelligence import _monday_of
@@ -2321,6 +2362,18 @@ class TestSuggestDailyPlan:
 
         assert reader.asked == [("p1", self.FRIDAY - timedelta(days=4))]
         assert result[0]["reasoning"] == "You need 32.0h more this week under your contract"
+
+    async def test_hours_under_a_term_that_owes_nothing_are_not_counted_toward_the_week(self):
+        # AHM-82. The line quotes the week card's Remaining: of the 16 h
+        # Monday and Tuesday owe, Monday's 6 h count and Wednesday's 4 h
+        # under the objective term do not.
+        project, beats = _split_week()
+        monday = date(2026, 3, 2)
+        goals = await week_goals([project], monday, _FakeWeekExpectationReader({"p1": 16.0}))
+
+        result = suggest_daily_plan(beats, [project], monday + timedelta(days=4), goals=goals)
+
+        assert result[0]["reasoning"] == "You need 10.0h more this week under your contract"
 
     async def test_met_goal_not_recommended(self):
         """Goal met (remaining ≤ 0) means unmet_weight=0; without
