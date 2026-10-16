@@ -130,6 +130,7 @@ Rail        CONTRACT   Part time · 80% of 42 h / 33.6 h/week · since Mon Aug 3
                        From Aug 3, 2026 · … · IN FORCE · "Four days a week from August"
                        From Jan 4, 2027 · … · PLANNED
                        [+ Change contract from…]
+                       TIMESHEET [September 2026 ▾] [Download CSV]
                        Holidays Switzerland · Zürich · 2 company days · 1 not given
                          · Brought forward +2.0 h · Vacation 25 d/yr · up to 5 d carry over
                          · Ended — · Holidays · Edit
@@ -240,6 +241,18 @@ yet — start the timer in the sidebar."
   contract nor a personal goal; *Goal* everywhere else. On a day job with a
   contract the register still lists stored goal overrides — they govern
   the weeks the contract does not — so they can be removed.
+- **The timesheet is a download, not a view.** Under "Change contract
+  from…" the register offers the months that have a sheet, newest first —
+  from the first term's month through yesterday's, or `ended_on`'s if
+  earlier (`timesheetMonths`, the API's `timesheet_range` again, so no month
+  offered is refused) — and "Download CSV" fetches it. A month the sheet
+  stops short of reads "October 2026 (through Oct 15)", and its file is
+  `…-2026-10-through-15.csv`: re-downloading a finished month gives the
+  same name, while one still growing says where it stopped. The block is
+  hidden while no month has a finished day. The page shows none of the
+  month's figures: they are in the file, from the API, and the page does
+  not rebuild them from the ledger (Decision 11). A refusal toasts the
+  API's message.
 - **Time off** makes one absence read, `[Jan 1, today + 365]`, for the
   upcoming list and the year's tally. A run of one type bridges weekends
   and holidays. A holiday row — public, or a company day reading "company

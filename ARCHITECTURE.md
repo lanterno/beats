@@ -68,7 +68,7 @@ api/src/
         ├── dependencies.py      # FastAPI Depends() wiring
         ├── schemas.py           # Request/response Pydantic models
         └── routers/
-            ├── projects.py      # CRUD, timer start/stop, stats, contract and its week, ledger, holidays
+            ├── projects.py      # CRUD, timer start/stop, stats, contract and its week, ledger, timesheet, holidays
             ├── absences.py      # Absences under /api/projects/{id}
             ├── beats.py         # Session CRUD, filtering
             ├── timer.py         # Timer status
@@ -101,7 +101,7 @@ Pure business logic with no framework dependencies.
 - **WeeklyPlan** — Per-project hour targets for one week.
 - **Webhook** — A registered URL to receive `timer.start` / `timer.stop` events.
 
-Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions, `ContractService` reads a day job's week and running balance against its contract, holidays and absences, and any project's ledger: its last N weeks, newest first, with the goal, the expectation and the balance at each week's close, assembled by the pure `domain/ledger.py`.
+Services orchestrate domain logic: `TimerService` enforces single-active-timer, `AnalyticsService` computes heatmaps and daily rhythm distributions, `ContractService` reads a day job's week and running balance against its contract, holidays and absences, and any project's ledger: its last N weeks, newest first, with the goal, the expectation and the balance at each week's close, assembled by the pure `domain/ledger.py`; and a day job's monthly timesheet, a row per finished day with its balance, assembled by the pure `domain/timesheet.py` and sent as CSV.
 
 ### Infrastructure Layer
 
