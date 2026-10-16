@@ -11,6 +11,7 @@ modules underneath.
 """
 
 import os
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import ClassVar
 from zoneinfo import ZoneInfo
@@ -24,7 +25,7 @@ from beats.coach import context as context_module
 from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import tools as tools_module
 from beats.coach.contract_section import HEADER as CONTRACT_HEADER
-from beats.coach.contract_section import describe_balance
+from beats.coach.contract_section import contract_section, describe_balance
 from beats.coach.feedback import brief_feedback_lines
 from beats.coach.gateway import (
     MODEL_PRICING,
@@ -3232,7 +3233,7 @@ class TestBuildDayContext:
         section = out.split(CONTRACT_HEADER)[1]
         assert section.splitlines()[1:7] == [
             "  Acme (contract): this week expects 24.0 h after holidays and days off"
-            " — 20.5 h worked under the contract, 3.5 h to go",
+            " — 20.5 h worked, 3.5 h to go",
             "    Mon 2026-05-25: public holiday (Pentecost Monday)",
             "    Fri 2026-05-29: day off",
             "  Acme today: 8.0 h expected (charged to the balance tomorrow)",
@@ -3305,12 +3306,12 @@ class TestBuildDayContext:
         for secret in ("Founders", "picnic", "sick", "flu", "CH", "ZH", "1.6"):
             assert secret not in out
 
-    async def test_worked_is_the_pages_on_a_half_way_hundredth(self):
-        """8 h 32 m 42 s is 8.545 h. Rounded each from the raw sums, the page
-        read 8.54 worked and 31.45 remaining, and the coach, reading worked
-        back off the other two, said 8.55. Remaining is now taken off the
-        rounded hours, so the page's three figures add up and the coach's
-        worked is the page's."""
+    async def test_worked_and_to_go_are_the_pages_on_a_half_way_hundredth(self):
+        """8 h 32 m 42 s is 8.545 h. The week route rounds worked to 8.54 and
+        remaining to 31.45, each on its own, and the page shows them as 8.5
+        and 31.4 h, which make 39.9 against 40.0. The coach says what the
+        page says, not the 8.55 it read back off the other two, nor a 31.5
+        that would add up."""
         from beats.domain.services import ContractService
 
         job = self._job(region=None)
@@ -3324,10 +3325,10 @@ class TestBuildDayContext:
         ).week("job", None, ZURICH)
         out = await self._day_context(projects=[job], beats=beats)
 
-        assert (page.expected, page.worked, page.remaining) == (40.0, 8.54, 31.46)
+        assert (page.expected, page.worked, page.remaining) == (40.0, 8.54, 31.45)
         assert (
             "this week expects 40.0 h after holidays and days off"
-            " — 8.54 h worked under the contract, 31.46 h to go\n" in out
+            " — 8.5 h worked, 31.4 h to go\n" in out
         )
 
     async def test_on_a_contracts_first_day_the_balance_is_the_opening_balance(self):
@@ -3377,11 +3378,12 @@ class TestBuildDayContext:
         absences = [self._off(date(2026, 5, 29))]  # Mon–Thu expect 32 h
         out = await self._day_context(projects=[job], beats=beats, absences=absences)
 
-        assert f"under the contract, {left}\n" in out
+        assert f" h worked, {left}\n" in out
 
     async def test_contract_starting_mid_week_counts_only_its_own_days(self):
-        """Starting on Wednesday: the 10 h tracked Monday and Tuesday are not
-        under the contract, so worked plus to go make the expectation. The
+        """Starting on Wednesday: worked is the page's, the whole week's 24 h,
+        but the 10 h tracked Monday and Tuesday are not under the contract,
+        so 10 h are still to go of its 24 h, and a note says why. The
         holiday before the start shortened nothing and is not listed."""
         job = self._job(starts=date(2026, 5, 27))
         beats = [
@@ -3394,28 +3396,10 @@ class TestBuildDayContext:
 
         assert (
             "this week expects 24.0 h after holidays and days off"
-            " — 14.0 h worked under the contract (its days this week only), 10.0 h to go" in out
+            " — 24.0 h worked, 10.0 h to go (the contract counts only its own days this week)"
+            in out
         )
         assert "Pentecost" not in out
-
-    async def test_worked_and_to_go_add_up_to_the_expectation(self):
-        """87 s on Tuesday and on Wednesday and an hour this morning: each
-        day rounds to 0.02 h, and summing those read "1.0 h worked" beside
-        "30.9 h to go" against 32 h. The week counts 1.05 h with 30.95 h to
-        go."""
-        job = self._job(starts=CONTRACT_MONDAY, region=None)
-        beats = [
-            self._work(date(2026, 5, 26), 87 / 3600),
-            self._work(date(2026, 5, 27), 87 / 3600),
-            self._work(CONTRACT_TODAY, 1, at=8),
-        ]
-        absences = [self._off(date(2026, 5, 29))]  # Mon–Thu expect 32 h
-        out = await self._day_context(projects=[job], beats=beats, absences=absences)
-
-        assert (
-            "this week expects 32.0 h after holidays and days off"
-            " — 1.05 h worked under the contract, 30.95 h to go\n" in out
-        )
 
     async def test_week_is_labelled_by_mondays_term_as_the_goal_line_is(self):
         """80 % until Tuesday, full-time from Wednesday: the goal line names
@@ -3443,9 +3427,10 @@ class TestBuildDayContext:
         assert "  Acme (contract, 80%): this week expects" in out
         assert "full-time" not in out
 
-    async def test_quarter_hours_add_up_as_printed(self):
-        """23.75 h worked of 40 leaves 16.25 h: rounded to the tenth each,
-        the line read "23.8 h worked, 16.3 h to go" against 40.0."""
+    async def test_quarter_hours_read_as_the_page_reads_them(self):
+        """23.75 h worked of 40 leaves 16.25 h, and the page shows each at
+        the tenth, ties away from zero: 23.8 and 16.3, which make 40.1. The
+        coach says the same two figures."""
         job = self._job(starts=CONTRACT_MONDAY, region=None)
         beats = [
             self._work(CONTRACT_MONDAY, 7.75),
@@ -3455,7 +3440,7 @@ class TestBuildDayContext:
 
         assert (
             "this week expects 40.0 h after holidays and days off"
-            " — 23.75 h worked under the contract, 16.25 h to go\n" in out
+            " — 23.8 h worked, 16.3 h to go\n" in out
         )
 
     async def test_only_days_that_shortened_the_week_are_listed(self):
@@ -3564,6 +3549,133 @@ class TestDescribeBalance:
     )
     def test_matches_the_spa(self, hours, words):
         assert describe_balance(hours) == words
+
+
+def _to_fixed_1(hours: float) -> str:
+    """The page's `hours.toFixed(1)` for hours ≥ 0, worked from ECMA-262's
+    definition rather than from the coach's code: n is the integer for
+    which n / 10 − hours is closest to zero on the float's exact binary
+    value, the larger n on a tie."""
+    from fractions import Fraction
+    from math import floor
+
+    n = floor(Fraction(hours) * 10 + Fraction(1, 2))
+    return f"{n // 10}.{n % 10}"
+
+
+class TestContractSectionReadsAsThePage:
+    """Every whole-second duration worked, against two weeks: the coach's
+    expected, worked and to go are the page's Expected, Worked and
+    Remaining at the tenth the page shows, from the same week the page
+    reads (`ContractService.week_for`). The page rounds each on its own, so
+    its figures need not add up, and the coach must not either."""
+
+    _LINE = re.compile(
+        r"this week expects (?P<expected>\d+\.\d) h after holidays and days off"
+        r" — (?P<worked>\d+\.\d) h worked,"
+        r" (?:(?P<to_go>\d+\.\d) h to go|week met|week done, (?P<over>\d+\.\d) h over)$"
+    )
+
+    @staticmethod
+    def _job(term):
+        from beats.domain.models import Contract, Project, ProjectKind
+
+        return Project(
+            id="job", name="Acme", kind=ProjectKind.DAY_JOB, contract=Contract(terms=[term])
+        )
+
+    @pytest.mark.parametrize(
+        ("week", "seconds"),
+        [
+            # 40 h, nine hours of it to the second: 8.545 h among them.
+            ("custom_40", range(9 * 3600 + 1)),
+            # 80 % of 42 h less Friday's half day: 30.24 h, an hour of it.
+            ("part_time_half_day", range(3600 + 1)),
+        ],
+    )
+    async def test_every_figure_is_the_pages_tenth(self, week, seconds):
+        from beats.domain.models import Absence, AbsenceType, Beat, ContractTerm, ScheduleType
+        from beats.domain.services import ContractService
+
+        starts = date(2026, 5, 18)
+        term, absences = {
+            "custom_40": (
+                ContractTerm(
+                    effective_from=starts, schedule_type=ScheduleType.CUSTOM, weekly_hours=40
+                ),
+                [],
+            ),
+            "part_time_half_day": (
+                ContractTerm(
+                    effective_from=starts,
+                    schedule_type=ScheduleType.PART_TIME,
+                    full_time_hours=42,
+                    percentage=0.8,
+                ),
+                [
+                    Absence(
+                        project_id="job",
+                        date=date(2026, 5, 29),
+                        half_day=True,
+                        type=AbsenceType.VACATION,
+                    )
+                ],
+            ),
+        }[week]
+        job = self._job(term)
+        service = ContractService(
+            project_repo=_FakeProjectRepoForTools([job]),
+            beat_repo=_FakeBeatRepoForTools([]),
+            absence_repo=_FakeAbsenceStoreForCoach(absences),
+            adjustment_repo=_FakeAdjustmentStoreForCoach([]),
+            now=lambda tz: CONTRACT_NOW.astimezone(tz),
+        )
+        started = datetime(2026, 5, 26, 7, tzinfo=UTC)
+
+        mismatches = []
+        for second in seconds:
+            beat = Beat(
+                id="b", project_id="job", start=started, end=started + timedelta(seconds=second)
+            )
+            page = await service.week_for(job, [beat], None, ZURICH)
+            lines = contract_section([job], {"job": page}, CONTRACT_TODAY)
+            match = self._LINE.search(lines[1])
+            assert match is not None, lines[1]
+            assert page.expected is not None
+            assert page.remaining is not None
+            said = (match["expected"], match["worked"], match["to_go"] or "0.0")
+            shown = (
+                _to_fixed_1(page.expected),
+                _to_fixed_1(page.worked),
+                _to_fixed_1(max(page.remaining, 0.0)),
+            )
+            if said != shown:
+                mismatches.append((second, said, shown))
+            if match["over"] is not None:
+                # The page's "The week is done — 0.4 h over."
+                assert match["over"] == _to_fixed_1(-page.remaining), second
+
+        assert mismatches == []
+
+    @pytest.mark.parametrize(
+        ("hours", "shown"),
+        # What node prints for `hours.toFixed(1)`: 8.545 and 31.455 are just
+        # under and over their ties in binary, 0.25 and 16.25 exact ties.
+        [
+            (8.545, "8.5"),
+            (31.455, "31.5"),
+            (31.45, "31.4"),
+            (0.25, "0.3"),
+            (16.25, "16.3"),
+            (0.15, "0.1"),
+            (2.675, "2.7"),
+            (1.005, "1.0"),
+            (0.0, "0.0"),
+            (40.0, "40.0"),
+        ],
+    )
+    def test_the_reference_is_javascripts_to_fixed(self, hours, shown):
+        assert _to_fixed_1(hours) == shown
 
 
 class TestGatewayRetryAndMissingKey:
