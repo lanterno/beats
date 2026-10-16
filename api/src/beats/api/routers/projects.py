@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Response
-from pydantic import BeforeValidator
+from pydantic import BeforeValidator, WithJsonSchema
 
 from beats.api.dependencies import (
     BeatRepoDep,
@@ -303,10 +303,14 @@ def _first_of_month(value: object) -> date:
     return date(int(value[:4]), int(value[5:]), 1)
 
 
+# The schema is the string a client sends, not the `date` it becomes. Left to
+# pydantic it would come from `date` and say `format: date`: a full date, which
+# `_first_of_month` refuses with a 422.
 MonthQuery = Annotated[
     date,
     BeforeValidator(_first_of_month),
-    Query(description="The month wanted, as YYYY-MM.", examples=["2026-09"]),
+    Query(description="The month wanted, as YYYY-MM."),
+    WithJsonSchema({"type": "string", "pattern": f"^{_MONTH.pattern}$", "examples": ["2026-09"]}),
 ]
 
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
