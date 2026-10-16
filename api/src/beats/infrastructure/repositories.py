@@ -158,16 +158,6 @@ class MongoStore[ModelT: BaseModel]:
         result = await self.collection.delete_many(self._q())
         return result.deleted_count
 
-    async def _upsert_raw(self, data: dict) -> None:
-        """Import/restore path: write a document that arrived as a dict."""
-        doc = serialize_to_document(dict(data))
-        doc["user_id"] = self.user_id
-        doc_id = doc.pop("_id", None)
-        if doc_id:
-            await self.collection.update_one({"_id": doc_id}, {"$set": doc}, upsert=True)
-        else:
-            await self.collection.insert_one(doc)
-
 
 class MongoSingletonStore[ModelT: BaseModel](MongoStore[ModelT]):
     """A collection holding exactly one document per user."""
