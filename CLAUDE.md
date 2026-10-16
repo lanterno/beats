@@ -235,9 +235,10 @@ nothing.
   the diagnostic count at its current ceiling so a new one still does.
 - TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100.
   Biome covers `client/`, `e2e/` and the root config files, and the VS Code
-  extension has its own config. Accessibility rules are on; seven of them run at
-  `warn` because their remaining sites need per-component decisions rather than a
-  blanket fix (see `ui/biome.json` for which and why).
+  extension has its own config. Accessibility rules are on and fail the check, all
+  but `noAutofocus`: dialogs put the cursor in their first field on purpose. A site
+  that follows an ARIA pattern the rules misread, such as the project picker's
+  combobox, carries a `biome-ignore` saying which.
 - Go: gofmt + `go vet` + `staticcheck`; tests use stdlib `testing` only (no testify).
   `main()` only turns `run(args) int` into a process exit, so the CLI dispatch is
   testable without spawning a process. Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
