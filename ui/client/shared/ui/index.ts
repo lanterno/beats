@@ -13,7 +13,7 @@ export { EmptyState } from "./empty-state";
 export { FocusMode } from "./focus-mode";
 export { GoalRing } from "./goal-ring";
 export { Panel, type PanelProps } from "./panel";
-export { Progress } from "./progress";
+
 export { SkyBackdrop } from "./sky-backdrop";
 export { Toaster } from "./sonner";
 export { SyncStatus } from "./sync-status";
