@@ -1,11 +1,13 @@
 import {
 	ArrowRight,
 	Clock,
+	GitCommitHorizontal,
 	KeyRound,
 	Map as MapIcon,
 	Scale,
 	Send,
 	ShieldCheck,
+	Star,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthModal } from "@/features/auth";
@@ -61,9 +63,67 @@ function timeAgo(iso: string): string {
 	return `${d}d ago`;
 }
 
+/** "4", "1.2k": a star count the way GitHub shows it. */
+function starCount(stars: number): string {
+	if (stars < 1000) return String(stars);
+	return `${(stars / 1000).toFixed(stars < 10_000 ? 1 : 0).replace(/\.0$/, "")}k`;
+}
+
+type RepoStats = { stars: number; pushedAt: string };
+
+// One read of the repo for the nav and the hero both, kept for the tab's
+// session like the commits below: unauthenticated, the API allows 60 an hour.
+let repoStats: Promise<RepoStats | null> | null = null;
+
+function loadRepoStats(): Promise<RepoStats | null> {
+	const cacheKey = "beats:home:repo:v1";
+	repoStats ??= (async () => {
+		try {
+			const cached = sessionStorage.getItem(cacheKey);
+			if (cached) return JSON.parse(cached) as RepoStats;
+		} catch {
+			// fall through to fetch
+		}
+		try {
+			const r = await fetch(REPO_RAW_API, { headers: { Accept: "application/vnd.github+json" } });
+			if (!r.ok) return null;
+			const repo = (await r.json()) as Record<string, unknown>;
+			if (typeof repo.stargazers_count !== "number" || typeof repo.pushed_at !== "string") {
+				return null;
+			}
+			const stats = { stars: repo.stargazers_count, pushedAt: repo.pushed_at };
+			try {
+				sessionStorage.setItem(cacheKey, JSON.stringify(stats));
+			} catch {
+				// storage refused; the next visit fetches again
+			}
+			return stats;
+		} catch {
+			return null;
+		}
+	})();
+	return repoStats;
+}
+
+/** The repo's stars and last push, or null until they arrive or when GitHub won't say. */
+function useRepoStats(): RepoStats | null {
+	const [stats, setStats] = useState<RepoStats | null>(null);
+	useEffect(() => {
+		let live = true;
+		loadRepoStats().then((s) => {
+			if (live) setStats(s);
+		});
+		return () => {
+			live = false;
+		};
+	}, []);
+	return stats;
+}
+
 // ───────────────────────── nav ──────────────────────────
 
 function Nav({ onSignIn }: { onSignIn: () => void }) {
+	const stats = useRepoStats();
 	return (
 		<nav className="homepage-nav">
 			<div className="homepage-nav-inner">
@@ -87,14 +147,13 @@ function Nav({ onSignIn }: { onSignIn: () => void }) {
 					>
 						<Github className="w-3.5 h-3.5" aria-hidden />
 						<span>GitHub</span>
-						<img
-							src={`https://img.shields.io/github/stars/${GITHUB_REPO}?style=flat&label=&color=222&labelColor=222`}
-							alt="stars"
-							className="homepage-nav-stars"
-							loading="lazy"
-							width={36}
-							height={16}
-						/>
+						{stats && (
+							<span className="homepage-nav-stars font-mono">
+								<Star className="w-3 h-3" aria-hidden />
+								{starCount(stats.stars)}
+								<span className="sr-only"> stars</span>
+							</span>
+						)}
 					</a>
 					<button type="button" className="homepage-nav-signin" onClick={onSignIn}>
 						Sign in
@@ -108,29 +167,26 @@ function Nav({ onSignIn }: { onSignIn: () => void }) {
 // ───────────────────────── hero ──────────────────────────
 
 function GhBadgeRow() {
+	const stats = useRepoStats();
 	return (
 		<div className="homepage-badge-row">
-			<img
-				src={`https://img.shields.io/badge/open%20source-MIT-2b8a3e?style=flat&logo=opensourceinitiative&logoColor=white`}
-				alt="Open source: MIT"
-				loading="lazy"
-				width={120}
-				height={20}
-			/>
-			<img
-				src={`https://img.shields.io/github/stars/${GITHUB_REPO}?style=flat&logo=github&logoColor=fff&label=stars&color=444`}
-				alt="GitHub stars"
-				loading="lazy"
-				width={80}
-				height={20}
-			/>
-			<img
-				src={`https://img.shields.io/github/last-commit/${GITHUB_REPO}?style=flat&logo=git&logoColor=fff&label=last%20commit&color=444`}
-				alt="Last commit"
-				loading="lazy"
-				width={130}
-				height={20}
-			/>
+			<span className="homepage-badge">
+				<Scale className="w-3 h-3" aria-hidden />
+				Open source · MIT
+			</span>
+			{stats && (
+				<>
+					<span className="homepage-badge">
+						<Star className="w-3 h-3" aria-hidden />
+						<span className="font-mono">{starCount(stats.stars)}</span>
+						{stats.stars === 1 ? "star" : "stars"}
+					</span>
+					<span className="homepage-badge">
+						<GitCommitHorizontal className="w-3 h-3" aria-hidden />
+						updated <span className="font-mono">{timeAgo(stats.pushedAt)}</span>
+					</span>
+				</>
+			)}
 		</div>
 	);
 }

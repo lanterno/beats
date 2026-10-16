@@ -97,6 +97,15 @@
 	box-shadow: 0 12px 26px -18px var(--shadow-color);
 	backdrop-filter: blur(12px) saturate(1.2);
 }
+/* At dusk the pill is the panels' own colour and the shadow is lost on the
+   dark sky, so a panel scrolling under it took its edge. A step lighter and
+   a hairline give it one back. */
+:root[data-theme="dusk"] .homepage-nav-inner {
+	background: color-mix(in srgb, var(--hp-panel-2), var(--hp-ink) 6%);
+	box-shadow:
+		inset 0 0 0 1px var(--hp-hair),
+		0 12px 26px -18px var(--shadow-color);
+}
 .homepage-wordmark {
 	display: inline-flex;
 	align-items: center;
@@ -142,10 +151,13 @@
 	background: var(--hp-wash-2);
 }
 .homepage-nav-stars {
-	height: 16px;
-	width: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.2rem;
+	padding: 0.1rem 0.45rem;
 	border-radius: 999px;
-	opacity: 0.95;
+	background: var(--hp-panel);
+	font-size: 0.75rem;
 }
 .homepage-nav-signin {
 	font-family: var(--font-body);
@@ -236,11 +248,21 @@
 	flex-wrap: wrap;
 	min-height: 20px;
 }
-.homepage-badge-row img {
-	height: 20px;
-	width: auto;
+.homepage-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.2rem 0.65rem;
 	border-radius: 999px;
-	opacity: 0.92;
+	background: var(--hp-panel-2);
+	box-shadow: var(--hp-shadow-chip);
+	color: var(--hp-ink-2);
+	font-size: 0.75rem;
+	font-weight: 700;
+	line-height: 1.2;
+}
+.homepage-badge svg {
+	color: var(--hp-ink);
 }
 
 .homepage-hero-title {
