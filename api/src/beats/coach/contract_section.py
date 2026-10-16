@@ -77,6 +77,16 @@ def _left(remaining: float) -> str:
     return f"week done, {-rounded} h over"
 
 
+def _its_days_only(contract: Contract, week: ContractWeek) -> str:
+    """A note that the worked figure leaves days out, on a week the contract
+    starts or ends inside: the project page's Worked counts the whole week,
+    so the coach's smaller figure is not a contradiction."""
+    sunday = week.week_of + timedelta(days=6)
+    starts_inside = contract.starts_on > week.week_of
+    ends_inside = contract.ended_on is not None and contract.ended_on < sunday
+    return " (its days this week only)" if starts_inside or ends_inside else ""
+
+
 def _by_sunday(week: ContractWeek, today: date) -> tuple[float, float] | None:
     """The balance on Monday morning if no more hours are worked this week,
     and if the week's expectation is met — the twin of `projection()` in the
@@ -142,12 +152,19 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
     # `expected` and `remaining` are None together (ContractWeek); both are
     # named so the type checker knows it.
     if week.expected is not None and week.remaining is not None:
-        worked = sum(day.worked for day in week.days if counts_worked(contract, day.date))
+        # Worked under the contract — on the days it covers, what "to go"
+        # and the balance count — read back off the week's own figures, so
+        # worked and to go add up to the expectation before display rounds
+        # them. Not summed from the days: each is already rounded to the
+        # hundredth, and the sum drifts (87 s on two days and an hour today
+        # sum to 1.04 h, where the week counts 1.05 h with 30.95 h to go).
+        worked = round_hours(week.expected - week.remaining)
         term = term_on(contract, max(today, contract.starts_on))
         label = fmt_contract_goal(term) if term is not None else "contract"
         lines.append(
             f"  {name} ({label}): this week expects {_hours(week.expected)} after holidays"
-            f" and days off — {_hours(worked)} worked under the contract, {_left(week.remaining)}"
+            f" and days off — {_hours(worked)} worked under the"
+            f" contract{_its_days_only(contract, week)}, {_left(week.remaining)}"
         )
         # Which of this week's days off came from the employer's own list:
         # their names are the user's words, so only the fact is sent.
