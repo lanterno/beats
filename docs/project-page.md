@@ -160,7 +160,8 @@ balance while it lasts."), no expectation, the personal goal if set; the
 register shows the term as a labelled gap or a step at zero. *Before the
 first term*: "Contract starts Mon Sep 14, 2026 · 33.6 h/week", worked
 only. *After `ended_on`*: "Final balance · ended Aug 31" with the proof
-frozen at that date and no projection. *Missing region*: a notice line in
+frozen at that date, bar an "adjusted" line once a settlement after the
+end moves the balance, and no projection. *Missing region*: a notice line in
 the standing and the register's constants line carry the caveat; no
 banner. *Past week open*: the balance stays pinned to today; the right
 half becomes "Week 35 · closed +1.5 h over", no sentence, the day rows
@@ -359,7 +360,8 @@ null.
     "balance_end": 5.7,                   // the Sunday close: opening + worked − expected + adjusted
                                           // through it, before Monday's adjustment; null for the current
                                           // week and whenever contract_expected is null (one rule for the
-                                          // row); the frozen final balance after ended_on
+                                          // row); after ended_on the final balance, moved only
+                                          // by an adjustment after the end
     "notes": [ {"date":"2026-08-18","kind":"sick","half_day":true},
                {"date":"2026-05-25","kind":"holiday","name":"Whit Monday"} ],
     "adjustments": [ {"id": "…", "date": "2026-08-31", "kind": "delta", "hours": -40.0,
@@ -398,10 +400,11 @@ What the shape settles:
   by `week_expectation`: a week with no expectation has no closing
   balance. A term starting on a Saturday leaves its week before the
   contract on both counts, and its weekend hours move the next close.
-- **After `ended_on` every row repeats the final balance**, and
-  `contract_expected` is 0 there (owed nothing by circumstance; the term
-  still governs). Hours tracked after the end appear in `worked` and move
-  nothing.
+- **After `ended_on` every row repeats the final balance until an
+  adjustment after the end moves it** (a settlement paying it out moves
+  every close after its day), and `contract_expected` is 0 there (owed
+  nothing by circumstance; the term still governs). Hours tracked after
+  the end appear in `worked` and move nothing.
 - **`totals` is null on the week route's rule for today's balance**, so
   the standing and the ledger's foot go blank together.
 - **The proof holds to the cent, not to the bit.** `balance` is
