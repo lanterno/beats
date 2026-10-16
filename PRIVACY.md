@@ -8,7 +8,7 @@ For the catalogue of every field stored, see [DATA.md](./DATA.md).
 
 Beats is a self-tracking system. It records what you work on, for how long, and (optionally) how you felt while doing it. It is not a productivity app sold to employers, and there is no analytics product built on top of your data.
 
-If you mark a project as a day job, Beats also stores its contract — the hours owed each week as a percentage of a full-time basis, the dates those terms changed, an opening balance — the employer's holiday region as two ISO codes, the employer's own days off where they differ from that region's (dates, with the names you give them, and the region's holidays the employer does not give), and the days you were absent (vacation, sick or other, whole or half), and any dated adjustments you make to the balance (a payout, a reset or a cap, with a note if you give one). From those it works out what the week expects of you and a running overtime balance.
+If you mark a project as a day job, Beats also stores its contract — the hours owed each week as a percentage of a full-time basis, the dates those terms changed, an opening balance — the employer's holiday region as two ISO codes, the employer's own days off where they differ from that region's (dates, with the names you give them, and the region's holidays the employer does not give), the vacation days the job gives if you track them (days per year, how unused days carry over, and the days left on a date you choose), and the days you were absent (vacation, sick or other, whole or half), and any dated adjustments you make to the balance (a payout, a reset or a cap, with a note if you give one). From those it works out what the week expects of you, a running overtime balance and the vacation days you have left.
 
 ## Who can see your data
 
@@ -63,7 +63,7 @@ If you do not want any data leaving the Beats database, do not use the coach.
 
 ## Export and deletion
 
-- **Export**: anytime, via `/api/export` — your projects (contract included) and sessions, as JSON or CSV. Absences, balance adjustments, plans, webhooks, signals, biometrics and coach history are not in it yet.
+- **Export**: anytime, via `/api/export` — your projects (contract included, archived ones too), sessions, absences and balance adjustments as a JSON backup you can import again, or your sessions as CSV. Plans, webhooks, signals, biometrics and coach history are not in it yet.
 - **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, balance adjustments, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
 
 ## Changes

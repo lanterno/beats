@@ -23,10 +23,18 @@ import {
 	post,
 	put,
 	RegionListSchema,
+	VacationYearSchema,
 } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
-import type { AdjustmentKind, ContractWeek, Holiday, HolidayRegion, Ledger } from "../model";
-import { toContractWeek, toLedger } from "../model";
+import type {
+	AdjustmentKind,
+	ContractWeek,
+	Holiday,
+	HolidayRegion,
+	Ledger,
+	VacationYear,
+} from "../model";
+import { toContractWeek, toLedger, toVacationYear } from "../model";
 
 /**
  * Per-project aggregations the backend can fold into the list response when
@@ -207,6 +215,18 @@ export async function fetchProjectHolidays(
 	if (includeNotGiven) params.set("include", "not_given");
 	const data = await get<unknown>(`/api/projects/${projectId}/holidays?${params.toString()}`);
 	return parseApiResponse(HolidayListSchema, data);
+}
+
+/**
+ * One calendar year of a day job's vacation entitlement. 409 without a
+ * contract (NO_CONTRACT) or an entitlement (NO_VACATION_ENTITLEMENT), and
+ * for a year before the opening's or after the contract's end
+ * (VACATION_YEAR_OUT_OF_RANGE).
+ */
+export async function fetchVacationYear(projectId: string, year: number): Promise<VacationYear> {
+	const params = new URLSearchParams({ year: String(year), tz: browserTimeZone() });
+	const data = await get<unknown>(`/api/projects/${projectId}/vacation?${params.toString()}`);
+	return toVacationYear(parseApiResponse(VacationYearSchema, data));
 }
 
 /** Every country the holiday calendar knows, with its subdivisions, for the region picker. */

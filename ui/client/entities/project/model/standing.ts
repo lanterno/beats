@@ -88,8 +88,12 @@ function dayOffReason(day: ContractDay): string | undefined {
 /** Past this many days off the nominal line counts them by kind instead of naming each. */
 const NAMED_DAYS_OFF = 2;
 
-/** "2", "2½", "½": a count of days off, to the half day. */
-function halfDays(days: number): string {
+/**
+ * "2", "2½", "½": a count of days, to the half day. For a count that is not
+ * negative: a negative one rounds toward the larger magnitude (−2.5 reads
+ * "−3½"), so a caller with a signed figure formats its size and words the sign.
+ */
+export function halfDays(days: number): string {
 	const halves = Math.round(days * 2);
 	const whole = Math.floor(halves / 2);
 	if (halves % 2 === 0) return String(whole);

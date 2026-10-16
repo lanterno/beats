@@ -4,8 +4,9 @@
  * term in force and the next one, the terms as a step chart over the
  * contract's life, the full list with edit and remove, "+ Change contract
  * from…", and the constants (region, this year's company days and public
- * holidays not given, what was brought forward, the end), with "Holidays"
- * opening the dialog that edits the two lists.
+ * holidays not given, what was brought forward, the vacation entitlement if
+ * one is tracked, the end), with "Holidays" opening the dialog that edits
+ * the two lists.
  * On any other kind — or a day job still without a contract that has a
  * personal goal — it is the Goal: the goal in force, its dated history as the
  * same chart, and the override list with remove.
@@ -31,6 +32,7 @@ import type {
 import {
 	ContractTermFields,
 	contractFieldErrors,
+	describeEntitlement,
 	describeTerm,
 	formatSignedHours,
 	permanentOverrideOn,
@@ -458,6 +460,7 @@ function ContractVariant({
 			(calendar ?? []).filter((h) => !h.given && !companyDates.has(h.date)).length,
 		),
 		`Brought forward ${signed(contract.openingBalanceHours)}`,
+		contract.vacation ? describeEntitlement(contract.vacation) : null,
 		endedOn ? `${ended ? "Ended" : "Ends"} ${plainDate(endedOn)}` : "Ended —",
 	]
 		.filter((part): part is string => part !== null)

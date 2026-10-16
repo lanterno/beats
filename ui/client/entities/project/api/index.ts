@@ -19,4 +19,5 @@ export {
 	useUpdateContract,
 	useUpdateGoalOverrides,
 	useUpdateProject,
+	useVacationYear,
 } from "./queries";

@@ -124,12 +124,14 @@ Holidays dialog (`HolidaysDialog`) the register's constants open. Under
 proof, or a side project's pace, beside the open week), `WeekDays` ("Days") and
 `WeekLedger` ("Earlier weeks", whose "Adjust balance" and adjustment rows open the
 `AdjustmentDialog`); the rail holds `ContractRegister` (the contract with
-its step chart, or the goal), `TimeOff` on a day job, and `QuietFacts`. The layout
+its step chart, or the goal), `TimeOff` on a day job (whose tally reads the vacation
+entitlement's year when the contract has one), and `QuietFacts`. The layout
 queries the content column (`@container/content`), not the viewport, and the rail sits
-beside the column from 860 px of it. Every figure is the API's; the page's own
-arithmetic — the sentence, the Sunday projection, the ledger's rows and their +/− — is
-pure functions in `entities/project/model` (`standing.ts`, `ledger.ts`), a test per
-branch. Tests and E2E specs find the panels by their region names, never by class.
+beside the column from 860 px of it. Every figure is the API's, a ledger row's +/− too
+on a week that closes (its `balance_moved`); the page's own arithmetic — the sentence,
+the Sunday projection, the ledger's rows, and the +/− on a week without a close
+(worked − expected, else worked − goal) — is pure functions in `entities/project/model`
+(`standing.ts`, `ledger.ts`), a test per branch. Tests and E2E specs find the panels by their region names, never by class.
 
 ## Testing
 

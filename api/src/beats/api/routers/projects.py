@@ -28,8 +28,16 @@ from beats.api.schemas import (
     UpdateProjectRequest,
 )
 from beats.domain.holidays import Holiday
-from beats.domain.models import Contract, ContractWeek, GoalOverride, Ledger, Project, ProjectKind
-from beats.domain.services import keep_unsent_holiday_changes
+from beats.domain.models import (
+    Contract,
+    ContractWeek,
+    GoalOverride,
+    Ledger,
+    Project,
+    ProjectKind,
+    VacationYear,
+)
+from beats.domain.services import keep_unsent_contract_fields
 
 router = APIRouter(
     prefix="/api/projects",
@@ -159,15 +167,16 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
     # unless the edit moves the project away from day_job, in which case the
     # contract goes with it: a contract lives only on a day job, and the
     # service refuses one sent with any other kind (409 NOT_A_DAY_JOB).
-    # Inside a sent contract the same rule holds for the holiday lists: one
-    # left out is kept, so an older client's term edit does not delete them.
+    # Inside a sent contract the same rule holds for the holiday lists and the
+    # vacation entitlement: one left out is kept, so an older client's term
+    # edit does not delete them.
     existing = await service.project_repo.get_by_id(request.id)
     sent = request.model_fields_set
     kind = request.kind if request.kind is not None else existing.kind
     if "contract" in sent:
         contract = request.contract
         if contract is not None:
-            contract = keep_unsent_holiday_changes(contract, existing.contract)
+            contract = keep_unsent_contract_fields(contract, existing.contract)
     else:
         contract = existing.contract if kind is ProjectKind.DAY_JOB else None
     project = Project(
@@ -219,12 +228,15 @@ async def update_goal_overrides(
 @router.put("/{project_id}/contract", response_model=ProjectResponse)
 async def replace_contract(project_id: str, contract: Contract, service: ProjectServiceDep):
     """Replace a day job's whole contract: terms, holiday region, company
-    holidays and the region holidays not given, opening balance and end
-    date, in one shape, like goal-overrides. A holiday list the body leaves
-    out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
-    not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
-    does not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term
-    later past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START)."""
+    holidays and the region holidays not given, opening balance, end date
+    and vacation entitlement, in one shape, like goal-overrides. A holiday
+    list or a `vacation` the body leaves out is kept; `[]` or `null` clears
+    it. Leaves `kind` alone; on a project that is not a day job it is a 409
+    (NOT_A_DAY_JOB), and a region the calendar does not know is a 400
+    (UNKNOWN_HOLIDAY_REGION). Moving the first term later past a balance
+    adjustment is a 409 (ADJUSTMENT_BEFORE_START), and leaving the vacation
+    count's opening outside the contract's dates a 409
+    (VACATION_OPENING_OUTSIDE_CONTRACT)."""
     updated = await service.replace_contract(project_id, contract)
     return updated.model_dump()
 
@@ -299,6 +311,28 @@ async def get_holidays(
     region.
     409 on a project that is not a day job."""
     return await service.holidays(project_id, year, tz, include_not_given=include == "not_given")
+
+
+@router.get("/{project_id}/vacation", response_model=VacationYear)
+async def get_vacation(
+    project_id: str,
+    service: ContractServiceDep,
+    tz: TimezoneDep,
+    year: int | None = Query(
+        default=None, ge=1, le=9999, description="Defaults to the current year in `tz`."
+    ),
+):
+    """One calendar year of a day job's vacation entitlement, in days: what
+    the year gives (`accrued`, pro-rated in the year the contract ends; null
+    in the opening year, whose figure is the opening's), what the year
+    before carried in, what is available, what is booked (the `vacation`
+    days, past and planned, on weekdays inside the contract's dates that are
+    not its holidays) and what remains. Every figure is a whole or half day.
+    409 on a project that is not a day job (NOT_A_DAY_JOB), without a
+    contract (NO_CONTRACT) or an entitlement (NO_VACATION_ENTITLEMENT), and
+    for a year before the opening's or after the contract's end
+    (VACATION_YEAR_OUT_OF_RANGE)."""
+    return await service.vacation(project_id, year, tz)
 
 
 @router.get("/{project_id}/git-activity")

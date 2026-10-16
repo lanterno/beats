@@ -275,16 +275,22 @@ function appliedBetween(ledger: Ledger, from: string, to: string): number {
 }
 
 /**
- * A week's +/−: the move between its close and the one before when both are
- * in the ledger; on the contract's first close — the week holding `since`, or
- * the week after when the one holding it has no close (a weekend start) — the
- * move from the opening balance. The balance counts only the contract's days,
- * so on those weeks worked − expected is not what moved it. Either move
- * leaves out the balance adjustments inside it, which are rows of their own:
- * the week's own, or on the first close every one from `since` through the
- * week's Sunday. Else worked − expected, else worked − goal; null with
- * neither, and for a week the ledger does not hold. `openingBalance` is the
- * contract's; null off a contract.
+ * A week's +/−: on a week with a close, the API's `balanceMoved` — what the
+ * balance counted that week less what it expected, adjustments left out,
+ * read off the close before even when the ledger does not hold that week.
+ * The balance counts only the contract's days, so on the week a contract
+ * starts or ends worked − expected is not what moved it.
+ *
+ * An API that predates `balanceMoved` leaves the SPA to read the move off
+ * the closes: between its close and the one before when both are in the
+ * ledger; on the contract's first close — the week holding `since`, or the
+ * week after when the one holding it has no close (a weekend start) — from
+ * the opening balance. Either leaves out the balance adjustments inside it,
+ * which are rows of their own: the week's own, or on the first close every
+ * one from `since` through the week's Sunday. Else, and on a week with no
+ * close, worked − expected, else worked − goal; null with neither, and for a
+ * week the ledger does not hold. `openingBalance` is the contract's; null off
+ * a contract.
  */
 export function weekDelta(
 	ledger: Ledger,
@@ -295,6 +301,7 @@ export function weekDelta(
 	if (!week) return null;
 	const older = ledger.weeks.find((w) => w.weekOf === addIsoDays(weekOf, -7));
 	if (week.balanceEnd !== null) {
+		if (typeof week.balanceMoved === "number") return week.balanceMoved;
 		const sunday = sundayOf(weekOf);
 		if (older && older.balanceEnd !== null) {
 			const applied = appliedBetween(ledger, weekOf, sunday);

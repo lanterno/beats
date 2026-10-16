@@ -43,9 +43,24 @@ const CompanyHolidaySchema = z.object({
 	name: z.string(),
 });
 
+const CarryOverSchema = z.enum(["all", "capped", "none"]);
+
+// Days for a five-day week, every figure a whole or half day; the cap only
+// with `capped`. The API's field constraints are the authority.
+const VacationEntitlementSchema = z.object({
+	days_per_year: z.number(),
+	carry_over: CarryOverSchema,
+	carry_over_max_days: z.number().nullable().optional(),
+	opening_on: z.string(), // YYYY-MM-DD
+	opening_days: z.number(),
+});
+
+export type ApiVacationEntitlement = z.infer<typeof VacationEntitlementSchema>;
+
 // The two holiday lists default to empty so an API that predates them still
 // parses; the SPA always sends both (`toApiContract`), since a list left out
-// of a write is kept and one sent empty is cleared.
+// of a write is kept and one sent empty is cleared. `vacation` is the same:
+// absent from an older API, always sent (an object or null) by the SPA.
 export const ContractSchema = z.object({
 	terms: z.array(ContractTermSchema),
 	holiday_country: z.string().nullable().optional(),
@@ -54,6 +69,7 @@ export const ContractSchema = z.object({
 	ended_on: z.string().nullable().optional(),
 	company_holidays: z.array(CompanyHolidaySchema).optional().default([]),
 	holidays_not_given: z.array(z.string()).optional().default([]),
+	vacation: VacationEntitlementSchema.nullable().optional(),
 });
 
 export type ApiContract = z.infer<typeof ContractSchema>;
@@ -166,6 +182,10 @@ export const LedgerWeekSchema = z.object({
 	effective_goal_overridden: z.boolean(),
 	contract_expected: z.number().nullable(),
 	balance_end: z.number().nullable(),
+	// What the week's work moved the balance by, null exactly when
+	// `balance_end` is. Optional for an API that predates it, which leaves
+	// the SPA to read the move off the closes.
+	balance_moved: z.number().nullable().optional(),
 	notes: z.array(LedgerNoteSchema),
 	// Defaults, like `adjusted` and `ended_balance` below, for an API that
 	// predates balance adjustments: it keeps none, so these are the true
@@ -193,6 +213,19 @@ export const LedgerSchema = z.object({
 });
 
 export type ApiLedger = z.infer<typeof LedgerSchema>;
+
+// GET /{id}/vacation: one calendar year of the entitlement, in whole or half
+// days. `accrued` is null in the opening year, whose figure is the opening's.
+export const VacationYearSchema = z.object({
+	year: z.number(),
+	accrued: z.number().nullable(),
+	carried_in: z.number(),
+	available: z.number(),
+	booked: z.number(),
+	remaining: z.number(),
+});
+
+export type ApiVacationYear = z.infer<typeof VacationYearSchema>;
 
 // `source` and `given` default to an older API's only answer: a region
 // holiday the contract gives.
