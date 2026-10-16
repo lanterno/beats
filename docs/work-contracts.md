@@ -451,10 +451,14 @@ region check, and every project write reconciles the adjustments
   restores a project as a project write (`ProjectService.restore_project`:
   the contract checks, and the reconcile above against the contract it
   replaces) and then the absences and adjustments through
-  `ContractService`'s record methods, in the request's `tz`. A record they
-  refuse is left out and listed under `skipped` with its route's code, not
-  a failure of the file: an absence outlives a kind change away from
-  `day_job`, so an honest export carries one its route now refuses.
+  `ContractService`'s record methods, in the request's `tz`. A project write
+  they refuse stops the import with its error, there being no transaction:
+  the projects before it stay restored, and no session, absence or
+  adjustment is written; importing again once the conflict is fixed is
+  safe. An absence or an adjustment they refuse is left out and listed
+  under `skipped` with its route's code, not a failure of the file: an
+  absence outlives a kind change away from `day_job`, so an honest export
+  carries one its route now refuses.
 - **`this_week` on the index** is the week route's current week, null on
   anything but a day job with a contract. `contract_worked` sits beside
   `weekly_minutes` because they differ: `weekly_minutes` is the personal

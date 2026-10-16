@@ -101,14 +101,22 @@ Plans, webhooks, signals, biometrics and coach history are in neither; they stay
 database until deleted.
 
 `POST /api/export/import` takes a `/full` file back, a `1.1` one or a `1.0` one from
-before absences and adjustments were exported. Re-importing is safe: projects and
-sessions are matched by id, an absence or an adjustment by its project and date. The
-file is checked whole first, so a malformed record writes nothing. The rest goes
-through the same rules as the app's own writes: a project as a project write (a
-contract that would strand an adjustment is refused), then absences and adjustments,
-against the projects as restored and the `tz` sent. A record those rules refuse (time
-off on a project that is no longer a day job, an adjustment outside its contract) is
-left out, and the response lists it under `skipped`.
+before absences and adjustments were exported, into the account that sends it.
+Re-importing is safe: projects and sessions are matched by id, an absence or an
+adjustment by its project and date. The file is checked whole first, and a file that
+fails writes nothing: a malformed record, a malformed id included, is a 422, and a
+file holding projects or sessions of another account is a 409
+`BACKUP_OF_ANOTHER_ACCOUNT`.
+
+The rest goes through the same rules as the app's own writes: the projects first, each
+as a project write, then the sessions, then absences and adjustments, against the
+projects as restored and the `tz` sent. A project write those rules refuse (a contract
+that would strand an adjustment, say) stops the import with that write's error: the
+projects before it in the file are already restored, and nothing after it is written,
+no sessions, absences or adjustments. Fixing the conflict and importing the file again
+is safe. A refused absence or adjustment does not stop it (time off on a project that
+is no longer a day job, an adjustment outside its contract): it is left out, and the
+response lists it under `skipped`.
 
 ## Deletion
 

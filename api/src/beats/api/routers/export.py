@@ -177,11 +177,14 @@ async def import_full_json(
     The whole file is checked first, and a file that fails writes nothing:
     a malformed record, a project's or a session's id included, is a 422
     that names it, and a file holding a project or a session whose id is
-    another account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`. Projects are then
-    written as a project write is — the contract's checks and the reconcile
-    against the contract it replaces apply, so their refusal is that write's
-    error — and the absences and adjustments through their own routes'
-    rules, against the projects as restored. A record those rules refuse (an
+    another account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`.
+
+    Projects are then written as a project write is: the contract's checks,
+    and the reconcile against the contract it replaces. A refusal there is
+    that write's error and stops the import, with no transaction: the
+    projects before it in the file stay written, and no beat, absence or
+    adjustment is. Absences and adjustments go through their own routes'
+    rules, against the projects as restored, and one those rules refuse (an
     absence on a project that is no longer a day job; an adjustment outside
     the contract's first day through today in `tz`) is left out and listed
     under `skipped` with the code its route would answer."""
