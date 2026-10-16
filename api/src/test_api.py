@@ -1309,6 +1309,31 @@ class TestContractWeekAPI:
         assert week["worked"] == 5
         assert week["remaining"] == 22
 
+    def test_hours_under_an_objective_term_count_toward_neither_remaining_nor_balance(
+        self, client, auth_headers
+    ):
+        # AHM-82. Full time Monday and Tuesday, objective from Wednesday,
+        # full time again the Monday after, so today has a balance. Thursday's
+        # 3 h were worked under a term that expects nothing: shown in
+        # `worked`, subtracted from neither Remaining nor counted as overtime.
+        full_time = {"schedule_type": "full_time", "full_time_hours": 40}
+        project = _day_job(
+            client,
+            auth_headers,
+            terms=[
+                {"effective_from": WEEK, **full_time},
+                {"effective_from": "2026-03-04", "schedule_type": "objective"},
+                {"effective_from": "2026-03-09", **full_time},
+            ],
+        )
+        _log(client, auth_headers, project["id"], "2026-03-03T09:00:00+00:00", 120)
+        _log(client, auth_headers, project["id"], "2026-03-05T09:00:00+00:00", 180)
+
+        week = self._week(client, auth_headers, project["id"])
+
+        assert (week["expected"], week["worked"], week["remaining"]) == (16, 5, 14)
+        assert week["balance_worked"] == 2
+
     def test_percentage_change_midweek_shows_in_days(self, client, auth_headers):
         project = _day_job(
             client,
