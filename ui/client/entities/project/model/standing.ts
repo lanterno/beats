@@ -66,6 +66,8 @@ export interface Projection {
  * the day closes; `met` adds what is still to go. Null without a balance or
  * an expectation, and when `todayIso` is not in the week: the balance is
  * pinned to today whatever week is open, so only the current week projects.
+ * The coach's twin is `_by_sunday` in api/src/beats/coach/contract_section.py;
+ * a change to either is made in both.
  */
 export function projection(week: ContractWeek, todayIso: string): Projection | null {
 	if (week.balance === undefined || week.expected === undefined) return null;

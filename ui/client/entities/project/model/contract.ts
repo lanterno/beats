@@ -134,6 +134,8 @@ export function balanceTone(hours: number): BalanceTone {
 /**
  * A balance with its sign made unmistakable: "+4.5 h over", "−2.0 h owed"
  * or "even" — never a bare signed number, whose minus is easy to miss.
+ * The coach words the balance with its twin, `describe_balance` in
+ * api/src/beats/coach/contract_section.py; a change to either is made in both.
  */
 export function describeBalance(hours: number): string {
 	const tone = balanceTone(hours);
