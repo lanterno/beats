@@ -3331,6 +3331,32 @@ class TestBuildDayContext:
             " — 1.05 h worked under the contract, 30.95 h to go\n" in out
         )
 
+    async def test_week_is_labelled_by_mondays_term_as_the_goal_line_is(self):
+        """80 % until Tuesday, full-time from Wednesday: the goal line names
+        Monday's term, and so does the week's line, not today's."""
+        from beats.domain.models import ContractTerm, ScheduleType
+
+        job = self._job(region=None)
+        assert job.contract is not None
+        terms = [
+            ContractTerm(
+                effective_from=date(2026, 5, 18),
+                schedule_type=ScheduleType.PART_TIME,
+                full_time_hours=40,
+                percentage=0.8,
+            ),
+            ContractTerm(
+                effective_from=date(2026, 5, 27),
+                schedule_type=ScheduleType.FULL_TIME,
+                full_time_hours=40,
+            ),
+        ]
+        job = job.model_copy(update={"contract": job.contract.model_copy(update={"terms": terms})})
+        out = await self._day_context(projects=[job])
+
+        assert "  Acme (contract, 80%): this week expects" in out
+        assert "full-time" not in out
+
     async def test_quarter_hours_add_up_as_printed(self):
         """23.75 h worked of 40 leaves 16.25 h: rounded to the tenth each,
         the line read "23.8 h worked, 16.3 h to go" against 40.0."""
