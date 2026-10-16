@@ -5,18 +5,22 @@ module only words them, and decides what of them leaves Beats. PRIVACY.md
 is the list, and a change to what is sent is made there first:
 
 - the week's expected hours after holidays and days off, the hours worked
-  under the contract and what is left;
+  under the contract (on its days only) and what is left;
 - the dates of this week's holidays and days off that made it shorter —
-  a public holiday by its name, a company holiday only as "company
-  holiday" (its name is the user's own words), a day off only as "day
-  off" or "half day off" (its type can be health data, its note is free
-  text, and the arithmetic treats them all alike);
+  a public holiday by its name, which can name the region (Augsburg Peace
+  Festival), a company holiday only as "company holiday" (its name is the
+  user's own words), a day off only as "day off" or "half day off" (its
+  type can be health data, its note is free text, and the arithmetic
+  treats them all alike);
 - today's expected hours, the running balance and its by-Sunday
   projection — or, once the contract has ended (earlier this week), only
-  its final balance.
+  its final balance — and the end date when it falls in this week.
 
-Never the region's codes, the opening balance, another week's days, or a
-contract that ended before this week.
+The balance is a sum, opening + worked − expected + adjusted, and only
+the sum is sent; on a contract's first day it is the opening balance.
+Never the region's codes, the opening balance or an adjustment as a
+figure of its own, another week's days, or a contract that ended before
+this week.
 
 Two rules here are the SPA's too, and a change to either is made in both:
 `describe_balance` is `describeBalance` (ui/client/entities/project/model/
