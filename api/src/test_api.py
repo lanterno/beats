@@ -1863,10 +1863,14 @@ class TestAdjustmentsAPI:
         assert resp.status_code == 409, resp.text
         assert resp.json()["code"] == "ADJUSTMENT_OUTSIDE_BALANCE"
 
-    def test_a_body_that_means_nothing_is_422_naming_hours(self, client, auth_headers):
+    @pytest.mark.parametrize("hours", [0, True, "3"], ids=["zero", "a bool", "a string"])
+    def test_a_body_that_means_nothing_is_422_naming_hours(self, client, auth_headers, hours):
+        # `true` once read as a 1 h payout: lax validation takes a bool for a number.
         project = _day_job(client, auth_headers)
         monday = self._last_monday().isoformat()
-        resp = self._post(client, auth_headers, project["id"], date=monday, kind="delta", hours=0)
+        resp = self._post(
+            client, auth_headers, project["id"], date=monday, kind="delta", hours=hours
+        )
         assert resp.status_code == 422, resp.text
         assert [f["path"] for f in resp.json()["fields"]] == ["hours"]
 
