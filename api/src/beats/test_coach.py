@@ -43,6 +43,7 @@ from beats.coach.repos import (
     DAILY_BRIEFS_COLLECTION,
     LLM_USAGE_COLLECTION,
     CoachRepos,
+    fmt_contract_goal,
     fmt_minutes,
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker
@@ -3650,6 +3651,77 @@ class TestDescribeBalance:
     )
     def test_matches_the_spa(self, hours, words):
         assert describe_balance(hours) == words
+
+
+class TestPartTimePercentReadsAsThePage:
+    """A part-time term's percentage, in the goal line, get_projects and the
+    contract week's label, is the one the page prints with `toPercent`
+    (`Math.round(fraction * 10000) / 100`), not a whole percent."""
+
+    @staticmethod
+    def _part_time(fraction: float):
+        from beats.domain.models import ContractTerm, ScheduleType
+
+        return ContractTerm(
+            effective_from=date(2026, 1, 5),
+            schedule_type=ScheduleType.PART_TIME,
+            full_time_hours=40,
+            percentage=fraction,
+        )
+
+    @pytest.mark.parametrize(
+        ("fraction", "shown"),
+        # What node prints for `String(toPercent(fraction))`. The first four
+        # were "88%", "62%", "38%" and "12%" — a tie went to the even digit.
+        [
+            (0.875, "87.5"),
+            (0.625, "62.5"),
+            (0.375, "37.5"),
+            (0.125, "12.5"),
+            (0.6875, "68.75"),
+            (0.8, "80"),
+            (0.29, "29"),
+            (0.335, "33.5"),
+            (0.0725, "7.25"),
+            (0.995, "99.5"),
+        ],
+    )
+    def test_matches_the_spa(self, fraction, shown):
+        assert fmt_contract_goal(self._part_time(fraction)) == f"contract, {shown}%"
+
+    def test_every_half_percent_the_form_offers_reads_as_typed(self):
+        """The form steps by half a percent and stores `fromPercent`'s
+        `Math.round(percent * 100) / 10000`; the page shows each back as
+        typed, and so must the coach. A part-time term is under 100%."""
+        mismatches = []
+        for halves in range(1, 200):
+            typed = halves / 2
+            stored = round(typed * 100) / 10000
+            said = fmt_contract_goal(self._part_time(stored))
+            if said != f"contract, {typed:g}%":
+                mismatches.append((typed, said))
+        assert mismatches == []
+
+    async def test_the_contract_week_is_labelled_with_it(self):
+        from beats.domain.models import Contract, Project, ProjectKind
+        from beats.domain.services import ContractService
+
+        job = Project(
+            id="job",
+            name="Acme",
+            kind=ProjectKind.DAY_JOB,
+            contract=Contract(terms=[self._part_time(0.875)]),
+        )
+        service = ContractService(
+            project_repo=_FakeProjectRepoForTools([job]),
+            beat_repo=_FakeBeatRepoForTools([]),
+            absence_repo=_FakeAbsenceStoreForCoach([]),
+            adjustment_repo=_FakeAdjustmentStoreForCoach([]),
+            now=lambda tz: CONTRACT_NOW.astimezone(tz),
+        )
+        week = await service.week_for(job, [], None, ZURICH)
+        lines = contract_section([job], {"job": week}, CONTRACT_TODAY)
+        assert lines[1].startswith("  Acme (contract, 87.5%): this week expects")
 
 
 def _to_fixed_1(hours: float) -> str:
