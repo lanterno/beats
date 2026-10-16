@@ -1648,6 +1648,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Adjustment
+         * @description Record a balance adjustment: `delta` moves the balance by `hours`
+         *     (negative for a payout), `reset` sets it to `hours`, `cap` brings it down
+         *     to `hours` if it is above. Each takes effect at the start of its day.
+         *     One per date: posting again for a date replaces the adjustment there,
+         *     keeps its id and still answers 201.
+         *
+         *     `tz` is required: the date must fall from the contract's first day
+         *     through today in `tz` (409 ADJUSTMENT_OUTSIDE_BALANCE). 409 NO_CONTRACT
+         *     when the day job has no contract, and so no balance, yet.
+         */
+        post: operations["record_adjustment_api_projects__project_id__adjustments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/adjustments/{adjustment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Adjustment
+         * @description Remove a balance adjustment. 404 when it is not on this project.
+         */
+        delete: operations["delete_adjustment_api_projects__project_id__adjustments__adjustment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/archive": {
         parameters: {
             query?: never;
@@ -1683,7 +1731,8 @@ export interface paths {
          *     date, in one shape, like goal-overrides. A holiday list the body leaves
          *     out is kept; `[]` clears it. Leaves `kind` alone; on a project that is
          *     not a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar
-         *     does not know is a 400 (UNKNOWN_HOLIDAY_REGION).
+         *     does not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term
+         *     later past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START).
          */
         put: operations["replace_contract_api_projects__project_id__contract_put"];
         post?: never;
@@ -2345,6 +2394,34 @@ export interface components {
          * @enum {string}
          */
         AbsenceType: "vacation" | "sick" | "other";
+        /**
+         * AdjustmentKind
+         * @description How a balance adjustment moves the balance at the start of its day.
+         * @enum {string}
+         */
+        AdjustmentKind: "delta" | "reset" | "cap";
+        /**
+         * AdjustmentResponse
+         * @description Response schema for a balance adjustment: the record as stored. What
+         *     it moved the balance by is the ledger's (`applied`), worked out on every
+         *     read.
+         */
+        AdjustmentResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hours */
+            hours: number;
+            /** Id */
+            id: string;
+            kind: components["schemas"]["AdjustmentKind"];
+            /** Note */
+            note?: string | null;
+            /** Project Id */
+            project_id: string;
+        };
         /** AutoTimerSuggestion */
         AutoTimerSuggestion: {
             /** Project Id */
@@ -2353,6 +2430,28 @@ export interface components {
             project_name?: string | null;
             /** Should Suggest */
             should_suggest: boolean;
+        };
+        /**
+         * BalanceAdjustmentFields
+         * @description A dated change to a day job's balance, as a client sends it — the
+         *     request body of `POST /{id}/adjustments`, so its validators are the 422.
+         *
+         *     A reset or a cap stores its target, not the hours it moved: what it
+         *     moves is worked out each time the balance is read, against the balance
+         *     that morning, so a session recorded later from before the reset leaves
+         *     everything after it unchanged.
+         */
+        BalanceAdjustmentFields: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hours */
+            hours: number;
+            kind: components["schemas"]["AdjustmentKind"];
+            /** Note */
+            note?: string | null;
         };
         /** BiometricDayRequest */
         BiometricDayRequest: {
@@ -2579,6 +2678,8 @@ export interface components {
         ContractWeek: {
             /** Balance */
             balance: number | null;
+            /** Balance Adjusted */
+            balance_adjusted: number | null;
             /** Balance As Of */
             balance_as_of: string | null;
             /** Balance Expected Through */
@@ -3038,11 +3139,36 @@ export interface components {
          *     Typed because it crosses the wire, as `ContractWeek` is.
          */
         Ledger: {
+            /** Ended Balance */
+            ended_balance: number | null;
             /** Since */
             since: string | null;
             totals: components["schemas"]["LedgerTotals"] | null;
             /** Weeks */
             weeks: components["schemas"]["LedgerWeek"][];
+        };
+        /**
+         * LedgerAdjustment
+         * @description A balance adjustment as its ledger week shows it: the record, and
+         *     `applied`, the hours it actually moved the balance — `hours` for a
+         *     delta, the target less that morning's balance for a reset, and for a cap
+         *     the hours it took off (0 when the balance was under it).
+         */
+        LedgerAdjustment: {
+            /** Applied */
+            applied: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hours */
+            hours: number;
+            /** Id */
+            id: string;
+            kind: components["schemas"]["AdjustmentKind"];
+            /** Note */
+            note: string | null;
         };
         /**
          * LedgerNote
@@ -3070,11 +3196,14 @@ export interface components {
         LedgerNoteKind: "vacation" | "sick" | "other" | "holiday";
         /**
          * LedgerTotals
-         * @description The balance as of today and the two terms that move it, since the
-         *     contract started — the standing's "worked since · expected through" line
-         *     and the ledger's foot. The opening balance is the contract's own.
+         * @description The balance as of today and the three terms that move it, since the
+         *     contract started — the standing's "worked since · expected through ·
+         *     adjusted" lines and the ledger's foot. The opening balance is the
+         *     contract's own.
          */
         LedgerTotals: {
+            /** Adjusted */
+            adjusted: number;
             /** Balance */
             balance: number;
             /** Expected */
@@ -3088,6 +3217,8 @@ export interface components {
          *     and when it is None.
          */
         LedgerWeek: {
+            /** Adjustments */
+            adjustments: components["schemas"]["LedgerAdjustment"][];
             /** Balance End */
             balance_end: number | null;
             /** Contract Expected */
@@ -6415,6 +6546,88 @@ export interface operations {
             path: {
                 project_id: string;
                 absence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_adjustment_api_projects__project_id__adjustments_post: {
+        parameters: {
+            query: {
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BalanceAdjustmentFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdjustmentResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_adjustment_api_projects__project_id__adjustments__adjustment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                adjustment_id: string;
             };
             cookie?: never;
         };
