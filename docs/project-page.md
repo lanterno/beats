@@ -131,13 +131,15 @@ Rail        CONTRACT   Part time · 80% of 42 h / 33.6 h/week · since Mon Aug 3
                        From Jan 4, 2027 · … · PLANNED
                        [+ Change contract from…]
                        Holidays Switzerland · Zürich · 2 company days · 1 not given
-                         · Brought forward +2.0 h · Ended — · Holidays · Edit
+                         · Brought forward +2.0 h · Vacation 25 d/yr · up to 5 d carry over
+                         · Ended — · Holidays · Edit
             TIME OFF   upcoming                                          + Book
                        Tomorrow · Fri Sep 11 · Vacation · Zürich trip          vacation
                        Mon Oct 5 – Fri Oct 9 · Vacation · 5 days               vacation
                        Thu Dec 24 · Christmas Eve · company holiday             holiday
                        Fri Dec 25 · Christmas Day · public holiday · Zürich     holiday
-                       2026: 21 d vacation booked · ½ d sick
+                       2026: 8 of 27½ d vacation · 19½ left · ½ d sick
+                         25 d for 2026 · 2½ d carried from 2025
             FACTS      Last tracked today 11:52 · Focus today 74
 ```
 
@@ -243,6 +245,21 @@ yet — start the timer in the sidebar."
   and holidays. A holiday row — public, or a company day reading "company
   holiday" — opens its week in Days (it has nothing to book); an absence
   row opens the dialog on the run.
+- **The tally counts against the vacation entitlement** when the contract
+  has one and the year is one it counts (from the opening's through the
+  end's): `GET …/vacation?year=` gives "2026: 8 of 23½ d vacation · 15½
+  left", or "1½ d over", and sick and other days follow as recorded
+  counts. A quiet line under it says where the figure came from — "12 d
+  left on Oct 1" in the opening year, "25 d for 2027 · 2½ d carried from
+  2026" after it, "… through Jun 30" in the year the job ends, a deficit
+  carried in as "2½ d overdrawn in 2026". The vacation days are then the
+  API's, which leaves out weekends, holidays and days before the opening,
+  so they can be fewer than the days recorded. Negative figures are said
+  by their size with the sign in words, never as "−3½". Without an
+  entitlement, or outside its years, the tally counts the recorded days
+  and nothing is read. The entitlement is set in the settings drawer's
+  contract section (days per year, unused days, the opening), and the
+  register's constants name it.
 - **The Holidays dialog** (`HolidaysDialog`, from the register's
   constants) edits the contract's company days and the public holidays the
   employer does not give, one year at a time (‹ 2026 ›), and saves with one
@@ -522,6 +539,6 @@ rules of its own there. The accent is its running beat and primary button.
 ## Follow-ups and open questions
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Project
-page follow-ups*. Vacation entitlement and the companion's week card are
-under *Work contracts follow-ups*. The open
+page follow-ups*. The companion's week card is under *Work contracts
+follow-ups*. The open
 question, `apple-mobile-web-app-status-bar-style` under the sky, is AHM-29.
