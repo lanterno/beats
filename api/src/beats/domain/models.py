@@ -255,7 +255,7 @@ class Contract(BaseModel):
     region — does nothing; a company day on a removed date wins. Each list's
     only rule is its own (no date twice), and no rule may ever tie either
     list to another field or to the other list: an incoming contract that
-    leaves a list out keeps the stored one (`keep_unsent_holiday_changes`),
+    leaves a list out keeps the stored one (`keep_unsent_contract_fields`),
     merged without re-validating, which is safe only while every rule on
     these lists is per-list. A cross-field rule would need that merge to
     re-validate and answer a 422 — otherwise a merged contract could fail

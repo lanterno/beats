@@ -29,7 +29,7 @@ from beats.api.schemas import (
 )
 from beats.domain.holidays import Holiday
 from beats.domain.models import Contract, ContractWeek, GoalOverride, Ledger, Project, ProjectKind
-from beats.domain.services import keep_unsent_holiday_changes
+from beats.domain.services import keep_unsent_contract_fields
 
 router = APIRouter(
     prefix="/api/projects",
@@ -167,7 +167,7 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
     if "contract" in sent:
         contract = request.contract
         if contract is not None:
-            contract = keep_unsent_holiday_changes(contract, existing.contract)
+            contract = keep_unsent_contract_fields(contract, existing.contract)
     else:
         contract = existing.contract if kind is ProjectKind.DAY_JOB else None
     project = Project(

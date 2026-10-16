@@ -282,16 +282,16 @@ def _check_contract(project: Project) -> None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
 
 
-_HOLIDAY_CHANGES = ("company_holidays", "holidays_not_given")
+_KEPT_WHEN_UNSENT = ("company_holidays", "holidays_not_given")
 
 
-def keep_unsent_holiday_changes(incoming: Contract, stored: Contract | None) -> Contract:
-    """`incoming`, with each holiday list it left out taken from `stored`.
+def keep_unsent_contract_fields(incoming: Contract, stored: Contract | None) -> Contract:
+    """`incoming`, with each later-added field it left out taken from `stored`.
 
-    Omitted is not null: a client that predates the lists (an old SPA tab,
-    which rebuilds the whole contract on every term edit) sends neither, and
-    must not delete them; an explicit `[]` clears. Which keys were sent is
-    the model's `model_fields_set`.
+    Omitted is not cleared: a client that predates a field (an old SPA tab,
+    which rebuilds the whole contract on every term edit) does not send it,
+    and must not delete it; an explicit empty value clears. Which keys were
+    sent is the model's `model_fields_set`.
 
     `model_copy` does not re-validate, and that is safe only because each
     list's rules are its own (see `Contract`): the stored list passed them on
@@ -303,7 +303,7 @@ def keep_unsent_holiday_changes(incoming: Contract, stored: Contract | None) -> 
         return incoming
     unsent = {
         field: getattr(stored, field)
-        for field in _HOLIDAY_CHANGES
+        for field in _KEPT_WHEN_UNSENT
         if field not in incoming.model_fields_set
     }
     return incoming.model_copy(update=unsent) if unsent else incoming
@@ -379,7 +379,7 @@ class ProjectService:
 
         Whole rather than patched, like goal overrides: the terms are a history
         that only makes sense as one list. The holiday lists are the exception:
-        one the body leaves out is kept (`keep_unsent_holiday_changes`). The
+        one the body leaves out is kept (`keep_unsent_contract_fields`). The
         kind is not touched here; a project that is not a day job has no
         contract to replace (409).
         """
@@ -387,7 +387,7 @@ class ProjectService:
         if project.kind is not ProjectKind.DAY_JOB:
             raise NotADayJob()
         previous = project.contract
-        project.contract = keep_unsent_holiday_changes(contract, previous)
+        project.contract = keep_unsent_contract_fields(contract, previous)
         return await self.update_project(project, previous_contract=previous)
 
     async def archive_project(self, project_id: str) -> Project:
