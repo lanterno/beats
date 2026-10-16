@@ -2737,6 +2737,27 @@ class TestComputeFocusScores:
         )
         assert [r["beat_id"] for r in result] == ["first", "last"]
 
+    async def test_a_week_behind_utc_keeps_its_sunday_evening(self):
+        """New York is behind UTC, so 23:30 on a Sunday is stored under the
+        Monday after the week. It belongs to the week; 00:30 on that Monday,
+        stored on the same UTC day, does not."""
+        tz = ZoneInfo("America/New_York")
+        monday = date(2026, 9, 7)
+        sunday, next_monday = monday + timedelta(days=6), monday + timedelta(days=7)
+
+        def beat(id_: str, d: date, hour: int, minute: int) -> Beat:
+            s = datetime(d.year, d.month, d.day, hour, minute, tzinfo=tz).astimezone(UTC)
+            return Beat(id=id_, project_id="p1", start=s, end=s + timedelta(minutes=20))
+
+        late = beat("late", sunday, 23, 30)
+        after = beat("after", next_monday, 0, 30)
+        assert late.start.date() == after.start.date() == next_monday
+
+        result = await _intel_service(beats=[after, late]).compute_focus_scores(
+            monday, sunday, tz=tz
+        )
+        assert [r["beat_id"] for r in result] == ["late"]
+
     async def test_a_week_is_ordered_by_day_then_start(self):
         monday = date(2026, 9, 7)
         tuesday, wednesday = monday + timedelta(days=1), monday + timedelta(days=2)
