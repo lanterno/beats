@@ -207,12 +207,7 @@ func printStatusHuman(cfg *config.Config, r statusReport) {
 	fmt.Println("  pair:   ok")
 
 	if r.Daemon.Running {
-		if r.Daemon.UptimeSec > 0 {
-			fmt.Printf("  daemon: running · %d windows emitted · uptime %s\n",
-				r.Daemon.WindowsEmitted, formatUptimeShort(r.Daemon.UptimeSec))
-		} else {
-			fmt.Println("  daemon: running")
-		}
+		fmt.Printf("  daemon: %s\n", daemonLine(r.Daemon))
 		// Surface a dropped count only when non-zero — silence is
 		// the healthy state and adding "0 dropped" to every status
 		// invocation would be noise. When non-zero it's actionable
@@ -290,28 +285,16 @@ func formatStatusJSON(r statusReport) (string, error) {
 	return string(b) + "\n", nil
 }
 
-// flowStatusLine returns the same one-line summary the human form
-// has always rendered. Now a thin wrapper over collectFlowStatus +
-// renderFlowLine so the structured (JSON) and string (table) paths
-// can never drift. Kept as a named export for the existing test
-// suite, which exercises the full pipeline through this entry
-// point.
-func flowStatusLine(ctx context.Context, c *client.Client) string {
-	return renderFlowLine(collectFlowStatus(ctx, c))
-}
-
-// daemonStatusDetail returns the human "running · N windows
-// emitted · uptime Xm" line. Kept as a wrapper for the same
-// reason flowStatusLine is — existing tests exercise it
-// end-to-end and the structured form (probeOwnDaemonHealth)
-// powers the JSON path.
-func daemonStatusDetail(port int) string {
-	uptime, emitted, _ := probeOwnDaemonHealth(port)
-	if uptime == 0 && emitted == 0 {
+// daemonLine is the human status line for a running daemon:
+// "running · N windows emitted · uptime Xm", or plain "running" when
+// its /health could not be read (an uptime of zero), so the status
+// command never wedges on an unreachable loopback.
+func daemonLine(d daemonStatus) string {
+	if d.UptimeSec <= 0 {
 		return "running"
 	}
 	return fmt.Sprintf("running · %d windows emitted · uptime %s",
-		emitted, formatUptimeShort(uptime))
+		d.WindowsEmitted, formatUptimeShort(d.UptimeSec))
 }
 
 // formatUptimeShort renders seconds as "Ns" / "Nm" / "Nh" / "Nd" —
