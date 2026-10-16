@@ -3316,7 +3316,7 @@ class TestBuildDayContext:
         """87 s on Tuesday and on Wednesday and an hour this morning: each
         day rounds to 0.02 h, and summing those read "1.0 h worked" beside
         "30.9 h to go" against 32 h. The week counts 1.05 h with 30.95 h to
-        go, which read 1.1 and 30.9 as the page's hours1 shows them."""
+        go."""
         job = self._job(starts=CONTRACT_MONDAY, region=None)
         beats = [
             self._work(date(2026, 5, 26), 87 / 3600),
@@ -3328,7 +3328,22 @@ class TestBuildDayContext:
 
         assert (
             "this week expects 32.0 h after holidays and days off"
-            " — 1.1 h worked under the contract, 30.9 h to go\n" in out
+            " — 1.05 h worked under the contract, 30.95 h to go\n" in out
+        )
+
+    async def test_quarter_hours_add_up_as_printed(self):
+        """23.75 h worked of 40 leaves 16.25 h: rounded to the tenth each,
+        the line read "23.8 h worked, 16.3 h to go" against 40.0."""
+        job = self._job(starts=CONTRACT_MONDAY, region=None)
+        beats = [
+            self._work(CONTRACT_MONDAY, 7.75),
+            *(self._work(CONTRACT_MONDAY + timedelta(days=n), 8) for n in (1, 2)),
+        ]
+        out = await self._day_context(projects=[job], beats=beats)
+
+        assert (
+            "this week expects 40.0 h after holidays and days off"
+            " — 23.75 h worked under the contract, 16.25 h to go\n" in out
         )
 
     async def test_only_days_that_shortened_the_week_are_listed(self):
