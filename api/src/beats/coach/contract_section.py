@@ -125,14 +125,15 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
         return []  # a finished job; its frozen balance is not live news
     lines: list[str] = []
 
-    if week.expected is not None:
+    # `expected` and `remaining` are None together (ContractWeek); both are
+    # named so the type checker knows it.
+    if week.expected is not None and week.remaining is not None:
         worked = sum(day.worked for day in week.days if counts_worked(contract, day.date))
-        remaining = week.remaining if week.remaining is not None else week.expected - worked
         term = term_on(contract, max(today, contract.starts_on))
         label = fmt_contract_goal(term) if term is not None else "contract"
         lines.append(
             f"  {name} ({label}): this week expects {_hours(week.expected)} after holidays"
-            f" and days off — {_hours(worked)} worked under the contract, {_left(remaining)}"
+            f" and days off — {_hours(worked)} worked under the contract, {_left(week.remaining)}"
         )
         # Which of this week's days off came from the employer's own list:
         # their names are the user's words, so only the fact is sent.
