@@ -138,7 +138,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     engine.run(withEntrypoint: "popoverMain")
     let controller = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
     controller.backgroundColor = .clear
-    popover.contentViewController = controller
+    // Flutter's view sits inside a plain container rather than being the
+    // popover's content view itself. On macOS 13.3.1 and later the engine
+    // leaves mouseDown and mouseUp to NSView's default, which passes them up
+    // to the view controller — except, on macOS 26, in a popover's content
+    // view, where they stop there and no click reaches Flutter
+    // (flutter/flutter#115015 was the same bug on older macOS).
+    let container = NSViewController()
+    container.view = NSView(frame: NSRect(origin: .zero, size: popover.contentSize))
+    container.addChild(controller)
+    controller.view.frame = container.view.bounds
+    controller.view.autoresizingMask = [.width, .height]
+    container.view.addSubview(controller.view)
+    popover.contentViewController = container
 
     let channel = FlutterMethodChannel(name: Self.popoverChannelName, binaryMessenger: engine.binaryMessenger)
     channel.setMethodCallHandler { [weak self] call, result in
