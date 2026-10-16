@@ -114,6 +114,17 @@ class TestTheEndYear:
         with pytest.raises(ValueError, match="outside"):
             vacation_year(contract, [], set(), 2029)
 
+    def test_the_last_year_a_date_can_hold_is_counted_like_any_other(self):
+        # The route takes a year up to 9999, and an open-ended contract chains
+        # every year up to it. Working out a year's length from the next
+        # Jan 1 raised there, a 500 at the route. 9999 is not a leap year:
+        # 181 of 365 days of 25 is 12.4, so 12.5.
+        open_ended = _contract(_entitlement())
+        ending = _contract(_entitlement(), ended_on=date(9999, 6, 30))
+
+        assert vacation_year(open_ended, [], set(), 9999).accrued == 25
+        assert vacation_year(ending, [], set(), 9999).accrued == 12.5
+
     def test_a_quarter_day_rounds_up_to_the_half(self):
         # 30.5 days × 15 / 366 is exactly 1.25: half up gives 1.5, where
         # banker's rounding would give 1.
