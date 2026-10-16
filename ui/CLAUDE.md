@@ -118,7 +118,8 @@ flash, and repeats the keys and the dusk sky's hex — change them in both place
 share — `/contract/week` for the open week, the current week (the balance is pinned to
 today) and the next, the ledger, the sessions and the running timer — and the open
 week, which is the URL's `?week=`, so ‹ ›, a ledger row and a time-off entry all move
-one navigator; it also owns the booking dialog every "Book time off" opens. Under
+one navigator; it also owns the booking dialog every "Book time off" opens and the
+Holidays dialog (`HolidaysDialog`) the register's constants open. Under
 `ProjectHeader` the main column is `Standing` ("Where you stand": the balance and its
 proof, or a side project's pace, beside the open week), `WeekDays` ("Days") and
 `WeekLedger` ("Earlier weeks"); the rail holds `ContractRegister` (the contract with
