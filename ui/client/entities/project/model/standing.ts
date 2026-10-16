@@ -35,7 +35,9 @@ export function weekLabel(weekOf: string, todayIso: string): string {
  * The first seven days under the contract (Decision 2): the balance is
  * charged a day at a time and has not had a full week to settle, so the page
  * shows it muted with the first-week line. False before the contract starts
- * — that is another state — and without a term.
+ * — that is another state — and without a term. The coach's twin is
+ * `_is_first_week` in api/src/beats/coach/contract_section.py; a change to
+ * either is made in both.
  */
 export function isFirstWeek(contract: Contract, todayIso: string): boolean {
 	const first = sortTerms(contract.terms)[0];

@@ -76,7 +76,11 @@ export function weekRange(weekOf: string): string {
 	return dateRange(weekOf, sundayOf(weekOf));
 }
 
-/** Hours at the decimal the page shows them: "6.7 h", "42.0 h". */
+/**
+ * Hours at the decimal the page shows them: "6.7 h", "42.0 h". The coach's
+ * twin is `_hours` in api/src/beats/coach/contract_section.py, which says the
+ * week's figures as the page shows them; a change to either is made in both.
+ */
 export function hours1(hours: number): string {
 	return `${hours.toFixed(1)} h`;
 }
