@@ -151,10 +151,13 @@
 	background: var(--hp-wash-2);
 }
 .homepage-nav-stars {
-	height: 16px;
-	width: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.2rem;
+	padding: 0.1rem 0.45rem;
 	border-radius: 999px;
-	opacity: 0.95;
+	background: var(--hp-panel);
+	font-size: 0.75rem;
 }
 .homepage-nav-signin {
 	font-family: var(--font-body);
@@ -245,11 +248,21 @@
 	flex-wrap: wrap;
 	min-height: 20px;
 }
-.homepage-badge-row img {
-	height: 20px;
-	width: auto;
+.homepage-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.2rem 0.65rem;
 	border-radius: 999px;
-	opacity: 0.92;
+	background: var(--hp-panel-2);
+	box-shadow: var(--hp-shadow-chip);
+	color: var(--hp-ink-2);
+	font-size: 0.75rem;
+	font-weight: 700;
+	line-height: 1.2;
+}
+.homepage-badge svg {
+	color: var(--hp-ink);
 }
 
 .homepage-hero-title {
