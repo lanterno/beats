@@ -324,8 +324,11 @@ match shows the figures and no sentence — never a guessed one. The code is
   week's `/contract/week`. Its figures round to 0.01 like the API's, so the
   sign is the balance's. The coach projects with a Python twin,
   `_by_sunday` in `api/src/beats/coach/contract_section.py`, and words the
-  balance with `describe_balance` beside it; a change to `projection()` or
-  `describeBalance` is made there too.
+  balance with `describe_balance` beside it. It prints the week's figures
+  with `_hours`, `hours1`'s twin, so it says the tenth the page shows, and
+  in the first week it sends no projection, by `_is_first_week`, the twin
+  of `isFirstWeek`. A change to `projection()`, `describeBalance`,
+  `hours1` or `isFirstWeek` is made there too.
 - **A cap has no sentence.** The personal-goal path serves every kind, and
   a day job under an objective term or before its first term, over the
   calendar days left.
