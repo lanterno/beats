@@ -3242,11 +3242,35 @@ class TestBuildDayContext:
         assert "2026-05-30" not in out
         assert "company holiday" not in out
 
-    async def test_contract_ending_this_week_says_so(self):
+    async def test_contract_that_ended_yesterday_sends_only_its_final_balance(self):
+        """Nothing worked from today on counts, so there is nothing "to go"
+        and no Sunday to project to: the project page shows "Final balance"
+        alone, and so does the section. −2 h the first week, +1 h on
+        Tuesday and +0.5 h on Wednesday; this morning's 3 h do not count."""
         job = self._job(ended_on=date(2026, 5, 27))
-        out = await self._day_context(projects=[job])
+        out = await self._day_context(projects=[job], beats=self._week_beats())
 
-        assert "  Acme: contract ends 2026-05-27" in out
+        assert out.split(CONTRACT_HEADER)[1].strip().splitlines() == [
+            "Acme final balance: −0.5 h owed (contract ended 2026-05-27)"
+        ]
+        for live in ("to go", "running balance", "by Sunday", "today:", "contract ends"):
+            assert live not in out
+
+    async def test_contract_ending_today_is_still_live(self):
+        """On the last day today's hours count and today's 8 h are charged
+        tomorrow, so the bare +2.5 h is not where the contract closes: the
+        projection is, and the section keeps it. Meeting the week closes at
+        last week's −2 h."""
+        job = self._job(ended_on=CONTRACT_TODAY)
+        out = await self._day_context(projects=[job], beats=self._week_beats())
+
+        assert "  Acme running balance: +2.5 h over" in out
+        assert (
+            "  Acme by Sunday: −5.5 h owed if you stop now, −2.0 h owed if the rest of the"
+            " week is met" in out
+        )
+        assert "  Acme: contract ends 2026-05-28" in out
+        assert "final balance" not in out
 
     @pytest.mark.parametrize(
         "case", ["objective", "side_project", "no_contract", "ended_last_week"]
