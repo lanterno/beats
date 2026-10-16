@@ -36,6 +36,7 @@ from beats.domain.holidays import (
 from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
     Absence,
+    BalanceAdjustment,
     Beat,
     Contract,
     ContractDay,
@@ -559,7 +560,7 @@ class ContractService:
         absences = await self.absence_repo.list_by_project(project.id, start, end)
         holidays = contract_holidays(contract, start, end)
         worked = worked_by_local_day(beats, tz)
-        return self._assemble(contract, absences, holidays, worked, week_of, today)
+        return self._assemble(contract, absences, holidays, worked, [], week_of, today)
 
     async def ledger(self, project_id: str, weeks: int, tz: ZoneInfo) -> Ledger:
         """The last `weeks` weeks of any project, newest first, ending with the
@@ -588,7 +589,7 @@ class ContractService:
             absences = await self.absence_repo.list_by_project(project.id, start, end)
             holidays = contract_holidays(contract, start, end)
         worked = worked_by_local_day(beats, tz)
-        return assemble_ledger(project, contract, absences, holidays, worked, today, weeks)
+        return assemble_ledger(project, contract, absences, holidays, worked, [], today, weeks)
 
     async def weeks_for(
         self, projects: Iterable[Project], beats_by_pid: Mapping[str, list[Beat]], tz: ZoneInfo
@@ -644,6 +645,7 @@ class ContractService:
         absences: Iterable[Absence],
         holidays: Mapping[date, str],
         worked: Mapping[date, float],
+        adjustments: Iterable[BalanceAdjustment],
         week_of: date,
         today: date,
     ) -> ContractWeek:
@@ -680,7 +682,7 @@ class ContractService:
         expected = week_expectation(contract, absences, holiday_days, week_of)
         remaining = round_hours(expected_raw - counted_raw) if expected is not None else None
         running = (
-            balance_terms(contract, absences, holiday_days, worked, today)
+            balance_terms(contract, absences, holiday_days, worked, adjustments, today)
             if owes(term_on(contract, today))
             else None
         )
@@ -695,6 +697,7 @@ class ContractService:
             balance_opening=round_hours(running.opening) if running else None,
             balance_worked=round_hours(running.worked) if running else None,
             balance_expected_through=(round_hours(running.expected_through) if running else None),
+            balance_adjusted=round_hours(running.adjusted) if running else None,
         )
 
     async def holidays(
