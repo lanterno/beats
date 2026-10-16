@@ -8,6 +8,7 @@ export {
 	usePatterns,
 	useProductivityScore,
 	useProjectHealth,
+	useRefreshFocusScores,
 	useRefreshPatterns,
 	useScoreHistory,
 } from "./api";

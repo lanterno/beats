@@ -78,10 +78,11 @@ export async function dismissInboxItem(itemId: string): Promise<void> {
 	await post<void>(`/api/intelligence/inbox/${itemId}/dismiss`, {});
 }
 
-export async function fetchFocusScores(date?: string): Promise<FocusScore[]> {
+/** Today's focus scores, or Monday to Sunday of `weekOf` (a Monday). */
+export async function fetchFocusScores(weekOf?: string): Promise<FocusScore[]> {
 	const tz = encodeURIComponent(browserTimeZone());
-	const url = date
-		? `/api/intelligence/focus-scores?date=${date}&tz=${tz}`
+	const url = weekOf
+		? `/api/intelligence/focus-scores?week_of=${weekOf}&tz=${tz}`
 		: `/api/intelligence/focus-scores?tz=${tz}`;
 	const data = await get<unknown>(url);
 	return parseApiResponse(FocusScoreListSchema, data);
