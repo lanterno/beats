@@ -5,8 +5,8 @@
  * same-tab writes, so we dispatch our own.
  *
  * Same key scheme as pickerRecents (P2.1) — both user-scoped by email so
- * a shared browser doesn't leak state across accounts. Server-side
- * persistence stays deferred per the roadmap (open question 2).
+ * a shared browser doesn't leak state across accounts. Pins live in this
+ * browser only; they do not follow the account to another device.
  */
 
 import { useEffect, useState } from "react";

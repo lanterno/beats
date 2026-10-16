@@ -4,8 +4,7 @@ Sibling of test_domain.py — covers the coach modules whose logic is
 deterministic enough to test without making LLM calls. Some tests touch
 Mongo via the testcontainers harness in conftest.py; others are pure.
 Gateway streaming, the chat tool-use loop, and context builders use
-hand-rolled fakes (added incrementally per the coach hardening
-roadmap).
+hand-rolled fakes.
 
 The test_api.py suite covers the HTTP layer; this file covers the
 modules underneath.

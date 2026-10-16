@@ -93,7 +93,7 @@ export type AnyProject = Project | ProjectWithDuration;
  * Sorted unique list of category strings across all projects. Seeds the
  * `<datalist>` of the ProjectForm category combobox so users can pick an
  * existing value with one click but still type a new one — keeps category
- * free-form (per the roadmap open question) while reducing typo drift.
+ * free-form while reducing typo drift.
  */
 export function extractCategories<T extends Pick<Project, "category">>(
 	projects: T[] | undefined,

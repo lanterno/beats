@@ -35,7 +35,7 @@ this build derives the same contract from the same fields. Clearing the goal
 is the second pass, `clear_personal_goal_on_day_jobs`, added once every reader
 took the contract (Phase 5); its own reasoning is on the function.
 
-What the roadmap leaves open, decided here:
+What docs/work-contracts.md leaves open, decided here:
 
 - **The base term's date.** `Project` has no `created_at`. The base term starts
   on the UTC date of the project's earliest beat, running or not — the day the
@@ -223,24 +223,22 @@ async def clear_personal_goal_on_day_jobs(
     on a week ("holiday", "conference"), and the overrides panel still lists
     them, so they stay theirs to keep or delete.
 
-    This is the pass the roadmap said would not be additive, and it is the
-    first that is not. Under a rollback to a revision between Phase 1 and this
-    one, or an old revision still serving during a rollout, the projects
-    cleared here are read by the personal goal's path with nothing but their
-    overrides left: the readers that gated on `weekly_goal` — the score, the
-    stale-project card, the coach's goals — go quiet, while the week card,
-    pacing, planning and health show whatever an `effective_from` override in
-    force says (the case for every migrated day job that had one) and "—"
-    where there is none. Readers disagreeing, then, rather than no goal
-    anywhere, until roll-forward, when the readers take the contract again
-    and nothing is lost, because the number the goal had is in the
-    contract's terms (Decision 10). What is lost for good is narrower: a
-    document a revision *without the model* (before Phase 1) rewrites drops
-    `kind` and `contract`, and with no `weekly_goal` left the first pass then
-    migrates it as a side project with no contract. That is a rollback across
-    four deployed phases, and the terms the user edited since Phase 4 could
-    not be re-derived from the goal anyway; it is accepted, and this note is
-    what says so.
+    This is the first pass that is not additive. Under a rollback to a revision
+    between Phase 1 and this one, or an old revision still serving during a
+    rollout, the projects cleared here are read by the personal goal's path with
+    nothing but their overrides left: the readers that gated on `weekly_goal` —
+    the score, the stale-project card, the coach's goals — go quiet, while the
+    week card, pacing, planning and health show whatever an `effective_from`
+    override in force says (the case for every migrated day job that had one)
+    and "—" where there is none. Readers disagreeing, then, rather than no goal
+    anywhere, until roll-forward, when the readers take the contract again and
+    nothing is lost, because the number the goal had is in the contract's terms
+    (Decision 10). What is lost for good is narrower: a document a revision
+    *without the model* (before Phase 1) rewrites drops `kind` and `contract`,
+    and with no `weekly_goal` left the first pass then migrates it as a side
+    project with no contract. That is a rollback across four deployed phases,
+    and the terms the user edited since Phase 4 could not be re-derived from the
+    goal anyway; it is accepted, and this note is what says so.
 
     Writes are a `$unset` filtered on the document still being a day job with
     the personal goal this pass read, so a request that rewrites the project
