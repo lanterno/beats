@@ -280,7 +280,10 @@ match shows the figures and no sentence — never a guessed one. The code is
 - **The projection is the current week's only.** The balance is pinned to
   today whatever week is open, so the page always passes the current
   week's `/contract/week`. Its figures round to 0.01 like the API's, so the
-  sign is the balance's.
+  sign is the balance's. The coach projects with a Python twin,
+  `_by_sunday` in `api/src/beats/coach/contract_section.py`, and words the
+  balance with `describe_balance` beside it; a change to `projection()` or
+  `describeBalance` is made there too.
 - **A cap has no sentence.** The personal-goal path serves every kind, and
   a day job under an objective term or before its first term, over the
   calendar days left.
