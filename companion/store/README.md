@@ -86,7 +86,11 @@ These need the account holder; the rest is done.
    *Store settings*: category Productivity; contact email
    ahmed.elghareeb@proton.me; website https://lifepete.com.
 6. **Closed testing.** Create a closed track, add testers by email or a Google
-   Group, share the opt-in link, and promote the internal build to it.
+   Group, share the opt-in link, and promote the internal build to it. The
+   track is *alpha*, its testers the *my testers* email list. The opt-in link
+   is https://play.google.com/apps/testing/space.elghareeb.beats; it works only
+   for a Google account already on that list, so add someone's address before
+   sending it. Only testers who opt in count toward the 12.
 7. **Production access.** After 14 days with 12 or more testers, *Dashboard →
    Apply for production*, answer the questions about the test, then create a
    production release from the same bundle and send it for review.
