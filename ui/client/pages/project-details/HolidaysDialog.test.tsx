@@ -97,6 +97,20 @@ describe("HolidaysDialog", () => {
 		expect(sentContract().company_holidays).toEqual([nextYear]);
 	});
 
+	it("keeps a tick on a weekend holiday stored as not given, so it can be taken back", async () => {
+		// The dialog never builds this, but the API accepts it; without the tick
+		// the date would be counted in the constants and impossible to remove.
+		hooks.holidays.mockReturnValue([holiday("2026-08-01", "Swiss National Day", false)]);
+		renderDialog({ holidaysNotGiven: ["2026-08-01"] });
+
+		const tick = within(dialog()).getByRole("checkbox", { name: /Swiss National Day/ });
+		expect(tick).not.toBeChecked();
+		await userEvent.click(tick);
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
+
+		expect(sentContract().holidays_not_given).toEqual([]);
+	});
+
 	it("refuses a company day without a name before sending anything", async () => {
 		renderDialog();
 
