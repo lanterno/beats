@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response
+from pydantic import AfterValidator
 
 from beats.api.dependencies import (
     InsightsRepoDep,
@@ -25,6 +26,7 @@ from beats.api.schemas import (
     SuggestionResponse,
     WeeklyDigestResponse,
 )
+from beats.domain.intelligence.focus import EARLIEST_SCORABLE_DAY
 from beats.domain.models import UserInsights
 
 router = APIRouter(prefix="/api/intelligence", tags=["intelligence"])
@@ -178,12 +180,22 @@ async def get_suggestions(
     return [SuggestionResponse(**r) for r in results]
 
 
+def _within_focus_reach(day: date | None) -> date | None:
+    """A week's scores read a month of history before it; a `week_of` whose
+    history would start before the calendar does is a 422, not an overflow."""
+    if day is not None and day < EARLIEST_SCORABLE_DAY:
+        msg = "week_of is too close to the start of the calendar"
+        raise ValueError(msg)
+    return day
+
+
 @router.get("/focus-scores", response_model=list[FocusScoreResponse])
 async def get_focus_scores(
     service: IntelligenceServiceDep,
     tz: TimezoneDep,
     week_of: Annotated[
         MondayDate,
+        AfterValidator(_within_focus_reach),
         Query(
             description="Monday of the week to score, Monday to Sunday in `tz`. "
             "Defaults to today alone."

@@ -13,6 +13,10 @@ from ._support import UTC_TZ, _beats_covering
 # A session's peak hours come from the local days up to and including it.
 PEAK_WINDOW_DAYS = 30
 
+# The first day `compute_focus_scores` can score: its peak window, and the day
+# `_beats_covering` widens a read by, have to fit inside the calendar.
+EARLIEST_SCORABLE_DAY = date.min + timedelta(days=PEAK_WINDOW_DAYS + 1)
+
 
 async def compute_focus_scores(
     beat_repo: RangeBeatReader, start: date, end: date, tz: ZoneInfo = UTC_TZ
