@@ -82,7 +82,7 @@
         "type": "object"
       },
       "AbsenceType": {
-        "description": "Why a day was not worked. For the record and the calendar's colour only \u2014\nthe arithmetic treats all three the same.",
+        "description": "Why a day was not worked. The expectation treats all three the same: a\nday off is a day off. Only the vacation count reads the type, and counts\n`vacation` alone against the entitlement (`domain/vacation.py`).",
         "enum": [
           "vacation",
           "sick",
@@ -551,6 +551,16 @@
         "title": "BriefResponse",
         "type": "object"
       },
+      "CarryOver": {
+        "description": "What becomes of the vacation days left at the end of a year.",
+        "enum": [
+          "all",
+          "capped",
+          "none"
+        ],
+        "title": "CarryOver",
+        "type": "string"
+      },
       "ChatRequest": {
         "properties": {
           "conversation_id": {
@@ -598,7 +608,7 @@
         "type": "object"
       },
       "Contract": {
-        "description": "A day job's terms as they changed over time, plus what frames them.\n\n`terms` is the history \u2014 part-time, then 80%, then full-time \u2014 kept in\norder of `effective_from` with no two starting on the same day, because\nthe day decides which term applies. The region names the employer's\npublic holidays: `holiday_subdivision` only means something inside a\n`holiday_country`. Both must be codes the holidays library knows, but\nthat is checked where a contract is written (`ProjectService`), not\nhere: this model is re-validated on every read, and the set of codes the\nlibrary knows moves with its version \u2014 a code it stops recognising must\nmake one contract un-editable, not every project of the user unreadable.\n`opening_balance_hours` is what was banked (or owed) before Beats started\ncounting; `ended_on` freezes the balance from that day on.\n\nWhere the employer's days off differ from the region's, two lists say\nhow: `company_holidays` adds days, `holidays_not_given` takes region\nholidays away (`domain/holidays.contract_calendar` combines the three).\nA removal that matches no region holiday \u2014 or is kept while there is no\nregion \u2014 does nothing; a company day on a removed date wins. Each list's\nonly rule is its own (no date twice), and no rule may ever tie either\nlist to another field or to the other list: an incoming contract that\nleaves a list out keeps the stored one (`keep_unsent_holiday_changes`),\nmerged without re-validating, which is safe only while every rule on\nthese lists is per-list. A cross-field rule would need that merge to\nre-validate and answer a 422 \u2014 otherwise a merged contract could fail\nthe next read, and every project of the user with it.",
+        "description": "A day job's terms as they changed over time, plus what frames them.\n\n`terms` is the history \u2014 part-time, then 80%, then full-time \u2014 kept in\norder of `effective_from` with no two starting on the same day, because\nthe day decides which term applies. The region names the employer's\npublic holidays: `holiday_subdivision` only means something inside a\n`holiday_country`. Both must be codes the holidays library knows, but\nthat is checked where a contract is written (`ProjectService`), not\nhere: this model is re-validated on every read, and the set of codes the\nlibrary knows moves with its version \u2014 a code it stops recognising must\nmake one contract un-editable, not every project of the user unreadable.\n`opening_balance_hours` is what was banked (or owed) before Beats started\ncounting; `ended_on` freezes the balance from that day on.\n\nWhere the employer's days off differ from the region's, two lists say\nhow: `company_holidays` adds days, `holidays_not_given` takes region\nholidays away (`domain/holidays.contract_calendar` combines the three).\nA removal that matches no region holiday \u2014 or is kept while there is no\nregion \u2014 does nothing; a company day on a removed date wins. Each list's\nonly rule is its own (no date twice), and no rule may ever tie either\nlist to another field or to the other list: an incoming contract that\nleaves a list out keeps the stored one (`keep_unsent_contract_fields`),\nmerged without re-validating, which is safe only while every rule on\nthese lists is per-list. A cross-field rule would need that merge to\nre-validate and answer a 422 \u2014 otherwise a merged contract could fail\nthe next read, and every project of the user with it.\n\n`vacation` is the leave the job gives (`VacationEntitlement`), None when\nnothing is tracked. It is kept when left out the same way, and so has no\nrule here tying it to the terms or `ended_on`: that its opening falls\ninside the contract's dates is checked after the merge, on the write.",
         "properties": {
           "company_holidays": {
             "items": {
@@ -662,6 +672,16 @@
             },
             "title": "Terms",
             "type": "array"
+          },
+          "vacation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VacationEntitlement"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3883,6 +3903,101 @@
           "sso_provisioned"
         ],
         "title": "UserResponse",
+        "type": "object"
+      },
+      "VacationEntitlement": {
+        "description": "The vacation days a day job gives, counted the way the arithmetic\ncounts a day off: for a five-day week (decision 3), so a week off is\nfive days whatever the percentage, and a 4-day week with 20 days is\nentered as 25.\n\nCounting starts on `opening_on`, with `opening_days` left for the rest\nof that calendar year (carry-over included, negative when overdrawn) \u2014\nthe figure off the contract or an HR statement. Nothing before it is\nreconstructed: a contract the migration started at the first beat,\nyears back, must not be credited years of leave nobody recorded.\n\nEvery figure is a whole or half day. The rules are field constraints,\nso a 422 names the leaf. The one rule tying the entitlement to the rest\nof the contract \u2014 `opening_on` inside its dates \u2014 is checked where a\ncontract is written (`ProjectService`), for the reason the region is:\nthis model is re-validated on every read, and a stored entitlement can\nbe paired with new terms by the keep-unsent merge.",
+        "properties": {
+          "carry_over": {
+            "$ref": "#/components/schemas/CarryOver"
+          },
+          "carry_over_max_days": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 366.0,
+                "multipleOf": 0.5,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carry Over Max Days"
+          },
+          "days_per_year": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 366.0,
+            "multipleOf": 0.5,
+            "title": "Days Per Year",
+            "type": "number"
+          },
+          "opening_days": {
+            "maximum": 366.0,
+            "minimum": -366.0,
+            "multipleOf": 0.5,
+            "title": "Opening Days",
+            "type": "number"
+          },
+          "opening_on": {
+            "format": "date",
+            "title": "Opening On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "days_per_year",
+          "carry_over",
+          "opening_on",
+          "opening_days"
+        ],
+        "title": "VacationEntitlement",
+        "type": "object"
+      },
+      "VacationYear": {
+        "description": "`GET /{id}/vacation`: one calendar year of a day job's vacation\nentitlement, in days, every figure a whole or half day. See\n`domain/vacation.py` for how each is worked out. Only what the client\ncannot derive: the days per year, the opening and the end date are on\nthe contract it already holds.",
+        "properties": {
+          "accrued": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accrued"
+          },
+          "available": {
+            "title": "Available",
+            "type": "number"
+          },
+          "booked": {
+            "title": "Booked",
+            "type": "number"
+          },
+          "carried_in": {
+            "title": "Carried In",
+            "type": "number"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "number"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "accrued",
+          "carried_in",
+          "available",
+          "booked",
+          "remaining"
+        ],
+        "title": "VacationYear",
         "type": "object"
       },
       "ValidationError": {
@@ -7933,7 +8048,7 @@
     },
     "/api/projects/{project_id}/contract": {
       "put": {
-        "description": "Replace a day job's whole contract: terms, holiday region, company\nholidays and the region holidays not given, opening balance and end\ndate, in one shape, like goal-overrides. A holiday list the body leaves\nout is kept; `[]` clears it. Leaves `kind` alone; on a project that is\nnot a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar\ndoes not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term\nlater past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START).",
+        "description": "Replace a day job's whole contract: terms, holiday region, company\nholidays and the region holidays not given, opening balance, end date\nand vacation entitlement, in one shape, like goal-overrides. A holiday\nlist or a `vacation` the body leaves out is kept; `[]` or `null` clears\nit. Leaves `kind` alone; on a project that is not a day job it is a 409\n(NOT_A_DAY_JOB), and a region the calendar does not know is a 400\n(UNKNOWN_HOLIDAY_REGION). Moving the first term later past a balance\nadjustment is a 409 (ADJUSTMENT_BEFORE_START), and leaving the vacation\ncount's opening outside the contract's dates a 409\n(VACATION_OPENING_OUTSIDE_CONTRACT).",
         "operationId": "replace_contract_api_projects__project_id__contract_put",
         "parameters": [
           {
@@ -8650,6 +8765,90 @@
           }
         },
         "summary": "Unarchive Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/vacation": {
+      "get": {
+        "description": "One calendar year of a day job's vacation entitlement, in days: what\nthe year gives (`accrued`, pro-rated in the year the contract ends; null\nin the opening year, whose figure is the opening's), what the year\nbefore carried in, what is available, what is booked (the `vacation`\ndays, past and planned, on weekdays inside the contract's dates that are\nnot its holidays) and what remains. Every figure is a whole or half day.\n409 on a project that is not a day job (NOT_A_DAY_JOB), without a\ncontract (NO_CONTRACT) or an entitlement (NO_VACATION_ENTITLEMENT), and\nfor a year before the opening's or after the contract's end\n(VACATION_YEAR_OUT_OF_RANGE).",
+        "operationId": "get_vacation_api_projects__project_id__vacation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to the current year in `tz`.",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9999,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the current year in `tz`.",
+              "title": "Year"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VacationYear"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Vacation",
         "tags": [
           "Projects"
         ]
