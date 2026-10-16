@@ -187,6 +187,7 @@ function toLedgerWeek(api: ApiLedgerWeek): LedgerWeek {
 		effectiveGoalOverridden: api.effective_goal_overridden,
 		contractExpected: api.contract_expected,
 		balanceEnd: api.balance_end,
+		balanceMoved: api.balance_moved,
 		notes: api.notes.map(toLedgerNote),
 		adjustments: api.adjustments.map(toLedgerAdjustment),
 	};

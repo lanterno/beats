@@ -1550,6 +1550,7 @@ class TestLedgerAPI:
         assert current["worked"] == 0.78
         assert current["days"] == [0.78, 0, 0, 0, 0, 0, 0]
         assert current["balance_end"] is None  # not closed yet
+        assert current["balance_moved"] is None
         assert current["contract_expected"] == 40
         assert (current["effective_goal"], current["effective_goal_type"]) == (40, "target")
         assert current["effective_goal_overridden"] is False
@@ -1559,6 +1560,9 @@ class TestLedgerAPI:
         # worked − expected: the row is its own week's, not a neighbour's.
         assert last["balance_end"] - ledger["weeks"][2]["balance_end"] == pytest.approx(
             last["worked"] - last["contract_expected"], abs=0.01
+        )
+        assert last["balance_moved"] == pytest.approx(
+            last["balance_end"] - ledger["weeks"][2]["balance_end"], abs=0.01
         )
         assert ledger["since"] == CONTRACT_START
         totals = ledger["totals"]

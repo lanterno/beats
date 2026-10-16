@@ -19,7 +19,7 @@ src/beats/
 │   ├── exceptions.py    DomainException hierarchy → unified envelope
 │   ├── services.py      TimerService, ProjectService, BeatService, ContractService
 │   ├── contracts.py     Work-contract arithmetic: term in force, expected hours, balance adjustments, and one running pass for the balance, its terms and the closes
-│   ├── ledger.py        Pure assembly of the project page's weeks (goal, expectation, closing balance, adjustments)
+│   ├── ledger.py        Pure assembly of the project page's weeks (goal, expectation, closing balance and its move, adjustments)
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions, and a contract's holiday set (`contract_calendar`, `contract_holidays`)
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
 │   ├── flow.py          Pure aggregation over the daemon's flow windows, for the coach

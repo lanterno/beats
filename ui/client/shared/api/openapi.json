@@ -2165,6 +2165,17 @@
             ],
             "title": "Balance End"
           },
+          "balance_moved": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Moved"
+          },
           "contract_expected": {
             "anyOf": [
               {
@@ -2227,6 +2238,7 @@
           "effective_goal_overridden",
           "contract_expected",
           "balance_end",
+          "balance_moved",
           "notes",
           "adjustments"
         ],

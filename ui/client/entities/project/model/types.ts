@@ -155,6 +155,10 @@ export interface LedgerAdjustment {
  *   today's) and whenever `contractExpected` is null: one rule for the row.
  *   After the contract ended every week repeats the frozen final balance,
  *   moved only by an adjustment after the end.
+ * - `balanceMoved`: what the week's work and expectation moved the balance
+ *   by — the close less the one before, less the adjustments between; on
+ *   the contract's first close, from the opening balance. Null exactly when
+ *   `balanceEnd` is; absent from an API that predates it.
  * - `days`: seven entries, Monday to Sunday, hours worked by the local day
  *   each beat started on, a running timer included.
  * - `notes`: weekdays only, by date, a holiday before an absence on the same day.
@@ -170,6 +174,7 @@ export interface LedgerWeek {
 	effectiveGoalOverridden: boolean;
 	contractExpected: number | null;
 	balanceEnd: number | null;
+	balanceMoved?: number | null;
 	notes: LedgerNote[];
 	adjustments: LedgerAdjustment[];
 }

@@ -273,7 +273,8 @@ nothing.
   closing balance is the Sunday close, before Monday's adjustment, read off one running
   total (`running_balance`) with today's terms and every adjustment's `applied`; on the week
   a contract starts or ends mid-week `worked` counts hours the balance does not, so the
-  page's +/− is the move between two closes, less the week's adjustments. The decisions are in
+  page's +/− is each week's `balance_moved`: the move between two closes, less the
+  adjustments between, read off the same pass even for the oldest week shown. The decisions are in
   [docs/work-contracts.md](docs/work-contracts.md) and
   [docs/project-page.md](docs/project-page.md).
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`

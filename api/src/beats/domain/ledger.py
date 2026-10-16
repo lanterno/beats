@@ -38,6 +38,18 @@ What a week carries, and when a figure is None:
                       expectation freeze on that day, so the ledger repeats
                       the frozen figure rather than going blank — the
                       closing balance is still what the reader asked for.
+    balance_moved     what the week's work and expectation moved the
+                      balance by — the +/− a reader of the row wants: its
+                      close less the Sunday close before it, less the
+                      adjustments dated in between, which are figures of
+                      their own. On the contract's first close it is read
+                      from the opening balance, and when the week holding
+                      the first day has no close (a weekend start) the
+                      week after reads from it too, so those weekend hours
+                      land in the first week that closes. None exactly
+                      when `balance_end` is. The close before is read off
+                      the same pass whether or not its week is in the
+                      ledger, so the oldest row shown has its move too.
     notes             the absences and named public holidays on the week's
                       weekdays, by date; an absence carries `half_day`, a
                       holiday its `name`. Weekends are left out: they owe
@@ -55,7 +67,7 @@ What a week carries, and when a figure is None:
 from the contract's first day through `ended_on`. On the week a contract
 starts or ends mid-week the row's worked − contract_expected is therefore not
 the balance's move: the hours before the first day or after the last are
-shown, and charged nothing.
+shown, and charged nothing. `balance_moved` is the move.
 
 `since` is the contract's first day, or None. `totals` is the balance as of
 today with the three terms that move it, or None when there is no balance
@@ -63,8 +75,8 @@ today — the same rule as the week route's `balance`. `ended_balance` is the
 close on `ended_on` once that day has come: the final balance, before a
 settlement dated after it.
 
-The totals, every close, every `applied` and `ended_balance` come from one
-`running_balance` pass, so no two of them can disagree.
+The totals, every close, every move, every `applied` and `ended_balance` come
+from one `running_balance` pass, so no two of them can disagree.
 """
 
 from collections.abc import Iterable, Mapping
@@ -112,6 +124,7 @@ def assemble_ledger(
     adjustments = list(adjustments)
     expected: dict[date, float | None] = {}
     closes: dict[date, float] = {}
+    moved: dict[date, float] = {}
     applied: dict[date, float] = {}
     filed: list[BalanceAdjustment] = []
     totals = None
@@ -127,6 +140,12 @@ def assemble_ledger(
         # today's balance instead — and a week with no expectation has no
         # balance to close.
         sundays = [week_of + _SUNDAY for week_of in mondays[1:] if expected[week_of] is not None]
+        # The day each close's move is read from, closed in the same pass.
+        froms = {
+            sunday: _move_from(contract, by_day, holiday_days, sunday - _SUNDAY)
+            for sunday in sundays
+        }
+        wanted = [*sundays, *froms.values()]
         running = running_balance(
             contract,
             by_day.values(),
@@ -134,10 +153,16 @@ def assemble_ledger(
             worked,
             adjustments,
             today,
-            [*sundays, ended_on] if ended and ended_on is not None else sundays,
+            [*wanted, ended_on] if ended and ended_on is not None else wanted,
         )
         closes = {sunday: running.closes[sunday] for sunday in sundays}
         applied = running.applied
+        moved = {
+            sunday: running.closes[sunday]
+            - running.closes[before]
+            - sum(hours for day, hours in applied.items() if before < day <= sunday)
+            for sunday, before in froms.items()
+        }
         # Only an adjustment the pass reached moved anything: one dated
         # before the contract's first day is ignored, so it is not shown.
         filed = [a for a in adjustments if a.date in applied]
@@ -163,6 +188,7 @@ def assemble_ledger(
             week_of,
             expected.get(week_of),
             closes.get(week_of + _SUNDAY),
+            moved.get(week_of + _SUNDAY),
         )
         for week_of in mondays
     ]
@@ -172,6 +198,28 @@ def assemble_ledger(
         totals=totals,
         ended_balance=ended_balance,
     )
+
+
+def _move_from(
+    contract: Contract,
+    by_day: Mapping[date, Absence],
+    holidays: set[date],
+    week_of: date,
+) -> date:
+    """The day whose close the move of the week starting `week_of` is read
+    from: the Sunday before it — or, when the week before holds the
+    contract's first day and has no close, the day before the first, which
+    closes at the opening balance. A week holding the first day itself reads
+    from its own Sunday before, which is before the contract and so closes at
+    the opening balance as well."""
+    week_before = week_of - timedelta(weeks=1)
+    starts_on = contract.starts_on
+    if (
+        week_before <= starts_on < week_of
+        and week_expectation(contract, by_day.values(), holidays, week_before) is None
+    ):
+        return starts_on - timedelta(days=1)
+    return week_of - timedelta(days=1)
 
 
 def _week(
@@ -185,6 +233,7 @@ def _week(
     week_of: date,
     expected: float | None,
     closing: float | None,
+    moved: float | None,
 ) -> LedgerWeek:
     days = [week_of + timedelta(days=offset) for offset in range(7)]
     hours = [worked.get(day, 0.0) for day in days]
@@ -210,6 +259,7 @@ def _week(
         effective_goal_overridden=project.goal_overridden(week_of),
         contract_expected=expected,
         balance_end=round_hours(closing) if closing is not None else None,
+        balance_moved=round_hours(moved) if moved is not None else None,
         notes=notes,
         adjustments=[
             LedgerAdjustment(
