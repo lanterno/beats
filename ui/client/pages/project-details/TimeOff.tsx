@@ -16,7 +16,7 @@ import { type Ref, useState } from "react";
 import type { Absence, AbsenceType } from "@/entities/absence";
 import { ABSENCE_TYPE_LABELS, useAbsences } from "@/entities/absence";
 import type { Holiday, ProjectWithDuration } from "@/entities/project";
-import { useHolidayRegions, useProjectHolidays } from "@/entities/project";
+import { halfDays, useHolidayRegions, useProjectHolidays } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { addIsoDays, cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
@@ -52,13 +52,6 @@ const TYPES: AbsenceType[] = ["vacation", "sick", "other"];
 type Entry =
 	| ({ kind: "absence" } & AbsenceRun)
 	| { kind: "holiday"; date: string; name: string; source: Holiday["source"] };
-
-/** "21", "½", "2½" — days counted in halves. */
-function days(n: number): string {
-	const whole = Math.floor(n);
-	const half = n - whole >= 0.5 ? "½" : "";
-	return whole === 0 ? half || "0" : `${whole}${half}`;
-}
 
 function dayCount(run: AbsenceRun): number {
 	return run.absences.reduce((sum, a) => sum + (a.halfDay ? 0.5 : 1), 0);
@@ -124,7 +117,7 @@ function tally(absences: Absence[], year: number): string {
 	const inYear = absences.filter((a) => a.date.startsWith(`${year}-`));
 	const parts = TYPES.map((type) => {
 		const n = inYear.filter((a) => a.type === type).reduce((s, a) => s + (a.halfDay ? 0.5 : 1), 0);
-		return n > 0 ? `${days(n)} d ${type}` : null;
+		return n > 0 ? `${halfDays(n)} d ${type}` : null;
 	}).filter((part): part is string => part !== null);
 	if (parts.length === 0) return `Nothing booked yet in ${year}`;
 	parts[0] = `${parts[0]} booked`;
@@ -235,7 +228,7 @@ export function TimeOff({
 								: `${dateOf(entry.from)} – ${dateOf(entry.through)}`;
 							what = [
 								`${ABSENCE_TYPE_LABELS[entry.type]}${single && first.halfDay ? " ½" : ""}`,
-								single ? null : `${days(count)} day${count <= 1 ? "" : "s"}`,
+								single ? null : `${halfDays(count)} day${count <= 1 ? "" : "s"}`,
 								note || null,
 							]
 								.filter((part): part is string => part !== null)

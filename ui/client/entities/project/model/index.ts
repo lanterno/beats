@@ -65,6 +65,7 @@ export {
 } from "./selectors";
 // The standing: the sentence, the projection, the first week, the labels
 export {
+	halfDays,
 	isFirstWeek,
 	nominalLine,
 	type Projection,

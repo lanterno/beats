@@ -70,6 +70,7 @@ export {
 	type FilterAndRankOptions,
 	filterAndRankProjects,
 	formatSignedHours,
+	halfDays,
 	isFirstWeek,
 	isTimeBasedOn,
 	ledgerCsv,
