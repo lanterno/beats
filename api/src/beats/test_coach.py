@@ -3346,10 +3346,11 @@ class TestBuildDayContext:
 
     async def test_by_sunday_charges_today_and_the_rest_of_the_week(self):
         """The bare balance counts this morning's 4 h but not today's 8 h, so
-        it reads +4.0. Stopping now owes today and Friday: −12.0. Meeting the
-        week works off exactly that."""
-        job = self._job(starts=CONTRACT_MONDAY, region=None)
+        it reads +4.0 (last week was met to the hour). Stopping now owes
+        today and Friday: −12.0. Meeting the week works off exactly that."""
+        job = self._job(region=None)
         beats = [
+            *(self._work(date(2026, 5, 18) + timedelta(days=n), 8) for n in range(5)),
             *(self._work(CONTRACT_MONDAY + timedelta(days=n), 8) for n in range(3)),
             self._work(CONTRACT_TODAY, 4, at=7),
         ]
@@ -3360,6 +3361,31 @@ class TestBuildDayContext:
             "  Acme by Sunday: −12.0 h owed if you stop now, even if the rest of the week is met"
             in out
         )
+
+    @pytest.mark.parametrize(
+        ("starts", "first_week"),
+        [
+            (CONTRACT_MONDAY, True),
+            # Friday to Thursday is still the first seven days, across two
+            # calendar weeks, as the page counts them; from Thursday it is not.
+            (date(2026, 5, 22), True),
+            (date(2026, 5, 21), False),
+        ],
+    )
+    async def test_the_first_week_says_so_in_place_of_the_projection(self, starts, first_week):
+        """The page shows "First week under the contract." and no by-Sunday
+        projection for the first seven days from the contract's first term:
+        the balance has not had a full week to settle. So does the coach."""
+        job = self._job(starts=starts, region=None)
+        out = await self._day_context(projects=[job], beats=[self._work(CONTRACT_TODAY, 4)])
+
+        assert "  Acme running balance:" in out
+        said = (
+            "  Acme: first week under the contract — each day is charged as it closes,"
+            " and the balance settles once a full week is in"
+        )
+        assert (said in out.splitlines()) is first_week
+        assert ("Acme by Sunday:" in out) is not first_week
 
     @pytest.mark.parametrize(
         ("today_hours", "left"),
