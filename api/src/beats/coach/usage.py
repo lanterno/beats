@@ -17,11 +17,16 @@ from beats.settings import settings
 logger = logging.getLogger(__name__)
 
 
+def budget_message(spent: float, limit: float) -> str:
+    """What a client is told when the month's budget is spent."""
+    return f"Monthly LLM budget exceeded: ${spent:.2f} / ${limit:.2f}"
+
+
 class BudgetExceeded(Exception):
     def __init__(self, spent: float, limit: float) -> None:
         self.spent = spent
         self.limit = limit
-        super().__init__(f"Monthly LLM budget exceeded: ${spent:.2f} / ${limit:.2f}")
+        super().__init__(budget_message(spent, limit))
 
 
 class UsageTracker:
