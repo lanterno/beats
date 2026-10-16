@@ -89,7 +89,26 @@ Beats does not auto-delete anything. Beats, notes, coach history, and biometrics
 
 ## Export
 
-`/api/export` returns the authenticated user's projects — contract included — and sessions: `/full` as JSON, `/csv/sessions` as a CSV of the completed sessions alone. Nothing is held back behind a tier, but nothing else is in it yet either: absences, balance adjustments, plans, webhooks, signals, biometrics and coach history stay in the database until deleted.
+`/api/export` returns the authenticated user's data. Nothing is held back behind a tier.
+
+- **`/full`**, a JSON backup (version `1.1`), holds everything a day job's balance is
+  made of: every project, archived ones too, with its contract; every session; every
+  absence, including one kept from when its project was a day job; every balance
+  adjustment.
+- **`/csv/sessions`** is a CSV of the completed sessions alone.
+
+Plans, webhooks, signals, biometrics and coach history are in neither; they stay in the
+database until deleted.
+
+`POST /api/export/import` takes a `/full` file back, a `1.1` one or a `1.0` one from
+before absences and adjustments were exported. Re-importing is safe: projects and
+sessions are matched by id, an absence or an adjustment by its project and date. The
+file is checked whole first, so a malformed record writes nothing. The rest goes
+through the same rules as the app's own writes: a project as a project write (a
+contract that would strand an adjustment is refused), then absences and adjustments,
+against the projects as restored and the `tz` sent. A record those rules refuse (time
+off on a project that is no longer a day job, an adjustment outside its contract) is
+left out, and the response lists it under `skipped`.
 
 ## Deletion
 
