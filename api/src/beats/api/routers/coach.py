@@ -171,12 +171,15 @@ async def trigger_brief_generation(
 async def coach_chat(
     user_id: CurrentUserId,
     request: ChatRequest,
+    tz: TimezoneDep,
 ):
-    """Streaming chat with tool use. Returns SSE."""
+    """Streaming chat with tool use. Returns SSE. ``tz`` names the user's
+    today and each day job's contract week in the coach's context."""
     event_stream = handle_chat_turn(
         user_id=user_id,
         message=request.message,
         conversation_id=request.conversation_id,
+        tz=tz,
     )
 
     async def sse_generator():
@@ -303,10 +306,10 @@ async def delete_all_coach_data(user_id: CurrentUserId):
 
 
 @router.post("/memory/rewrite", response_model=MemoryResponse)
-async def rewrite_memory(user_id: CurrentUserId):
+async def rewrite_memory(user_id: CurrentUserId, tz: TimezoneDep):
     """Trigger the coach to rewrite its memory from the last 7 days."""
     try:
-        content = await rewrite_coach_memory(user_id)
+        content = await rewrite_coach_memory(user_id, tz=tz)
     except BudgetExceeded as exc:
         # Match the brief branch: explicit BUDGET_EXCEEDED
         # code so clients can render "monthly LLM budget reached"

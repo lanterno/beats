@@ -8,10 +8,11 @@ then asks the coach to produce an updated Markdown summary.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from anthropic.types import TextBlock
 
-from beats.coach.context import build_coach_messages
+from beats.coach.context import UTC_TZ, build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import MEMORY_REWRITE_PROMPT
@@ -47,13 +48,18 @@ async def _recent_data_summary(user_id: str) -> str:
     return "\n".join(lines)
 
 
-async def rewrite_coach_memory(user_id: str) -> str:
-    """Rewrite the coach memory from the last 7 days of data."""
+async def rewrite_coach_memory(user_id: str, tz: ZoneInfo = UTC_TZ) -> str:
+    """Rewrite the coach memory from the last 7 days of data.
+
+    ``tz`` is the user's timezone: the day context the rewrite reads names
+    the user's today and each day job's contract week in it, as the brief's
+    does.
+    """
 
     recent = await _recent_data_summary(user_id)
     prompt = f"{recent}\n\n---\n\n{MEMORY_REWRITE_PROMPT}"
 
-    system, messages, spec = await build_coach_messages(user_id, prompt)
+    system, messages, spec = await build_coach_messages(user_id, prompt, tz=tz)
 
     result = await complete(
         user_id=user_id,
