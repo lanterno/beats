@@ -4,6 +4,7 @@ Tests all endpoints: Projects, Beats, and Timer APIs
 """
 
 import contextlib
+import json
 import time
 from datetime import UTC, date, datetime, timedelta
 
@@ -3501,6 +3502,200 @@ class TestCsvAndJsonExport:
         # one of the import branches surfaces immediately
         assert imp["projects"] >= 1
         assert imp["beats"] >= 1
+
+
+def _without_ids(value):
+    """A response with every `id` taken out: an absence or an adjustment is
+    identified by its project and date, and one restored into an empty
+    account gets a new id."""
+    if isinstance(value, dict):
+        return {k: _without_ids(v) for k, v in value.items() if k != "id"}
+    if isinstance(value, list | tuple):
+        return [_without_ids(v) for v in value]
+    return value
+
+
+class TestBackupImport:
+    """POST /api/export/import against what a day job's balance is made of:
+    the round trip, the previous build's file, and the rules the restore
+    goes through. Each test has its own day job; the one that empties the
+    account empties only the collections a backup holds."""
+
+    @staticmethod
+    def _export(client, headers) -> dict:
+        resp = client.get("/api/export/full", headers=headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    @staticmethod
+    def _import(client, headers, backup: dict, tz: str = "UTC"):
+        return client.post(
+            "/api/export/import",
+            params={"tz": tz},
+            files={"file": ("backup.json", json.dumps(backup), "application/json")},
+            headers=headers,
+        )
+
+    @staticmethod
+    def _standing(client, headers, project_id: str) -> tuple[dict, dict]:
+        week = client.get(
+            f"/api/projects/{project_id}/contract/week",
+            params={"week_of": WEEK, "tz": "UTC"},
+            headers=headers,
+        )
+        assert week.status_code == 200, week.text
+        ledger = client.get(
+            f"/api/projects/{project_id}/ledger",
+            params={"weeks": 104, "tz": "UTC"},
+            headers=headers,
+        )
+        assert ledger.status_code == 200, ledger.text
+        return week.json(), ledger.json()
+
+    @staticmethod
+    def _adjust(client, headers, project_id: str, **body) -> dict:
+        resp = client.post(
+            f"/api/projects/{project_id}/adjustments",
+            params={"tz": "UTC"},
+            json=body,
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    @staticmethod
+    def _absent(client, headers, project_id: str, **body) -> dict:
+        resp = client.post(f"/api/projects/{project_id}/absences", json=body, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_a_day_jobs_balance_is_the_same_after_a_round_trip(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        # Everything the balance reads: an opening balance, a company day,
+        # sessions, a full and a half day off, a payout and a later reset.
+        project = _day_job(
+            client, auth_headers, opening_balance_hours=6, company_holidays=[COMPANY_DAY]
+        )
+        pid = project["id"]
+        _log(client, auth_headers, pid, "2026-03-02T08:00:00+00:00", 9 * 60)
+        _log(client, auth_headers, pid, "2026-03-06T08:00:00+00:00", 5 * 60)
+        self._absent(client, auth_headers, pid, date="2026-03-03", type="vacation")
+        self._absent(client, auth_headers, pid, date="2026-03-05", type="sick", half_day=True)
+        self._adjust(client, auth_headers, pid, date="2026-03-02", kind="delta", hours=-4)
+        self._adjust(client, auth_headers, pid, date="2026-06-01", kind="reset", hours=2)
+        before = self._standing(client, auth_headers, pid)
+
+        backup = self._export(client, auth_headers)
+        # A restore into an empty account: what a backup holds, gone.
+        for collection in ("projects", "timeLogs", "absences", "balance_adjustments"):
+            mongo[collection].delete_many({"user_id": auth_info["user_id"]})
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["skipped"] == []
+        assert resp.json()["imported"] == {
+            "projects": len(backup["projects"]),
+            "beats": len(backup["beats"]),
+            "absences": len(backup["absences"]),
+            "balance_adjustments": len(backup["balance_adjustments"]),
+        }
+        after = self._standing(client, auth_headers, pid)
+        assert after[0]["balance"] is not None
+        assert _without_ids(after) == _without_ids(before)
+
+    def test_a_backup_from_the_previous_build_imports(self, client, auth_headers):
+        # 1.0 had no absences or adjustments; a file without the keys is a
+        # backup with none of them, not a 422.
+        project = _day_job(client, auth_headers)
+        _log(client, auth_headers, project["id"], "2026-03-02T08:00:00+00:00", 60)
+        backup = self._export(client, auth_headers)
+        backup["version"] = "1.0"
+        del backup["absences"], backup["balance_adjustments"]
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "status": "ok",
+            "imported": {
+                "projects": len(backup["projects"]),
+                "beats": len(backup["beats"]),
+                "absences": 0,
+                "balance_adjustments": 0,
+            },
+            "skipped": [],
+        }
+
+    def test_a_record_its_route_would_refuse_is_left_out_and_named(self, client, auth_headers):
+        # An absence outlives a change away from day_job, so an honest export
+        # carries one its route now refuses; an adjustment moved before the
+        # first day is one the adjustment route would refuse.
+        former = _day_job(client, auth_headers)
+        self._absent(client, auth_headers, former["id"], date="2026-03-03", type="vacation")
+        resp = client.put(
+            "/api/projects/",
+            json={"id": former["id"], "name": former["name"], "kind": "freelance"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        job = _day_job(client, auth_headers)
+        kept = self._adjust(
+            client, auth_headers, job["id"], date="2026-03-02", kind="delta", hours=3
+        )
+        moved = self._adjust(
+            client, auth_headers, job["id"], date="2026-03-09", kind="delta", hours=1
+        )
+        backup = self._export(client, auth_headers)
+        for record in backup["balance_adjustments"]:
+            if record["id"] == moved["id"]:
+                record["date"] = "2025-12-29"
+        client.delete(f"/api/projects/{job['id']}/adjustments/{moved['id']}", headers=auth_headers)
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        skipped = {(s["collection"], s["project_id"], s["code"]) for s in resp.json()["skipped"]}
+        assert skipped == {
+            ("absences", former["id"], "NOT_A_DAY_JOB"),
+            ("balance_adjustments", job["id"], "ADJUSTMENT_OUTSIDE_BALANCE"),
+        }
+        _, ledger = self._standing(client, auth_headers, job["id"])
+        restored = [a for week in ledger["weeks"] for a in week["adjustments"]]
+        assert [(a["id"], a["date"]) for a in restored] == [(kept["id"], "2026-03-02")]
+
+    def test_a_malformed_record_is_a_422_naming_it_and_writes_nothing(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        self._adjust(client, auth_headers, project["id"], date="2026-03-02", kind="delta", hours=2)
+        backup = self._export(client, auth_headers)
+        for record in backup["projects"]:
+            if record["id"] == project["id"]:
+                record["name"] = "renamed by the backup"
+        # A string is not hours, as on the adjustment route.
+        backup["balance_adjustments"][0]["hours"] = "2"
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["balance_adjustments.0.hours"]
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == project["id"])["name"] == project["name"]
+
+    def test_restoring_a_contract_reconciles_its_adjustments(self, client, auth_headers):
+        # Since the export, the contract started earlier and an adjustment
+        # was dated in the weeks it gained. Restoring the later first day
+        # would leave that adjustment counting for nothing: refused, as the
+        # contract route refuses it.
+        project = _day_job(client, auth_headers)
+        backup = self._export(client, auth_headers)
+        earlier = [{**FULL_TIME[0], "effective_from": "2025-12-01"}]
+        _put_contract(client, auth_headers, project["id"], terms=earlier)
+        self._adjust(client, auth_headers, project["id"], date="2025-12-01", kind="delta", hours=5)
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "ADJUSTMENT_BEFORE_START"
 
 
 class TestIntelligenceInbox:
