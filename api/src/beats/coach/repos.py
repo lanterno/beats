@@ -19,6 +19,7 @@ from beats.domain.services import ContractService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     MongoAbsenceRepository,
+    MongoAdjustmentRepository,
     MongoBeatRepository,
     MongoFlowWindowRepository,
     MongoProjectRepository,
@@ -81,5 +82,6 @@ async def build_repos(user_id: str) -> CoachRepos:
             project_repo=projects,
             beat_repo=beats,
             absence_repo=MongoAbsenceRepository(db.absences, user_id=user_id),
+            adjustment_repo=MongoAdjustmentRepository(db.balance_adjustments, user_id=user_id),
         ),
     )
