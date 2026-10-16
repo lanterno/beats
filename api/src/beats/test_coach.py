@@ -1645,6 +1645,27 @@ class _FakeAbsenceStoreForCoach:
         raise NotImplementedError
 
 
+class _FakeAdjustmentStoreForCoach:
+    """In-memory AdjustmentStore: the balance counts what is here, as the
+    project page's does. The coach only reads; the writes are here because
+    the contract service's port names them."""
+
+    def __init__(self, adjustments):
+        self._adjustments = list(adjustments)
+
+    async def list_by_project(self, project_id, start, end):
+        return sorted(
+            (a for a in self._adjustments if a.project_id == project_id and start <= a.date <= end),
+            key=lambda a: a.date,
+        )
+
+    async def upsert(self, adjustment):
+        raise NotImplementedError
+
+    async def delete(self, project_id, adjustment_id):
+        raise NotImplementedError
+
+
 class _FakeFlowRepoForCoach:
     """Returns flow windows whose window_start falls in [start, end]."""
 
@@ -1664,7 +1685,13 @@ CONTRACT_MONDAY = date(2026, 5, 25)
 
 
 def _fake_coach_repos(
-    *, projects=None, beats=None, flow_windows=None, absences=None, contracts=None
+    *,
+    projects=None,
+    beats=None,
+    flow_windows=None,
+    absences=None,
+    adjustments=None,
+    contracts=None,
 ) -> CoachRepos:
     """The real CoachRepos, holding in-memory repositories.
 
@@ -1688,6 +1715,7 @@ def _fake_coach_repos(
             project_repo=project_repo,
             beat_repo=beat_repo,
             absence_repo=_FakeAbsenceStoreForCoach(absences or []),
+            adjustment_repo=_FakeAdjustmentStoreForCoach(adjustments or []),
             now=lambda tz: CONTRACT_NOW.astimezone(tz),
         ),
     )
@@ -3155,10 +3183,52 @@ class TestBuildDayContext:
             project_repo=_FakeProjectRepoForTools([job]),
             beat_repo=_FakeBeatRepoForTools(beats),
             absence_repo=_FakeAbsenceStoreForCoach(absences),
+            adjustment_repo=_FakeAdjustmentStoreForCoach([]),
             now=lambda tz: CONTRACT_NOW.astimezone(tz),
         ).week("job", None, ZURICH)
         assert page.balance is not None
         assert f"running balance: {describe_balance(page.balance)}" in section
+
+    async def test_contract_balance_counts_an_adjustment_as_the_page_does(self):
+        """A 3 h payout last Monday takes the running balance from +4.1 h to
+        +1.1 h, and both by-Sunday figures with it, exactly as the project
+        page's week route reads it. The adjustment's kind and note are not
+        sent: only the balance it moved."""
+        from beats.domain.models import AdjustmentKind, BalanceAdjustment
+        from beats.domain.services import ContractService
+
+        job = self._job(opening=1.6)
+        beats = self._week_beats()
+        absences = [self._off(date(2026, 5, 29))]
+        payout = BalanceAdjustment(
+            project_id="job",
+            date=date(2026, 5, 18),
+            kind=AdjustmentKind.DELTA,
+            hours=-3,
+            note="paid out in May's salary",
+        )
+        out = await self._day_context(
+            projects=[job], beats=beats, absences=absences, adjustments=[payout]
+        )
+
+        section = out.split(CONTRACT_HEADER)[1]
+        assert "  Acme running balance: +1.1 h over" in section.splitlines()
+        assert (
+            "  Acme by Sunday: −6.9 h owed if you stop now,"
+            " −3.4 h owed if the rest of the week is met"
+        ) in section.splitlines()
+        page = await ContractService(
+            project_repo=_FakeProjectRepoForTools([job]),
+            beat_repo=_FakeBeatRepoForTools(beats),
+            absence_repo=_FakeAbsenceStoreForCoach(absences),
+            adjustment_repo=_FakeAdjustmentStoreForCoach([payout]),
+            now=lambda tz: CONTRACT_NOW.astimezone(tz),
+        ).week("job", None, ZURICH)
+        assert page.balance is not None
+        assert page.balance_adjusted == -3
+        assert f"running balance: {describe_balance(page.balance)}" in section
+        assert "paid out" not in out
+        assert "delta" not in out.lower()
 
     async def test_contract_section_sends_no_absence_type_note_region_or_company_name(self):
         """What PRIVACY.md promises stays home: a sick day with a note reads

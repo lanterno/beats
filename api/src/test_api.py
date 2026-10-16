@@ -2423,6 +2423,57 @@ class TestCoachRouterGapFill:
             resp = client.get(f"/api/coach/usage{q}", headers=auth_info["headers"])
             assert resp.status_code == 422
 
+    def test_brief_reads_the_day_jobs_balance_with_its_adjustments(
+        self, client, auth_info, monkeypatch
+    ):
+        """A brief builds the coach's repositories against real Mongo, and its
+        day context quotes the running balance the week route reads, a payout
+        included. Once ContractService needed its adjustment store, a coach
+        that did not pass one failed every brief with a 502."""
+        from types import SimpleNamespace
+
+        from anthropic.types import TextBlock
+
+        from beats.coach import brief as brief_module
+        from beats.coach.contract_section import describe_balance
+
+        headers = auth_info["headers"]
+        project = _day_job(client, headers, opening_balance_hours=10)
+        last_monday = datetime.now(UTC).date() - timedelta(days=datetime.now(UTC).weekday() + 7)
+        resp = client.post(
+            f"/api/projects/{project['id']}/adjustments",
+            params={"tz": "UTC"},
+            json={"date": last_monday.isoformat(), "kind": "delta", "hours": -4},
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        sent: list[dict] = []
+
+        async def fake_complete(**kwargs):
+            sent.extend(kwargs["messages"])
+            return SimpleNamespace(
+                content=[TextBlock(type="text", text="Morning.")],
+                model="fake",
+                cost_usd=0.0,
+                input_tokens=0,
+                output_tokens=0,
+                cache_read_input_tokens=0,
+            )
+
+        monkeypatch.setattr(brief_module, "complete", fake_complete)
+
+        resp = client.post("/api/coach/brief/generate", params={"tz": "UTC"}, headers=headers)
+        assert resp.status_code == 200, resp.text
+
+        week = client.get(
+            f"/api/projects/{project['id']}/contract/week", params={"tz": "UTC"}, headers=headers
+        ).json()
+        assert week["balance_adjusted"] == -4
+        prompt = "\n".join(m["content"] for m in sent if isinstance(m["content"], str))
+        line = f"{project['name']} running balance: {describe_balance(week['balance'])}"
+        assert line in prompt
+
     def test_memory_rewrite_budget_exceeded_uses_envelope_code(
         self, client, auth_info, monkeypatch
     ):
