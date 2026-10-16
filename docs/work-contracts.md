@@ -429,7 +429,9 @@ region check, and every project write reconciles the adjustments
   each of the four terms and the balance is rounded on its own, 0.005 at
   most apiece. All five are null exactly when `balance` is. It is as of
   today, whatever week is asked for, and counts the adjustments dated
-  through today. `remaining` goes negative once the week is over. The
+  through today. `remaining` is `expected` less the hours under the
+  contract as rounded, so on a week it covers whole `worked + remaining`
+  is `expected` to the hundredth; it goes negative once the week is over. The
   ledger's totals carry the same terms, and its `ended_balance` is the
   close on `ended_on` once that day has come — the final balance before a
   settlement after it, null otherwise.
