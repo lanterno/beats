@@ -43,9 +43,24 @@ const CompanyHolidaySchema = z.object({
 	name: z.string(),
 });
 
+const CarryOverSchema = z.enum(["all", "capped", "none"]);
+
+// Days for a five-day week, every figure a whole or half day; the cap only
+// with `capped`. The API's field constraints are the authority.
+const VacationEntitlementSchema = z.object({
+	days_per_year: z.number(),
+	carry_over: CarryOverSchema,
+	carry_over_max_days: z.number().nullable().optional(),
+	opening_on: z.string(), // YYYY-MM-DD
+	opening_days: z.number(),
+});
+
+export type ApiVacationEntitlement = z.infer<typeof VacationEntitlementSchema>;
+
 // The two holiday lists default to empty so an API that predates them still
 // parses; the SPA always sends both (`toApiContract`), since a list left out
-// of a write is kept and one sent empty is cleared.
+// of a write is kept and one sent empty is cleared. `vacation` is the same:
+// absent from an older API, always sent (an object or null) by the SPA.
 export const ContractSchema = z.object({
 	terms: z.array(ContractTermSchema),
 	holiday_country: z.string().nullable().optional(),
@@ -54,6 +69,7 @@ export const ContractSchema = z.object({
 	ended_on: z.string().nullable().optional(),
 	company_holidays: z.array(CompanyHolidaySchema).optional().default([]),
 	holidays_not_given: z.array(z.string()).optional().default([]),
+	vacation: VacationEntitlementSchema.nullable().optional(),
 });
 
 export type ApiContract = z.infer<typeof ContractSchema>;

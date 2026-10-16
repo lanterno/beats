@@ -40,6 +40,24 @@ export interface CompanyHoliday {
 	name: string;
 }
 
+/** What becomes of the vacation days left at the end of a year. */
+export type CarryOver = "all" | "capped" | "none";
+
+/**
+ * The vacation days a day job gives, in days for a five-day week (a 4-day
+ * week with 20 days is 25), every figure a whole or half day. Counting
+ * starts on `openingOn` with `openingDays` left for the rest of that year;
+ * nothing before it is counted.
+ */
+export interface VacationEntitlement {
+	daysPerYear: number;
+	carryOver: CarryOver;
+	/** With `capped` only: how many unused days carry into the next year. */
+	carryOverMaxDays?: number;
+	openingOn: string; // YYYY-MM-DD, inside the contract's dates
+	openingDays: number; // may be negative
+}
+
 /** A day job's terms as they changed over time, plus what frames them. */
 export interface Contract {
 	/** In ascending order of effectiveFrom, never empty. */
@@ -58,6 +76,8 @@ export interface Contract {
 	 */
 	companyHolidays: CompanyHoliday[];
 	holidaysNotGiven: string[]; // YYYY-MM-DD
+	/** Absent when no entitlement is tracked; every write sends it, null for none. */
+	vacation?: VacationEntitlement;
 }
 
 /** An absence as the week route reports it on a day: what kind, and whether half of it. */

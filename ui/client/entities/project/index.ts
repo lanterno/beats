@@ -31,6 +31,7 @@ export {
 export type {
 	AdjustmentKind,
 	AdjustmentRow,
+	CarryOver,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -55,6 +56,7 @@ export type {
 	ScheduleType,
 	TermFieldErrors,
 	TermFormValues,
+	VacationEntitlement,
 	WeekGoalView,
 } from "./model";
 export {
@@ -63,6 +65,7 @@ export {
 	contractFieldErrors,
 	contractFrameDefaults,
 	contractGovernsWeek,
+	describeEntitlement,
 	describeLedgerNote,
 	describeTerm,
 	displayTermOn,

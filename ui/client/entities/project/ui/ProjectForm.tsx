@@ -12,8 +12,8 @@
  * behind a "Set up the contract now" switch because a day job may wait for
  * its contract (the API allows it; the migration produces it) and a rename
  * must not demand one; on a day job that has one it edits the frame
- * (region, opening balance, end date) and shows the current term
- * read-only, because a term is changed in the history panel, where "fix
+ * (region, opening balance, end date, vacation entitlement) and shows
+ * the current term read-only, because a term is changed in the history panel, where "fix
  * this term" and "new term from a date" are two different actions instead
  * of one ambiguous edit. A time-based day job hides the personal weekly
  * goal — the contract is the goal; an objective one keeps it (Decision 8).
@@ -64,6 +64,7 @@ import {
 	type ProjectFormErrors,
 	projectFormFieldErrors,
 } from "./projectFormWire";
+import { VacationFields } from "./VacationFields";
 
 // FF.11: rotate the default color through PROJECT_COLORS per ProjectForm
 // mount so consecutive new projects don't all open with the same first
@@ -668,6 +669,15 @@ export function ProjectForm({
 									</div>
 								)}
 							</div>
+
+							<VacationFields
+								values={values.contract}
+								onChange={setFrame}
+								errors={errors.contract}
+								inputCls={inputCls}
+								labelCls={labelCls}
+								errorCls={errorCls}
+							/>
 						</>
 					)}
 				</section>

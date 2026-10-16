@@ -80,6 +80,7 @@ export {
 // Types
 export type {
 	AdjustmentKind,
+	CarryOver,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -99,6 +100,9 @@ export type {
 	ProjectKind,
 	ProjectWithDuration,
 	ScheduleType,
+	VacationEntitlement,
 } from "./types";
+// The vacation entitlement in words
+export { describeEntitlement } from "./vacation";
 // This-week figures for a list row: contract or personal goal
 export { type WeekGoalView, weekGoalView } from "./weekGoal";

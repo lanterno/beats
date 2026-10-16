@@ -33,6 +33,7 @@ export type {
 	ApiProject,
 	ApiProjectKind,
 	ApiProjectListItem,
+	ApiVacationEntitlement,
 	CalendarStatus,
 	FlowTopBucket,
 	FlowWindow,
