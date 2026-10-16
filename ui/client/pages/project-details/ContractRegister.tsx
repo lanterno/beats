@@ -3,7 +3,9 @@
  * "The page", Rail). On a day job with a contract it is the register: the
  * term in force and the next one, the terms as a step chart over the
  * contract's life, the full list with edit and remove, "+ Change contract
- * from…", and the constants (region, what was brought forward, the end).
+ * from…", and the constants (region, this year's company days and public
+ * holidays not given, what was brought forward, the end), with "Holidays"
+ * opening the dialog that edits the two lists.
  * On any other kind — or a day job still without a contract that has a
  * personal goal — it is the Goal: the goal in force, its dated history as the
  * same chart, and the override list with remove.
@@ -41,6 +43,7 @@ import {
 	toApiContract,
 	toPercent,
 	useHolidayRegions,
+	useProjectHolidays,
 	useUpdateContract,
 	useUpdateGoalOverrides,
 	validateTerm,
@@ -60,6 +63,8 @@ export interface ContractRegisterProps {
 	firstTrackedIso?: string;
 	/** Opens the settings drawer on a field. */
 	onOpenSettings: (field: ProjectFormAutoFocusField) => void;
+	/** Opens the Holidays dialog: company days and the public holidays not given. */
+	onOpenHolidays: () => void;
 	/** "+ Change contract from…", so the settings form can hand focus here. */
 	changeButtonRef?: Ref<HTMLButtonElement>;
 }
@@ -340,21 +345,37 @@ function OverrideList({ project, todayIso }: { project: ProjectWithDuration; tod
 
 type Editor = { mode: "add" } | { mode: "edit"; index: number };
 
+/** "2 company days · 1 not given" — this year's, as the calendar counts them. */
+function holidayAdjustments(company: number, notGiven: number): string[] {
+	return [
+		company > 0 ? `${company} company day${company === 1 ? "" : "s"}` : null,
+		notGiven > 0 ? `${notGiven} not given` : null,
+	].filter((part): part is string => part !== null);
+}
+
 function ContractVariant({
 	project,
 	contract,
 	todayIso,
 	onOpenSettings,
+	onOpenHolidays,
 	changeButtonRef,
 }: {
 	project: ProjectWithDuration;
 	contract: Contract;
 	todayIso: string;
 	onOpenSettings: (field: ProjectFormAutoFocusField) => void;
+	onOpenHolidays: () => void;
 	changeButtonRef?: Ref<HTMLButtonElement>;
 }) {
 	const updateContract = useUpdateContract();
 	const { data: regions } = useHolidayRegions();
+	// Counted off the calendar, not the raw lists: a date not given that the
+	// region has no holiday on does nothing, and is not counted. The dialog
+	// reads the same query.
+	const { data: calendar } = useProjectHolidays(project.id, Number(todayIso.slice(0, 4)), {
+		includeNotGiven: true,
+	});
 	const [editor, setEditor] = useState<Editor | null>(null);
 	const [pendingIndex, setPendingIndex] = useState<number | null>(null);
 	// "+ Change contract from…" is the page's too (the settings form hands focus
@@ -427,6 +448,10 @@ function ContractVariant({
 						: ""
 				}`
 			: null,
+		...holidayAdjustments(
+			(calendar ?? []).filter((h) => h.source === "company").length,
+			(calendar ?? []).filter((h) => !h.given).length,
+		),
 		`Brought forward ${signed(contract.openingBalanceHours)}`,
 		endedOn ? `${ended ? "Ended" : "Ends"} ${plainDate(endedOn)}` : "Ended —",
 	]
@@ -543,6 +568,14 @@ function ContractVariant({
 				)}
 				<p>
 					{constants}
+					<button
+						type="button"
+						onClick={onOpenHolidays}
+						className={CONST_BUTTON}
+						aria-label="Holidays: company days and public holidays not given"
+					>
+						Holidays
+					</button>
 					<button
 						type="button"
 						onClick={() => onOpenSettings("holidayCountry")}
@@ -711,6 +744,7 @@ export function ContractRegister({
 	todayIso,
 	firstTrackedIso,
 	onOpenSettings,
+	onOpenHolidays,
 	changeButtonRef,
 }: ContractRegisterProps) {
 	const contract = project.kind === "day_job" ? project.contract : undefined;
@@ -721,6 +755,7 @@ export function ContractRegister({
 				contract={contract}
 				todayIso={todayIso}
 				onOpenSettings={onOpenSettings}
+				onOpenHolidays={onOpenHolidays}
 				changeButtonRef={changeButtonRef}
 			/>
 		);
