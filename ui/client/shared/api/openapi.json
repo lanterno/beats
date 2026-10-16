@@ -6520,7 +6520,7 @@
     },
     "/api/intelligence/inbox/{item_id}/dismiss": {
       "post": {
-        "description": "Dismiss any inbox item by its full inbox id (e.g.\n``suggestion:<project>:<date>`` or ``project_health:<project>``).\n\nPersists the id so the item stays gone across reloads and devices \u2014\nreplacing the UI's per-day localStorage workaround. Pattern items can\nalso be dismissed here by their ``pattern:<id>`` form; the legacy\n/patterns/{id}/dismiss route (bare id) keeps working too.",
+        "description": "Dismiss any inbox item by its full inbox id (e.g.\n``suggestion:<project>:<date>`` or ``project_health:<project>``).\n\nPersists the id so the item stays gone across reloads and devices \u2014\nreplacing the UI's per-day localStorage workaround. A pattern dismissed\nhere by its ``pattern:<id>`` form is gone from ``/patterns`` too.",
         "operationId": "dismiss_inbox_item_api_intelligence_inbox__item_id__dismiss_post",
         "parameters": [
           {

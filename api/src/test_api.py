@@ -3589,6 +3589,26 @@ class TestIntelligenceAPI:
         ]
         assert ids == ["i-keep"]
 
+    def test_a_pattern_dismissed_from_the_inbox_is_gone_from_patterns(
+        self, client, auth_headers, auth_info
+    ):
+        """The Inbox dismisses a pattern by its inbox id, `pattern:<id>`; the
+        Insights page reads /patterns, which once checked only the bare id and
+        showed the card again."""
+        self._seed_insights(
+            auth_info,
+            insights=[
+                {"id": "i-keep", "type": "x", "title": "K", "body": "k", "priority": 3},
+                {"id": "i-doom", "type": "x", "title": "D", "body": "d", "priority": 3},
+            ],
+        )
+
+        resp = client.post("/api/intelligence/inbox/pattern:i-doom/dismiss", headers=auth_headers)
+        assert resp.status_code == 204
+
+        patterns = client.get("/api/intelligence/patterns", headers=auth_headers).json()
+        assert [i["id"] for i in patterns["insights"]] == ["i-keep"]
+
     def test_refresh_preserves_dismissed_ids(self, client, auth_headers, auth_info):
         """When refresh recomputes patterns, the previously-dismissed
         ids must carry through — otherwise dismissing was pointless
