@@ -59,7 +59,7 @@ export interface StepChartGeometry {
 }
 
 export const CHART_WIDTH = 296;
-export const CHART_HEIGHT = 112;
+const CHART_HEIGHT = 112;
 const PAD_LEFT = 4;
 const PAD_RIGHT = 4;
 const PAD_TOP = 18;

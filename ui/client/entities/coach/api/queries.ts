@@ -18,7 +18,7 @@ import {
 	setBriefFeedback,
 } from "./coachApi";
 
-export const coachKeys = {
+const coachKeys = {
 	all: ["coach"] as const,
 	brief: () => [...coachKeys.all, "brief"] as const,
 	briefHistory: (limit: number) => [...coachKeys.all, "brief-history", limit] as const,

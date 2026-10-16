@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CalendarStatus } from "@/shared/api";
 import { connectCalendar, disconnectCalendar, fetchCalendarStatus } from "./calendarApi";
 
-export const calendarKeys = {
+const calendarKeys = {
 	all: ["calendar"] as const,
 	status: () => [...calendarKeys.all, "status"] as const,
 	events: (start: string, end: string) => [...calendarKeys.all, "events", start, end] as const,

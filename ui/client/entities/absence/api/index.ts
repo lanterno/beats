@@ -1,12 +1,8 @@
-export {
-	type AbsenceInput,
-	type AbsenceRange,
-	deleteAbsence,
-	fetchAbsences,
-	recordAbsence,
+export type {
+	AbsenceInput,
+	AbsenceRange,
 } from "./absenceApi";
 export {
-	absenceKeys,
 	useAbsences,
 	useRecordAbsences,
 	useRemoveAbsences,

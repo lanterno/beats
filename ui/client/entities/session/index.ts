@@ -11,11 +11,8 @@
 // API layer
 export type { DriftEvent } from "./api";
 export {
-	deleteBeat,
 	fetchBeats,
-	fetchRecentDrift,
 	sessionKeys,
-	updateBeat,
 	useAllBeats,
 	useAllCurrentWeekSessions,
 	useAllTags,
@@ -45,7 +42,7 @@ export type {
 	ProjectOption,
 	Session,
 } from "./model";
-export { groupSessionsByLocalDay, toApiBeat, toSession } from "./model";
+export { groupSessionsByLocalDay, toSession } from "./model";
 
 // UI layer
 export { SessionEditForm } from "./ui";

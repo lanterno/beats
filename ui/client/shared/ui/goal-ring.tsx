@@ -31,8 +31,8 @@ export function GoalRing({
 	const isOverBudget = isCap && percent >= 90;
 
 	const trackColor = "hsl(var(--muted))";
-	// Leaf while a target fills, as `Progress` does: the accent stays with
-	// today, the running timer and the primary action. A cap fills in the
+	// Leaf while a target fills: the accent stays with today, the running
+	// timer and the primary action. A cap fills in the
 	// muted ink until it nears its limit, since spending a budget is not news.
 	const fillColor = isCap
 		? isOverBudget

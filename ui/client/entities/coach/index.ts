@@ -7,8 +7,6 @@ export type {
 	UsageSummaryResponse,
 } from "./api";
 export {
-	coachKeys,
-	fetchChatHistory,
 	useBriefFeedback,
 	useCoachBrief,
 	useCoachBriefHistory,

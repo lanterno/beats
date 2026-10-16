@@ -5,7 +5,8 @@
  * Following FSD conventions, this module exports:
  * - Model: state management hook and types
  * - API: timer API functions
- * - UI: timer-related components
+ *
+ * The timer's UI is the sidebar's (`widgets/sidebar/SidebarTimer.tsx`).
  */
 
 // API layer
@@ -13,6 +14,3 @@ export { fetchTimerStatus } from "./api";
 // Model layer
 export type { TimerState, TimerStatus } from "./model";
 export { timerStatusKey, useTimer } from "./model";
-
-// UI layer
-export { TimerDisplay, TimerManager } from "./ui";

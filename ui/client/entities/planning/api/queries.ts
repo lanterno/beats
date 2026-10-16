@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchWeeklyPlan, upsertWeeklyPlan } from "./planningApi";
 
-export const planningKeys = {
+const planningKeys = {
 	all: ["planning"] as const,
 	weeklyPlan: (weekOf: string) => [...planningKeys.all, "weekly-plan", weekOf] as const,
 };

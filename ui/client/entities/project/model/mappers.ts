@@ -69,7 +69,7 @@ export function toApiProject(project: Project): ApiProject {
 	};
 }
 
-export function toContractTerm(api: ApiContractTerm): ContractTerm {
+function toContractTerm(api: ApiContractTerm): ContractTerm {
 	return {
 		effectiveFrom: api.effective_from,
 		scheduleType: api.schedule_type,
@@ -80,7 +80,7 @@ export function toContractTerm(api: ApiContractTerm): ContractTerm {
 	};
 }
 
-export function toApiContractTerm(term: ContractTerm): ApiContractTerm {
+function toApiContractTerm(term: ContractTerm): ApiContractTerm {
 	return {
 		effective_from: term.effectiveFrom,
 		schedule_type: term.scheduleType,
@@ -91,7 +91,7 @@ export function toApiContractTerm(term: ContractTerm): ApiContractTerm {
 	};
 }
 
-export function toContract(api: ApiContract): Contract {
+function toContract(api: ApiContract): Contract {
 	return {
 		terms: api.terms.map(toContractTerm),
 		holidayCountry: api.holiday_country ?? undefined,

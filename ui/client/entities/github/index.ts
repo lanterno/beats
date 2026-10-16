@@ -1,6 +1,5 @@
 export {
 	fetchGitHubAuthUrl,
-	githubKeys,
 	useConnectGitHub,
 	useDisconnectGitHub,
 	useGitHubStatus,

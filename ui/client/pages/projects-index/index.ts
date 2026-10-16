@@ -1,1 +1,1 @@
-export { default, default as ProjectsIndex } from "./ProjectsIndex";
+export { default } from "./ProjectsIndex";

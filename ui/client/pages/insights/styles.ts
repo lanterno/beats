@@ -10,10 +10,6 @@
 export const LABEL =
 	"font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground";
 
-/** `.sec-h .sub` — the heading's quiet second half. */
-export const SUB =
-	"font-body font-medium tracking-normal normal-case text-[12.5px] text-muted-foreground ml-2";
-
 /** A panel's quiet meta line, right of its label. */
 export const META = "text-xs font-medium text-muted-foreground";
 

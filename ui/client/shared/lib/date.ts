@@ -195,11 +195,3 @@ export function getISOWeek(date: Date): number {
 	const yearStart = new Date(d.getFullYear(), 0, 1);
 	return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
-
-/**
- * Get a "Week N" label for the week that is `weeksAgo` weeks before the current week.
- */
-export function getWeekNumberLabel(weeksAgo: number): string {
-	const monday = getMondayOfWeeksAgo(weeksAgo);
-	return `Week ${getISOWeek(monday)}`;
-}
