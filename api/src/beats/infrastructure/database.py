@@ -39,6 +39,10 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.oura_integrations.create_index("user_id", unique=True)
     # One absence per day per project: a second one replaces the first.
     await db.absences.create_index([("user_id", 1), ("project_id", 1), ("date", 1)], unique=True)
+    # One balance adjustment per day per project, the same way.
+    await db.balance_adjustments.create_index(
+        [("user_id", 1), ("project_id", 1), ("date", 1)], unique=True
+    )
 
 
 class Database:

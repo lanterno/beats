@@ -19,6 +19,7 @@ from beats.domain.services import BeatService, ContractService, ProjectService, 
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
     AbsenceRepository,
+    AdjustmentRepository,
     BeatRepository,
     BiometricDayRepository,
     CalendarIntegrationRepository,
@@ -28,6 +29,7 @@ from beats.infrastructure.repositories import (
     GitHubIntegrationRepository,
     InsightsRepository,
     MongoAbsenceRepository,
+    MongoAdjustmentRepository,
     MongoBeatRepository,
     MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
@@ -117,6 +119,28 @@ def get_timezone(
     """
     if not tz:
         return ZoneInfo("UTC")
+    return _zone(tz)
+
+
+def get_required_timezone(
+    tz: Annotated[
+        str,
+        Query(
+            min_length=1,
+            description=(
+                "IANA timezone name (e.g. America/New_York). Required: which day is "
+                "today decides what the request may do."
+            ),
+        ),
+    ],
+) -> ZoneInfo:
+    """``get_timezone`` without the UTC default, for a write whose rules
+    depend on the caller's today: a missing ``tz`` is a 422 naming it,
+    rather than a quiet answer for a day the caller is not in."""
+    return _zone(tz)
+
+
+def _zone(tz: str) -> ZoneInfo:
     try:
         return ZoneInfo(tz)
     except ZoneInfoNotFoundError, ValueError:
@@ -127,6 +151,7 @@ def get_timezone(
 
 
 TimezoneDep = Annotated[ZoneInfo, Depends(get_timezone)]
+RequiredTimezoneDep = Annotated[ZoneInfo, Depends(get_required_timezone)]
 
 
 def monday_or_none(day: date | None) -> date | None:
@@ -178,23 +203,35 @@ def get_beat_service(
 get_absence_repository = _user_scoped(MongoAbsenceRepository, "absences")
 
 
+get_adjustment_repository = _user_scoped(MongoAdjustmentRepository, "balance_adjustments")
+
+
 def get_contract_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     absence_repo: Annotated[AbsenceRepository, Depends(get_absence_repository)],
+    adjustment_repo: Annotated[AdjustmentRepository, Depends(get_adjustment_repository)],
 ) -> ContractService:
     """Get the contract service with injected repositories."""
     return ContractService(
-        project_repo=project_repo, beat_repo=beat_repo, absence_repo=absence_repo
+        project_repo=project_repo,
+        beat_repo=beat_repo,
+        absence_repo=absence_repo,
+        adjustment_repo=adjustment_repo,
     )
 
 
 def get_project_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    adjustment_repo: Annotated[AdjustmentRepository, Depends(get_adjustment_repository)],
 ) -> ProjectService:
-    """Get the project service with injected repositories."""
-    return ProjectService(project_repo=project_repo, beat_repo=beat_repo)
+    """Get the project service with injected repositories. The adjustments
+    are there for the contract writes: the balance adjustments go with the
+    contract, and a first day moved later past one is refused."""
+    return ProjectService(
+        project_repo=project_repo, beat_repo=beat_repo, adjustments=adjustment_repo
+    )
 
 
 def get_analytics_service(

@@ -18,6 +18,9 @@ from beats.domain.contracts import (
 )
 from beats.domain.exceptions import (
     AbsenceNotFound,
+    AdjustmentBeforeStart,
+    AdjustmentNotFound,
+    AdjustmentOutsideBalance,
     InvalidEndTime,
     NoActiveTimer,
     NoContract,
@@ -48,7 +51,9 @@ from beats.domain.models import (
 )
 from beats.domain.ports import (
     AbsenceStore,
+    AdjustmentStore,
     BeatStore,
+    ContractAdjustments,
     FlowWindowReader,
     ProjectBeatReader,
     ProjectReader,
@@ -307,19 +312,67 @@ def keep_unsent_holiday_changes(incoming: Contract, stored: Contract | None) -> 
 class ProjectService:
     """Service for managing project operations and analytics."""
 
-    def __init__(self, project_repo: ProjectStore, beat_repo: ProjectBeatReader):
+    def __init__(
+        self,
+        project_repo: ProjectStore,
+        beat_repo: ProjectBeatReader,
+        adjustments: ContractAdjustments,
+    ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
+        self.adjustments = adjustments
 
     async def create_project(self, project: Project) -> Project:
-        """Create a new project."""
+        """Create a new project. A new project has no balance adjustments, so
+        there is nothing to reconcile."""
         _check_contract(project)
         return await self.project_repo.create(project)
 
-    async def update_project(self, project: Project) -> Project:
-        """Update an existing project."""
+    async def update_project(
+        self, project: Project, *, previous_contract: Contract | None
+    ) -> Project:
+        """Update an existing project, reconciling its balance adjustments
+        against the contract it had (`_reconcile_adjustments`). The previous
+        contract is a required keyword so no caller skips that by accident;
+        one that leaves the contract alone passes the one it read."""
         _check_contract(project)
-        return await self.project_repo.update(project)
+        purge_after = await self._reconcile_adjustments(
+            project.id, previous_contract, project.contract
+        )
+        updated = await self.project_repo.update(project)
+        if purge_after and project.id is not None:
+            await self.adjustments.delete_by_project(project.id)
+        return updated
+
+    async def _reconcile_adjustments(
+        self, project_id: str | None, previous: Contract | None, new: Contract | None
+    ) -> bool:
+        """What a contract write does to the balance adjustments, before the
+        write; True when they are to be purged after it.
+
+        - The contract goes (a kind change, `contract: null`): they go with
+          it, after the write, since they only mean something against its
+          balance. Nothing dormant is kept for an undo.
+        - A contract arrives where there was none: anything left over is
+          purged first. No adjustment can be live without a contract, so
+          this clears whatever a failed purge left.
+        - The first day moves later past an adjustment: 409, rather than
+          the adjustment silently dropping out of the balance.
+
+        Anything else (a rename or a colour change resending the contract
+        unchanged, a first day moved earlier) reads nothing.
+        """
+        if project_id is None:
+            return False
+        if previous is not None and new is None:
+            return True
+        if previous is None and new is not None:
+            await self.adjustments.delete_by_project(project_id)
+        elif previous is not None and new is not None and new.starts_on > previous.starts_on:
+            earliest = await self.adjustments.earliest(project_id, previous.starts_on)
+            if earliest is not None and earliest < new.starts_on:
+                raise AdjustmentBeforeStart()
+        return False
 
     async def replace_contract(self, project_id: str, contract: Contract) -> Project:
         """Replace a day job's whole contract — terms, region, opening balance, end.
@@ -333,8 +386,9 @@ class ProjectService:
         project = await self.project_repo.get_by_id(project_id)
         if project.kind is not ProjectKind.DAY_JOB:
             raise NotADayJob()
-        project.contract = keep_unsent_holiday_changes(contract, project.contract)
-        return await self.update_project(project)
+        previous = project.contract
+        project.contract = keep_unsent_holiday_changes(contract, previous)
+        return await self.update_project(project, previous_contract=previous)
 
     async def archive_project(self, project_id: str) -> Project:
         """Archive a project."""
@@ -502,13 +556,15 @@ def worked_by_local_day(beats: Iterable[Beat], tz: ZoneInfo) -> dict[date, float
 
 
 class ContractService:
-    """A day job read against its contract, and its absences.
+    """A day job read against its contract, its absences and its balance
+    adjustments.
 
     Writing the contract is `ProjectService.replace_contract`, a project write
     with the region check; this service only reads projects, through a
     user-scoped repository, so someone else's project is not found (404)
     rather than forbidden — the same answer as for a project that does not
-    exist. Absences are kept here because their only reader is the week.
+    exist. Absences and balance adjustments are kept here because their only
+    readers are the week and the ledger.
     """
 
     def __init__(
@@ -516,11 +572,13 @@ class ContractService:
         project_repo: ProjectReader,
         beat_repo: ProjectBeatReader,
         absence_repo: AbsenceStore,
+        adjustment_repo: AdjustmentStore,
         now: Callable[[ZoneInfo], datetime] = datetime.now,
     ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
         self.absence_repo = absence_repo
+        self.adjustment_repo = adjustment_repo
         # The one clock every read here uses: which week is open, which day
         # the balance is as of, which year the calendar defaults to are all
         # "today in the request timezone", and a test hands in a fixed instant
@@ -541,9 +599,11 @@ class ContractService:
         project index loads every listed project's beats in one query and
         must not load them again per day job.
 
-        One absence read and one calendar build per call, both over the
-        union of the week and the contract's life so far: the week needs its
-        own days, the balance needs every day since the contract started.
+        One absence read, one adjustment read and one calendar build per
+        call, over the union of the week and the contract's life so far: the
+        week needs its own days, the balance needs every day since the
+        contract started. Adjustments before the first day count for
+        nothing, so they are not read.
         """
         if project.kind is not ProjectKind.DAY_JOB:
             raise NotADayJob()
@@ -558,9 +618,12 @@ class ContractService:
         start = min(contract.starts_on, week_of)
         end = max(today, week_of + timedelta(days=6))
         absences = await self.absence_repo.list_by_project(project.id, start, end)
+        adjustments = await self.adjustment_repo.list_by_project(
+            project.id, contract.starts_on, end
+        )
         holidays = contract_holidays(contract, start, end)
         worked = worked_by_local_day(beats, tz)
-        return self._assemble(contract, absences, holidays, worked, [], week_of, today)
+        return self._assemble(contract, absences, holidays, worked, adjustments, week_of, today)
 
     async def ledger(self, project_id: str, weeks: int, tz: ZoneInfo) -> Ledger:
         """The last `weeks` weeks of any project, newest first, ending with the
@@ -568,10 +631,10 @@ class ContractService:
         terms that make it — the project page's one read for every week
         figure (`domain/ledger.py`).
 
-        One beats read, and on a day job with a contract one absence read and
-        one calendar build, both over the union of the weeks shown and the
-        contract's life so far: each week's closing balance needs every day
-        since the contract started. A project of another kind, or a day job
+        One beats read, and on a day job with a contract one absence read,
+        one adjustment read and one calendar build, over the union of the
+        weeks shown and the contract's life so far: each week's closing
+        balance needs every day since the contract started. A project of another kind, or a day job
         without a contract, gets its goal and its hours and nothing is read
         for a contract. A region the calendar library has stopped knowing is
         this project's own error (400), as it is on the week route.
@@ -582,14 +645,20 @@ class ContractService:
         monday = today - timedelta(days=today.weekday())
         contract = project.contract if project.kind is ProjectKind.DAY_JOB else None
         absences: list[Absence] = []
+        adjustments: list[BalanceAdjustment] = []
         holidays: dict[date, str] = {}
         if contract is not None and project.id is not None:
             start = min(contract.starts_on, monday - timedelta(weeks=weeks - 1))
             end = max(today, monday + timedelta(days=6))
             absences = await self.absence_repo.list_by_project(project.id, start, end)
+            adjustments = await self.adjustment_repo.list_by_project(
+                project.id, contract.starts_on, end
+            )
             holidays = contract_holidays(contract, start, end)
         worked = worked_by_local_day(beats, tz)
-        return assemble_ledger(project, contract, absences, holidays, worked, [], today, weeks)
+        return assemble_ledger(
+            project, contract, absences, holidays, worked, adjustments, today, weeks
+        )
 
     async def weeks_for(
         self, projects: Iterable[Project], beats_by_pid: Mapping[str, list[Beat]], tz: ZoneInfo
@@ -738,6 +807,31 @@ class ContractService:
         await self._day_job(project_id)
         if not await self.absence_repo.delete(project_id, absence_id):
             raise AbsenceNotFound(absence_id)
+
+    async def record_adjustment(
+        self, adjustment: BalanceAdjustment, tz: ZoneInfo
+    ) -> BalanceAdjustment:
+        """Record a balance adjustment; one already on that date is replaced
+        and keeps its id. It needs a contract (without one there is no
+        balance to adjust) and a date from the contract's first day through
+        today in `tz`: before the first day it would count for nothing, and a
+        future one would move a balance nobody can see yet. After `ended_on`
+        is allowed: that is how a final balance is paid out."""
+        project = await self._day_job(adjustment.project_id)
+        contract = project.contract
+        if contract is None:
+            raise NoContract()
+        today = self._now(tz).date()
+        if not contract.starts_on <= adjustment.date <= today:
+            raise AdjustmentOutsideBalance()
+        return await self.adjustment_repo.upsert(adjustment)
+
+    async def remove_adjustment(self, project_id: str, adjustment_id: str) -> None:
+        """Remove a balance adjustment; one that is not on this project is
+        not found."""
+        await self._day_job(project_id)
+        if not await self.adjustment_repo.delete(project_id, adjustment_id):
+            raise AdjustmentNotFound(adjustment_id)
 
     async def _day_job(self, project_id: str) -> Project:
         """The project, provided it is a day job — with or without a contract:
