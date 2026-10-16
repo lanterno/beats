@@ -8783,11 +8783,10 @@
             "name": "month",
             "required": true,
             "schema": {
-              "description": "The month wanted, as YYYY-MM.",
               "examples": [
                 "2026-09"
               ],
-              "format": "date",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
             }
