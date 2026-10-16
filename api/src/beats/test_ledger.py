@@ -324,15 +324,17 @@ class TestLedgerEndedOn:
 
     def test_the_oldest_row_moves_by_the_hours_the_balance_counted(self):
         # AHM-81. Full time 40 h from 5 January, ended Wednesday 4 February,
-        # 8 h every weekday through Friday 6 February, five weeks read on
-        # 5 March. The oldest row, the week of 2 February, logged 40 h
-        # against 24 expected, but only Monday to Wednesday count: the
-        # balance did not move, and worked − expected (+16) is not its +/−.
+        # 8 h every weekday through Friday 6 February, an opening balance of
+        # 5 h, five weeks read on 5 March. The oldest row, the week of
+        # 2 February, logged 40 h against 24 expected, but only Monday to
+        # Wednesday count: the balance did not move off the close before it,
+        # and worked − expected (+16) is not its +/−. Nor is the close itself
+        # (5), which a zero opening would leave indistinguishable from no move.
         full_time = ContractTerm(
             effective_from=FIRST_TERM, schedule_type=ScheduleType.FULL_TIME, full_time_hours=40
         )
         ended_on = date(2026, 2, 4)
-        contract = Contract(terms=[full_time], opening_balance_hours=0, ended_on=ended_on)
+        contract = Contract(terms=[full_time], opening_balance_hours=5, ended_on=ended_on)
         worked = {
             FIRST_TERM + timedelta(days=n): 8.0
             for n in range((date(2026, 2, 6) - FIRST_TERM).days + 1)
@@ -342,10 +344,16 @@ class TestLedgerEndedOn:
         oldest = ledger.weeks[-1]
         assert oldest.week_of == date(2026, 2, 2)
         assert (oldest.worked, oldest.contract_expected) == (40, 24)
-        assert (oldest.balance_end, oldest.balance_moved) == (0, 0)
-        assert ledger.ended_balance == 0
-        # The weeks after the end hold the final balance and move nothing.
-        assert [w.balance_moved for w in ledger.weeks[1:]] == [0, 0, 0, 0]
+        assert (oldest.balance_end, oldest.balance_moved) == (5, 0)
+        assert ledger.ended_balance == 5
+        # The three weeks after the end hold the final balance and move nothing.
+        after_end = ledger.weeks[1:-1]
+        assert [w.week_of for w in after_end] == [
+            date(2026, 2, 23),
+            date(2026, 2, 16),
+            date(2026, 2, 9),
+        ]
+        assert [(w.balance_end, w.balance_moved) for w in after_end] == [(5, 0)] * 3
 
 
 class TestLedgerAdjustments:
