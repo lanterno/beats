@@ -14,7 +14,6 @@ export {
 	getDayName,
 	getISOWeek,
 	getMondayOfWeeksAgo,
-	getWeekNumberLabel,
 	getWeekRange,
 	mondayOfIso,
 	parseIsoDate,
