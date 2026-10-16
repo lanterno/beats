@@ -1794,6 +1794,221 @@ class TestLedgerAPI:
         assert resp.json()["code"] == "NOT_FOUND"
 
 
+# 80 % of 42 h: 6.72 h a day, which a day worked to the second rounds to
+# −0.0 against.
+PART_TIME_80 = [
+    {
+        "effective_from": CONTRACT_START,
+        "schedule_type": "part_time",
+        "full_time_hours": 42,
+        "percentage": 0.8,
+    }
+]
+
+
+class TestTimesheetAPI:
+    """GET /api/projects/{id}/timesheet.csv — a day job's month as a CSV. The
+    assembly is tested on fixed dates in `test_timesheet.py`; this is the
+    wire: the file's shape, the -0.00 a day worked to contract would print,
+    the read over the contract's whole life, the timezone, the refusals.
+    Only last month and the month before are asked for: both are always
+    finished and inside CONTRACT_START, so no test breaks on the 1st."""
+
+    @staticmethod
+    def _month(back: int) -> date:
+        """The 1st of the month `back` months before the current one, in UTC."""
+        first = datetime.now(UTC).date().replace(day=1)
+        for _ in range(back):
+            first = (first - timedelta(days=1)).replace(day=1)
+        return first
+
+    @staticmethod
+    def _get(client, headers, project_id: str, month: str | None, **params):
+        query = {} if month is None else {"month": month}
+        return client.get(
+            f"/api/projects/{project_id}/timesheet.csv",
+            params={**query, **params},
+            headers=headers,
+        )
+
+    def _rows(self, client, headers, project_id: str, month: date, **params) -> list[list[str]]:
+        resp = self._get(client, headers, project_id, month.strftime("%Y-%m"), **params)
+        assert resp.status_code == 200, resp.text
+        return list(csv.reader(io.StringIO(resp.text)))
+
+    @staticmethod
+    def _by_date(rows: list[list[str]]) -> dict[str, dict[str, str]]:
+        header = rows[0]
+        return {row[0]: dict(zip(header, row, strict=True)) for row in rows[1:]}
+
+    @staticmethod
+    def _first_weekday(month: date) -> date:
+        day = month
+        while day.weekday() >= 5:
+            day += timedelta(days=1)
+        return day
+
+    def test_the_month_as_csv_a_row_per_day(self, client, auth_headers):
+        project = _day_job(client, auth_headers, opening_balance_hours=2.5)
+        month = self._month(1)
+        resp = self._get(client, auth_headers, project["id"], month.strftime("%Y-%m"))
+
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"].startswith("text/csv")
+        assert resp.headers["content-disposition"] == "attachment"
+        rows = list(csv.reader(io.StringIO(resp.text)))
+        assert rows[0] == [
+            "date",
+            "weekday",
+            "expected",
+            "worked",
+            "difference",
+            "holiday",
+            "absence",
+            "half_day",
+            "adjustment",
+            "adjusted",
+            "balance",
+        ]
+        assert rows[1][0] == "brought forward"
+        assert rows[-1][0] == "total"
+        days = [row[0] for row in rows[2:-1]]
+        assert days[0] == month.isoformat()
+        assert [date.fromisoformat(d) for d in days] == [
+            month + timedelta(days=n) for n in range(len(days))
+        ]
+        assert (date.fromisoformat(days[-1]) + timedelta(days=1)).day == 1
+        assert {len(row) for row in rows} == {11}
+
+    def test_a_day_worked_to_contract_differs_by_0_00(self, client, auth_headers):
+        project = _day_job(client, auth_headers, terms=PART_TIME_80)
+        day = self._first_weekday(self._month(1))
+        begun = datetime(day.year, day.month, day.day, 9, tzinfo=UTC)
+        resp = client.post(
+            "/api/beats/",
+            json={
+                "project_id": project["id"],
+                "start": begun.isoformat(),
+                "end": (begun + timedelta(seconds=24192)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        rows = self._rows(client, auth_headers, project["id"], self._month(1))
+        row = self._by_date(rows)[day.isoformat()]
+
+        assert (row["expected"], row["worked"], row["difference"]) == ("6.72", "6.72", "0.00")
+
+    def test_a_month_brings_forward_what_the_one_before_carried(self, client, auth_headers):
+        # Work logged before both months and in each, and a payout in the
+        # later one: the month before's close is last month's opening only if
+        # the read runs over the contract's whole life, not the month's.
+        project = _day_job(client, auth_headers, opening_balance_hours=1.25)
+        before, last = self._month(2), self._month(1)
+        payday = self._first_weekday(last)
+        _log(client, auth_headers, project["id"], f"{CONTRACT_START}T09:00:00+00:00", 300)
+        _log(
+            client,
+            auth_headers,
+            project["id"],
+            f"{self._first_weekday(before)}T09:00:00+00:00",
+            600,
+        )
+        _log(client, auth_headers, project["id"], f"{payday}T09:00:00+00:00", 450)
+        resp = client.post(
+            f"/api/projects/{project['id']}/adjustments",
+            params={"tz": "UTC"},
+            json={"date": payday.isoformat(), "kind": "delta", "hours": -3.5},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+        earlier = self._rows(client, auth_headers, project["id"], before)
+        later = self._rows(client, auth_headers, project["id"], last)
+
+        assert earlier[-1][-1] == later[1][-1]
+        row = self._by_date(later)[payday.isoformat()]
+        assert (row["adjustment"], row["adjusted"]) == ("delta", "-3.50")
+        total = dict(zip(later[0], later[-1], strict=True))
+        assert total["adjusted"] == "-3.50"
+        moved = float(total["worked"]) - float(total["expected"]) + float(total["adjusted"])
+        assert float(later[1][-1]) + moved == pytest.approx(float(total["balance"]), abs=0.025)
+
+    def test_a_company_holiday_is_named_as_one_not_as_typed(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        day = self._first_weekday(self._month(1))
+        _put_contract(
+            client,
+            auth_headers,
+            project["id"],
+            company_holidays=[{"date": day.isoformat(), "name": "Founders' Day"}],
+        )
+
+        rows = self._rows(client, auth_headers, project["id"], self._month(1))
+
+        row = self._by_date(rows)[day.isoformat()]
+        assert (row["holiday"], row["expected"]) == ("company holiday", "0.00")
+        assert not any("Founders" in cell for r in rows for cell in r)
+
+    def test_days_follow_the_request_timezone(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        day = self._month(1) + timedelta(days=9)
+        # 23:30 UTC, which in Zürich is already the next day.
+        _log(client, auth_headers, project["id"], f"{day}T23:30:00+00:00", 60)
+        next_day = (day + timedelta(days=1)).isoformat()
+
+        in_utc = self._by_date(self._rows(client, auth_headers, project["id"], self._month(1)))
+        in_zurich = self._by_date(
+            self._rows(client, auth_headers, project["id"], self._month(1), tz="Europe/Zurich")
+        )
+
+        assert (in_utc[day.isoformat()]["worked"], in_utc[next_day]["worked"]) == ("1.00", "0.00")
+        assert (in_zurich[day.isoformat()]["worked"], in_zurich[next_day]["worked"]) == (
+            "0.00",
+            "1.00",
+        )
+
+    def test_a_side_project_or_a_day_job_without_a_contract_is_409(self, client, auth_headers):
+        month = self._month(1).strftime("%Y-%m")
+        side = _create_project(client, auth_headers)
+        resp = self._get(client, auth_headers, side["id"], month)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+        bare = _create_project(client, auth_headers, kind="day_job")
+        resp = self._get(client, auth_headers, bare["id"], month)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NO_CONTRACT"
+
+    @pytest.mark.parametrize("which", ["next", "before the start"])
+    def test_a_month_without_a_finished_day_in_the_contract_is_409(
+        self, client, auth_headers, which
+    ):
+        project = _day_job(client, auth_headers)
+        if which == "next":
+            month = (self._month(0) + timedelta(days=31)).strftime("%Y-%m")
+        else:
+            month = "2025-12"
+        resp = self._get(client, auth_headers, project["id"], month)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "OUTSIDE_CONTRACT"
+
+    @pytest.mark.parametrize("month", ["2026-13", "2026-9", "0000-01", "2026-09-01", None])
+    def test_a_month_that_is_not_yyyy_mm_is_422_naming_it(self, client, auth_headers, month):
+        project = _day_job(client, auth_headers)
+        resp = self._get(client, auth_headers, project["id"], month)
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["month"]
+
+    def test_someone_elses_project_is_404(self, client, auth_headers, other_auth_headers):
+        mine = _day_job(client, auth_headers)
+        resp = self._get(client, other_auth_headers, mine["id"], self._month(1).strftime("%Y-%m"))
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
+
+
 class TestVacationAPI:
     """GET /api/projects/{id}/vacation. The arithmetic is tested on fixed
     dates in `test_vacation.py`, and which year is the default in
