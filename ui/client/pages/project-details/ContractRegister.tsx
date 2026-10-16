@@ -5,8 +5,8 @@
  * contract's life, the full list with edit and remove, "+ Change contract
  * from…", and the constants (region, this year's company days and public
  * holidays not given, what was brought forward, the vacation entitlement if
- * one is tracked, the end), with "Holidays"
- * opening the dialog that edits the two lists.
+ * one is tracked, the end), with "Holidays" opening the dialog that edits
+ * the two lists.
  * On any other kind — or a day job still without a contract that has a
  * personal goal — it is the Goal: the goal in force, its dated history as the
  * same chart, and the override list with remove.
