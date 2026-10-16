@@ -1,9 +1,12 @@
 import { Cpu } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { del, get, post } from "@/shared/api";
+import { APP_NAME, config, isLoopbackUrl, publicApiBase } from "@/shared/config";
 import { cn } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
+import { pairingQrPayload } from "./pairingQr";
 import { DANGER_HOVER, HEADING, HEADING_ICON, LABEL, LEAD } from "./styles";
 
 export interface DeviceRegistrationInfo {
@@ -101,6 +104,12 @@ export function DaemonSection() {
 		}
 	};
 
+	// What the QR tells the phone: the API as seen from outside this page, and
+	// this web app. A loopback API means this machine, which the phone is not.
+	const web = window.location.origin;
+	const api = publicApiBase(config.apiBaseUrl, web);
+	const phoneCanReach = !isLoopbackUrl(api);
+
 	return (
 		<section className="mb-8">
 			<h2 className={HEADING}>
@@ -111,20 +120,46 @@ export function DaemonSection() {
 				<p className={LEAD}>
 					Pair the <code className="font-code text-foreground">beatsd</code> daemon to this account
 					for ambient flow tracking. Run{" "}
-					<code className="font-code text-foreground">beatsd pair &lt;code&gt;</code>.
+					<code className="font-code text-foreground">beatsd pair &lt;code&gt;</code> for the
+					daemon, or scan the QR with the companion on your phone.
 				</p>
 
 				{pairing ? (
-					<div className="space-y-2">
-						<div className="font-code text-2xl tracking-[0.3em] text-foreground font-bold">
-							{pairing.code}
+					<div className="flex flex-col sm:flex-row sm:items-center gap-4">
+						{phoneCanReach ? (
+							// Dark on white in both hours: ML Kit, which the companion
+							// scans with, does not reliably read an inverted code.
+							<div className="self-start shrink-0 rounded-2xl bg-white p-1">
+								<QRCodeSVG
+									value={pairingQrPayload({ code: pairing.code, api, web })}
+									size={152}
+									level="M"
+									marginSize={4}
+									bgColor="#ffffff"
+									fgColor="#000000"
+									title="Pairing QR code"
+								/>
+							</div>
+						) : (
+							<p className={cn(LEAD, "sm:max-w-[13rem]")}>
+								Your phone can't reach {new URL(api).host}. To pair a phone by QR, open {APP_NAME}{" "}
+								at its network address, or type the code.
+							</p>
+						)}
+						<div className="space-y-2 min-w-0">
+							<div className="font-code text-2xl tracking-[0.3em] text-foreground font-bold">
+								{pairing.code}
+							</div>
+							<p className="text-[11px] font-medium text-muted-foreground">
+								{expiryLine(pairing.expiresInSeconds)}
+							</p>
+							<p className="text-[11px] font-medium text-muted-foreground break-all">
+								Points at {api}
+							</p>
+							<Button variant="secondary" size="sm" onClick={() => setPairing(null)}>
+								Dismiss
+							</Button>
 						</div>
-						<p className="text-[11px] font-medium text-muted-foreground">
-							{expiryLine(pairing.expiresInSeconds)}
-						</p>
-						<Button variant="secondary" size="sm" onClick={() => setPairing(null)}>
-							Dismiss
-						</Button>
 					</div>
 				) : (
 					<Button variant="secondary" size="sm" onClick={handleGenerateCode} disabled={loading}>
