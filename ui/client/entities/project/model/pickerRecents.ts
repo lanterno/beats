@@ -2,9 +2,8 @@
  * Picker recents — most-recently-selected project ids, user-scoped to avoid
  * cross-account leakage on the same browser. Read by the ProjectPicker
  * (boosts recents to the top with an empty query) and written on every
- * selection. localStorage is the storage today; P2.5 (pin-to-top) reuses
- * the same key scheme; server-side persistence stays deferred per the
- * roadmap.
+ * selection. They live in this browser's localStorage only; pins
+ * (pins.ts) use the same key scheme.
  */
 
 const KEY_PREFIX = "beats:project-picker-recents:v1";

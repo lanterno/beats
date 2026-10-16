@@ -4,7 +4,7 @@
  * P3.0 aggregation endpoint so it loads in one round-trip regardless of
  * project count.
  *
- * Per the roadmap (P3.1):
+ * What it shows:
  * - Columns: color+name, category, integrations icons, weekly progress,
  *   last tracked.
  * - Sortable column headers; search via the shared selector.

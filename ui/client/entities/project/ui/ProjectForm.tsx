@@ -424,8 +424,8 @@ export function ProjectForm({
 									value={value}
 									checked={selected}
 									onChange={() =>
-										// Choosing a day job reveals the contract section (the
-										// roadmap's rule), whatever the switch said before.
+										// Choosing a day job reveals the contract section,
+										// whatever the switch said before.
 										setValues((s) => ({
 											...s,
 											kind: value,
