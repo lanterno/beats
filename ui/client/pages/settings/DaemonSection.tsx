@@ -14,8 +14,21 @@ export interface DeviceRegistrationInfo {
 	last_seen: string | null;
 }
 
+/** A code on screen, and the wall-clock moment it stops being any use. */
+interface PairingCode {
+	code: string;
+	expiresInSeconds: number;
+	/** `Date.now()` milliseconds at which the code is cleared. */
+	deadline: number;
+}
+
+function expiryLine(seconds: number): string {
+	const minutes = Math.max(1, Math.round(seconds / 60));
+	return `Expires in ${minutes} ${minutes === 1 ? "minute" : "minutes"}. One-time use.`;
+}
+
 export function DaemonSection() {
-	const [code, setCode] = useState<string | null>(null);
+	const [pairing, setPairing] = useState<PairingCode | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [devices, setDevices] = useState<DeviceRegistrationInfo[]>([]);
 	const [revoking, setRevoking] = useState<string | null>(null);
@@ -33,13 +46,40 @@ export function DaemonSection() {
 		fetchDevices();
 	}, [fetchDevices]);
 
+	// Clear the code once its deadline passes. The interval alone is not
+	// enough: browsers throttle it in a hidden tab and it stalls while the
+	// machine sleeps, so the deadline is checked again when the tab comes
+	// back. The deadline is wall-clock, not a countdown, for the same reason.
+	useEffect(() => {
+		if (!pairing) return;
+		const { deadline } = pairing;
+		const clearIfExpired = () => {
+			if (Date.now() >= deadline) setPairing(null);
+		};
+		const interval = window.setInterval(clearIfExpired, 1000);
+		document.addEventListener("visibilitychange", clearIfExpired);
+		window.addEventListener("focus", clearIfExpired);
+		return () => {
+			window.clearInterval(interval);
+			document.removeEventListener("visibilitychange", clearIfExpired);
+			window.removeEventListener("focus", clearIfExpired);
+		};
+	}, [pairing]);
+
 	const handleGenerateCode = async () => {
 		setLoading(true);
+		// Taken before the request, so the deadline falls on or before the
+		// server's own expiry and the page never shows a code it has dropped.
+		const requestedAt = Date.now();
 		try {
 			const data = await post<{ code: string; expires_in_seconds: number }>(
 				"/api/device/pair/code",
 			);
-			setCode(data.code);
+			setPairing({
+				code: data.code,
+				expiresInSeconds: data.expires_in_seconds,
+				deadline: requestedAt + data.expires_in_seconds * 1000,
+			});
 			toast.success("Pairing code generated");
 		} catch {
 			toast.error("Failed to generate pairing code");
@@ -71,19 +111,18 @@ export function DaemonSection() {
 				<p className={LEAD}>
 					Pair the <code className="font-code text-foreground">beatsd</code> daemon to this account
 					for ambient flow tracking. Run{" "}
-					<code className="font-code text-foreground">beatsd pair &lt;code&gt;</code> within 5
-					minutes.
+					<code className="font-code text-foreground">beatsd pair &lt;code&gt;</code>.
 				</p>
 
-				{code ? (
+				{pairing ? (
 					<div className="space-y-2">
 						<div className="font-code text-2xl tracking-[0.3em] text-foreground font-bold">
-							{code}
+							{pairing.code}
 						</div>
 						<p className="text-[11px] font-medium text-muted-foreground">
-							Expires in 5 minutes. One-time use.
+							{expiryLine(pairing.expiresInSeconds)}
 						</p>
-						<Button variant="secondary" size="sm" onClick={() => setCode(null)}>
+						<Button variant="secondary" size="sm" onClick={() => setPairing(null)}>
 							Dismiss
 						</Button>
 					</div>
