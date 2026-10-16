@@ -1183,6 +1183,23 @@ class TestContractAPI:
         assert resp.status_code == 422, resp.text
         assert [f["path"] for f in resp.json()["fields"]] == ["vacation.carry_over_max_days"]
 
+    @pytest.mark.parametrize("carry_over", ["all", "none"])
+    def test_a_cap_on_an_uncapped_carry_over_is_422_at_the_cap(
+        self, client, auth_headers, carry_over
+    ):
+        # Kept, it would be a stored cap that nothing reads.
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={
+                "terms": FULL_TIME,
+                "vacation": {**VACATION, "carry_over": carry_over, "carry_over_max_days": 5},
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["vacation.carry_over_max_days"]
+
 
 class TestContractWeekAPI:
     """GET /api/projects/{id}/contract/week, /holidays, and the index's this_week."""
