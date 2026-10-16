@@ -291,7 +291,7 @@ nothing.
 ## Infrastructure
 
 **One deployment is live: lifepete.com** on Google Cloud — API on Cloud Run
-(shipped by `cloudbuild.yaml` + `terraform/`), SPA on Firebase Hosting (shipped
+(shipped by `api/cloudbuild.yaml` + `terraform/`), SPA on Firebase Hosting (shipped
 by the `deploy` job in `.github/workflows/ui.yml`). **Two origins**,
 `lifepete.com` and `api.lifepete.com`, joined by CORS.
 
