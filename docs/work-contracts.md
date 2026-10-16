@@ -389,7 +389,10 @@ screen as the week, and "You need 32.0h more" beside a ring against
 adjusted expectation through `WeekExpectationReader`
 (`ContractService.expected_for_week`, mapped in `intelligence/goals.py`).
 A governed line reads "You need 25.6h more this week under your
-contract" — a contract is not "hit".
+contract" — a contract is not "hit". The hours they count against it are
+the week card's too: worked on a day the balance counts (`counts_worked`),
+so on a week a term that owes nothing begins or ends, the hours under it
+are tracked and owe the figure nothing.
 
 ### Vacation
 
