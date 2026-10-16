@@ -1770,6 +1770,104 @@ class TestLedgerAPI:
         assert resp.json()["code"] == "NOT_FOUND"
 
 
+class TestVacationAPI:
+    """GET /api/projects/{id}/vacation. The arithmetic is tested on fixed
+    dates in `test_vacation.py`, and which year is the default in
+    `test_domain.py` at a fixed instant; this is the wire."""
+
+    @staticmethod
+    def _vacation(client, headers, project_id: str, **params):
+        return client.get(f"/api/projects/{project_id}/vacation", params=params, headers=headers)
+
+    @staticmethod
+    def _off(client, headers, project_id: str, day: str, kind: str, **fields) -> None:
+        resp = client.post(
+            f"/api/projects/{project_id}/absences",
+            json={"date": day, "type": kind, **fields},
+            headers=headers,
+        )
+        assert resp.status_code in (200, 201), resp.text
+
+    def test_a_year_reads_the_opening_then_the_carry(self, client, auth_headers):
+        # From the opening on Monday 2 March 2026 with 12 days left: Tuesday
+        # costs a day, Wednesday is the company's holiday and costs none,
+        # Thursday's half day costs ½, and Friday's sick day is not leave.
+        project = _day_job(client, auth_headers)
+        _put_contract(
+            client, auth_headers, project["id"], company_holidays=[COMPANY_DAY], vacation=VACATION
+        )
+        for day, kind, fields in [
+            ("2026-03-03", "vacation", {}),
+            (COMPANY_DAY["date"], "vacation", {}),
+            ("2026-03-05", "vacation", {"half_day": True}),
+            ("2026-03-06", "sick", {}),
+        ]:
+            self._off(client, auth_headers, project["id"], day, kind, **fields)
+
+        resp = self._vacation(client, auth_headers, project["id"], year=2026)
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "year": 2026,
+            "accrued": None,
+            "carried_in": 0,
+            "available": 12,
+            "booked": 1.5,
+            "remaining": 10.5,
+        }
+        resp = self._vacation(client, auth_headers, project["id"], year=2027)
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "year": 2027,
+            "accrued": 25,
+            "carried_in": 10.5,
+            "available": 35.5,
+            "booked": 0,
+            "remaining": 35.5,
+        }
+
+    def test_a_vacation_recorded_moves_booked(self, client, auth_headers):
+        project = _day_job(client, auth_headers, vacation=VACATION)
+        before = self._vacation(client, auth_headers, project["id"], year=2026).json()
+
+        self._off(client, auth_headers, project["id"], "2026-09-01", "vacation")
+
+        after = self._vacation(client, auth_headers, project["id"], year=2026).json()
+        assert (before["booked"], after["booked"]) == (0, 1)
+        assert after["remaining"] == before["remaining"] - 1
+
+    def test_a_year_before_the_opening_is_409_naming_the_range(self, client, auth_headers):
+        project = _day_job(client, auth_headers, ended_on="2028-06-30", vacation=VACATION)
+        resp = self._vacation(client, auth_headers, project["id"], year=2025)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "VACATION_YEAR_OUT_OF_RANGE"
+        assert resp.json()["detail"] == "Vacation is counted from 2026 through 2028"
+        resp = self._vacation(client, auth_headers, project["id"], year=2029)
+        assert resp.status_code == 409, resp.text
+
+    def test_a_contract_without_an_entitlement_is_409(self, client, auth_headers):
+        project = _day_job(client, auth_headers)
+        resp = self._vacation(client, auth_headers, project["id"])
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NO_VACATION_ENTITLEMENT"
+
+    def test_a_day_job_without_a_contract_is_409(self, client, auth_headers):
+        project = _create_project(client, auth_headers, kind="day_job")
+        resp = self._vacation(client, auth_headers, project["id"])
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NO_CONTRACT"
+
+    def test_a_side_project_is_409(self, client, auth_headers):
+        project = _create_project(client, auth_headers)
+        resp = self._vacation(client, auth_headers, project["id"])
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NOT_A_DAY_JOB"
+
+    def test_a_malformed_project_id_is_404(self, client, auth_headers):
+        resp = self._vacation(client, auth_headers, "not-an-id")
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "NOT_FOUND"
+
+
 class TestAbsencesAPI:
     """/api/projects/{id}/absences — scoping and the delete."""
 

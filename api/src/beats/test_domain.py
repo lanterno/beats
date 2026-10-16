@@ -3777,6 +3777,37 @@ class TestRecordAdjustment:
         assert [a.date for a in await repo.list_by_project("p1", monday, monday)] == [monday]
 
 
+class TestVacationYearDefault:
+    """Which year `/vacation` reads when none is asked for: the current one in
+    the request's timezone, pinned at a fixed instant since the HTTP suite
+    runs on the server's clock. 23:30 UTC on New Year's Eve is already 2027
+    in Zürich."""
+
+    async def test_the_default_year_is_the_request_timezones(self):
+        from beats.domain.models import CarryOver, VacationEntitlement
+        from beats.domain.services import ContractService
+
+        project = _day_job("p1")
+        assert project.contract is not None
+        project.contract.vacation = VacationEntitlement(
+            days_per_year=25,
+            carry_over=CarryOver.ALL,
+            opening_on=date(2026, 3, 2),
+            opening_days=12,
+        )
+        at = datetime(2026, 12, 31, 23, 30, tzinfo=UTC)
+        service = ContractService(
+            project_repo=_FakeProjectRepoForServices([project]),
+            beat_repo=_FakeBeatRepoForServices(),
+            absence_repo=_FakeAbsenceRepo(),
+            adjustment_repo=_FakeAdjustmentRepo(),
+            now=lambda tz: at.astimezone(tz),
+        )
+
+        assert (await service.vacation("p1", None, ZoneInfo("UTC"))).year == 2026
+        assert (await service.vacation("p1", None, ZoneInfo("Europe/Zurich"))).year == 2027
+
+
 class TestReconcileAdjustments:
     """A contract write against the balance adjustments of the contract it
     replaces. The drawer resends the whole contract on every edit, so the
