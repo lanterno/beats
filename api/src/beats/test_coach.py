@@ -13,6 +13,7 @@ modules underneath.
 import os
 from datetime import UTC, date, datetime, timedelta
 from typing import ClassVar
+from zoneinfo import ZoneInfo
 
 import pytest
 from pymongo import AsyncMongoClient
@@ -22,6 +23,8 @@ from beats.coach import chat as chat_module
 from beats.coach import context as context_module
 from beats.coach import memory_rewrite as memory_rewrite_module
 from beats.coach import tools as tools_module
+from beats.coach.contract_section import HEADER as CONTRACT_HEADER
+from beats.coach.contract_section import describe_balance
 from beats.coach.feedback import brief_feedback_lines
 from beats.coach.gateway import (
     MODEL_PRICING,
@@ -1585,7 +1588,8 @@ class TestRewriteCoachMemory:
 
 
 class _FakeProjectRepoForTools:
-    """Returns a fixed list of project objects."""
+    """Returns a fixed list of project objects — or one of them, by id, which
+    is what the contract service asks of a project store."""
 
     def __init__(self, projects):
         self._projects = projects
@@ -1594,6 +1598,14 @@ class _FakeProjectRepoForTools:
         if archived:
             return list(self._projects)
         return [p for p in self._projects if not p.archived]
+
+    async def get_by_id(self, project_id):
+        from beats.domain.exceptions import ProjectNotFound
+
+        for project in self._projects:
+            if project.id == project_id:
+                return project
+        raise ProjectNotFound()
 
 
 class _FakeBeatRepoForTools:
@@ -1612,6 +1624,26 @@ class _FakeBeatRepoForTools:
     async def list_completed_in_range(self, start, end):
         return [b for b in self._beats if b.end is not None and start <= b.start.date() <= end]
 
+    async def list_by_project(self, project_id):
+        return [b for b in self._beats if b.project_id == project_id]
+
+
+class _FakeAbsenceStoreForCoach:
+    """In-memory AbsenceStore. The coach only reads; the writes are here
+    because the contract service's port names them."""
+
+    def __init__(self, absences):
+        self._absences = list(absences)
+
+    async def list_by_project(self, project_id, start, end):
+        return [a for a in self._absences if a.project_id == project_id and start <= a.date <= end]
+
+    async def upsert(self, absence):
+        raise NotImplementedError
+
+    async def delete(self, project_id, absence_id):
+        raise NotImplementedError
+
 
 class _FakeFlowRepoForCoach:
     """Returns flow windows whose window_start falls in [start, end]."""
@@ -1623,16 +1655,41 @@ class _FakeFlowRepoForCoach:
         return [w for w in self._windows if start <= w.window_start <= end]
 
 
-def _fake_coach_repos(*, projects=None, beats=None, flow_windows=None) -> CoachRepos:
+# The contract service's clock in these tests: Thursday 28 May 2026, noon in
+# Zürich. The week is Monday 25 May, Pentecost Monday in CH-ZH.
+ZURICH = ZoneInfo("Europe/Zurich")
+CONTRACT_NOW = datetime(2026, 5, 28, 12, 0, tzinfo=ZURICH)
+CONTRACT_TODAY = CONTRACT_NOW.date()
+CONTRACT_MONDAY = date(2026, 5, 25)
+
+
+def _fake_coach_repos(
+    *, projects=None, beats=None, flow_windows=None, absences=None, contracts=None
+) -> CoachRepos:
     """The real CoachRepos, holding in-memory repositories.
 
     It used to be a look-alike class, which meant nothing checked that the
     fakes matched what the coach asks for. Now the dataclass is protocol-typed,
-    so this is both the real thing and a type error if a fake drifts."""
+    so this is both the real thing and a type error if a fake drifts.
+
+    `contracts` defaults to the real ContractService over the same fakes, on a
+    clock fixed at `CONTRACT_NOW`, so the contract section runs the project
+    page's own assembly and passes on whatever day CI runs."""
+    from beats.domain.services import ContractService
+
+    project_repo = _FakeProjectRepoForTools(projects or [])
+    beat_repo = _FakeBeatRepoForTools(beats or [])
     return CoachRepos(
-        project=_FakeProjectRepoForTools(projects or []),
-        beat=_FakeBeatRepoForTools(beats or []),
+        project=project_repo,
+        beat=beat_repo,
         flow=_FakeFlowRepoForCoach(flow_windows or []),
+        contracts=contracts
+        or ContractService(
+            project_repo=project_repo,
+            beat_repo=beat_repo,
+            absence_repo=_FakeAbsenceStoreForCoach(absences or []),
+            now=lambda tz: CONTRACT_NOW.astimezone(tz),
+        ),
     )
 
 
@@ -2992,6 +3049,268 @@ class TestBuildDayContext:
         assert "### Calendar today" not in out
         # The rest of the day context still renders
         assert "## Today: 2026-04-01" in out
+
+    # The contract section. The clock is the contract service's (CONTRACT_NOW,
+    # Thursday 28 May in Zürich), and every positive test passes that day as
+    # `target_date` with the Zürich timezone.
+
+    @staticmethod
+    def _job(
+        *,
+        weekly=40.0,
+        starts=date(2026, 5, 18),
+        region=("CH", "ZH"),
+        opening=0.0,
+        ended_on=None,
+        company=(),
+        objective=False,
+    ):
+        from beats.domain.models import (
+            CompanyHoliday,
+            Contract,
+            ContractTerm,
+            Project,
+            ProjectKind,
+            ScheduleType,
+        )
+
+        term = (
+            ContractTerm(effective_from=starts, schedule_type=ScheduleType.OBJECTIVE)
+            if objective
+            else ContractTerm(
+                effective_from=starts, schedule_type=ScheduleType.CUSTOM, weekly_hours=weekly
+            )
+        )
+        country, subdivision = region if region else (None, None)
+        contract = Contract(
+            terms=[term],
+            holiday_country=country,
+            holiday_subdivision=subdivision,
+            opening_balance_hours=opening,
+            ended_on=ended_on,
+            company_holidays=[CompanyHoliday(date=day, name=name) for day, name in company],
+        )
+        return Project(id="job", name="Acme", kind=ProjectKind.DAY_JOB, contract=contract)
+
+    @staticmethod
+    def _work(day: date, hours: float, *, at: int = 9):
+        """A finished session on the job, starting at `at` o'clock in Zürich."""
+        from datetime import time
+
+        from beats.domain.models import Beat
+
+        start = datetime.combine(day, time(at), tzinfo=ZURICH).astimezone(UTC)
+        return Beat(
+            id=f"w-{day}-{at}", project_id="job", start=start, end=start + timedelta(hours=hours)
+        )
+
+    @staticmethod
+    def _off(day: date, *, half_day=False, type_="vacation", note=None):
+        from beats.domain.models import Absence, AbsenceType
+
+        return Absence(
+            project_id="job", date=day, half_day=half_day, type=AbsenceType(type_), note=note
+        )
+
+    async def _day_context(self, *, target=CONTRACT_TODAY, **repos) -> str:
+        return await context_module.build_day_context(
+            "user-1", _fake_coach_repos(**repos), target_date=target, tz=ZURICH
+        )
+
+    def _week_beats(self):
+        """38 h the week before (7.6 h a weekday, against 40), then 9 h on
+        Tuesday, 8.5 h on Wednesday and 3 h this morning."""
+        before = [self._work(date(2026, 5, 18) + timedelta(days=n), 7.6) for n in range(5)]
+        return [
+            *before,
+            self._work(date(2026, 5, 26), 9),
+            self._work(date(2026, 5, 27), 8.5),
+            self._work(CONTRACT_TODAY, 3, at=8),
+        ]
+
+    async def test_contract_week_after_holiday_and_day_off(self):
+        """40 h a week, Pentecost Monday off and Friday booked off: the week
+        expects 24 h, not 40, and 20.5 h of it is worked. The balance is
+        1.6 opening − 2 h last week + 4.5 h this week, and the project page's
+        week route says the same."""
+        from beats.domain.services import ContractService
+
+        job = self._job(opening=1.6)
+        beats = self._week_beats()
+        absences = [self._off(date(2026, 5, 29))]
+        out = await self._day_context(projects=[job], beats=beats, absences=absences)
+
+        section = out.split(CONTRACT_HEADER)[1]
+        assert section.splitlines()[1:7] == [
+            "  Acme (contract): this week expects 24.0 h after holidays and days off"
+            " — 20.5 h worked under the contract, 3.5 h to go",
+            "    Mon 2026-05-25: public holiday (Pentecost Monday)",
+            "    Fri 2026-05-29: day off",
+            "  Acme today: 8.0 h expected (charged to the balance tomorrow)",
+            "  Acme running balance: +4.1 h over",
+            "  Acme by Sunday: −3.9 h owed if you stop now,"
+            " −0.4 h owed if the rest of the week is met",
+        ]
+        page = await ContractService(
+            project_repo=_FakeProjectRepoForTools([job]),
+            beat_repo=_FakeBeatRepoForTools(beats),
+            absence_repo=_FakeAbsenceStoreForCoach(absences),
+            now=lambda tz: CONTRACT_NOW.astimezone(tz),
+        ).week("job", None, ZURICH)
+        assert page.balance is not None
+        assert f"running balance: {describe_balance(page.balance)}" in section
+
+    async def test_contract_section_sends_no_absence_type_note_region_or_company_name(self):
+        """What PRIVACY.md promises stays home: a sick day with a note reads
+        "day off", a company holiday reads "company holiday" without the name
+        the user typed, and neither the region's codes nor the opening
+        balance appear anywhere in the day context."""
+        job = self._job(opening=1.6, company=[(date(2026, 5, 27), "Founders' picnic at Lake")])
+        absences = [self._off(date(2026, 5, 29), type_="sick", note="flu")]
+        out = await self._day_context(projects=[job], beats=self._week_beats(), absences=absences)
+
+        assert "    Wed 2026-05-27: company holiday" in out
+        assert "    Fri 2026-05-29: day off" in out
+        for secret in ("Founders", "picnic", "sick", "flu", "CH", "ZH", "1.6"):
+            assert secret not in out
+
+    async def test_by_sunday_charges_today_and_the_rest_of_the_week(self):
+        """The bare balance counts this morning's 4 h but not today's 8 h, so
+        it reads +4.0. Stopping now owes today and Friday: −12.0. Meeting the
+        week works off exactly that."""
+        job = self._job(starts=CONTRACT_MONDAY, region=None)
+        beats = [
+            *(self._work(CONTRACT_MONDAY + timedelta(days=n), 8) for n in range(3)),
+            self._work(CONTRACT_TODAY, 4, at=7),
+        ]
+        out = await self._day_context(projects=[job], beats=beats)
+
+        assert "  Acme running balance: +4.0 h over" in out
+        assert (
+            "  Acme by Sunday: −12.0 h owed if you stop now, even if the rest of the week is met"
+            in out
+        )
+
+    @pytest.mark.parametrize(
+        ("today_hours", "left"),
+        [
+            (7.0, "1.0 h to go"),
+            (8.04, "week met"),  # −0.04 h left rounds to the 0.0 shown
+            (8.4, "week done, 0.4 h over"),
+        ],
+    )
+    async def test_what_is_left_is_judged_at_the_decimal_shown(self, today_hours, left):
+        job = self._job(starts=CONTRACT_MONDAY, region=None)
+        beats = [
+            *(self._work(CONTRACT_MONDAY + timedelta(days=n), 8) for n in range(3)),
+            self._work(CONTRACT_TODAY, today_hours, at=1),
+        ]
+        absences = [self._off(date(2026, 5, 29))]  # Mon–Thu expect 32 h
+        out = await self._day_context(projects=[job], beats=beats, absences=absences)
+
+        assert f"under the contract, {left}\n" in out
+
+    async def test_contract_starting_mid_week_counts_only_its_own_days(self):
+        """Starting on Wednesday: the 10 h tracked Monday and Tuesday are not
+        under the contract, so worked plus to go make the expectation. The
+        holiday before the start shortened nothing and is not listed."""
+        job = self._job(starts=date(2026, 5, 27))
+        beats = [
+            self._work(date(2026, 5, 25), 5),
+            self._work(date(2026, 5, 26), 5),
+            self._work(date(2026, 5, 27), 8),
+            self._work(CONTRACT_TODAY, 6, at=1),
+        ]
+        out = await self._day_context(projects=[job], beats=beats)
+
+        assert (
+            "this week expects 24.0 h after holidays and days off"
+            " — 14.0 h worked under the contract, 10.0 h to go" in out
+        )
+        assert "Pentecost" not in out
+
+    async def test_only_days_that_shortened_the_week_are_listed(self):
+        """A company day on a Saturday owed nothing to begin with; a day off
+        booked on the holiday is the holiday, once; a half day says so."""
+        job = self._job(company=[(date(2026, 5, 30), "Summer party")])
+        absences = [self._off(CONTRACT_MONDAY), self._off(date(2026, 5, 26), half_day=True)]
+        out = await self._day_context(projects=[job], absences=absences)
+
+        assert out.count("2026-05-25") == 1
+        assert "    Mon 2026-05-25: public holiday (Pentecost Monday)" in out
+        assert "    Tue 2026-05-26: half day off" in out
+        assert "2026-05-30" not in out
+        assert "company holiday" not in out
+
+    async def test_contract_ending_this_week_says_so(self):
+        job = self._job(ended_on=date(2026, 5, 27))
+        out = await self._day_context(projects=[job])
+
+        assert "  Acme: contract ends 2026-05-27" in out
+
+    @pytest.mark.parametrize(
+        "case", ["objective", "side_project", "no_contract", "ended_last_week"]
+    )
+    async def test_no_section_without_a_live_contract_that_owes_hours(self, case):
+        from beats.domain.models import Project, ProjectKind
+
+        project = {
+            "objective": lambda: self._job(objective=True),
+            "side_project": lambda: _project("job", "Acme", weekly_goal=10),
+            "no_contract": lambda: Project(id="job", name="Acme", kind=ProjectKind.DAY_JOB),
+            "ended_last_week": lambda: self._job(ended_on=date(2026, 5, 22)),
+        }[case]()
+        out = await self._day_context(projects=[project], beats=self._week_beats())
+
+        assert CONTRACT_HEADER not in out
+
+    async def test_no_section_for_a_day_other_than_the_contract_clocks_today(self):
+        """A backdated brief: the figures are today's, so none are sent."""
+        out = await self._day_context(
+            target=CONTRACT_TODAY - timedelta(days=1),
+            projects=[self._job()],
+            beats=self._week_beats(),
+        )
+
+        assert CONTRACT_HEADER not in out
+        assert "## Today: 2026-05-27" in out
+
+    async def test_failing_contract_read_leaves_the_rest_of_the_day(self):
+        class _Broken:
+            async def current_weeks(self, projects, tz, as_of):
+                raise RuntimeError("mongo went away")
+
+        out = await self._day_context(
+            projects=[self._job()], beats=self._week_beats(), contracts=_Broken()
+        )
+
+        assert CONTRACT_HEADER not in out
+        assert "08:00 — Acme (3h 0m)" in out
+
+
+class TestDescribeBalance:
+    """`describe_balance` is the API's twin of the SPA's `describeBalance`
+    (ui/client/entities/project/model/contract.ts): the same inputs, the same
+    words, as `contract.test.ts` pins them there."""
+
+    @pytest.mark.parametrize(
+        ("hours", "words"),
+        [
+            (4.5, "+4.5 h over"),
+            (6.2, "+6.2 h over"),
+            (-2, "−2.0 h owed"),
+            (-0.04, "even"),
+            (0, "even"),
+            (0.04, "even"),
+            (0.05, "+0.1 h over"),
+            # A tie: toFixed rounds away from zero where Python's round()
+            # would go to the even digit and say 0.2.
+            (0.25, "+0.3 h over"),
+            (-0.25, "−0.3 h owed"),
+        ],
+    )
+    def test_matches_the_spa(self, hours, words):
+        assert describe_balance(hours) == words
 
 
 class TestGatewayRetryAndMissingKey:
