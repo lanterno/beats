@@ -5,6 +5,10 @@ on:
   pull_request:
     paths: [shared/brand.json, scripts/gen_brand.py, api/**, ui/**, companion/**, .github/workflows/brand.yml]
 
+# Read the code, nothing more; a job that needs a write asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   # The product name is stamped from shared/brand.json into three surfaces, and
   # none of their own workflows runs when only the JSON changes. Stdlib only.

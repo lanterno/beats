@@ -8,6 +8,10 @@ on:
   pull_request:
     paths: [ui/**, api/src/**, .github/workflows/ui.yml]
 
+# Read the code, nothing more; a job that needs a write asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Lint & Type Check
@@ -55,6 +59,11 @@ jobs:
     needs: quality
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # The Firebase action reports the deploy as a check run ("Production
+    # deploy succeeded") with the repo token.
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         working-directory: ui
