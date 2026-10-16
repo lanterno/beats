@@ -8,40 +8,48 @@ from beats.domain.models import Beat
 from beats.domain.ports import RangeBeatReader
 from beats.domain.utils import local_date, local_dt
 
-from ._support import UTC_TZ, _beats_in_local_range
+from ._support import UTC_TZ, _beats_covering
 
 
 async def compute_focus_scores(
-    beat_repo: RangeBeatReader, target_date: date, tz: ZoneInfo = UTC_TZ
+    beat_repo: RangeBeatReader, start: date, end: date, tz: ZoneInfo = UTC_TZ
 ) -> list[dict]:
-    """Compute focus quality scores for all sessions on a given local date.
+    """Focus quality scores for every session whose local date is in [start, end].
 
-    The peak block comes from the 30 local days up to and including the
-    target, read in local dates like the day itself, so a session just after
-    local midnight 30 days back counts wherever UTC filed it. The window is
-    sorted by start so a tie between two blocks breaks the same way on every
-    run, whatever order the store returned them in.
+    Each day is scored exactly as a request for that day alone would score it,
+    so a session's mark is the same on the Today feed and on the project page:
+    its own peak block, from the 30 local days up to and including it, and
+    fragmentation that only counts neighbours on the same local day.
+
+    The window is read in local dates, so a session just after local midnight
+    30 days back counts wherever UTC filed it, and sorted by start, so a tie
+    between two blocks breaks the same way on every run. Rows come out by day,
+    then by start.
     """
-    recent_beats = sorted(
-        await _beats_in_local_range(beat_repo, target_date - timedelta(days=30), target_date, tz),
+    window = sorted(
+        await _beats_covering(beat_repo, start - timedelta(days=30), end),
         key=lambda b: b.start,
     )
-    sorted_beats = [b for b in recent_beats if local_date(b.start, tz) == target_date]
-    if not sorted_beats:
-        return []
-
-    peak_block = find_peak_block(recent_beats, tz)
+    dated = [(local_date(b.start, tz), b) for b in window]
+    by_day: dict[date, list[Beat]] = defaultdict(list)
+    for d, b in dated:
+        if start <= d <= end:
+            by_day[d].append(b)
 
     results = []
-    for i, b in enumerate(sorted_beats):
-        score = focus_score_for_beat(b, sorted_beats, i, peak_block, tz)
-        results.append(
-            {
-                "beat_id": b.id,
-                "score": score["score"],
-                "components": score["components"],
-            }
-        )
+    for d in sorted(by_day):
+        since = d - timedelta(days=30)
+        peak_block = find_peak_block([b for bd, b in dated if since <= bd <= d], tz)
+        day_beats = by_day[d]
+        for i, b in enumerate(day_beats):
+            score = focus_score_for_beat(b, day_beats, i, peak_block, tz)
+            results.append(
+                {
+                    "beat_id": b.id,
+                    "score": score["score"],
+                    "components": score["components"],
+                }
+            )
     return results
 
 

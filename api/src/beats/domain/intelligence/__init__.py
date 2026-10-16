@@ -104,8 +104,10 @@ class IntelligenceService:
         goals = await week_goals(projects, _monday_of(target_date), self.contracts)
         return suggest_daily_plan(beats, projects, target_date, tz, goals)
 
-    async def compute_focus_scores(self, target_date: date, tz: ZoneInfo = UTC_TZ) -> list[dict]:
-        return await compute_focus_scores(self.beat_repo, target_date, tz)
+    async def compute_focus_scores(
+        self, start: date, end: date, tz: ZoneInfo = UTC_TZ
+    ) -> list[dict]:
+        return await compute_focus_scores(self.beat_repo, start, end, tz)
 
     async def get_project_health(self, tz: ZoneInfo = UTC_TZ) -> list[dict]:
         return await get_project_health(self.beat_repo, self.project_repo, tz)

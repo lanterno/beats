@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from beats.api.dependencies import (
     InsightsRepoDep,
     IntelligenceServiceDep,
+    MondayDate,
     TimezoneDep,
     WeeklyDigestRepoDep,
 )
@@ -181,11 +182,24 @@ async def get_suggestions(
 async def get_focus_scores(
     service: IntelligenceServiceDep,
     tz: TimezoneDep,
-    target_date: Annotated[date | None, Query(alias="date")] = None,
+    week_of: Annotated[
+        MondayDate,
+        Query(
+            description="Monday of the week to score, Monday to Sunday in `tz`. "
+            "Defaults to today alone."
+        ),
+    ] = None,
 ) -> list[FocusScoreResponse]:
-    """Get focus quality scores for all sessions on a date (defaults to today)."""
-    d = target_date or datetime.now(tz).date()
-    results = await service.compute_focus_scores(d, tz=tz)
+    """Focus quality scores for every session today, or in the week of `week_of`.
+
+    Each day is scored as it would be alone, against its own 30-day peak
+    hours, so a session scores the same whichever way it is asked for. Rows
+    are ordered by local day, then by start."""
+    if week_of is not None:
+        start, end = week_of, week_of + timedelta(days=6)
+    else:
+        start = end = datetime.now(tz).date()
+    results = await service.compute_focus_scores(start, end, tz=tz)
     return [FocusScoreResponse(**r) for r in results]
 
 
