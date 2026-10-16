@@ -147,13 +147,23 @@ export function validateContractFrame(
 /**
  * Form → domain for the whole contract. `terms` are whatever the caller
  * holds — the existing history when editing the frame, the one new term
- * when creating — sorted the way the API wants them.
+ * when creating — sorted the way the API wants them. `kept` are the
+ * holiday lists, edited only in the Holidays dialog: the existing
+ * contract's, or empty ones on create, carried through unchanged. A region
+ * change — "No region" included — clears neither: a date not given that the
+ * new region does not have simply does nothing.
  */
-export function contractFromForm(frame: ContractFrameValues, terms: ContractTerm[]): Contract {
+export function contractFromForm(
+	frame: ContractFrameValues,
+	terms: ContractTerm[],
+	kept: Pick<Contract, "companyHolidays" | "holidaysNotGiven">,
+): Contract {
 	const contract: Contract = {
 		terms: sortTerms(terms),
 		openingBalanceHours:
 			frame.openingBalanceHours.trim() === "" ? 0 : Number(frame.openingBalanceHours),
+		companyHolidays: kept.companyHolidays,
+		holidaysNotGiven: kept.holidaysNotGiven,
 	};
 	const country = frame.holidayCountry.trim();
 	if (country) {

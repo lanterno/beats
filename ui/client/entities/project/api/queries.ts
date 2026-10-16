@@ -28,7 +28,14 @@ export const projectKeys = {
 	total: (id: string) => [...projectKeys.all, "total", id] as const,
 	/** Every ledger read of one project, whatever its length — what a write invalidates. */
 	ledger: (id: string) => [...projectKeys.all, "ledger", id] as const,
-	holidays: (id: string, year: number) => [...projectKeys.all, "holidays", id, year] as const,
+	holidays: (id: string, year: number, includeNotGiven = false) =>
+		[
+			...projectKeys.all,
+			"holidays",
+			id,
+			year,
+			includeNotGiven ? "with-not-given" : "given",
+		] as const,
 	/** Every week of one project against its contract — what an absence write invalidates. */
 	contractWeeks: (id: string) => [...projectKeys.all, "contract-week", id] as const,
 	contractWeek: (id: string, weekOf: string | undefined) =>
@@ -283,13 +290,22 @@ export function useProjectLedger(
 	});
 }
 
-/** The contract region's holidays for one year, for the absence calendar. */
-export function useProjectHolidays(projectId: string | undefined, year: number) {
+/**
+ * The contract's holidays for one year, for the absence calendar and Time
+ * off; with `includeNotGiven`, the region's the employer does not give as
+ * well, for the Holidays dialog and the contract's constants.
+ */
+export function useProjectHolidays(
+	projectId: string | undefined,
+	year: number,
+	options: { includeNotGiven?: boolean } = {},
+) {
+	const includeNotGiven = options.includeNotGiven ?? false;
 	return useQuery({
-		queryKey: projectKeys.holidays(projectId || "", year),
-		queryFn: () => fetchProjectHolidays(projectId as string, year),
+		queryKey: projectKeys.holidays(projectId || "", year, includeNotGiven),
+		queryFn: () => fetchProjectHolidays(projectId as string, year, { includeNotGiven }),
 		enabled: !!projectId,
-		// Changes only with the region, and a contract write invalidates it.
+		// Changes only with the contract, and a contract write invalidates it.
 		staleTime: 60 * 60_000,
 	});
 }

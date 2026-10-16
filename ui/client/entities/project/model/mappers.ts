@@ -98,9 +98,17 @@ function toContract(api: ApiContract): Contract {
 		holidaySubdivision: api.holiday_subdivision ?? undefined,
 		openingBalanceHours: api.opening_balance_hours ?? 0,
 		endedOn: api.ended_on ?? undefined,
+		companyHolidays: api.company_holidays.map((h) => ({ date: h.date, name: h.name })),
+		holidaysNotGiven: [...api.holidays_not_given],
 	};
 }
 
+/**
+ * Domain → wire for every contract write. Both holiday lists are always
+ * sent: every term edit rebuilds the contract through here, and a list
+ * dropped on the way would be kept by today's API but cleared by any write
+ * that sent it empty.
+ */
 export function toApiContract(contract: Contract): ApiContract {
 	return {
 		terms: contract.terms.map(toApiContractTerm),
@@ -108,6 +116,8 @@ export function toApiContract(contract: Contract): ApiContract {
 		holiday_subdivision: contract.holidaySubdivision ?? null,
 		opening_balance_hours: contract.openingBalanceHours,
 		ended_on: contract.endedOn ?? null,
+		company_holidays: contract.companyHolidays.map((h) => ({ date: h.date, name: h.name })),
+		holidays_not_given: [...contract.holidaysNotGiven],
 	};
 }
 
