@@ -41,7 +41,9 @@ async def export_sessions_csv(
     else:
         beats = await beat_repo.list_all_completed()
 
-    projects = await project_repo.list()
+    # Archived too, as in `/full`: a finished day job's sessions are still
+    # written, and must not come out under "Unknown".
+    projects = await project_repo.list(archived=False) + await project_repo.list(archived=True)
     project_map = {p.id: p.name for p in projects}
 
     output = io.StringIO()
