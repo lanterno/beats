@@ -11,6 +11,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    ValidationInfo,
     computed_field,
     field_validator,
     model_validator,
@@ -348,6 +349,69 @@ class Absence(BaseModel):
     note: str | None = None
 
 
+class AdjustmentKind(StrEnum):
+    """How a balance adjustment moves the balance at the start of its day."""
+
+    DELTA = "delta"  # by `hours`, signed: a payout is negative, a credit positive
+    RESET = "reset"  # to `hours`
+    CAP = "cap"  # down to `hours` if above it; a balance under the cap is untouched
+
+
+# Far beyond any real balance, and small enough that a sum of many records
+# stays finite: a balance that overflowed would serialize as null.
+_ADJUSTMENT_HOURS_BOUND = 10_000
+
+
+class BalanceAdjustmentFields(BaseModel):
+    """A dated change to a day job's balance, as a client sends it — the
+    request body of `POST /{id}/adjustments`, so its validators are the 422.
+
+    A reset or a cap stores its target, not the hours it moved: what it
+    moves is worked out each time the balance is read, against the balance
+    that morning, so a session recorded later from before the reset leaves
+    everything after it unchanged.
+    """
+
+    date: date_type
+    kind: AdjustmentKind
+    # Strict, so `true` is a 422 and not a 1 h payout: lax mode reads a bool
+    # (and a numeric string) as a number. An int still reads as hours.
+    hours: float = Field(
+        strict=True,
+        allow_inf_nan=False,
+        ge=-_ADJUSTMENT_HOURS_BOUND,
+        le=_ADJUSTMENT_HOURS_BOUND,
+    )
+    note: str | None = None
+
+    @field_validator("hours")
+    @classmethod
+    def hours_mean_something_for_the_kind(cls, hours: float, info: ValidationInfo) -> float:
+        # A field validator rather than a model one, so the 422 names `hours`.
+        # `kind` is declared first and so is already in `info.data` — unless
+        # it failed, and then its own error is the answer.
+        kind = info.data.get("kind")
+        if kind is AdjustmentKind.DELTA and hours == 0:
+            msg = "a delta of 0 h moves nothing"
+            raise ValueError(msg)
+        if kind is AdjustmentKind.CAP and hours < 0:
+            msg = "a cap must not be negative"
+            raise ValueError(msg)
+        return hours
+
+
+class BalanceAdjustment(BalanceAdjustmentFields):
+    """A balance adjustment on record: one per (project, date), so a second
+    posted for a day replaces the first, as an absence does. It counts from
+    the contract's first day on, whatever `ended_on` says — a payout after
+    the end settles the frozen balance — and is deleted with the contract."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    project_id: str
+
+
 class DayAbsence(BaseModel):
     """An absence as one day of the week report shows it — the record without
     its keys, which the day already supplies."""
@@ -389,17 +453,20 @@ class ContractWeek(BaseModel):
     balance: float | None
     days: list[ContractDay]
     # The proof under the balance, so a reader can check the sum:
-    # `balance_opening + balance_worked - balance_expected_through` is
-    # `balance` to the cent (each term is rounded on its own). Always on the
-    # wire, and null exactly when `balance` is — required like it, so the
-    # generated type does not say they may be absent: `balance_as_of` is the
-    # day the balance is for, `balance_worked` the hours since the contract
-    # started (through `ended_on` at most), `balance_expected_through` what
-    # was expected through the day before.
+    # `balance_opening + balance_worked - balance_expected_through +
+    # balance_adjusted` is `balance` within 0.025 (each of the four terms and
+    # the balance is rounded on its own). Always on the wire, and null
+    # exactly when `balance` is — required like it, so the generated type
+    # does not say they may be absent: `balance_as_of` is the day the balance
+    # is for, `balance_worked` the hours since the contract started (through
+    # `ended_on` at most), `balance_expected_through` what was expected
+    # through the day before, `balance_adjusted` what the balance
+    # adjustments dated through today moved it by.
     balance_as_of: date_type | None
     balance_opening: float | None
     balance_worked: float | None
     balance_expected_through: float | None
+    balance_adjusted: float | None
 
 
 class LedgerNoteKind(StrEnum):
@@ -422,6 +489,20 @@ class LedgerNote(BaseModel):
     name: str | None = None
 
 
+class LedgerAdjustment(BaseModel):
+    """A balance adjustment as its ledger week shows it: the record, and
+    `applied`, the hours it actually moved the balance — `hours` for a
+    delta, the target less that morning's balance for a reset, and for a cap
+    the hours it took off (0 when the balance was under it)."""
+
+    id: str
+    date: date_type
+    kind: AdjustmentKind
+    hours: float
+    note: str | None
+    applied: float
+
+
 class LedgerWeek(BaseModel):
     """One week of the ledger. See `domain/ledger.py` for what each figure is
     and when it is None."""
@@ -435,15 +516,18 @@ class LedgerWeek(BaseModel):
     contract_expected: float | None
     balance_end: float | None
     notes: list[LedgerNote]
+    adjustments: list[LedgerAdjustment]
 
 
 class LedgerTotals(BaseModel):
-    """The balance as of today and the two terms that move it, since the
-    contract started — the standing's "worked since · expected through" line
-    and the ledger's foot. The opening balance is the contract's own."""
+    """The balance as of today and the three terms that move it, since the
+    contract started — the standing's "worked since · expected through ·
+    adjusted" lines and the ledger's foot. The opening balance is the
+    contract's own."""
 
     expected: float
     worked: float
+    adjusted: float
     balance: float
 
 
@@ -454,6 +538,11 @@ class Ledger(BaseModel):
     weeks: list[LedgerWeek]
     since: date_type | None  # contract.starts_on, or None
     totals: LedgerTotals | None  # None when there is no balance today
+    # The close on `ended_on`, before any adjustment after it — the final
+    # balance a settlement then pays out. None without a contract, without
+    # `ended_on`, while `ended_on` is still to come, and when no balance is
+    # kept on that day (`week_expectation`'s null rule for the term then).
+    ended_balance: float | None
 
 
 class Beat(TzNormalizedModel):

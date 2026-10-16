@@ -19,6 +19,7 @@ from beats.api.errors import http_exception_handler, validation_exception_handle
 from beats.api.middleware import IdempotencyMiddleware, ensure_mutation_log_indexes
 from beats.api.routers.absences import router as absences_router
 from beats.api.routers.account import router as account_router
+from beats.api.routers.adjustments import router as adjustments_router
 from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
@@ -290,6 +291,7 @@ app.include_router(sso_router)
 app.include_router(account_router)
 app.include_router(projects_router)
 app.include_router(absences_router)
+app.include_router(adjustments_router)
 app.include_router(meta_router)
 app.include_router(beats_router)
 app.include_router(timer_router)

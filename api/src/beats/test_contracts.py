@@ -18,12 +18,13 @@ tested with `ProjectService` in `test_domain.py`.
 """
 
 import os
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from pymongo import AsyncMongoClient
 
-from beats.domain.contracts import balance, expected_hours, term_on
+from beats.domain.contracts import balance, expected_hours, running_balance, term_on
 from beats.domain.holidays import (
     HolidaySource,
     contract_calendar,
@@ -33,11 +34,16 @@ from beats.domain.holidays import (
 from beats.domain.models import (
     Absence,
     AbsenceType,
+    AdjustmentKind,
+    BalanceAdjustment,
+    BalanceAdjustmentFields,
+    Beat,
     CompanyHoliday,
     Contract,
     ContractTerm,
     ScheduleType,
 )
+from beats.domain.services import worked_by_local_day
 from beats.infrastructure.repositories import MongoAbsenceRepository
 
 # A week with nothing special about it. Monday 2 March 2026 through Friday 6 March.
@@ -262,13 +268,137 @@ class TestBalance:
         contract = _contract(_full_time(MON), opening_balance_hours=10)
         worked = {MON: 8.0, TUE: 8.0, WED: 3.0}
         # Opening 10, worked 19 including Wednesday's 3, expected Mon-Tue only.
-        assert balance(contract, [], set(), worked, today=WED) == 10 + 19 - 16
+        assert balance(contract, [], set(), worked, [], today=WED) == 10 + 19 - 16
 
     def test_ended_on_freezes_both_sides(self):
         contract = _contract(_full_time(MON), ended_on=TUE)
         worked = {MON: 8.0, TUE: 8.0, WED: 5.0}
         # Wednesday's 5 h neither count as overtime nor were expected.
-        assert balance(contract, [], set(), worked, today=FRI) == 0
+        assert balance(contract, [], set(), worked, [], today=FRI) == 0
+
+
+def _adjust(day: date, kind: AdjustmentKind, hours: float) -> BalanceAdjustment:
+    return BalanceAdjustment(project_id="p1", date=day, kind=kind, hours=hours)
+
+
+# 8 h on each of Monday to Thursday: on a 40 h week from Monday, every close
+# through Thursday is the opening balance, untouched by the work itself.
+EVEN_WEEK = {MON: 8.0, TUE: 8.0, WED: 8.0, THU: 8.0}
+
+
+class TestBalanceAdjustments:
+    """The three kinds, each applied at the start of its day against the
+    close of the day before. A delta stores what it moves; a reset or a cap
+    stores its target, so what it moves follows the history before it."""
+
+    def test_a_delta_moves_the_balance_from_its_day_on(self):
+        running = running_balance(
+            _contract(_full_time(MON)),
+            [],
+            set(),
+            EVEN_WEEK,
+            [_adjust(WED, AdjustmentKind.DELTA, -5)],
+            FRI,
+            closes_on=[MON, TUE, WED, THU],
+        )
+        assert running.closes == {MON: 0, TUE: 0, WED: -5, THU: -5}
+        assert running.applied == {WED: -5}
+        assert (running.terms.adjusted, running.terms.balance) == (-5, -5)
+
+    def test_a_reset_dated_today_is_its_target_plus_todays_work(self):
+        # The morning's 12 h (10 opening, 18 worked, 16 expected) go to 0
+        # at the start of Wednesday; the 3 h worked since then count.
+        contract = _contract(_full_time(MON), opening_balance_hours=10)
+        worked = {MON: 9.0, TUE: 9.0, WED: 3.0}
+        terms = running_balance(
+            contract, [], set(), worked, [_adjust(WED, AdjustmentKind.RESET, 0)], WED
+        ).terms
+        assert (terms.adjusted, terms.balance) == (-12, 3)
+
+    @pytest.mark.parametrize(
+        ("kind", "hours", "after_more_work"),
+        [(AdjustmentKind.RESET, 0, 0), (AdjustmentKind.DELTA, -5, 2)],
+        ids=["a reset holds", "a delta passes it through"],
+    )
+    def test_history_recorded_later_from_before_the_adjustment(self, kind, hours, after_more_work):
+        # Opening 5, reset to 0 (or −5) on Thursday, read on Friday. A
+        # forgotten 2 h on Tuesday, recorded later, changes what a reset
+        # moved and leaves the balance after it where it was; a delta keeps
+        # its hours, so the 2 h come through.
+        contract = _contract(_full_time(MON), opening_balance_hours=5)
+        adjustment = [_adjust(THU, kind, hours)]
+        before = running_balance(contract, [], set(), EVEN_WEEK, adjustment, FRI)
+        later = running_balance(contract, [], set(), {**EVEN_WEEK, TUE: 10.0}, adjustment, FRI)
+        assert before.terms.balance == 0
+        assert later.terms.balance == after_more_work
+        if kind is AdjustmentKind.RESET:
+            assert (before.applied, later.applied) == ({THU: -5}, {THU: -7})
+
+    def test_a_reset_holds_against_an_absence_recorded_before_it(self):
+        contract = _contract(_full_time(MON), opening_balance_hours=5)
+        running = running_balance(
+            contract,
+            [_absence(TUE)],
+            set(),
+            EVEN_WEEK,
+            [_adjust(THU, AdjustmentKind.RESET, 0)],
+            FRI,
+        )
+        assert running.applied == {THU: -13}  # 5 + 24 worked − 16 expected
+        assert running.terms.balance == 0
+
+    @pytest.mark.parametrize(
+        ("opening", "applied", "after"),
+        [(25, -15, 10), (4, 0, 4), (-6, 0, -6)],
+        ids=["above the cap", "under it", "owed"],
+    )
+    def test_a_cap_only_ever_brings_the_balance_down(self, opening, applied, after):
+        contract = _contract(_full_time(MON), opening_balance_hours=opening)
+        running = running_balance(
+            contract, [], set(), {}, [_adjust(MON, AdjustmentKind.CAP, 10)], MON
+        )
+        assert running.applied == {MON: applied}
+        assert running.terms.balance == after
+
+    def test_an_adjustment_before_the_contract_starts_is_ignored(self):
+        contract = _contract(_full_time(WED), opening_balance_hours=3)
+        running = running_balance(
+            contract, [], set(), {}, [_adjust(MON, AdjustmentKind.DELTA, -40)], WED, [TUE]
+        )
+        assert running.applied == {}
+        assert running.closes == {TUE: 3}
+        assert (running.terms.adjusted, running.terms.balance) == (0, 3)
+
+    def test_the_balance_after_a_reset_depends_on_the_timezone(self):
+        # 23:30 UTC on Tuesday is 00:30 on Wednesday in Berlin. Bucketed in
+        # UTC the hour is Tuesday's and Wednesday's reset absorbs it; in
+        # Berlin it is Wednesday's, after the reset, and counts.
+        start = datetime(2026, 3, 3, 23, 30, tzinfo=UTC)
+        beats = [Beat(project_id="p1", start=start, end=start + timedelta(hours=1))]
+        contract = _contract(_full_time(MON))
+        reset = [_adjust(WED, AdjustmentKind.RESET, 0)]
+
+        def balance_in(zone: str) -> float:
+            worked = worked_by_local_day(beats, ZoneInfo(zone))
+            return balance(contract, [], set(), worked, reset, WED)
+
+        assert balance_in("UTC") == 0
+        assert balance_in("Europe/Berlin") == 1
+
+    @pytest.mark.parametrize(
+        ("kind", "hours", "message"),
+        [
+            (AdjustmentKind.DELTA, 0, "moves nothing"),
+            (AdjustmentKind.CAP, -1, "must not be negative"),
+            (AdjustmentKind.DELTA, -10_001, "greater than or equal"),
+            (AdjustmentKind.RESET, 10_001, "less than or equal"),
+            (AdjustmentKind.RESET, float("nan"), "finite"),
+        ],
+        ids=["a delta of 0", "a negative cap", "under the bound", "over it", "nan"],
+    )
+    def test_an_adjustment_that_means_nothing_is_refused(self, kind, hours, message):
+        with pytest.raises(ValueError, match=message):
+            BalanceAdjustmentFields(date=MON, kind=kind, hours=hours)
 
 
 class TestContractValidation:

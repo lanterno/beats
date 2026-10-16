@@ -75,6 +75,7 @@ const WEEK: ContractWeek = {
 	balanceOpening: 2,
 	balanceWorked: 848.5,
 	balanceExpectedThrough: 840,
+	balanceAdjusted: 0,
 	days: days({
 		0: { worked: 7.1 },
 		1: { worked: 6.9 },
@@ -95,6 +96,7 @@ function ledgerWeek(weekOf: string, worked: number, goal: number | null = 8): Le
 		contractExpected: null,
 		balanceEnd: null,
 		notes: [],
+		adjustments: [],
 	};
 }
 
@@ -139,6 +141,7 @@ describe("Standing on a day job", () => {
 		expect(region).toHaveTextContent("+2.0 h brought forward");
 		expect(region).toHaveTextContent("+848.5 h worked since Mon Jan 5");
 		expect(region).toHaveTextContent("−840.0 h expected through Wed");
+		expect(region).not.toHaveTextContent("adjusted");
 		expect(region).toHaveTextContent("By Sunday: +5.7 h if the week is met");
 		expect(region).toHaveTextContent("+3.8 h if you stop now.");
 
@@ -150,6 +153,14 @@ describe("Standing on a day job", () => {
 		expect(region).toHaveTextContent("1.9 h to go, all today. Friday is off.");
 		expect(within(region).getByRole("button", { name: "Book time off" })).toBeInTheDocument();
 		expect(within(region).queryByRole("button", { name: "Edit goal" })).not.toBeInTheDocument();
+	});
+
+	it("adds the adjustments to the proof, so its lines still add up to the balance", () => {
+		const paidOut: ContractWeek = { ...WEEK, balance: -29.5, balanceAdjusted: -40 };
+		renderStanding({ currentWeek: paidOut, openWeek: paidOut });
+		const region = screen.getByRole("region", { name: "Where you stand" });
+		expect(within(region).getByText("−29.5 h")).toBeInTheDocument();
+		expect(region).toHaveTextContent("−840.0 h expected through Wed−40.0 h adjusted");
 	});
 
 	it("says an owed balance in persimmon, muted with its line in the contract's first week", () => {
@@ -264,7 +275,8 @@ describe("Standing on a day job", () => {
 		};
 		const ledger: Ledger = {
 			since: "2026-09-02",
-			totals: { expected: 50.4, worked: 38, balance: -12.4 },
+			totals: { expected: 50.4, worked: 38, adjusted: 0, balance: -12.4 },
+			endedBalance: null,
 			weeks: [
 				{ ...ledgerWeek("2026-09-07", 10, 42), contractExpected: 42, balanceEnd: null },
 				{ ...ledgerWeek("2026-08-31", 28, 42), contractExpected: 25.2, balanceEnd: -1.2 },
@@ -325,6 +337,7 @@ describe("Standing on a side project", () => {
 	const ledger: Ledger = {
 		since: null,
 		totals: null,
+		endedBalance: null,
 		weeks: [
 			ledgerWeek("2026-09-07", 4.8),
 			ledgerWeek("2026-08-31", 8.4),

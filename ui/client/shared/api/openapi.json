@@ -91,6 +91,61 @@
         "title": "AbsenceType",
         "type": "string"
       },
+      "AdjustmentKind": {
+        "description": "How a balance adjustment moves the balance at the start of its day.",
+        "enum": [
+          "delta",
+          "reset",
+          "cap"
+        ],
+        "title": "AdjustmentKind",
+        "type": "string"
+      },
+      "AdjustmentResponse": {
+        "description": "Response schema for a balance adjustment: the record as stored. What\nit moved the balance by is the ledger's (`applied`), worked out on every\nread.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AdjustmentKind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "date",
+          "kind",
+          "hours"
+        ],
+        "title": "AdjustmentResponse",
+        "type": "object"
+      },
       "AutoTimerSuggestion": {
         "properties": {
           "project_id": {
@@ -124,6 +179,43 @@
           "should_suggest"
         ],
         "title": "AutoTimerSuggestion",
+        "type": "object"
+      },
+      "BalanceAdjustmentFields": {
+        "description": "A dated change to a day job's balance, as a client sends it \u2014 the\nrequest body of `POST /{id}/adjustments`, so its validators are the 422.\n\nA reset or a cap stores its target, not the hours it moved: what it\nmoves is worked out each time the balance is read, against the balance\nthat morning, so a session recorded later from before the reset leaves\neverything after it unchanged.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "hours": {
+            "maximum": 10000.0,
+            "minimum": -10000.0,
+            "title": "Hours",
+            "type": "number"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AdjustmentKind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "date",
+          "kind",
+          "hours"
+        ],
+        "title": "BalanceAdjustmentFields",
         "type": "object"
       },
       "BiometricDayRequest": {
@@ -701,6 +793,17 @@
             ],
             "title": "Balance"
           },
+          "balance_adjusted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Adjusted"
+          },
           "balance_as_of": {
             "anyOf": [
               {
@@ -795,7 +898,8 @@
           "balance_as_of",
           "balance_opening",
           "balance_worked",
-          "balance_expected_through"
+          "balance_expected_through",
+          "balance_adjusted"
         ],
         "title": "ContractWeek",
         "type": "object"
@@ -1863,6 +1967,17 @@
       "Ledger": {
         "description": "`GET /{id}/ledger`: N weeks newest first, and the totals as of today.\nTyped because it crosses the wire, as `ContractWeek` is.",
         "properties": {
+          "ended_balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended Balance"
+          },
           "since": {
             "anyOf": [
               {
@@ -1896,9 +2011,56 @@
         "required": [
           "weeks",
           "since",
-          "totals"
+          "totals",
+          "ended_balance"
         ],
         "title": "Ledger",
+        "type": "object"
+      },
+      "LedgerAdjustment": {
+        "description": "A balance adjustment as its ledger week shows it: the record, and\n`applied`, the hours it actually moved the balance \u2014 `hours` for a\ndelta, the target less that morning's balance for a reset, and for a cap\nthe hours it took off (0 when the balance was under it).",
+        "properties": {
+          "applied": {
+            "title": "Applied",
+            "type": "number"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AdjustmentKind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "kind",
+          "hours",
+          "note",
+          "applied"
+        ],
+        "title": "LedgerAdjustment",
         "type": "object"
       },
       "LedgerNote": {
@@ -1954,8 +2116,12 @@
         "type": "string"
       },
       "LedgerTotals": {
-        "description": "The balance as of today and the two terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through\" line\nand the ledger's foot. The opening balance is the contract's own.",
+        "description": "The balance as of today and the three terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through \u00b7\nadjusted\" lines and the ledger's foot. The opening balance is the\ncontract's own.",
         "properties": {
+          "adjusted": {
+            "title": "Adjusted",
+            "type": "number"
+          },
           "balance": {
             "title": "Balance",
             "type": "number"
@@ -1972,6 +2138,7 @@
         "required": [
           "expected",
           "worked",
+          "adjusted",
           "balance"
         ],
         "title": "LedgerTotals",
@@ -1980,6 +2147,13 @@
       "LedgerWeek": {
         "description": "One week of the ledger. See `domain/ledger.py` for what each figure is\nand when it is None.",
         "properties": {
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerAdjustment"
+            },
+            "title": "Adjustments",
+            "type": "array"
+          },
           "balance_end": {
             "anyOf": [
               {
@@ -2053,7 +2227,8 @@
           "effective_goal_overridden",
           "contract_expected",
           "balance_end",
-          "notes"
+          "notes",
+          "adjustments"
         ],
         "title": "LedgerWeek",
         "type": "object"
@@ -6327,7 +6502,7 @@
     },
     "/api/intelligence/digests/generate": {
       "post": {
-        "description": "Generate (or regenerate) a weekly digest. Defaults to last completed week.",
+        "description": "Generate (or regenerate) a weekly digest. Defaults to last completed week.\n\nDigests are keyed by their Monday, so any other day is a 422: one generated\nfor a Tuesday would be stored under a week no reader asks for.",
         "operationId": "generate_digest_api_intelligence_digests_generate_post",
         "parameters": [
           {
@@ -7596,6 +7771,122 @@
         ]
       }
     },
+    "/api/projects/{project_id}/adjustments": {
+      "post": {
+        "description": "Record a balance adjustment: `delta` moves the balance by `hours`\n(negative for a payout), `reset` sets it to `hours`, `cap` brings it down\nto `hours` if it is above. Each takes effect at the start of its day.\nOne per date: posting again for a date replaces the adjustment there,\nkeeps its id and still answers 201.\n\n`tz` is required: the date must fall from the contract's first day\nthrough today in `tz` (409 ADJUSTMENT_OUTSIDE_BALANCE). 409 NO_CONTRACT\nwhen the day job has no contract, and so no balance, yet.",
+        "operationId": "record_adjustment_api_projects__project_id__adjustments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BalanceAdjustmentFields"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjustmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Adjustment",
+        "tags": [
+          "Adjustments"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/adjustments/{adjustment_id}": {
+      "delete": {
+        "description": "Remove a balance adjustment. 404 when it is not on this project.",
+        "operationId": "delete_adjustment_api_projects__project_id__adjustments__adjustment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "adjustment_id",
+            "required": true,
+            "schema": {
+              "title": "Adjustment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Adjustment",
+        "tags": [
+          "Adjustments"
+        ]
+      }
+    },
     "/api/projects/{project_id}/archive": {
       "post": {
         "description": "Archive a project.",
@@ -7642,7 +7933,7 @@
     },
     "/api/projects/{project_id}/contract": {
       "put": {
-        "description": "Replace a day job's whole contract: terms, holiday region, company\nholidays and the region holidays not given, opening balance and end\ndate, in one shape, like goal-overrides. A holiday list the body leaves\nout is kept; `[]` clears it. Leaves `kind` alone; on a project that is\nnot a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar\ndoes not know is a 400 (UNKNOWN_HOLIDAY_REGION).",
+        "description": "Replace a day job's whole contract: terms, holiday region, company\nholidays and the region holidays not given, opening balance and end\ndate, in one shape, like goal-overrides. A holiday list the body leaves\nout is kept; `[]` clears it. Leaves `kind` alone; on a project that is\nnot a day job it is a 409 (NOT_A_DAY_JOB), and a region the calendar\ndoes not know is a 400 (UNKNOWN_HOLIDAY_REGION). Moving the first term\nlater past a balance adjustment is a 409 (ADJUSTMENT_BEFORE_START).",
         "operationId": "replace_contract_api_projects__project_id__contract_put",
         "parameters": [
           {

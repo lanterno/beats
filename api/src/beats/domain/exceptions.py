@@ -93,7 +93,8 @@ class NotADayJob(DomainException):
 
 
 class NoContract(DomainException):
-    """Raised when a day job's week is asked for before it has a contract."""
+    """Raised when a day job's week, or a balance adjustment, is asked for
+    before it has a contract."""
 
     status_code = 409
     message = "This day job has no contract yet"
@@ -109,6 +110,38 @@ class AbsenceNotFound(DomainException):
     def __init__(self, absence_id: str | None = None):
         if absence_id:
             super().__init__(f"Absence not found: {absence_id}")
+        else:
+            super().__init__()
+
+
+class AdjustmentOutsideBalance(DomainException):
+    """Raised when a balance adjustment is dated where there is no balance to
+    adjust: before the contract's first day, or after today in the caller's
+    timezone."""
+
+    status_code = 409
+    message = "A balance adjustment must be dated from the contract's first day through today"
+    code = "ADJUSTMENT_OUTSIDE_BALANCE"
+
+
+class AdjustmentBeforeStart(DomainException):
+    """Raised when a contract write moves the first day later past a balance
+    adjustment: the adjustment would silently stop counting."""
+
+    status_code = 409
+    message = "Move or remove the balance adjustments dated before the contract's first day"
+    code = "ADJUSTMENT_BEFORE_START"
+
+
+class AdjustmentNotFound(DomainException):
+    """Raised when a balance adjustment cannot be found by ID on the project."""
+
+    status_code = 404
+    message = "Balance adjustment not found"
+
+    def __init__(self, adjustment_id: str | None = None):
+        if adjustment_id:
+            super().__init__(f"Balance adjustment not found: {adjustment_id}")
         else:
             super().__init__()
 

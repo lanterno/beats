@@ -93,6 +93,7 @@ Standing    the brightest panel.
   left      BALANCE · as of Thu Sep 10
             +10.5 h over                       (leaf / persimmon / muted)
             +2.0 h brought forward · +848.5 h worked since Jan 5 · −840.0 h expected through Wed
+              [· −40.0 h adjusted — only when an adjustment moved the balance]
             By Sunday: +5.7 h if the week is met, +3.8 h if you stop now.
             [one notice line when it applies: quiet-project alert + Snooze 7d;
              "Public holidays are not deducted — set the holiday region" ]
@@ -111,14 +112,16 @@ Days        DAYS · Sep 7 – 13 · W37                                  ‹ ›
             Sat–Sun 12–13                              nothing expected
             Planned 28 h · 9 commits · Timer running since 13:10
 
-Earlier     EARLIER WEEKS · newest first                      Copy as CSV
+Earlier     EARLIER WEEKS · newest first       Copy as CSV · Adjust balance
 weeks       WEEK            ▇▇▇▇▇··   EXPECTED  WORKED   +/−   BALANCE
             W36 Aug 31–Sep 6          33.6      32.9    −0.7    +5.7
+            ( Mon Aug 31 · Adjusted −40.0 h · "Paid out with August"   −40.0 )
             W34 Aug 17–23  Tue sick ½ 30.2      29.4    −0.8    +4.9
             ( From Mon Aug 3, 2026 · Part time 80% of 42 h = 33.6 h/wk · was 60% · "note" )
             ·· 3 weeks away · Jul 6 – 26 · vacation ··
             Show 5 more weeks · 26 more back to the opening balance
-            Since Mon Jan 5, 2026 · 840.0 h expected · 848.5 h worked · +8.5 h  ·  All time 1,284 h · 412 sessions
+            Since Mon Jan 5, 2026 · 840.0 h expected · 848.5 h worked · +8.5 h
+              (+2.0 h brought forward, −40.0 h adjusted)  ·  All time 1,284 h · 412 sessions
 
 Rail        CONTRACT   Part time · 80% of 42 h / 33.6 h/week · since Mon Aug 3, 2026
                        Next → Full time · 42 h/week from Mon Jan 4, 2027
@@ -157,7 +160,8 @@ balance while it lasts."), no expectation, the personal goal if set; the
 register shows the term as a labelled gap or a step at zero. *Before the
 first term*: "Contract starts Mon Sep 14, 2026 · 33.6 h/week", worked
 only. *After `ended_on`*: "Final balance · ended Aug 31" with the proof
-frozen at that date and no projection. *Missing region*: a notice line in
+frozen at that date, bar an "adjusted" line once a settlement after the
+end moves the balance, and no projection. *Missing region*: a notice line in
 the standing and the register's constants line carry the caveat; no
 banner. *Past week open*: the balance stays pinned to today; the right
 half becomes "Week 35 · closed +1.5 h over", no sentence, the day rows
@@ -205,6 +209,26 @@ yet — start the timer in the sidebar."
   week or later sits at the top, a ghost while still to come. A quiet run
   of weeks folds into one row and breaks at a rule; it reads "n weeks
   away · … · vacation" only when every note in it is a vacation.
+- **A balance adjustment is a row of its own**, placed as a term's rule
+  is: under the week it falls in, at the top when it is in the current
+  week. It reads "Mon Aug 31 · Adjusted −40.0 h" over its note; a reset
+  "Balance reset to 0.0 h · was +62.5 h"; a cap "Capped at 50.0 h · 12.5 h
+  over the cap dropped", or "under the cap, nothing dropped". Its +/− cell
+  is the API's `applied`, its balance cell blank, so reading up, the close
+  below plus the adjustment rows plus the week's +/− is the week's close.
+  The CSV writes it as `text,,,applied,`, so the delta column still adds
+  up. Clicking the row opens the dialog to change or remove it.
+- **"Adjust balance"** sits in the ledger's header on any day job with a
+  contract, whether or not there are earlier weeks; with none, the
+  adjustment rows show as pills beside the rules. Its dialog
+  (`AdjustmentDialog`) offers Pay out · Credit · Reset to · Cap at — the
+  first two one signed `delta` — the hours (±10 000, as the API), the day
+  (the contract's first through today) and a note. A day that already
+  holds an adjustment in the ledger says the save replaces it. Changing an
+  adjustment's day posts on the new day before deleting the old, so a
+  failure leaves the old in place. The API's refusal shows inline. No new
+  balance is previewed: what a reset or a cap moves is the API's to say
+  (Decision 11), and the row says it once saved.
 - **The goal is the standing goal, not this week's**: the permanent
   override in force this Monday, else the project's own (`standingGoalOn`),
   for both the kind chip and the Goal panel. A one-week override bends
@@ -242,8 +266,9 @@ yet — start the timer in the sidebar."
   note unless one is typed. Remove takes the whole range when every
   bookable weekday in it is on record. The cost line counts against what
   is already booked, so a half day becoming a full one "drops by 3.4 h".
-- **A kind change deletes the contract**: its terms, region and opening
-  balance are not kept, and nothing comes back with a return to day job.
+- **A kind change deletes the contract**: its terms, region, opening
+  balance and balance adjustments are not kept, and nothing comes back
+  with a return to day job.
   The settings drawer says so before save, on a project with a contract.
 - **An archived project's page opens**, so the Archived chip's Restore and
   the drawer's are reachable from the projects index.
@@ -299,9 +324,20 @@ match shows the figures and no sentence — never a guessed one. The code is
   it is the move from the opening balance. Only then does it fall back to
   worked − expected, else worked − goal. Worked − expected is wrong on the
   week a contract starts or ends mid-week, because `worked` counts hours
-  the balance does not (see *The ledger route*).
-- **The since line is worked − expected with the opening in brackets**, so
-  it adds up to the standing's balance.
+  the balance does not (see *The ledger route*). Either move leaves out
+  the balance adjustments inside it, which are rows of their own: the
+  week's own between two closes; on the first close every one from
+  `since` through the week's Sunday, since a weekend start leaves the
+  start week without a close and an adjustment filed there is still
+  inside the next week's move.
+- **The since line is worked − expected with the opening and the
+  adjustments in brackets** ("+8.5 h (+2.0 h brought forward, −40.0 h
+  adjusted)"), so it adds up to the standing's balance. The standing's
+  proof gets a fourth line, "−40.0 h adjusted", only when the adjusted
+  figure is not 0 at one decimal.
+- **The ended rule's final balance is `ended_balance`**, the close on the
+  end day, so a settlement after the end appears as its own row and not
+  inside the "final" figure; an API without it falls back to the totals.
 
 ---
 
@@ -311,7 +347,8 @@ match shows the figures and no sentence — never a guessed one. The code is
 newest week first, `weeks` 1–104 (default 8; a 422 naming `weeks`
 outside it). One beats read, and on a day job with a contract one absence
 read and one holiday calendar over
-`[min(contract.starts_on, first Monday), max(today, last Sunday)]`, then
+`[min(contract.starts_on, first Monday), max(today, last Sunday)]`, one
+balance-adjustment read from `contract.starts_on` to the same end, then
 `worked_by_local_day(beats, tz)` once. The assembly is pure, in
 `domain/ledger.py`; its docstring says what each figure is and when it is
 null.
@@ -323,45 +360,60 @@ null.
     "days": [6.9, 6.4, 6.7, 6.5, 6.4, 0, 0],   // Mon..Sun worked hours
     "effective_goal": 33.6, "effective_goal_type": "target", "effective_goal_overridden": false,
     "contract_expected": 33.6,            // adjusted; null when nothing time-based governs
-    "balance_end": 5.7,                   // the balance at the close of Sunday: opening + worked − expected
-                                          // through it, the Monday-morning figure; null for the current
+    "balance_end": 5.7,                   // the Sunday close: opening + worked − expected + adjusted
+                                          // through it, before Monday's adjustment; null for the current
                                           // week and whenever contract_expected is null (one rule for the
-                                          // row); the frozen final balance after ended_on
+                                          // row); after ended_on the final balance, moved only
+                                          // by an adjustment after the end
     "notes": [ {"date":"2026-08-18","kind":"sick","half_day":true},
-               {"date":"2026-05-25","kind":"holiday","name":"Whit Monday"} ]
+               {"date":"2026-05-25","kind":"holiday","name":"Whit Monday"} ],
+    "adjustments": [ {"id": "…", "date": "2026-08-31", "kind": "delta", "hours": -40.0,
+                      "note": "Paid out with August", "applied": -40.0} ]   // any day of the week
   } ],
   "since": "2026-01-05",                  // contract.starts_on, or null
-  "totals": {"expected": 840.0, "worked": 848.5, "balance": 10.5} | null }
+  "totals": {"expected": 840.0, "worked": 848.5, "adjusted": -40.0, "balance": -29.5} | null,
+  "ended_balance": null }                 // the close on ended_on once it has come, before a settlement
 ```
 
 `/contract/week` carries sibling fields, never a retyped `balance`:
 `balance_as_of` (date), `balance_opening`, `balance_worked`,
-`balance_expected_through` — null exactly when `balance` is null, and
-required-nullable like it, so the generated type does not call them
-optional.
+`balance_expected_through`, `balance_adjusted` — null exactly when
+`balance` is null, and required-nullable like it, so the generated type
+does not call them optional. The SPA parses the three new figures
+(`adjustments`, `adjusted`, `balance_adjusted`) and `ended_balance` as
+optional, so it reads an API that predates them: such an API keeps no
+adjustments, and `[]` and 0 are its true figures.
 
 What the shape settles:
 
-- **The closing balance is the Monday-morning figure.** Reading the
-  balance on the following Monday would count that Monday's hours (today's
-  work counts as soon as it happens) while charging only through Sunday,
-  and the row-to-row proof would fail. `closing_balances` in
-  `contracts.py` reads every Sunday's close off one running total over the
-  same per-day rule `balance_terms` sums, so the proof is one rule in one
-  place.
+- **The closing balance is the Sunday close, before Monday's
+  adjustment.** Reading the balance on the following Monday would count
+  that Monday's hours (today's work counts as soon as it happens) and its
+  adjustment while charging only through Sunday, and the row-to-row proof
+  would fail. `running_balance` in `contracts.py` reads every Sunday's
+  close, today's terms and every adjustment's `applied` off one running
+  total over the per-day rule, so the proof is one rule in one place.
+  Between two closes it reads `balance_end − the close before − Σ applied
+  = worked − contract_expected` on a full week.
+- **An adjustment's `applied` is filled wherever it falls** — the current
+  week, a week with no close, a ledger of one week — because the pass
+  runs through today and the last adjustment, not only to the last closed
+  Sunday.
 - **`balance_end` and `contract_expected` share one null rule**, decided
   by `week_expectation`: a week with no expectation has no closing
   balance. A term starting on a Saturday leaves its week before the
   contract on both counts, and its weekend hours move the next close.
-- **After `ended_on` every row repeats the final balance**, and
-  `contract_expected` is 0 there (owed nothing by circumstance; the term
-  still governs). Hours tracked after the end appear in `worked` and move
-  nothing.
+- **After `ended_on` every row repeats the final balance until an
+  adjustment after the end moves it** (a settlement paying it out moves
+  every close after its day), and `contract_expected` is 0 there (owed
+  nothing by circumstance; the term still governs). Hours tracked after
+  the end appear in `worked` and move nothing.
 - **`totals` is null on the week route's rule for today's balance**, so
   the standing and the ledger's foot go blank together.
 - **The proof holds to the cent, not to the bit.** `balance` is
-  `round(opening + worked − expected, 2)`; the three terms are rounded on
-  their own, so their sum can differ from `balance` by up to 0.01.
+  `round(opening + worked − expected + adjusted, 2)`; the four terms are
+  rounded on their own, so their sum can differ from `balance` by up to
+  0.025.
 - **`notes` are weekdays only**, by date, a holiday before an absence on
   the same day. The absence's free-text note is not carried; the rail's
   Time off panel reads the absence list for that.
@@ -473,6 +525,6 @@ rules of its own there. The accent is its running beat and primary button.
 ## Follow-ups and open questions
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Project
-page follow-ups*. The ledger's write side, vacation entitlement and the
-companion's week card are under *Work contracts follow-ups*. The open
+page follow-ups*. Vacation entitlement and the companion's week card are
+under *Work contracts follow-ups*. The open
 question, `apple-mobile-web-app-status-bar-style` under the sky, is AHM-29.

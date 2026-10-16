@@ -20,7 +20,14 @@ from datetime import date, datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-from beats.domain.models import Absence, Beat, ContractWeek, FlowWindow, Project
+from beats.domain.models import (
+    Absence,
+    BalanceAdjustment,
+    Beat,
+    ContractWeek,
+    FlowWindow,
+    Project,
+)
 
 
 class CompletedBeatReader(Protocol):
@@ -112,6 +119,31 @@ class AbsenceStore(Protocol):
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
+
+
+class AdjustmentStore(Protocol):
+    """Balance adjustments on one project: the range read the balance needs,
+    and the two writes the ledger makes. Upsert is keyed on (project, date),
+    as an absence's is — a second adjustment on a day replaces the first.
+    Delete is by id within the project, so False means "not on this
+    project"."""
+
+    async def list_by_project(
+        self, project_id: str, start: date, end: date
+    ) -> list[BalanceAdjustment]: ...
+    async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
+    async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
+
+
+class ContractAdjustments(Protocol):
+    """What a contract write asks of the balance adjustments: whether one
+    sits at or after a day — so moving the first day later past it is
+    refused rather than silently dropping it from the balance — and the
+    purge when the contract goes, since an adjustment only means something
+    against the balance of the contract it was made on."""
+
+    async def earliest(self, project_id: str, on_or_after: date) -> date | None: ...
+    async def delete_by_project(self, project_id: str) -> int: ...
 
 
 class WeekExpectationReader(Protocol):

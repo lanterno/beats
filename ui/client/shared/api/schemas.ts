@@ -72,6 +72,22 @@ export const ApiAbsenceSchema = z.object({
 export type ApiAbsence = z.infer<typeof ApiAbsenceSchema>;
 export const ApiAbsenceListSchema = z.array(ApiAbsenceSchema);
 
+// A balance adjustment (POST /adjustments): a signed `delta`, a `reset` to
+// `hours`, or a `cap` at `hours`. What it moved the balance by is the
+// ledger's `applied`, never this record's.
+const AdjustmentKindSchema = z.enum(["delta", "reset", "cap"]);
+
+export const ApiAdjustmentSchema = z.object({
+	id: z.string(),
+	project_id: z.string(),
+	date: z.string(), // YYYY-MM-DD
+	kind: AdjustmentKindSchema,
+	hours: z.number(),
+	note: z.string().nullable().optional(),
+});
+
+export type ApiAdjustment = z.infer<typeof ApiAdjustmentSchema>;
+
 // One week of a day job against its contract (GET /contract/week). `expected`,
 // `remaining` and `balance` are null — not 0 — when no time-based term is in
 // force (an objective term, a week before the contract); 0 is a week the
@@ -100,12 +116,15 @@ export const ContractWeekSchema = z.object({
 	worked: z.number(),
 	remaining: z.number().nullable(),
 	balance: z.number().nullable(),
-	// The proof of `balance`: opening + worked − expected_through, as of
-	// `balance_as_of`. Null exactly when `balance` is.
+	// The proof of `balance`: opening + worked − expected_through + adjusted,
+	// as of `balance_as_of`. Null exactly when `balance` is.
 	balance_as_of: z.string().nullable(), // YYYY-MM-DD
 	balance_opening: z.number().nullable(),
 	balance_worked: z.number().nullable(),
 	balance_expected_through: z.number().nullable(),
+	// Optional while an API that predates balance adjustments may answer:
+	// such an API keeps none, so 0 is the true figure there, not a guess.
+	balance_adjusted: z.number().nullable().optional(),
 	days: z.array(ContractDaySchema),
 });
 
@@ -127,6 +146,17 @@ export const LedgerNoteSchema = z.object({
 
 export type ApiLedgerNote = z.infer<typeof LedgerNoteSchema>;
 
+export const LedgerAdjustmentSchema = z.object({
+	id: z.string(),
+	date: z.string(), // YYYY-MM-DD, any day of the week
+	kind: AdjustmentKindSchema,
+	hours: z.number(),
+	note: z.string().nullable().optional(),
+	applied: z.number(), // the hours it moved the balance by
+});
+
+export type ApiLedgerAdjustment = z.infer<typeof LedgerAdjustmentSchema>;
+
 export const LedgerWeekSchema = z.object({
 	week_of: z.string(), // the Monday, YYYY-MM-DD
 	worked: z.number(),
@@ -137,6 +167,10 @@ export const LedgerWeekSchema = z.object({
 	contract_expected: z.number().nullable(),
 	balance_end: z.number().nullable(),
 	notes: z.array(LedgerNoteSchema),
+	// Defaults, like `adjusted` and `ended_balance` below, for an API that
+	// predates balance adjustments: it keeps none, so these are the true
+	// figures there, not guesses.
+	adjustments: z.array(LedgerAdjustmentSchema).optional().default([]),
 });
 
 export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
@@ -144,6 +178,7 @@ export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
 const LedgerTotalsSchema = z.object({
 	expected: z.number(),
 	worked: z.number(),
+	adjusted: z.number().optional().default(0),
 	balance: z.number(),
 });
 
@@ -152,6 +187,8 @@ export type ApiLedgerTotals = z.infer<typeof LedgerTotalsSchema>;
 export const LedgerSchema = z.object({
 	since: z.string().nullable(), // contract.starts_on, YYYY-MM-DD
 	totals: LedgerTotalsSchema.nullable(),
+	// The close on `ended_on`, before a settlement after it.
+	ended_balance: z.number().nullable().optional(),
 	weeks: z.array(LedgerWeekSchema),
 });
 

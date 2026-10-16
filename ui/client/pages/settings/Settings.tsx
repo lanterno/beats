@@ -15,7 +15,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
-import { config } from "@/shared/config";
+import { config, publicApiBase } from "@/shared/config";
 import { cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
 import { Button, buttonVariants, Panel } from "@/shared/ui";
@@ -37,7 +37,9 @@ export default function Settings() {
 	const [importing, setImporting] = useState(false);
 	const { theme, setTheme, density, setDensity } = useTheme();
 
-	const apiBase = config.apiBaseUrl;
+	// The address the Developer examples print: on the same-origin self-hosted
+	// build the configured base is empty, which would read `curl /api/...`.
+	const apiBase = publicApiBase(config.apiBaseUrl, window.location.origin);
 
 	const downloadWithToast = async (url: string, filename: string) => {
 		try {

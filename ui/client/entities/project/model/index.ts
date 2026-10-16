@@ -35,8 +35,9 @@ export {
 } from "./contractForm";
 // The goal in force on a Monday: a permanent override, else the project's own
 export { permanentOverrideOn, type StandingGoal, standingGoalOn } from "./goalOverrides";
-// The ledger's rows: rule rows, the quiet collapse, CSV
+// The ledger's rows: rule rows, adjustment rows, the quiet collapse, CSV
 export {
+	type AdjustmentRow,
 	describeLedgerNote,
 	type LedgerRow,
 	type LedgerWeekRow,
@@ -77,6 +78,7 @@ export {
 } from "./standing";
 // Types
 export type {
+	AdjustmentKind,
 	CompanyHoliday,
 	Contract,
 	ContractDay,
@@ -87,6 +89,7 @@ export type {
 	Holiday,
 	HolidayRegion,
 	Ledger,
+	LedgerAdjustment,
 	LedgerNote,
 	LedgerNoteKind,
 	LedgerTotals,

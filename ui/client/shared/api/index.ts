@@ -18,6 +18,7 @@ export type { Paths, Schemas } from "./schema";
 // Re-export types
 export type {
 	ApiAbsence,
+	ApiAdjustment,
 	ApiBeat,
 	ApiContract,
 	ApiContractDay,
@@ -25,6 +26,7 @@ export type {
 	ApiContractWeek,
 	ApiGoalOverride,
 	ApiLedger,
+	ApiLedgerAdjustment,
 	ApiLedgerNote,
 	ApiLedgerTotals,
 	ApiLedgerWeek,
@@ -54,6 +56,7 @@ export type {
 export {
 	ApiAbsenceListSchema,
 	ApiAbsenceSchema,
+	ApiAdjustmentSchema,
 	ApiBeatListSchema,
 	ApiProjectListSchema,
 	ApiProjectSchema,

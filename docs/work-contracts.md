@@ -10,7 +10,8 @@ a day-job project carries its **contract**: how much of a week it is
 owed, where it is (for the public holidays), and how those terms have
 changed over time. From the contract, the holidays, and the user's
 absences, Beats derives the hours expected each week and a running
-**balance** — overtime if positive, hours owed if negative.
+**balance** — overtime if positive, hours owed if negative — which dated
+**balance adjustments** pay out, reset or cap.
 
 The decisions below were made in conversation and are recorded so that
 later work does not re-litigate them. The rest says what was built on
@@ -67,6 +68,19 @@ goal. Git history has the plans.
     The calendar's `include=not_given` still lists that region day, as
     not given, beside the company day: an editor that could see only one
     of the two marks could not clear the other.
+13. **Balance adjustments replace editing the opening balance.** A payout,
+    a year-end reset or a cap is a dated record of its own, so the opening
+    balance stays what was banked before Beats and the ledger shows when
+    the balance was settled. Three one-off kinds: a signed `delta`, a
+    `reset` to a value, a `cap` at a ceiling. No repeating rules ("cap at
+    100 h every 31 December"): like company holidays, a policy changes, and
+    a rule would apply to years nobody checked. A reset or a cap stores its
+    target, not the hours it moved, so a session recorded later from before
+    it does not undo it. One per day, and a post on a taken day replaces
+    it, as an absence does: editing on the same day is then one atomic
+    write. They belong to the contract's balance and go with the contract
+    (a kind change, `contract: null`); absences stay, being facts about
+    days.
 
 ---
 
@@ -118,6 +132,19 @@ class Absence(BaseModel):            # own collection
     half_day: bool = False
     type: AbsenceType                 # vacation | sick | other
     note: str | None
+
+class AdjustmentKind(StrEnum):
+    DELTA = "delta"                   # by hours, signed: a payout is negative
+    RESET = "reset"                   # to hours
+    CAP = "cap"                       # down to hours if above; hours >= 0
+
+class BalanceAdjustment(BaseModel):  # own collection, balance_adjustments
+    id: str | None
+    project_id: str
+    date: date
+    kind: AdjustmentKind
+    hours: float                      # finite, |hours| <= 10 000; a delta is not 0
+    note: str | None
 ```
 
 The validators: terms non-empty, ascending, no two on one day; `ended_on`
@@ -147,6 +174,14 @@ list unreadable.
 Absences are unique on `(user_id, project_id, date)`: a second absence
 on a day replaces the first. The type is for the record and the
 calendar's colour; the arithmetic treats all three identically.
+
+Balance adjustments are unique on `(user_id, project_id, date)` the same
+way, and the repository's upsert is a replace on that key, so the id
+survives and a reset posted over a noted payout does not keep the note.
+The body is `BalanceAdjustmentFields`, whose validators are the 422 at
+`hours`: a delta of 0 moves nothing, a cap is not negative, and the bound
+keeps a sum of many records finite. The collection is new and additive,
+so no startup pass runs for it; `ensure_indexes` builds its index.
 
 `weekly_goal` / `goal_type` / `goal_overrides` are the *personal* goal
 and keep applying to side projects, freelance work, and objective-based
@@ -192,17 +227,43 @@ worked(range)   = Σ beat duration on this project, by local day
 balance(today) = opening_balance_hours
                + worked(start .. min(today, ended_on))
                - expected(start .. yesterday)
+               + adjusted(start .. today)
+
+adjusted(d), at the start of d, against b = the close of d − 1:
+    delta → hours
+    reset → hours − b              (the balance becomes hours)
+    cap   → min(0, hours − b)      (no higher than hours)
 ```
 
 Today's expectation is charged tomorrow, so the balance does not read
 −6 h every morning; today's work counts at once. `start` is the first
-term's `effective_from`. `ended_on` freezes both sides: nothing is
-expected after it, and time tracked after it is not overtime either.
+term's `effective_from`. `ended_on` freezes work and expectation: nothing
+is expected after it, and time tracked after it is not overtime either.
 
-A week's **closing balance** (`closing_balances`) is the same sum taken
-through its Sunday — the Monday-morning figure. On the week a contract
-starts or ends mid-week, `worked` counts hours the balance does not, so
-the move between two closes is not `worked − expected`.
+**Adjustments apply at the start of their day**, against the previous
+day's close, before the day's work. They count from `start` on, whatever
+`ended_on` says, so a final payout after the end settles the frozen
+balance; one dated before `start` falls outside the sum and is ignored.
+A reset or a cap stores its target, and what it moves (`applied`) is
+worked out on each read, so recording earlier history later changes
+what it applied and not the balance after it.
+
+**A reset makes the balance depend on the timezone.** Worked time is
+bucketed by the local day each beat started on, in the request's `tz`,
+so a beat late on the eve of a reset is absorbed by it in one zone and
+counted after it in another. The index, the SPA and the companion each
+send their own `tz`; the figures can differ by that beat, by design.
+
+**One pass.** `running_balance` walks the contract's days once, from
+`start` through the latest of today, the last close asked for and the
+last adjustment, and returns today's terms, every close asked for and
+every adjustment's `applied` together, so no two can disagree and a
+ledger of a hundred weeks costs what one does. A day's **close** is the
+balance at the end of it, before the next day's adjustment. A week's
+**closing balance** is its Sunday close. On the week a contract starts or
+ends mid-week, `worked` counts hours the balance does not, so the move
+between two closes is not `worked − expected`; on any week it also
+includes the week's adjustments.
 
 **Day boundaries** use the request timezone (`tz`, default UTC). A beat
 belongs whole to the local day it started on, and a running timer counts
@@ -317,21 +378,25 @@ and it is accepted.
 ## HTTP contract
 
 Contract routes are in `routers/projects.py`, absences in
-`routers/absences.py` under the same prefix, regions in
-`routers/meta.py`. `ContractService` assembles weeks, ledgers and
-balances behind narrow ports (`ProjectReader`, `ProjectBeatReader`,
-`AbsenceStore`); `ProjectService.replace_contract` is the one contract
-write, beside the region check.
+`routers/absences.py` and balance adjustments in `routers/adjustments.py`
+under the same prefix, regions in `routers/meta.py`. `ContractService`
+assembles weeks, ledgers and balances behind narrow ports
+(`ProjectReader`, `ProjectBeatReader`, `AbsenceStore`, `AdjustmentStore`);
+`ProjectService.replace_contract` is the one contract write, beside the
+region check, and every project write reconciles the adjustments
+(`ContractAdjustments`).
 
 | Route | Purpose |
 |---|---|
 | `POST/PUT /api/projects` | `kind` and `contract` on create/update; 422 from the validators, at the term's path (`contract.terms.0`) |
 | `GET /api/projects?include=this_week` | adds `contract_expected`, `contract_worked`, `contract_remaining`, `balance` for the current week |
 | `PUT /api/projects/{id}/contract` | replace terms / region / company holidays / holidays not given / opening balance / `ended_on` as one object; `kind` untouched |
-| `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, days: [{date, expected, worked, holiday, absence}]}` |
-| `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected` and `balance_end`; `since`; `totals` as of today |
+| `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, balance_adjusted, days: [{date, expected, worked, holiday, absence}]}` |
+| `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected`, `balance_end` and its `adjustments` (each with `applied`); `since`; `totals` as of today, `adjusted` among them; `ended_balance` |
 | `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`, even where a company day covers the date, which is then listed twice, the region's row first. Only company days without a region; `[]` without a contract |
 | `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
+| `POST /api/projects/{id}/adjustments?tz=` | a delta, reset or cap (upsert on date, keeps the id, 201); `tz` required |
+| `DELETE /api/projects/{id}/adjustments/{adjustment_id}` | 204, or 404 when it is not on this project |
 | `GET /api/meta/holiday-regions` | `[{code, name, subdivisions: [{code, name}]}]`; `Cache-Control: public, max-age=86400`; behind the normal auth |
 
 - **Omitted is not null on `PUT /api/projects`.** Older clients do not
@@ -360,15 +425,33 @@ write, beside the region check.
   `PUT /{id}/contract` a model-level error has an empty `path`: the
   body *is* the contract.
 - **The balance carries its terms.** `balance_opening + balance_worked −
-  balance_expected_through` is `balance` within 0.01, each rounded on its
-  own; all four are null exactly when `balance` is. It is as of today,
-  whatever week is asked for. `remaining` goes negative once the week is
-  over.
+  balance_expected_through + balance_adjusted` is `balance` within 0.025:
+  each of the four terms and the balance is rounded on its own, 0.005 at
+  most apiece. All five are null exactly when `balance` is. It is as of
+  today, whatever week is asked for, and counts the adjustments dated
+  through today. `remaining` goes negative once the week is over. The
+  ledger's totals carry the same terms, and its `ended_balance` is the
+  close on `ended_on` once that day has come — the final balance before a
+  settlement after it, null otherwise.
 - **Absences.** `GET` defaults each bound to the current year in `tz`.
   `POST` answers 201 even when it replaced one, and is accepted on a day
   job with no contract yet — leave first, contract later. `DELETE` is by
   id within the project in the path, so its 404 means "not on this
   project".
+- **Balance adjustments.** `POST` needs a contract (409 `NO_CONTRACT`)
+  and a date from the first term through today in `tz` (409
+  `ADJUSTMENT_OUTSIDE_BALANCE`); `tz` is required, a 422 when missing,
+  since the date rule is the caller's today. It answers 201 even when it
+  replaced one. There is no list route: the ledger carries every field a
+  reader wants. A contract write reconciles them against the contract it
+  replaces: when the contract goes they are purged after the write; when
+  one arrives where there was none, leftovers are purged first (no
+  adjustment is live without a contract, so this clears what a failed
+  purge left); and moving the first term later past one is 409
+  `ADJUSTMENT_BEFORE_START`. Anything else — a rename resending the
+  contract unchanged, a first day moved earlier — reads nothing.
+  `POST /api/export/import` restores raw documents past these rules, as it
+  does for absences.
 - **`this_week` on the index** is the week route's current week, null on
   anything but a day job with a contract. `contract_worked` sits beside
   `weekly_minutes` because they differ: `weekly_minutes` is the personal
@@ -407,18 +490,20 @@ write, beside the region check.
 (`Acme: 33.6h/week (contract, 80%)`), and on a day job with a contract
 the current week against it: what it expects after holidays and days
 off, what was worked under it and what is left, today's expected hours,
-the running balance and its by-Sunday projection, and the dates of this
-week's holidays and days off that shortened it. A public holiday goes by
-its name; a company holiday only as "company holiday", never the name
-the user typed; a day off only as "day off" or "half day off", never its
-type or note. The region's codes, the opening balance, and other weeks'
-holidays and absences are not sent. A contract that ended earlier in the
-current week sends only its final balance; one that ended before it
-sends none of the week, though its goal line stays in the profile and
-in `get_projects` until the project is archived (`goal_term` does not
-consult `ended_on`).
-`/api/export` carries the contract but not absences. `PRIVACY.md`
-states this; a change happens there first.
+the running balance (balance adjustments included) and its by-Sunday
+projection, and the dates of this week's holidays and days off that
+shortened it. A public holiday goes by its name; a company holiday only
+as "company holiday", never the name the user typed; a day off only as
+"day off" or "half day off", never its type or note. The adjustments
+themselves (their dates, kinds and notes), the region's codes, the
+opening balance, and other weeks' holidays and absences are not sent. A
+contract that ended earlier in the current week sends only its final
+balance; one that ended before it sends none of the week, though its
+goal line stays in the profile and in `get_projects` until the project
+is archived (`goal_term` does not consult `ended_on`).
+`/api/export` carries the contract but not absences or balance
+adjustments. `PRIVACY.md` and `DATA.md` state this; a change happens
+there first.
 
 ---
 
@@ -426,7 +511,7 @@ states this; a change happens there first.
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
 contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, vacation
-entitlement, the ledger's write side, the companion's week card, and
-whether `hours_per_day` should be configurable for a 4-day full-time
-week. The balance ledger's read side was built by
-[project-page.md](project-page.md).
+entitlement, the companion's week card, and whether `hours_per_day`
+should be configurable for a 4-day full-time week. The balance ledger's
+read side was built by [project-page.md](project-page.md), its write
+side by Decision 13.

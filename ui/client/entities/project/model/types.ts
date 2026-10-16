@@ -93,15 +93,17 @@ export interface ContractWeek {
 	balance?: number;
 	/**
 	 * The proof of `balance`: `balanceOpening + balanceWorked −
-	 * balanceExpectedThrough`, as of `balanceAsOf` (today; the expectation is
-	 * charged through yesterday, today's hours count as they happen). All four
-	 * undefined exactly when `balance` is. Each is rounded on its own, so the
-	 * sum can differ from `balance` by 0.01.
+	 * balanceExpectedThrough + balanceAdjusted`, as of `balanceAsOf` (today;
+	 * the expectation is charged through yesterday, today's hours and today's
+	 * adjustment count as they happen). All five undefined exactly when
+	 * `balance` is. Each is rounded on its own, so the sum can differ from
+	 * `balance` by up to 0.025.
 	 */
 	balanceAsOf?: string; // YYYY-MM-DD
 	balanceOpening?: number;
 	balanceWorked?: number;
 	balanceExpectedThrough?: number;
+	balanceAdjusted?: number;
 	/** Monday to Sunday, in order. */
 	days: ContractDay[];
 }
@@ -119,6 +121,24 @@ export interface LedgerNote {
 	name?: string;
 }
 
+/** How a balance adjustment moves the balance at the start of its day. */
+export type AdjustmentKind = "delta" | "reset" | "cap";
+
+/**
+ * A balance adjustment as its ledger week carries it: a signed `delta` of
+ * `hours`, a `reset` to `hours`, or a `cap` at `hours`. `applied` is the API's
+ * figure for what it actually moved the balance by — the hours of a delta,
+ * the target less that morning's balance for a reset, what a cap took off.
+ */
+export interface LedgerAdjustment {
+	id: string;
+	date: string; // YYYY-MM-DD, any day of the week
+	kind: AdjustmentKind;
+	hours: number;
+	note?: string;
+	applied: number;
+}
+
 /**
  * One week of the ledger (GET /ledger). The wire's nulls stay null here:
  * each is a figure in its own right, not a field that may be missing.
@@ -130,13 +150,16 @@ export interface LedgerNote {
  *   null when nothing time-based governs the week (before the first term, an
  *   objective or 0 h term, any other kind of project), 0 when it owed nothing
  *   by circumstance (a week of vacation, after the contract ended).
- * - `balanceEnd`: the balance at the close of the week's Sunday — the Monday
- *   morning figure. Null on the current week (the standing carries today's)
- *   and whenever `contractExpected` is null: one rule for the row. After the
- *   contract ended every week repeats the frozen final balance.
+ * - `balanceEnd`: the balance at the close of the week's Sunday, before
+ *   Monday's adjustment. Null on the current week (the standing carries
+ *   today's) and whenever `contractExpected` is null: one rule for the row.
+ *   After the contract ended every week repeats the frozen final balance,
+ *   moved only by an adjustment after the end.
  * - `days`: seven entries, Monday to Sunday, hours worked by the local day
  *   each beat started on, a running timer included.
  * - `notes`: weekdays only, by date, a holiday before an absence on the same day.
+ * - `adjustments`: the balance adjustments dated in the week, weekends
+ *   included, by date.
  */
 export interface LedgerWeek {
 	weekOf: string; // the Monday, YYYY-MM-DD
@@ -148,12 +171,14 @@ export interface LedgerWeek {
 	contractExpected: number | null;
 	balanceEnd: number | null;
 	notes: LedgerNote[];
+	adjustments: LedgerAdjustment[];
 }
 
-/** The balance as of today and the two terms that move it, since the contract started. */
+/** The balance as of today and the three terms that move it, since the contract started. */
 export interface LedgerTotals {
 	expected: number;
 	worked: number;
+	adjusted: number;
 	balance: number;
 }
 
@@ -161,10 +186,13 @@ export interface LedgerTotals {
  * The last N weeks of a project, newest first, the current week included.
  * `since` is the contract's first day; `totals` is null whenever the week
  * route's `balance` would be — no contract, or none that owes hours today.
+ * `endedBalance` is the close on the contract's `endedOn` once that day has
+ * come, before any settlement after it; null otherwise.
  */
 export interface Ledger {
 	since: string | null;
 	totals: LedgerTotals | null;
+	endedBalance: number | null;
 	weeks: LedgerWeek[];
 }
 
