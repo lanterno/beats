@@ -68,7 +68,8 @@ export async function fetchMemory(): Promise<MemoryResponse> {
 }
 
 export async function rewriteMemory(): Promise<MemoryResponse> {
-	return post<MemoryResponse>("/api/coach/memory/rewrite", {});
+	const tz = encodeURIComponent(browserTimeZone());
+	return post<MemoryResponse>(`/api/coach/memory/rewrite?tz=${tz}`, {});
 }
 
 export async function deleteMemory(): Promise<void> {
