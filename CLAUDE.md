@@ -257,7 +257,9 @@ nothing.
   shape and so idempotent: `migrate_project_kinds` stamps `kind` on every project without
   one and derives a day job's contract from its target goal; `clear_personal_goal_on_day_jobs`
   unsets `weekly_goal` on every day job whose term in force today is time-based. The
-  `holidays` package is imported in `domain/holidays.py` and nowhere else; the arithmetic in
+  `holidays` package is imported in `domain/holidays.py` and nowhere else, and
+  `contract_holidays` there is the one place the region's calendar meets the contract's own
+  additions and removals (`company_holidays`, `holidays_not_given`); the arithmetic in
   `domain/contracts.py` takes holidays as a set of dates. Worked time is bucketed by the
   local date each beat started on, in the request timezone (`tz`, default UTC); the holiday
   region is the employer's, whatever the timezone. `GET /{id}/ledger` is the project page's
