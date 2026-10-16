@@ -101,6 +101,12 @@ Beats does not auto-delete anything. Beats, notes, coach history, and biometrics
   adjustment.
 - **`/csv/sessions`** is a CSV of the completed sessions alone.
 
+A day job with a contract also has a monthly timesheet,
+`GET /api/projects/{id}/timesheet.csv?month=`, for handing to the employer. Per day it
+holds the hours worked and expected, the balance adjustment's kind and what it moved,
+the public holiday's name (a company holiday reads `company holiday`, not the name typed
+for it), the absence type and half-day flag (never the absence's note), and the balance.
+
 Plans, webhooks, signals, biometrics and coach history are in neither; they stay in the
 database until deleted.
 

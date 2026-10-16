@@ -62,7 +62,7 @@ If you do not want any data leaving the Beats database, do not use the coach.
 
 ## Export and deletion
 
-- **Export**: anytime, via `/api/export` — your projects (contract included, archived ones too), sessions, absences and balance adjustments as a JSON backup you can import again, or your sessions as CSV. Plans, webhooks, signals, biometrics and coach history are not in it yet.
+- **Export**: anytime, via `/api/export` — your projects (contract included, archived ones too), sessions, absences and balance adjustments as a JSON backup you can import again, or your sessions as CSV. A day job's monthly timesheet, a CSV for your employer, holds per day the hours worked and expected, any balance adjustment, the public holiday's name (a company holiday reads "company holiday"), the absence type and whether it was a half day (never the absence's note), and the balance. Plans, webhooks, signals, biometrics and coach history are not in it yet.
 - **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, balance adjustments, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
 
 ## Changes
