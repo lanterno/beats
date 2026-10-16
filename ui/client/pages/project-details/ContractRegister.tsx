@@ -440,6 +440,11 @@ function ContractVariant({
 
 	const country = regions?.find((r) => r.code === contract.holidayCountry);
 	const subdivision = country?.subdivisions.find((s) => s.code === contract.holidaySubdivision);
+	// A region day not given that a company day covers is listed beside it, but
+	// the company day wins: it is a holiday after all, and not counted as not given.
+	const companyDates = new Set(
+		(calendar ?? []).filter((h) => h.source === "company").map((h) => h.date),
+	);
 	const constants = [
 		contract.holidayCountry
 			? `Holidays ${country?.name ?? contract.holidayCountry}${
@@ -449,8 +454,8 @@ function ContractVariant({
 				}`
 			: null,
 		...holidayAdjustments(
-			(calendar ?? []).filter((h) => h.source === "company").length,
-			(calendar ?? []).filter((h) => !h.given).length,
+			companyDates.size,
+			(calendar ?? []).filter((h) => !h.given && !companyDates.has(h.date)).length,
 		),
 		`Brought forward ${signed(contract.openingBalanceHours)}`,
 		endedOn ? `${ended ? "Ended" : "Ends"} ${plainDate(endedOn)}` : "Ended —",
