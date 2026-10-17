@@ -12,7 +12,14 @@
  */
 
 import { addIsoDays, mondayOfIso } from "@/shared/lib";
-import { formatHours, formatSignedHours, sortTerms, termHoursPerWeek, toPercent } from "./contract";
+import {
+	balanceIsFinal,
+	formatHours,
+	formatSignedHours,
+	sortTerms,
+	termHoursPerWeek,
+	toPercent,
+} from "./contract";
 import type {
 	Contract,
 	ContractTerm,
@@ -206,13 +213,17 @@ function contractRules(
 		// own row; an API that predates adjustments has no settlement to leave out.
 		const final = ledger.endedBalance ?? ledger.totals?.balance ?? endWeek?.balanceEnd ?? null;
 		const finalText = final !== null ? ` · final balance ${formatSignedHours(final)}` : "";
+		// On the last day itself the balance is still live (the standing
+		// carries it), so the rule names the day and no final figure.
 		rules.push({
 			type: "rule",
 			rule: "ended",
 			date: endedOn,
 			text: planned
 				? `Ends ${longDate(endedOn)} · planned`
-				: `Ended ${longDate(endedOn)}${finalText}`,
+				: balanceIsFinal(contract, todayIso)
+					? `Ended ${longDate(endedOn)}${finalText}`
+					: `Ends ${longDate(endedOn)} · today`,
 			planned,
 		});
 	}

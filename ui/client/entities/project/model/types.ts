@@ -229,7 +229,8 @@ export interface LedgerTotals {
  * `since` is the contract's first day; `totals` is null whenever the week
  * route's `balance` would be — no contract, or none that owes hours today.
  * `endedBalance` is the close on the contract's `endedOn` once that day has
- * come, before any settlement after it; null otherwise.
+ * passed, before any settlement after it; null otherwise, the last day
+ * itself included, since its hours still count.
  */
 export interface Ledger {
 	since: string | null;
