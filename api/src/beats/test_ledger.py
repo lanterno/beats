@@ -473,6 +473,16 @@ class TestLedgerAdjustments:
         assert _ledger(_day_job(planned)).ended_balance is None
         assert _ledger().ended_balance is None
 
+    def test_ended_balance_waits_for_the_day_after_the_last(self):
+        # On the last day its hours still count and its 6.72 h is charged
+        # only the next morning: the close is still moving, so there is no
+        # final balance yet. The day after, it is that day's close.
+        ended = _contract(ended_on=TODAY)
+        assert _ledger(_day_job(ended)).ended_balance is None
+        after = _ledger(_day_job(ended), today=TODAY + timedelta(days=1))
+        assert after.totals is not None
+        assert after.ended_balance == after.totals.balance
+
     @pytest.mark.parametrize(
         "last_term",
         [
