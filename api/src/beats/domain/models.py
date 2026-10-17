@@ -306,6 +306,16 @@ class VacationEntitlement(BaseModel):
         return cap
 
 
+# Far beyond any real balance, and small enough that a sum of many records
+# stays finite: a balance that overflowed would serialize as null. It bounds
+# the two figures a client types into the balance: the opening and an
+# adjustment's hours. Both models are re-validated on every read, the
+# opening with every project of its user, so a stored figure past the bound
+# is a 500 there: it is never narrowed without first finding the stored
+# figures past the new one.
+_BALANCE_HOURS_BOUND = 10_000
+
+
 class Contract(BaseModel):
     """A day job's terms as they changed over time, plus what frames them.
 
@@ -343,7 +353,12 @@ class Contract(BaseModel):
     terms: list[ContractTerm]
     holiday_country: str | None = None  # ISO 3166-1 alpha-2, e.g. "CH"
     holiday_subdivision: str | None = None  # ISO 3166-2 part, e.g. "ZH"
-    opening_balance_hours: float = Field(default=0, allow_inf_nan=False)
+    opening_balance_hours: float = Field(
+        default=0,
+        allow_inf_nan=False,
+        ge=-_BALANCE_HOURS_BOUND,
+        le=_BALANCE_HOURS_BOUND,
+    )
     ended_on: date_type | None = None
     company_holidays: list[CompanyHoliday] = Field(default_factory=list, max_length=400)
     holidays_not_given: list[date_type] = Field(default_factory=list, max_length=400)
@@ -437,11 +452,6 @@ class AdjustmentKind(StrEnum):
     CAP = "cap"  # down to `hours` if above it; a balance under the cap is untouched
 
 
-# Far beyond any real balance, and small enough that a sum of many records
-# stays finite: a balance that overflowed would serialize as null.
-_ADJUSTMENT_HOURS_BOUND = 10_000
-
-
 class BalanceAdjustmentFields(BaseModel):
     """A dated change to a day job's balance, as a client sends it — the
     request body of `POST /{id}/adjustments`, so its validators are the 422.
@@ -459,8 +469,8 @@ class BalanceAdjustmentFields(BaseModel):
     hours: float = Field(
         strict=True,
         allow_inf_nan=False,
-        ge=-_ADJUSTMENT_HOURS_BOUND,
-        le=_ADJUSTMENT_HOURS_BOUND,
+        ge=-_BALANCE_HOURS_BOUND,
+        le=_BALANCE_HOURS_BOUND,
     )
     note: str | None = None
 
