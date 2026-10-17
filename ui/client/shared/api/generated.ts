@@ -1485,6 +1485,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/meta/holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Region Holidays
+         * @description One region's public holidays for a year, by date and name, as the
+         *     region gives them — no contract's company days or days not given. For
+         *     the settings form, which must see the calendar of a region it has not
+         *     saved yet. 400 `UNKNOWN_HOLIDAY_REGION` for a country or subdivision the
+         *     calendar does not know. Cacheable for a day, like the region list: it
+         *     changes only with a `holidays` release.
+         */
+        get: operations["list_region_holidays_api_meta_holidays_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/oura/connect": {
         parameters: {
             query?: never;
@@ -3805,6 +3830,20 @@ export interface components {
             name: string;
             /** Subdivisions */
             subdivisions: components["schemas"]["Subdivision"][];
+        };
+        /**
+         * RegionHoliday
+         * @description One public holiday of a region, as the region gives it: no contract's
+         *     additions or removals.
+         */
+        RegionHoliday: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Name */
+            name: string;
         };
         /** RegisterStartRequest */
         RegisterStartRequest: {
@@ -6379,6 +6418,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Region"][];
+                };
+            };
+        };
+    };
+    list_region_holidays_api_meta_holidays_get: {
+        parameters: {
+            query: {
+                /** @description ISO 3166-1 alpha-2, as the region list gives it. */
+                country: string;
+                year: number;
+                subdivision?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionHoliday"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
