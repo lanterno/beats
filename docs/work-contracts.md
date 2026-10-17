@@ -655,7 +655,8 @@ until the project is archived (`goal_term` does not consult `ended_on`).
 The vacation entitlement is not sent.
 
 Every day and week the coach reads is the request timezone's: the
-contract section's week and today, the goal line's week and the weekly
+contract section's week and today, the calendar's day and the times its
+events are printed at, the goal line's week and the weekly
 totals in the profile, the productivity score, the memory rewrite's last
 seven days, and the tools' (`get_projects`' week, the dates `get_beats`
 takes and prints, the patterns'). So the label and the goal line name
