@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/shared/api";
+import { fetchRegionHolidays } from "../api/projectApi";
 import type { Contract, HolidayRegion, RegionHoliday } from "../model";
 import { contractFrameDefaults } from "../model";
 import { ProjectForm } from "./ProjectForm";
@@ -33,6 +34,9 @@ vi.mock("../api/projectApi", async (importOriginal) => ({
 		return calendar;
 	}),
 }));
+
+const fetchHolidays = vi.mocked(fetchRegionHolidays);
+const fromCalendars = fetchHolidays.getMockImplementation() as typeof fetchRegionHolidays;
 
 function renderWithQueries(ui: ReactElement) {
 	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -366,6 +370,50 @@ describe("ProjectForm", () => {
 				expect(onSubmit).toHaveBeenCalledWith(
 					expect.objectContaining({ clearedNotGiven: ["2026-11-30"] }),
 				);
+			});
+
+			afterEach(() => fetchHolidays.mockImplementation(fromCalendars));
+
+			it("holds Save until the new region's calendar is in", async () => {
+				let release = () => {};
+				const held = new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				fetchHolidays.mockImplementation(async (country, subdivision, year) => {
+					if (subdivision === "SCT") await held;
+					return fromCalendars(country, subdivision, year);
+				});
+				renderForm();
+
+				await userEvent.selectOptions(screen.getByLabelText(/Region within United Kingdom/), "SCT");
+				expect(screen.getByText(/Checking Scotland's holidays/)).toBeInTheDocument();
+				expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+				release();
+				expect(await screen.findByRole("button", { name: "Clear the mark" })).toBeInTheDocument();
+				expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+			});
+
+			it("says when the marks cannot be checked, lets Save go, and tries again on ask", async () => {
+				// An API without the route answers 404 for every region.
+				let failing = true;
+				fetchHolidays.mockImplementation(async (country, subdivision, year) => {
+					if (subdivision === "SCT" && failing) throw new Error("404");
+					return fromCalendars(country, subdivision, year);
+				});
+				renderForm();
+
+				await userEvent.selectOptions(screen.getByLabelText(/Region within United Kingdom/), "SCT");
+				expect(
+					await screen.findByText(
+						/Could not check the 2 days this contract marks as not given against Scotland's holidays/,
+					),
+				).toBeInTheDocument();
+				expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+
+				failing = false;
+				await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+				expect(await screen.findByRole("button", { name: "Clear the mark" })).toBeInTheDocument();
 			});
 
 			it("says nothing where the new region revives no mark, and starts over on each change", async () => {
