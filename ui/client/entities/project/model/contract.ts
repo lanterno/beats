@@ -24,7 +24,10 @@ export function isTimeBased(scheduleType: ScheduleType): boolean {
 
 /**
  * Hours the week owes under a term; null for an objective term, and for a
- * time-based term missing its numbers (the API would have refused it).
+ * time-based term missing its numbers (the API would have refused it). With
+ * `formatHours`, the coach's twin is `fmt_hours` in
+ * api/src/beats/coach/repos.py, which prints a term's hours as the page does;
+ * a change to the rounding here is made there too.
  */
 export function termHoursPerWeek(term: ContractTerm): number | null {
 	if (term.scheduleType === "objective") return null;
@@ -115,7 +118,11 @@ export function fromPercent(percent: number): number {
 	return Math.round(percent * 100) / 10000;
 }
 
-/** "42 h", "33.6 h" — a term's figure, at whatever precision it has. */
+/**
+ * "42 h", "33.6 h" — a term's figure, to the hundredth. The coach's twin is
+ * `fmt_hours` in api/src/beats/coach/repos.py; a change to either is made in
+ * both.
+ */
 export function formatHours(hours: number): string {
 	return `${Math.round(hours * 100) / 100} h`;
 }
