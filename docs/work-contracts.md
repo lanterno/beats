@@ -73,7 +73,17 @@ goal. Git history has the plans.
     is kept; a company day on a removed date wins, under its own name.
     The calendar's `include=not_given` still lists that region day, as
     not given, beside the company day: an editor that could see only one
-    of the two marks could not clear the other.
+    of the two marks could not clear the other. Because the removals are
+    bare dates, a region change can bring one into force: a date that
+    matched no holiday of the old region and matches one of the new
+    becomes a working day there. The API keeps both lists through a
+    region change, as it keeps them through any other write; the settings
+    form names each such date before saving, and clears it only when
+    asked (see "The UI's rules"). The inverse — a removal that matched a
+    holiday of the old region and matches none of the new — does nothing
+    and is not mentioned at the change: it is left for the Holidays
+    dialog's "No longer a holiday here", where it can be removed, and the
+    same warning names it again should a later region bring it back.
 13. **Balance adjustments replace editing the opening balance.** A payout,
     a year-end reset or a cap is a dated record of its own, so the opening
     balance stays what was banked before Beats and the ledger shows when
@@ -720,6 +730,16 @@ region check, and every project write reconciles the adjustments
   contract will replace.
 - **A day job may wait for its contract.** The form's first term sits
   behind "Set up the contract now", so renaming does not demand one.
+- **A region change names the removals it brings into force.** While the
+  settings form holds a region other than the stored one on a contract
+  with `holidays_not_given`, it reads both regions' calendars from
+  `/api/meta/holidays`, for the years those dates fall in, and
+  `revivedNotGiven` lists each date the new region has a holiday on and
+  the old one had none, by the new holiday's name — less a date a company
+  day covers, which stays a day off either way. "Clear the marks" ("the
+  mark" for one) drops those dates in the same save, "Keep the marks"
+  takes that back, and a further region change starts over. Until both calendars are in, or
+  when one fails, nothing is said.
 - **Balance wording.** `describeBalance` rounds to the decimal shown
   before judging the sign — −0.04 h reads "even" — and never prints a
   bare signed number: "+4.5 h over", "−2.0 h owed". The API's twin, for
