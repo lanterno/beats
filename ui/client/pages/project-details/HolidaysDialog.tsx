@@ -11,7 +11,8 @@
  * API, say), when the tick stays so the date can be taken back. A date left
  * over from a region change — or kept with no region at all — is listed so
  * it can be seen and removed: on its own it does nothing, but a later region
- * with a holiday that day would quietly make it a working day. While a save
+ * with a holiday that day would make it a working day, which the settings
+ * form says before that change is saved. While a save
  * is in flight the dialog stays open, as the booking dialog does.
  */
 

@@ -14,6 +14,7 @@ export {
 	useProjectLedger,
 	useProjects,
 	useRecordAdjustment,
+	useRegionCalendar,
 	useRemoveAdjustment,
 	useUnarchiveProject,
 	useUpdateContract,

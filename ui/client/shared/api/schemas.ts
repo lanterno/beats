@@ -18,7 +18,7 @@ export type ApiGoalOverride = z.infer<typeof GoalOverrideSchema>;
 
 // Work contracts (docs/work-contracts.md). These mirror the API's
 // `ProjectKind`, `ScheduleType`, `ContractTerm`, `Contract`, `AbsenceType`,
-// `Holiday` and `Region` schemas field for field; the validators behind
+// `Holiday`, `RegionHoliday` and `Region` schemas field for field; the validators behind
 // them (which numbers a schedule type needs, terms in order) are the API's,
 // and a 422 names the offending path in `fields`.
 
@@ -237,6 +237,14 @@ const HolidaySchema = z.object({
 });
 
 export const HolidayListSchema = z.array(HolidaySchema);
+
+/** A region's public holiday, as the region gives it (`/api/meta/holidays`). */
+const RegionHolidaySchema = z.object({
+	date: z.string(), // YYYY-MM-DD
+	name: z.string(),
+});
+
+export const RegionHolidayListSchema = z.array(RegionHolidaySchema);
 
 const SubdivisionSchema = z.object({
 	code: z.string(),

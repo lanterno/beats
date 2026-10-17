@@ -19,8 +19,10 @@ import type { ProjectFormValues } from "./ProjectForm";
  * carried unchanged (they are edited only in the history panel), or the
  * form's one first term when there is no contract yet and the form is
  * adding one; the region, opening balance and end date are the form's
- * either way. The holiday lists are the existing contract's too, or empty
- * on a new one. A day job left without a contract sends `kind` alone.
+ * either way. The holiday lists are the existing contract's too, less the
+ * dates not given the form was asked to clear (a region change would make
+ * them working days), or empty on a new one. A day job left without a
+ * contract sends `kind` alone.
  */
 export function projectWriteFromForm(
 	values: ProjectFormValues,
@@ -29,7 +31,14 @@ export function projectWriteFromForm(
 	if (values.kind !== "day_job") return { kind: values.kind };
 	if (!existingContract && !values.addContract) return { kind: "day_job" };
 	const terms = existingContract ? existingContract.terms : [termFromForm(values.term)];
-	const kept = existingContract ?? { companyHolidays: [], holidaysNotGiven: [] };
+	const kept = existingContract
+		? {
+				companyHolidays: existingContract.companyHolidays,
+				holidaysNotGiven: existingContract.holidaysNotGiven.filter(
+					(date) => !values.clearedNotGiven.includes(date),
+				),
+			}
+		: { companyHolidays: [], holidaysNotGiven: [] };
 	return {
 		kind: "day_job",
 		contract: toApiContract(contractFromForm(values.contract, terms, kept)),
