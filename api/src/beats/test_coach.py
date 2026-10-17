@@ -2036,6 +2036,28 @@ class TestToolsDispatch:
         )
         assert "No patterns" in result
 
+    async def test_get_patterns_quotes_the_contracts_week_as_the_inbox_does(self, monkeypatch):
+        """Pentecost Monday takes a day off a 40-hour week, which then expects
+        32 hours. The stale-project card get_patterns returns quotes the 32, as
+        the Inbox's does, not the term's nominal 40."""
+        from beats.domain.intelligence import patterns as patterns_module
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return CONTRACT_NOW.astimezone(tz) if tz else CONTRACT_NOW.replace(tzinfo=None)
+
+        monkeypatch.setattr(patterns_module, "datetime", _At)
+        projects = [TestBuildDayContext._job()]
+        repos = _fake_coach_repos(projects=projects)
+
+        result = await tools_module.execute_tool(
+            "user-1", "get_patterns", {}, repos=repos, projects=projects, tz=ZURICH
+        )
+
+        assert "Acme needs attention" in result
+        assert "your contract still expects 32.0h of it this week" in result
+
     # -- search_beats --
 
     async def test_search_beats_matches_note_text(self):
@@ -3689,6 +3711,9 @@ class TestBuildDayContext:
     async def test_failing_contract_read_leaves_the_rest_of_the_day(self):
         class _Broken:
             async def current_weeks(self, projects, tz, as_of):
+                raise RuntimeError("mongo went away")
+
+            async def expected_for_week(self, project, week_of):
                 raise RuntimeError("mongo went away")
 
         out = await self._day_context(
