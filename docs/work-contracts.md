@@ -611,8 +611,9 @@ region check, and every project write reconciles the adjustments
 the page's `toPercent` prints it (87.5%, never "88%"; `fmt_percent` is
 the twin), and on a day job with a contract the current week against
 it, labelled as the goal line is (by the term in force on the week's
-Monday): what it expects after holidays and days
-off, the hours worked and what is left, today's expected hours, the
+Monday, or on the contract's first day when it starts mid-week; that
+week the goal line does not yet carry the contract): what it expects
+after holidays and days off, the hours worked and what is left, today's expected hours, the
 running balance and its by-Sunday projection, the dates of this week's
 holidays and days off that shortened it, and `ended_on` once it falls
 inside the week. Each figure is the API's own, from the week the page
