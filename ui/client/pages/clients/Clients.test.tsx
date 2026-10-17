@@ -2,12 +2,15 @@
  * The Clients page's states that depend on what the account holds: with no
  * client yet, the freelance hours billed to no one are still shown, with a
  * way to bill them — the state a first freelance project is in, which the
- * sidebar already offers the page for.
+ * sidebar already offers the page for. And when the month cannot be read —
+ * an older API during a deploy answers 404 "Not Found" — the page's own
+ * sentence and the API's words stay apart.
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BillingMonth } from "@/entities/billing";
+import { ApiError } from "@/shared/api";
 import Clients from "./Clients";
 
 const { state, idle } = vi.hoisted(() => ({
@@ -84,5 +87,14 @@ describe("Clients", () => {
 			"href",
 			"/project/p1",
 		);
+	});
+
+	it("keeps the API's words apart from its own when the month cannot be read", () => {
+		state.month = { data: undefined, error: new ApiError(404, "Not Found") };
+		renderPage();
+
+		const failure = screen.getByRole("alert");
+		expect(within(failure).getByText("The rest of the site works as usual.")).toBeInTheDocument();
+		expect(within(failure).getByText("Not Found")).toBeInTheDocument();
 	});
 });
