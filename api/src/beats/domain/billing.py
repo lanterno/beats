@@ -147,13 +147,21 @@ def month_range(month: date, today: date) -> tuple[date, date]:
     return month, min(month_end(month), today)
 
 
+def utc_midnight(day: date, tz: ZoneInfo) -> datetime:
+    """The instant `day` starts in `tz`, in UTC. East of Greenwich, 1 January
+    of year 1 starts before the first instant UTC can hold, and nothing
+    started before that, so it is that instant (`MonthQuery` takes 0001-01)."""
+    try:
+        return datetime.combine(day, time(), tz).astimezone(UTC)
+    except OverflowError:
+        return datetime.min.replace(tzinfo=UTC)
+
+
 def utc_range(first: date, last: date, tz: ZoneInfo) -> tuple[datetime, datetime]:
     """The instants the days `first` through `last` span in `tz`, as
     [start, end) in UTC: local midnight to local midnight, whatever the
     offset did between."""
-    start = datetime.combine(first, time(), tz).astimezone(UTC)
-    end = datetime.combine(last + timedelta(days=1), time(), tz).astimezone(UTC)
-    return start, end
+    return utc_midnight(first, tz), utc_midnight(last + timedelta(days=1), tz)
 
 
 class BillingLine(NamedTuple):
