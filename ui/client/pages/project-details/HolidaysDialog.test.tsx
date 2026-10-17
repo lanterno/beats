@@ -5,7 +5,9 @@
  * from its row, and a refusal on another year's page opens that year),
  * another year's entries go out untouched, a date not given that is no
  * longer a holiday of the region is listed and can be removed — but only once
- * the year's calendar is in — and a 422 on a company day lands on its row.
+ * the year's calendar is in — a 422 on a company day lands on its row, and
+ * last year's company days copy into the year shown as rows still to save,
+ * offered only when that year has one.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -244,6 +246,55 @@ describe("HolidaysDialog", () => {
 		expect(
 			within(dialog()).queryByRole("region", { name: "No longer a holiday here" }),
 		).not.toBeInTheDocument();
+	});
+
+	it("copies last year's company days into the year shown, unsaved, and says what it left out", async () => {
+		const lastYear = [
+			{ date: "2025-10-31", name: "Bridge day" }, // a Friday; a Saturday in 2026
+			{ date: "2025-12-24", name: "Christmas Eve" },
+			{ date: "2025-12-25", name: "Firm Christmas" }, // Zürich's Christmas Day in 2026
+			{ date: "2025-12-31", name: "New Year's Eve" },
+		];
+		const silvester = { date: "2026-12-31", name: "Silvester" };
+		renderDialog({ companyHolidays: [...lastYear, silvester] });
+
+		await userEvent.click(
+			within(dialog()).getByRole("button", { name: "Copy last year's company days" }),
+		);
+
+		expect(hooks.mutate).not.toHaveBeenCalled();
+		expect(within(dialog()).getByRole("status")).toHaveTextContent(
+			"Copied 2 days from 2025 — save to keep them. Left out: Dec 25, already a public holiday · Dec 31, already a company day.",
+		);
+		expect(within(dialog()).getByLabelText("Company holiday 2: date")).toHaveValue("2026-10-31");
+		expect(within(dialog()).getByLabelText("Company holiday 2: name")).toHaveAccessibleDescription(
+			"On a weekend — changes nothing",
+		);
+		expect(within(dialog()).getByLabelText("Company holiday 3: date")).toHaveValue("2026-12-24");
+		expect(
+			within(dialog()).getByLabelText("Company holiday 3: name"),
+		).not.toHaveAccessibleDescription();
+
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Save" }));
+
+		expect(sentContract().company_holidays).toEqual([
+			...lastYear,
+			silvester,
+			{ date: "2026-10-31", name: "Bridge day" },
+			{ date: "2026-12-24", name: "Christmas Eve" },
+		]);
+	});
+
+	it("offers the copy only on a year whose year before has a company day", async () => {
+		renderDialog({ companyHolidays: [{ date: "2026-12-24", name: "Christmas Eve" }] });
+		const copy = { name: "Copy last year's company days" };
+
+		expect(within(dialog()).queryByRole("button", copy)).not.toBeInTheDocument();
+
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Next year" }));
+		await userEvent.click(within(dialog()).getByRole("button", copy));
+
+		expect(within(dialog()).getByLabelText("Company holiday 1: date")).toHaveValue("2027-12-24");
 	});
 
 	it("puts a 422 on a company day's name beside that row", async () => {
