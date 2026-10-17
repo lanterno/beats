@@ -657,8 +657,10 @@ totals in the profile, the productivity score, the memory rewrite's last
 seven days, and the tools' (`get_projects`' week, the dates `get_beats`
 takes and prints, the patterns'). So the label and the goal line name
 one term on a Sunday evening west of UTC too. The SPA sends `tz` with a
-brief, a chat message and a memory rewrite; a client that sends none,
-the companion's chat for now, gets UTC's.
+brief, a chat message and a memory rewrite; a client that sends none
+gets UTC's. For now that is the companion's chat, and its brief
+notification, which looks for the brief of UTC's today
+(`getTodayBrief` in `notification_poller.dart`, without a timezone).
 
 `/api/export/full` carries the contract, its entitlement included, the
 absences and the balance adjustments, so a backup restores the same
