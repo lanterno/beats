@@ -2059,6 +2059,42 @@ class TestToolsDispatch:
         assert "Acme needs attention" in result
         assert "your contract still expects 32.0h of it this week" in result
 
+    async def test_get_patterns_survives_one_failing_contract_read(self, monkeypatch):
+        """AHM-85. A raise from one day job's week expectation failed
+        detect_patterns whole, and the coach read "Pattern detection
+        failed". Now the other job's card quotes its contract's 32 h and the
+        failing one its term's plain 40 h."""
+        from beats.domain.intelligence import patterns as patterns_module
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return CONTRACT_NOW.astimezone(tz) if tz else CONTRACT_NOW.replace(tzinfo=None)
+
+        class _FailsForGlobex:
+            async def current_weeks(self, projects, tz, as_of):
+                return {}
+
+            async def expected_for_week(self, project, week_of):
+                if project.id == "globex":
+                    raise RuntimeError("mongo went away")
+                return 32.0
+
+        monkeypatch.setattr(patterns_module, "datetime", _At)
+        acme = TestBuildDayContext._job()
+        globex = acme.model_copy(update={"id": "globex", "name": "Globex"})
+        repos = _fake_coach_repos(projects=[acme, globex], contracts=_FailsForGlobex())
+
+        result = await tools_module.execute_tool(
+            "user-1", "get_patterns", {}, repos=repos, projects=[acme, globex], tz=ZURICH
+        )
+
+        assert "Pattern detection failed" not in result
+        assert "Acme needs attention" in result
+        assert "your contract still expects 32.0h of it this week" in result
+        assert "Globex needs attention" in result
+        assert "your contract still expects 40.0h of it this week" in result
+
     # -- search_beats --
 
     async def test_search_beats_matches_note_text(self):
