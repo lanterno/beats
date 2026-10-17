@@ -3,7 +3,8 @@ import { expect, type Locator, test } from "@playwright/test";
 /**
  * The billing surfaces as they lay out, which jsdom cannot draw: the Clients
  * page's panel for the seeded client — its amount and the lines table it is
- * made of. `api/scripts/e2e_session.py` seeds it: a client at 85.00 EUR an
+ * made of — and the Billing panel in the rail of the seeded freelance
+ * project. `api/scripts/e2e_session.py` seeds both: a client at 85.00 EUR an
  * hour from 1 January, a project billable at that rate, and two finished
  * sessions in the last three hours (so this month has a line, unless the
  * month began less than three hours ago). Nothing here writes, so every run
@@ -50,5 +51,23 @@ test.describe("Clients and billing", () => {
 		const pill = panel.getByRole("switch", { name: /^Billable: / }).first();
 		await expectDrawn(pill);
 		await expect(pill).toHaveAttribute("aria-checked", "true");
+	});
+
+	test("the seeded freelance project's rail shows its billing", async ({ page }) => {
+		await page.goto("/projects");
+		await page.getByRole("link", { name: PROJECT }).first().click();
+		await expect(page).toHaveURL(/\/project\//);
+
+		const billing = page.getByRole("region", { name: "Billing" });
+		await expectDrawn(billing);
+		await expect(billing).toContainText(CLIENT);
+		await expect(billing.getByRole("list", { name: "Billing terms" })).toContainText(
+			"billable at the client's rate, €85.00/h",
+		);
+		await expect(billing).toContainText(/This month: [\d.]+ h billable · €/);
+		await expect(billing.getByRole("link", { name: "→ Clients" })).toHaveAttribute(
+			"href",
+			"/clients",
+		);
 	});
 });
