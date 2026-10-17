@@ -76,8 +76,9 @@ nothing. `balance_moved` is the move.
 `since` is the contract's first day, or None. `totals` is the balance as of
 today with the three terms that move it, or None when there is no balance
 today — the same rule as the week route's `balance`. `ended_balance` is the
-close on `ended_on` once that day has come: the final balance, before a
-settlement dated after it.
+close on `ended_on` once that day has passed: the final balance, before a
+settlement dated after it. On `ended_on` itself it is None, since that
+day's hours still count and its close is not yet known.
 
 The totals, every close, every move, every `applied` and `ended_balance` come
 from one `running_balance` pass, so no two of them can disagree.
@@ -140,7 +141,7 @@ def assemble_ledger(
             for week_of in mondays
         }
         ended_on = contract.ended_on
-        ended = ended_on is not None and ended_on <= today and owes(term_on(contract, ended_on))
+        ended = ended_on is not None and ended_on < today and owes(term_on(contract, ended_on))
         # The current week is first and has not closed — the standing shows
         # today's balance instead — and a week with no expectation has no
         # balance to close.

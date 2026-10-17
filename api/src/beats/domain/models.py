@@ -627,8 +627,9 @@ class Ledger(BaseModel):
     totals: LedgerTotals | None  # None when there is no balance today
     # The close on `ended_on`, before any adjustment after it — the final
     # balance a settlement then pays out. None without a contract, without
-    # `ended_on`, while `ended_on` is still to come, and when no balance is
-    # kept on that day (`week_expectation`'s null rule for the term then).
+    # `ended_on`, until the day after it (on the last day its hours still
+    # count), and when no balance is kept on that day (`week_expectation`'s
+    # null rule for the term then).
     ended_balance: float | None
 
 

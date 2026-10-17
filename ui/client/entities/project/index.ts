@@ -65,10 +65,13 @@ export type {
 } from "./model";
 export {
 	assignColor,
+	balanceIsFinal,
 	balanceTone,
 	contractFieldErrors,
 	contractFrameDefaults,
 	contractGovernsWeek,
+	copyCompanyDays,
+	describeCompanyDaysCopy,
 	describeEntitlement,
 	describeLedgerNote,
 	describeTerm,
@@ -79,6 +82,7 @@ export {
 	filterAndRankProjects,
 	formatSignedHours,
 	halfDays,
+	hasCompanyDaysIn,
 	isFirstWeek,
 	isTimeBasedOn,
 	ledgerCsv,

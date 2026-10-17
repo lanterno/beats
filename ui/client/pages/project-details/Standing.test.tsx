@@ -190,6 +190,42 @@ describe("Standing on a day job", () => {
 		expect(screen.queryByText(/By Sunday/)).not.toBeInTheDocument();
 	});
 
+	it("keeps the contract's last day live and calls the balance final from the day after", () => {
+		// Ends today, Thursday: Friday expects nothing, so the projection is
+		// where the contract closes — +3.8 h if it stops now, +5.7 h if met.
+		const ending: ProjectWithDuration = { ...BASE, contract: { ...CONTRACT, endedOn: TODAY } };
+		renderStanding({ project: ending });
+		let region = screen.getByRole("region", { name: "Where you stand" });
+		expect(region).not.toHaveTextContent("Final balance");
+		expect(region).toHaveTextContent("Balanceas of Thu Sep 10");
+		expect(region).toHaveTextContent("−840.0 h expected through Wed");
+		expect(region).toHaveTextContent("By Sunday: +5.7 h if the week is met");
+		expect(region).toHaveTextContent("+3.8 h if you stop now.");
+		expect(figure("Remaining")).toBe("1.9 h");
+		expect(region).toHaveTextContent("1.9 h to go, all today.");
+		cleanup();
+
+		// Friday: Thursday's 6.72 h is charged and the balance has frozen.
+		const after: ContractWeek = {
+			...WEEK,
+			balance: 3.78,
+			balanceAsOf: "2026-09-11",
+			balanceExpectedThrough: 846.72,
+		};
+		renderStanding({
+			project: ending,
+			todayIso: "2026-09-11",
+			currentWeek: after,
+			openWeek: after,
+		});
+		region = screen.getByRole("region", { name: "Where you stand" });
+		expect(region).toHaveTextContent("Final balanceended Thu Sep 10");
+		expect(within(region).getByText("+3.8 h")).toBeInTheDocument();
+		expect(region).toHaveTextContent("−846.7 h expected through Thu Sep 10");
+		expect(region).not.toHaveTextContent("By Sunday");
+		expect(screen.queryByText("Remaining")).not.toBeInTheDocument();
+	});
+
 	it("offers to add a contract when there is none, and no balance", () => {
 		const props = renderStanding({
 			project: { ...BASE, contract: undefined },

@@ -99,6 +99,19 @@ export function isTimeBasedOn(contract: Contract | undefined, isoDate: string): 
 	return term !== undefined && isTimeBased(term.scheduleType);
 }
 
+/**
+ * Whether the contract's balance is final on a day: its `endedOn` is behind
+ * it. The last day itself is still live — its hours count, and its
+ * expectation is charged the next morning — so the balance, the week and the
+ * projection stay live through it, and the ledger's `endedBalance` waits for
+ * the day after too. The coach reads the end the same way (`_project_lines`
+ * in api/src/beats/coach/contract_section.py); a change to either is made in
+ * both.
+ */
+export function balanceIsFinal(contract: Contract, isoDate: string): boolean {
+	return contract.endedOn !== undefined && contract.endedOn < isoDate;
+}
+
 /** Terms in ascending order of effectiveFrom, as the API keeps them. */
 export function sortTerms(terms: ContractTerm[]): ContractTerm[] {
 	return [...terms].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));

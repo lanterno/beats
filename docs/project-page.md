@@ -34,10 +34,14 @@ checked in beside this file; the artifact link is a convenience.
    started less than seven days ago shows its (large, negative) balance in
    the muted tone with the line *"First week under the contract. Each day
    is charged as it closes; the figure settles once a full week is in."*
+   Not on the contract's last day, though: a full week will never come in,
+   and the projection that day is where the contract closes.
 3. **The Sunday projection stays.** Under the balance: *"By Sunday: +5.7 h
    if the week is met, +3.8 h if you stop now."* Both figures are client
    arithmetic over `/contract/week` (see *The arithmetic*), rounded with
-   the same rule as the balance so signs never disagree.
+   the same rule as the balance so signs never disagree. On the week a
+   contract ends, the days after `ended_on` expect nothing, so through its
+   last day the projection is the close the balance will freeze at.
 4. **The Planned column is demoted** to an annotation on the open week
    ("Planned 28 h · 9 commits"). The weekly plan page is untouched.
 5. **The health card is cut.** Its goal sparkline goes. Its stale-project
@@ -162,9 +166,14 @@ exists. *Objective / 0-hour term*: no balance ("An objective term — no
 balance while it lasts."), no expectation, the personal goal if set; the
 register shows the term as a labelled gap or a step at zero. *Before the
 first term*: "Contract starts Mon Sep 14, 2026 · 33.6 h/week", worked
-only. *After `ended_on`*: "Final balance · ended Aug 31" with the proof
-frozen at that date, bar an "adjusted" line once a settlement after the
-end moves the balance, and no projection. *Missing region*: a notice line in
+only. *The last day*: still live — that day's hours count and its
+expectation is charged the next morning — so the balance, its projection
+(the close) and the week read as on any other day; the header, the
+register and the ledger's closing rule already say "ended", the rule
+without its final balance ("Ended Mon Aug 31, 2026"). *After `ended_on`*,
+from the next day: "Final balance · ended Aug 31" with the proof frozen
+at that date, bar an "adjusted" line once a settlement after the end
+moves the balance, and no projection. *Missing region*: a notice line in
 the standing and the register's constants line carry the caveat; no
 banner. *Past week open*: the balance stays pinned to today; the right
 half becomes "Week 35 · closed +1.5 h over", no sentence, the day rows
@@ -208,8 +217,9 @@ yet — start the timer in the sidebar."
   104.
 - **A term's rule row sits under the week its date falls in**, so reading
   down, everything above the rule is under the new terms. The closing rule
-  sits above the week the contract ended in; a rule dated in the current
-  week or later sits at the top, a ghost while still to come. A quiet run
+  sits above the week the contract ended in, with the final balance from
+  the day after; a rule dated in the current week or later sits at the
+  top, a ghost while still to come. A quiet run
   of weeks folds into one row and breaks at a rule; it reads "n weeks
   away · … · vacation" only when every note in it is a vacation.
 - **A balance adjustment is a row of its own**, placed as a term's rule
@@ -284,14 +294,20 @@ yet — start the timer in the sidebar."
   seen and removed, but only once that year's calendar is in: until then,
   or when it fails to load, every date not given would look left over. A
   company day on a date marked not given is refused, and its row offers
-  "Clear the mark". A region change in the settings form clears neither
-  list unless asked: when the new region has a holiday on a date marked
-  not given that the stored region had none on, the form lists the date
-  under the picker with the holiday's name, since the mark would make it
-  a working day, and offers to clear the mark in the same save. Save
-  waits for the two calendars, and a failed read says the marks went
-  unchecked (docs/work-contracts.md, "The UI's rules"). A mark the new region has
-  no holiday on is left for "No longer a holiday here". The constants'
+  "Clear the mark". A company day on a public holiday or a weekend says on
+  its row that it changes nothing. "Copy last year's company days", shown
+  while the year before has one, adds that year's days as unsaved rows
+  (`copyCompanyDays` in `entities/project/model`) and says under it what it
+  left out (Decision 12), until a company day is edited or removed. Both
+  this and a row's note read a public holiday as the ticks stand, not as
+  saved. A region change in the settings form clears neither list unless
+  asked: when the new region has a holiday on a date marked not given that
+  the stored region had none on, the form lists the date under the picker
+  with the holiday's name, since the mark would make it a working day, and
+  offers to clear the mark in the same save. Save waits for the two
+  calendars, and a failed read says the marks went unchecked
+  (docs/work-contracts.md, "The UI's rules"). A mark the new region has no
+  holiday on is left for "No longer a holiday here". The constants'
   "2 company days · 1 not given" are counted off
   `/holidays?include=not_given`, not the raw lists, so a leftover date is
   never counted, nor a date not given that a company day covers.
@@ -363,6 +379,10 @@ match shows the figures and no sentence — never a guessed one. The code is
   no line beats a wrong one. Past two days off it counts them by kind
   ("3 days vacation 20.2 h − 2 holidays 13.4 h"), a kind with one day
   keeping its name, so a week of Christmas stays one line.
+- **No day after `ended_on` is a day off.** `/contract/week` still names a
+  holiday or an absence there, but the contract owed nothing that day to
+  take off, so neither the sentence's "Friday is off" nor `nominalLine`
+  names it, as the coach's `_shortened` sends none (`within_contract`).
 - **The ledger's +/− (`weekDelta`) is the API's `balance_moved`** on a
   week with a close, adjustments left out (they are rows of their own).
   On a week without one it falls back to worked − expected, else worked −
@@ -427,7 +447,7 @@ null.
   } ],
   "since": "2026-01-05",                  // contract.starts_on, or null
   "totals": {"expected": 840.0, "worked": 848.5, "adjusted": -40.0, "balance": -29.5} | null,
-  "ended_balance": null }                 // the close on ended_on once it has come, before a settlement
+  "ended_balance": null }                 // the close on ended_on once it has passed, before a settlement
 ```
 
 `/contract/week` carries sibling fields, never a retyped `balance`:

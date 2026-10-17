@@ -84,6 +84,18 @@ goal. Git history has the plans.
     and is not mentioned at the change: it is left for the Holidays
     dialog's "No longer a holiday here", where it can be removed, and the
     same warning names it again should a later region bring it back.
+    What stands in for a rule is a copy: the Holidays dialog copies the
+    year before's company days into the year it shows, each on the same
+    month and day, as rows the user checks and saves. It leaves out a
+    date that already has a company day or is a public holiday the
+    employer gives as the dialog's ticks stand, saved or not, and says so
+    (a public holiday the year's calendar has not brought in yet is
+    copied, and its row then says it changes nothing); a day that lands
+    on a weekend is copied and its row says it changes nothing, since a
+    weekend owes nothing. 29 February into a year without one is left
+    out with a note, not moved to the 28th or 1 March: a leap-day policy
+    does not say which neighbour the employer would give, so the user
+    adds it by hand.
 13. **Balance adjustments replace editing the opening balance.** A payout,
     a year-end reset or a cap is a dated record of its own, so the opening
     balance stays what was banked before Beats and the ledger shows when
@@ -671,8 +683,9 @@ region check, and every project write reconciles the adjustments
   decimal the page shows (8.545 h of 40 reads 8.5 worked and 31.4
   remaining). The
   ledger's totals carry the same terms, and its `ended_balance` is the
-  close on `ended_on` once that day has come — the final balance before a
-  settlement after it, null otherwise.
+  close on `ended_on` once that day has passed — the final balance before
+  a settlement after it, null otherwise, on `ended_on` itself too, whose
+  hours still count.
 - **Absences.** `GET` defaults each bound to the current year in `tz`.
   `POST` answers 201 even when it replaced one, and is accepted on a day
   job with no contract yet — leave first, contract later. `DELETE` is by
@@ -767,7 +780,7 @@ and what is left, today's expected hours, the running balance and its
 by-Sunday projection, the dates of this week's holidays and days off
 that shortened it, and `ended_on` once it falls inside the week. Each
 figure is the API's own, from the week the page reads (on `ended_on`
-itself too, though the page shows only a final balance that day), and is
+itself too, a day both keep live, its projection the close), and is
 printed as the page prints it (one decimal, as `toFixed` rounds the
 binary value; the balance through `describe_balance`), so the coach says
 what the page says even where the page's figures do not add up at that
@@ -777,8 +790,9 @@ contract's days, and the line says "(the contract counts only its own
 days this week)", which with no `ended_on` beside it says the contract
 started this week. In the contract's first seven days the page shows no
 projection, and the coach sends "first week under the contract" in its
-place. The balance is opening + worked − expected + adjusted, and only
-the sum is sent: the opening balance and the adjustments (their dates,
+place, bar the contract's last day, when both give the projection. The
+balance is opening + worked − expected + adjusted, and only the sum is
+sent: the opening balance and the adjustments (their dates,
 kinds and notes) are not sent as figures of their own, though the sum is
 the opening balance on a contract's first day and moves by a payout on
 its date. A public holiday goes by its name. The region is not sent as a

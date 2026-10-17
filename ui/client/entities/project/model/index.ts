@@ -1,8 +1,11 @@
 // Color utilities
 export { assignColor, PROJECT_COLORS } from "./colors";
+// Last year's company days, copied into the next
+export { copyCompanyDays, describeCompanyDaysCopy, hasCompanyDaysIn } from "./companyHolidays";
 // Contract arithmetic + labels
 export {
 	type BalanceTone,
+	balanceIsFinal,
 	balanceTone,
 	contractGovernsWeek,
 	describeBalance,

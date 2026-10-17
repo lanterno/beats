@@ -79,6 +79,12 @@ describe("isFirstWeek", () => {
 		expect(isFirstWeek(contract, "2026-09-13")).toBe(true);
 		expect(isFirstWeek(contract, "2026-09-14")).toBe(false);
 	});
+
+	it("ends on the contract's last day, whose close the projection then gives", () => {
+		const short = { ...contract, endedOn: "2026-09-10" };
+		expect(isFirstWeek(short, "2026-09-09")).toBe(true);
+		expect(isFirstWeek(short, "2026-09-10")).toBe(false);
+	});
 });
 
 describe("projection", () => {
@@ -155,6 +161,17 @@ describe("nominalLine", () => {
 		expect(nominalLine(change, TERM)).toBeNull();
 	});
 
+	it("names no holiday after the contract's last day, which owed nothing to take off", () => {
+		// Ends Thursday; the week route still names Friday's holiday, and four
+		// days' 26.88 h is the nominal less a day, so it would add up.
+		const ending = week({ 4: { expected: 0, holiday: "Christmas Day" } });
+		expect(ending.expected).toBe(26.88);
+		expect(nominalLine(ending, TERM, TODAY)).toBeNull();
+		expect(nominalLine(ending, TERM, "2026-09-11")).toBe(
+			"33.6 h nominal − Fri Christmas Day 6.7 h",
+		);
+	});
+
 	it("says nothing for a difference with no day to name", () => {
 		// The term started on Wednesday: Mon and Tue expect nothing, and are not off.
 		const w = week({ 0: { expected: 0 }, 1: { expected: 0 } });
@@ -183,6 +200,25 @@ describe("weekSentence on a day job", () => {
 		expect(say(MOCKUP, TODAY, next)).toBe("1.9 h to go, all today. Friday is off, then Mon 6.7 h.");
 		expect(say(MOCKUP)).toBe("1.9 h to go, all today. Friday is off.");
 		expect(say(week({ 0: { worked: 31.7 } }), "2026-09-11")).toBe("1.9 h to go, all today.");
+	});
+
+	it("calls no day after the contract's last day off, a holiday or a vacation booked there", () => {
+		const hours = {
+			0: { worked: 7.1 },
+			1: { worked: 6.9 },
+			2: { worked: 7.6 },
+			3: { worked: 3.4 },
+		};
+		const sayEnding = (w: ContractWeek) =>
+			weekSentence({ week: w, todayIso: TODAY, kind: "day_job", endedOn: TODAY });
+		expect(sayEnding(week({ ...hours, 4: { expected: 0, holiday: "Christmas Day" } }))).toBe(
+			"1.9 h to go, all today.",
+		);
+		expect(sayEnding(MOCKUP)).toBe("1.9 h to go, all today.");
+		// Ending on Friday, the vacation is inside the contract and still off.
+		expect(
+			weekSentence({ week: MOCKUP, todayIso: TODAY, kind: "day_job", endedOn: "2026-09-11" }),
+		).toBe("1.9 h to go, all today. Friday is off.");
 	});
 
 	it("says nothing is due today and where the hours go", () => {
