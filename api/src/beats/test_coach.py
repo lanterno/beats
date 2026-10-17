@@ -3254,9 +3254,9 @@ class TestBuildDayContext:
 
     async def test_calendar_reads_the_users_day_on_the_users_clock(self, monkeypatch):
         """The window asked of the calendar is the user's local day, with its
-        offset: Google refuses a naive timeMin with a 400, which the broad
-        except turned into no calendar at all, and a naive midnight was UTC's
-        day besides. An event Google writes in another zone reads on the
+        offset: Google refuses a naive timeMin with a 400, which fetch_events'
+        per-calendar except turned into no calendar at all, and a naive
+        midnight was UTC's day besides. An event Google writes in another zone reads on the
         user's clock."""
         from beats.domain import calendar as calendar_module
 
