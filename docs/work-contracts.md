@@ -660,8 +660,9 @@ region check, and every project write reconciles the adjustments
   decimal the page shows (8.545 h of 40 reads 8.5 worked and 31.4
   remaining). The
   ledger's totals carry the same terms, and its `ended_balance` is the
-  close on `ended_on` once that day has come — the final balance before a
-  settlement after it, null otherwise.
+  close on `ended_on` once that day has passed — the final balance before
+  a settlement after it, null otherwise, on `ended_on` itself too, whose
+  hours still count.
 - **Absences.** `GET` defaults each bound to the current year in `tz`.
   `POST` answers 201 even when it replaced one, and is accepted on a day
   job with no contract yet — leave first, contract later. `DELETE` is by
@@ -738,7 +739,7 @@ and what is left, today's expected hours, the running balance and its
 by-Sunday projection, the dates of this week's holidays and days off
 that shortened it, and `ended_on` once it falls inside the week. Each
 figure is the API's own, from the week the page reads (on `ended_on`
-itself too, though the page shows only a final balance that day), and is
+itself too, a day both keep live, its projection the close), and is
 printed as the page prints it (one decimal, as `toFixed` rounds the
 binary value; the balance through `describe_balance`), so the coach says
 what the page says even where the page's figures do not add up at that
@@ -748,7 +749,7 @@ contract's days, and the line says "(the contract counts only its own
 days this week)", which with no `ended_on` beside it says the contract
 started this week. In the contract's first seven days the page shows no
 projection, and the coach sends "first week under the contract" in its
-place. The balance is opening + worked − expected + adjusted, and only
+place, bar the contract's last day, when both give the projection. The balance is opening + worked − expected + adjusted, and only
 the sum is sent: the opening balance and the adjustments (their dates,
 kinds and notes) are not sent as figures of their own, though the sum is
 the opening balance on a contract's first day and moves by a payout on
