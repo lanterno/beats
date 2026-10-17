@@ -355,6 +355,78 @@ class TestProjectAPI:
         assert "Updated-" in updated_project["name"]
         assert len(client.get("/api/projects/", headers=auth_headers).json()) == projects_count
 
+    def _project_with_every_field(self, client, auth_headers) -> dict:
+        response = client.post(
+            "/api/projects/",
+            json={
+                "name": f"kept-{time.time()}",
+                "description": "the description",
+                "color": "#5B9CF6",
+                "weekly_goal": 12.5,
+                "goal_type": "cap",
+                "github_repo": "lanterno/beats",
+                "category": "coding",
+                "autostart_repos": ["/Users/me/code/beats"],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    def test_a_colour_change_keeps_every_field_it_leaves_out(self, client, auth_headers):
+        """AHM-89: the project page's colour picker sends id, name and colour
+        (and a few fields it happens to know), never the GitHub repo, the
+        category or the autostart repos. Absence read as a reset, so one
+        colour change wiped all three."""
+        project = self._project_with_every_field(client, auth_headers)
+        client.post(f"/api/projects/{project['id']}/archive", headers=auth_headers)
+
+        response = client.put(
+            "/api/projects/",
+            json={"id": project["id"], "name": project["name"], "color": "#FBBF24"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        listed = client.get("/api/projects/?archived=true", headers=auth_headers).json()
+        stored = next(p for p in listed if p["id"] == project["id"])
+        assert stored["color"] == "#FBBF24"
+        assert stored["description"] == "the description"
+        assert stored["archived"] is True
+        assert stored["weekly_goal"] == 12.5
+        assert stored["goal_type"] == "cap"
+        assert stored["github_repo"] == "lanterno/beats"
+        assert stored["category"] == "coding"
+        assert stored["autostart_repos"] == ["/Users/me/code/beats"]
+
+    def test_an_explicit_null_or_empty_value_still_clears(self, client, auth_headers):
+        """Left out keeps; sent clears. The settings drawer clears a field by
+        sending null (or `[]` for the autostart repos), and must go on doing so."""
+        project = self._project_with_every_field(client, auth_headers)
+
+        response = client.put(
+            "/api/projects/",
+            json={
+                "id": project["id"],
+                "name": project["name"],
+                "description": None,
+                "color": None,
+                "weekly_goal": None,
+                "github_repo": None,
+                "category": None,
+                "autostart_repos": [],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        updated = response.json()
+        assert updated["description"] is None
+        assert updated["color"] is None
+        assert updated["weekly_goal"] is None
+        assert updated["github_repo"] is None
+        assert updated["category"] is None
+        assert updated["autostart_repos"] == []
+        assert updated["goal_type"] == "cap"
+
     def test_projects_archive(self, client, auth_headers):
         """Test POST /api/projects/{project_id}/archive - Archive a project"""
         # Create a project first
