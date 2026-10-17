@@ -111,6 +111,16 @@ class NoContract(DomainException):
     code = "NO_CONTRACT"
 
 
+class MonthOutsideContract(DomainException):
+    """Raised when a timesheet is asked for a month with no finished day
+    inside the contract: wholly before its first term or after `ended_on`,
+    still to come, or the current month on its first day."""
+
+    status_code = 409
+    message = "No finished day of that month falls in the contract"
+    code = "OUTSIDE_CONTRACT"
+
+
 class VacationOpeningOutsideContract(DomainException):
     """Raised when a contract write leaves the vacation count's opening date
     outside the contract's dates — before the first term, or after

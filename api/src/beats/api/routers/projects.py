@@ -1,10 +1,14 @@
 """Projects API router - thin controller for project operations."""
 
+import csv
 import http
+import io
+import re
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
+from pydantic import BeforeValidator, WithJsonSchema
 
 from beats.api.dependencies import (
     BeatRepoDep,
@@ -38,6 +42,7 @@ from beats.domain.models import (
     VacationYear,
 )
 from beats.domain.services import keep_unsent_contract_fields
+from beats.domain.timesheet import Timesheet
 
 router = APIRouter(
     prefix="/api/projects",
@@ -283,6 +288,129 @@ async def get_ledger(
     as `/contract/week`. A project the contract does not govern carries its
     goal and its hours and nulls for the rest."""
     return await service.ledger(project_id, weeks, tz)
+
+
+_MONTH = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+
+
+def _first_of_month(value: object) -> date:
+    """'YYYY-MM' to the 1st of that month. Anything else — '2026-9', a full
+    date, '0000-01', which `date` refuses — is a ValueError, which a query
+    parameter turns into a 422 naming `month`."""
+    if not isinstance(value, str) or _MONTH.fullmatch(value) is None:
+        msg = "month must be YYYY-MM"
+        raise ValueError(msg)
+    return date(int(value[:4]), int(value[5:]), 1)
+
+
+# The schema is the string a client sends, not the `date` it becomes. Left to
+# pydantic it would come from `date` and say `format: date`: a full date, which
+# `_first_of_month` refuses with a 422.
+MonthQuery = Annotated[
+    date,
+    BeforeValidator(_first_of_month),
+    Query(description="The month wanted, as YYYY-MM."),
+    WithJsonSchema({"type": "string", "pattern": f"^{_MONTH.pattern}$", "examples": ["2026-09"]}),
+]
+
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_TIMESHEET_COLUMNS = [
+    "date",
+    "weekday",
+    "expected",
+    "worked",
+    "difference",
+    "holiday",
+    "absence",
+    "half_day",
+    "adjustment",
+    "adjusted",
+    "balance",
+]
+
+
+def _hours(value: float | None) -> str:
+    """Two fixed decimals, a blank for None. Adding 0.0 turns a rounded −0.0
+    into 0.00: a day worked exactly to contract would print −0.00."""
+    return "" if value is None else f"{value + 0.0:.2f}"
+
+
+def _timesheet_csv(sheet: Timesheet) -> str:
+    """The sheet as RFC 4180 CSV: comma-separated, dot decimals, CRLF line
+    ends, a header and no other metadata. A "brought forward" row first and a
+    "total" row last, its holiday and absence cells holding the month's
+    counts. Nothing in it is text the user typed: a holiday is the library's
+    name or "company holiday", an absence its type."""
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(_TIMESHEET_COLUMNS)
+    writer.writerow(["brought forward", *[""] * 9, _hours(sheet.brought_forward)])
+    for day in sheet.days:
+        writer.writerow(
+            [
+                day.date.isoformat(),
+                _WEEKDAYS[day.date.weekday()],
+                _hours(day.expected),
+                _hours(day.worked),
+                _hours(day.difference),
+                day.holiday or "",
+                day.absence.value if day.absence is not None else "",
+                ("yes" if day.half_day else "no") if day.absence is not None else "",
+                day.adjustment.value if day.adjustment is not None else "",
+                _hours(day.adjusted),
+                _hours(day.balance_end),
+            ]
+        )
+    writer.writerow(
+        [
+            "total",
+            "",
+            _hours(sheet.expected),
+            _hours(sheet.worked),
+            _hours(sheet.difference),
+            str(sheet.holidays),
+            f"{sheet.absence_days:g}",
+            "",
+            "",
+            _hours(sheet.adjusted),
+            _hours(sheet.carried_forward),
+        ]
+    )
+    return out.getvalue()
+
+
+@router.get(
+    "/{project_id}/timesheet.csv",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "The month as CSV, one row per finished day.",
+            "content": {"text/csv": {}},
+        }
+    },
+)
+async def get_timesheet_csv(
+    project_id: str, month: MonthQuery, service: ContractServiceDep, tz: TimezoneDep
+) -> Response:
+    """A day job's month as a timesheet, for the employer: one row per
+    finished day of the month inside the contract — through yesterday in
+    `tz`, from the first term, through `ended_on` — with the hours expected,
+    worked and their difference, the weekday holiday's name and absence
+    type, the balance adjustment and what it moved, and the balance at the
+    day's close; a "brought forward" row first and a "total" row last. A
+    figure the contract has no expectation for is blank. Worked hours are
+    bucketed by the local day each beat started on, in `tz`, and a running
+    timer counts up to now, as on `/ledger`. The file is sent as an
+    attachment without a filename; the caller names it.
+    409 on a project that is not a day job (NOT_A_DAY_JOB), without a
+    contract (NO_CONTRACT), or for a month with no finished day inside the
+    contract (OUTSIDE_CONTRACT)."""
+    sheet = await service.timesheet(project_id, month, tz)
+    return Response(
+        content=_timesheet_csv(sheet),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment"},
+    )
 
 
 @router.get("/{project_id}/holidays", response_model=list[Holiday])

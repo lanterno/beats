@@ -379,7 +379,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments), `/{id}/vacation` (one year of the vacation entitlement, in days) |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments), `/{id}/vacation` (one year of the vacation entitlement, in days), `/{id}/timesheet.csv?month=` (a month, a row per finished day, as CSV) |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
