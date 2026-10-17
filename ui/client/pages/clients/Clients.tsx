@@ -198,8 +198,12 @@ export default function Clients() {
 						Billing isn't available right now.
 					</p>
 					<p className="mt-1 text-[12.5px] text-muted-foreground font-medium">
-						{describeError(monthQuery.error, "The figures could not be read.")} The rest of the site
-						works as usual.
+						The rest of the site works as usual.
+					</p>
+					{/* The API's words as they came, on a line of their own: they are
+					    not a sentence of this page's, and may not end in a full stop. */}
+					<p className="mt-1 text-xs text-muted-foreground font-medium">
+						{describeError(monthQuery.error, "The figures could not be read.")}
 					</p>
 				</Panel>
 			) : !report ? (
