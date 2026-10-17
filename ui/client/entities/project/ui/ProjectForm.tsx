@@ -55,6 +55,7 @@ import {
 	displayTermOn,
 	isTimeBased,
 	isTimeBasedOn,
+	MAX_BALANCE_HOURS,
 	PROJECT_COLORS,
 	termFormDefaults,
 	validateContractFrame,
@@ -665,6 +666,8 @@ export function ProjectForm({
 										id="project-form-opening-balance"
 										type="number"
 										step="0.25"
+										min={-MAX_BALANCE_HOURS}
+										max={MAX_BALANCE_HOURS}
 										inputMode="decimal"
 										value={values.contract.openingBalanceHours}
 										onChange={(e) => setFrame("openingBalanceHours", e.target.value)}

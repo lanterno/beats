@@ -341,6 +341,7 @@ describe("WeekDays", () => {
 				effectiveGoalOverridden: false,
 				contractExpected: null,
 				balanceEnd: null,
+				balanceMoved: null,
 				notes: [],
 				adjustments: [],
 			},

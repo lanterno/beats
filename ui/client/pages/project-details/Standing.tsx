@@ -455,9 +455,7 @@ export function Standing(props: StandingProps) {
 	// stands in when the ledger has not reached the week.
 	let closed: string | null = null;
 	if (isPast && worked !== undefined) {
-		const moved = ledger
-			? weekDelta(ledger, openWeekOf, contract?.openingBalanceHours ?? null)
-			: null;
+		const moved = ledger ? weekDelta(ledger, openWeekOf) : null;
 		const over =
 			governed && openWeek?.expected !== undefined
 				? (moved ?? -(openWeek.remaining ?? openWeek.expected - openWeek.worked))

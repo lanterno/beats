@@ -112,6 +112,13 @@ export function balanceIsFinal(contract: Contract, isoDate: string): boolean {
 	return contract.endedOn !== undefined && contract.endedOn < isoDate;
 }
 
+/**
+ * The API's bound, either way, on the figures typed into a balance: an
+ * adjustment's hours and the opening (`_BALANCE_HOURS_BOUND` in
+ * api/src/beats/domain/models.py).
+ */
+export const MAX_BALANCE_HOURS = 10_000;
+
 /** Terms in ascending order of effectiveFrom, as the API keeps them. */
 export function sortTerms(terms: ContractTerm[]): ContractTerm[] {
 	return [...terms].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));

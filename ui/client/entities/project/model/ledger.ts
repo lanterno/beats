@@ -11,7 +11,7 @@
  * "·· 3 weeks away · Jul 6 – 26 · vacation ··".
  */
 
-import { addIsoDays, mondayOfIso } from "@/shared/lib";
+import { mondayOfIso } from "@/shared/lib";
 import {
 	balanceIsFinal,
 	formatHours,
@@ -169,12 +169,7 @@ function adjustmentRow(adjustment: LedgerAdjustment): AdjustmentRow {
 }
 
 /** Every rule the contract puts in the ledger, dated; placement is decided below. */
-function contractRules(
-	contract: Contract,
-	ledger: Ledger,
-	weeks: LedgerWeek[],
-	todayIso: string,
-): RuleRow[] {
+function contractRules(contract: Contract, ledger: Ledger, todayIso: string): RuleRow[] {
 	const terms = sortTerms(contract.terms);
 	const rules: RuleRow[] = terms.map((term, i) => {
 		const planned = term.effectiveFrom > todayIso;
@@ -208,13 +203,11 @@ function contractRules(
 	const endedOn = contract.endedOn;
 	if (endedOn) {
 		const planned = endedOn > todayIso;
-		const endWeek = weeks.find((w) => w.weekOf <= endedOn && endedOn <= sundayOf(w.weekOf));
 		// The close on the end day, before a settlement after it, which is its
-		// own row; an API that predates adjustments has no settlement to leave out.
-		const final = ledger.endedBalance ?? ledger.totals?.balance ?? endWeek?.balanceEnd ?? null;
-		// On the last day itself the balance is still live (the standing
-		// carries it), so the rule says the contract ended, as the header and
-		// the register do that day, and gives no final figure.
+		// own row. On the last day itself the balance is still live (the
+		// standing carries it), so the rule says the contract ended, as the
+		// header and the register do that day, and gives no final figure.
+		const final = ledger.endedBalance;
 		const finalText =
 			final !== null && balanceIsFinal(contract, todayIso)
 				? ` · final balance ${formatSignedHours(final)}`
@@ -279,55 +272,20 @@ function roundHours(hours: number): number {
 	return Math.round(hours * 100) / 100;
 }
 
-/** Σ applied over the ledger's adjustments dated in [from, to]. */
-function appliedBetween(ledger: Ledger, from: string, to: string): number {
-	return ledger.weeks
-		.flatMap((w) => w.adjustments)
-		.filter((a) => from <= a.date && a.date <= to)
-		.reduce((sum, a) => sum + a.applied, 0);
-}
-
 /**
  * A week's +/−: on a week with a close, the API's `balanceMoved` — what the
- * balance counted that week less what it expected, adjustments left out,
- * read off the close before even when the ledger does not hold that week.
- * The balance counts only the contract's days under a term that owes hours,
- * so on the week a contract starts or ends, or a term that owes nothing
- * begins or ends, worked − expected is not what moved it.
- *
- * An API that predates `balanceMoved` leaves the SPA to read the move off
- * the closes: between its close and the one before when both are in the
- * ledger; on the contract's first close — the week holding `since`, or the
- * week after when the one holding it has no close (a weekend start) — from
- * the opening balance. Either leaves out the balance adjustments inside it,
- * which are rows of their own: the week's own, or on the first close every
- * one from `since` through the week's Sunday. Else, and on a week with no
- * close, worked − expected, else worked − goal; null with neither, and for a
- * week the ledger does not hold. `openingBalance` is the contract's; null off
- * a contract.
+ * balance counted that week less what it expected, adjustments left out
+ * (they are rows of their own), read off the close before even when the
+ * ledger does not hold that week. The balance counts only the contract's
+ * days under a term that owes hours, so on the week a contract starts or
+ * ends, or a term that owes nothing begins or ends, worked − expected is not
+ * what moved it. On a week with no close, worked − expected, else worked −
+ * goal; null with neither, and for a week the ledger does not hold.
  */
-export function weekDelta(
-	ledger: Ledger,
-	weekOf: string,
-	openingBalance: number | null,
-): number | null {
+export function weekDelta(ledger: Ledger, weekOf: string): number | null {
 	const week = ledger.weeks.find((w) => w.weekOf === weekOf);
 	if (!week) return null;
-	const older = ledger.weeks.find((w) => w.weekOf === addIsoDays(weekOf, -7));
-	if (week.balanceEnd !== null) {
-		if (typeof week.balanceMoved === "number") return week.balanceMoved;
-		const sunday = sundayOf(weekOf);
-		if (older && older.balanceEnd !== null) {
-			const applied = appliedBetween(ledger, weekOf, sunday);
-			return roundHours(week.balanceEnd - older.balanceEnd - applied);
-		}
-		const startWeek = ledger.since === null ? null : mondayOfIso(ledger.since);
-		const firstClose = startWeek === weekOf || (older !== undefined && startWeek === older.weekOf);
-		if (openingBalance !== null && firstClose && ledger.since !== null) {
-			const applied = appliedBetween(ledger, ledger.since, sunday);
-			return roundHours(week.balanceEnd - openingBalance - applied);
-		}
-	}
+	if (week.balanceMoved !== null) return week.balanceMoved;
 	if (week.contractExpected !== null) return roundHours(week.worked - week.contractExpected);
 	if (week.effectiveGoal !== null) return roundHours(week.worked - week.effectiveGoal);
 	return null;
@@ -363,7 +321,7 @@ export function ledgerRows(
 		.filter((w) => w.weekOf < thisMonday)
 		.sort((a, b) => b.weekOf.localeCompare(a.weekOf));
 	const contract = project.kind === "day_job" ? project.contract : undefined;
-	const rules = contract ? contractRules(contract, ledger, weeks, todayIso) : [];
+	const rules = contract ? contractRules(contract, ledger, todayIso) : [];
 	const adjustments = contract ? ledger.weeks.flatMap((w) => w.adjustments).map(adjustmentRow) : [];
 	const dated = (row: RuleRow | AdjustmentRow) =>
 		row.type === "rule" ? row.date : row.adjustment.date;
@@ -374,12 +332,11 @@ export function ledgerRows(
 	const rows: LedgerRow[] = [];
 	// Rules and adjustments from the current week on, newest first, above everything.
 	rows.push(...marks.filter((r) => mondayOfIso(dated(r)) >= thisMonday).sort(newestFirst));
-	const opening = contract ? contract.openingBalanceHours : null;
 	for (const week of weeks) {
 		const inWeek = marks.filter((r) => mondayOfIso(dated(r)) === week.weekOf);
 		const isEnded = (r: RuleRow | AdjustmentRow) => r.type === "rule" && r.rule === "ended";
 		rows.push(...inWeek.filter(isEnded));
-		rows.push(weekRow(week, weekDelta(ledger, week.weekOf, opening)));
+		rows.push(weekRow(week, weekDelta(ledger, week.weekOf)));
 		rows.push(...inWeek.filter((r) => !isEnded(r)).sort(newestFirst));
 	}
 	return collapseQuiet(rows);

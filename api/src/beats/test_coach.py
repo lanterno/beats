@@ -2059,6 +2059,42 @@ class TestToolsDispatch:
         assert "Acme needs attention" in result
         assert "your contract still expects 32.0h of it this week" in result
 
+    async def test_get_patterns_survives_one_failing_contract_read(self, monkeypatch):
+        """AHM-85. A raise from one day job's week expectation failed
+        detect_patterns whole, and the coach read "Pattern detection
+        failed". Now the other job's card quotes its contract's 32 h and the
+        failing one its term's plain 40 h."""
+        from beats.domain.intelligence import patterns as patterns_module
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return CONTRACT_NOW.astimezone(tz) if tz else CONTRACT_NOW.replace(tzinfo=None)
+
+        class _FailsForGlobex:
+            async def current_weeks(self, projects, tz, as_of):
+                return {}
+
+            async def expected_for_week(self, project, week_of):
+                if project.id == "globex":
+                    raise RuntimeError("mongo went away")
+                return 32.0
+
+        monkeypatch.setattr(patterns_module, "datetime", _At)
+        acme = TestBuildDayContext._job()
+        globex = acme.model_copy(update={"id": "globex", "name": "Globex"})
+        repos = _fake_coach_repos(projects=[acme, globex], contracts=_FailsForGlobex())
+
+        result = await tools_module.execute_tool(
+            "user-1", "get_patterns", {}, repos=repos, projects=[acme, globex], tz=ZURICH
+        )
+
+        assert "Pattern detection failed" not in result
+        assert "Acme needs attention" in result
+        assert "your contract still expects 32.0h of it this week" in result
+        assert "Globex needs attention" in result
+        assert "your contract still expects 40.0h of it this week" in result
+
     # -- search_beats --
 
     async def test_search_beats_matches_note_text(self):
@@ -3333,6 +3369,45 @@ class TestBuildDayContext:
         assert "### Calendar today" not in out
         # The rest of the day context still renders
         assert "## Today: 2026-04-01" in out
+
+    async def test_an_unreadable_event_time_skips_that_event_alone(self, monkeypatch):
+        """AHM-85. A dateTime fromisoformat refuses lost the whole calendar
+        block. Now that event is skipped, and the five that print are the
+        first five readable ones, so the bad one takes no good one's place."""
+        from beats.domain import calendar as calendar_module
+
+        db = Database.get_db()
+        await db.calendar_integrations.insert_one(
+            {
+                "user_id": "user-1",
+                "provider": "google",
+                "access_token": "ya29",
+                "refresh_token": "rt",
+                "enabled": True,
+                "calendar_ids": ["primary"],
+            }
+        )
+
+        def event(summary, hour):
+            return {
+                "summary": summary,
+                "start": f"2026-04-01T{hour:02}:00:00Z",
+                "end": f"2026-04-01T{hour:02}:30:00Z",
+                "all_day": False,
+            }
+
+        async def fake_fetch_events(self, start, end):
+            garbled = {**event("Garbled", 8), "start": "2026-04-01Tnine o'clock"}
+            return [garbled, *(event(f"Meeting {n}", 9 + n) for n in range(5))]
+
+        monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
+
+        repos = _fake_coach_repos()
+        out = await context_module.build_day_context("user-1", repos, target_date=date(2026, 4, 1))
+
+        assert "Garbled" not in out
+        for n in range(5):
+            assert f"  {9 + n:02}:00–{9 + n:02}:30 Meeting {n}" in out
 
     # The contract section. The clock is the contract service's (CONTRACT_NOW,
     # Thursday 28 May in Zürich), and every positive test passes that day as
