@@ -250,7 +250,10 @@ export function ClientPanel({
 
 			{billing.lines.length === 0 && billing.entries.length === 0 ? (
 				<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
-					Nothing logged for {billing.name} in {monthName}.
+					{/* A running timer is left out of the month until it stops. */}
+					{billing.running
+						? `Nothing finished for ${billing.name} in ${monthName} yet: a timer is running, and counts once stopped.`
+						: `Nothing logged for ${billing.name} in ${monthName}.`}
 				</p>
 			) : (
 				<>
