@@ -321,6 +321,22 @@ describe("HolidaysDialog", () => {
 		).not.toHaveAccessibleDescription();
 	});
 
+	it("drops the copy's line once a copied day is removed, there and on coming back", async () => {
+		renderDialog({ companyHolidays: [{ date: "2025-12-24", name: "Christmas Eve" }] });
+
+		await userEvent.click(
+			within(dialog()).getByRole("button", { name: "Copy last year's company days" }),
+		);
+		await userEvent.click(
+			within(dialog()).getByRole("button", { name: "Remove company holiday 1" }),
+		);
+
+		expect(within(dialog()).getByRole("status")).toBeEmptyDOMElement();
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Previous year" }));
+		await userEvent.click(within(dialog()).getByRole("button", { name: "Next year" }));
+		expect(within(dialog()).getByRole("status")).toBeEmptyDOMElement();
+	});
+
 	it("offers the copy only on a year whose year before has a company day", async () => {
 		renderDialog({ companyHolidays: [{ date: "2026-12-24", name: "Christmas Eve" }] });
 		const copy = { name: "Copy last year's company days" };
