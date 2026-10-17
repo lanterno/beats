@@ -365,6 +365,10 @@ match shows the figures and no sentence — never a guessed one. The code is
   no line beats a wrong one. Past two days off it counts them by kind
   ("3 days vacation 20.2 h − 2 holidays 13.4 h"), a kind with one day
   keeping its name, so a week of Christmas stays one line.
+- **No day after `ended_on` is a day off.** `/contract/week` still names a
+  holiday or an absence there, but the contract owed nothing that day to
+  take off, so neither the sentence's "Friday is off" nor `nominalLine`
+  names it, as the coach's `_shortened` sends none (`within_contract`).
 - **The ledger's +/− (`weekDelta`) is the API's `balance_moved`** on a
   week with a close, adjustments left out (they are rows of their own).
   On a week without one it falls back to worked − expected, else worked −
