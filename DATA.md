@@ -51,7 +51,11 @@ No passwords are stored — Beats does not have a password login path.
   `user_id`, `project_id`, `date`, `kind` (`delta`, `reset`, `cap`), `hours` (signed for a
   delta, the target for a reset or a cap), `note`. Unique on `(user_id, project_id, date)`,
   so a second adjustment on a day replaces the first. Deleted with the contract.
-- **Beats (sessions)**: start, end, project id, source (manual / daemon / editor), tags, notes
+- **Beats (sessions)**: start, end, project id, source (manual / daemon / editor), tags, notes.
+  The tags are derived from the daemon's flow windows when a session is logged, stopped
+  or its times are edited; an edit over no windows keeps the tags it had. The note comes
+  only from an import. An edit writes the project, start and end it carries and the tags, a
+  stop the end and the tags, and neither touches the note or anything else stored.
 - **Timer state**: the currently-running beat per user
 - **Plans**: weekly plans — a per-project hour target for a given week
 - **Webhooks**: target URLs and which timer events they subscribe to. Deliveries
