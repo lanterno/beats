@@ -165,3 +165,10 @@ class ContractWeeksReader(Protocol):
     async def current_weeks(
         self, projects: Iterable[Project], tz: ZoneInfo, as_of: date
     ) -> dict[str, ContractWeek]: ...
+
+
+class CoachContractReader(ContractWeeksReader, WeekExpectationReader, Protocol):
+    """Both of what the coach reads of a contract: the current weeks for the
+    day context, and each week's adjusted expectation for the pattern tool,
+    whose pacing and stale-project cards quote it as the Inbox's do.
+    `ContractService` is both."""

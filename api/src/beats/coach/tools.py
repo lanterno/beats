@@ -107,9 +107,13 @@ class _ToolContext:
         self.project_map = {p.id: p.name for p in projects}
 
     def _build_intel(self):
+        # With the contract reader, as the Inbox's service is built: the
+        # pacing and stale-project cards get_patterns returns quote a
+        # governed week's adjusted expectation, not the nominal term.
         return IntelligenceService(
             beat_repo=self.repos.beat,
             project_repo=self.repos.project,
+            contracts=self.repos.contracts,
         )
 
 

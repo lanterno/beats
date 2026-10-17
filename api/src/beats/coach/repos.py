@@ -11,8 +11,8 @@ from dataclasses import dataclass
 
 from beats.domain.models import ContractTerm, ScheduleType
 from beats.domain.ports import (
+    CoachContractReader,
     CompletedBeatReader,
-    ContractWeeksReader,
     FlowWindowReader,
     ProjectLister,
 )
@@ -39,7 +39,8 @@ class CoachRepos:
 
     Each field names only what the coach reads: the project list, completed
     beats (directly, and again through IntelligenceService), flow windows,
-    and each day job's current week against its contract. Typed by
+    and of each day job's contract its current week and, through
+    IntelligenceService, a week's adjusted expectation. Typed by
     protocol rather than by the Mongo classes that satisfy it, so the coach has
     no business knowing where the data lives and the tests' in-memory fakes are
     as valid here as the real thing.
@@ -50,7 +51,7 @@ class CoachRepos:
     project: ProjectLister
     beat: CompletedBeatReader
     flow: FlowWindowReader
-    contracts: ContractWeeksReader
+    contracts: CoachContractReader
 
 
 def fmt_minutes(minutes: float) -> str:

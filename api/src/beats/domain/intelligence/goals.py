@@ -3,10 +3,11 @@
 `Project.effective_goal` is nominal by decision (docs/work-contracts.md,
 "The goal"): on a day job the contract governs it is the term's plain weekly
 hours, before holidays and absences, and the score, the health rail and the
-coach want exactly that. Three readers quote the week's figure — the Inbox's
-planning line, the pacing card and the stale-project card — and there it must
-be what the week actually expects, or the Inbox contradicts the week card
-beside it on a week with a vacation booked. Those three take a map built here:
+coach's goal line want exactly that. Three readers quote the week's figure —
+the Inbox's planning line, the pacing card and the stale-project card, the
+last two in the coach's `get_patterns` too — and there it must be what the
+week actually expects, or the Inbox contradicts the week card beside it on a
+week with a vacation booked. Those three take a map built here:
 for a governed week the contract's adjusted expectation, read through
 `WeekExpectationReader`; for every other project the nominal goal, exactly as
 before.
@@ -49,8 +50,7 @@ async def week_goals(
 ) -> dict[str, WeekGoal]:
     """`nominal_week_goals`, with each governed week's hours replaced by what
     the contract expects of it after holidays and absences. Without a reader
-    — the coach builds the service without one and never asks for a
-    remaining figure — the nominal map is the answer."""
+    the nominal map is the answer."""
     projects = list(projects)
     goals = nominal_week_goals(projects, monday)
     if contracts is None:
