@@ -2427,6 +2427,55 @@ class TestHolidayRegionsAPI:
         assert client.get("/api/meta/holiday-regions").status_code == 401
 
 
+class TestRegionHolidaysAPI:
+    """The calendar of a region no contract names yet — what the settings
+    form reads before a region change is saved."""
+
+    @staticmethod
+    def _holidays(client, headers, **params) -> list[dict]:
+        resp = client.get("/api/meta/holidays", params=params, headers=headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def test_a_region_is_listed_by_date_and_name_without_a_contract(self, client, auth_headers):
+        resp = client.get(
+            "/api/meta/holidays",
+            params={"country": "GB", "subdivision": "ENG", "year": 2026},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert "public" in resp.headers["cache-control"]
+        holidays = resp.json()
+        assert {"date": EASTER_MONDAY, "name": "Easter Monday"} in holidays
+        assert all(set(h) == {"date", "name"} and h["date"].startswith("2026-") for h in holidays)
+        assert [h["date"] for h in holidays] == sorted(h["date"] for h in holidays)
+
+    def test_the_subdivision_is_part_of_the_region(self, client, auth_headers):
+        # What the settings form compares: England and Scotland disagree on
+        # Easter Monday and on Saint Andrew's Day.
+        england = self._holidays(client, auth_headers, country="GB", subdivision="ENG", year=2026)
+        scotland = self._holidays(client, auth_headers, country="GB", subdivision="SCT", year=2026)
+        assert EASTER_MONDAY in {h["date"] for h in england}
+        assert EASTER_MONDAY not in {h["date"] for h in scotland}
+        assert "2026-11-30" in {h["date"] for h in scotland}
+        assert "2026-11-30" not in {h["date"] for h in england}
+
+    @pytest.mark.parametrize(
+        "params", [{"country": "XX"}, {"country": "GB", "subdivision": "XX"}], ids=str
+    )
+    def test_an_unknown_region_is_400_with_code(self, client, auth_headers, params):
+        resp = client.get(
+            "/api/meta/holidays", params={**params, "year": 2026}, headers=auth_headers
+        )
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["code"] == "UNKNOWN_HOLIDAY_REGION"
+
+    def test_the_year_is_required(self, client, auth_headers):
+        resp = client.get("/api/meta/holidays", params={"country": "GB"}, headers=auth_headers)
+        assert resp.status_code == 422, resp.text
+        assert "year" in resp.json()["fields"][0]["path"]
+
+
 class TestBeatsDirectAPI:
     """Test suite for Beat (time log) management endpoints"""
 
