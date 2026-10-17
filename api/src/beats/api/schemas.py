@@ -384,6 +384,9 @@ class ImportCounts(BaseModel):
     beats: int
     absences: int
     balance_adjustments: int
+    clients: int
+    project_billing: int
+    billable_overrides: int
 
 
 class ImportSkip(BaseModel):

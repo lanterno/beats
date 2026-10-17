@@ -15,7 +15,8 @@ time is not gated, since no figure existed, and neither is an override —
 editing a past entry is itself the consent.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import date, datetime
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
@@ -34,7 +35,9 @@ from beats.domain.exceptions import (
     ClientHasProjects,
     CurrencyInUse,
     CurrencyMismatch,
+    DomainException,
     NotFreelance,
+    ProjectHasBilling,
     ProjectNotBilled,
     RetroactiveChange,
 )
@@ -43,6 +46,7 @@ from beats.domain.models import (
     BillingTerm,
     Client,
     ClientFields,
+    Project,
     ProjectBilling,
     ProjectKind,
 )
@@ -69,6 +73,38 @@ class BilledProject(NamedTuple):
 
 def _priced(billings: Iterable[ProjectBilling]) -> bool:
     return any(term.rate_minor is not None for billing in billings for term in billing.terms)
+
+
+def _locked(client: Client, billings: Iterable[ProjectBilling]) -> bool:
+    """Whether something is priced in `client`'s currency, among `billings`."""
+    return bool(client.rates) or _priced(
+        billing for billing in billings if billing.client_id == client.id
+    )
+
+
+def _check_move(
+    previous: Client, client: Client, terms: Iterable[BillingTerm], month_start: date
+) -> None:
+    """CURRENCY_MISMATCH for a project's billing moved from `previous` to
+    `client` in another currency, while the terms it would have there carry
+    a rate of their own, or a billable term dated before `month_start`."""
+    if previous.currency != client.currency and any(
+        term.rate_minor is not None or (term.billable and term.effective_from < month_start)
+        for term in terms
+    ):
+        raise CurrencyMismatch()
+
+
+@contextmanager
+def _naming(record: str) -> Iterator[None]:
+    """A refusal raised inside, its detail prefixed with the backup record it
+    is about (`project_billing.0: …`), as a 422 names a field."""
+    try:
+        yield
+    except DomainException as exc:
+        exc.message = f"{record}: {exc.message}"
+        exc.args = (exc.message,)
+        raise
 
 
 class BillingService:
@@ -107,14 +143,7 @@ class BillingService:
         """The active clients, or with `archived` the archived ones, by name."""
         clients = await self.clients.list(archived=archived)
         billings = await self.billings.list_all()
-        records = [
-            ClientRecord(
-                client,
-                bool(client.rates)
-                or _priced(billing for billing in billings if billing.client_id == client.id),
-            )
-            for client in clients
-        ]
+        records = [ClientRecord(client, _locked(client, billings)) for client in clients]
         return sorted(records, key=lambda r: (r.client.name.casefold(), r.client.id or ""))
 
     async def get_client(self, client_id: str) -> ClientRecord:
@@ -227,12 +256,7 @@ class BillingService:
             changes = [past_change(stored.terms, terms, month_start)]
             if stored.client_id != client_id:
                 previous = await self.clients.get_by_id(stored.client_id)
-                if previous.currency != client.currency and any(
-                    term.rate_minor is not None
-                    or (term.billable and term.effective_from < month_start)
-                    for term in terms
-                ):
-                    raise CurrencyMismatch()
+                _check_move(previous, client, terms, month_start)
                 changes.append(link_change([*stored.terms, *terms], month_start))
             self._gate(min((day for day in changes if day is not None), default=None), rewrite_past)
         billing = await self.billings.upsert(
@@ -330,6 +354,82 @@ class BillingService:
     # ------------------------------------------------------------------ #
     # Restore, for import: every rule was checked before the first write
     # ------------------------------------------------------------------ #
+
+    async def check_restore(
+        self,
+        projects: Sequence[Project],
+        clients: Sequence[Client],
+        billings: Sequence[ProjectBilling],
+        tz: ZoneInfo,
+    ) -> None:
+        """The rules the client and billing writes apply, run over what a
+        backup would leave — its records over the account's — before any of
+        it is written, so a file one of them refuses writes nothing. The
+        first refusal is raised as its route raises it, its detail naming
+        the record (`project_billing.0: …`).
+
+        - A client's currency is one the table knows, when the client is new
+          or its currency changes; as on `update_client`, a stored one is not
+          checked again. It cannot change once something in the account is
+          priced in it (CURRENCY_IN_USE).
+        - A project the file moves away from freelance while the account
+          bills it, and the file does not bill it anew, is
+          PROJECT_HAS_BILLING, as `restore_project` would answer it.
+        - Billing is on a project that is freelance as the file leaves it
+          (NOT_FREELANCE), and billing the file moves to a client in another
+          currency is held to `set_project_billing`'s rule (CURRENCY_MISMATCH).
+
+        That each billing's project and client is in the file or the account
+        is the import's to check first. The retroactive gate is not applied:
+        a restore puts back what was.
+        """
+        stored_clients = {client.id: client for client in await self.clients.list_all()}
+        stored_billings = {
+            billing.project_id: billing for billing in await self.billings.list_all()
+        }
+        kinds = {
+            project.id: project.kind
+            for project in [
+                *await self.projects.list(archived=False),
+                *await self.projects.list(archived=True),
+                *projects,
+            ]
+        }
+        merged = {**stored_clients, **{client.id: client for client in clients}}
+        billed = {billing.project_id for billing in billings}
+        month_start = self._month_start(tz)
+
+        for i, client in enumerate(clients):
+            with _naming(f"clients.{i}"):
+                stored = stored_clients.get(client.id)
+                if stored is None or client.currency != stored.currency:
+                    check_currency(client.currency)
+                if (
+                    stored is not None
+                    and client.currency != stored.currency
+                    and _locked(stored, stored_billings.values())
+                ):
+                    raise CurrencyInUse()
+
+        for i, project in enumerate(projects):
+            with _naming(f"projects.{i}"):
+                if (
+                    project.kind is not ProjectKind.FREELANCE
+                    and project.id in stored_billings
+                    and project.id not in billed
+                ):
+                    raise ProjectHasBilling()
+
+        for i, billing in enumerate(billings):
+            with _naming(f"project_billing.{i}"):
+                if kinds.get(billing.project_id) is not ProjectKind.FREELANCE:
+                    raise NotFreelance()
+                before = stored_billings.get(billing.project_id)
+                if before is not None and before.client_id != billing.client_id:
+                    previous = stored_clients.get(before.client_id)
+                    moved_to = merged.get(billing.client_id)
+                    if previous is not None and moved_to is not None:
+                        _check_move(previous, moved_to, billing.terms, month_start)
 
     async def restore_client(self, client: Client) -> None:
         """Write a client read from a backup, keeping its id and its archive
