@@ -10,7 +10,7 @@ The coach is mounted under `/api/coach/*`; this directory is the implementation 
 coach/
 ├── prompts.py          COACH_PERSONA + per-purpose prompt templates
 ├── repos.py            CoachRepos dataclass + collection-name constants + fmt_minutes
-│                        (`contracts` is a ContractService, behind ContractWeeksReader)
+│                        (`contracts` is a ContractService, behind CoachContractReader)
 ├── gateway.py          THE single entry point for client.messages.* — caching,
 │                        cost math, retries, budget gate
 ├── usage.py            UsageTracker — records every LLM call, enforces the

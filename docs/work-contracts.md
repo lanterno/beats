@@ -364,8 +364,8 @@ last term stays the goal, so no personal goal reappears that the form
 cannot show; archiving takes a finished job out of the readers.
 
 **The goal is nominal; a figure beside the week is adjusted.** The
-score, the health rail and the coach want what the week owes by
-contract, before holidays and absences. But the Inbox's planning line,
+score, the health rail and the coach's goal line want what the week owes
+by contract, before holidays and absences. But the Inbox's planning line,
 the pacing card and the stale-project card quote a figure on the same
 screen as the week, and "You need 32.0h more" beside a ring against
 25.6 was the one contradiction the user saw. Those three read the
@@ -375,7 +375,9 @@ A governed line reads "You need 25.6h more this week under your
 contract" — a contract is not "hit". The coach gets both: the nominal
 goal in its cached profile, and beside today, in the day context, the
 adjusted week, what is left of it, the balance and its by-Sunday
-projection (`coach/contract_section.py`).
+projection (`coach/contract_section.py`). Its `get_patterns` tool builds
+the service with the same reader, so its pacing and stale-project cards
+quote the Inbox's figure.
 
 ### Vacation
 
