@@ -118,10 +118,20 @@ def contract_calendar(
     return sorted(found, key=lambda h: (h.date, h.given))
 
 
-def contract_holidays(contract: Contract, start: date, end: date) -> dict[date, str]:
+def contract_holidays(
+    contract: Contract, start: date, end: date, *, company_name: str | None = None
+) -> dict[date, str]:
     """The days within [start, end] the contract treats as holidays, by name —
-    the set every week figure is computed from."""
-    return {h.date: h.name for h in contract_calendar(contract, start, end) if h.given}
+    the set every week figure is computed from. With `company_name`, every
+    company day goes by that name rather than the one typed for it: the
+    timesheet, which the employer reads, carries no text the user typed."""
+
+    def name(holiday: Holiday) -> str:
+        if company_name is not None and holiday.source is HolidaySource.COMPANY:
+            return company_name
+        return holiday.name
+
+    return {h.date: name(h) for h in contract_calendar(contract, start, end) if h.given}
 
 
 @cache

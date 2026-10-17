@@ -1948,6 +1948,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/timesheet.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timesheet Csv
+         * @description A day job's month as a timesheet, for the employer: one row per
+         *     finished day of the month inside the contract — through yesterday in
+         *     `tz`, from the first term, through `ended_on` — with the hours expected,
+         *     worked and their difference, the weekday holiday's name and absence
+         *     type, the balance adjustment and what it moved, and the balance at the
+         *     day's close; a "brought forward" row first and a "total" row last. A
+         *     figure the contract has no expectation for is blank. Worked hours are
+         *     bucketed by the local day each beat started on, in `tz`, and a running
+         *     timer counts up to now, as on `/ledger`. The file is sent as an
+         *     attachment without a filename; the caller names it.
+         *     409 on a project that is not a day job (NOT_A_DAY_JOB), without a
+         *     contract (NO_CONTRACT), or for a month with no finished day inside the
+         *     contract (OUTSIDE_CONTRACT).
+         */
+        get: operations["get_timesheet_csv_api_projects__project_id__timesheet_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/today/": {
         parameters: {
             query?: never;
@@ -7233,6 +7265,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_timesheet_csv_api_projects__project_id__timesheet_csv_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month as CSV, one row per finished day. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Not found */

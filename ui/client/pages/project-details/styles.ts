@@ -22,6 +22,10 @@ export const LINKISH =
 export const NAV_BUTTON =
 	"grid place-items-center w-7 h-7 rounded-full bg-secondary text-foreground hover:bg-sidebar-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
+/** A native select as a pill on a panel, the height of a small `Button` beside it. */
+export const SELECT_PILL =
+	"h-9 min-w-0 max-w-full rounded-full bg-sidebar-accent pl-3 pr-2 text-sm font-bold text-foreground transition-colors hover:bg-[color-mix(in_srgb,var(--color-sidebar-accent),var(--color-foreground)_8%)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
 /** `.tint` — a small pill for a day off, by why. */
 export const TINT: Record<LedgerNoteKind, string> = {
 	vacation: "bg-tint-vacation text-tint-vacation-ink",

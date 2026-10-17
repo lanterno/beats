@@ -25,7 +25,7 @@ import {
 	RegionListSchema,
 	VacationYearSchema,
 } from "@/shared/api";
-import { browserTimeZone } from "@/shared/lib";
+import { browserTimeZone, downloadFile } from "@/shared/lib";
 import type {
 	AdjustmentKind,
 	ContractWeek,
@@ -227,6 +227,22 @@ export async function fetchVacationYear(projectId: string, year: number): Promis
 	const params = new URLSearchParams({ year: String(year), tz: browserTimeZone() });
 	const data = await get<unknown>(`/api/projects/${projectId}/vacation?${params.toString()}`);
 	return toVacationYear(parseApiResponse(VacationYearSchema, data));
+}
+
+/**
+ * Download a day job's month ('YYYY-MM') as its CSV timesheet, saved as
+ * `filename` — the server names no file. The days, and the yesterday a
+ * month in progress stops at, are the browser's timezone's. A refusal
+ * throws the API's error: 409 OUTSIDE_CONTRACT for a month with no finished
+ * day in the contract, NOT_A_DAY_JOB, NO_CONTRACT.
+ */
+export function downloadTimesheet(
+	projectId: string,
+	month: string,
+	filename: string,
+): Promise<void> {
+	const params = new URLSearchParams({ month, tz: browserTimeZone() });
+	return downloadFile(`/api/projects/${projectId}/timesheet.csv?${params.toString()}`, filename);
 }
 
 /** Every country the holiday calendar knows, with its subdivisions, for the region picker. */
