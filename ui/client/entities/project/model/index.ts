@@ -3,6 +3,7 @@ export { assignColor, PROJECT_COLORS } from "./colors";
 // Contract arithmetic + labels
 export {
 	type BalanceTone,
+	balanceIsFinal,
 	balanceTone,
 	contractGovernsWeek,
 	describeBalance,

@@ -31,13 +31,14 @@ a contract that ended before this week. "This week" and "today" are the
 request timezone's, which every caller passes, as is every other day and
 week the coach reads.
 
-Four rules here are the SPA's too, and a change to any is made in both:
-`describe_balance` is `describeBalance` (ui/client/entities/project/model/
-contract.ts), `_by_sunday` is `projection()` and `_is_first_week` is
-`isFirstWeek` (…/model/standing.ts), and `_hours` is `hours1`
-(…/model/weekDates.ts). The label's percentage is a fifth, kept beside
-`fmt_contract_goal` in repos.py: `fmt_percent` is `toPercent`
-(…/model/contract.ts).
+Five rules here are the SPA's too, and a change to any is made in both:
+`describe_balance` is `describeBalance` and the final balance's
+`ended_on < today` in `_project_lines` is `balanceIsFinal`
+(ui/client/entities/project/model/contract.ts), `_by_sunday` is
+`projection()` and `_is_first_week` is `isFirstWeek` (…/model/standing.ts),
+and `_hours` is `hours1` (…/model/weekDates.ts). The label's percentage is
+a sixth, kept beside `fmt_contract_goal` in repos.py: `fmt_percent` is
+`toPercent` (…/model/contract.ts).
 
 Another week can still reach the prompt from outside this module: the
 user context's rated briefs (feedback.py) each carry their opening
@@ -141,8 +142,9 @@ def _is_first_week(contract: Contract, today: date) -> bool:
     """The contract's first seven days, counted from its first term, as the
     page's `isFirstWeek` counts them: the balance is charged a day at a time
     and has not had a full week to settle, so the page shows "First week
-    under the contract." in place of the by-Sunday projection. False once
-    the contract has ended, as on the page."""
+    under the contract." in place of the by-Sunday projection. False from
+    the contract's last day on, as on the page: a full week will never come
+    in, and that day's projection is where the contract closes."""
     if contract.ended_on is not None and contract.ended_on <= today:
         return False
     return contract.starts_on <= today < contract.starts_on + timedelta(days=7)
@@ -177,9 +179,9 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
     # Ended earlier this week: nothing worked from here on counts, so the
     # balance is final and the week's figures, today's expectation and the
     # projection are left out, as the project page leaves them out. On the
-    # last day itself the page already says "Final balance", but today's
-    # hours still count and today's expectation is still charged tomorrow,
-    # so here that day stays live and its projection is the true close.
+    # last day itself today's hours still count and today's expectation is
+    # still charged tomorrow, so that day stays live, here as on the page,
+    # and its projection is where the contract closes.
     if contract.ended_on is not None and contract.ended_on < today:
         if week.balance is None or week.balance_as_of != today:
             return []

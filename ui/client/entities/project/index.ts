@@ -65,6 +65,7 @@ export type {
 } from "./model";
 export {
 	assignColor,
+	balanceIsFinal,
 	balanceTone,
 	contractFieldErrors,
 	contractFrameDefaults,

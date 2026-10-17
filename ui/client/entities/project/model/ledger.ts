@@ -12,7 +12,14 @@
  */
 
 import { addIsoDays, mondayOfIso } from "@/shared/lib";
-import { formatHours, formatSignedHours, sortTerms, termHoursPerWeek, toPercent } from "./contract";
+import {
+	balanceIsFinal,
+	formatHours,
+	formatSignedHours,
+	sortTerms,
+	termHoursPerWeek,
+	toPercent,
+} from "./contract";
 import type {
 	Contract,
 	ContractTerm,
@@ -205,7 +212,13 @@ function contractRules(
 		// The close on the end day, before a settlement after it, which is its
 		// own row; an API that predates adjustments has no settlement to leave out.
 		const final = ledger.endedBalance ?? ledger.totals?.balance ?? endWeek?.balanceEnd ?? null;
-		const finalText = final !== null ? ` · final balance ${formatSignedHours(final)}` : "";
+		// On the last day itself the balance is still live (the standing
+		// carries it), so the rule says the contract ended, as the header and
+		// the register do that day, and gives no final figure.
+		const finalText =
+			final !== null && balanceIsFinal(contract, todayIso)
+				? ` · final balance ${formatSignedHours(final)}`
+				: "";
 		rules.push({
 			type: "rule",
 			rule: "ended",
