@@ -408,7 +408,7 @@ match shows the figures and no sentence — never a guessed one. The code is
   and the line is the balance's proof, not a tally.
 - **The ended rule's final balance is `ended_balance`**, the close on the
   end day, so a settlement after the end appears as its own row and not
-  inside the "final" figure; an API without it falls back to the totals.
+  inside the "final" figure; while it is null the rule gives none.
 
 ---
 
@@ -454,11 +454,11 @@ null.
 `balance_as_of` (date), `balance_opening`, `balance_worked`,
 `balance_expected_through`, `balance_adjusted` — null exactly when
 `balance` is null, and required-nullable like it, so the generated type
-does not call them optional. The SPA parses the three new figures
-(`adjustments`, `adjusted`, `balance_adjusted`) and `ended_balance` as
-optional, so it reads an API that predates them: such an API keeps no
-adjustments, and `[]` and 0 are its true figures. `balance_moved` is
-optional to the SPA too, which reads the move off the closes without it.
+does not call them optional. The SPA parses every one of them, and
+`adjustments`, `adjusted` and `ended_balance` on the ledger, as required:
+a response without one fails to parse rather than reading as no
+adjustments. `balance_moved` is optional to the SPA, which reads the move
+off the closes without it.
 
 What the shape settles:
 
