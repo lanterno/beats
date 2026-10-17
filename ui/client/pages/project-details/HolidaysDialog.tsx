@@ -129,7 +129,9 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 
 	const region = (calendar ?? []).filter((h) => h.source === "region");
 	const regionDates = new Set(region.map((h) => h.date));
-	const givenRegionDates = new Set(region.filter((h) => h.given).map((h) => h.date));
+	// Given as the ticks stand, not as stored: the calendar's `given` is the
+	// saved list, and an unsaved tick is what Save sends.
+	const givenRegionDates = new Set(region.filter((h) => !notGiven.has(h.date)).map((h) => h.date));
 	// Only a loaded year can say a date is not the region's: until then, or
 	// when the read fails, every date not given would look left over.
 	const leftovers = calendar
