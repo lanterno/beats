@@ -4075,7 +4075,7 @@ class TestProjectServiceTimeAggregations:
 
     async def test_monthly_totals_empty_returns_zero(self):
         svc = _project_service(projects=[_project("p1", "Alpha")])
-        result = await svc.get_monthly_totals("p1")
+        result = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
         assert result == {
             "durations_per_month": {},
             "total_minutes": 0,
@@ -4092,7 +4092,7 @@ class TestProjectServiceTimeAggregations:
             self._completed("b3", "p1", date(2026, 5, 1), minutes=120),
         ]
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
-        result = await svc.get_monthly_totals("p1")
+        result = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
         assert result["durations_per_month"] == {"2026-04": 1.5, "2026-05": 2.0}
         assert result["total_minutes"] == 90 + 120
 
@@ -4103,7 +4103,7 @@ class TestProjectServiceTimeAggregations:
         s = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
         runaway = Beat(id="b-runaway", project_id="p1", start=s, end=s + timedelta(hours=30))
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=[runaway])
-        result = await svc.get_monthly_totals("p1")
+        result = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
         assert len(result["warnings"]) == 1
         assert "b-runaway" in result["warnings"][0]
         assert "24 hours" in result["warnings"][0]
@@ -4217,8 +4217,8 @@ class TestProjectServiceBeatsBatchHelpers:
             self._running("b4", "p1", date.today()),
         ]
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
-        via_public = await svc.get_monthly_totals("p1")
-        via_helper = ProjectService._monthly_totals_from_beats(beats)
+        via_public = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
+        via_helper = ProjectService._monthly_totals_from_beats(beats, ZoneInfo("UTC"))
         assert via_helper == via_public
 
     def test_this_week_from_beats_minutes_and_goal(self):

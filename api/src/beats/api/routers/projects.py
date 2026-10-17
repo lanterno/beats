@@ -65,7 +65,8 @@ async def list_projects(
         default=None,
         description=(
             "Comma-separated aggregations to populate per project. Supported: "
-            "'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal "
+            "'totals' (total_minutes, a running timer counted up to now), "
+            "'this_week' (weekly_minutes + effective_goal "
             "trio, and on a day job the contract's expected / worked / remaining / "
             "balance), "
             "'last_tracked' (last_tracked_at). Omitted ⇒ slim response."
@@ -120,7 +121,7 @@ async def list_projects(
             return item
         beats = beats_by_pid.get(p.id, [])
         if want_totals:
-            totals = service._monthly_totals_from_beats(beats)
+            totals = service._monthly_totals_from_beats(beats, tz)
             item["total_minutes"] = totals.get("total_minutes", 0)
         if want_week:
             item.update(service._this_week_from_beats(beats, p))
@@ -509,10 +510,12 @@ async def today_time_for_project(project_id: str, service: ProjectServiceDep) ->
 
 @router.get("/{project_id}/total/")
 async def total_work_time_per_month_on_project(
-    project_id: str, service: ProjectServiceDep
+    project_id: str, service: ProjectServiceDep, tz: TimezoneDep
 ) -> MonthlyTotalsResponse:
-    """Get total time per month for a project."""
-    result = await service.get_monthly_totals(project_id)
+    """A project's hours per month, keyed 'YYYY-MM', and the minutes of them
+    all. Hours are bucketed by the local month of the day each beat started
+    on, in `tz`, and a running timer counts up to now, as on `/ledger`."""
+    result = await service.get_monthly_totals(project_id, tz)
     return MonthlyTotalsResponse(**result)
 
 
