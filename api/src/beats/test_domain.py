@@ -3365,10 +3365,21 @@ class TestTimerServiceStatus:
         assert status == {"isBeating": False}
 
 
+class _NoBilling:
+    """Billing as the services see it, with nothing billed: no project has
+    billing, and no beat an override."""
+
+    async def exists(self, project_id: str) -> bool:
+        return False
+
+    async def delete(self, beat_id: str) -> bool:
+        return False
+
+
 def _beat_service(beats: list[Beat] | None = None):
     from beats.domain.services import BeatService
 
-    return BeatService(beat_repo=_FakeBeatRepoForServices(beats))
+    return BeatService(beat_repo=_FakeBeatRepoForServices(beats), overrides=_NoBilling())
 
 
 class TestBeatServiceCrud:
@@ -3533,6 +3544,7 @@ def _project_service(
         project_repo=_FakeProjectRepoForServices(projects),
         beat_repo=_FakeBeatRepoForServices(beats),
         adjustments=adjustments or _FakeAdjustmentRepo(),
+        billing=_NoBilling(),
     )
 
 
