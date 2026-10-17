@@ -300,8 +300,15 @@ yet — start the timer in the sidebar."
   (`copyCompanyDays` in `entities/project/model`) and says under it what it
   left out (Decision 12), until a company day is edited or removed. Both
   this and a row's note read a public holiday as the ticks stand, not as
-  saved. A region change in the settings form clears neither list. The
-  constants' "2 company days · 1 not given" are counted off
+  saved. A region change in the settings form clears neither list unless
+  asked: when the new region has a holiday on a date marked not given that
+  the stored region had none on, the form lists the date under the picker
+  with the holiday's name, since the mark would make it a working day, and
+  offers to clear the mark in the same save. Save waits for the two
+  calendars, and a failed read says the marks went unchecked
+  (docs/work-contracts.md, "The UI's rules"). A mark the new region has no
+  holiday on is left for "No longer a holiday here". The constants'
+  "2 company days · 1 not given" are counted off
   `/holidays?include=not_given`, not the raw lists, so a leftover date is
   never counted, nor a date not given that a company day covers.
 - **The booking dialog records with `POST …/absences`**, the API's upsert,

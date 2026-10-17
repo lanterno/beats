@@ -3347,6 +3347,26 @@
         "title": "Region",
         "type": "object"
       },
+      "RegionHoliday": {
+        "description": "One public holiday of a region, as the region gives it: no contract's\nadditions or removals.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "name"
+        ],
+        "title": "RegionHoliday",
+        "type": "object"
+      },
       "RegisterStartRequest": {
         "properties": {
           "display_name": {
@@ -7462,6 +7482,82 @@
           }
         },
         "summary": "List Holiday Regions",
+        "tags": [
+          "Meta"
+        ]
+      }
+    },
+    "/api/meta/holidays": {
+      "get": {
+        "description": "One region's public holidays for a year, by date and name, as the\nregion gives them \u2014 no contract's company days or days not given. For\nthe settings form, which must see the calendar of a region it has not\nsaved yet. 400 `UNKNOWN_HOLIDAY_REGION` for a country or subdivision the\ncalendar does not know. Cacheable for a day, like the region list: it\nchanges only with a `holidays` release.",
+        "operationId": "list_region_holidays_api_meta_holidays_get",
+        "parameters": [
+          {
+            "description": "ISO 3166-1 alpha-2, as the region list gives it.",
+            "in": "query",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "description": "ISO 3166-1 alpha-2, as the region list gives it.",
+              "title": "Country",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subdivision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subdivision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegionHoliday"
+                  },
+                  "title": "Response List Region Holidays Api Meta Holidays Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Region Holidays",
         "tags": [
           "Meta"
         ]

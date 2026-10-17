@@ -73,18 +73,29 @@ goal. Git history has the plans.
     is kept; a company day on a removed date wins, under its own name.
     The calendar's `include=not_given` still lists that region day, as
     not given, beside the company day: an editor that could see only one
-    of the two marks could not clear the other.
+    of the two marks could not clear the other. Because the removals are
+    bare dates, a region change can bring one into force: a date that
+    matched no holiday of the old region and matches one of the new
+    becomes a working day there. The API keeps both lists through a
+    region change, as it keeps them through any other write; the settings
+    form names each such date before saving, and clears it only when
+    asked (see "The UI's rules"). The inverse — a removal that matched a
+    holiday of the old region and matches none of the new — does nothing
+    and is not mentioned at the change: it is left for the Holidays
+    dialog's "No longer a holiday here", where it can be removed, and the
+    same warning names it again should a later region bring it back.
     What stands in for a rule is a copy: the Holidays dialog copies the
     year before's company days into the year it shows, each on the same
     month and day, as rows the user checks and saves. It leaves out a
     date that already has a company day or is a public holiday the
     employer gives as the dialog's ticks stand, saved or not, and says so
     (a public holiday the year's calendar has not brought in yet is
-    copied, and its row then says it changes nothing); a day that lands on a weekend is copied and its row says it
-    changes nothing, since a weekend owes nothing.
-    29 February into a year without one is left out with a note, not
-    moved to the 28th or 1 March: a leap-day policy does not say which
-    neighbour the employer would give, so the user adds it by hand.
+    copied, and its row then says it changes nothing); a day that lands
+    on a weekend is copied and its row says it changes nothing, since a
+    weekend owes nothing. 29 February into a year without one is left
+    out with a note, not moved to the 28th or 1 March: a leap-day policy
+    does not say which neighbour the employer would give, so the user
+    adds it by hand.
 13. **Balance adjustments replace editing the opening balance.** A payout,
     a year-end reset or a cap is a dated record of its own, so the opening
     balance stays what was banked before Beats and the ledger shows when
@@ -621,6 +632,7 @@ region check, and every project write reconciles the adjustments
 | `POST /api/projects/{id}/adjustments?tz=` | a delta, reset or cap (upsert on date, keeps the id, 201); `tz` required |
 | `DELETE /api/projects/{id}/adjustments/{adjustment_id}` | 204, or 404 when it is not on this project |
 | `GET /api/meta/holiday-regions` | `[{code, name, subdivisions: [{code, name}]}]`; `Cache-Control: public, max-age=86400`; behind the normal auth |
+| `GET /api/meta/holidays?country=&subdivision=&year=` | one region's public holidays for a year as `[{date, name}]`, by date, as the region gives them: no contract is read, so it answers for a region no contract names yet. `country` and `year` required (422 naming the one missing); an unknown country or subdivision is 400 `UNKNOWN_HOLIDAY_REGION`; cacheable and session-only like the region list |
 
 - **Omitted is not null on `PUT /api/projects`.** Older clients do not
   send `kind` or `contract`, so the route reads `model_fields_set`: left
@@ -709,8 +721,11 @@ region check, and every project write reconciles the adjustments
   goal's, completed beats only, by UTC date.
 - **Holidays are cached per region and year**: the balance rebuilds
   every year since the contract started on each request, and some
-  regions cost ~10 ms a year. Company days and the dates not given come
-  from the contract the request already read, and cost nothing.
+  regions cost ~10 ms a year. The cache keeps the 4,096 most recently
+  read (some 20 MB at most), because `/api/meta/holidays` takes any
+  region and year from any session and an unbounded one would grow with
+  whatever it is asked. Company days and the dates not given come from
+  the contract the request already read, and cost nothing.
 - **Device tokens** reach every route under `/api/projects`, since
   `DEVICE_ALLOWED_PREFIXES` matches by prefix. That exposes nothing new:
   a device could already `PUT /api/projects`. `/api/meta` is
@@ -731,6 +746,21 @@ region check, and every project write reconciles the adjustments
   contract will replace.
 - **A day job may wait for its contract.** The form's first term sits
   behind "Set up the contract now", so renaming does not demand one.
+- **A region change names the removals it brings into force.** While the
+  settings form holds a region other than the stored one on a contract
+  with `holidays_not_given`, it reads both regions' calendars from
+  `/api/meta/holidays`, for the years those dates fall in, and
+  `revivedNotGiven` lists each date the new region has a holiday on and
+  the old one had none, by the new holiday's name — less a date a company
+  day covers, which stays a day off either way. "Clear the marks" ("the
+  mark" for one) drops those dates in the same save, "Keep the marks"
+  takes that back, and a further region change starts over. Save waits
+  for both calendars, under "Checking … holidays", so no mark comes into
+  force unseen. When one fails, after the client's retries, the form
+  says the marks could not be checked and what saving does to them, and
+  offers "Try again"; Save is let go then, since the SPA ships apart
+  from the API and holding it would block every region change against
+  an API without the route.
 - **Balance wording.** `describeBalance` rounds to the decimal shown
   before judging the sign — −0.04 h reads "even" — and never prints a
   bare signed number: "+4.5 h over", "−2.0 h owed". The API's twin, for

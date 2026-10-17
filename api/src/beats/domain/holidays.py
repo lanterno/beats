@@ -2,7 +2,8 @@
 
 Everything downstream takes holidays as a plain `set[date]`, so the arithmetic
 in `contracts.py` never touches this module and the library is exchangeable
-from one place. What is exposed: the dates in a range for one region, the
+from one place. What is exposed: the dates in a range for one region, a
+region's year as the settings form previews it (`region_holidays`), the
 holidays of one contract (`contract_calendar`, `contract_holidays` — the one
 place the region's calendar meets the employer's own additions and removals),
 the list of regions for a picker, and the check the project service runs on a
@@ -20,7 +21,7 @@ locale, so a container on `C` answered "Fronleichnam" where a laptop on
 
 from datetime import date
 from enum import StrEnum
-from functools import cache
+from functools import cache, lru_cache
 
 import holidays as holidays_lib
 from holidays import registry
@@ -47,6 +48,14 @@ class Holiday(BaseModel):
     name: str
     source: HolidaySource
     given: bool
+
+
+class RegionHoliday(BaseModel):
+    """One public holiday of a region, as the region gives it: no contract's
+    additions or removals."""
+
+    date: date
+    name: str
 
 
 class Subdivision(BaseModel):
@@ -78,6 +87,17 @@ def named_holidays_between(
             if start <= day <= end
         )
     return found
+
+
+def region_holidays(country: str, subdivision: str | None, year: int) -> list[RegionHoliday]:
+    """The region's public holidays in `year`, by date. A region a contract
+    does not name yet has no contract to read them through: the settings form
+    asks for this one before saving a region change, to say which dates the
+    contract marks as not given the new region has a holiday on.
+    Raises `UnknownHolidayRegion` unless `check_region` passes."""
+    check_region(country, subdivision)
+    region = named_holidays_between(country, subdivision, date(year, 1, 1), date(year, 12, 31))
+    return [RegionHoliday(date=day, name=name) for day, name in sorted(region.items())]
 
 
 def contract_calendar(
@@ -134,13 +154,21 @@ def contract_holidays(
     return {h.date: name(h) for h in contract_calendar(contract, start, end) if h.given}
 
 
-@cache
+# The bound is what keeps the cache small: `/api/meta/holidays` takes any
+# region and year from any session, so without one a script could grow the
+# API process until it ran out of memory. A (region, year) is a kilobyte or
+# a few, so the cache stays within some 20 MB, and holds every year since
+# a contract started for hundreds of contracts at once.
+_YEARS_CACHED = 4096
+
+
+@lru_cache(maxsize=_YEARS_CACHED)
 def _year(country: str, subdivision: str | None, year: int) -> dict[date, str]:
-    """One region's calendar for one year, built once per process.
+    """One region's calendar for one year, built once per process while
+    it stays among the `_YEARS_CACHED` most recently read.
 
     The balance reads every year since a contract started on every request,
-    and some regions take ~10 ms a year to build; a mapping per
-    (region, year) is a few hundred bytes, so the cache stays small.
+    and some regions take ~10 ms a year to build.
     """
     try:
         calendar = holidays_lib.country_holidays(

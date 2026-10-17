@@ -78,6 +78,7 @@ export {
 	ProductivityScoreSchema,
 	ProjectHealthListSchema,
 	parseApiResponse,
+	RegionHolidayListSchema,
 	RegionListSchema,
 	RhythmSlotListSchema,
 	ScoreHistorySchema,

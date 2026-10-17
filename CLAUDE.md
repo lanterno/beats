@@ -398,4 +398,4 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials, logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
-| `/api/meta` | Static reference data: holiday regions for the contract picker (cacheable, still behind auth) |
+| `/api/meta` | Static reference data: holiday regions for the contract picker, and one region's holidays for a year (cacheable, still behind auth) |

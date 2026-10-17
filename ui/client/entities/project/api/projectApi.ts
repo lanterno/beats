@@ -22,6 +22,7 @@ import {
 	parseApiResponse,
 	post,
 	put,
+	RegionHolidayListSchema,
 	RegionListSchema,
 	VacationYearSchema,
 } from "@/shared/api";
@@ -32,6 +33,7 @@ import type {
 	Holiday,
 	HolidayRegion,
 	Ledger,
+	RegionHoliday,
 	VacationYear,
 } from "../model";
 import { toContractWeek, toLedger, toVacationYear } from "../model";
@@ -249,6 +251,22 @@ export function downloadTimesheet(
 export async function fetchHolidayRegions(): Promise<HolidayRegion[]> {
 	const data = await get<unknown>("/api/meta/holiday-regions");
 	return parseApiResponse(RegionListSchema, data);
+}
+
+/**
+ * One region's public holidays for a year, as the region gives them — for a
+ * region no contract names yet. `subdivision` "" is the whole country. 400
+ * UNKNOWN_HOLIDAY_REGION for a code the calendar does not know.
+ */
+export async function fetchRegionHolidays(
+	country: string,
+	subdivision: string,
+	year: number,
+): Promise<RegionHoliday[]> {
+	const params = new URLSearchParams({ country, year: String(year) });
+	if (subdivision) params.set("subdivision", subdivision);
+	const data = await get<unknown>(`/api/meta/holidays?${params.toString()}`);
+	return parseApiResponse(RegionHolidayListSchema, data);
 }
 
 export async function updateGoalOverrides(

@@ -239,7 +239,9 @@ function vacationFromForm(frame: ContractFrameValues): VacationEntitlement | und
  * holiday lists, edited only in the Holidays dialog: the existing
  * contract's, or empty ones on create, carried through unchanged. A region
  * change — "No region" included — clears neither: a date not given that the
- * new region does not have simply does nothing. The vacation entitlement is
+ * new region does not have simply does nothing, and the marks a new region
+ * would bring into force are cleared only when the user asks
+ * (`revivedNotGiven`), by the caller, in `kept`. The vacation entitlement is
  * the frame's own: empty days per year leave it out, which the wire sends
  * as null and so clears it.
  */

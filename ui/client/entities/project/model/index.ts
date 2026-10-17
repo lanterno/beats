@@ -56,6 +56,8 @@ export { toApiContract, toContractWeek, toLedger, toProject, toVacationYear } fr
 export { readPickerRecents, recordPickerRecent } from "./pickerRecents";
 // Project pins (user-scoped localStorage + custom-event sync)
 export { usePinnedProjects } from "./pins";
+// A region change: the dates marked not given it would bring into force
+export { notGivenYears, revivedNotGiven } from "./regionChange";
 // Selectors
 export {
 	extractCategories,
@@ -109,6 +111,7 @@ export type {
 	Project,
 	ProjectKind,
 	ProjectWithDuration,
+	RegionHoliday,
 	ScheduleType,
 	VacationEntitlement,
 	VacationYear,

@@ -6,10 +6,11 @@
  * and a kind change says so before save. Archive asks first and then leaves
  * the page; an archived project restores.
  */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project } from "@/entities/project";
+import type { Contract, Project } from "@/entities/project";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 
 const { hooks } = vi.hoisted(() => ({
@@ -32,6 +33,18 @@ vi.mock("@/entities/project", async () => {
 		}),
 	};
 });
+// What a region change reads, at the network: France has Bastille Day, and
+// a contract with no region has no holidays at all.
+vi.mock("@/entities/project/api/projectApi", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/entities/project/api/projectApi")>()),
+	fetchRegionHolidays: vi.fn(async (country: string) => {
+		if (country !== "FR") throw new Error(`no calendar for ${country}`);
+		return [
+			{ date: "2026-07-14", name: "National Day" },
+			{ date: "2026-12-25", name: "Christmas Day" },
+		];
+	}),
+}));
 vi.mock("@/entities/github", () => ({
 	useGitHubStatus: () => ({ data: { connected: false } }),
 }));
@@ -41,6 +54,21 @@ vi.mock("react-router", async () => {
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+const CONTRACT: Contract = {
+	terms: [
+		{ effectiveFrom: "2026-01-05", scheduleType: "full_time", fullTimeHours: 40, percentage: 1 },
+		{
+			effectiveFrom: "2026-04-01",
+			scheduleType: "part_time",
+			fullTimeHours: 40,
+			percentage: 0.8,
+		},
+	],
+	openingBalanceHours: 2,
+	companyHolidays: [],
+	holidaysNotGiven: [],
+};
+
 const DAY_JOB: Project = {
 	id: "p1",
 	name: "Employer",
@@ -49,20 +77,7 @@ const DAY_JOB: Project = {
 	goalOverrides: [],
 	autostartRepos: [],
 	kind: "day_job",
-	contract: {
-		terms: [
-			{ effectiveFrom: "2026-01-05", scheduleType: "full_time", fullTimeHours: 40, percentage: 1 },
-			{
-				effectiveFrom: "2026-04-01",
-				scheduleType: "part_time",
-				fullTimeHours: 40,
-				percentage: 0.8,
-			},
-		],
-		openingBalanceHours: 2,
-		companyHolidays: [],
-		holidaysNotGiven: [],
-	},
+	contract: CONTRACT,
 };
 
 const KIND_LINE = /Changing the kind deletes the contract/;
@@ -106,6 +121,28 @@ describe("ProjectSettingsDrawer", () => {
 			opening_balance_hours: 2,
 		});
 		expect(body.contract.terms).toHaveLength(2);
+	});
+
+	it("drops the marks a region change would make working days, and only those, when asked", async () => {
+		// Left over from a region with no Bastille Day; the March date matches nothing in France.
+		const marked: Project = {
+			...DAY_JOB,
+			contract: { ...CONTRACT, holidaysNotGiven: ["2026-03-04", "2026-07-14"] },
+		};
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<ProjectSettingsDrawer project={marked} open onClose={vi.fn()} />
+			</QueryClientProvider>,
+		);
+
+		await userEvent.selectOptions(screen.getByLabelText("Holiday region"), "FR");
+		expect(await screen.findByText(/National Day/)).toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: "Clear the mark" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		const body = hooks.update.mock.calls[0][0];
+		expect(body.contract.holiday_country).toBe("FR");
+		expect(body.contract.holidays_not_given).toEqual(["2026-03-04"]);
 	});
 
 	it("saves a day job that has no contract yet without demanding one", async () => {

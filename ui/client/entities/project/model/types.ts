@@ -251,6 +251,12 @@ export interface Holiday {
 	given: boolean;
 }
 
+/** One public holiday of a region, as the region gives it: no contract's changes. */
+export interface RegionHoliday {
+	date: string; // YYYY-MM-DD
+	name: string;
+}
+
 /** One country in the region picker, with the subdivisions that change its calendar. */
 export interface HolidayRegion {
 	code: string;

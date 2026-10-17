@@ -15,9 +15,12 @@
  * (region, opening balance, end date, vacation entitlement) and shows the
  * current term read-only, because a term is changed in the history panel,
  * where "fix this term" and "new term from a date" are two different
- * actions instead of one ambiguous edit. A time-based day job hides the
- * personal weekly goal — the contract is the goal; an objective one keeps
- * it (Decision 8).
+ * actions instead of one ambiguous edit. A region change that would make a
+ * date the contract marks as not given a working day says so under the
+ * picker and offers to clear the mark (RevivedNotGivenNotice); Save waits
+ * for both regions' calendars, or for one to fail, which the notice says. A
+ * time-based day job hides the personal weekly goal — the contract is the
+ * goal; an objective one keeps it (Decision 8).
  *
  * a11y: every field has a real <label htmlFor>; goal-type and kind use
  * icon+text instead of color alone (WCAG 1.4.1); ColorPicker is opened
@@ -65,6 +68,7 @@ import {
 	type ProjectFormErrors,
 	projectFormFieldErrors,
 } from "./projectFormWire";
+import { RevivedNotGivenNotice } from "./RevivedNotGivenNotice";
 import { VacationFields } from "./VacationFields";
 
 // FF.11: rotate the default color through PROJECT_COLORS per ProjectForm
@@ -105,6 +109,12 @@ export interface ProjectFormValues {
 	term: TermFormValues;
 	/** The contract's frame — region, opening balance, end date. Read on a day job. */
 	contract: ContractFrameValues;
+	/**
+	 * Dates the existing contract marks as not given that the save drops: the
+	 * ones a region change would make working days, once the user chose to
+	 * clear them. Every region change empties it.
+	 */
+	clearedNotGiven: string[];
 }
 
 export type ProjectFormAutoFocusField =
@@ -164,6 +174,7 @@ function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues 
 		addContract: initial?.addContract ?? true,
 		term: initial?.term ?? termFormDefaults(),
 		contract: initial?.contract ?? contractFrameDefaults(),
+		clearedNotGiven: initial?.clearedNotGiven ?? [],
 	};
 }
 
@@ -257,6 +268,17 @@ export function ProjectForm({
 	// Whether the form is describing a contract at all: the frame of the one
 	// that exists, or the first term of a new one.
 	const editsContract = isDayJob && (existingContract !== undefined || values.addContract);
+	// A region change on a contract that marks dates as not given: the marks
+	// are bare dates, and the new region may have a holiday on one. Save
+	// waits for the notice's check, so no mark comes into force unseen.
+	const changesMarkedRegion =
+		editsContract &&
+		existingContract !== undefined &&
+		existingContract.holidaysNotGiven.length > 0 &&
+		(values.contract.holidayCountry !== (existingContract.holidayCountry ?? "") ||
+			values.contract.holidaySubdivision !== (existingContract.holidaySubdivision ?? ""));
+	const [regionChecked, setRegionChecked] = useState(false);
+	const holdsSave = changesMarkedRegion && !regionChecked;
 	// The contract is the goal when it owes hours — judged by the term in
 	// force today on an existing contract, or by the one being typed.
 	const contractIsTimeBased = existingContract
@@ -293,6 +315,7 @@ export function ProjectForm({
 
 	const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
+		if (holdsSave) return;
 		const next = validate();
 		setClientErrors(next);
 		if (hasProjectFormErrors(next)) {
@@ -318,6 +341,10 @@ export function ProjectForm({
 		setValues((s) => ({ ...s, contract: { ...s.contract, [k]: v } }));
 
 	const selectedRegion = holidayRegions?.find((r) => r.code === values.contract.holidayCountry);
+	const selectedRegionName = values.contract.holidaySubdivision
+		? (selectedRegion?.subdivisions.find((sd) => sd.code === values.contract.holidaySubdivision)
+				?.name ?? values.contract.holidaySubdivision)
+		: (selectedRegion?.name ?? values.contract.holidayCountry);
 	// Until the list arrives, keep whatever code the contract already has
 	// selectable so a re-render cannot blank it.
 	const countryOptions: HolidayRegion[] =
@@ -552,6 +579,7 @@ export function ProjectForm({
 													holidayCountry: e.target.value,
 													holidaySubdivision: "",
 												},
+												clearedNotGiven: [],
 											}))
 										}
 										autoFocus={autoFocusField === "holidayCountry"}
@@ -586,7 +614,13 @@ export function ProjectForm({
 										<select
 											id="project-form-holiday-subdivision"
 											value={values.contract.holidaySubdivision}
-											onChange={(e) => setFrame("holidaySubdivision", e.target.value)}
+											onChange={(e) =>
+												setValues((s) => ({
+													...s,
+													contract: { ...s.contract, holidaySubdivision: e.target.value },
+													clearedNotGiven: [],
+												}))
+											}
 											aria-invalid={errors.contract.holidaySubdivision ? true : undefined}
 											aria-describedby={
 												errors.contract.holidaySubdivision
@@ -610,6 +644,17 @@ export function ProjectForm({
 									</div>
 								)}
 							</div>
+							{existingContract && changesMarkedRegion && (
+								<RevivedNotGivenNotice
+									contract={existingContract}
+									country={values.contract.holidayCountry}
+									subdivision={values.contract.holidaySubdivision}
+									regionName={selectedRegionName}
+									cleared={values.clearedNotGiven.length > 0}
+									onClear={(dates) => set("clearedNotGiven", dates)}
+									onChecked={setRegionChecked}
+								/>
+							)}
 
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 								<div>
@@ -819,7 +864,7 @@ export function ProjectForm({
 			)}
 
 			<div className="flex gap-2 pt-1">
-				<Button type="submit" disabled={!trimmedName || submitting} className="flex-1">
+				<Button type="submit" disabled={!trimmedName || submitting || holdsSave} className="flex-1">
 					{submitting ? "Saving…" : submitLabel}
 				</Button>
 				{onCancel && (

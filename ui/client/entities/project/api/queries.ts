@@ -2,7 +2,7 @@
  * Project TanStack Query Hooks
  * Data fetching with caching, deduplication, and automatic refetching.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/api";
 import type { ContractWeek, Ledger, ProjectWithDuration, VacationYear } from "../model";
 import { toProject } from "../model";
@@ -15,6 +15,7 @@ import {
 	fetchLedger,
 	fetchProjectHolidays,
 	fetchProjects,
+	fetchRegionHolidays,
 	fetchVacationYear,
 	recordAdjustment,
 	removeAdjustment,
@@ -52,6 +53,9 @@ export const projectKeys = {
 /** The holiday-region list changes only with a release of the API's calendar library. */
 const holidayRegionKeys = {
 	all: ["meta", "holiday-regions"] as const,
+	/** One region's year, as the region gives it; changes as rarely as the list. */
+	holidays: (country: string, subdivision: string, year: number) =>
+		["meta", "holidays", country, subdivision, year] as const,
 };
 
 /** One list item, with the aggregations the list endpoint folded in. */
@@ -382,5 +386,55 @@ export function useHolidayRegions() {
 		// Static for the life of the API process; the route says max-age=86400 too.
 		staleTime: 24 * 60 * 60_000,
 		gcTime: 24 * 60 * 60_000,
+	});
+}
+
+/**
+ * A region's calendar as `useRegionCalendar` reads it: still loading, failed
+ * (after the client's own retries), or in, by date and name.
+ */
+export type RegionCalendar =
+	| { status: "pending" }
+	| { status: "error"; retry: () => void }
+	| { status: "success"; holidays: ReadonlyMap<string, string> };
+
+/**
+ * One region's public holidays over `years`, by date and name, as the
+ * region gives them — the calendar of a region the contract may not name
+ * yet, for the settings form's region change. `country` "" is no region,
+ * which has none. In only once every year is; a failed year fails it.
+ */
+export function useRegionCalendar(
+	country: string,
+	subdivision: string,
+	years: readonly number[],
+): RegionCalendar {
+	return useQueries({
+		queries: country
+			? years.map((year) => ({
+					queryKey: holidayRegionKeys.holidays(country, subdivision, year),
+					queryFn: () => fetchRegionHolidays(country, subdivision, year),
+					// Static for the life of the API process, as the region list is.
+					staleTime: 24 * 60 * 60_000,
+					gcTime: 24 * 60 * 60_000,
+				}))
+			: [],
+		combine: (results): RegionCalendar => {
+			const failed = results.filter((result) => result.isError);
+			if (failed.length > 0) {
+				return {
+					status: "error",
+					retry: () => {
+						for (const result of failed) void result.refetch();
+					},
+				};
+			}
+			const holidays = new Map<string, string>();
+			for (const { data } of results) {
+				if (!data) return { status: "pending" };
+				for (const holiday of data) holidays.set(holiday.date, holiday.name);
+			}
+			return { status: "success", holidays };
+		},
 	});
 }
