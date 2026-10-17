@@ -151,14 +151,15 @@ class WeekExpectationReader(Protocol):
     hours it expects of that week after holidays and absences, or None when
     it expects nothing by nature (`ContractService.expected_for_week`). The
     Inbox's readers — the planning line, the pacing card, the stale-project
-    card — read this and nothing else of a contract."""
+    card — read this and nothing else of a contract, and so, through
+    `CoachContractReader`, does the coach's pattern tool."""
 
     async def expected_for_week(self, project: Project, week_of: date) -> float | None: ...
 
 
 class ContractWeeksReader(Protocol):
-    """What the coach reads of a contract: the current week of each day job
-    among `projects`, by project id, the same figures the project page shows
+    """What the coach's day context reads of a contract: the current week of
+    each day job among `projects`, by project id, the same figures the page shows
     — and nothing unless `as_of` is today in `tz` by the reader's own clock
     (`ContractService.current_weeks`)."""
 

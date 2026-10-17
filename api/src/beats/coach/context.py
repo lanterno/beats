@@ -221,8 +221,9 @@ async def build_day_context(
             cal_repo = MongoCalendarIntegrationRepository(db.calendar_integrations, user_id=user_id)
             cal_service = CalendarService(settings=settings, repo=cal_repo)
             # The user's day in the request timezone, with its offset: Google
-            # refuses a timeMin/timeMax without one (a 400 the except above
-            # swallowed), and a naive midnight would be UTC's day anyway.
+            # refuses a timeMin/timeMax without one (a 400 that fetch_events'
+            # per-calendar except swallowed), and a naive midnight would be
+            # UTC's day anyway.
             events = await cal_service.fetch_events(
                 datetime.combine(today, time.min, tzinfo=tz),
                 datetime.combine(today, time.max, tzinfo=tz),
