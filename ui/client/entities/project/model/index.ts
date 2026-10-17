@@ -5,6 +5,7 @@ export { copyCompanyDays, describeCompanyDaysCopy, hasCompanyDaysIn } from "./co
 // Contract arithmetic + labels
 export {
 	type BalanceTone,
+	balanceIsFinal,
 	balanceTone,
 	contractGovernsWeek,
 	describeBalance,

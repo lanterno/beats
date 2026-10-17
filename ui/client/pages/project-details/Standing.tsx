@@ -21,6 +21,7 @@ import type {
 	ProjectWithDuration,
 } from "@/entities/project";
 import {
+	balanceIsFinal,
 	balanceTone,
 	formatSignedHours,
 	isFirstWeek,
@@ -189,7 +190,9 @@ function Balance({
 		);
 	}
 
-	const ended = contract.endedOn !== undefined && contract.endedOn <= todayIso;
+	// Final from the day after `endedOn`: on the last day itself its hours
+	// still count, so the balance and its projection stay live.
+	const ended = balanceIsFinal(contract, todayIso);
 	const term = termOn(contract, todayIso);
 	const first = sortTerms(contract.terms)[0];
 	const regionNotice = !contract.holidayCountry && (
@@ -252,7 +255,7 @@ function Balance({
 	}
 
 	const tone = balanceTone(week.balance);
-	const firstWeek = !ended && isFirstWeek(contract, todayIso);
+	const firstWeek = isFirstWeek(contract, todayIso);
 	const colour = firstWeek ? BIG_TONE.even : BIG_TONE[tone];
 	const word = tone === "over" ? "over" : tone === "owed" ? "owed" : "";
 	const proj = ended ? null : projection(week, todayIso);
@@ -400,7 +403,7 @@ export function Standing(props: StandingProps) {
 	const isPast = openWeekOf < thisMonday;
 	const dayJob = project.kind === "day_job";
 	const contract = dayJob ? project.contract : undefined;
-	const ended = contract?.endedOn !== undefined && contract.endedOn <= todayIso;
+	const ended = contract !== undefined && balanceIsFinal(contract, todayIso);
 	const ledgerWeek = ledger?.weeks.find((w) => w.weekOf === openWeekOf);
 
 	// On a day job with a contract the open week waits for `/contract/week`
@@ -430,13 +433,15 @@ export function Standing(props: StandingProps) {
 		goal !== null;
 
 	const term = contract ? termOn(contract, openWeekOf) : undefined;
-	const nominal = governed && openWeek && term ? nominalLine(openWeek, term) : null;
+	const nominal =
+		governed && openWeek && term ? nominalLine(openWeek, term, contract?.endedOn) : null;
 
 	const sentence =
 		isCurrent && worked !== undefined && !ended
 			? weekSentence({
 					week: governed && openWeek ? openWeek : { weekOf: openWeekOf, worked },
 					nextWeek,
+					endedOn: contract?.endedOn,
 					todayIso,
 					kind: project.kind,
 					personalGoal: goalApplies ? goal : null,
