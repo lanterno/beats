@@ -163,6 +163,23 @@ describe("ledgerRows: rule rows", () => {
 		expect(rows[1]).toMatchObject({ text: "Ended Wed Aug 26, 2026 · final balance +5.7 h" });
 	});
 
+	it("names the contract's last day without a final balance, its hours still counting", () => {
+		// Read on the end day: its hours still count, so the API sends no
+		// `endedBalance` and today's balance is not the close either.
+		const contract: Contract = {
+			...CONTRACT,
+			terms: CONTRACT.terms.slice(0, 2),
+			endedOn: "2026-08-26",
+		};
+		const rows = ledgerRows(
+			ledger([week("2026-08-24"), week("2026-08-17")]),
+			{ kind: "day_job", contract },
+			"2026-08-26",
+		);
+		expect(shape(rows)).toEqual(["rule ended 2026-08-26", "week 2026-08-17"]);
+		expect(rows[0]).toMatchObject({ text: "Ends Wed Aug 26, 2026 · today" });
+	});
+
 	it("has no rules on a project the contract does not govern", () => {
 		const rows = ledgerRows(
 			ledger([week("2026-09-07"), week("2026-08-31")], { since: null, totals: null }),
