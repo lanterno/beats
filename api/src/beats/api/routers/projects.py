@@ -3,12 +3,10 @@
 import csv
 import http
 import io
-import re
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Response
-from pydantic import BeforeValidator, WithJsonSchema
 
 from beats.api.dependencies import (
     BeatRepoDep,
@@ -20,6 +18,7 @@ from beats.api.dependencies import (
     TimezoneDep,
     WebhookRepoDep,
 )
+from beats.api.params import MonthQuery
 from beats.api.routers.webhooks import dispatch_webhook_event
 from beats.api.schemas import (
     CreateProjectRequest,
@@ -289,29 +288,6 @@ async def get_ledger(
     goal and its hours and nulls for the rest."""
     return await service.ledger(project_id, weeks, tz)
 
-
-_MONTH = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
-
-
-def _first_of_month(value: object) -> date:
-    """'YYYY-MM' to the 1st of that month. Anything else — '2026-9', a full
-    date, '0000-01', which `date` refuses — is a ValueError, which a query
-    parameter turns into a 422 naming `month`."""
-    if not isinstance(value, str) or _MONTH.fullmatch(value) is None:
-        msg = "month must be YYYY-MM"
-        raise ValueError(msg)
-    return date(int(value[:4]), int(value[5:]), 1)
-
-
-# The schema is the string a client sends, not the `date` it becomes. Left to
-# pydantic it would come from `date` and say `format: date`: a full date, which
-# `_first_of_month` refuses with a 422.
-MonthQuery = Annotated[
-    date,
-    BeforeValidator(_first_of_month),
-    Query(description="The month wanted, as YYYY-MM."),
-    WithJsonSchema({"type": "string", "pattern": f"^{_MONTH.pattern}$", "examples": ["2026-09"]}),
-]
 
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _TIMESHEET_COLUMNS = [
