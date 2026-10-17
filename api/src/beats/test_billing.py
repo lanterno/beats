@@ -279,6 +279,32 @@ class TestBucketing:
             1,
         )
 
+    def test_a_beat_that_ends_before_it_starts_is_no_time_at_all(self):
+        # POST /api/beats/ and a restore both take one. Its negative length
+        # must not take ten hours, and their money, off the line beside it.
+        report = assemble_billing(
+            [_client((JAN_1, 8500))],
+            [_billing(_term(JAN_1))],
+            {"p1": _project(), "p4": _project("p4", "Logo refresh")},
+            [
+                _beat(date(2026, 10, 2), _hours(2)),
+                _beat(date(2026, 10, 10), -_hours(10), at=time(18)),
+                _beat(OCT_1, _hours(1), project_id="p4"),
+                _beat(OCT_1, -_hours(3), project_id="p4"),
+            ],
+            {},
+            OCT_1,
+            OCT_31,
+            BERLIN,
+        )
+        [row] = report.clients
+        assert (row.billable_hours, row.amount_minor, len(row.entries)) == (
+            Decimal("2.00"),
+            17000,
+            1,
+        )
+        assert [u.hours for u in report.unattached] == [Decimal("1.00")]
+
     def test_a_month_is_read_from_local_midnight_to_local_midnight(self):
         # Summer time in Berlin on the 1st, winter time by the 31st.
         assert utc_range(OCT_1, OCT_31, BERLIN) == (
