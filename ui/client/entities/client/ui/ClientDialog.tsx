@@ -180,9 +180,14 @@ export function ClientDialog({
 	const [busy, setBusy] = useState(false);
 
 	const locked = client?.currencyLocked ?? false;
-	// Until the table arrives, the client's own currency stays selectable.
+	// The client's own currency is always selectable: before the table
+	// arrives, and after it when the code has been withdrawn since it was
+	// chosen, which the API still reads but no longer lists.
+	const table = currencies ?? [];
 	const options: Currency[] =
-		currencies ?? (client ? [{ code: client.currency, minorUnits: client.minorUnits }] : []);
+		client && !table.some((c) => c.code === client.currency)
+			? [{ code: client.currency, minorUnits: client.minorUnits }, ...table]
+			: table;
 	const chosen = options.find((c) => c.code === currency);
 	const minorUnits = chosen?.minorUnits ?? (currency === client?.currency ? client.minorUnits : 2);
 	const chips: [string, string][] = [
