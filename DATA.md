@@ -65,7 +65,8 @@ No passwords are stored — Beats does not have a password login path.
 - **Billable marks**: one document per session you marked billable or not, against its
   project's terms — `user_id`, `beat_id`, `billable`. Unique on `(user_id, beat_id)`.
   Deleted with the session.
-- **Beats (sessions)**: start, end, project id, source (manual / daemon / editor), tags, notes
+- **Beats (sessions)**: start, end, project id, tags and a note. Nothing records where a
+  session came from (the timer, a manual entry, the daemon or the editor extension).
 - **Timer state**: the currently-running beat per user
 - **Plans**: weekly plans — a per-project hour target for a given week
 - **Webhooks**: target URLs and which timer events they subscribe to. Deliveries
