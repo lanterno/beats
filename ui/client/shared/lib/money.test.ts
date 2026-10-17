@@ -36,6 +36,20 @@ describe("parseMoney", () => {
 		expect(minor("85.5", JPY)).toBeNull();
 	});
 
+	it("refuses a comma before three digits, which reads either way", () => {
+		// The Iraqi dinar has three decimals, as KWD does, and 25,000 dinars
+		// is an hour's rate there: read as 25.000 it would be saved a
+		// thousand times too low.
+		expect(minor("25,000", KWD)).toBeNull();
+		expect(minor("1,500", KWD)).toBeNull();
+		expect(minor("1,500", JPY)).toBeNull();
+		expect(minor("25.000", KWD)).toBe(25000);
+		expect(minor("25000", KWD)).toBe(25_000_000);
+		expect(minor("85,5", KWD)).toBe(85500);
+		const parsed = parseMoney("25,000", KWD);
+		if (!parsed.ok) expect(parsed.reason).toMatch(/thousands/);
+	});
+
 	it("refuses thousands separators and signs", () => {
 		expect(minor("1,000.00")).toBeNull();
 		expect(minor("1 000")).toBeNull();
