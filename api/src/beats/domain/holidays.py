@@ -21,7 +21,7 @@ locale, so a container on `C` answered "Fronleichnam" where a laptop on
 
 from datetime import date
 from enum import StrEnum
-from functools import cache
+from functools import cache, lru_cache
 
 import holidays as holidays_lib
 from holidays import registry
@@ -154,13 +154,21 @@ def contract_holidays(
     return {h.date: name(h) for h in contract_calendar(contract, start, end) if h.given}
 
 
-@cache
+# The bound is what keeps the cache small: `/api/meta/holidays` takes any
+# region and year from any session, so without one a script could grow the
+# API process until it ran out of memory. A (region, year) is a kilobyte or
+# a few, so the cache stays within some 20 MB, and holds every year since
+# a contract started for hundreds of contracts at once.
+_YEARS_CACHED = 4096
+
+
+@lru_cache(maxsize=_YEARS_CACHED)
 def _year(country: str, subdivision: str | None, year: int) -> dict[date, str]:
-    """One region's calendar for one year, built once per process.
+    """One region's calendar for one year, built once per process while
+    it stays among the `_YEARS_CACHED` most recently read.
 
     The balance reads every year since a contract started on every request,
-    and some regions take ~10 ms a year to build; a mapping per
-    (region, year) is a few hundred bytes, so the cache stays small.
+    and some regions take ~10 ms a year to build.
     """
     try:
         calendar = holidays_lib.country_holidays(
