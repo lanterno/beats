@@ -87,6 +87,7 @@ export {
 	isTimeBasedOn,
 	ledgerCsv,
 	ledgerRows,
+	MAX_BALANCE_HOURS,
 	nominalLine,
 	partitionByArchived,
 	permanentOverrideOn,

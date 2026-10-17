@@ -15,7 +15,7 @@ there is nothing to register.
 """
 
 import builtins
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from datetime import date, datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
@@ -62,12 +62,13 @@ class FlowWindowReader(Protocol):
 
 class TimerBeatStore(Protocol):
     """The four beat operations running a timer needs: open one, find the
-    open one, find the last one, close it."""
+    open one, find the last one, close it. `update` writes only the fields
+    named, as `BeatStore.update` does."""
 
     async def create(self, beat: Beat) -> Beat: ...
     async def get_active(self) -> Beat | None: ...
     async def get_last(self) -> Beat: ...
-    async def update(self, beat: Beat) -> Beat: ...
+    async def update(self, beat: Beat, fields: Collection[str]) -> Beat: ...
 
 
 class TimerProjectReader(Protocol):
@@ -79,11 +80,17 @@ class TimerProjectReader(Protocol):
 
 class BeatStore(Protocol):
     """CRUD over beats — what `BeatService` needs, not the twelve methods
-    the Mongo repository happens to offer."""
+    the Mongo repository happens to offer.
+
+    `update` writes the named `fields` of `beat` onto the stored beat with its
+    id and nothing else, and returns the beat as stored: a field the write
+    does not name (the note an import brought) is never rebuilt from a
+    partial model, nor reverted to what was read before an await. It raises
+    `BeatNotFound` when the user has no beat with that id."""
 
     async def get_by_id(self, beat_id: str) -> Beat: ...
     async def create(self, beat: Beat) -> Beat: ...
-    async def update(self, beat: Beat) -> Beat: ...
+    async def update(self, beat: Beat, fields: Collection[str]) -> Beat: ...
     async def delete(self, beat_id: str) -> bool: ...
     # builtins.list because this class defines a method called `list`.
     async def list(

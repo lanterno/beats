@@ -1185,6 +1185,8 @@
           },
           "opening_balance_hours": {
             "default": 0,
+            "maximum": 10000.0,
+            "minimum": -10000.0,
             "title": "Opening Balance Hours",
             "type": "number"
           },
@@ -4467,7 +4469,7 @@
         "type": "object"
       },
       "UpdateBeatRequest": {
-        "description": "Request body for updating a beat. Tags are auto-derived, not sent.",
+        "description": "Request body for editing a beat: these fields, and only these, change.\nTags are auto-derived, not sent. The note is not editable here: it comes\nfrom an import, stays as stored, and a `note` in the body is ignored.",
         "properties": {
           "end": {
             "anyOf": [
@@ -4504,7 +4506,7 @@
         "type": "object"
       },
       "UpdateProjectRequest": {
-        "description": "Request body for updating a project.\n\nThe update is a wholesale replace, so a client that predates a field\nwould reset it on every colour change if \"not sent\" read as \"clear\".\n`kind` and `contract` therefore tell the two apart through\n`model_fields_set`: left out, the stored value is kept; `contract: null`\nclears the contract. `kind` has no empty state, so null reads as left\nout there.",
+        "description": "Request body for updating a project.\n\nOnly `id` and `name` are required, and every other field is read by\npresence (`model_fields_set`): left out, the stored value is kept; sent,\nit replaces it. A client sends what it edits, and must not wipe what it\ndoes not know: the project page's colour picker sends no GitHub repo,\ncategory or autostart repos, and while \"not sent\" read as \"clear\" every\ncolour change reset all three. The defaults below are therefore never\nwritten over a stored value.\n\n`null` clears `description`, `color`, `weekly_goal`, `github_repo`,\n`category` and `contract`; `[]` clears `autostart_repos`. `archived` and\n`goal_type` have no empty state and refuse null (422); `kind` has none\neither, and reads null as left out. A day job moved to another kind\nloses its contract with it; a contract sent with any other kind is a 409.",
         "properties": {
           "archived": {
             "default": false,
@@ -5917,7 +5919,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing beat.",
+        "description": "Edit a beat's project, start and end. The note and every other stored\nfield stay as stored; the tags are re-derived from the new times when the\ndaemon has flow windows for them, and kept when it has none. A beat the\ncaller does not hold is a 404.",
         "operationId": "update_beat_api_beats__put",
         "requestBody": {
           "content": {
@@ -9165,7 +9167,7 @@
             }
           },
           {
-            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes, a running timer counted up to now), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
             "in": "query",
             "name": "include",
             "required": false,
@@ -9178,7 +9180,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes, a running timer counted up to now), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
               "title": "Include"
             }
           },
@@ -9279,7 +9281,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing project.",
+        "description": "Update an existing project. A field the request leaves out keeps its\nstored value; one it sends replaces it, `null` clearing a nullable one.",
         "operationId": "update_project_api_projects__put",
         "requestBody": {
           "content": {
@@ -10443,7 +10445,7 @@
     },
     "/api/projects/{project_id}/total/": {
       "get": {
-        "description": "Get total time per month for a project.",
+        "description": "A project's hours per month, keyed 'YYYY-MM', and the minutes of them\nall. Hours are bucketed by the local month of the day each beat started\non, in `tz`, and a running timer counts up to now, as on `/ledger`.",
         "operationId": "total_work_time_per_month_on_project_api_projects__project_id__total__get",
         "parameters": [
           {
@@ -10453,6 +10455,24 @@
             "schema": {
               "title": "Project Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
             }
           }
         ],
@@ -10489,7 +10509,7 @@
     },
     "/api/projects/{project_id}/unarchive": {
       "post": {
-        "description": "Restore an archived project (symmetric to /archive). Distinct from\nPUT /api/projects/ \u2014 using a dedicated endpoint keeps callers from\nsilently dropping fields they don't yet manage via a generic update.",
+        "description": "Restore an archived project (symmetric to /archive).",
         "operationId": "unarchive_project_api_projects__project_id__unarchive_post",
         "parameters": [
           {

@@ -6,12 +6,12 @@ import type { Contract, Ledger, LedgerAdjustment, LedgerNote, LedgerWeek } from 
 const TODAY = "2026-09-10";
 
 function week(weekOf: string, patch: Partial<LedgerWeek> = {}): LedgerWeek {
-	return {
+	const row = {
 		weekOf,
 		worked: 33.6,
 		days: [6.72, 6.72, 6.72, 6.72, 6.72, 0, 0],
 		effectiveGoal: 33.6,
-		effectiveGoalType: "target",
+		effectiveGoalType: "target" as const,
 		effectiveGoalOverridden: false,
 		contractExpected: 33.6,
 		balanceEnd: 5,
@@ -19,6 +19,13 @@ function week(weekOf: string, patch: Partial<LedgerWeek> = {}): LedgerWeek {
 		adjustments: [],
 		...patch,
 	};
+	// The API's move on a full week of the contract, null exactly when the
+	// close is; a week a contract starts or ends in sends its own.
+	const moved =
+		row.balanceEnd === null || row.contractExpected === null
+			? null
+			: Math.round((row.worked - row.contractExpected) * 100) / 100;
+	return { balanceMoved: moved, ...row };
 }
 
 function ledger(weeks: LedgerWeek[], extra: Partial<Ledger> = {}): Ledger {
@@ -149,7 +156,10 @@ describe("ledgerRows: rule rows", () => {
 					week("2026-08-24", { contractExpected: 20.16, balanceEnd: 5.7 }),
 					week("2026-08-17"),
 				],
-				{ totals: { expected: 800, worked: 805.7, adjusted: 0, balance: 5.7 } },
+				{
+					totals: { expected: 800, worked: 805.7, adjusted: 0, balance: 5.7 },
+					endedBalance: 5.7,
+				},
 			),
 			{ kind: "day_job", contract },
 			TODAY,
@@ -164,8 +174,8 @@ describe("ledgerRows: rule rows", () => {
 	});
 
 	it("says the contract ended on its last day, without a final balance while its hours count", () => {
-		// Read on the end day: its hours still count, so the API sends no
-		// `endedBalance` and today's balance is not the close either.
+		// Read on the end day: its hours still count, so the API's
+		// `endedBalance` is null and today's balance is not the close either.
 		const contract: Contract = {
 			...CONTRACT,
 			terms: CONTRACT.terms.slice(0, 2),
@@ -340,25 +350,8 @@ describe("ledgerRows: the +/− cell", () => {
 		]);
 	});
 
-	// The fixtures below send no `balanceMoved`, as an API that predates it
-	// does: the SPA reads the move off the closes.
-	it("reads the move between two closes when it has both, else worked − expected, else worked − goal", () => {
+	it("is worked − goal on a week with no close, and null without a goal", () => {
 		const rows = ledgerRows(
-			ledger([
-				week("2026-09-07"),
-				// The contract ended mid-week: 10 h worked, 0 expected, but the close did not move.
-				week("2026-08-31", { worked: 10, contractExpected: 0, balanceEnd: 5.7 }),
-				week("2026-08-24", { worked: 32.9, contractExpected: 33.6, balanceEnd: 5.7 }),
-				week("2026-08-17", { worked: 35.1, contractExpected: 33.6, balanceEnd: 6.4 }),
-			]),
-			DAY_JOB,
-			TODAY,
-		);
-		const deltas = rows.map((r) => (r.type === "week" ? r.delta : "-"));
-		// The oldest row has no close before it and falls back to the arithmetic.
-		expect(deltas).toEqual(["-", 0, -0.7, 1.5]);
-
-		const side = ledgerRows(
 			ledger(
 				[
 					week("2026-09-07"),
@@ -380,68 +373,7 @@ describe("ledgerRows: the +/− cell", () => {
 			{ kind: "side_project" },
 			TODAY,
 		);
-		expect(side.map((r) => (r.type === "week" ? r.delta : "-"))).toEqual([0.4, null]);
-	});
-
-	it("moves the contract's first close from the opening balance, whatever was logged before it", () => {
-		// Starts Wed Aug 5 with +2.0 h brought forward. Mon and Tue carry 8 h
-		// logged before the start; Wed–Fri 18 h against 18 h: the close stays +2.0.
-		const wednesday: Contract = {
-			terms: [{ effectiveFrom: "2026-08-05", scheduleType: "custom", weeklyHours: 30 }],
-			openingBalanceHours: 2,
-			companyHolidays: [],
-			holidaysNotGiven: [],
-		};
-		const mid = ledgerRows(
-			ledger(
-				[
-					week("2026-09-07"),
-					week("2026-08-10", { worked: 30, contractExpected: 30, balanceEnd: 2 }),
-					week("2026-08-03", { worked: 26, contractExpected: 18, balanceEnd: 2 }),
-					week("2026-07-27", {
-						worked: 4,
-						effectiveGoal: null,
-						contractExpected: null,
-						balanceEnd: null,
-					}),
-				],
-				{ since: "2026-08-05" },
-			),
-			{ kind: "day_job", contract: wednesday },
-			TODAY,
-		);
-		expect(mid.flatMap((r) => (r.type === "week" ? [[r.week.weekOf, r.delta]] : []))).toEqual([
-			["2026-08-10", 0],
-			["2026-08-03", 0],
-			["2026-07-27", null],
-		]);
-
-		// Starts Sat Jan 10: its week has no close, and the 3 h worked that
-		// Saturday move the next week's, from +2.0 to +6.0.
-		const saturday: Contract = {
-			terms: [{ effectiveFrom: "2026-01-10", scheduleType: "custom", weeklyHours: 32 }],
-			openingBalanceHours: 2,
-			companyHolidays: [],
-			holidaysNotGiven: [],
-		};
-		const weekend = ledgerRows(
-			ledger(
-				[
-					week("2026-01-19"),
-					week("2026-01-12", { worked: 33, contractExpected: 32, balanceEnd: 6 }),
-					week("2026-01-05", {
-						worked: 3,
-						effectiveGoal: null,
-						contractExpected: null,
-						balanceEnd: null,
-					}),
-				],
-				{ since: "2026-01-10" },
-			),
-			{ kind: "day_job", contract: saturday },
-			"2026-01-22",
-		);
-		expect(weekend.flatMap((r) => (r.type === "week" ? [r.delta] : []))).toEqual([4, null]);
+		expect(rows.map((r) => (r.type === "week" ? r.delta : "-"))).toEqual([0.4, null]);
 	});
 });
 
@@ -509,58 +441,6 @@ describe("ledgerRows: adjustment rows", () => {
 			["Tue Sep 1 · Balance reset to 0.0 h", "was +62.5 h"],
 			["Mon Aug 31 · Adjusted −40.0 h", "“Paid out in August”"],
 		]);
-	});
-
-	it("leaves a week's adjustments out of its +/−, so the rows add up to its close", () => {
-		// 33.6 worked against 33.6, and a −10 payout: the close falls by 10,
-		// the payout's row says −10 and the week's own +/− is 0.
-		const rows = ledgerRows(
-			ledger([
-				week("2026-09-07"),
-				week("2026-08-31", {
-					balanceEnd: -5,
-					adjustments: [adjustment("2026-09-02", "delta", -10, -10)],
-				}),
-				week("2026-08-24", { balanceEnd: 5 }),
-			]),
-			{ kind: "day_job", contract: { ...CONTRACT, terms: CONTRACT.terms.slice(0, 1) } },
-			TODAY,
-		);
-		expect(rows.map((r) => (r.type === "week" || r.type === "adjustment" ? r.delta : "-"))).toEqual(
-			[0, -10, 0],
-		);
-	});
-
-	it("leaves a payout out of the first close, though it falls in a start week with none", () => {
-		// Starts Sat Jan 10 with +2.0 brought forward; a −1 payout that Sunday is
-		// filed under the start week, which has no close, and is inside the next
-		// week's move from the opening balance: +2.0 → +5.0 is +4 worked, −1 paid.
-		const saturday: Contract = {
-			terms: [{ effectiveFrom: "2026-01-10", scheduleType: "custom", weeklyHours: 32 }],
-			openingBalanceHours: 2,
-			companyHolidays: [],
-			holidaysNotGiven: [],
-		};
-		const rows = ledgerRows(
-			ledger(
-				[
-					week("2026-01-19"),
-					week("2026-01-12", { worked: 33, contractExpected: 32, balanceEnd: 5 }),
-					week("2026-01-05", {
-						worked: 3,
-						effectiveGoal: null,
-						contractExpected: null,
-						balanceEnd: null,
-						adjustments: [adjustment("2026-01-11", "delta", -1, -1)],
-					}),
-				],
-				{ since: "2026-01-10" },
-			),
-			{ kind: "day_job", contract: saturday },
-			"2026-01-22",
-		);
-		expect(rows.flatMap((r) => (r.type === "week" ? [r.delta] : []))).toEqual([4, null]);
-		expect(shape(rows)).toContain("adjustment 2026-01-11");
 	});
 
 	it("names the balance the contract ended on, not what a settlement after it left", () => {

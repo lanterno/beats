@@ -1,23 +1,15 @@
 import type { Schemas } from "@/shared/api";
 
 type Counts = Schemas["ImportCounts"];
+type BillingCounts = "clients" | "project_billing" | "billable_overrides";
 
 /**
- * `POST /api/export/import`'s answer, as this page may receive it. The SPA
- * and the API ship on their own, and an API older than the 1.1 backup
- * answers with `projects` and `beats` alone: no time off, no adjustments,
- * and nothing `skipped`; one older than 1.2 has no clients, no project
- * billing and no billable marks.
+ * What this page reads of `POST /api/export/import`'s answer. The SPA and
+ * the API ship on their own, and an API older than the 1.2 backup answers
+ * without clients, project billing or billable marks.
  */
-export type ImportResult = {
-	imported: Pick<Counts, "projects" | "beats"> &
-		Partial<
-			Pick<
-				Counts,
-				"absences" | "balance_adjustments" | "clients" | "project_billing" | "billable_overrides"
-			>
-		>;
-	skipped?: Schemas["ImportSkip"][];
+export type ImportResult = Pick<Schemas["ImportResponse"], "skipped"> & {
+	imported: Omit<Counts, BillingCounts> & Partial<Pick<Counts, BillingCounts>>;
 };
 
 export interface ImportSummary {
@@ -43,20 +35,20 @@ function listed(parts: string[]): string {
 /**
  * The toast after a backup import. Time off, adjustments, clients, project
  * billing and billable marks are named only when there are some, so a
- * backup without a day job or a client reads as it always did. A record the import left out is one the project would not take now
- * (time off on a project that is no longer a day job, an adjustment outside
- * the contract), and the toast says so, rather than the import reading as
+ * backup without a day job or a client reads as it always did. A record
+ * the import left out is one the project would not take now (time off on
+ * a project that is no longer a day job, an adjustment outside the
+ * contract), and the toast says so, rather than the import reading as
  * complete.
  */
-export function describeImport({ imported, skipped = [] }: ImportResult): ImportSummary {
+export function describeImport({ imported, skipped }: ImportResult): ImportSummary {
 	const parts = [
 		count(imported.projects, "project", "projects"),
 		count(imported.beats, "session", "sessions"),
 	];
-	const absences = imported.absences ?? 0;
-	const adjustments = imported.balance_adjustments ?? 0;
-	if (absences > 0) parts.push(timeOff(absences));
-	if (adjustments > 0) parts.push(count(adjustments, "balance adjustment", "balance adjustments"));
+	if (imported.absences > 0) parts.push(timeOff(imported.absences));
+	if (imported.balance_adjustments > 0)
+		parts.push(count(imported.balance_adjustments, "balance adjustment", "balance adjustments"));
 	const clients = imported.clients ?? 0;
 	const billed = imported.project_billing ?? 0;
 	const marks = imported.billable_overrides ?? 0;

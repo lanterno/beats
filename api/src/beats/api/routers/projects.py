@@ -4,7 +4,7 @@ import csv
 import http
 import io
 from datetime import date, timedelta
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query, Response
 
@@ -64,7 +64,8 @@ async def list_projects(
         default=None,
         description=(
             "Comma-separated aggregations to populate per project. Supported: "
-            "'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal "
+            "'totals' (total_minutes, a running timer counted up to now), "
+            "'this_week' (weekly_minutes + effective_goal "
             "trio, and on a day job the contract's expected / worked / remaining / "
             "balance), "
             "'last_tracked' (last_tracked_at). Omitted ⇒ slim response."
@@ -119,7 +120,7 @@ async def list_projects(
             return item
         beats = beats_by_pid.get(p.id, [])
         if want_totals:
-            totals = service._monthly_totals_from_beats(beats)
+            totals = service._monthly_totals_from_beats(beats, tz)
             item["total_minutes"] = totals.get("total_minutes", 0)
         if want_week:
             item.update(service._this_week_from_beats(beats, p))
@@ -160,22 +161,28 @@ async def create_project(request: CreateProjectRequest, service: ProjectServiceD
 
 @router.put("/", response_model=ProjectResponse)
 async def update_project(request: UpdateProjectRequest, service: ProjectServiceDep):
-    """Update an existing project."""
-    # Preserve what the request does not carry: the replace is wholesale, so
-    # building Project() from the request alone would wipe goal_overrides on
-    # every unrelated edit (e.g. a color change) — and, from a client that
-    # predates them, kind and contract too, turning a migrated day job back
-    # into a side project with no contract. Read existing first; `kind` and
-    # `contract` are taken from the request only when it actually sent them
-    # (model_fields_set), so `contract: null` clears and absence keeps —
-    # unless the edit moves the project away from day_job, in which case the
-    # contract goes with it: a contract lives only on a day job, and the
-    # service refuses one sent with any other kind (409 NOT_A_DAY_JOB).
-    # Inside a sent contract the same rule holds for the holiday lists and the
-    # vacation entitlement: one left out is kept, so an older client's term
-    # edit does not delete them.
+    """Update an existing project. A field the request leaves out keeps its
+    stored value; one it sends replaces it, `null` clearing a nullable one."""
+    # Omitted is not cleared: a client sends the fields it edits, and the
+    # rest must survive. The project page's colour picker sends id, name,
+    # colour and a few fields it happens to know; while absence read as a
+    # reset, every colour change wiped the GitHub repo, the category and the
+    # autostart repos (AHM-89). So every field is taken from the request only
+    # when it was sent (model_fields_set), and goal_overrides, which no
+    # request carries, always from the stored project.
+    # `kind` has no empty state, so null reads as left out. `contract: null`
+    # clears; left out, the contract is kept — unless the edit moves the
+    # project away from day_job, in which case it goes with the kind: a
+    # contract lives only on a day job, and the service refuses one sent with
+    # any other kind (409 NOT_A_DAY_JOB). Inside a sent contract the same
+    # rule holds for the holiday lists and the vacation entitlement: one left
+    # out is kept, so an older client's term edit does not delete them.
     existing = await service.project_repo.get_by_id(request.id)
     sent = request.model_fields_set
+
+    def sent_or_stored(field: str) -> Any:
+        return getattr(request if field in sent else existing, field)
+
     kind = request.kind if request.kind is not None else existing.kind
     if "contract" in sent:
         contract = request.contract
@@ -186,21 +193,17 @@ async def update_project(request: UpdateProjectRequest, service: ProjectServiceD
     project = Project(
         id=request.id,
         name=request.name,
-        description=request.description,
-        color=request.color,
-        archived=request.archived,
-        weekly_goal=request.weekly_goal,
-        goal_type=request.goal_type,
+        description=sent_or_stored("description"),
+        color=sent_or_stored("color"),
+        archived=sent_or_stored("archived"),
+        weekly_goal=sent_or_stored("weekly_goal"),
+        goal_type=sent_or_stored("goal_type"),
         goal_overrides=existing.goal_overrides,
         kind=kind,
         contract=contract,
-        github_repo=request.github_repo,
-        # category and autostart_repos were silently dropped here —
-        # the schema accepted them but the route never forwarded them
-        # to the domain, so the daemon's flow-score category_fit
-        # never matched and auto-timer autostart rules never fired.
-        category=request.category,
-        autostart_repos=request.autostart_repos,
+        github_repo=sent_or_stored("github_repo"),
+        category=sent_or_stored("category"),
+        autostart_repos=sent_or_stored("autostart_repos"),
     )
     updated = await service.update_project(project, previous_contract=existing.contract)
     return updated.model_dump()
@@ -469,9 +472,7 @@ async def archive_project(project_id: str, service: ProjectServiceDep):
 
 @router.post("/{project_id}/unarchive")
 async def unarchive_project(project_id: str, service: ProjectServiceDep):
-    """Restore an archived project (symmetric to /archive). Distinct from
-    PUT /api/projects/ — using a dedicated endpoint keeps callers from
-    silently dropping fields they don't yet manage via a generic update."""
+    """Restore an archived project (symmetric to /archive)."""
     await service.unarchive_project(project_id)
     return {"status": "success"}
 
@@ -485,10 +486,12 @@ async def today_time_for_project(project_id: str, service: ProjectServiceDep) ->
 
 @router.get("/{project_id}/total/")
 async def total_work_time_per_month_on_project(
-    project_id: str, service: ProjectServiceDep
+    project_id: str, service: ProjectServiceDep, tz: TimezoneDep
 ) -> MonthlyTotalsResponse:
-    """Get total time per month for a project."""
-    result = await service.get_monthly_totals(project_id)
+    """A project's hours per month, keyed 'YYYY-MM', and the minutes of them
+    all. Hours are bucketed by the local month of the day each beat started
+    on, in `tz`, and a running timer counts up to now, as on `/ledger`."""
+    result = await service.get_monthly_totals(project_id, tz)
     return MonthlyTotalsResponse(**result)
 
 

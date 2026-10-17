@@ -356,6 +356,78 @@ class TestProjectAPI:
         assert "Updated-" in updated_project["name"]
         assert len(client.get("/api/projects/", headers=auth_headers).json()) == projects_count
 
+    def _project_with_every_field(self, client, auth_headers) -> dict:
+        response = client.post(
+            "/api/projects/",
+            json={
+                "name": f"kept-{time.time()}",
+                "description": "the description",
+                "color": "#5B9CF6",
+                "weekly_goal": 12.5,
+                "goal_type": "cap",
+                "github_repo": "lanterno/beats",
+                "category": "coding",
+                "autostart_repos": ["/Users/me/code/beats"],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    def test_a_colour_change_keeps_every_field_it_leaves_out(self, client, auth_headers):
+        """AHM-89: the project page's colour picker sends id, name and colour
+        (and a few fields it happens to know), never the GitHub repo, the
+        category or the autostart repos. Absence read as a reset, so one
+        colour change wiped all three."""
+        project = self._project_with_every_field(client, auth_headers)
+        client.post(f"/api/projects/{project['id']}/archive", headers=auth_headers)
+
+        response = client.put(
+            "/api/projects/",
+            json={"id": project["id"], "name": project["name"], "color": "#FBBF24"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        listed = client.get("/api/projects/?archived=true", headers=auth_headers).json()
+        stored = next(p for p in listed if p["id"] == project["id"])
+        assert stored["color"] == "#FBBF24"
+        assert stored["description"] == "the description"
+        assert stored["archived"] is True
+        assert stored["weekly_goal"] == 12.5
+        assert stored["goal_type"] == "cap"
+        assert stored["github_repo"] == "lanterno/beats"
+        assert stored["category"] == "coding"
+        assert stored["autostart_repos"] == ["/Users/me/code/beats"]
+
+    def test_an_explicit_null_or_empty_value_still_clears(self, client, auth_headers):
+        """Left out keeps; sent clears. The settings drawer clears a field by
+        sending null (or `[]` for the autostart repos), and must go on doing so."""
+        project = self._project_with_every_field(client, auth_headers)
+
+        response = client.put(
+            "/api/projects/",
+            json={
+                "id": project["id"],
+                "name": project["name"],
+                "description": None,
+                "color": None,
+                "weekly_goal": None,
+                "github_repo": None,
+                "category": None,
+                "autostart_repos": [],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        updated = response.json()
+        assert updated["description"] is None
+        assert updated["color"] is None
+        assert updated["weekly_goal"] is None
+        assert updated["github_repo"] is None
+        assert updated["category"] is None
+        assert updated["autostart_repos"] == []
+        assert updated["goal_type"] == "cap"
+
     def test_projects_archive(self, client, auth_headers):
         """Test POST /api/projects/{project_id}/archive - Archive a project"""
         # Create a project first
@@ -493,6 +565,52 @@ class TestProjectAPI:
         data = response.json()
         assert "durations_per_month" in data
         assert "warnings" in data
+
+    def test_project_total_buckets_by_the_local_month_a_beat_started_in(self, client, auth_headers):
+        project = client.post(
+            "/api/projects/", json={"name": f"test-total-tz-{time.time()}"}, headers=auth_headers
+        ).json()
+        # 22:00 on 31 January in New York is 03:00 on 1 February in UTC.
+        _log(client, auth_headers, project["id"], "2026-02-01T03:00:00+00:00", 60)
+
+        def months(**params):
+            resp = client.get(
+                f"/api/projects/{project['id']}/total/", params=params, headers=auth_headers
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()["durations_per_month"]
+
+        assert months(tz="America/New_York") == {"2026-01": 1.0}
+        # A caller that sends no tz gets UTC, as on the ledger.
+        assert months() == {"2026-02": 1.0}
+
+    def test_project_total_counts_a_running_timer_up_to_now(self, client, auth_headers):
+        project = client.post(
+            "/api/projects/", json={"name": f"test-total-run-{time.time()}"}, headers=auth_headers
+        ).json()
+        started = datetime.now(UTC) - timedelta(minutes=30)
+        resp = client.post(
+            f"/api/projects/{project['id']}/start",
+            json={"time": started.isoformat()},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        try:
+            total = client.get(f"/api/projects/{project['id']}/total/", headers=auth_headers).json()
+            assert total["total_minutes"] >= 30
+            assert total["durations_per_month"][started.strftime("%Y-%m")] >= 0.5
+
+            listing = client.get(
+                "/api/projects/", params={"include": "totals"}, headers=auth_headers
+            ).json()
+            item = next(p for p in listing if p["id"] == project["id"])
+            assert item["total_minutes"] >= 30
+        finally:
+            client.post(
+                "/api/projects/stop",
+                json={"time": datetime.now(UTC).isoformat()},
+                headers=auth_headers,
+            )
 
     def test_project_summary(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/summary/ - Get project summary"""
@@ -975,6 +1093,19 @@ class TestContractAPI:
         assert contract["opening_balance_hours"] == 12.5
         assert [t["effective_from"] for t in contract["terms"]] == [CONTRACT_START, WEEK]
         assert resp.json()["kind"] == "day_job"
+
+    @pytest.mark.parametrize("opening", [-10_001, 10_001], ids=["owed", "banked"])
+    def test_an_opening_past_the_bound_is_422_at_the_opening(self, client, auth_headers, opening):
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "opening_balance_hours": opening},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["opening_balance_hours"]
 
     def test_replace_contract_on_a_side_project_is_409(self, client, auth_headers):
         project = _create_project(client, auth_headers)
@@ -3291,6 +3422,140 @@ class TestBeatsDirectAPI:
         response = client.delete(f"/api/beats/{beat['id']}", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["deleted"] is True
+
+
+class TestBeatEdit:
+    """PUT /api/beats/ changes what the request carries — the project, the
+    start and the end — and the tags those times derive, and nothing else.
+    A note reaches a session only through an import, and no client sends one
+    back, so an edit that rebuilt the session from the request erased it."""
+
+    START = "2026-04-01T09:00:00Z"
+    END = "2026-04-01T09:30:00Z"
+
+    @staticmethod
+    def _project(client, headers) -> str:
+        resp = client.post("/api/projects/", json={"name": "Edit"}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def _session(self, client, headers, *, note: str | None = None, tags=()) -> dict:
+        """A finished session, with the note and tags an import brings."""
+        project_id = self._project(client, headers)
+        beat = client.post(
+            "/api/beats/",
+            json={"project_id": project_id, "start": self.START, "end": self.END},
+            headers=headers,
+        ).json()
+        backup = {"beats": [{**beat, "note": note, "tags": list(tags)}]}
+        imported = client.post(
+            "/api/export/import",
+            files={"file": ("backup.json", json.dumps(backup), "application/json")},
+            headers=headers,
+        )
+        assert imported.status_code == 200, imported.text
+        return beat
+
+    @staticmethod
+    def _edit(client, headers, beat: dict, **changes):
+        """The body the companion sends: the four fields, nothing else."""
+        body = {k: beat[k] for k in ("id", "project_id", "start", "end")}
+        return client.put("/api/beats/", json={**body, **changes}, headers=headers)
+
+    @staticmethod
+    def _window(client, headers, start: str, end: str, repo: str) -> None:
+        resp = client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": start,
+                "window_end": end,
+                "flow_score": 0.8,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.5,
+                "idle_fraction": 0.1,
+                "editor_repo": repo,
+                "editor_language": "Go",
+            },
+            headers=headers,
+        )
+        assert resp.status_code in (200, 201), resp.text
+
+    def test_a_time_edit_keeps_the_note(self, client, auth_headers):
+        beat = self._session(client, auth_headers, note="Call with the auditors")
+
+        resp = self._edit(client, auth_headers, beat, end="2026-04-01T10:15:00Z")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["note"] == "Call with the auditors"
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"].startswith("2026-04-01T10:15:00")
+        assert stored["note"] == "Call with the auditors"
+
+    def test_moving_a_session_to_another_project_keeps_the_note(self, client, auth_headers):
+        beat = self._session(client, auth_headers, note="Billable")
+        other = self._project(client, auth_headers)
+
+        resp = self._edit(client, auth_headers, beat, project_id=other)
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert (stored["project_id"], stored["note"]) == (other, "Billable")
+
+    def test_reopening_a_session_keeps_the_note(self, client, auth_headers):
+        """`end: null` reopens it as the running timer, as the companion's
+        undo of a stop does."""
+        beat = self._session(client, auth_headers, note="Deep work")
+
+        resp = self._edit(client, auth_headers, beat, end=None)
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"] is None
+        assert stored["note"] == "Deep work"
+
+    def test_an_edit_with_no_flow_windows_keeps_the_tags(self, client, auth_headers):
+        beat = self._session(client, auth_headers, tags=["imported"])
+
+        resp = self._edit(client, auth_headers, beat, end="2026-04-01T10:00:00Z")
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["tags"] == ["imported"]
+
+    def test_an_edit_over_flow_windows_takes_their_tags(self, client, auth_headers):
+        beat = self._session(client, auth_headers, note="Kept", tags=["imported"])
+        self._window(client, auth_headers, "2026-04-01T09:40:00Z", "2026-04-01T09:50:00Z", "acme")
+
+        resp = self._edit(client, auth_headers, beat, end="2026-04-01T10:00:00Z")
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert (stored["tags"], stored["note"]) == (["acme", "go"], "Kept")
+
+    def test_an_unknown_session_is_404(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+
+        resp = self._edit(client, auth_headers, beat, id="0123456789abcdef01234567")
+
+        assert resp.status_code == 404, resp.text
+
+    def test_someone_elses_session_is_404_and_left_alone(
+        self, client, auth_headers, other_auth_headers
+    ):
+        """Even when the caller's own flow windows cover its times: deriving
+        tags is no reason to skip finding the session first."""
+        beat = self._session(client, auth_headers, note="Mine")
+        self._window(
+            client, other_auth_headers, "2026-04-01T09:05:00Z", "2026-04-01T09:15:00Z", "theirs"
+        )
+
+        resp = self._edit(client, other_auth_headers, beat, end="2026-04-01T11:00:00Z")
+
+        assert resp.status_code == 404, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"].startswith("2026-04-01T09:30:00")
+        assert (stored["note"], stored["tags"]) == ("Mine", [])
 
 
 class TestTimerAPI:

@@ -176,7 +176,7 @@ class Contract(BaseModel):
     terms: list[ContractTerm]         # strictly ascending, non-empty
     holiday_country: str | None       # ISO 3166-1 alpha-2, e.g. "CH"
     holiday_subdivision: str | None   # ISO 3166-2 part, e.g. "ZH"
-    opening_balance_hours: float = 0  # hours banked before Beats
+    opening_balance_hours: float = 0  # banked before Beats; finite, |hours| <= 10 000
     ended_on: date | None             # freezes the balance
     company_holidays: list[CompanyHoliday] = []  # the employer's own days off
     holidays_not_given: list[date] = []          # region holidays it does not give
@@ -229,7 +229,9 @@ The validators: terms non-empty, ascending, no two on one day; `ended_on`
 not before the first term; `full_time` fills in `percentage = 1` and
 refuses anything else; `part_time` needs a percentage below 1; `custom`
 needs `weekly_hours` and takes no basis; `objective` takes none of the
-numbers; `holiday_subdivision` needs a `holiday_country`.
+numbers; `holiday_subdivision` needs a `holiday_country`. The opening
+balance is held to the bound an adjustment's hours are (below), as a
+field constraint, so a 422 names `opening_balance_hours`.
 
 The two holiday lists have one rule each, and it is their own: no date
 twice. Neither is checked against the region, the calendar, the
@@ -270,8 +272,13 @@ way, and the repository's upsert is a replace on that key, so the id
 survives and a reset posted over a noted payout does not keep the note.
 The body is `BalanceAdjustmentFields`, whose validators are the 422 at
 `hours`: a delta of 0 moves nothing, a cap is not negative, and the bound
-keeps a sum of many records finite. The collection is new and additive,
-so no startup pass runs for it; `ensure_indexes` builds its index.
+keeps a sum of many records finite. The bound, ±10 000 h, is the opening
+balance's too: they are the two figures a client types into the balance.
+It holds on every read as well, since both models are re-validated there,
+and a stored opening past it fails every project of its user with it; so
+the bound is never narrowed without first finding the stored figures past
+the new one. The collection is new and additive, so no startup pass runs
+for it; `ensure_indexes` builds its index.
 
 `weekly_goal` / `goal_type` / `goal_overrides` are the *personal* goal
 and keep applying to side projects, freelance work, and objective-based
@@ -417,10 +424,13 @@ goal in its cached profile, and beside today, in the day context, the
 adjusted week, what is left of it, the balance and its by-Sunday
 projection (`coach/contract_section.py`). Its `get_patterns` tool builds
 the service with the same reader, so its pacing and stale-project cards
-quote the Inbox's figure. The hours all of them count against it are the
-week card's too: worked on a day the balance counts (`counts_worked`), so
-on a week a term that owes nothing begins or ends, the hours under it are
-tracked and owe the figure nothing.
+quote the Inbox's figure. A read that raises for one project leaves that
+project on its nominal goal, logged by id, and every other project's line
+and cards come through, in the Inbox and the tool alike (`week_goals`).
+The hours all of them count against it are the week card's too: worked
+on a day the balance counts (`counts_worked`), so on a week a term that
+owes nothing begins or ends, the hours under it are tracked and owe the
+figure nothing.
 
 ### Vacation
 
@@ -635,8 +645,10 @@ region check, and every project write reconciles the adjustments
 | `GET /api/meta/holidays?country=&subdivision=&year=` | one region's public holidays for a year as `[{date, name}]`, by date, as the region gives them: no contract is read, so it answers for a region no contract names yet. `country` and `year` required (422 naming the one missing); an unknown country or subdivision is 400 `UNKNOWN_HOLIDAY_REGION`; cacheable and session-only like the region list |
 
 - **Omitted is not null on `PUT /api/projects`.** Older clients do not
-  send `kind` or `contract`, so the route reads `model_fields_set`: left
-  out keeps the stored value, `contract: null` clears it. Requests carry
+  send `kind` or `contract`, and the project page's colour picker sends
+  no GitHub repo, category or autostart repos, so the route reads every
+  field bar `id` and `name` by `model_fields_set`: left out keeps the
+  stored value, `contract: null` clears it. Requests carry
   the domain `Contract` itself — its validators produce the 422, and a
   mirror would drift. The same holds inside a sent contract for
   `company_holidays`, `holidays_not_given` and `vacation`, on

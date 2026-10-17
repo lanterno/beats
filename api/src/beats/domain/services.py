@@ -186,10 +186,15 @@ class TimerService:
         if end_normalized < start:
             raise InvalidEndTime()
 
+        # Only the end and the tags are written: the beat was read before the
+        # flow-window await, and anything written to it meanwhile (a start
+        # moved earlier, a note imported) must not be reverted to that read.
         active.end = end
+        written = {"end"}
         if self.flow_repo is not None:
             active.tags = await derive_flow_tags(self.flow_repo, active.start, end)
-        return await self.beat_repo.update(active)
+            written.add("tags")
+        return await self.beat_repo.update(active, written)
 
     async def get_status(self) -> dict:
         """Get the current timer status.
@@ -250,11 +255,15 @@ class BeatService:
         return await self.beat_repo.get_by_id(beat_id)
 
     async def update_beat(self, beat: Beat) -> Beat:
-        """Update an existing beat, re-deriving tags from daemon flow signals.
+        """Write an edit's project, start and end onto the stored beat,
+        re-deriving tags from daemon flow signals, and return the beat as
+        stored. Nothing else is written: the note and any other stored field
+        stay as they are, whatever `beat` carries for them.
 
         If the daemon has no windows for the (possibly edited) range we keep the
         beat's existing tags rather than wiping them — non-destructive for any
-        tags captured before this range was last touched.
+        tags captured before this range was last touched. A beat reopened
+        (`end` None) keeps its tags too; the stop that closes it derives them.
         """
         # Validate the beat can be stopped if end is being set
         if beat.end:
@@ -262,14 +271,13 @@ class BeatService:
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        written = {"project_id", "start", "end"}
         if self.flow_repo is not None and beat.end is not None:
             derived = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
             if derived:
                 beat.tags = derived
-            elif beat.id is not None:
-                existing = await self.beat_repo.get_by_id(beat.id)
-                beat.tags = existing.tags
-        return await self.beat_repo.update(beat)
+                written.add("tags")
+        return await self.beat_repo.update(beat, written)
 
     async def delete_beat(self, beat_id: str) -> bool:
         """Delete a beat by ID, and its billable override with it. The
@@ -543,44 +551,36 @@ class ProjectService:
             "effective_goal_overridden": project.goal_overridden(monday),
         }
 
-    async def get_monthly_totals(self, project_id: str) -> dict:
+    async def get_monthly_totals(self, project_id: str, tz: ZoneInfo) -> dict:
         """Get total time per month for a project.
 
         Returns:
             Dict with durations per month, total minutes, and any warnings.
         """
         beats = await self.beat_repo.list_by_project(project_id)
-        return self._monthly_totals_from_beats(beats)
+        return self._monthly_totals_from_beats(beats, tz)
 
     @staticmethod
-    def _monthly_totals_from_beats(beats: list[Beat]) -> dict:
-        warnings: list[str] = []
+    def _monthly_totals_from_beats(beats: list[Beat], tz: ZoneInfo) -> dict:
+        """Hours per local month, keyed 'YYYY-MM', and the minutes of them all.
+        A month's hours are the ledger's days that fall in it: each beat goes
+        whole to the local date it started on, in `tz`, and a running timer
+        counts up to now (`worked_by_local_day`)."""
+        warnings = [
+            f"Warning: Log {beat.id} has duration longer than 24 hours ({beat.duration})."
+            for beat in beats
+            if beat.duration > timedelta(hours=24)
+        ]
 
-        # Filter to completed beats and collect durations
-        durations_per_month: dict[str, timedelta] = defaultdict(timedelta)
-        for beat in beats:
-            if beat.end is None:
-                continue
-            if beat.duration > timedelta(hours=24):
-                warnings.append(
-                    f"Warning: Log {beat.id} has duration longer than 24 hours ({beat.duration})."
-                )
-            month_key = beat.start.strftime("%Y-%m")
-            durations_per_month[month_key] += beat.duration
-
-        # Calculate totals
-        grand_total = sum(durations_per_month.values(), timedelta())
-        total_minutes = round(grand_total.total_seconds() / 60)
-
-        # Convert to hours
-        result = {
-            month: round(duration.total_seconds() / 3600, 2)
-            for month, duration in sorted(durations_per_month.items())
-        }
+        hours_per_month: dict[str, float] = defaultdict(float)
+        for day, hours in worked_by_local_day(beats, tz).items():
+            hours_per_month[day.strftime("%Y-%m")] += hours
 
         return {
-            "durations_per_month": result,
-            "total_minutes": total_minutes,
+            "durations_per_month": {
+                month: round(hours, 2) for month, hours in sorted(hours_per_month.items())
+            },
+            "total_minutes": round(sum(hours_per_month.values()) * 60),
             "warnings": warnings,
         }
 

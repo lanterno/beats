@@ -63,7 +63,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~20s for 1214 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~20s for 1234 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -95,7 +95,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 1214-test suite takes about 20 seconds.
+  the full 1234-test suite takes about 20 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -112,7 +112,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 725 of them across 90 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 721 of them across 90 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 35 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
   MongoDB behind it; the dev server starts itself. A `setup` project
@@ -396,7 +396,7 @@ changing anything both ends share.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments), `/{id}/vacation` (one year of the vacation entitlement, in days), `/{id}/timesheet.csv?month=` (a month, a row per finished day, as CSV) |
+| `/api/projects` | Projects CRUD (with `kind` and `contract`), timer start/stop, git activity; `/{id}/total/` (hours per local month in `tz`, a running timer up to now); `/{id}/ledger` (any kind: N weeks newest first, the goal and hours per week, and on a day job the adjusted expectation, each week's closing balance and today's with its terms); on a day job `/{id}/contract` (replace), `/{id}/contract/week` (the week, and today's balance with the terms that make it), `/{id}/holidays`, `/{id}/absences`, `/{id}/adjustments` (POST, DELETE: balance adjustments), `/{id}/vacation` (one year of the vacation entitlement, in days), `/{id}/timesheet.csv?month=` (a month, a row per finished day, as CSV) |
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/clients` | Clients you bill: CRUD, archive and unarchive; one currency each and dated default rates (`rate_minor`, minor units an hour). `PUT` takes `tz` and `rewrite_past`. No device token |

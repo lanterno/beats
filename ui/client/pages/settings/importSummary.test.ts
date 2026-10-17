@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 import { describeImport } from "./importSummary";
 
 describe("describeImport", () => {
-	// The SPA ships on its own: an API from before the 1.1 backup answers with
-	// projects and beats alone, and that must read as it always did.
-	it("reads an older API's answer as one without time off or adjustments", () => {
-		expect(describeImport({ imported: { projects: 2, beats: 40 } })).toEqual({
-			message: "Imported 2 projects and 40 sessions",
-			leftOut: null,
-		});
-	});
-
 	it("names the time off and the adjustments only when there are some", () => {
 		expect(
 			describeImport({

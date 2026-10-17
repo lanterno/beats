@@ -386,7 +386,10 @@ export interface paths {
         get: operations["list_beats_api_beats__get"];
         /**
          * Update Beat
-         * @description Update an existing beat.
+         * @description Edit a beat's project, start and end. The note and every other stored
+         *     field stay as stored; the tags are re-derived from the new times when the
+         *     daemon has flow windows for them, and kept when it has none. A beat the
+         *     caller does not hold is a 404.
          */
         put: operations["update_beat_api_beats__put"];
         /**
@@ -1893,7 +1896,8 @@ export interface paths {
         get: operations["list_projects_api_projects__get"];
         /**
          * Update Project
-         * @description Update an existing project.
+         * @description Update an existing project. A field the request leaves out keeps its
+         *     stored value; one it sends replaces it, `null` clearing a nullable one.
          */
         put: operations["update_project_api_projects__put"];
         /**
@@ -2312,7 +2316,9 @@ export interface paths {
         };
         /**
          * Total Work Time Per Month On Project
-         * @description Get total time per month for a project.
+         * @description A project's hours per month, keyed 'YYYY-MM', and the minutes of them
+         *     all. Hours are bucketed by the local month of the day each beat started
+         *     on, in `tz`, and a running timer counts up to now, as on `/ledger`.
          */
         get: operations["total_work_time_per_month_on_project_api_projects__project_id__total__get"];
         put?: never;
@@ -2334,9 +2340,7 @@ export interface paths {
         put?: never;
         /**
          * Unarchive Project
-         * @description Restore an archived project (symmetric to /archive). Distinct from
-         *     PUT /api/projects/ — using a dedicated endpoint keeps callers from
-         *     silently dropping fields they don't yet manage via a generic update.
+         * @description Restore an archived project (symmetric to /archive).
          */
         post: operations["unarchive_project_api_projects__project_id__unarchive_post"];
         delete?: never;
@@ -4610,7 +4614,9 @@ export interface components {
         };
         /**
          * UpdateBeatRequest
-         * @description Request body for updating a beat. Tags are auto-derived, not sent.
+         * @description Request body for editing a beat: these fields, and only these, change.
+         *     Tags are auto-derived, not sent. The note is not editable here: it comes
+         *     from an import, stays as stored, and a `note` in the body is ignored.
          */
         UpdateBeatRequest: {
             /** End */
@@ -4629,12 +4635,19 @@ export interface components {
          * UpdateProjectRequest
          * @description Request body for updating a project.
          *
-         *     The update is a wholesale replace, so a client that predates a field
-         *     would reset it on every colour change if "not sent" read as "clear".
-         *     `kind` and `contract` therefore tell the two apart through
-         *     `model_fields_set`: left out, the stored value is kept; `contract: null`
-         *     clears the contract. `kind` has no empty state, so null reads as left
-         *     out there.
+         *     Only `id` and `name` are required, and every other field is read by
+         *     presence (`model_fields_set`): left out, the stored value is kept; sent,
+         *     it replaces it. A client sends what it edits, and must not wipe what it
+         *     does not know: the project page's colour picker sends no GitHub repo,
+         *     category or autostart repos, and while "not sent" read as "clear" every
+         *     colour change reset all three. The defaults below are therefore never
+         *     written over a stored value.
+         *
+         *     `null` clears `description`, `color`, `weekly_goal`, `github_repo`,
+         *     `category` and `contract`; `[]` clears `autostart_repos`. `archived` and
+         *     `goal_type` have no empty state and refuse null (422); `kind` has none
+         *     either, and reads null as left out. A day job moved to another kind
+         *     loses its contract with it; a contract sent with any other kind is a 409.
          */
         UpdateProjectRequest: {
             /**
@@ -7757,7 +7770,7 @@ export interface operations {
         parameters: {
             query?: {
                 archived?: boolean;
-                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
+                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes, a running timer counted up to now), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
                 include?: string | null;
                 /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
                 tz?: string | null;
@@ -8616,7 +8629,10 @@ export interface operations {
     };
     total_work_time_per_month_on_project_api_projects__project_id__total__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path: {
                 project_id: string;

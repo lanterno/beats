@@ -95,6 +95,7 @@ function ledgerWeek(weekOf: string, worked: number, goal: number | null = 8): Le
 		effectiveGoalOverridden: false,
 		contractExpected: null,
 		balanceEnd: null,
+		balanceMoved: null,
 		notes: [],
 		adjustments: [],
 	};
@@ -315,7 +316,12 @@ describe("Standing on a day job", () => {
 			endedBalance: null,
 			weeks: [
 				{ ...ledgerWeek("2026-09-07", 10, 42), contractExpected: 42, balanceEnd: null },
-				{ ...ledgerWeek("2026-08-31", 28, 42), contractExpected: 25.2, balanceEnd: -1.2 },
+				{
+					...ledgerWeek("2026-08-31", 28, 42),
+					contractExpected: 25.2,
+					balanceEnd: -1.2,
+					balanceMoved: -1.2,
+				},
 				{ ...ledgerWeek("2026-08-24", 0, null) },
 			],
 		};

@@ -56,12 +56,19 @@ class CreateProjectRequest(BaseModel):
 class UpdateProjectRequest(BaseModel):
     """Request body for updating a project.
 
-    The update is a wholesale replace, so a client that predates a field
-    would reset it on every colour change if "not sent" read as "clear".
-    `kind` and `contract` therefore tell the two apart through
-    `model_fields_set`: left out, the stored value is kept; `contract: null`
-    clears the contract. `kind` has no empty state, so null reads as left
-    out there.
+    Only `id` and `name` are required, and every other field is read by
+    presence (`model_fields_set`): left out, the stored value is kept; sent,
+    it replaces it. A client sends what it edits, and must not wipe what it
+    does not know: the project page's colour picker sends no GitHub repo,
+    category or autostart repos, and while "not sent" read as "clear" every
+    colour change reset all three. The defaults below are therefore never
+    written over a stored value.
+
+    `null` clears `description`, `color`, `weekly_goal`, `github_repo`,
+    `category` and `contract`; `[]` clears `autostart_repos`. `archived` and
+    `goal_type` have no empty state and refuse null (422); `kind` has none
+    either, and reads null as left out. A day job moved to another kind
+    loses its contract with it; a contract sent with any other kind is a 409.
     """
 
     id: str
@@ -107,7 +114,9 @@ class CreateBeatRequest(BaseModel):
 
 
 class UpdateBeatRequest(BaseModel):
-    """Request body for updating a beat. Tags are auto-derived, not sent."""
+    """Request body for editing a beat: these fields, and only these, change.
+    Tags are auto-derived, not sent. The note is not editable here: it comes
+    from an import, stays as stored, and a `note` in the body is ignored."""
 
     id: str
     project_id: str

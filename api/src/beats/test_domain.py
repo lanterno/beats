@@ -1,6 +1,7 @@
 """Tests for domain models and services."""
 
 import builtins
+from collections.abc import Collection
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -2363,6 +2364,32 @@ class TestSuggestDailyPlan:
         assert reader.asked == [("p1", self.FRIDAY - timedelta(days=4))]
         assert result[0]["reasoning"] == "You need 32.0h more this week under your contract"
 
+    async def test_a_failing_contract_read_keeps_that_projects_nominal_goal(self, caplog):
+        """AHM-85. One day job's read raising (Mongo gone) failed the whole
+        plan, and with it the Inbox. Now that job is planned against its
+        term's plain 40 h, the other against what its contract answers, and
+        the warning names the project by id."""
+
+        class _FailsForP2(_FakeWeekExpectationReader):
+            async def expected_for_week(self, project, week_of):
+                if project.id == "p2":
+                    raise RuntimeError("mongo went away")
+                return await super().expected_for_week(project, week_of)
+
+        projects = [_day_job("p1"), _day_job("p2")]
+        svc = _intel_service(projects=projects, contracts=_FailsForP2({"p1": 32.0}))
+
+        result = await svc.suggest_daily_plan(self.FRIDAY)
+
+        reasoning = {r["project_id"]: r["reasoning"] for r in result}
+        assert reasoning == {
+            "p1": "You need 32.0h more this week under your contract",
+            "p2": "You need 40.0h more this week under your contract",
+        }
+        [record] = [r for r in caplog.records if r.name == "beats.domain.intelligence.goals"]
+        assert "p2" in record.getMessage()
+        assert "Day job" not in record.getMessage()
+
     async def test_hours_under_a_term_that_owes_nothing_are_not_counted_toward_the_week(self):
         # AHM-82. The line quotes the week card's Remaining: of the 16 h
         # Monday and Tuesday owe, Monday's 6 h count and Wednesday's 4 h
@@ -2940,7 +2967,8 @@ class _FakeBeatRepoForServices:
     """In-memory BeatRepository fake for TimerService / BeatService.
     Implements get_active, get_last, create, update, delete, list,
     list_by_project, get_by_id with the same contract the real repo
-    exposes (raising NoObjectMatched where applicable)."""
+    exposes (raising NoObjectMatched where applicable, and BeatNotFound
+    from update, as the port says)."""
 
     def __init__(self, beats: builtins.list[Beat] | None = None):
         self._beats: list[Beat] = list(beats or [])
@@ -2967,14 +2995,14 @@ class _FakeBeatRepoForServices:
         self._beats.append(beat)
         return beat
 
-    async def update(self, beat: Beat) -> Beat:
+    async def update(self, beat: Beat, fields: Collection[str]) -> Beat:
         for i, b in enumerate(self._beats):
             if b.id == beat.id:
-                self._beats[i] = beat
-                return beat
-        from beats.domain.exceptions import NoObjectMatched
+                self._beats[i] = b.model_copy(update={f: getattr(beat, f) for f in fields})
+                return self._beats[i]
+        from beats.domain.exceptions import BeatNotFound
 
-        raise NoObjectMatched()
+        raise BeatNotFound(beat.id)
 
     async def delete(self, beat_id: str) -> bool:
         for i, b in enumerate(self._beats):
@@ -3310,6 +3338,54 @@ class TestTimerServiceStop:
         too_early = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
         with pytest.raises(InvalidEndTime):
             await svc.stop_timer(end_time=too_early)
+
+    async def test_a_write_during_the_flow_read_survives_the_stop(self):
+        """The stop reads the running beat, then awaits the flow windows, then
+        writes. Against real Mongo: a write landing in that await (the
+        companion moving the start earlier, an import bringing a note) is
+        not reverted by the stop, which writes only the end and the tags."""
+        import os
+
+        from bson import ObjectId
+        from pymongo import AsyncMongoClient
+
+        from beats.domain.services import TimerService
+        from beats.infrastructure.repositories import (
+            MongoBeatRepository,
+            MongoProjectRepository,
+        )
+
+        client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+        try:
+            db = client[os.environ.get("DB_NAME", "beats_test")]
+            user_id = str(ObjectId())
+            beats = MongoBeatRepository(db.beats, user_id=user_id)
+            start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+            moved = start - timedelta(minutes=20)
+            running = await beats.create(Beat(project_id="p1", start=start))
+            assert running.id is not None
+
+            class _WriteDuringRead:
+                async def list_by_range(self, start: datetime, end: datetime) -> list:
+                    await db.beats.update_one(
+                        {"_id": ObjectId(running.id)},
+                        {"$set": {"start": moved, "note": "Imported"}},
+                    )
+                    return []
+
+            svc = TimerService(
+                beat_repo=beats,
+                project_repo=MongoProjectRepository(db.projects, user_id=user_id),
+                flow_repo=_WriteDuringRead(),
+            )
+            end = start + timedelta(hours=1)
+            stopped = await svc.stop_timer(end_time=end)
+
+            stored = await beats.get_by_id(running.id)
+            assert (stored.start, stored.end, stored.note) == (moved, end, "Imported")
+            assert stopped == stored
+        finally:
+            await client.close()
 
 
 class TestTimerServiceStatus:
@@ -4011,7 +4087,7 @@ class TestProjectServiceTimeAggregations:
 
     async def test_monthly_totals_empty_returns_zero(self):
         svc = _project_service(projects=[_project("p1", "Alpha")])
-        result = await svc.get_monthly_totals("p1")
+        result = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
         assert result == {
             "durations_per_month": {},
             "total_minutes": 0,
@@ -4028,7 +4104,7 @@ class TestProjectServiceTimeAggregations:
             self._completed("b3", "p1", date(2026, 5, 1), minutes=120),
         ]
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
-        result = await svc.get_monthly_totals("p1")
+        result = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
         assert result["durations_per_month"] == {"2026-04": 1.5, "2026-05": 2.0}
         assert result["total_minutes"] == 90 + 120
 
@@ -4039,7 +4115,7 @@ class TestProjectServiceTimeAggregations:
         s = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
         runaway = Beat(id="b-runaway", project_id="p1", start=s, end=s + timedelta(hours=30))
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=[runaway])
-        result = await svc.get_monthly_totals("p1")
+        result = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
         assert len(result["warnings"]) == 1
         assert "b-runaway" in result["warnings"][0]
         assert "24 hours" in result["warnings"][0]
@@ -4153,8 +4229,8 @@ class TestProjectServiceBeatsBatchHelpers:
             self._running("b4", "p1", date.today()),
         ]
         svc = _project_service(projects=[_project("p1", "Alpha")], beats=beats)
-        via_public = await svc.get_monthly_totals("p1")
-        via_helper = ProjectService._monthly_totals_from_beats(beats)
+        via_public = await svc.get_monthly_totals("p1", ZoneInfo("UTC"))
+        via_helper = ProjectService._monthly_totals_from_beats(beats, ZoneInfo("UTC"))
         assert via_helper == via_public
 
     def test_this_week_from_beats_minutes_and_goal(self):
