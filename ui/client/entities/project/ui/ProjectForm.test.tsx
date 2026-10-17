@@ -1,9 +1,43 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/shared/api";
-import type { Contract } from "../model";
+import type { Contract, HolidayRegion, RegionHoliday } from "../model";
+import { contractFrameDefaults } from "../model";
 import { ProjectForm } from "./ProjectForm";
+
+// The network only: the calendars a region change reads go through the real
+// queries, the real comparison and the real form.
+const CALENDARS: Record<string, RegionHoliday[]> = {
+	"GB-ENG-2026": [
+		{ date: "2026-04-06", name: "Easter Monday" },
+		{ date: "2026-12-25", name: "Christmas Day" },
+	],
+	"GB-SCT-2026": [
+		{ date: "2026-11-30", name: "Saint Andrew's Day" },
+		{ date: "2026-12-25", name: "Christmas Day" },
+	],
+	"GB-WLS-2026": [
+		{ date: "2026-04-06", name: "Easter Monday" },
+		{ date: "2026-12-25", name: "Christmas Day" },
+	],
+};
+
+vi.mock("../api/projectApi", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../api/projectApi")>()),
+	fetchRegionHolidays: vi.fn(async (country: string, subdivision: string, year: number) => {
+		const calendar = CALENDARS[`${country}-${subdivision}-${year}`];
+		if (!calendar) throw new Error(`no calendar for ${country}-${subdivision}-${year}`);
+		return calendar;
+	}),
+}));
+
+function renderWithQueries(ui: ReactElement) {
+	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 describe("ProjectForm", () => {
 	afterEach(cleanup);
@@ -140,6 +174,7 @@ describe("ProjectForm", () => {
 	});
 
 	describe("work contracts", () => {
+		const contractFrame = contractFrameDefaults();
 		const CONTRACT: Contract = {
 			terms: [
 				{
@@ -275,6 +310,79 @@ describe("ProjectForm", () => {
 			expect(screen.getByText("must be positive")).toBeInTheDocument();
 			// No input for the terms as a whole: it reads as a general message.
 			expect(screen.getByRole("alert")).toHaveTextContent("terms must be in order");
+		});
+
+		describe("a region change on a contract with dates not given", () => {
+			const GB: HolidayRegion = {
+				code: "GB",
+				name: "United Kingdom",
+				subdivisions: [
+					{ code: "ENG", name: "England" },
+					{ code: "SCT", name: "Scotland" },
+					{ code: "WLS", name: "Wales" },
+				],
+			};
+			// Saint Andrew's Day is no holiday in England, so its mark does
+			// nothing there; Christmas is not given in both.
+			const IN_ENGLAND: Contract = {
+				...CONTRACT,
+				holidayCountry: "GB",
+				holidaySubdivision: "ENG",
+				holidaysNotGiven: ["2026-11-30", "2026-12-25"],
+			};
+
+			function renderForm(onSubmit = vi.fn()) {
+				renderWithQueries(
+					<ProjectForm
+						onSubmit={onSubmit}
+						initialValues={{
+							name: "Employer",
+							kind: "day_job",
+							contract: {
+								...contractFrame,
+								holidayCountry: "GB",
+								holidaySubdivision: "ENG",
+							},
+						}}
+						existingContract={IN_ENGLAND}
+						holidayRegions={[GB]}
+					/>,
+				);
+				return onSubmit;
+			}
+
+			it("names the mark the new region has a holiday on, and clears it on save when asked", async () => {
+				const onSubmit = renderForm();
+				const subdivision = screen.getByLabelText(/Region within United Kingdom/);
+
+				await userEvent.selectOptions(subdivision, "SCT");
+				expect(
+					await screen.findByText(/marks a day as not given that Scotland has a holiday on/),
+				).toBeInTheDocument();
+				expect(screen.getByRole("listitem")).toHaveTextContent("Saint Andrew's Day");
+
+				await userEvent.click(screen.getByRole("button", { name: "Clear the mark" }));
+				await userEvent.click(screen.getByRole("button", { name: "Save" }));
+				expect(onSubmit).toHaveBeenCalledWith(
+					expect.objectContaining({ clearedNotGiven: ["2026-11-30"] }),
+				);
+			});
+
+			it("says nothing where the new region revives no mark, and starts over on each change", async () => {
+				const onSubmit = renderForm();
+				const subdivision = screen.getByLabelText(/Region within United Kingdom/);
+
+				await userEvent.selectOptions(subdivision, "SCT");
+				await userEvent.click(await screen.findByRole("button", { name: "Clear the mark" }));
+				expect(screen.getByRole("button", { name: "Keep the mark" })).toBeInTheDocument();
+
+				// Wales has England's holidays here: nothing comes into force, and
+				// the clear asked for Scotland is gone with it.
+				await userEvent.selectOptions(subdivision, "WLS");
+				await userEvent.click(screen.getByRole("button", { name: "Save" }));
+				expect(screen.queryByText(/as not given that/)).not.toBeInTheDocument();
+				expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ clearedNotGiven: [] }));
+			});
 		});
 	});
 });
