@@ -635,8 +635,10 @@ region check, and every project write reconciles the adjustments
 | `GET /api/meta/holidays?country=&subdivision=&year=` | one region's public holidays for a year as `[{date, name}]`, by date, as the region gives them: no contract is read, so it answers for a region no contract names yet. `country` and `year` required (422 naming the one missing); an unknown country or subdivision is 400 `UNKNOWN_HOLIDAY_REGION`; cacheable and session-only like the region list |
 
 - **Omitted is not null on `PUT /api/projects`.** Older clients do not
-  send `kind` or `contract`, so the route reads `model_fields_set`: left
-  out keeps the stored value, `contract: null` clears it. Requests carry
+  send `kind` or `contract`, and the project page's colour picker sends
+  no GitHub repo, category or autostart repos, so the route reads every
+  field bar `id` and `name` by `model_fields_set`: left out keeps the
+  stored value, `contract: null` clears it. Requests carry
   the domain `Contract` itself — its validators produce the 422, and a
   mirror would drift. The same holds inside a sent contract for
   `company_holidays`, `holidays_not_given` and `vacation`, on
