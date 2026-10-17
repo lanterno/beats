@@ -138,9 +138,7 @@ export const ContractWeekSchema = z.object({
 	balance_opening: z.number().nullable(),
 	balance_worked: z.number().nullable(),
 	balance_expected_through: z.number().nullable(),
-	// Optional while an API that predates balance adjustments may answer:
-	// such an API keeps none, so 0 is the true figure there, not a guess.
-	balance_adjusted: z.number().nullable().optional(),
+	balance_adjusted: z.number().nullable(),
 	days: z.array(ContractDaySchema),
 });
 
@@ -187,10 +185,7 @@ export const LedgerWeekSchema = z.object({
 	// the SPA to read the move off the closes.
 	balance_moved: z.number().nullable().optional(),
 	notes: z.array(LedgerNoteSchema),
-	// Defaults, like `adjusted` and `ended_balance` below, for an API that
-	// predates balance adjustments: it keeps none, so these are the true
-	// figures there, not guesses.
-	adjustments: z.array(LedgerAdjustmentSchema).optional().default([]),
+	adjustments: z.array(LedgerAdjustmentSchema),
 });
 
 export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
@@ -198,7 +193,7 @@ export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
 const LedgerTotalsSchema = z.object({
 	expected: z.number(),
 	worked: z.number(),
-	adjusted: z.number().optional().default(0),
+	adjusted: z.number(),
 	balance: z.number(),
 });
 
@@ -208,7 +203,7 @@ export const LedgerSchema = z.object({
 	since: z.string().nullable(), // contract.starts_on, YYYY-MM-DD
 	totals: LedgerTotalsSchema.nullable(),
 	// The close on `ended_on`, before a settlement after it.
-	ended_balance: z.number().nullable().optional(),
+	ended_balance: z.number().nullable(),
 	weeks: z.array(LedgerWeekSchema),
 });
 

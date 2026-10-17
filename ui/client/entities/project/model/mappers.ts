@@ -190,8 +190,7 @@ export function toContractWeek(api: ApiContractWeek): ContractWeek {
 		balanceOpening: api.balance_opening ?? undefined,
 		balanceWorked: api.balance_worked ?? undefined,
 		balanceExpectedThrough: api.balance_expected_through ?? undefined,
-		// An API without adjustments sends none, and kept none: 0 is its figure.
-		balanceAdjusted: api.balance === null ? undefined : (api.balance_adjusted ?? 0),
+		balanceAdjusted: api.balance_adjusted ?? undefined,
 		days: api.days.map(toContractDay),
 	};
 }
@@ -237,7 +236,7 @@ export function toLedger(api: ApiLedger): Ledger {
 	return {
 		since: api.since,
 		totals: api.totals,
-		endedBalance: api.ended_balance ?? null,
+		endedBalance: api.ended_balance,
 		weeks: api.weeks.map(toLedgerWeek),
 	};
 }

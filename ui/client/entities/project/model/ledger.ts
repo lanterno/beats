@@ -169,12 +169,7 @@ function adjustmentRow(adjustment: LedgerAdjustment): AdjustmentRow {
 }
 
 /** Every rule the contract puts in the ledger, dated; placement is decided below. */
-function contractRules(
-	contract: Contract,
-	ledger: Ledger,
-	weeks: LedgerWeek[],
-	todayIso: string,
-): RuleRow[] {
+function contractRules(contract: Contract, ledger: Ledger, todayIso: string): RuleRow[] {
 	const terms = sortTerms(contract.terms);
 	const rules: RuleRow[] = terms.map((term, i) => {
 		const planned = term.effectiveFrom > todayIso;
@@ -208,13 +203,11 @@ function contractRules(
 	const endedOn = contract.endedOn;
 	if (endedOn) {
 		const planned = endedOn > todayIso;
-		const endWeek = weeks.find((w) => w.weekOf <= endedOn && endedOn <= sundayOf(w.weekOf));
 		// The close on the end day, before a settlement after it, which is its
-		// own row; an API that predates adjustments has no settlement to leave out.
-		const final = ledger.endedBalance ?? ledger.totals?.balance ?? endWeek?.balanceEnd ?? null;
-		// On the last day itself the balance is still live (the standing
-		// carries it), so the rule says the contract ended, as the header and
-		// the register do that day, and gives no final figure.
+		// own row. On the last day itself the balance is still live (the
+		// standing carries it), so the rule says the contract ended, as the
+		// header and the register do that day, and gives no final figure.
+		const final = ledger.endedBalance;
 		const finalText =
 			final !== null && balanceIsFinal(contract, todayIso)
 				? ` · final balance ${formatSignedHours(final)}`
@@ -363,7 +356,7 @@ export function ledgerRows(
 		.filter((w) => w.weekOf < thisMonday)
 		.sort((a, b) => b.weekOf.localeCompare(a.weekOf));
 	const contract = project.kind === "day_job" ? project.contract : undefined;
-	const rules = contract ? contractRules(contract, ledger, weeks, todayIso) : [];
+	const rules = contract ? contractRules(contract, ledger, todayIso) : [];
 	const adjustments = contract ? ledger.weeks.flatMap((w) => w.adjustments).map(adjustmentRow) : [];
 	const dated = (row: RuleRow | AdjustmentRow) =>
 		row.type === "rule" ? row.date : row.adjustment.date;
