@@ -107,7 +107,8 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const [nextKey, setNextKey] = useState(contract.companyHolidays.length);
 	const [errors, setErrors] = useState<Map<number, RowErrors>>(new Map());
 	const [general, setGeneral] = useState<string[]>([]);
-	// What the last copy did, said on the page it was made on.
+	// What the last copy did, said on the page it was made on until a row is
+	// edited or removed, when it could name days no longer there.
 	const [copied, setCopied] = useState<{ year: number; words: string } | null>(null);
 	const [saving, setSaving] = useState(false);
 
@@ -150,6 +151,12 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const setRow = (key: number, patch: Partial<CompanyRow>) => {
 		setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 		clearErrors(key);
+		setCopied(null);
+	};
+
+	const removeRow = (key: number) => {
+		setRows((all) => all.filter((r) => r.key !== key));
+		setCopied(null);
 	};
 
 	const toggleGiven = (date: string, given: boolean) =>
@@ -363,7 +370,7 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 										/>
 										<button
 											type="button"
-											onClick={() => setRows((all) => all.filter((r) => r.key !== row.key))}
+											onClick={() => removeRow(row.key)}
 											disabled={saving}
 											aria-label={`Remove company holiday ${i + 1}`}
 											className={REMOVE}
