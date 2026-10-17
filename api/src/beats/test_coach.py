@@ -3370,6 +3370,45 @@ class TestBuildDayContext:
         # The rest of the day context still renders
         assert "## Today: 2026-04-01" in out
 
+    async def test_an_unreadable_event_time_skips_that_event_alone(self, monkeypatch):
+        """AHM-85. A dateTime fromisoformat refuses lost the whole calendar
+        block. Now that event is skipped, and the five that print are the
+        first five readable ones, so the bad one takes no good one's place."""
+        from beats.domain import calendar as calendar_module
+
+        db = Database.get_db()
+        await db.calendar_integrations.insert_one(
+            {
+                "user_id": "user-1",
+                "provider": "google",
+                "access_token": "ya29",
+                "refresh_token": "rt",
+                "enabled": True,
+                "calendar_ids": ["primary"],
+            }
+        )
+
+        def event(summary, hour):
+            return {
+                "summary": summary,
+                "start": f"2026-04-01T{hour:02}:00:00Z",
+                "end": f"2026-04-01T{hour:02}:30:00Z",
+                "all_day": False,
+            }
+
+        async def fake_fetch_events(self, start, end):
+            garbled = {**event("Garbled", 8), "start": "2026-04-01Tnine o'clock"}
+            return [garbled, *(event(f"Meeting {n}", 9 + n) for n in range(5))]
+
+        monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
+
+        repos = _fake_coach_repos()
+        out = await context_module.build_day_context("user-1", repos, target_date=date(2026, 4, 1))
+
+        assert "Garbled" not in out
+        for n in range(5):
+            assert f"  {9 + n:02}:00–{9 + n:02}:30 Meeting {n}" in out
+
     # The contract section. The clock is the contract service's (CONTRACT_NOW,
     # Thursday 28 May in Zürich), and every positive test passes that day as
     # `target_date` with the Zürich timezone.
