@@ -761,6 +761,28 @@ class ContractService:
                 logger.warning("project %s: contract region unknown, week skipped", project.id)
         return weeks
 
+    async def current_weeks(
+        self, projects: Iterable[Project], tz: ZoneInfo, as_of: date
+    ) -> dict[str, ContractWeek]:
+        """The current week of every day job with a contract among `projects`,
+        by project id, provided `as_of` is today in `tz` — the coach's read,
+        which holds no beats of its own.
+
+        Empty for any other day: the figures are today's (the balance is as
+        of today, the week is today's), and this service's clock is the one
+        that says which day that is, so a backdated brief does not quote
+        today's balance as its own and a test that fixes the clock fixes
+        both sides. Otherwise one beats read per day job — a running beat
+        counts, as on the project page — and then the index's read
+        (`weeks_for`), so the figures are the week route's to the decimal
+        and a region the library has stopped knowing skips that project.
+        """
+        if as_of != self._now(tz).date():
+            return {}
+        day_jobs = [p for p in projects if p.id and p.kind is ProjectKind.DAY_JOB and p.contract]
+        beats_by_pid = {p.id: await self.beat_repo.list_by_project(p.id) for p in day_jobs if p.id}
+        return await self.weeks_for(day_jobs, beats_by_pid, tz)
+
     async def expected_for_week(self, project: Project, week_of: date) -> float | None:
         """What the contract expects of the week starting `week_of` — the week
         route's `expected` on its own, for the readers that quote a figure
@@ -826,6 +848,10 @@ class ContractService:
         # The same function every other reader of the figure goes through,
         # so the card, the history row and the planning line cannot drift.
         expected = week_expectation(contract, absences, holiday_days, week_of)
+        # Rounded from the raw sums, as every other figure here is: 8.545 h
+        # of a 40 h week reads 8.54 worked and 31.45 remaining, which the
+        # page shows as 8.5 and 31.4 and the coach says as the page does.
+        # The page's figures need not add up at the decimal it shows.
         remaining = round_hours(expected_raw - counted_raw) if expected is not None else None
         running = (
             balance_terms(contract, absences, holiday_days, worked, adjustments, today)

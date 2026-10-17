@@ -22,10 +22,11 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from anthropic.types import TextBlock, ToolUseBlock
 
-from beats.coach.context import build_coach_messages
+from beats.coach.context import UTC_TZ, build_coach_messages
 from beats.coach.gateway import complete
 from beats.coach.repos import COACH_CONVERSATIONS_COLLECTION, build_repos
 from beats.coach.tools import TOOL_SCHEMAS, execute_tool
@@ -89,8 +90,13 @@ async def handle_chat_turn(
     user_id: str,
     message: str,
     conversation_id: str | None = None,
+    tz: ZoneInfo = UTC_TZ,
 ) -> AsyncIterator[dict[str, Any]]:
     """Yields SSE-ready dicts: {type, ...payload}.
+
+    ``tz`` is the user's timezone, as the brief's is: the day context's
+    "today" and each day job's contract week are that timezone's, the
+    project page's, not UTC's.
 
     Event types:
       - {"type": "text", "text": "..."}
@@ -101,7 +107,9 @@ async def handle_chat_turn(
     conv_id = conversation_id or str(uuid.uuid4())
     history = await _load_history(user_id, conv_id)
 
-    system, all_messages, spec = await build_coach_messages(user_id, message, history=history)
+    system, all_messages, spec = await build_coach_messages(
+        user_id, message, history=history, tz=tz
+    )
 
     await _persist_message(user_id, conv_id, "user", message)
 
@@ -182,7 +190,7 @@ async def handle_chat_turn(
         for tb in tool_use_blocks:
             try:
                 result_text = await execute_tool(
-                    user_id, tb["name"], tb["input"], repos=repos, projects=projects
+                    user_id, tb["name"], tb["input"], repos=repos, projects=projects, tz=tz
                 )
             except Exception as exc:  # noqa: BLE001
                 result_text = f"Error: {exc}"

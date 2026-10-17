@@ -24,7 +24,10 @@ export function isTimeBased(scheduleType: ScheduleType): boolean {
 
 /**
  * Hours the week owes under a term; null for an objective term, and for a
- * time-based term missing its numbers (the API would have refused it).
+ * time-based term missing its numbers (the API would have refused it). With
+ * `formatHours`, the coach's twin is `fmt_hours` in
+ * api/src/beats/coach/repos.py, which prints a term's hours as the page does;
+ * a change to the rounding here is made there too.
  */
 export function termHoursPerWeek(term: ContractTerm): number | null {
 	if (term.scheduleType === "objective") return null;
@@ -101,7 +104,11 @@ export function sortTerms(terms: ContractTerm[]): ContractTerm[] {
 	return [...terms].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
 }
 
-/** A percentage stored as a fraction (0.8), shown as a percent (80). */
+/**
+ * A percentage stored as a fraction (0.8), shown as a percent (80). The
+ * coach's twin is `fmt_percent` in api/src/beats/coach/repos.py, which names
+ * a part-time term as the page does; a change to either is made in both.
+ */
 export function toPercent(fraction: number): number {
 	return Math.round(fraction * 10000) / 100;
 }
@@ -111,7 +118,11 @@ export function fromPercent(percent: number): number {
 	return Math.round(percent * 100) / 10000;
 }
 
-/** "42 h", "33.6 h" — a term's figure, at whatever precision it has. */
+/**
+ * "42 h", "33.6 h" — a term's figure, to the hundredth. The coach's twin is
+ * `fmt_hours` in api/src/beats/coach/repos.py; a change to either is made in
+ * both.
+ */
 export function formatHours(hours: number): string {
 	return `${Math.round(hours * 100) / 100} h`;
 }
@@ -134,6 +145,8 @@ export function balanceTone(hours: number): BalanceTone {
 /**
  * A balance with its sign made unmistakable: "+4.5 h over", "−2.0 h owed"
  * or "even" — never a bare signed number, whose minus is easy to miss.
+ * The coach words the balance with its twin, `describe_balance` in
+ * api/src/beats/coach/contract_section.py; a change to either is made in both.
  */
 export function describeBalance(hours: number): string {
 	const tone = balanceTone(hours);

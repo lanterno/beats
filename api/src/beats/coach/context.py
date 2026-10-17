@@ -11,14 +11,15 @@ The blocks are composed into messages by the brief/chat callers.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from beats.coach.contract_section import contract_section
 from beats.coach.feedback import brief_feedback_lines, recent_rated_briefs
 from beats.coach.memory import MemoryStore
 from beats.coach.prompts import COACH_PERSONA
-from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
+from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_hours, fmt_minutes
 from beats.domain.flow import summarize_flow
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.utils import local_date, local_dt
@@ -36,8 +37,16 @@ def build_system_block() -> str:
     return COACH_PERSONA
 
 
-async def build_user_context(user_id: str, repos: CoachRepos) -> str:
-    """30-day aggregates + coach memory. Designed to be cached."""
+async def build_user_context(user_id: str, repos: CoachRepos, tz: ZoneInfo = UTC_TZ) -> str:
+    """30-day aggregates + coach memory. Designed to be cached.
+
+    ``tz`` is the request's, and every week here is a week in it: the goal
+    line's, the weekly totals' and the productivity score's. The goal line
+    must be the day context's week, since that context's contract week is
+    labelled by the term this line names; on UTC's week a user west of
+    Greenwich would read next week's term on Sunday evening beside this
+    week's figures. Only the 30-day window is a span of time, not of days.
+    """
     db = Database.get_db()
 
     projects = await repos.project.list()
@@ -56,16 +65,21 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         name = project_map.get(b.project_id, "Unknown")
         project_hours[name] = project_hours.get(name, 0) + b.duration.total_seconds() / 3600
 
-    # Weekly totals for the last 4 weeks
+    # Weekly totals for the last 4 weeks: the user's Monday-to-Sunday weeks,
+    # each session on the local day it started, as the project page counts
+    # them. From every beat, not the 30-day window, which cuts the fourth.
+    local_today = now.astimezone(tz).date()
+    monday = local_today - timedelta(days=local_today.weekday())
     week_totals: list[str] = []
     for w in range(4):
-        start = now - timedelta(days=now.weekday() + 7 * (w + 1))
+        start = monday - timedelta(days=7 * (w + 1))
         end = start + timedelta(days=7)
         week_hours = sum(
-            b.duration.total_seconds() / 3600 for b in recent_beats if start <= b.start < end
+            b.duration.total_seconds() / 3600
+            for b in beats
+            if start <= local_date(b.start, tz) < end
         )
-        week_label = start.strftime("%b %d")
-        week_totals.append(f"  Week of {week_label}: {week_hours:.1f}h")
+        week_totals.append(f"  Week of {start.strftime('%b %d')}: {week_hours:.1f}h")
 
     # Productivity score
     intel = IntelligenceService(
@@ -73,7 +87,7 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         project_repo=repos.project,
     )
     try:
-        score_data = await intel.compute_productivity_score()
+        score_data = await intel.compute_productivity_score(tz=tz)
         score_line = (
             f"Productivity score: {score_data['score']}/100 "
             f"(consistency={score_data['components']['consistency']}, "
@@ -84,17 +98,18 @@ async def build_user_context(user_id: str, repos: CoachRepos) -> str:
         logger.debug("Productivity score unavailable", exc_info=True)
         score_line = "Productivity score: unavailable"
 
-    # Goals — this week's: the contract's hours on a day job it governs, the
+    # Goals — this week's in the request timezone, as the day context's
+    # contract week is: the contract's hours on a day job it governs, the
     # personal goal elsewhere. One line either way.
-    monday = now.date() - timedelta(days=now.weekday())
     goals = []
     for p in active:
         term = p.goal_term(monday)
         if term is not None:
             # A governing term of 0 hours is no goal, and hides the personal one.
+            # The hours to the hundredth, as the page's term reads (`fmt_hours`).
             goal, _ = p.effective_goal(monday)
             if goal:
-                goals.append(f"  {p.name}: {goal:g}h/week ({fmt_contract_goal(term)})")
+                goals.append(f"  {p.name}: {fmt_hours(goal)}h/week ({fmt_contract_goal(term)})")
         elif p.weekly_goal:
             goals.append(f"  {p.name}: {p.weekly_goal}h/week ({p.goal_type})")
 
@@ -158,7 +173,8 @@ async def build_day_context(
     user_id: str, repos: CoachRepos, target_date: date | None = None, tz: ZoneInfo = UTC_TZ
 ) -> str:
     """Today's raw signals. Small and NOT cached."""
-    project_map = {p.id: p.name for p in await repos.project.list()}
+    projects = await repos.project.list()
+    project_map = {p.id: p.name for p in projects}
 
     today = target_date or datetime.now(tz).date()
     yesterday = today - timedelta(days=1)
@@ -204,16 +220,25 @@ async def build_day_context(
 
             cal_repo = MongoCalendarIntegrationRepository(db.calendar_integrations, user_id=user_id)
             cal_service = CalendarService(settings=settings, repo=cal_repo)
+            # The user's day in the request timezone, with its offset: Google
+            # refuses a timeMin/timeMax without one (a 400 that fetch_events'
+            # per-calendar except swallowed), and a naive midnight would be
+            # UTC's day anyway.
             events = await cal_service.fetch_events(
-                datetime.combine(today, datetime.min.time()),
-                datetime.combine(today, datetime.max.time()),
+                datetime.combine(today, time.min, tzinfo=tz),
+                datetime.combine(today, time.max, tzinfo=tz),
             )
+
+            def clock(raw: str) -> str:
+                # HH:MM on the user's clock: Google writes each event's time
+                # in its calendar's zone, which need not be the request's.
+                return datetime.fromisoformat(raw).astimezone(tz).strftime("%H:%M")
+
             for ev in events[:5]:
                 # fetch_events returns RFC3339 datetime strings ("2026-05-
                 # 01T09:00:00-07:00") or ISO dates for all-day events
-                # ("2026-05-01"). Slice 11:16 to extract HH:MM from the
-                # dateTime form; for all-day rows it gives the empty
-                # string, so we render those as "all-day" instead.
+                # ("2026-05-01"). Only the dateTime form has a "T"; the
+                # date-only rows render as "all-day" instead.
                 # Defensive .get("", ...) — Google's API can occasionally
                 # return events without a `start.dateTime` key (e.g.
                 # cancelled instances of recurring events). Fall through
@@ -222,8 +247,8 @@ async def build_day_context(
                 start_raw = ev.get("start") or ""
                 end_raw = ev.get("end") or ""
                 summary = ev.get("summary", "(no title)")
-                start_t = start_raw[11:16] if "T" in start_raw else "all-day"
-                end_t = end_raw[11:16] if "T" in end_raw else ""
+                start_t = clock(start_raw) if "T" in start_raw else "all-day"
+                end_t = clock(end_raw) if "T" in end_raw else ""
                 if start_t == "all-day":
                     calendar_lines.append(f"  all-day {summary}")
                 else:
@@ -243,6 +268,19 @@ async def build_day_context(
 
     if calendar_lines:
         lines += ["", "### Calendar today", *calendar_lines]
+
+    # Each day job's week against its contract (best-effort, like the
+    # sections around it). Here and not in the cached user context: the
+    # figures move with every session and are the request timezone's. The
+    # contract service's clock decides whether `today` is today, so a
+    # backdated brief gets no section rather than today's balance.
+    try:
+        weeks = await repos.contracts.current_weeks(projects, tz, today)
+        section = contract_section(projects, weeks, today)
+        if section:
+            lines += ["", *section]
+    except Exception:
+        logger.debug("Contract weeks unavailable for day context", exc_info=True)
 
     # Biometric data (if available)
     try:
@@ -303,16 +341,18 @@ async def build_coach_messages(
     """Build the full (system, messages, cache_spec) tuple for a coach call.
 
     Used by both brief.py and chat.py to avoid duplicating the context assembly.
-    Returns (system, messages, cache_spec). ``tz`` controls the local-day
-    bucketing of the (uncached) day context; the cached user-context block is
-    timezone-independent so the prompt cache isn't fragmented per timezone.
+    Returns (system, messages, cache_spec). ``tz`` is the request's, and
+    every day and week of the coach's is that timezone's: the (uncached) day
+    context's, and in the cached user-context block the goal line's, the
+    weekly totals' and the score's. That block is one user's own anyway, so
+    the timezone splits its cache only when the user's timezone changes.
     """
     from beats.coach.gateway import CacheSpec
 
     repos = await build_repos(user_id)
 
     system = build_system_block()
-    user_ctx = await build_user_context(user_id, repos)
+    user_ctx = await build_user_context(user_id, repos, tz)
     day_ctx = await build_day_context(user_id, repos, target_date, tz)
 
     preamble = [

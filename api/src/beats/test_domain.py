@@ -3764,6 +3764,19 @@ class TestContractServiceLedger:
         assert ledger.totals is not None
         assert ledger.totals.balance == week.balance
 
+    async def test_each_week_figure_is_rounded_from_the_raw_hours(self):
+        # 8 h 32 m 42 s is 8.545 h, a half-way hundredth: worked rounds it to
+        # 8.54 and remaining rounds 31.455 to 31.45, each on its own, so the
+        # two miss 40 by a hundredth. Taking remaining off the rounded 8.54
+        # instead would read 31.46, which the page shows as 31.5 h, not 31.4.
+        started = datetime(2026, 3, 10, 8, tzinfo=UTC)
+        beat = Beat(id="b1", project_id="p1", start=started, end=started + timedelta(seconds=30762))
+        service = self._service(at=datetime(2026, 3, 11, 12, tzinfo=UTC), beats=[beat])
+
+        week = await service.week("p1", None, self.UTC_TZ)
+
+        assert (week.expected, week.worked, week.remaining) == (40, 8.54, 31.45)
+
     async def test_absences_are_read_from_the_contracts_first_day_to_the_weeks_end(self):
         # Read on Thursday 5 March for two weeks. A day off on 12 January is
         # well before the weeks shown but still charges nothing to the

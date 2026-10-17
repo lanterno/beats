@@ -660,7 +660,8 @@ export interface paths {
         put?: never;
         /**
          * Coach Chat
-         * @description Streaming chat with tool use. Returns SSE.
+         * @description Streaming chat with tool use. Returns SSE. ``tz`` names the user's
+         *     today and each day job's contract week in the coach's context.
          */
         post: operations["coach_chat_api_coach_chat_post"];
         delete?: never;
@@ -2775,6 +2776,8 @@ export interface components {
          *     week; `remaining` subtracts only the hours the balance counts — inside
          *     the contract's dates, under a term that owes hours — so the two differ
          *     on a week it starts or ends, or a term that owes nothing begins or ends.
+         *     Each figure is rounded on its own, so `worked + remaining` can miss
+         *     `expected` by a hundredth.
          */
         ContractWeek: {
             /** Balance */
@@ -5266,7 +5269,10 @@ export interface operations {
     };
     coach_chat_api_coach_chat_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5391,7 +5397,10 @@ export interface operations {
     };
     rewrite_memory_api_coach_memory_rewrite_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5405,6 +5414,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

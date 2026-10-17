@@ -15,10 +15,19 @@ there is nothing to register.
 """
 
 import builtins
+from collections.abc import Iterable
 from datetime import date, datetime
 from typing import Protocol
+from zoneinfo import ZoneInfo
 
-from beats.domain.models import Absence, BalanceAdjustment, Beat, FlowWindow, Project
+from beats.domain.models import (
+    Absence,
+    BalanceAdjustment,
+    Beat,
+    ContractWeek,
+    FlowWindow,
+    Project,
+)
 
 
 class CompletedBeatReader(Protocol):
@@ -142,6 +151,25 @@ class WeekExpectationReader(Protocol):
     hours it expects of that week after holidays and absences, or None when
     it expects nothing by nature (`ContractService.expected_for_week`). The
     Inbox's readers — the planning line, the pacing card, the stale-project
-    card — read this and nothing else of a contract."""
+    card — read this and nothing else of a contract, and so, through
+    `CoachContractReader`, does the coach's pattern tool."""
 
     async def expected_for_week(self, project: Project, week_of: date) -> float | None: ...
+
+
+class ContractWeeksReader(Protocol):
+    """What the coach's day context reads of a contract: the current week of
+    each day job among `projects`, by project id, the same figures the page shows
+    — and nothing unless `as_of` is today in `tz` by the reader's own clock
+    (`ContractService.current_weeks`)."""
+
+    async def current_weeks(
+        self, projects: Iterable[Project], tz: ZoneInfo, as_of: date
+    ) -> dict[str, ContractWeek]: ...
+
+
+class CoachContractReader(ContractWeeksReader, WeekExpectationReader, Protocol):
+    """Both of what the coach reads of a contract: the current weeks for the
+    day context, and each week's adjusted expectation for the pattern tool,
+    whose pacing and stale-project cards quote it as the Inbox's do.
+    `ContractService` is both."""

@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { config } from "@/shared/config";
+import { browserTimeZone } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
 import { type ChatHistoryMessage, type ChatSSEEvent, fetchChatHistory } from "./api/coachApi";
 
@@ -121,7 +122,10 @@ export function useCoachChat() {
 			});
 
 			try {
-				const res = await fetch(`${API_URL}/api/coach/chat`, {
+				// The coach's "today" and each day job's contract week are
+				// the browser's day, as on the brief and the project page.
+				const tz = encodeURIComponent(browserTimeZone());
+				const res = await fetch(`${API_URL}/api/coach/chat?tz=${tz}`, {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",

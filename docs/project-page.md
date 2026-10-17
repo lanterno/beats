@@ -335,7 +335,17 @@ match shows the figures and no sentence — never a guessed one. The code is
 - **The projection is the current week's only.** The balance is pinned to
   today whatever week is open, so the page always passes the current
   week's `/contract/week`. Its figures round to 0.01 like the API's, so the
-  sign is the balance's.
+  sign is the balance's. The coach projects with a Python twin,
+  `_by_sunday` in `api/src/beats/coach/contract_section.py`, and words the
+  balance with `describe_balance` beside it. It prints the week's figures
+  with `_hours`, `hours1`'s twin, so it says the tenth the page shows, and
+  in the first week it sends no projection, by `_is_first_week`, the twin
+  of `isFirstWeek`. It names a part-time term's percentage with
+  `fmt_percent` (`coach/repos.py`), `toPercent`'s twin, and the term's
+  weekly hours with `fmt_hours`, the twin of `termHoursPerWeek` and
+  `formatHours`. A change to `projection()`, `describeBalance`, `hours1`,
+  `isFirstWeek`, `toPercent` or the rounding of `termHoursPerWeek` and
+  `formatHours` is made there too.
 - **A cap has no sentence.** The personal-goal path serves every kind, and
   a day job under an objective term or before its first term, over the
   calendar days left.

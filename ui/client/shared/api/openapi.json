@@ -800,7 +800,7 @@
         "type": "object"
       },
       "ContractWeek": {
-        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation. `worked` is every hour on the project that\nweek; `remaining` subtracts only the hours the balance counts \u2014 inside\nthe contract's dates, under a term that owes hours \u2014 so the two differ\non a week it starts or ends, or a term that owes nothing begins or ends.",
+        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation. `worked` is every hour on the project that\nweek; `remaining` subtracts only the hours the balance counts \u2014 inside\nthe contract's dates, under a term that owes hours \u2014 so the two differ\non a week it starts or ends, or a term that owes nothing begins or ends.\nEach figure is rounded on its own, so `worked + remaining` can miss\n`expected` by a hundredth.",
         "properties": {
           "balance": {
             "anyOf": [
@@ -5828,8 +5828,28 @@
     },
     "/api/coach/chat": {
       "post": {
-        "description": "Streaming chat with tool use. Returns SSE.",
+        "description": "Streaming chat with tool use. Returns SSE. ``tz`` names the user's\ntoday and each day job's contract week in the coach's context.",
         "operationId": "coach_chat_api_coach_chat_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5990,6 +6010,26 @@
       "post": {
         "description": "Trigger the coach to rewrite its memory from the last 7 days.",
         "operationId": "rewrite_memory_api_coach_memory_rewrite_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6000,6 +6040,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Rewrite Memory",

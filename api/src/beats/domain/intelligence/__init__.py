@@ -64,10 +64,10 @@ class IntelligenceService:
     """Binds the repositories to the intelligence functions.
 
     Kept because the routers and the coach already depend on it; it adds
-    nothing but the two repositories — and, for the Inbox readers that
-    quote a week's figure, the contract reader that makes a governed day
-    job's week expectation the adjusted one (`goals.py`). The coach builds
-    the service without it and never asks for that figure.
+    nothing but the two repositories — and, for the readers that quote a
+    week's figure, the contract reader that makes a governed day job's week
+    expectation the adjusted one (`goals.py`). The routers and the coach's
+    tools both pass it, so the Inbox and `get_patterns` quote one figure.
     """
 
     def __init__(

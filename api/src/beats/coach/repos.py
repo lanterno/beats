@@ -6,12 +6,21 @@ Centralizing here avoids duplicating the constructor calls.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from beats.domain.models import ContractTerm, ScheduleType
-from beats.domain.ports import CompletedBeatReader, FlowWindowReader, ProjectLister
+from beats.domain.ports import (
+    CoachContractReader,
+    CompletedBeatReader,
+    FlowWindowReader,
+    ProjectLister,
+)
+from beats.domain.services import ContractService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
+    MongoAbsenceRepository,
+    MongoAdjustmentRepository,
     MongoBeatRepository,
     MongoFlowWindowRepository,
     MongoProjectRepository,
@@ -29,7 +38,9 @@ class CoachRepos:
     """The user-scoped repositories the coach reads.
 
     Each field names only what the coach reads: the project list, completed
-    beats (directly, and again through IntelligenceService), and flow windows. Typed by
+    beats (directly, and again through IntelligenceService), flow windows,
+    and of each day job's contract its current week and, through
+    IntelligenceService, a week's adjusted expectation. Typed by
     protocol rather than by the Mongo classes that satisfy it, so the coach has
     no business knowing where the data lives and the tests' in-memory fakes are
     as valid here as the real thing.
@@ -40,11 +51,37 @@ class CoachRepos:
     project: ProjectLister
     beat: CompletedBeatReader
     flow: FlowWindowReader
+    contracts: CoachContractReader
 
 
 def fmt_minutes(minutes: float) -> str:
     h, m = divmod(int(minutes), 60)
     return f"{h}h {m}m" if h > 0 else f"{m}m"
+
+
+def fmt_percent(fraction: float) -> str:
+    """A stored fraction (0.875) as the page prints it ("87.5"): the SPA's
+    `toPercent`, `Math.round(fraction * 10000) / 100`, written out as
+    JavaScript writes a number. To the hundredth, a tie rounded up, and no
+    trailing zeros, so 0.8 is "80" and 0.6875 "68.75", never "88" or "69"."""
+    scaled = fraction * 10000
+    whole = math.floor(scaled)
+    if scaled - whole >= 0.5:
+        whole += 1
+    return repr(whole / 100).removesuffix(".0")
+
+
+def fmt_hours(hours: float) -> str:
+    """A term's weekly hours (42 × 0.6875) as the page prints them ("28.88"):
+    the SPA's `termHoursPerWeek` and `formatHours`, each
+    `Math.round(hours * 100) / 100`, written out as JavaScript writes a
+    number. To the hundredth, a tie rounded up, and no trailing zeros, so
+    33.6 is "33.6" and 40 "40", never "28.875" or "31.24875"."""
+    scaled = hours * 100
+    whole = math.floor(scaled)
+    if scaled - whole >= 0.5:
+        whole += 1
+    return repr(whole / 100).removesuffix(".0")
 
 
 def fmt_contract_goal(term: ContractTerm) -> str:
@@ -53,7 +90,7 @@ def fmt_contract_goal(term: ContractTerm) -> str:
     for a custom term, whose hours say all there is. The hours themselves are
     the caller's to print — the two coach surfaces lay them out differently."""
     if term.schedule_type is ScheduleType.PART_TIME and term.percentage is not None:
-        return f"contract, {term.percentage:.0%}"
+        return f"contract, {fmt_percent(term.percentage)}%"
     if term.schedule_type is ScheduleType.FULL_TIME:
         return "contract, full-time"
     return "contract"
@@ -62,8 +99,16 @@ def fmt_contract_goal(term: ContractTerm) -> str:
 async def build_repos(user_id: str) -> CoachRepos:
     """Build user-scoped repositories for the coach."""
     db = Database.get_db()
+    projects = MongoProjectRepository(db.projects, user_id=user_id)
+    beats = MongoBeatRepository(db.timeLogs, user_id=user_id)
     return CoachRepos(
-        project=MongoProjectRepository(db.projects, user_id=user_id),
-        beat=MongoBeatRepository(db.timeLogs, user_id=user_id),
+        project=projects,
+        beat=beats,
         flow=MongoFlowWindowRepository(db.flow_windows, user_id=user_id),
+        contracts=ContractService(
+            project_repo=projects,
+            beat_repo=beats,
+            absence_repo=MongoAbsenceRepository(db.absences, user_id=user_id),
+            adjustment_repo=MongoAdjustmentRepository(db.balance_adjustments, user_id=user_id),
+        ),
     )

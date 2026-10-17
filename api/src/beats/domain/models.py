@@ -525,6 +525,8 @@ class ContractWeek(BaseModel):
     week; `remaining` subtracts only the hours the balance counts — inside
     the contract's dates, under a term that owes hours — so the two differ
     on a week it starts or ends, or a term that owes nothing begins or ends.
+    Each figure is rounded on its own, so `worked + remaining` can miss
+    `expected` by a hundredth.
     """
 
     week_of: date_type
