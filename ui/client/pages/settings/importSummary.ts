@@ -1,7 +1,16 @@
 import type { Schemas } from "@/shared/api";
 
-/** What this page reads of `POST /api/export/import`'s answer. */
-export type ImportResult = Pick<Schemas["ImportResponse"], "imported" | "skipped">;
+type Counts = Schemas["ImportCounts"];
+type BillingCounts = "clients" | "project_billing" | "billable_overrides";
+
+/**
+ * What this page reads of `POST /api/export/import`'s answer. The SPA and
+ * the API ship on their own, and an API older than the 1.2 backup answers
+ * without clients, project billing or billable marks.
+ */
+export type ImportResult = Pick<Schemas["ImportResponse"], "skipped"> & {
+	imported: Omit<Counts, BillingCounts> & Partial<Pick<Counts, BillingCounts>>;
+};
 
 export interface ImportSummary {
 	/** What the import wrote. */
@@ -24,11 +33,12 @@ function listed(parts: string[]): string {
 }
 
 /**
- * The toast after a backup import. Time off and adjustments are named only
- * when there are some, so a backup without a day job reads as it always
- * did. A record the import left out is one the project would not take now
- * (time off on a project that is no longer a day job, an adjustment outside
- * the contract), and the toast says so, rather than the import reading as
+ * The toast after a backup import. Time off, adjustments, clients, project
+ * billing and billable marks are named only when there are some, so a
+ * backup without a day job or a client reads as it always did. A record
+ * the import left out is one the project would not take now (time off on
+ * a project that is no longer a day job, an adjustment outside the
+ * contract), and the toast says so, rather than the import reading as
  * complete.
  */
 export function describeImport({ imported, skipped }: ImportResult): ImportSummary {
@@ -39,6 +49,12 @@ export function describeImport({ imported, skipped }: ImportResult): ImportSumma
 	if (imported.absences > 0) parts.push(timeOff(imported.absences));
 	if (imported.balance_adjustments > 0)
 		parts.push(count(imported.balance_adjustments, "balance adjustment", "balance adjustments"));
+	const clients = imported.clients ?? 0;
+	const billed = imported.project_billing ?? 0;
+	const marks = imported.billable_overrides ?? 0;
+	if (clients > 0) parts.push(count(clients, "client", "clients"));
+	if (billed > 0) parts.push(`billing for ${count(billed, "project", "projects")}`);
+	if (marks > 0) parts.push(count(marks, "billable mark", "billable marks"));
 
 	const skippedAbsences = skipped.filter((s) => s.collection === "absences").length;
 	const skippedAdjustments = skipped.length - skippedAbsences;

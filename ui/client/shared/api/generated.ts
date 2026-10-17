@@ -427,6 +427,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/billing/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Billable Overrides
+         * @description Every entry marked billable or not against its project's term. They
+         *     are exceptions, so the list is small.
+         */
+        get: operations["list_billable_overrides_api_billing_entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/entries/{beat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Billable Override
+         * @description Mark one entry billable or not, whatever its project's term says. It
+         *     counts while the entry's project is billed, and survives a move to
+         *     another project. 404 when the entry is not the caller's.
+         */
+        put: operations["set_billable_override_api_billing_entries__beat_id__put"];
+        post?: never;
+        /**
+         * Clear Billable Override
+         * @description Return an entry to its project's rule. Always 204: with no mark, or
+         *     no entry, there is nothing left to clear.
+         */
+        delete: operations["clear_billable_override_api_billing_entries__beat_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Billing Month
+         * @description What each client is owed for a month, in its own currency, with a
+         *     total per currency and the freelance hours billed to no one.
+         *
+         *     A finished entry belongs whole to the local day it started on in `tz`,
+         *     which picks both its month and its rate; a running timer is left out
+         *     (`running` on its client) until it stops. The current month runs
+         *     through today in `tz`; a later one is a 409 MONTH_NOT_STARTED. Money is
+         *     integer minor units; each line's amount is its hours times its rate,
+         *     rounded once, and every total is a sum of lines.
+         */
+        get: operations["get_billing_month_api_billing_month_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Project Billings
+         * @description Every billed project's billing: one per project, a small set.
+         */
+        get: operations["list_project_billings_api_billing_projects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Project Billing
+         * @description Bill a freelance project to a client under dated terms, replacing
+         *     what it had: from each term's `effective_from`, whether its hours are
+         *     billable and, optionally, at a rate of its own (`rate_minor`, in the
+         *     client's currency); without one they take the client's rate in force
+         *     that day. Strictly ascending, one a day.
+         *
+         *     404 for a project, or a client (CLIENT_NOT_FOUND), that is not the
+         *     caller's; 409 NOT_FREELANCE for a project of another kind; 409
+         *     CURRENCY_MISMATCH for a move to a client in another currency while a
+         *     rate of the project's own, a billable term before the current month, or
+         *     an entry before it marked billable would be read in it. Attaching a
+         *     project the first time is not gated; after that, a change to terms dated
+         *     before the current month in `tz`, or a move to another client while one
+         *     is or an entry there is marked billable, is a 409 RETROACTIVE_CHANGE
+         *     without `rewrite_past: true`.
+         */
+        put: operations["set_project_billing_api_billing_projects__project_id__put"];
+        post?: never;
+        /**
+         * Remove Project Billing
+         * @description Stop billing a project, in every month. 404 when it is not billed;
+         *     409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated
+         *     before the current month in `tz`, or an entry there is marked billable.
+         */
+        delete: operations["remove_project_billing_api_billing_projects__project_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/biometrics/": {
         parameters: {
             query?: never;
@@ -565,6 +701,107 @@ export interface paths {
         get: operations["calendar_status_api_calendar_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clients/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Clients
+         * @description The active clients, or with `archived` the archived ones, by name.
+         */
+        get: operations["list_clients_api_clients__get"];
+        put?: never;
+        /**
+         * Create Client
+         * @description Add a client. Every key is required, null where it may be. 400
+         *     UNKNOWN_CURRENCY for a code the API's table does not know.
+         */
+        post: operations["create_client_api_clients__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clients/{client_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Client
+         * @description One client. 404 CLIENT_NOT_FOUND when it is not the caller's.
+         */
+        get: operations["get_client_api_clients__client_id__get"];
+        /**
+         * Update Client
+         * @description Replace a client's name, contact, currency and default rates.
+         *
+         *     409 CURRENCY_IN_USE when the currency changes once something is priced
+         *     in it (`currency_locked`). A rate change dated before the current month
+         *     in `tz` may change figures already invoiced: without `rewrite_past:
+         *     true` it is a 409 RETROACTIVE_CHANGE naming the first month touched.
+         *     `tz` and `rewrite_past` are both required.
+         */
+        put: operations["update_client_api_clients__client_id__put"];
+        post?: never;
+        /**
+         * Delete Client
+         * @description Delete a client. 409 CLIENT_HAS_PROJECTS while a project is billed to
+         *     it: archive it instead, so past reports keep its name and currency.
+         */
+        delete: operations["delete_client_api_clients__client_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clients/{client_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Client
+         * @description Archive a client: kept, in the reports of months it has hours in, and
+         *     out of the pickers.
+         */
+        post: operations["archive_client_api_clients__client_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clients/{client_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unarchive Client
+         * @description Bring an archived client back.
+         */
+        post: operations["unarchive_client_api_clients__client_id__unarchive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -975,9 +1212,10 @@ export interface paths {
         };
         /**
          * Export Full Json
-         * @description Export everything a balance is made of, as JSON for backup: the
-         *     projects (contract included), the sessions, the absences and the balance
-         *     adjustments.
+         * @description Export everything a balance and a bill are made of, as JSON for
+         *     backup: the projects (contract included), the sessions, the absences and
+         *     the balance adjustments; the clients, each project's billing and the
+         *     entries marked billable or not.
          */
         get: operations["export_full_json_api_export_full_get"];
         put?: never;
@@ -999,25 +1237,40 @@ export interface paths {
         put?: never;
         /**
          * Import Full Json
-         * @description Import a full JSON backup, version 1.0 or 1.1, into the caller's
-         *     account. Safe to re-import: projects and beats are written by id, and
-         *     an absence or an adjustment replaces the one on its project and date, as
-         *     its own route does.
+         * @description Import a full JSON backup, version 1.0, 1.1 or 1.2, into the caller's
+         *     account. Safe to re-import: projects, beats and clients are written by
+         *     id, a project's billing replaces the one on its project and an override
+         *     the one on its beat, and an absence or an adjustment replaces the one on
+         *     its project and date, as its own route does.
          *
          *     The whole file is checked first, and a file that fails writes nothing:
-         *     a malformed record, a project's or a session's id included, is a 422
-         *     that names it, and a file holding a project or a session whose id is
-         *     another account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`.
          *
-         *     Projects are then written as a project write is: the contract's checks,
-         *     and the reconcile against the contract it replaces. A refusal there is
-         *     that write's error and stops the import, with no transaction: the
-         *     projects before it in the file stay written, and no beat, absence or
-         *     adjustment is. Absences and adjustments go through their own routes'
-         *     rules, against the projects as restored, and one those rules refuse (an
-         *     absence on a project that is no longer a day job; an adjustment outside
-         *     the contract's first day through today in `tz`) is left out and listed
-         *     under `skipped` with the code its route would answer.
+         *     - a malformed record, a project's, a session's or a client's id
+         *       included, is a 422 that names it;
+         *     - a file holding a project, a session or a client whose id is another
+         *       account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`;
+         *     - a billing whose project or client, or an override whose session, is in
+         *       neither the file nor the account is a 422 that names it;
+         *     - a client or a billing that its route would refuse, against the file
+         *       over the account (a currency the API does not know, or one changed
+         *       once priced; billing on a project that is not freelance, or a billed
+         *       project moved away from freelance; billing moved to a client in
+         *       another currency), is that route's error, its detail naming the
+         *       record. The retroactive gate is not applied: a restore puts back what
+         *       was.
+         *
+         *     Clients are written first, then projects as a project write is: the
+         *     contract's checks, and the reconcile against the contract it replaces.
+         *     A refusal there is that write's error and stops the import, with no
+         *     transaction: the clients and the projects before it in the file stay
+         *     written, and nothing after them is. Then each project's billing, the
+         *     beats and the overrides. Absences and adjustments go last, through their
+         *     own routes' rules, against the projects as restored, and one those rules
+         *     refuse (an absence on a project that is no longer a day job; an
+         *     adjustment outside the contract's first day through today in `tz`) is
+         *     left out and listed under `skipped` with the code its route would
+         *     answer. Billing is never skipped: its rules ran before the first
+         *     write.
          */
         post: operations["import_full_json_api_export_import_post"];
         delete?: never;
@@ -1454,6 +1707,30 @@ export interface paths {
          * @description Get smart daily plan suggestions for a date (defaults to today).
          */
         get: operations["get_suggestions_api_intelligence_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/meta/currencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Currencies
+         * @description Every currency a client may be billed in, by code, with its minor
+         *     units — the API's own table, the one source of how many digits a
+         *     currency has: the browser's ICU data disagrees with ISO 4217 on some.
+         *     The SPA names each code itself. Cacheable for a day, like the region
+         *     list: it changes only with a release.
+         */
+        get: operations["list_currencies_api_meta_currencies_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2571,6 +2848,132 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * BillableOverrideRequest
+         * @description Request body for marking one entry billable or not.
+         */
+        BillableOverrideRequest: {
+            /** Billable */
+            billable: boolean;
+        };
+        /**
+         * BillableOverrideResponse
+         * @description One entry's billable mark, against its project's term.
+         */
+        BillableOverrideResponse: {
+            /** Beat Id */
+            beat_id: string;
+            /** Billable */
+            billable: boolean;
+        };
+        /**
+         * BillingEntryResponse
+         * @description A finished entry of a billed project, billable or not. `day` is the
+         *     local day it started on, which decides its month and its rate. `hours`
+         *     is for display; the lines are the figures.
+         */
+        BillingEntryResponse: {
+            /** Beat Id */
+            beat_id: string;
+            /** Billable */
+            billable: boolean;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Hours */
+            hours: number;
+            /** Overridden */
+            overridden: boolean;
+            /** Project Id */
+            project_id: string;
+            /** Rate Minor */
+            rate_minor: number | null;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /**
+         * BillingLineResponse
+         * @description A run of consecutive days of one project at one rate from one source.
+         *     `rate_minor`, `source` and `amount_minor` are all null on an unpriced
+         *     run. `hours` are to the hundredth, and `amount_minor` is `hours` times
+         *     `rate_minor`, to a whole minor unit, half-up.
+         */
+        BillingLineResponse: {
+            /** Amount Minor */
+            amount_minor: number | null;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Hours */
+            hours: number;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Project Id */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /** Rate Minor */
+            rate_minor: number | null;
+            source: components["schemas"]["RateSource"] | null;
+        };
+        /**
+         * BillingMonthResponse
+         * @description What is billable in a month, per client and per currency: the whole
+         *     month once it has ended, `first` through today while it runs.
+         */
+        BillingMonthResponse: {
+            /** Clients */
+            clients: components["schemas"]["ClientBillingResponse"][];
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Month */
+            month: string;
+            /** Totals */
+            totals: components["schemas"]["CurrencyTotalResponse"][];
+            /** Unattached */
+            unattached: components["schemas"]["UnattachedHoursResponse"][];
+        };
+        /**
+         * BillingTerm
+         * @description From `effective_from` on, whether a project's hours are billable and,
+         *     optionally, at a rate of its own; without one they take the client's
+         *     rate in force each day. "Not billable from 1 November" is a term, so
+         *     October's figures stay as they were.
+         */
+        BillingTerm: {
+            /** Billable */
+            billable: boolean;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Rate Minor */
+            rate_minor?: number | null;
+        };
         /** BiometricDayRequest */
         BiometricDayRequest: {
             /**
@@ -2668,6 +3071,108 @@ export interface components {
             conversation_id?: string | null;
             /** Message */
             message: string;
+        };
+        /**
+         * ClientBillingResponse
+         * @description One client's figures for the month, in its one currency. The hours and
+         *     the amount are sums of the lines; `unpriced_hours` is the part of
+         *     `billable_hours` with no rate. `running`: a billable timer is running,
+         *     and counts once it stops.
+         */
+        ClientBillingResponse: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Archived */
+            archived: boolean;
+            /** Billable Hours */
+            billable_hours: number;
+            /** Client Id */
+            client_id: string;
+            /** Currency */
+            currency: string;
+            /** Entries */
+            entries: components["schemas"]["BillingEntryResponse"][];
+            /** Lines */
+            lines: components["schemas"]["BillingLineResponse"][];
+            /** Minor Units */
+            minor_units: number;
+            /** Name */
+            name: string;
+            /** Non Billable Hours */
+            non_billable_hours: number;
+            /** Running */
+            running: boolean;
+            /** Unpriced Hours */
+            unpriced_hours: number;
+        };
+        /**
+         * ClientResponse
+         * @description A client as stored, with its currency's minor units from the API's
+         *     table, and whether its currency is locked: something is priced in it,
+         *     so it can no longer change.
+         */
+        ClientResponse: {
+            /** Archived */
+            archived: boolean;
+            /** Contact Email */
+            contact_email?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Currency Locked */
+            currency_locked: boolean;
+            /** Id */
+            id: string;
+            /** Minor Units */
+            minor_units: number;
+            /** Name */
+            name: string;
+            /** Rates */
+            rates: components["schemas"]["RateTerm"][];
+        };
+        /**
+         * ClientUpdateRequest
+         * @description Request body for replacing a client: the same keys, and
+         *     `rewrite_past`, required, saying the caller has confirmed a change to
+         *     figures before the current month.
+         */
+        ClientUpdateRequest: {
+            /** Contact Email */
+            contact_email: string | null;
+            /** Contact Name */
+            contact_name: string | null;
+            /** Currency */
+            currency: string;
+            /** Name */
+            name: string;
+            /** Rates */
+            rates: components["schemas"]["RateTerm"][];
+            /** Rewrite Past */
+            rewrite_past: boolean;
+        };
+        /**
+         * ClientWriteRequest
+         * @description Request body for adding a client: the domain's fields, every key
+         *     required, null where it may be. Its rates are `rate_minor` per hour in
+         *     the currency's minor units, strictly ascending by `effective_from`.
+         */
+        ClientWriteRequest: {
+            /** Contact Email */
+            contact_email: string | null;
+            /** Contact Name */
+            contact_name: string | null;
+            /** Currency */
+            currency: string;
+            /** Name */
+            name: string;
+            /** Rates */
+            rates: components["schemas"]["RateTerm"][];
         };
         /**
          * CompanyHoliday
@@ -2897,6 +3402,32 @@ export interface components {
             events: string[];
             /** Url */
             url: string;
+        };
+        /**
+         * CurrencyResponse
+         * @description A currency a client may be billed in, and its minor units.
+         */
+        CurrencyResponse: {
+            /** Code */
+            code: string;
+            /** Minor Units */
+            minor_units: number;
+        };
+        /**
+         * CurrencyTotalResponse
+         * @description Every listed client in one currency, summed: no figure holds two.
+         */
+        CurrencyTotalResponse: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Billable Hours */
+            billable_hours: number;
+            /** Currency */
+            currency: string;
+            /** Minor Units */
+            minor_units: number;
+            /** Unpriced Hours */
+            unpriced_hours: number;
         };
         /**
          * DayAbsence
@@ -3214,6 +3745,12 @@ export interface components {
             balance_adjustments: number;
             /** Beats */
             beats: number;
+            /** Billable Overrides */
+            billable_overrides: number;
+            /** Clients */
+            clients: number;
+            /** Project Billing */
+            project_billing: number;
             /** Projects */
             projects: number;
         };
@@ -3652,6 +4189,36 @@ export interface components {
             score: number;
         };
         /**
+         * ProjectBillingRequest
+         * @description Request body for billing a project: its client and the whole list of
+         *     terms, and `rewrite_past`, all required.
+         */
+        ProjectBillingRequest: {
+            /** Client Id */
+            client_id: string;
+            /** Rewrite Past */
+            rewrite_past: boolean;
+            /** Terms */
+            terms: components["schemas"]["BillingTerm"][];
+        };
+        /**
+         * ProjectBillingResponse
+         * @description A project's billing, with its client's currency and minor units, the
+         *     currency every `rate_minor` in it is in.
+         */
+        ProjectBillingResponse: {
+            /** Client Id */
+            client_id: string;
+            /** Currency */
+            currency: string;
+            /** Minor Units */
+            minor_units: number;
+            /** Project Id */
+            project_id: string;
+            /** Terms */
+            terms: components["schemas"]["BillingTerm"][];
+        };
+        /**
          * ProjectBreakdownEntry
          * @description One project's share of a week, as a digest reports it.
          *
@@ -3793,6 +4360,28 @@ export interface components {
             weekly_goal?: number | null;
             /** Weekly Minutes */
             weekly_minutes?: number | null;
+        };
+        /**
+         * RateSource
+         * @description Which level a line's rate comes from.
+         * @enum {string}
+         */
+        RateSource: "project" | "client";
+        /**
+         * RateTerm
+         * @description One stretch of a client's default rate, from `effective_from` until
+         *     the next. Any day of the week: rates change on invoice dates, not
+         *     Mondays. `rate_minor` is per hour, in the client's currency's minor
+         *     units — cents for EUR, yen for JPY, fils for KWD.
+         */
+        RateTerm: {
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Rate Minor */
+            rate_minor: number;
         };
         /**
          * RecentDriftResponse
@@ -4009,6 +4598,19 @@ export interface components {
             count: number;
             /** Key */
             key: string;
+        };
+        /**
+         * UnattachedHoursResponse
+         * @description A freelance project with finished hours in the month and no client:
+         *     hours in no figure of the report.
+         */
+        UnattachedHoursResponse: {
+            /** Hours */
+            hours: number;
+            /** Name */
+            name: string;
+            /** Project Id */
+            project_id: string;
         };
         /**
          * UpdateBeatRequest
@@ -4973,6 +5575,265 @@ export interface operations {
             };
         };
     };
+    list_billable_overrides_api_billing_entries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillableOverrideResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_billable_override_api_billing_entries__beat_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                beat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillableOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillableOverrideResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_billable_override_api_billing_entries__beat_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                beat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_billing_month_api_billing_month_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingMonthResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_project_billings_api_billing_projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectBillingResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_project_billing_api_billing_projects__project_id__put: {
+        parameters: {
+            query: {
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectBillingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectBillingResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_project_billing_api_billing_projects__project_id__delete: {
+        parameters: {
+            query: {
+                /** @description The caller has confirmed a change to figures before the current month. */
+                rewrite_past: boolean;
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_biometrics_api_biometrics__get: {
         parameters: {
             query?: {
@@ -5181,6 +6042,279 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_clients_api_clients__get: {
+        parameters: {
+            query?: {
+                archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_client_api_clients__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_client_api_clients__client_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_client_api_clients__client_id__put: {
+        parameters: {
+            query: {
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_client_api_clients__client_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_client_api_clients__client_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unarchive_client_api_clients__client_id__unarchive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6411,6 +7545,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_currencies_api_meta_currencies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrencyResponse"][];
                 };
             };
         };

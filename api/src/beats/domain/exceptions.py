@@ -3,12 +3,31 @@
 from datetime import date
 
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_MONTH_NAMES = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 
 def _spoken(day: date) -> str:
     """A date the way a message says it, "Mar 2, 2026" — spelled out here
     rather than with `%b`, which follows the process locale."""
     return f"{_MONTHS[day.month - 1]} {day.day}, {day.year}"
+
+
+def _spoken_month(day: date) -> str:
+    """The month of `day` the way a message says it, "March 2026"."""
+    return f"{_MONTH_NAMES[day.month - 1]} {day.year}"
 
 
 class DomainException(Exception):
@@ -212,19 +231,130 @@ class AdjustmentNotFound(DomainException):
 
 
 class BackupOfAnotherAccount(DomainException):
-    """Raised when a backup being imported holds a project or a session whose
-    id is another account's. A restore keeps ids, so writing it would
-    collide with that account's record, or, unscoped, take it over."""
+    """Raised when a backup being imported holds a project, a session or a
+    client whose id is another account's. A restore keeps ids, so writing it
+    would collide with that account's record, or, unscoped, take it over."""
 
     status_code = 409
-    message = "This backup holds projects or sessions of another account"
+    message = "This backup holds projects, sessions or clients of another account"
     code = "BACKUP_OF_ANOTHER_ACCOUNT"
 
-    def __init__(self, projects: int, beats: int):
+    def __init__(self, projects: int, beats: int, clients: int):
         super().__init__(
-            f"This backup holds {projects} project(s) and {beats} session(s) of another "
-            "account; import it into the account it was exported from"
+            f"This backup holds {projects} project(s), {beats} session(s) and {clients} "
+            "client(s) of another account; import it into the account it was exported from"
         )
+
+
+# Billing exceptions
+class ClientNotFound(DomainException):
+    """Raised when a client cannot be found by ID among the caller's own."""
+
+    status_code = 404
+    message = "Client not found"
+    code = "CLIENT_NOT_FOUND"
+
+    def __init__(self, client_id: str | None = None):
+        if client_id:
+            super().__init__(f"Client not found: {client_id}")
+        else:
+            super().__init__()
+
+
+class UnknownCurrency(DomainException):
+    """Raised when a client names a currency `domain/currencies.py` does not
+    know: the table is the one source of a currency's minor units."""
+
+    message = "Unknown currency"
+    code = "UNKNOWN_CURRENCY"
+
+    def __init__(self, currency: str):
+        super().__init__(f"Unknown currency: {currency}")
+
+
+class CurrencyInUse(DomainException):
+    """Raised when a client's currency is changed once something is priced in
+    it — a rate of the client's, or of any of its projects': every amount
+    would silently be read in the new currency."""
+
+    status_code = 409
+    message = "This client's rates are in its currency; its currency can no longer change"
+    code = "CURRENCY_IN_USE"
+
+
+class CurrencyMismatch(DomainException):
+    """Raised when a project is moved to a client in another currency while
+    it carries a rate of its own, or billable terms before the current
+    month: either would be re-denominated in the other currency."""
+
+    status_code = 409
+    message = (
+        "This project is billed in its client's currency; stop billing it before "
+        "moving it to a client in another currency"
+    )
+    code = "CURRENCY_MISMATCH"
+
+
+class ClientHasProjects(DomainException):
+    """Raised when a client is deleted while a project is billed to it.
+    Archive is the way out: past reports keep the client's name and currency."""
+
+    status_code = 409
+    message = "Projects are billed to this client; archive it instead"
+    code = "CLIENT_HAS_PROJECTS"
+
+
+class NotFreelance(DomainException):
+    """Raised when billing is asked of a project that is not freelance. A
+    conflict with the project's kind, as `NotADayJob` is for a contract."""
+
+    status_code = 409
+    message = "Only a freelance project is billed"
+    code = "NOT_FREELANCE"
+
+
+class ProjectHasBilling(DomainException):
+    """Raised when a billed project's kind is changed away from freelance: its
+    billing would sit dormant on a project that cannot read it."""
+
+    status_code = 409
+    message = "Stop billing this project before changing its kind"
+    code = "PROJECT_HAS_BILLING"
+
+
+class RetroactiveChange(DomainException):
+    """Raised when a write would change billable figures before the current
+    month and the caller did not say `rewrite_past`. Those months may have
+    been invoiced; the 409 names the first one touched."""
+
+    status_code = 409
+    message = "This changes billable figures in a month that has ended"
+    code = "RETROACTIVE_CHANGE"
+
+    def __init__(self, first_day: date):
+        super().__init__(
+            f"This changes billable figures from {_spoken_month(first_day)}, which may "
+            "already have been invoiced. Confirm to apply it."
+        )
+
+
+class ProjectNotBilled(DomainException):
+    """Raised when billing is stopped on a project that is not billed. A
+    project of someone else's, or none at all, is not billed either."""
+
+    status_code = 404
+    message = "This project is not billed"
+
+
+class MonthNotStarted(DomainException):
+    """Raised when a billing month after the current one is asked for."""
+
+    status_code = 409
+    message = "That month has not started yet"
+    code = "MONTH_NOT_STARTED"
+
+    def __init__(self, month: date):
+        super().__init__(f"{_spoken_month(month)} has not started yet")
 
 
 # Beat-related exceptions

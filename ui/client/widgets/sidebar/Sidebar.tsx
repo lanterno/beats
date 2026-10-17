@@ -10,6 +10,7 @@
 
 import {
 	BarChart3,
+	Briefcase,
 	CalendarDays,
 	Download,
 	Layers,
@@ -29,6 +30,7 @@ import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
+import { useShowClients } from "./useShowClients";
 
 interface SidebarProps extends TimerProps {
 	projects: ProjectWithDuration[];
@@ -36,6 +38,8 @@ interface SidebarProps extends TimerProps {
 
 const NAV = [
 	{ to: "/projects", title: "Projects", Icon: Layers, prefix: true },
+	// Only once there is someone or something to bill (`useShowClients`).
+	{ to: "/clients", title: "Clients", Icon: Briefcase, prefix: false },
 	{ to: "/plan", title: "Weekly Plan", Icon: CalendarDays, prefix: false },
 	{ to: "/coach", title: "Coach", Icon: Sparkles, prefix: false },
 	{ to: "/insights", title: "Insights", Icon: BarChart3, prefix: false },
@@ -48,6 +52,8 @@ export function Sidebar(props: SidebarProps) {
 	const navigate = useNavigate();
 	const { canShow: canInstall, install, dismiss: dismissInstall } = useInstallPrompt();
 	const { user } = useAuth();
+	const showClients = useShowClients(projects);
+	const nav = NAV.filter((item) => item.to !== "/clients" || showClients);
 
 	const handleLogout = async () => {
 		await signOut();
@@ -73,7 +79,7 @@ export function Sidebar(props: SidebarProps) {
 						<SyncStatus />
 					</div>
 					<nav aria-label="Pages" className="flex items-center justify-between">
-						{NAV.map(({ to, title, Icon, prefix }) => (
+						{nav.map(({ to, title, Icon, prefix }) => (
 							<Link
 								key={to}
 								to={to}

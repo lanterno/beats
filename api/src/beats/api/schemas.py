@@ -6,13 +6,18 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from beats.domain.billing import RateSource
 from beats.domain.models import (
     AbsenceType,
     AdjustmentKind,
+    BillingTerm,
+    ClientFields,
     Contract,
     GoalType,
+    ProjectBillingFields,
     ProjectBreakdownEntry,
     ProjectKind,
+    RateTerm,
 )
 
 
@@ -229,6 +234,158 @@ class AdjustmentResponse(BaseModel):
     note: str | None = None
 
 
+class ClientWriteRequest(ClientFields):
+    """Request body for adding a client: the domain's fields, every key
+    required, null where it may be. Its rates are `rate_minor` per hour in
+    the currency's minor units, strictly ascending by `effective_from`."""
+
+
+class ClientUpdateRequest(ClientFields):
+    """Request body for replacing a client: the same keys, and
+    `rewrite_past`, required, saying the caller has confirmed a change to
+    figures before the current month."""
+
+    rewrite_past: bool = Field(strict=True)
+
+
+class ClientResponse(BaseModel):
+    """A client as stored, with its currency's minor units from the API's
+    table, and whether its currency is locked: something is priced in it,
+    so it can no longer change."""
+
+    id: str
+    name: str
+    contact_name: str | None = None
+    contact_email: str | None = None
+    currency: str
+    minor_units: int
+    rates: list[RateTerm]
+    archived: bool
+    created_at: datetime
+    currency_locked: bool
+
+
+class ProjectBillingRequest(ProjectBillingFields):
+    """Request body for billing a project: its client and the whole list of
+    terms, and `rewrite_past`, all required."""
+
+    rewrite_past: bool = Field(strict=True)
+
+
+class ProjectBillingResponse(BaseModel):
+    """A project's billing, with its client's currency and minor units, the
+    currency every `rate_minor` in it is in."""
+
+    project_id: str
+    client_id: str
+    currency: str
+    minor_units: int
+    terms: list[BillingTerm]
+
+
+class BillableOverrideRequest(BaseModel):
+    """Request body for marking one entry billable or not."""
+
+    billable: bool = Field(strict=True)
+
+
+class BillableOverrideResponse(BaseModel):
+    """One entry's billable mark, against its project's term."""
+
+    beat_id: str
+    billable: bool
+
+
+class BillingLineResponse(BaseModel):
+    """A run of consecutive days of one project at one rate from one source.
+    `rate_minor`, `source` and `amount_minor` are all null on an unpriced
+    run. `hours` are to the hundredth, and `amount_minor` is `hours` times
+    `rate_minor`, to a whole minor unit, half-up."""
+
+    project_id: str
+    project_name: str
+    rate_minor: int | None
+    source: RateSource | None
+    first: date_type
+    last: date_type
+    hours: float
+    amount_minor: int | None
+
+
+class BillingEntryResponse(BaseModel):
+    """A finished entry of a billed project, billable or not. `day` is the
+    local day it started on, which decides its month and its rate. `hours`
+    is for display; the lines are the figures."""
+
+    beat_id: str
+    project_id: str
+    day: date_type
+    start: datetime
+    end: datetime
+    hours: float
+    billable: bool
+    overridden: bool
+    rate_minor: int | None
+
+
+class ClientBillingResponse(BaseModel):
+    """One client's figures for the month, in its one currency. The hours and
+    the amount are sums of the lines; `unpriced_hours` is the part of
+    `billable_hours` with no rate. `running`: a billable timer is running,
+    and counts once it stops."""
+
+    client_id: str
+    name: str
+    archived: bool
+    currency: str
+    minor_units: int
+    running: bool
+    billable_hours: float
+    non_billable_hours: float
+    unpriced_hours: float
+    amount_minor: int
+    lines: list[BillingLineResponse]
+    entries: list[BillingEntryResponse]
+
+
+class CurrencyTotalResponse(BaseModel):
+    """Every listed client in one currency, summed: no figure holds two."""
+
+    currency: str
+    minor_units: int
+    billable_hours: float
+    unpriced_hours: float
+    amount_minor: int
+
+
+class UnattachedHoursResponse(BaseModel):
+    """A freelance project with finished hours in the month and no client:
+    hours in no figure of the report."""
+
+    project_id: str
+    name: str
+    hours: float
+
+
+class BillingMonthResponse(BaseModel):
+    """What is billable in a month, per client and per currency: the whole
+    month once it has ended, `first` through today while it runs."""
+
+    month: str  # YYYY-MM
+    first: date_type
+    last: date_type
+    totals: list[CurrencyTotalResponse]
+    clients: list[ClientBillingResponse]
+    unattached: list[UnattachedHoursResponse]
+
+
+class CurrencyResponse(BaseModel):
+    """A currency a client may be billed in, and its minor units."""
+
+    code: str
+    minor_units: int
+
+
 class ImportCounts(BaseModel):
     """How many of each record a backup import wrote."""
 
@@ -236,6 +393,9 @@ class ImportCounts(BaseModel):
     beats: int
     absences: int
     balance_adjustments: int
+    clients: int
+    project_billing: int
+    billable_overrides: int
 
 
 class ImportSkip(BaseModel):

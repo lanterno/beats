@@ -24,9 +24,12 @@ from beats.domain.models import (
     Absence,
     BalanceAdjustment,
     Beat,
+    BillableOverride,
+    Client,
     ContractWeek,
     FlowWindow,
     Project,
+    ProjectBilling,
 )
 
 
@@ -180,3 +183,70 @@ class CoachContractReader(ContractWeeksReader, WeekExpectationReader, Protocol):
     day context, and each week's adjusted expectation for the pattern tool,
     whose pacing and stale-project cards quote it as the Inbox's do.
     `ContractService` is both."""
+
+
+class BillingPresence(Protocol):
+    """Whether a project is billed — all `ProjectService` asks of billing,
+    so a kind change away from freelance is refused while it is, rather than
+    leaving money dormant on a project that cannot read it."""
+
+    async def exists(self, project_id: str) -> bool: ...
+
+
+class BillableOverrideRemover(Protocol):
+    """The one billing write a beat's own deletion makes: its override goes
+    with it. True when there was one."""
+
+    async def delete(self, beat_id: str) -> bool: ...
+
+
+class BillingBeatReader(Protocol):
+    """What billing reads of beats: those of some projects started in a span
+    of instants, running ones included, and whether a beat is the caller's
+    at all. Nothing that writes one."""
+
+    async def list_started_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime
+    ) -> list[Beat]: ...
+    async def exists(self, beat_id: str) -> bool: ...
+
+
+class BillingProjectReader(ProjectReader, ProjectLister, Protocol):
+    """One project by id, for a billing write's kind check, and the list, for
+    a report: archived projects included, since an archived project's hours
+    in a month are still billed."""
+
+
+class ClientStore(Protocol):
+    """Clients: one by id, the list, and the writes the client routes make.
+    `get_by_id` raises `ClientNotFound` for one that is not the caller's, a
+    malformed id included."""
+
+    async def get_by_id(self, client_id: str) -> Client: ...
+    # builtins.list because this class defines a method called `list`.
+    async def list(self, archived: bool = False) -> builtins.list[Client]: ...
+    async def list_all(self) -> builtins.list[Client]: ...
+    async def create(self, client: Client) -> Client: ...
+    async def update(self, client: Client) -> Client: ...
+    async def delete(self, client_id: str) -> bool: ...
+    async def restore(self, client: Client) -> None: ...
+
+
+class ProjectBillingStore(Protocol):
+    """Project billing, one per project: upsert is keyed on the project, so
+    a second write replaces the first."""
+
+    async def get(self, project_id: str) -> ProjectBilling | None: ...
+    async def list_all(self) -> list[ProjectBilling]: ...
+    async def list_by_client(self, client_id: str) -> list[ProjectBilling]: ...
+    async def upsert(self, billing: ProjectBilling) -> ProjectBilling: ...
+    async def delete(self, project_id: str) -> bool: ...
+
+
+class BillableOverrideStore(Protocol):
+    """Billable overrides, one per beat: upsert is keyed on the beat."""
+
+    async def list_all(self) -> list[BillableOverride]: ...
+    async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]: ...
+    async def upsert(self, override: BillableOverride) -> BillableOverride: ...
+    async def delete(self, beat_id: str) -> bool: ...

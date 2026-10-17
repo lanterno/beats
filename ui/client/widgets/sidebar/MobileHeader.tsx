@@ -6,6 +6,7 @@
 
 import {
 	BarChart3,
+	Briefcase,
 	CalendarDays,
 	Download,
 	Layers,
@@ -27,6 +28,7 @@ import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
+import { useShowClients } from "./useShowClients";
 
 interface MobileHeaderProps extends TimerProps {
 	projects: ProjectWithDuration[];
@@ -34,6 +36,8 @@ interface MobileHeaderProps extends TimerProps {
 
 const NAV = [
 	{ to: "/projects", title: "Projects", Icon: Layers },
+	// Only once there is someone or something to bill (`useShowClients`).
+	{ to: "/clients", title: "Clients", Icon: Briefcase },
 	{ to: "/plan", title: "Weekly Plan", Icon: CalendarDays },
 	{ to: "/coach", title: "Coach", Icon: Sparkles },
 	{ to: "/insights", title: "Insights", Icon: BarChart3 },
@@ -47,6 +51,8 @@ export function MobileHeader(props: MobileHeaderProps) {
 	const { canShow: canInstall, install, dismiss: dismissInstall } = useInstallPrompt();
 
 	const { isRunning, elapsedSeconds, customStartTime, selectedProjectId, projects } = props;
+	const showClients = useShowClients(projects);
+	const nav = NAV.filter((item) => item.to !== "/clients" || showClients);
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
 	let totalSeconds = elapsedSeconds;
@@ -137,7 +143,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 								</button>
 							</div>
 							<nav aria-label="Pages" className="flex items-center justify-between">
-								{NAV.map(({ to, title, Icon }) => (
+								{nav.map(({ to, title, Icon }) => (
 									<Link
 										key={to}
 										to={to}

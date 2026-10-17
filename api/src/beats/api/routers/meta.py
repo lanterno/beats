@@ -1,7 +1,10 @@
-"""Meta API router — reference data the UI's contract settings need, static per release."""
+"""Meta API router — reference data the UI's contract and client settings
+need, static per release."""
 
 from fastapi import APIRouter, Query, Response
 
+from beats.api.schemas import CurrencyResponse
+from beats.domain.currencies import currencies
 from beats.domain.holidays import Region, RegionHoliday, region_holidays, regions
 
 router = APIRouter(prefix="/api/meta", tags=["Meta"])
@@ -38,3 +41,14 @@ async def list_region_holidays(
     holidays = region_holidays(country, subdivision, year)
     response.headers["Cache-Control"] = "public, max-age=86400"
     return holidays
+
+
+@router.get("/currencies", response_model=list[CurrencyResponse])
+async def list_currencies(response: Response):
+    """Every currency a client may be billed in, by code, with its minor
+    units — the API's own table, the one source of how many digits a
+    currency has: the browser's ICU data disagrees with ISO 4217 on some.
+    The SPA names each code itself. Cacheable for a day, like the region
+    list: it changes only with a release."""
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return [CurrencyResponse(code=c.code, minor_units=c.minor_units) for c in currencies()]

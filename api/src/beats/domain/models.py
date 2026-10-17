@@ -663,6 +663,138 @@ class VacationYear(BaseModel):
     remaining: float  # available - booked; negative when overdrawn
 
 
+# 1,000,000.00 an hour in a two-decimal currency. A month of every hour at it,
+# 1e8 x 744, is about 7.4e10: far inside the 2**53 a JavaScript number holds.
+RATE_MINOR_MAX = 100_000_000
+
+_Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+# Shape only — one "@" with text either side. It is shown, never mailed.
+_Email = Annotated[
+    str, StringConstraints(strip_whitespace=True, max_length=254, pattern=r"^[^@\s]+@[^@\s]+$")
+]
+
+
+def _forward_one_a_day[T: RateTerm | BillingTerm](terms: list[T]) -> list[T]:
+    """Refuse, never sort: a list out of order is a client bug, and sorting
+    it would quietly pick which of two same-day terms wins."""
+    for earlier, later in pairwise(terms):
+        if later.effective_from <= earlier.effective_from:
+            msg = "terms must be in ascending order of effective_from, with no two on one day"
+            raise ValueError(msg)
+    return terms
+
+
+class RateTerm(BaseModel):
+    """One stretch of a client's default rate, from `effective_from` until
+    the next. Any day of the week: rates change on invoice dates, not
+    Mondays. `rate_minor` is per hour, in the client's currency's minor
+    units — cents for EUR, yen for JPY, fils for KWD."""
+
+    effective_from: date_type
+    # Strict, so `true` is a 422 and not a rate of 1: lax mode reads a bool,
+    # a numeric string and 85.0 as an int.
+    rate_minor: int = Field(strict=True, gt=0, le=RATE_MINOR_MAX)
+
+
+class ClientFields(BaseModel):
+    """A client as a write sends it — the body of `POST` and `PUT
+    /api/clients`, so its validators are the 422. Every key is required,
+    null where it may be: a write replaces the client whole, and a key an
+    older client leaves out must be refused, not read as cleared."""
+
+    name: _Name
+    contact_name: _Name | None
+    contact_email: _Email | None
+    currency: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+    rates: list[RateTerm]
+
+    @field_validator("rates")
+    @classmethod
+    def rates_run_forward(cls, rates: list[RateTerm]) -> list[RateTerm]:
+        # A field validator rather than a model one, so the 422 names `rates`.
+        return _forward_one_a_day(rates)
+
+
+class Client(ClientFields, TzNormalizedModel):
+    """Someone you bill: a record in your own account, not an account of
+    theirs (docs/billing.md). One currency for everything billed to them, so
+    a client's figures never need an exchange rate.
+
+    `currency` is checked for shape only. That it is a code
+    `domain/currencies.py` knows, and that it does not change once anything
+    is priced in it, is checked where a client is written: this model is
+    re-validated on every read, and a table edit must not make a stored
+    client unreadable.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    # Defaulted here, unlike on a write: a None is not stored.
+    contact_name: _Name | None = None
+    contact_email: _Email | None = None
+    rates: list[RateTerm] = Field(default_factory=list)
+    archived: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class BillingTerm(BaseModel):
+    """From `effective_from` on, whether a project's hours are billable and,
+    optionally, at a rate of its own; without one they take the client's
+    rate in force each day. "Not billable from 1 November" is a term, so
+    October's figures stay as they were."""
+
+    effective_from: date_type
+    billable: bool = Field(strict=True)
+    rate_minor: int | None = Field(default=None, strict=True, gt=0, le=RATE_MINOR_MAX)
+
+    @field_validator("rate_minor")
+    @classmethod
+    def a_rate_only_where_billable(cls, rate: int | None, info: ValidationInfo) -> int | None:
+        # A field validator rather than a model one, so the 422 names the
+        # rate. `billable` is declared first and so is in `info.data` —
+        # unless it failed, and then its own error is the answer.
+        if rate is not None and info.data.get("billable") is False:
+            msg = "a term that is not billable takes no rate"
+            raise ValueError(msg)
+        return rate
+
+
+class ProjectBillingFields(BaseModel):
+    """A project's billing as a write sends it — the body of `PUT
+    /api/billing/projects/{id}`, beside `rewrite_past` — so its validators
+    are the 422."""
+
+    client_id: str
+    terms: list[BillingTerm]
+
+    @field_validator("terms")
+    @classmethod
+    def terms_run_forward(cls, terms: list[BillingTerm]) -> list[BillingTerm]:
+        # A field validator rather than a model one, so the 422 names `terms`.
+        return _forward_one_a_day(terms)
+
+
+class ProjectBilling(ProjectBillingFields):
+    """A freelance project billed to one client, under dated terms. One per
+    project, in its own collection: never a field of `Project`, which devices
+    read and replace-style writes rebuild (docs/billing.md). The client link
+    is not dated — a project is for one client, and moving it moves all of
+    its hours."""
+
+    project_id: str
+    terms: list[BillingTerm] = Field(default_factory=list)
+
+
+class BillableOverride(BaseModel):
+    """One entry marked billable or not, against its project's term. A fact
+    about the entry: it survives a move to another project, and counts only
+    while the entry's project is billed."""
+
+    beat_id: str
+    billable: bool = Field(strict=True)
+
+
 class Beat(TzNormalizedModel):
     """A time tracking entry (heartbeat) for a project.
 

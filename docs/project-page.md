@@ -159,6 +159,23 @@ The rail's first panel is **Goal** (the goal in force, its dated history
 as the same step chart when there are two or more steps, the override list
 with remove, *Edit goal* → drawer). No Time off panel.
 
+**Freelance, billed.** A freelance project's rail also holds **Billing**,
+after Goal (the decisions are in [billing.md](billing.md)):
+
+```
+Rail        BILLING    Studio Kite                                   Change client
+                       Since Mar 1, 2026 · billable at the client's rate, €85.00/h
+                       Since Oct 1, 2026 · billable at €95.00/h            IN FORCE
+                       From Nov 1, 2026 · not billable                      PLANNED
+                       [+ Change from…]
+                       This month: 12.5 h billable · €1,062.50 → Clients
+                       Stop billing
+Days        Thu 2   09:00 → 11:30  …   [Billable] marked by you ↺        2h 30m
+```
+
+Without billing the panel asks "Who is this work for?" with *Bill this
+project*. Each finished session in Days carries a Billable pill.
+
 **States.** *No contract yet* (day job): the balance slot reads "No
 contract yet. Add the terms and the page keeps a balance from that date."
 with *Add contract*; time off is bookable and counts once a contract
@@ -184,8 +201,8 @@ yet — start the timer in the sidebar."
 ### How the page is put together
 
 - **The regions are named**: "Where you stand", "Days", "Earlier weeks",
-  and in the rail "Contract" or "Goal", "Time off". Tests and E2E specs
-  find the page by those names, never by class.
+  and in the rail "Contract" or "Goal", "Time off", "Billing". Tests and
+  E2E specs find the page by those names, never by class.
 - **The layout queries the content column, not the viewport**
   (`@container/content`): the standing's two halves from 640 px, the day
   row's narrow grid under 560, the ledger's two-line grid under 640, the
@@ -319,6 +336,51 @@ yet — start the timer in the sidebar."
   note unless one is typed. Remove takes the whole range when every
   bookable weekday in it is on record. The cost line counts against what
   is already booked, so a half day becoming a full one "drops by 3.4 h".
+- **Billing is read only on a freelance project**, by the page, which
+  hands it to the Billing panel and to Days: `GET /api/billing/projects`
+  for the project's billing, and, once it is billed, `GET
+  /api/billing/entries` for the marks. When the read fails — an older API
+  during a deploy — the panel says "Billing isn't available right now",
+  the pills do not show, and the rest of the page works.
+- **"Bill this project"** opens `BillingDialog`: the client (the active
+  ones, plus "New client…", which opens the client dialog over it), the
+  day it is billable from, and whose rate. The day starts on the project's
+  first tracked day, labelled "All of its time so far", or today when
+  nothing is tracked; the user sees it and can move it, and that is the
+  consent for the history it bills. Attaching the first time asks nothing
+  more.
+- **The terms are a register**, as the contract's: "Since" a day for a
+  term in force or past, "From" a day for one to come, the one in force
+  marked *In force*, one to come *Planned*. A term without a rate of its
+  own names the client's rate on its first day, or today's while it is in
+  force. "Change from…" adds a term on a day picked with a chip (1st of
+  this month · today · 1st of next month) or the calendar, never filled in;
+  a row's pencil edits it and its bin removes it. The last term cannot be
+  removed: *Stop billing* removes them all, after an inline "Stop billing
+  {name}? Its terms go; its hours stay."
+- **Every change PUTs the whole billing**, the client and every term,
+  through `withPastConsent`: a change that reaches a month already over
+  asks first in the API's words ("This changes billable figures from March
+  2026, …"), stacked over the billing dialog when that is open, and is
+  sent again only on *Change it*. *Change client* is gated the same way, since
+  the client link is not dated and every hour moves with it. A refusal
+  lands on its input: `terms.N.rate_minor` on the rate, a client that is
+  gone or in another currency on the client.
+- **"This month"** is the project's lines in `/api/billing/month`, summed
+  — the API's hours and amounts, never priced here — with a link to the
+  Clients page.
+- **The Billable pill** sits on each finished session row of a billed
+  project; the running one has none, as it is not billed until it stops.
+  It shows what the month's report counts for that entry (`entryBillable`,
+  the API's flag rule run on the session's local start day in the
+  browser's zone). A tap marks the entry the other way (`PUT
+  /api/billing/entries/{id}`), at once in the cache and put back if the
+  write fails. A marked entry reads "marked by you" with a reset to the
+  project's rule (`DELETE`), whether or not the mark agrees with the term.
+  `SessionEditForm`, QuickLog and the timer are unchanged.
+- **A billed project keeps its kind.** The settings form shows the API's
+  `PROJECT_HAS_BILLING` on the kind input: "Stop billing this project
+  before changing its kind".
 - **A kind change deletes the contract**: its terms, region, opening
   balance and balance adjustments are not kept, and nothing comes back
   with a return to day job.

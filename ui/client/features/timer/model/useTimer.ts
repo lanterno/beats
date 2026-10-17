@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
-import { apiMutate } from "@/shared/api";
+import { apiMutate, billingRootKey } from "@/shared/api";
 import { notifySyncWork, parseUtcIso } from "@/shared/lib";
 import { fetchTimerStatus } from "../api";
 import type { TimerState } from "./types";
@@ -174,6 +174,8 @@ export function useTimer() {
 				queryClient.invalidateQueries({ queryKey: timerStatusKey });
 				queryClient.invalidateQueries({ queryKey: projectKeys.all });
 				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+				// A stopped timer is a finished entry: the month's billing counts it now.
+				queryClient.invalidateQueries({ queryKey: billingRootKey });
 			} else {
 				notifySyncWork();
 			}

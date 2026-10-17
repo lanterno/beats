@@ -22,13 +22,20 @@ from pydantic import BaseModel
 from pymongo import ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 
-from beats.domain.exceptions import BeatNotFound, NoObjectMatched, ProjectNotFound
+from beats.domain.exceptions import (
+    BeatNotFound,
+    ClientNotFound,
+    NoObjectMatched,
+    ProjectNotFound,
+)
 from beats.domain.models import (
     Absence,
     BalanceAdjustment,
     Beat,
+    BillableOverride,
     BiometricDay,
     CalendarIntegration,
+    Client,
     DeviceRegistration,
     FitbitIntegration,
     FlowWindow,
@@ -37,6 +44,7 @@ from beats.domain.models import (
     PairingCode,
     PendingSuggestion,
     Project,
+    ProjectBilling,
     SignalSummary,
     SSOFlow,
     User,
@@ -215,6 +223,10 @@ class BeatRepository(Protocol):
     ) -> dict[str, builtins.list[Beat]]: ...
     async def list_all_completed(self) -> builtins.list[Beat]: ...
     async def list_completed_in_range(self, start: date, end: date) -> builtins.list[Beat]: ...
+    async def list_started_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime
+    ) -> builtins.list[Beat]: ...
+    async def exists(self, beat_id: str) -> bool: ...
     async def restore(self, beat: Beat) -> None: ...
     async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
 
@@ -331,6 +343,29 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
                 "end": {"$ne": None},
             }
         )
+
+    async def list_started_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime
+    ) -> builtins.list[Beat]:
+        """The beats of these projects that started in [start, end), running
+        ones included. `start` and `end` are instants — aware datetimes,
+        which the driver stores and compares in UTC — not the server's dates,
+        so the caller can ask for local midnight to local midnight."""
+        ids = list(project_ids)
+        if not ids:
+            return []
+        return await self._find_many(
+            {"project_id": {"$in": ids}, "start": {"$gte": start, "$lt": end}}
+        )
+
+    async def exists(self, beat_id: str) -> bool:
+        # A malformed id is "no such beat", as `MongoProjectRepository.exists`
+        # has it, so a route taking the id from its path answers 404.
+        try:
+            oid = ObjectId(beat_id)
+        except InvalidId:
+            return False
+        return await self.collection.find_one(self._q({"_id": oid}), {"_id": 1}) is not None
 
     async def restore(self, beat: Beat) -> None:
         """Write a beat read from a backup, keeping its id: a replace that
@@ -922,3 +957,148 @@ class MongoAdjustmentRepository(MongoStore[BalanceAdjustment], AdjustmentReposit
     async def delete_by_project(self, project_id: str) -> int:
         result = await self.collection.delete_many(self._q({"project_id": project_id}))
         return result.deleted_count
+
+
+class ClientRepository(Protocol):
+    async def get_by_id(self, client_id: str) -> Client: ...
+    async def list(self, archived: bool = False) -> builtins.list[Client]: ...
+    async def list_all(self) -> builtins.list[Client]: ...
+    async def create(self, client: Client) -> Client: ...
+    async def update(self, client: Client) -> Client: ...
+    async def delete(self, client_id: str) -> bool: ...
+    async def restore(self, client: Client) -> None: ...
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
+
+
+class MongoClientRepository(MongoStore[Client], ClientRepository):
+    model = Client
+
+    async def get_by_id(self, client_id: str) -> Client:
+        # A malformed id is "no such client", like an unknown one: every route
+        # under /api/clients/{id} takes it from the path and answers 404.
+        try:
+            oid = ObjectId(client_id)
+        except InvalidId:
+            raise ClientNotFound(client_id) from None
+        client = await self._find_one({"_id": oid})
+        if client is None:
+            raise ClientNotFound(client_id)
+        return client
+
+    async def list(self, archived: bool = False) -> builtins.list[Client]:
+        return await self._find_many({"archived": archived})
+
+    async def list_all(self) -> builtins.list[Client]:
+        # Archived too, for a report — an archived client keeps the months it
+        # has hours in — and for the full export.
+        return await self._find_many()
+
+    async def create(self, client: Client) -> Client:
+        return await self._insert(client)
+
+    async def update(self, client: Client) -> Client:
+        return await self._replace(client.id, client)
+
+    async def delete(self, client_id: str) -> bool:
+        try:
+            oid = ObjectId(client_id)
+        except InvalidId:
+            return False
+        return await self._delete_one({"_id": oid})
+
+    async def restore(self, client: Client) -> None:
+        """Write a client read from a backup, keeping its id, as
+        `MongoBeatRepository.restore` writes a beat: a replace that inserts
+        when there is none, scoped to this user."""
+        if client.id is None:
+            await self._insert(client)
+            return
+        await self.collection.replace_one(
+            self._q({"_id": ObjectId(client.id)}), self._dump(client), upsert=True
+        )
+
+    async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        return await self._ids_held_elsewhere(ids)
+
+
+class ProjectBillingRepository(Protocol):
+    async def get(self, project_id: str) -> ProjectBilling | None: ...
+    async def exists(self, project_id: str) -> bool: ...
+    async def list_all(self) -> list[ProjectBilling]: ...
+    async def list_by_client(self, client_id: str) -> list[ProjectBilling]: ...
+    async def upsert(self, billing: ProjectBilling) -> ProjectBilling: ...
+    async def delete(self, project_id: str) -> bool: ...
+
+
+class MongoProjectBillingRepository(MongoStore[ProjectBilling], ProjectBillingRepository):
+    model = ProjectBilling
+
+    async def get(self, project_id: str) -> ProjectBilling | None:
+        return await self._find_one({"project_id": project_id})
+
+    async def exists(self, project_id: str) -> bool:
+        doc = await self.collection.find_one(self._q({"project_id": project_id}), {"_id": 1})
+        return doc is not None
+
+    async def list_all(self) -> list[ProjectBilling]:
+        return await self._find_many()
+
+    async def list_by_client(self, client_id: str) -> list[ProjectBilling]:
+        return await self._find_many({"client_id": client_id})
+
+    async def upsert(self, billing: ProjectBilling) -> ProjectBilling:
+        # A replace, as an absence's: the document IS the billing, so a term
+        # left out of the new list must not survive in the old one. The
+        # (user, project) unique index makes this filter its identity.
+        data = self._dump(billing)
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_replace(
+            self._q({"project_id": data["project_id"]}),
+            data,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if result is None:
+            raise RuntimeError("upsert of ProjectBilling returned no document")
+        return self._load(result)
+
+    async def delete(self, project_id: str) -> bool:
+        return await self._delete_one({"project_id": project_id})
+
+
+class BillableOverrideRepository(Protocol):
+    async def list_all(self) -> list[BillableOverride]: ...
+    async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]: ...
+    async def upsert(self, override: BillableOverride) -> BillableOverride: ...
+    async def delete(self, beat_id: str) -> bool: ...
+
+
+class MongoBillableOverrideRepository(MongoStore[BillableOverride], BillableOverrideRepository):
+    model = BillableOverride
+
+    async def list_all(self) -> list[BillableOverride]:
+        return await self._find_many()
+
+    async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]:
+        ids = list(beat_ids)
+        if not ids:
+            return []
+        return await self._find_many({"beat_id": {"$in": ids}})
+
+    async def upsert(self, override: BillableOverride) -> BillableOverride:
+        # A replace keyed on the beat, which the (user, beat) unique index
+        # makes the document's identity.
+        data = self._dump(override)
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_replace(
+            self._q({"beat_id": data["beat_id"]}),
+            data,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if result is None:
+            raise RuntimeError("upsert of BillableOverride returned no document")
+        return self._load(result)
+
+    async def delete(self, beat_id: str) -> bool:
+        return await self._delete_one({"beat_id": beat_id})

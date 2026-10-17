@@ -10,7 +10,7 @@ import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { ProjectPicker, projectKeys, useProjects, visibleProjects } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
-import { post } from "@/shared/api";
+import { billingRootKey, post } from "@/shared/api";
 import { isValidTimeRange, toLocalDatetimeLocalString } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 
@@ -57,6 +57,8 @@ export function QuickLog() {
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			// A beat moves the project's week, its ledger and its balance too.
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+			// And, on a billed project, the month's billing.
+			queryClient.invalidateQueries({ queryKey: billingRootKey });
 			toast("Session logged");
 			setOpen(false);
 		} catch {
