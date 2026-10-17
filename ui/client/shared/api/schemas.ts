@@ -57,19 +57,18 @@ const VacationEntitlementSchema = z.object({
 
 export type ApiVacationEntitlement = z.infer<typeof VacationEntitlementSchema>;
 
-// The two holiday lists default to empty so an API that predates them still
-// parses; the SPA always sends both (`toApiContract`), since a list left out
-// of a write is kept and one sent empty is cleared. `vacation` is the same:
-// absent from an older API, always sent (an object or null) by the SPA.
+// The SPA always sends both holiday lists and `vacation` (an object or null)
+// (`toApiContract`), since one left out of a write is kept and one sent empty
+// is cleared.
 export const ContractSchema = z.object({
 	terms: z.array(ContractTermSchema),
 	holiday_country: z.string().nullable().optional(),
 	holiday_subdivision: z.string().nullable().optional(),
 	opening_balance_hours: z.number().optional().default(0),
 	ended_on: z.string().nullable().optional(),
-	company_holidays: z.array(CompanyHolidaySchema).optional().default([]),
-	holidays_not_given: z.array(z.string()).optional().default([]),
-	vacation: VacationEntitlementSchema.nullable().optional(),
+	company_holidays: z.array(CompanyHolidaySchema),
+	holidays_not_given: z.array(z.string()),
+	vacation: VacationEntitlementSchema.nullable(),
 });
 
 export type ApiContract = z.infer<typeof ContractSchema>;
@@ -138,9 +137,7 @@ export const ContractWeekSchema = z.object({
 	balance_opening: z.number().nullable(),
 	balance_worked: z.number().nullable(),
 	balance_expected_through: z.number().nullable(),
-	// Optional while an API that predates balance adjustments may answer:
-	// such an API keeps none, so 0 is the true figure there, not a guess.
-	balance_adjusted: z.number().nullable().optional(),
+	balance_adjusted: z.number().nullable(),
 	days: z.array(ContractDaySchema),
 });
 
@@ -183,14 +180,10 @@ export const LedgerWeekSchema = z.object({
 	contract_expected: z.number().nullable(),
 	balance_end: z.number().nullable(),
 	// What the week's work moved the balance by, null exactly when
-	// `balance_end` is. Optional for an API that predates it, which leaves
-	// the SPA to read the move off the closes.
-	balance_moved: z.number().nullable().optional(),
+	// `balance_end` is.
+	balance_moved: z.number().nullable(),
 	notes: z.array(LedgerNoteSchema),
-	// Defaults, like `adjusted` and `ended_balance` below, for an API that
-	// predates balance adjustments: it keeps none, so these are the true
-	// figures there, not guesses.
-	adjustments: z.array(LedgerAdjustmentSchema).optional().default([]),
+	adjustments: z.array(LedgerAdjustmentSchema),
 });
 
 export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
@@ -198,7 +191,7 @@ export type ApiLedgerWeek = z.infer<typeof LedgerWeekSchema>;
 const LedgerTotalsSchema = z.object({
 	expected: z.number(),
 	worked: z.number(),
-	adjusted: z.number().optional().default(0),
+	adjusted: z.number(),
 	balance: z.number(),
 });
 
@@ -208,7 +201,7 @@ export const LedgerSchema = z.object({
 	since: z.string().nullable(), // contract.starts_on, YYYY-MM-DD
 	totals: LedgerTotalsSchema.nullable(),
 	// The close on `ended_on`, before a settlement after it.
-	ended_balance: z.number().nullable().optional(),
+	ended_balance: z.number().nullable(),
 	weeks: z.array(LedgerWeekSchema),
 });
 
@@ -227,13 +220,13 @@ export const VacationYearSchema = z.object({
 
 export type ApiVacationYear = z.infer<typeof VacationYearSchema>;
 
-// `source` and `given` default to an older API's only answer: a region
-// holiday the contract gives.
+// `given` is false only on a region holiday the contract does not give,
+// listed with `include=not_given`.
 const HolidaySchema = z.object({
 	date: z.string(), // YYYY-MM-DD
 	name: z.string(),
-	source: z.enum(["region", "company"]).optional().default("region"),
-	given: z.boolean().optional().default(true),
+	source: z.enum(["region", "company"]),
+	given: z.boolean(),
 });
 
 export const HolidayListSchema = z.array(HolidaySchema);

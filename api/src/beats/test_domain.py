@@ -2363,6 +2363,32 @@ class TestSuggestDailyPlan:
         assert reader.asked == [("p1", self.FRIDAY - timedelta(days=4))]
         assert result[0]["reasoning"] == "You need 32.0h more this week under your contract"
 
+    async def test_a_failing_contract_read_keeps_that_projects_nominal_goal(self, caplog):
+        """AHM-85. One day job's read raising (Mongo gone) failed the whole
+        plan, and with it the Inbox. Now that job is planned against its
+        term's plain 40 h, the other against what its contract answers, and
+        the warning names the project by id."""
+
+        class _FailsForP2(_FakeWeekExpectationReader):
+            async def expected_for_week(self, project, week_of):
+                if project.id == "p2":
+                    raise RuntimeError("mongo went away")
+                return await super().expected_for_week(project, week_of)
+
+        projects = [_day_job("p1"), _day_job("p2")]
+        svc = _intel_service(projects=projects, contracts=_FailsForP2({"p1": 32.0}))
+
+        result = await svc.suggest_daily_plan(self.FRIDAY)
+
+        reasoning = {r["project_id"]: r["reasoning"] for r in result}
+        assert reasoning == {
+            "p1": "You need 32.0h more this week under your contract",
+            "p2": "You need 40.0h more this week under your contract",
+        }
+        [record] = [r for r in caplog.records if r.name == "beats.domain.intelligence.goals"]
+        assert "p2" in record.getMessage()
+        assert "Day job" not in record.getMessage()
+
     async def test_hours_under_a_term_that_owes_nothing_are_not_counted_toward_the_week(self):
         # AHM-82. The line quotes the week card's Remaining: of the 16 h
         # Monday and Tuesday owe, Monday's 6 h count and Wednesday's 4 h

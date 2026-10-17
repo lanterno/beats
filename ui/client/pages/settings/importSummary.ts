@@ -1,18 +1,7 @@
 import type { Schemas } from "@/shared/api";
 
-type Counts = Schemas["ImportCounts"];
-
-/**
- * `POST /api/export/import`'s answer, as this page may receive it. The SPA
- * and the API ship on their own, and an API older than the 1.1 backup
- * answers with `projects` and `beats` alone: no time off, no adjustments,
- * and nothing `skipped`.
- */
-export type ImportResult = {
-	imported: Pick<Counts, "projects" | "beats"> &
-		Partial<Pick<Counts, "absences" | "balance_adjustments">>;
-	skipped?: Schemas["ImportSkip"][];
-};
+/** What this page reads of `POST /api/export/import`'s answer. */
+export type ImportResult = Pick<Schemas["ImportResponse"], "imported" | "skipped">;
 
 export interface ImportSummary {
 	/** What the import wrote. */
@@ -42,15 +31,14 @@ function listed(parts: string[]): string {
  * the contract), and the toast says so, rather than the import reading as
  * complete.
  */
-export function describeImport({ imported, skipped = [] }: ImportResult): ImportSummary {
+export function describeImport({ imported, skipped }: ImportResult): ImportSummary {
 	const parts = [
 		count(imported.projects, "project", "projects"),
 		count(imported.beats, "session", "sessions"),
 	];
-	const absences = imported.absences ?? 0;
-	const adjustments = imported.balance_adjustments ?? 0;
-	if (absences > 0) parts.push(timeOff(absences));
-	if (adjustments > 0) parts.push(count(adjustments, "balance adjustment", "balance adjustments"));
+	if (imported.absences > 0) parts.push(timeOff(imported.absences));
+	if (imported.balance_adjustments > 0)
+		parts.push(count(imported.balance_adjustments, "balance adjustment", "balance adjustments"));
 
 	const skippedAbsences = skipped.filter((s) => s.collection === "absences").length;
 	const skippedAdjustments = skipped.length - skippedAbsences;
