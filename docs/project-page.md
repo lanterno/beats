@@ -508,6 +508,11 @@ What the shape settles:
 - The projects index (`include=this_week`) does not read the ledger. Its
   `weekly_minutes` and goal come from `ProjectService._this_week_from_beats`:
   completed beats, the current week by server date.
+- The all-time line under the ledger is the list's `total_minutes`
+  (`include=totals`): every beat, a running timer up to now, as the ledger
+  counts it. `GET /api/projects/{id}/total/` gives the same hours by month,
+  each beat in the local month of the day it started on, in `tz` (UTC
+  without one).
 
 ---
 
