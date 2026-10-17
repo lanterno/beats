@@ -609,38 +609,39 @@ region check, and every project write reconciles the adjustments
   change to either is made in both.
 
 **What leaves Beats.** The coach sends a day job's goal as one line
-(`Acme: 33.6h/week (contract, 80%)`), its percentage to the hundredth as
-the page's `toPercent` prints it (87.5%, never "88%"; `fmt_percent` is
-the twin), and on a day job with a contract the current week against it,
-labelled as the goal line is (by the term in force on the week's Monday,
-or on the contract's first day when it starts mid-week; that week the
-goal line does not yet carry the contract): what it expects after
-holidays and days off, the hours worked and what is left, today's
-expected hours, the running balance and its by-Sunday projection, the
-dates of this week's holidays and days off that shortened it, and
-`ended_on` once it falls inside the week. Each figure is the API's own,
-from the week the page reads (on `ended_on` itself too, though the page
-shows only a final balance that day), and is printed as the page prints
-it (one decimal, as `toFixed` rounds the binary value; the balance
-through `describe_balance`), so the coach says what the page says even
-where the page's figures do not add up at that decimal. The hours worked
-are the page's Worked, the whole week's; on a week the contract starts
-or ends inside, what is left counts only the contract's days, and the
-line says "(the contract counts only its own days this week)", which
-with no `ended_on` beside it says the contract started this week. In the
-contract's first seven days the page shows no projection, and the coach
-sends "first week under the contract" in its place. The balance is
-opening + worked − expected + adjusted, and only the sum is sent: the
-opening balance and the adjustments (their dates, kinds and notes) are
-not sent as figures of their own, though the sum is the opening balance
-on a contract's first day and moves by a payout on its date. A public
-holiday goes by its name. The region is not sent as a field of its own,
-but a regional holiday's name can name it, for example "Augsburg Peace
-Festival" in DE-Augsburg or "Yap Day" in FM-YAP, and for some
-subdivisions the library's code is the place name, so the holiday's name
-contains the code. No country code is sent. A company holiday goes only
-as "company holiday", never the name the user typed; a day off only as
-"day off" or "half day off", never its type or note. Other weeks'
+(`Acme: 33.6h/week (contract, 80%)`), its hours and its percentage to
+the hundredth as the page's `formatHours` and `toPercent` print them
+(28.88h, never "28.875h"; 87.5%, never "88%"; `fmt_hours` and
+`fmt_percent` are the twins), and on a day job with a contract the
+current week against it, labelled as the goal line is (by the term in
+force on the week's Monday, or on the contract's first day when it
+starts mid-week; that week the goal line does not yet carry the
+contract): what it expects after holidays and days off, the hours worked
+and what is left, today's expected hours, the running balance and its
+by-Sunday projection, the dates of this week's holidays and days off
+that shortened it, and `ended_on` once it falls inside the week. Each
+figure is the API's own, from the week the page reads (on `ended_on`
+itself too, though the page shows only a final balance that day), and is
+printed as the page prints it (one decimal, as `toFixed` rounds the
+binary value; the balance through `describe_balance`), so the coach says
+what the page says even where the page's figures do not add up at that
+decimal. The hours worked are the page's Worked, the whole week's; on a
+week the contract starts or ends inside, what is left counts only the
+contract's days, and the line says "(the contract counts only its own
+days this week)", which with no `ended_on` beside it says the contract
+started this week. In the contract's first seven days the page shows no
+projection, and the coach sends "first week under the contract" in its
+place. The balance is opening + worked − expected + adjusted, and only
+the sum is sent: the opening balance and the adjustments (their dates,
+kinds and notes) are not sent as figures of their own, though the sum is
+the opening balance on a contract's first day and moves by a payout on
+its date. A public holiday goes by its name. The region is not sent as a
+field of its own, but a regional holiday's name can name it, for example
+"Augsburg Peace Festival" in DE-Augsburg or "Yap Day" in FM-YAP, and for
+some subdivisions the library's code is the place name, so the holiday's
+name contains the code. No country code is sent. A company holiday goes
+only as "company holiday", never the name the user typed; a day off only
+as "day off" or "half day off", never its type or note. Other weeks'
 holidays and absences are not sent by the contract section, though the
 last 14 rated briefs go with every prompt, each with its opening
 sentence, and a brief that opened on a day off or a balance repeats it;
