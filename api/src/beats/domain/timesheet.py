@@ -17,8 +17,9 @@ What a sheet covers: the finished days of the month inside the contract,
     expected     `expected_on`; None when the day's term sets no expectation
                  (`owes`: an objective or 0 h term), so a day it owed nothing
                  by circumstance — a weekend, a holiday, a day off — is 0
-    worked       the hours of that local day; every day of the sheet is
-                 inside the contract, so every hour counts
+    worked       the hours of that local day, every one: on a day whose
+                 term owes nothing they are on the sheet but not in the
+                 balance, as on the ledger (`counts_worked`)
     difference   worked − expected, None with expected
     adjustment   the kind of the balance adjustment dated that day, if any
     adjusted     what it moved the balance by (`applied`), at the start of
@@ -35,13 +36,15 @@ when that day's term sets no expectation — the row's own rule. So one
 month's `carried_forward` (the last row's close) is the next month's
 `brought_forward`, and whenever both are set
 
-    brought_forward + worked − expected + adjusted = carried_forward
+    brought_forward + difference + adjusted = carried_forward
 
-within 0.025: the identity is exact on the raw figures, and each of the
-five is rounded on its own from a raw sum, 0.005 at most apiece, as the
-ledger's totals are. Hours worked under an objective stretch inside the
-month count in `worked` and move the balance, as they do on the ledger;
-their days expect nothing.
+within 0.02: the identity is exact on the raw figures, and each of the
+four is rounded on its own from a raw sum, 0.005 at most apiece, as the
+ledger's totals are. The total's `difference` is the rows' — worked less
+expected over the days that have an expectation — so hours worked under an
+objective stretch inside the month are in `worked` and move nothing, as on
+the ledger; their days expect nothing. Without such a stretch `difference`
+is `worked − expected`.
 
 `holidays` counts the weekday holidays of the sheet. `absence_days` counts
 the weekday absences that are not on a holiday — the holiday already gave
@@ -101,7 +104,7 @@ class Timesheet(NamedTuple):
     brought_forward: float | None
     expected: float | None  # Σ of the days with an expectation; None when none has one
     worked: float
-    difference: float | None  # worked − expected, None with it
+    difference: float | None  # Σ of the rows' differences, None with expected
     adjusted: float  # Σ applied
     holidays: int
     absence_days: float
@@ -163,7 +166,7 @@ def assemble_timesheet(
         brought_forward = None
 
     rows: list[TimesheetDay] = []
-    expected_raw = worked_raw = adjusted_raw = absence_days = 0.0
+    expected_raw = worked_raw = owed_worked_raw = adjusted_raw = absence_days = 0.0
     owed_any = False
     holiday_count = 0
     for day in days:
@@ -180,6 +183,7 @@ def assemble_timesheet(
         if owed:
             owed_any = True
             expected_raw += due
+            owed_worked_raw += hours
         if holiday is not None:
             holiday_count += 1
         elif absence is not None:
@@ -205,7 +209,7 @@ def assemble_timesheet(
         brought_forward=round_hours(brought_forward) if brought_forward is not None else None,
         expected=round_hours(expected_raw) if owed_any else None,
         worked=round_hours(worked_raw),
-        difference=round_hours(worked_raw - expected_raw) if owed_any else None,
+        difference=round_hours(owed_worked_raw - expected_raw) if owed_any else None,
         adjusted=round_hours(adjusted_raw),
         holidays=holiday_count,
         absence_days=absence_days,

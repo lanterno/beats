@@ -211,9 +211,9 @@ class TestTimesheetMonths:
             assert sheet.brought_forward is not None
             assert sheet.carried_forward is not None
             assert sheet.expected is not None
-            assert (
-                sheet.brought_forward + sheet.worked - sheet.expected + sheet.adjusted
-                == pytest.approx(sheet.carried_forward, abs=0.025)
+            assert sheet.difference is not None
+            assert sheet.brought_forward + sheet.difference + sheet.adjusted == pytest.approx(
+                sheet.carried_forward, abs=0.02
             )
 
     def test_each_row_moves_the_balance_by_its_difference_and_its_adjustment(self):
@@ -295,10 +295,11 @@ class TestTimesheetDays:
 
 
 class TestTimesheetNullRule:
-    def test_an_objective_stretch_inside_the_month_expects_nothing_and_its_hours_count(self):
+    def test_an_objective_stretch_inside_the_month_is_worked_but_moves_nothing(self):
         # Objective from Monday 9 March to Sunday 22 March: those days have no
-        # expectation and no balance, but both ends of the month do, and the
-        # hours worked in between move the balance as they do on the ledger.
+        # expectation and no balance, but both ends of the month do. The
+        # hours worked in between are on the sheet and, as on the ledger,
+        # out of the balance: the total's difference leaves them out.
         contract = _contract(
             _full_time(), _objective(date(2026, 3, 9)), _part_time(date(2026, 3, 23))
         )
@@ -313,9 +314,15 @@ class TestTimesheetNullRule:
         assert march.brought_forward is not None
         assert march.carried_forward is not None
         assert march.expected is not None
-        assert march.brought_forward + march.worked - march.expected == pytest.approx(
-            march.carried_forward, abs=0.025
+        assert march.difference is not None
+        assert march.brought_forward + march.difference == pytest.approx(
+            march.carried_forward, abs=0.02
         )
+        # The week of the 9th was the fixture's vacation; the week of the
+        # 16th was worked, 7.5 h a day, under the objective term.
+        stretch = sum(row.worked for row in march.days if row.expected is None)
+        assert stretch == 5 * 7.5
+        assert march.worked - march.expected == pytest.approx(march.difference + stretch, abs=0.02)
         # 5 days at 8 h, then 7 at 6.4 h; the objective weekdays expect nothing.
         assert march.expected == pytest.approx(5 * 8 + 7 * 6.4)
 

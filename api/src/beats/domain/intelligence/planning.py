@@ -24,9 +24,10 @@ def suggest_daily_plan(
     Pure: `beats` are the completed beats of the eight weeks up to
     `target_date` (`_beats_covering`), and `goals` is what each project's
     week asks for (`week_goals`) — on a day job the contract governs, the
-    week's expectation after holidays and absences, so the remaining hours
-    quoted here are the week card's, not the nominal term's. Left out, the
-    nominal goals are used.
+    week's expectation after holidays and absences, counted against the
+    hours of the days the balance counts, so the remaining hours quoted here
+    are the week card's, not the nominal term's. Left out, the nominal goals
+    are used.
     """
     dow = target_date.weekday()
     monday = _monday_of(target_date)
@@ -55,11 +56,13 @@ def suggest_daily_plan(
         pid: sum(mins) / len(mins) for pid, mins in dow_minutes.items() if mins and sum(mins) > 0
     }
 
-    # Weekly goal remaining
-    week_beats = [b for b in beats if local_date(b.start, tz) >= monday]
+    # Weekly goal remaining, over the hours that count against the goal
     week_hours: dict[str, float] = defaultdict(float)
-    for b in week_beats:
-        week_hours[b.project_id] += b.duration.total_seconds() / 3600
+    for b in beats:
+        day = local_date(b.start, tz)
+        week_goal = goals.get(b.project_id)
+        if day >= monday and (week_goal is None or week_goal.counts(day)):
+            week_hours[b.project_id] += b.duration.total_seconds() / 3600
 
     # Recency (worked yesterday?)
     yesterday = target_date - timedelta(days=1)

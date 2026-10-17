@@ -2772,8 +2772,9 @@ export interface components {
          *     circumstance (every weekday a holiday, or after `ended_on`). `balance`
          *     is None on the same rule for today. `remaining` goes negative once the
          *     week is over its expectation. `worked` is every hour on the project that
-         *     week; `remaining` subtracts only the hours inside the contract's dates,
-         *     as the balance does, so the two differ on a week it starts or ends.
+         *     week; `remaining` subtracts only the hours the balance counts — inside
+         *     the contract's dates, under a term that owes hours — so the two differ
+         *     on a week it starts or ends, or a term that owes nothing begins or ends.
          */
         ContractWeek: {
             /** Balance */
@@ -3353,7 +3354,9 @@ export interface components {
          * @description The balance as of today and the three terms that move it, since the
          *     contract started — the standing's "worked since · expected through ·
          *     adjusted" lines and the ledger's foot. The opening balance is the
-         *     contract's own.
+         *     contract's own. `worked` is the hours the balance counts: through
+         *     `ended_on`, under a term that owes hours. Hours worked under an
+         *     objective or 0-hour term are in the weeks' `worked` and not here.
          */
         LedgerTotals: {
             /** Adjusted */

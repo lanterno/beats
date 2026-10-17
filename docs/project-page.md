@@ -350,19 +350,25 @@ match shows the figures and no sentence — never a guessed one. The code is
   week with a close, adjustments left out (they are rows of their own).
   On a week without one it falls back to worked − expected, else worked −
   goal. Worked − expected is wrong on the week a contract starts or ends
-  mid-week, because `worked` counts hours the balance does not (see *The
-  ledger route*). Against an API that predates `balance_moved`, the SPA
-  reads the move off the closes: between two when the row and the one
-  before both have one, from the opening balance on the contract's first
-  close, each less the adjustments inside it — the week's own between two
-  closes; on the first close every one from `since` through the week's
-  Sunday, since a weekend start leaves the start week without a close and
-  an adjustment filed there is still inside the next week's move.
+  mid-week, or a term that owes nothing begins or ends, because `worked`
+  counts hours the balance does not (see *The ledger route*). Against an
+  API that predates `balance_moved`, the SPA reads the move off the
+  closes: between two when the row and the one before both have one,
+  from the opening balance on the contract's first close, each less the
+  adjustments inside it — the week's own between two closes; on the
+  first close every one from `since` through the week's Sunday, since a
+  weekend start leaves the start week without a close and an adjustment
+  filed there is still inside the next week's move.
 - **The since line is worked − expected with the opening and the
   adjustments in brackets** ("+8.5 h (+2.0 h brought forward, −40.0 h
   adjusted)"), so it adds up to the standing's balance. The standing's
   proof gets a fourth line, "−40.0 h adjusted", only when the adjusted
-  figure is not 0 at one decimal.
+  figure is not 0 at one decimal. Its worked, like the standing's "worked
+  since", is the balance's: the hours through `ended_on` under a term
+  that owes hours. A stretch under an objective or 0-hour term is in the
+  week rows and not in it. The wording stays "worked": on a contract
+  whose every term owes hours, the usual case, it is every hour worked,
+  and the line is the balance's proof, not a tally.
 - **The ended rule's final balance is `ended_balance`**, the close on the
   end day, so a settlement after the end appears as its own row and not
   inside the "final" figure; an API without it falls back to the totals.
@@ -433,9 +439,11 @@ What the shape settles:
   though the ledger does not hold the week before; reconstructed from the
   rows, that row could only fall back to worked − expected, which counts
   the hours after `ended_on` the balance does not (AHM-81). On the first
-  close it moves from the opening balance, and when the week holding the
-  first day has no close, the week after moves from it, so a weekend
-  start's hours are in a +/−.
+  close it moves from the opening balance, and when the week before has
+  no close, from the day before the first day in it the balance counts —
+  a time-based term starting on that weekend, the contract's first or one
+  after a term that owes nothing — so a weekend start's hours are in a
+  +/−.
 - **An adjustment's `applied` is filled wherever it falls** — the current
   week, a week with no close, a ledger of one week — because the pass
   runs through today and the last adjustment, not only to the last closed

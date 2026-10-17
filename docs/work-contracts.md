@@ -48,7 +48,11 @@ goal. Git history has the plans.
    breaks, no rounding, no manual day entries.
 8. **Objective-based day jobs** have no expectation and no balance —
    but the user may still set a *personal* weekly goal on them, which
-   is the existing `weekly_goal` field doing what it always did.
+   is the existing `weekly_goal` field doing what it always did. The
+   same holds day by day on a contract that changes: hours worked under
+   an objective term, or a term of 0 hours, count toward no balance, so
+   a time-based term after one starts from the balance the last left
+   and not from overtime the stretch never owed.
 9. **Contract changes are first-class.** Part-time → 80% → full-time is
    the normal life of a contract, and every calculation is term-aware
    down to the day.
@@ -289,9 +293,11 @@ worked(range)   = Σ beat duration on this project, by local day
 
 ```
 balance(today) = opening_balance_hours
-               + worked(start .. min(today, ended_on))
+               + counted(start .. min(today, ended_on))
                - expected(start .. yesterday)
                + adjusted(start .. today)
+
+counted(d) = worked(d) if the term in force on d owes hours, else 0
 
 adjusted(d), at the start of d, against b = the close of d − 1:
     delta → hours
@@ -303,6 +309,17 @@ Today's expectation is charged tomorrow, so the balance does not read
 −6 h every morning; today's work counts at once. `start` is the first
 term's `effective_from`. `ended_on` freezes work and expectation: nothing
 is expected after it, and time tracked after it is not overtime either.
+
+**A term that owes nothing counts no work.** An objective term, or one
+of 0 hours, expects nothing of its days, so the hours worked under it
+are not overtime: they are in the week's `worked`, and in no balance,
+`balance_worked`, close, `balance_moved` or `remaining`. A time-based
+term that follows starts from the close the last one left. Under the
+personal goal those hours never carried forward either, which is what
+Decision 10 asks of the 0-hour terms the migration wrote. Leave is
+counted apart: a day off under such a term still costs vacation
+(Decision 14). `counts_worked` in `contracts.py` decides it for every
+reader of the running pass.
 
 **Adjustments apply at the start of their day**, against the previous
 day's close, before the day's work. They count from `start` on, whatever
@@ -325,12 +342,12 @@ every adjustment's `applied` together, so no two can disagree and a
 ledger of a hundred weeks costs what one does. A day's **close** is the
 balance at the end of it, before the next day's adjustment. A week's
 **closing balance** is its Sunday close. On the week a contract starts or
-ends mid-week, `worked` counts hours the balance does not, so the move
-between two closes is not `worked − expected`; on any week it also
-includes the week's adjustments. The ledger therefore sends each closed
-week's **move**, `balance_moved`: the close less the one before, less the
-adjustments between, read off the same pass whether or not the week
-before is shown.
+ends mid-week, or a term that owes nothing begins or ends, `worked`
+counts hours the balance does not, so the move between two closes is not
+`worked − expected`; on any week it also includes the week's adjustments.
+The ledger therefore sends each closed week's **move**, `balance_moved`:
+the close less the one before, less the adjustments between, read off
+the same pass whether or not the week before is shown.
 
 **Day boundaries** use the request timezone (`tz`, default UTC). A beat
 belongs whole to the local day it started on, and a running timer counts
@@ -373,7 +390,10 @@ screen as the week, and "You need 32.0h more" beside a ring against
 adjusted expectation through `WeekExpectationReader`
 (`ContractService.expected_for_week`, mapped in `intelligence/goals.py`).
 A governed line reads "You need 25.6h more this week under your
-contract" — a contract is not "hit".
+contract" — a contract is not "hit". The hours they count against it are
+the week card's too: worked on a day the balance counts (`counts_worked`),
+so on a week a term that owes nothing begins or ends, the hours under it
+are tracked and owe the figure nothing.
 
 ### Vacation
 
@@ -421,7 +441,7 @@ each day d:       expected(d), worked(d), worked − expected,
                   the adjustment and its applied, close(d)
 carried forward = close(last)
 
-brought forward + worked − expected + adjusted = carried forward
+brought forward + difference + adjusted = carried forward
 ```
 
 - **What a sheet covers** is the month's finished days inside the
@@ -438,7 +458,10 @@ brought forward + worked − expected + adjusted = carried forward
   a close needs every day before it.
 - **The null rule is the row's.** A day whose term owes nothing (`owes`:
   an objective or 0-hour term) has no expected, difference or balance —
-  blank cells — while its hours still count, as they do in the balance.
+  blank cells. Its hours are in the day's worked and the total's, as on
+  the ledger, but not in the balance (`counts_worked`), so the total's
+  difference is the rows', worked less expected over the days that have
+  one: without such a day it is the total's worked − expected.
   A weekend, a holiday or a day off under an owing term is 0.00, not
   blank. Brought forward follows the same rule for the day before `first`;
   on the sheet that starts on the contract's first day it is the opening
@@ -446,8 +469,8 @@ brought forward + worked − expected + adjusted = carried forward
   blank when none does.
 - **Months chain.** One month's carried forward is the next month's
   brought forward, and whenever both are set the identity above holds —
-  exact on the raw figures, and within 0.025 in the file, since each of the
-  five is rounded on its own from a raw sum, as the ledger's totals are.
+  exact on the raw figures, and within 0.02 in the file, since each of the
+  four is rounded on its own from a raw sum, as the ledger's totals are.
   Rows sum to the total only within a few cents the same way: to the cent,
   not to the bit. Each row moves the balance by its difference plus its
   adjustment.
@@ -513,7 +536,8 @@ must be stored once and then owned by the user. Per project:
      — the ObjectId's date if it has none; `custom`;
      `weekly_hours = weekly_goal`.
    - every `effective_from` override becomes a `custom` term on that
-     date at its hours; `weekly_goal is None` → `weekly_hours = 0`. An
+     date at its hours; `weekly_goal is None` → `weekly_hours = 0`, a
+     term that owes nothing and so counts no hours toward the balance. An
      override dated on or before the base date was already in force,
      so it *replaces* the base term's hours — the latest such override
      wins, as it did under `effective_goal` — and the project's own

@@ -15,6 +15,7 @@ from beats.domain.contracts import (
     round_hours,
     term_on,
     week_expectation,
+    within_contract,
 )
 from beats.domain.exceptions import (
     AbsenceNotFound,
@@ -301,7 +302,7 @@ def _check_contract(project: Project) -> None:
     if contract.holiday_country is not None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
     vacation = contract.vacation
-    if vacation is not None and not counts_worked(contract, vacation.opening_on):
+    if vacation is not None and not within_contract(contract, vacation.opening_on):
         raise VacationOpeningOutsideContract(vacation.opening_on)
 
 
@@ -799,7 +800,7 @@ class ContractService:
         days: list[ContractDay] = []
         expected_raw = 0.0
         worked_raw = 0.0
-        counted_raw = 0.0  # worked inside the contract's dates, as the balance counts it
+        counted_raw = 0.0  # worked as the balance counts it (`counts_worked`)
         for offset in range(7):
             day = week_of + timedelta(days=offset)
             expected_day = expected_on(contract, day, holiday_days, by_day)
