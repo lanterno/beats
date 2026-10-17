@@ -149,7 +149,10 @@ describe("ledgerRows: rule rows", () => {
 					week("2026-08-24", { contractExpected: 20.16, balanceEnd: 5.7 }),
 					week("2026-08-17"),
 				],
-				{ totals: { expected: 800, worked: 805.7, adjusted: 0, balance: 5.7 } },
+				{
+					totals: { expected: 800, worked: 805.7, adjusted: 0, balance: 5.7 },
+					endedBalance: 5.7,
+				},
 			),
 			{ kind: "day_job", contract },
 			TODAY,
@@ -164,8 +167,8 @@ describe("ledgerRows: rule rows", () => {
 	});
 
 	it("says the contract ended on its last day, without a final balance while its hours count", () => {
-		// Read on the end day: its hours still count, so the API sends no
-		// `endedBalance` and today's balance is not the close either.
+		// Read on the end day: its hours still count, so the API's
+		// `endedBalance` is null and today's balance is not the close either.
 		const contract: Contract = {
 			...CONTRACT,
 			terms: CONTRACT.terms.slice(0, 2),
