@@ -3182,6 +3182,54 @@ class TestBuildDayContext:
         # All-day event: "  all-day <summary>"
         assert "  all-day Holiday" in out
 
+    async def test_calendar_reads_the_users_day_on_the_users_clock(self, monkeypatch):
+        """The window asked of the calendar is the user's local day, with its
+        offset: Google refuses a naive timeMin with a 400, which the broad
+        except turned into no calendar at all, and a naive midnight was UTC's
+        day besides. An event Google writes in another zone reads on the
+        user's clock."""
+        from beats.domain import calendar as calendar_module
+
+        db = Database.get_db()
+        await db.calendar_integrations.insert_one(
+            {
+                "user_id": "user-1",
+                "provider": "google",
+                "access_token": "ya29",
+                "refresh_token": "rt",
+                "enabled": True,
+                "calendar_ids": ["primary"],
+            }
+        )
+        windows: list[tuple[datetime, datetime]] = []
+
+        async def fake_fetch_events(self, start, end):
+            windows.append((start, end))
+            return [
+                {
+                    "summary": "Standup",
+                    "start": "2026-04-01T07:00:00Z",
+                    "end": "2026-04-01T07:30:00Z",
+                    "all_day": False,
+                },
+            ]
+
+        monkeypatch.setattr(calendar_module.CalendarService, "fetch_events", fake_fetch_events)
+
+        tz = ZoneInfo("Europe/Zurich")
+        repos = _fake_coach_repos()
+        out = await context_module.build_day_context(
+            "user-1", repos, target_date=date(2026, 4, 1), tz=tz
+        )
+        [(start, end)] = windows
+        assert start.utcoffset() is not None
+        assert end.utcoffset() is not None
+        # Zürich's 1 April, CEST: 22:00 UTC the day before to 22:00 UTC.
+        assert start == datetime(2026, 3, 31, 22, 0, tzinfo=UTC)
+        assert end.astimezone(tz).date() == date(2026, 4, 1)
+        assert datetime(2026, 4, 1, 21, 59, tzinfo=UTC) < end < datetime(2026, 4, 1, 22, tzinfo=UTC)
+        assert "  09:00–09:30 Standup" in out
+
     async def test_calendar_block_omitted_when_fetch_raises(self, monkeypatch):
         """If CalendarService.fetch_events raises (revoked OAuth,
         network down, expired token), the broad except in
