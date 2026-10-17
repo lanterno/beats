@@ -11,7 +11,7 @@ The blocks are composed into messages by the brief/chat callers.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -219,16 +219,24 @@ async def build_day_context(
 
             cal_repo = MongoCalendarIntegrationRepository(db.calendar_integrations, user_id=user_id)
             cal_service = CalendarService(settings=settings, repo=cal_repo)
+            # The user's day in the request timezone, with its offset: Google
+            # refuses a timeMin/timeMax without one (a 400 the except above
+            # swallowed), and a naive midnight would be UTC's day anyway.
             events = await cal_service.fetch_events(
-                datetime.combine(today, datetime.min.time()),
-                datetime.combine(today, datetime.max.time()),
+                datetime.combine(today, time.min, tzinfo=tz),
+                datetime.combine(today, time.max, tzinfo=tz),
             )
+
+            def clock(raw: str) -> str:
+                # HH:MM on the user's clock: Google writes each event's time
+                # in its calendar's zone, which need not be the request's.
+                return datetime.fromisoformat(raw).astimezone(tz).strftime("%H:%M")
+
             for ev in events[:5]:
                 # fetch_events returns RFC3339 datetime strings ("2026-05-
                 # 01T09:00:00-07:00") or ISO dates for all-day events
-                # ("2026-05-01"). Slice 11:16 to extract HH:MM from the
-                # dateTime form; for all-day rows it gives the empty
-                # string, so we render those as "all-day" instead.
+                # ("2026-05-01"). Only the dateTime form has a "T"; the
+                # date-only rows render as "all-day" instead.
                 # Defensive .get("", ...) — Google's API can occasionally
                 # return events without a `start.dateTime` key (e.g.
                 # cancelled instances of recurring events). Fall through
@@ -237,8 +245,8 @@ async def build_day_context(
                 start_raw = ev.get("start") or ""
                 end_raw = ev.get("end") or ""
                 summary = ev.get("summary", "(no title)")
-                start_t = start_raw[11:16] if "T" in start_raw else "all-day"
-                end_t = end_raw[11:16] if "T" in end_raw else ""
+                start_t = clock(start_raw) if "T" in start_raw else "all-day"
+                end_t = clock(end_raw) if "T" in end_raw else ""
                 if start_t == "all-day":
                     calendar_lines.append(f"  all-day {summary}")
                 else:
