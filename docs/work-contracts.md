@@ -274,8 +274,11 @@ The body is `BalanceAdjustmentFields`, whose validators are the 422 at
 `hours`: a delta of 0 moves nothing, a cap is not negative, and the bound
 keeps a sum of many records finite. The bound, ±10 000 h, is the opening
 balance's too: they are the two figures a client types into the balance.
-The collection is new and additive, so no startup pass runs for it;
-`ensure_indexes` builds its index.
+It holds on every read as well, since both models are re-validated there,
+and a stored opening past it fails every project of its user with it; so
+the bound is never narrowed without first finding the stored figures past
+the new one. The collection is new and additive, so no startup pass runs
+for it; `ensure_indexes` builds its index.
 
 `weekly_goal` / `goal_type` / `goal_overrides` are the *personal* goal
 and keep applying to side projects, freelance work, and objective-based
