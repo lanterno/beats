@@ -493,6 +493,52 @@ class TestProjectAPI:
         assert "durations_per_month" in data
         assert "warnings" in data
 
+    def test_project_total_buckets_by_the_local_month_a_beat_started_in(self, client, auth_headers):
+        project = client.post(
+            "/api/projects/", json={"name": f"test-total-tz-{time.time()}"}, headers=auth_headers
+        ).json()
+        # 22:00 on 31 January in New York is 03:00 on 1 February in UTC.
+        _log(client, auth_headers, project["id"], "2026-02-01T03:00:00+00:00", 60)
+
+        def months(**params):
+            resp = client.get(
+                f"/api/projects/{project['id']}/total/", params=params, headers=auth_headers
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()["durations_per_month"]
+
+        assert months(tz="America/New_York") == {"2026-01": 1.0}
+        # A caller that sends no tz gets UTC, as on the ledger.
+        assert months() == {"2026-02": 1.0}
+
+    def test_project_total_counts_a_running_timer_up_to_now(self, client, auth_headers):
+        project = client.post(
+            "/api/projects/", json={"name": f"test-total-run-{time.time()}"}, headers=auth_headers
+        ).json()
+        started = datetime.now(UTC) - timedelta(minutes=30)
+        resp = client.post(
+            f"/api/projects/{project['id']}/start",
+            json={"time": started.isoformat()},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        try:
+            total = client.get(f"/api/projects/{project['id']}/total/", headers=auth_headers).json()
+            assert total["total_minutes"] >= 30
+            assert total["durations_per_month"][started.strftime("%Y-%m")] >= 0.5
+
+            listing = client.get(
+                "/api/projects/", params={"include": "totals"}, headers=auth_headers
+            ).json()
+            item = next(p for p in listing if p["id"] == project["id"])
+            assert item["total_minutes"] >= 30
+        finally:
+            client.post(
+                "/api/projects/stop",
+                json={"time": datetime.now(UTC).isoformat()},
+                headers=auth_headers,
+            )
+
     def test_project_summary(self, client, auth_headers):
         """Test GET /api/projects/{project_id}/summary/ - Get project summary"""
         # Create project and beats
