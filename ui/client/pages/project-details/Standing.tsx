@@ -433,13 +433,15 @@ export function Standing(props: StandingProps) {
 		goal !== null;
 
 	const term = contract ? termOn(contract, openWeekOf) : undefined;
-	const nominal = governed && openWeek && term ? nominalLine(openWeek, term) : null;
+	const nominal =
+		governed && openWeek && term ? nominalLine(openWeek, term, contract?.endedOn) : null;
 
 	const sentence =
 		isCurrent && worked !== undefined && !ended
 			? weekSentence({
 					week: governed && openWeek ? openWeek : { weekOf: openWeekOf, worked },
 					nextWeek,
+					endedOn: contract?.endedOn,
 					todayIso,
 					kind: project.kind,
 					personalGoal: goalApplies ? goal : null,

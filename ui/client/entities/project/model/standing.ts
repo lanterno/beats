@@ -87,8 +87,15 @@ export function projection(week: ContractWeek, todayIso: string): Projection | n
 	return { stopNow: roundHours(stopNow), met: roundHours(stopNow + Math.max(remaining, 0)) };
 }
 
-/** "vacation", "sick", "other", or the holiday's name — why a day owed less; undefined otherwise. */
-function dayOffReason(day: ContractDay): string | undefined {
+/**
+ * "vacation", "sick", "other", or the holiday's name — why a day owed less;
+ * undefined otherwise. Undefined too after `endedOn`: the week route still
+ * names a holiday or an absence there, but the contract owed nothing that
+ * day to take off, so it is no day off under it. The coach asks the same of
+ * a day (`_shortened`, through `within_contract`).
+ */
+function dayOffReason(day: ContractDay, endedOn: string | undefined): string | undefined {
+	if (endedOn !== undefined && day.date > endedOn) return undefined;
 	if (day.holiday) return day.holiday;
 	if (day.absence) return day.absence.type;
 	return undefined;
@@ -117,9 +124,14 @@ export function halfDays(days: number): string {
  * Christmas stays one line. Null when they agree, when there is no
  * expectation, and when the named days do not account for the whole
  * difference (a term change or the contract's first or last day mid-week —
- * the ledger's rule row says so there).
+ * the ledger's rule row says so there). `endedOn` is the contract's last
+ * day: a holiday after it is not one of the week's days off.
  */
-export function nominalLine(week: ContractWeek, term: ContractTerm): string | null {
+export function nominalLine(
+	week: ContractWeek,
+	term: ContractTerm,
+	endedOn?: string,
+): string | null {
 	const nominal = termHoursPerWeek(term);
 	if (nominal == null || week.expected === undefined) return null;
 	if (Math.abs(week.expected - nominal) < 0.005) return null;
@@ -127,7 +139,7 @@ export function nominalLine(week: ContractWeek, term: ContractTerm): string | nu
 	const daysOff: { date: string; reason: string; kind: string; cut: number }[] = [];
 	for (const day of week.days) {
 		if (!isWeekday(day.date)) continue;
-		const reason = dayOffReason(day);
+		const reason = dayOffReason(day, endedOn);
 		if (!reason) continue;
 		const cut = roundHours(perDay - day.expected);
 		if (cut < 0.005) continue;
@@ -178,6 +190,8 @@ export interface WeekSentenceInput {
 	week: StandingWeek;
 	/** The following week against the contract, for "then Mon 6.7 h". */
 	nextWeek?: ContractWeek | null;
+	/** The contract's last day, where it has one: no day after it is off under the contract. */
+	endedOn?: string;
 	todayIso: string;
 	kind: ProjectKind;
 	/** The personal goal in force, where the contract does not govern; null for "no goal". */
@@ -209,6 +223,7 @@ function contractSentence(
 	week: StandingWeek,
 	expected: number,
 	nextWeek: ContractWeek | null | undefined,
+	endedOn: string | undefined,
 	todayIso: string,
 ): string | null {
 	const remaining = week.remaining ?? expected - week.worked;
@@ -224,7 +239,7 @@ function contractSentence(
 		if (todayExpected === 0) return `The week closes ${hours1(remaining)} short.`;
 		// "1.9 h to go, all today. Friday is off, then Mon 6.7 h."
 		const off = days.filter(
-			(d) => d.date > todayIso && isWeekday(d.date) && d.expected === 0 && dayOffReason(d),
+			(d) => d.date > todayIso && isWeekday(d.date) && d.expected === 0 && dayOffReason(d, endedOn),
 		);
 		const offText =
 			off.length > 0
@@ -245,7 +260,7 @@ function contractSentence(
 	const lead =
 		todayExpected > 0
 			? ""
-			: `Nothing due today${today && dayOffReason(today) ? ` (${capitalise(dayOffReason(today) ?? "")})` : ""}. `;
+			: `Nothing due today${today && dayOffReason(today, endedOn) ? ` (${capitalise(dayOffReason(today, endedOn) ?? "")})` : ""}. `;
 	const due = todayExpected > 0 && today ? [today, ...later] : later;
 	if (due.length === 1) return `${lead}${toGo} on ${weekdayLong(due[0].date)}.`;
 	const spread = `about ${perDay(remaining / due.length)} a day`;
@@ -284,7 +299,7 @@ export function weekSentence(input: WeekSentenceInput): string | null {
 	const { week, todayIso, kind } = input;
 	if (!inWeek(week.weekOf, todayIso)) return null;
 	if (kind === "day_job" && week.expected !== undefined) {
-		return contractSentence(week, week.expected, input.nextWeek, todayIso);
+		return contractSentence(week, week.expected, input.nextWeek, input.endedOn, todayIso);
 	}
 	return goalSentence(week, todayIso, input.personalGoal, input.goalType ?? "target");
 }
