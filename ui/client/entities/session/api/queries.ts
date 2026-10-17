@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
 import type { FlowWindow, FlowWindowSummary, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
+import { billingRootKey } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -96,13 +97,16 @@ export function useUpdateSession() {
 				queryKey: sessionKeys.list(variables.projectId),
 			});
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+			// An entry's times and project are what the month's billing is made of.
+			queryClient.invalidateQueries({ queryKey: billingRootKey });
 		},
 	});
 }
 
 /**
  * Hook to delete a session (beat). Invalidates session and project caches so
- * the row disappears and project totals refresh.
+ * the row disappears and project totals refresh, and the billing figures,
+ * since the API deletes the entry's billable mark with it.
  */
 export function useDeleteSession() {
 	const queryClient = useQueryClient();
@@ -112,6 +116,7 @@ export function useDeleteSession() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
+			queryClient.invalidateQueries({ queryKey: billingRootKey });
 		},
 	});
 }

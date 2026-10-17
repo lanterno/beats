@@ -259,6 +259,155 @@ const RegionSchema = z.object({
 
 export const RegionListSchema = z.array(RegionSchema);
 
+// Clients and billing (docs/billing.md). These mirror the API's
+// `ClientResponse`, `ProjectBillingResponse`, `BillableOverrideResponse`,
+// `BillingMonthResponse` and `CurrencyResponse`. Money is integer minor
+// units, and every amount travels with its `currency` and `minor_units`, the
+// API's table being the one source for those. No field defaults for an older
+// API: one without these routes answers 404, and the page shows its failure
+// state.
+
+const RateTermSchema = z.object({
+	effective_from: z.string(), // YYYY-MM-DD
+	rate_minor: z.number().int(), // per hour
+});
+
+export type ApiRateTerm = z.infer<typeof RateTermSchema>;
+
+export const ApiClientSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	contact_name: z.string().nullable(),
+	contact_email: z.string().nullable(),
+	currency: z.string(), // ISO 4217
+	minor_units: z.number().int(),
+	rates: z.array(RateTermSchema),
+	archived: z.boolean(),
+	created_at: z.string(), // ISO datetime
+	// Something is priced in the currency, so it can no longer change.
+	currency_locked: z.boolean(),
+});
+
+export type ApiClient = z.infer<typeof ApiClientSchema>;
+export const ApiClientListSchema = z.array(ApiClientSchema);
+
+const CurrencySchema = z.object({
+	code: z.string(),
+	minor_units: z.number().int(),
+});
+
+export type ApiCurrency = z.infer<typeof CurrencySchema>;
+export const CurrencyListSchema = z.array(CurrencySchema);
+
+// A term with no `rate_minor` takes the client's rate in force each day.
+const BillingTermSchema = z.object({
+	effective_from: z.string(), // YYYY-MM-DD
+	billable: z.boolean(),
+	rate_minor: z.number().int().nullable().optional(),
+});
+
+export type ApiBillingTerm = z.infer<typeof BillingTermSchema>;
+
+export const ApiProjectBillingSchema = z.object({
+	project_id: z.string(),
+	client_id: z.string(),
+	currency: z.string(), // the client's: every rate_minor here is in it
+	minor_units: z.number().int(),
+	terms: z.array(BillingTermSchema),
+});
+
+export type ApiProjectBilling = z.infer<typeof ApiProjectBillingSchema>;
+export const ApiProjectBillingListSchema = z.array(ApiProjectBillingSchema);
+
+export const ApiBillableOverrideSchema = z.object({
+	beat_id: z.string(),
+	billable: z.boolean(),
+});
+
+export type ApiBillableOverride = z.infer<typeof ApiBillableOverrideSchema>;
+export const ApiBillableOverrideListSchema = z.array(ApiBillableOverrideSchema);
+
+const RateSourceSchema = z.enum(["client", "project"]);
+
+// A run of consecutive days of one project at one rate from one source;
+// `rate_minor`, `source` and `amount_minor` are null together on an unpriced
+// run. `amount_minor` is `hours` × `rate_minor`, rounded once.
+const BillingLineSchema = z.object({
+	project_id: z.string(),
+	project_name: z.string(),
+	rate_minor: z.number().int().nullable(),
+	source: RateSourceSchema.nullable(),
+	first: z.string(), // YYYY-MM-DD
+	last: z.string(), // YYYY-MM-DD
+	hours: z.number(),
+	amount_minor: z.number().int().nullable(),
+});
+
+export type ApiBillingLine = z.infer<typeof BillingLineSchema>;
+
+// `day` is the local day it started on; `hours` is for display, the lines
+// are the figures.
+const BillingEntrySchema = z.object({
+	beat_id: z.string(),
+	project_id: z.string(),
+	day: z.string(), // YYYY-MM-DD
+	start: z.string(), // ISO datetime
+	end: z.string(), // ISO datetime
+	hours: z.number(),
+	billable: z.boolean(),
+	overridden: z.boolean(),
+	rate_minor: z.number().int().nullable(),
+});
+
+export type ApiBillingEntry = z.infer<typeof BillingEntrySchema>;
+
+const ClientBillingSchema = z.object({
+	client_id: z.string(),
+	name: z.string(),
+	archived: z.boolean(),
+	currency: z.string(),
+	minor_units: z.number().int(),
+	running: z.boolean(), // a billable timer is running; it counts once stopped
+	billable_hours: z.number(),
+	non_billable_hours: z.number(),
+	unpriced_hours: z.number(), // the part of billable_hours with no rate
+	amount_minor: z.number().int(),
+	lines: z.array(BillingLineSchema),
+	entries: z.array(BillingEntrySchema),
+});
+
+export type ApiClientBilling = z.infer<typeof ClientBillingSchema>;
+
+const CurrencyTotalSchema = z.object({
+	currency: z.string(),
+	minor_units: z.number().int(),
+	billable_hours: z.number(),
+	unpriced_hours: z.number(),
+	amount_minor: z.number().int(),
+});
+
+export type ApiCurrencyTotal = z.infer<typeof CurrencyTotalSchema>;
+
+// A freelance project with finished hours in the month and no client.
+const UnattachedHoursSchema = z.object({
+	project_id: z.string(),
+	name: z.string(),
+	hours: z.number(),
+});
+
+export type ApiUnattachedHours = z.infer<typeof UnattachedHoursSchema>;
+
+export const BillingMonthSchema = z.object({
+	month: z.string(), // YYYY-MM
+	first: z.string(), // YYYY-MM-DD
+	last: z.string(), // YYYY-MM-DD: the month's end, or today while it runs
+	totals: z.array(CurrencyTotalSchema), // one row per currency, never a sum across them
+	clients: z.array(ClientBillingSchema),
+	unattached: z.array(UnattachedHoursSchema),
+});
+
+export type ApiBillingMonth = z.infer<typeof BillingMonthSchema>;
+
 export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),

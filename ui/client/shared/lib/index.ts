@@ -51,6 +51,15 @@ export {
 } from "./format";
 // Fuzzy matching (command palette)
 export { fuzzyRank } from "./fuzzyMatch";
+// Money: integer minor units shown, and a typed rate read
+export {
+	formatMoney,
+	formatRate,
+	minorToInput,
+	type ParsedMoney,
+	parseMoney,
+	RATE_MINOR_MAX,
+} from "./money";
 // Offline mutation queue
 export type {
 	HttpMethod,
