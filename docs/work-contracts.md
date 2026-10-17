@@ -749,8 +749,9 @@ contract's days, and the line says "(the contract counts only its own
 days this week)", which with no `ended_on` beside it says the contract
 started this week. In the contract's first seven days the page shows no
 projection, and the coach sends "first week under the contract" in its
-place, bar the contract's last day, when both give the projection. The balance is opening + worked − expected + adjusted, and only
-the sum is sent: the opening balance and the adjustments (their dates,
+place, bar the contract's last day, when both give the projection. The
+balance is opening + worked − expected + adjusted, and only the sum is
+sent: the opening balance and the adjustments (their dates,
 kinds and notes) are not sent as figures of their own, though the sum is
 the opening balance on a contract's first day and moves by a payout on
 its date. A public holiday goes by its name. The region is not sent as a
