@@ -234,7 +234,9 @@ async def build_day_context(
                 # in its calendar's zone, which need not be the request's.
                 return datetime.fromisoformat(raw).astimezone(tz).strftime("%H:%M")
 
-            for ev in events[:5]:
+            for ev in events:
+                if len(calendar_lines) == 5:
+                    break
                 # fetch_events returns RFC3339 datetime strings ("2026-05-
                 # 01T09:00:00-07:00") or ISO dates for all-day events
                 # ("2026-05-01"). Only the dateTime form has a "T"; the
@@ -247,8 +249,14 @@ async def build_day_context(
                 start_raw = ev.get("start") or ""
                 end_raw = ev.get("end") or ""
                 summary = ev.get("summary", "(no title)")
-                start_t = clock(start_raw) if "T" in start_raw else "all-day"
-                end_t = clock(end_raw) if "T" in end_raw else ""
+                # A time that does not parse costs its event, not the block:
+                # the next readable event takes its place among the five.
+                try:
+                    start_t = clock(start_raw) if "T" in start_raw else "all-day"
+                    end_t = clock(end_raw) if "T" in end_raw else ""
+                except ValueError:
+                    logger.debug("Calendar event with an unreadable time skipped", exc_info=True)
+                    continue
                 if start_t == "all-day":
                     calendar_lines.append(f"  all-day {summary}")
                 else:
