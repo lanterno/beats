@@ -55,10 +55,10 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Twelve test files cover different layers (1153 tests, ~20s for the full run):
+Twelve test files cover different layers (1161 tests, ~20s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 374 tests.
-- **`src/beats/test_domain.py`** — pure-Python domain tests (no DB). Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed; 296 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 381 tests.
+- **`src/beats/test_domain.py`** — pure-Python domain tests. Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed, plus one timer stop against the real beat repository, for a write that lands while the stop reads the flow windows; 297 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, balance adjustments among them, plus one round trip through the absence repository; 59 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, balance adjustments and a settlement, the row-to-row balance proof; 32 tests.
 - **`src/beats/test_timesheet.py`** — the monthly timesheet on fixed dates: four months worked out by hand (a mid-month start and term change, weekend work, a vacation week, a half day, a payout, Easter), the month-to-month and row-to-row proofs, the range's clipping, the null rule under an objective term; 27 tests.

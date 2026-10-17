@@ -1,6 +1,7 @@
 """Tests for domain models and services."""
 
 import builtins
+from collections.abc import Collection
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -2966,7 +2967,8 @@ class _FakeBeatRepoForServices:
     """In-memory BeatRepository fake for TimerService / BeatService.
     Implements get_active, get_last, create, update, delete, list,
     list_by_project, get_by_id with the same contract the real repo
-    exposes (raising NoObjectMatched where applicable)."""
+    exposes (raising NoObjectMatched where applicable, and BeatNotFound
+    from update, as the port says)."""
 
     def __init__(self, beats: builtins.list[Beat] | None = None):
         self._beats: list[Beat] = list(beats or [])
@@ -2993,14 +2995,14 @@ class _FakeBeatRepoForServices:
         self._beats.append(beat)
         return beat
 
-    async def update(self, beat: Beat) -> Beat:
+    async def update(self, beat: Beat, fields: Collection[str]) -> Beat:
         for i, b in enumerate(self._beats):
             if b.id == beat.id:
-                self._beats[i] = beat
-                return beat
-        from beats.domain.exceptions import NoObjectMatched
+                self._beats[i] = b.model_copy(update={f: getattr(beat, f) for f in fields})
+                return self._beats[i]
+        from beats.domain.exceptions import BeatNotFound
 
-        raise NoObjectMatched()
+        raise BeatNotFound(beat.id)
 
     async def delete(self, beat_id: str) -> bool:
         for i, b in enumerate(self._beats):
@@ -3336,6 +3338,54 @@ class TestTimerServiceStop:
         too_early = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
         with pytest.raises(InvalidEndTime):
             await svc.stop_timer(end_time=too_early)
+
+    async def test_a_write_during_the_flow_read_survives_the_stop(self):
+        """The stop reads the running beat, then awaits the flow windows, then
+        writes. Against real Mongo: a write landing in that await (the
+        companion moving the start earlier, an import bringing a note) is
+        not reverted by the stop, which writes only the end and the tags."""
+        import os
+
+        from bson import ObjectId
+        from pymongo import AsyncMongoClient
+
+        from beats.domain.services import TimerService
+        from beats.infrastructure.repositories import (
+            MongoBeatRepository,
+            MongoProjectRepository,
+        )
+
+        client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+        try:
+            db = client[os.environ.get("DB_NAME", "beats_test")]
+            user_id = str(ObjectId())
+            beats = MongoBeatRepository(db.beats, user_id=user_id)
+            start = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
+            moved = start - timedelta(minutes=20)
+            running = await beats.create(Beat(project_id="p1", start=start))
+            assert running.id is not None
+
+            class _WriteDuringRead:
+                async def list_by_range(self, start: datetime, end: datetime) -> list:
+                    await db.beats.update_one(
+                        {"_id": ObjectId(running.id)},
+                        {"$set": {"start": moved, "note": "Imported"}},
+                    )
+                    return []
+
+            svc = TimerService(
+                beat_repo=beats,
+                project_repo=MongoProjectRepository(db.projects, user_id=user_id),
+                flow_repo=_WriteDuringRead(),
+            )
+            end = start + timedelta(hours=1)
+            stopped = await svc.stop_timer(end_time=end)
+
+            stored = await beats.get_by_id(running.id)
+            assert (stored.start, stored.end, stored.note) == (moved, end, "Imported")
+            assert stopped == stored
+        finally:
+            await client.close()
 
 
 class TestTimerServiceStatus:

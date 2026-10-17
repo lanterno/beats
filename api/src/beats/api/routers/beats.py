@@ -48,7 +48,10 @@ async def get_beat(beat_id: str, service: BeatServiceDep):
 
 @router.put("/")
 async def update_beat(request: UpdateBeatRequest, service: BeatServiceDep):
-    """Update an existing beat."""
+    """Edit a beat's project, start and end. The note and every other stored
+    field stay as stored; the tags are re-derived from the new times when the
+    daemon has flow windows for them, and kept when it has none. A beat the
+    caller does not hold is a 404."""
     beat = Beat(
         id=request.id,
         project_id=request.project_id,

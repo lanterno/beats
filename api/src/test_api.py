@@ -2743,6 +2743,140 @@ class TestBeatsDirectAPI:
         assert response.json()["deleted"] is True
 
 
+class TestBeatEdit:
+    """PUT /api/beats/ changes what the request carries — the project, the
+    start and the end — and the tags those times derive, and nothing else.
+    A note reaches a session only through an import, and no client sends one
+    back, so an edit that rebuilt the session from the request erased it."""
+
+    START = "2026-04-01T09:00:00Z"
+    END = "2026-04-01T09:30:00Z"
+
+    @staticmethod
+    def _project(client, headers) -> str:
+        resp = client.post("/api/projects/", json={"name": "Edit"}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def _session(self, client, headers, *, note: str | None = None, tags=()) -> dict:
+        """A finished session, with the note and tags an import brings."""
+        project_id = self._project(client, headers)
+        beat = client.post(
+            "/api/beats/",
+            json={"project_id": project_id, "start": self.START, "end": self.END},
+            headers=headers,
+        ).json()
+        backup = {"beats": [{**beat, "note": note, "tags": list(tags)}]}
+        imported = client.post(
+            "/api/export/import",
+            files={"file": ("backup.json", json.dumps(backup), "application/json")},
+            headers=headers,
+        )
+        assert imported.status_code == 200, imported.text
+        return beat
+
+    @staticmethod
+    def _edit(client, headers, beat: dict, **changes):
+        """The body the companion sends: the four fields, nothing else."""
+        body = {k: beat[k] for k in ("id", "project_id", "start", "end")}
+        return client.put("/api/beats/", json={**body, **changes}, headers=headers)
+
+    @staticmethod
+    def _window(client, headers, start: str, end: str, repo: str) -> None:
+        resp = client.post(
+            "/api/signals/flow-windows",
+            json={
+                "window_start": start,
+                "window_end": end,
+                "flow_score": 0.8,
+                "cadence_score": 0.5,
+                "coherence_score": 0.5,
+                "category_fit_score": 0.5,
+                "idle_fraction": 0.1,
+                "editor_repo": repo,
+                "editor_language": "Go",
+            },
+            headers=headers,
+        )
+        assert resp.status_code in (200, 201), resp.text
+
+    def test_a_time_edit_keeps_the_note(self, client, auth_headers):
+        beat = self._session(client, auth_headers, note="Call with the auditors")
+
+        resp = self._edit(client, auth_headers, beat, end="2026-04-01T10:15:00Z")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["note"] == "Call with the auditors"
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"].startswith("2026-04-01T10:15:00")
+        assert stored["note"] == "Call with the auditors"
+
+    def test_moving_a_session_to_another_project_keeps_the_note(self, client, auth_headers):
+        beat = self._session(client, auth_headers, note="Billable")
+        other = self._project(client, auth_headers)
+
+        resp = self._edit(client, auth_headers, beat, project_id=other)
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert (stored["project_id"], stored["note"]) == (other, "Billable")
+
+    def test_reopening_a_session_keeps_the_note(self, client, auth_headers):
+        """`end: null` reopens it as the running timer, as the companion's
+        undo of a stop does."""
+        beat = self._session(client, auth_headers, note="Deep work")
+
+        resp = self._edit(client, auth_headers, beat, end=None)
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"] is None
+        assert stored["note"] == "Deep work"
+
+    def test_an_edit_with_no_flow_windows_keeps_the_tags(self, client, auth_headers):
+        beat = self._session(client, auth_headers, tags=["imported"])
+
+        resp = self._edit(client, auth_headers, beat, end="2026-04-01T10:00:00Z")
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["tags"] == ["imported"]
+
+    def test_an_edit_over_flow_windows_takes_their_tags(self, client, auth_headers):
+        beat = self._session(client, auth_headers, note="Kept", tags=["imported"])
+        self._window(client, auth_headers, "2026-04-01T09:40:00Z", "2026-04-01T09:50:00Z", "acme")
+
+        resp = self._edit(client, auth_headers, beat, end="2026-04-01T10:00:00Z")
+
+        assert resp.status_code == 200, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert (stored["tags"], stored["note"]) == (["acme", "go"], "Kept")
+
+    def test_an_unknown_session_is_404(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+
+        resp = self._edit(client, auth_headers, beat, id="0123456789abcdef01234567")
+
+        assert resp.status_code == 404, resp.text
+
+    def test_someone_elses_session_is_404_and_left_alone(
+        self, client, auth_headers, other_auth_headers
+    ):
+        """Even when the caller's own flow windows cover its times: deriving
+        tags is no reason to skip finding the session first."""
+        beat = self._session(client, auth_headers, note="Mine")
+        self._window(
+            client, other_auth_headers, "2026-04-01T09:05:00Z", "2026-04-01T09:15:00Z", "theirs"
+        )
+
+        resp = self._edit(client, other_auth_headers, beat, end="2026-04-01T11:00:00Z")
+
+        assert resp.status_code == 404, resp.text
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"].startswith("2026-04-01T09:30:00")
+        assert (stored["note"], stored["tags"]) == ("Mine", [])
+
+
 class TestTimerAPI:
     """Test suite for Timer status endpoints"""
 
