@@ -31,8 +31,9 @@ async def _recent_data_summary(user_id: str, tz: ZoneInfo = UTC_TZ) -> str:
     repos = await build_repos(user_id)
     project_map = {p.id: p.name for p in await repos.project.list()}
 
+    # Seven dates, today the last of them; the filter below keeps week_ago.
     today = datetime.now(tz).date()
-    week_ago = today - timedelta(days=7)
+    week_ago = today - timedelta(days=6)
 
     beats = await repos.beat.list_all_completed()
     dated = ((local_date(b.start, tz), b) for b in beats)
