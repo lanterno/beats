@@ -539,10 +539,11 @@ export interface paths {
          *     404 for a project, or a client (CLIENT_NOT_FOUND), that is not the
          *     caller's; 409 NOT_FREELANCE for a project of another kind; 409
          *     CURRENCY_MISMATCH for a move to a client in another currency while a
-         *     rate of the project's own, or a billable term before the current month,
-         *     would be read in it. Attaching a project the first time is not gated;
-         *     after that, a change to terms dated before the current month in `tz`,
-         *     or a move to another client while one is, is a 409 RETROACTIVE_CHANGE
+         *     rate of the project's own, a billable term before the current month, or
+         *     an entry before it marked billable would be read in it. Attaching a
+         *     project the first time is not gated; after that, a change to terms dated
+         *     before the current month in `tz`, or a move to another client while one
+         *     is or an entry there is marked billable, is a 409 RETROACTIVE_CHANGE
          *     without `rewrite_past: true`.
          */
         put: operations["set_project_billing_api_billing_projects__project_id__put"];
@@ -551,7 +552,7 @@ export interface paths {
          * Remove Project Billing
          * @description Stop billing a project, in every month. 404 when it is not billed;
          *     409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated
-         *     before the current month in `tz`.
+         *     before the current month in `tz`, or an entry there is marked billable.
          */
         delete: operations["remove_project_billing_api_billing_projects__project_id__delete"];
         options?: never;

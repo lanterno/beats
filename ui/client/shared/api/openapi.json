@@ -6260,7 +6260,7 @@
     },
     "/api/billing/projects/{project_id}": {
       "delete": {
-        "description": "Stop billing a project, in every month. 404 when it is not billed;\n409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated\nbefore the current month in `tz`.",
+        "description": "Stop billing a project, in every month. 404 when it is not billed;\n409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated\nbefore the current month in `tz`, or an entry there is marked billable.",
         "operationId": "remove_project_billing_api_billing_projects__project_id__delete",
         "parameters": [
           {
@@ -6320,7 +6320,7 @@
         ]
       },
       "put": {
-        "description": "Bill a freelance project to a client under dated terms, replacing\nwhat it had: from each term's `effective_from`, whether its hours are\nbillable and, optionally, at a rate of its own (`rate_minor`, in the\nclient's currency); without one they take the client's rate in force\nthat day. Strictly ascending, one a day.\n\n404 for a project, or a client (CLIENT_NOT_FOUND), that is not the\ncaller's; 409 NOT_FREELANCE for a project of another kind; 409\nCURRENCY_MISMATCH for a move to a client in another currency while a\nrate of the project's own, or a billable term before the current month,\nwould be read in it. Attaching a project the first time is not gated;\nafter that, a change to terms dated before the current month in `tz`,\nor a move to another client while one is, is a 409 RETROACTIVE_CHANGE\nwithout `rewrite_past: true`.",
+        "description": "Bill a freelance project to a client under dated terms, replacing\nwhat it had: from each term's `effective_from`, whether its hours are\nbillable and, optionally, at a rate of its own (`rate_minor`, in the\nclient's currency); without one they take the client's rate in force\nthat day. Strictly ascending, one a day.\n\n404 for a project, or a client (CLIENT_NOT_FOUND), that is not the\ncaller's; 409 NOT_FREELANCE for a project of another kind; 409\nCURRENCY_MISMATCH for a move to a client in another currency while a\nrate of the project's own, a billable term before the current month, or\nan entry before it marked billable would be read in it. Attaching a\nproject the first time is not gated; after that, a change to terms dated\nbefore the current month in `tz`, or a move to another client while one\nis or an entry there is marked billable, is a 409 RETROACTIVE_CHANGE\nwithout `rewrite_past: true`.",
         "operationId": "set_project_billing_api_billing_projects__project_id__put",
         "parameters": [
           {
