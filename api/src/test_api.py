@@ -4,6 +4,7 @@ Tests all endpoints: Projects, Beats, and Timer APIs
 """
 
 import contextlib
+import copy
 import csv
 import io
 import json
@@ -4655,9 +4656,13 @@ class TestCsvAndJsonExport:
             "beats",
             "absences",
             "balance_adjustments",
+            "clients",
+            "project_billing",
+            "billable_overrides",
         }
-        # 1.1 is the format that carries absences and balance adjustments.
-        assert body["version"] == "1.1"
+        # 1.2 is the format that carries clients and their billing, beside
+        # 1.1's absences and balance adjustments.
+        assert body["version"] == "1.2"
 
     def test_full_json_export_carries_absences_and_adjustments(self, client, auth_headers):
         """What a day job's balance is made of beyond its contract and its
@@ -4741,6 +4746,12 @@ class TestCsvAndJsonExport:
         # one of the import branches surfaces immediately
         assert imp["projects"] >= 1
         assert imp["beats"] >= 1
+
+
+# What backup 1.2 added; a 1.1 file has none of them.
+BILLING_BACKUP_KEYS = ("clients", "project_billing", "billable_overrides")
+# A well-formed id no account holds.
+NOWHERE = "0" * 24
 
 
 def _without_ids(value):
@@ -4846,6 +4857,9 @@ class TestBackupImport:
             "beats": len(backup["beats"]),
             "absences": len(backup["absences"]),
             "balance_adjustments": len(backup["balance_adjustments"]),
+            "clients": len(backup["clients"]),
+            "project_billing": len(backup["project_billing"]),
+            "billable_overrides": len(backup["billable_overrides"]),
         }
         after = self._standing(client, auth_headers, pid)
         assert after[0]["balance"] is not None
@@ -4882,13 +4896,14 @@ class TestBackupImport:
         )
 
     def test_a_backup_from_the_previous_build_imports(self, client, auth_headers):
-        # 1.0 had no absences or adjustments; a file without the keys is a
-        # backup with none of them, not a 422.
+        # 1.0 had no absences or adjustments, nor billing; a file without the
+        # keys is a backup with none of them, not a 422.
         project = _day_job(client, auth_headers)
         _log(client, auth_headers, project["id"], "2026-03-02T08:00:00+00:00", 60)
         backup = self._export(client, auth_headers)
         backup["version"] = "1.0"
-        del backup["absences"], backup["balance_adjustments"]
+        for key in (*BILLING_BACKUP_KEYS, "absences", "balance_adjustments"):
+            del backup[key]
 
         resp = self._import(client, auth_headers, backup)
 
@@ -4900,6 +4915,9 @@ class TestBackupImport:
                 "beats": len(backup["beats"]),
                 "absences": 0,
                 "balance_adjustments": 0,
+                "clients": 0,
+                "project_billing": 0,
+                "billable_overrides": 0,
             },
             "skipped": [],
         }
@@ -5064,6 +5082,184 @@ class TestBackupImport:
             "/api/beats/", params={"project_id": project["id"]}, headers=auth_headers
         )
         assert sessions.json() == []
+
+    # --- 1.2: clients, project billing and billable marks ---
+
+    @staticmethod
+    def _billed(client, headers, name: str) -> tuple[dict, dict]:
+        kite = _create_client(client, headers, rates=KITE_RATE)
+        project = _freelance(client, headers, name)
+        terms = _billable_from("2026-03-01")
+        assert _bill(client, headers, project["id"], kite["id"], terms).status_code == 200
+        return kite, project
+
+    @staticmethod
+    def _imported_billing(resp) -> tuple[int, int, int]:
+        imported = resp.json()["imported"]
+        return tuple(imported[key] for key in BILLING_BACKUP_KEYS)
+
+    def test_billing_is_the_same_after_a_round_trip(self, client, auth_headers, auth_info, mongo):
+        # An archived client with a billed project, and an entry marked not
+        # billable: the ids are kept, so the mark still finds its entry and
+        # the month reads as it did.
+        kite, website = self._billed(client, auth_headers, "Round trip")
+        _beat(client, auth_headers, website["id"], "2026-03-10T09:00:00", 120)
+        marked = _beat(client, auth_headers, website["id"], "2026-03-11T09:00:00", 60)
+        resp = client.put(
+            f"/api/billing/entries/{marked['id']}", json={"billable": False}, headers=auth_headers
+        )
+        assert resp.status_code == 200, resp.text
+        resp = client.post(f"/api/clients/{kite['id']}/archive", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        before = _month(client, auth_headers)
+        [figures] = [c for c in before["clients"] if c["client_id"] == kite["id"]]
+        assert (figures["archived"], figures["amount_minor"]) == (True, 17000)
+
+        backup = self._export(client, auth_headers)
+        assert backup["version"] == "1.2"
+        for collection in (
+            "projects",
+            "timeLogs",
+            "absences",
+            "balance_adjustments",
+            *BILLING_BACKUP_KEYS,
+        ):
+            mongo[collection].delete_many({"user_id": auth_info["user_id"]})
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert self._imported_billing(resp) == tuple(
+            len(backup[key]) for key in BILLING_BACKUP_KEYS
+        )
+        archived = client.get("/api/clients/", params={"archived": True}, headers=auth_headers)
+        assert kite["id"] in [c["id"] for c in archived.json()]
+        assert _month(client, auth_headers) == before
+
+    def test_a_dangling_reference_is_a_422_naming_it_and_writes_nothing(self, client, auth_headers):
+        _, website = self._billed(client, auth_headers, "Dangling")
+        _beat(client, auth_headers, website["id"], "2026-03-12T09:00:00", 60)
+        sessions = client.get("/api/beats/", headers=auth_headers).json()
+        backup = self._export(client, auth_headers)
+        for record in backup["projects"]:
+            if record["id"] == website["id"]:
+                record["name"] = "renamed by the backup"
+        [billing] = [b for b in backup["project_billing"] if b["project_id"] == website["id"]]
+        # A client, a project and an entry neither in the file nor the account.
+        backup["project_billing"] = [
+            {**billing, "client_id": NOWHERE},
+            {**billing, "project_id": NOWHERE},
+        ]
+        backup["billable_overrides"] = [{"beat_id": NOWHERE, "billable": True}]
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == [
+            "project_billing.0.client_id",
+            "project_billing.1.project_id",
+            "billable_overrides.0.beat_id",
+        ]
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == website["id"])["name"] == website["name"]
+        assert client.get("/api/beats/", headers=auth_headers).json() == sessions
+
+    def test_another_accounts_client_is_refused_and_stays_theirs(
+        self, client, auth_headers, other_auth_headers
+    ):
+        theirs = _create_client(client, other_auth_headers, name="Their client")
+        their_backup = self._export(client, other_auth_headers)
+
+        resp = self._import(client, auth_headers, {"clients": their_backup["clients"]})
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "BACKUP_OF_ANOTHER_ACCOUNT"
+        resp = client.get(f"/api/clients/{theirs['id']}", headers=other_auth_headers)
+        assert resp.json() == theirs
+        mine = client.get("/api/clients/", headers=auth_headers).json()
+        assert theirs["id"] not in [c["id"] for c in mine]
+
+    def test_a_write_billing_would_refuse_is_refused_naming_it_and_writes_nothing(
+        self, client, auth_headers
+    ):
+        # Each file breaks one rule a billing write is held to, behind a
+        # project renamed ahead of it: the rule is checked before the rename
+        # is written, and answered as its route answers it.
+        kite, website = self._billed(client, auth_headers, "Refused")
+        dollars = _create_client(client, auth_headers, name="Dollar Co", currency="USD")
+        ahead = _create_project(client, auth_headers)
+        exported = self._export(client, auth_headers)
+
+        def record(collection: str, key: str, value: str) -> dict:
+            return copy.deepcopy(next(r for r in exported[collection] if r[key] == value))
+
+        def backup(**edits) -> dict:
+            projects = [
+                {**record("projects", "id", ahead["id"]), "name": "renamed by the backup"},
+                {**record("projects", "id", website["id"]), **edits.get("project", {})},
+            ]
+            clients = [
+                {**record("clients", "id", kite["id"]), **edits.get("kite", {})},
+                {**record("clients", "id", dollars["id"]), **edits.get("dollars", {})},
+            ]
+            billing = {
+                **record("project_billing", "project_id", website["id"]),
+                **edits.get("billing", {}),
+            }
+            return {
+                "projects": projects,
+                "clients": clients,
+                "project_billing": [] if edits.get("unbilled") else [billing],
+            }
+
+        side_project = {"kind": "side_project"}
+        cases = [
+            (backup(project=side_project), 409, "NOT_FREELANCE", "project_billing.0"),
+            (backup(project=side_project, unbilled=True), 409, "PROJECT_HAS_BILLING", "projects.1"),
+            (backup(kite={"currency": "USD"}), 409, "CURRENCY_IN_USE", "clients.0"),
+            (
+                backup(
+                    billing={
+                        "client_id": dollars["id"],
+                        "terms": _billable_from("2026-03-01", rate_minor=9000),
+                    }
+                ),
+                409,
+                "CURRENCY_MISMATCH",
+                "project_billing.0",
+            ),
+            (backup(dollars={"currency": "EUX"}), 400, "UNKNOWN_CURRENCY", "clients.1"),
+        ]
+        for file, status, code, where in cases:
+            resp = self._import(client, auth_headers, file)
+            assert resp.status_code == status, resp.text
+            assert resp.json()["code"] == code
+            assert resp.json()["detail"].startswith(f"{where}: "), resp.text
+
+        listed = client.get("/api/projects/", headers=auth_headers).json()
+        assert next(p for p in listed if p["id"] == ahead["id"])["name"] == ahead["name"]
+        assert next(p for p in listed if p["id"] == website["id"])["kind"] == "freelance"
+        mine = {c["id"]: c for c in client.get("/api/clients/", headers=auth_headers).json()}
+        assert (mine[kite["id"]]["currency"], mine[dollars["id"]]["currency"]) == ("EUR", "USD")
+        billed = client.get("/api/billing/projects", headers=auth_headers).json()
+        assert (
+            next(b for b in billed if b["project_id"] == website["id"])["client_id"] == kite["id"]
+        )
+
+    def test_a_backup_from_before_billing_imports_and_leaves_billing_alone(
+        self, client, auth_headers
+    ):
+        _, website = self._billed(client, auth_headers, "Before billing")
+        backup = self._export(client, auth_headers)
+        backup["version"] = "1.1"
+        for key in BILLING_BACKUP_KEYS:
+            del backup[key]
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert self._imported_billing(resp) == (0, 0, 0)
+        billed = client.get("/api/billing/projects", headers=auth_headers).json()
+        assert website["id"] in [b["project_id"] for b in billed]
 
 
 class TestIntelligenceInbox:
