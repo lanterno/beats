@@ -218,6 +218,257 @@
         "title": "BalanceAdjustmentFields",
         "type": "object"
       },
+      "BillableOverrideRequest": {
+        "description": "Request body for marking one entry billable or not.",
+        "properties": {
+          "billable": {
+            "title": "Billable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "billable"
+        ],
+        "title": "BillableOverrideRequest",
+        "type": "object"
+      },
+      "BillableOverrideResponse": {
+        "description": "One entry's billable mark, against its project's term.",
+        "properties": {
+          "beat_id": {
+            "title": "Beat Id",
+            "type": "string"
+          },
+          "billable": {
+            "title": "Billable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "beat_id",
+          "billable"
+        ],
+        "title": "BillableOverrideResponse",
+        "type": "object"
+      },
+      "BillingEntryResponse": {
+        "description": "A finished entry of a billed project, billable or not. `day` is the\nlocal day it started on, which decides its month and its rate. `hours`\nis for display; the lines are the figures.",
+        "properties": {
+          "beat_id": {
+            "title": "Beat Id",
+            "type": "string"
+          },
+          "billable": {
+            "title": "Billable",
+            "type": "boolean"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "overridden": {
+            "title": "Overridden",
+            "type": "boolean"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "rate_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Minor"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "beat_id",
+          "project_id",
+          "day",
+          "start",
+          "end",
+          "hours",
+          "billable",
+          "overridden",
+          "rate_minor"
+        ],
+        "title": "BillingEntryResponse",
+        "type": "object"
+      },
+      "BillingLineResponse": {
+        "description": "A run of consecutive days of one project at one rate from one source.\n`rate_minor`, `source` and `amount_minor` are all null on an unpriced\nrun. `hours` are to the hundredth, and `amount_minor` is `hours` times\n`rate_minor`, to a whole minor unit, half-up.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "rate_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Minor"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RateSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "rate_minor",
+          "source",
+          "first",
+          "last",
+          "hours",
+          "amount_minor"
+        ],
+        "title": "BillingLineResponse",
+        "type": "object"
+      },
+      "BillingMonthResponse": {
+        "description": "What is billable in a month, per client and per currency: the whole\nmonth once it has ended, `first` through today while it runs.",
+        "properties": {
+          "clients": {
+            "items": {
+              "$ref": "#/components/schemas/ClientBillingResponse"
+            },
+            "title": "Clients",
+            "type": "array"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "totals": {
+            "items": {
+              "$ref": "#/components/schemas/CurrencyTotalResponse"
+            },
+            "title": "Totals",
+            "type": "array"
+          },
+          "unattached": {
+            "items": {
+              "$ref": "#/components/schemas/UnattachedHoursResponse"
+            },
+            "title": "Unattached",
+            "type": "array"
+          }
+        },
+        "required": [
+          "month",
+          "first",
+          "last",
+          "totals",
+          "clients",
+          "unattached"
+        ],
+        "title": "BillingMonthResponse",
+        "type": "object"
+      },
+      "BillingTerm": {
+        "description": "From `effective_from` on, whether a project's hours are billable and,\noptionally, at a rate of its own; without one they take the client's\nrate in force each day. \"Not billable from 1 November\" is a term, so\nOctober's figures stay as they were.",
+        "properties": {
+          "billable": {
+            "title": "Billable",
+            "type": "boolean"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "rate_minor": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Minor"
+          }
+        },
+        "required": [
+          "effective_from",
+          "billable"
+        ],
+        "title": "BillingTerm",
+        "type": "object"
+      },
       "BiometricDayRequest": {
         "properties": {
           "date": {
@@ -583,6 +834,277 @@
           "message"
         ],
         "title": "ChatRequest",
+        "type": "object"
+      },
+      "ClientBillingResponse": {
+        "description": "One client's figures for the month, in its one currency. The hours and\nthe amount are sums of the lines; `unpriced_hours` is the part of\n`billable_hours` with no rate. `running`: a billable timer is running,\nand counts once it stops.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/BillingEntryResponse"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BillingLineResponse"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "non_billable_hours": {
+            "title": "Non Billable Hours",
+            "type": "number"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "unpriced_hours": {
+            "title": "Unpriced Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "client_id",
+          "name",
+          "archived",
+          "currency",
+          "minor_units",
+          "running",
+          "billable_hours",
+          "non_billable_hours",
+          "unpriced_hours",
+          "amount_minor",
+          "lines",
+          "entries"
+        ],
+        "title": "ClientBillingResponse",
+        "type": "object"
+      },
+      "ClientResponse": {
+        "description": "A client as stored, with its currency's minor units from the API's\ntable, and whether its currency is locked: something is priced in it,\nso it can no longer change.",
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "contact_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "currency_locked": {
+            "title": "Currency Locked",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/RateTerm"
+            },
+            "title": "Rates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "currency",
+          "minor_units",
+          "rates",
+          "archived",
+          "created_at",
+          "currency_locked"
+        ],
+        "title": "ClientResponse",
+        "type": "object"
+      },
+      "ClientUpdateRequest": {
+        "description": "Request body for replacing a client: the same keys, and\n`rewrite_past`, required, saying the caller has confirmed a change to\nfigures before the current month.",
+        "properties": {
+          "contact_email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "pattern": "^[^@\\s]+@[^@\\s]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/RateTerm"
+            },
+            "title": "Rates",
+            "type": "array"
+          },
+          "rewrite_past": {
+            "title": "Rewrite Past",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "contact_name",
+          "contact_email",
+          "currency",
+          "rates",
+          "rewrite_past"
+        ],
+        "title": "ClientUpdateRequest",
+        "type": "object"
+      },
+      "ClientWriteRequest": {
+        "description": "Request body for adding a client: the domain's fields, every key\nrequired, null where it may be. Its rates are `rate_minor` per hour in\nthe currency's minor units, strictly ascending by `effective_from`.",
+        "properties": {
+          "contact_email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "pattern": "^[^@\\s]+@[^@\\s]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/RateTerm"
+            },
+            "title": "Rates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "contact_name",
+          "contact_email",
+          "currency",
+          "rates"
+        ],
+        "title": "ClientWriteRequest",
         "type": "object"
       },
       "CompanyHoliday": {
@@ -1071,6 +1593,59 @@
           "url"
         ],
         "title": "CreateWebhookRequest",
+        "type": "object"
+      },
+      "CurrencyResponse": {
+        "description": "A currency a client may be billed in, and its minor units.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "minor_units"
+        ],
+        "title": "CurrencyResponse",
+        "type": "object"
+      },
+      "CurrencyTotalResponse": {
+        "description": "Every listed client in one currency, summed: no figure holds two.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "unpriced_hours": {
+            "title": "Unpriced Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "currency",
+          "minor_units",
+          "billable_hours",
+          "unpriced_hours",
+          "amount_minor"
+        ],
+        "title": "CurrencyTotalResponse",
         "type": "object"
       },
       "DayAbsence": {
@@ -1876,6 +2451,18 @@
             "title": "Beats",
             "type": "integer"
           },
+          "billable_overrides": {
+            "title": "Billable Overrides",
+            "type": "integer"
+          },
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          },
+          "project_billing": {
+            "title": "Project Billing",
+            "type": "integer"
+          },
           "projects": {
             "title": "Projects",
             "type": "integer"
@@ -1885,7 +2472,10 @@
           "projects",
           "beats",
           "absences",
-          "balance_adjustments"
+          "balance_adjustments",
+          "clients",
+          "project_billing",
+          "billable_overrides"
         ],
         "title": "ImportCounts",
         "type": "object"
@@ -2857,6 +3447,70 @@
         "title": "ProductivityScoreResponse",
         "type": "object"
       },
+      "ProjectBillingRequest": {
+        "description": "Request body for billing a project: its client and the whole list of\nterms, and `rewrite_past`, all required.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "rewrite_past": {
+            "title": "Rewrite Past",
+            "type": "boolean"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/BillingTerm"
+            },
+            "title": "Terms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client_id",
+          "terms",
+          "rewrite_past"
+        ],
+        "title": "ProjectBillingRequest",
+        "type": "object"
+      },
+      "ProjectBillingResponse": {
+        "description": "A project's billing, with its client's currency and minor units, the\ncurrency every `rate_minor` in it is in.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/BillingTerm"
+            },
+            "title": "Terms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "client_id",
+          "currency",
+          "minor_units",
+          "terms"
+        ],
+        "title": "ProjectBillingResponse",
+        "type": "object"
+      },
       "ProjectBreakdownEntry": {
         "description": "One project's share of a week, as a digest reports it.\n\nTyped rather than a bare dict because it crosses the wire: it is what\nthe UI's digest list renders, and an untyped `list[dict]` publishes an\nOpenAPI `array of object` with no properties, which leaves every client\ncasting the rows back into a shape by hand.",
         "properties": {
@@ -3276,6 +3930,37 @@
           "name"
         ],
         "title": "ProjectsListItemResponse",
+        "type": "object"
+      },
+      "RateSource": {
+        "description": "Which level a line's rate comes from.",
+        "enum": [
+          "project",
+          "client"
+        ],
+        "title": "RateSource",
+        "type": "string"
+      },
+      "RateTerm": {
+        "description": "One stretch of a client's default rate, from `effective_from` until\nthe next. Any day of the week: rates change on invoice dates, not\nMondays. `rate_minor` is per hour, in the client's currency's minor\nunits \u2014 cents for EUR, yen for JPY, fils for KWD.",
+        "properties": {
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "rate_minor": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "Rate Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "effective_from",
+          "rate_minor"
+        ],
+        "title": "RateTerm",
         "type": "object"
       },
       "RecentDriftResponse": {
@@ -3755,6 +4440,30 @@
           "count"
         ],
         "title": "TopBucket",
+        "type": "object"
+      },
+      "UnattachedHoursResponse": {
+        "description": "A freelance project with finished hours in the month and no client:\nhours in no figure of the report.",
+        "properties": {
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "name",
+          "hours"
+        ],
+        "title": "UnattachedHoursResponse",
         "type": "object"
       },
       "UpdateBeatRequest": {
@@ -5335,6 +6044,348 @@
         ]
       }
     },
+    "/api/billing/entries": {
+      "get": {
+        "description": "Every entry marked billable or not against its project's term. They\nare exceptions, so the list is small.",
+        "operationId": "list_billable_overrides_api_billing_entries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BillableOverrideResponse"
+                  },
+                  "title": "Response List Billable Overrides Api Billing Entries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "List Billable Overrides",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/api/billing/entries/{beat_id}": {
+      "delete": {
+        "description": "Return an entry to its project's rule. Always 204: with no mark, or\nno entry, there is nothing left to clear.",
+        "operationId": "clear_billable_override_api_billing_entries__beat_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "beat_id",
+            "required": true,
+            "schema": {
+              "title": "Beat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Billable Override",
+        "tags": [
+          "Billing"
+        ]
+      },
+      "put": {
+        "description": "Mark one entry billable or not, whatever its project's term says. It\ncounts while the entry's project is billed, and survives a move to\nanother project. 404 when the entry is not the caller's.",
+        "operationId": "set_billable_override_api_billing_entries__beat_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "beat_id",
+            "required": true,
+            "schema": {
+              "title": "Beat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillableOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillableOverrideResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Billable Override",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/api/billing/month": {
+      "get": {
+        "description": "What each client is owed for a month, in its own currency, with a\ntotal per currency and the freelance hours billed to no one.\n\nA finished entry belongs whole to the local day it started on in `tz`,\nwhich picks both its month and its rate; a running timer is left out\n(`running` on its client) until it stops. The current month runs\nthrough today in `tz`; a later one is a 409 MONTH_NOT_STARTED. Money is\ninteger minor units; each line's amount is its hours times its rate,\nrounded once, and every total is a sum of lines.",
+        "operationId": "get_billing_month_api_billing_month_get",
+        "parameters": [
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingMonthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Billing Month",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/api/billing/projects": {
+      "get": {
+        "description": "Every billed project's billing: one per project, a small set.",
+        "operationId": "list_project_billings_api_billing_projects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectBillingResponse"
+                  },
+                  "title": "Response List Project Billings Api Billing Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "List Project Billings",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/api/billing/projects/{project_id}": {
+      "delete": {
+        "description": "Stop billing a project, in every month. 404 when it is not billed;\n409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated\nbefore the current month in `tz`.",
+        "operationId": "remove_project_billing_api_billing_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The caller has confirmed a change to figures before the current month.",
+            "in": "query",
+            "name": "rewrite_past",
+            "required": true,
+            "schema": {
+              "description": "The caller has confirmed a change to figures before the current month.",
+              "title": "Rewrite Past",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Project Billing",
+        "tags": [
+          "Billing"
+        ]
+      },
+      "put": {
+        "description": "Bill a freelance project to a client under dated terms, replacing\nwhat it had: from each term's `effective_from`, whether its hours are\nbillable and, optionally, at a rate of its own (`rate_minor`, in the\nclient's currency); without one they take the client's rate in force\nthat day. Strictly ascending, one a day.\n\n404 for a project, or a client (CLIENT_NOT_FOUND), that is not the\ncaller's; 409 NOT_FREELANCE for a project of another kind; 409\nCURRENCY_MISMATCH for a move to a client in another currency while a\nrate of the project's own, or a billable term before the current month,\nwould be read in it. Attaching a project the first time is not gated;\nafter that, a change to terms dated before the current month in `tz`,\nor a move to another client while one is, is a 409 RETROACTIVE_CHANGE\nwithout `rewrite_past: true`.",
+        "operationId": "set_project_billing_api_billing_projects__project_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectBillingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectBillingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Project Billing",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/api/biometrics/": {
       "delete": {
         "description": "Delete all biometric data for the current user (privacy).",
@@ -5611,6 +6662,341 @@
         "summary": "Calendar Status",
         "tags": [
           "calendar"
+        ]
+      }
+    },
+    "/api/clients/": {
+      "get": {
+        "description": "The active clients, or with `archived` the archived ones, by name.",
+        "operationId": "list_clients_api_clients__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ClientResponse"
+                  },
+                  "title": "Response List Clients Api Clients  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Clients",
+        "tags": [
+          "Clients"
+        ]
+      },
+      "post": {
+        "description": "Add a client. Every key is required, null where it may be. 400\nUNKNOWN_CURRENCY for a code the API's table does not know.",
+        "operationId": "create_client_api_clients__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Client",
+        "tags": [
+          "Clients"
+        ]
+      }
+    },
+    "/api/clients/{client_id}": {
+      "delete": {
+        "description": "Delete a client. 409 CLIENT_HAS_PROJECTS while a project is billed to\nit: archive it instead, so past reports keep its name and currency.",
+        "operationId": "delete_client_api_clients__client_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Client",
+        "tags": [
+          "Clients"
+        ]
+      },
+      "get": {
+        "description": "One client. 404 CLIENT_NOT_FOUND when it is not the caller's.",
+        "operationId": "get_client_api_clients__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Client",
+        "tags": [
+          "Clients"
+        ]
+      },
+      "put": {
+        "description": "Replace a client's name, contact, currency and default rates.\n\n409 CURRENCY_IN_USE when the currency changes once something is priced\nin it (`currency_locked`). A rate change dated before the current month\nin `tz` may change figures already invoiced: without `rewrite_past:\ntrue` it is a 409 RETROACTIVE_CHANGE naming the first month touched.\n`tz` and `rewrite_past` are both required.",
+        "operationId": "update_client_api_clients__client_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Client",
+        "tags": [
+          "Clients"
+        ]
+      }
+    },
+    "/api/clients/{client_id}/archive": {
+      "post": {
+        "description": "Archive a client: kept, in the reports of months it has hours in, and\nout of the pickers.",
+        "operationId": "archive_client_api_clients__client_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive Client",
+        "tags": [
+          "Clients"
+        ]
+      }
+    },
+    "/api/clients/{client_id}/unarchive": {
+      "post": {
+        "description": "Bring an archived client back.",
+        "operationId": "unarchive_client_api_clients__client_id__unarchive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unarchive Client",
+        "tags": [
+          "Clients"
         ]
       }
     },
@@ -6462,7 +7848,7 @@
     },
     "/api/export/full": {
       "get": {
-        "description": "Export everything a balance is made of, as JSON for backup: the\nprojects (contract included), the sessions, the absences and the balance\nadjustments.",
+        "description": "Export everything a balance and a bill are made of, as JSON for\nbackup: the projects (contract included), the sessions, the absences and\nthe balance adjustments; the clients, each project's billing and the\nentries marked billable or not.",
         "operationId": "export_full_json_api_export_full_get",
         "responses": {
           "200": {
@@ -6482,7 +7868,7 @@
     },
     "/api/export/import": {
       "post": {
-        "description": "Import a full JSON backup, version 1.0 or 1.1, into the caller's\naccount. Safe to re-import: projects and beats are written by id, and\nan absence or an adjustment replaces the one on its project and date, as\nits own route does.\n\nThe whole file is checked first, and a file that fails writes nothing:\na malformed record, a project's or a session's id included, is a 422\nthat names it, and a file holding a project or a session whose id is\nanother account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`.\n\nProjects are then written as a project write is: the contract's checks,\nand the reconcile against the contract it replaces. A refusal there is\nthat write's error and stops the import, with no transaction: the\nprojects before it in the file stay written, and no beat, absence or\nadjustment is. Absences and adjustments go through their own routes'\nrules, against the projects as restored, and one those rules refuse (an\nabsence on a project that is no longer a day job; an adjustment outside\nthe contract's first day through today in `tz`) is left out and listed\nunder `skipped` with the code its route would answer.",
+        "description": "Import a full JSON backup, version 1.0, 1.1 or 1.2, into the caller's\naccount. Safe to re-import: projects, beats and clients are written by\nid, a project's billing replaces the one on its project and an override\nthe one on its beat, and an absence or an adjustment replaces the one on\nits project and date, as its own route does.\n\nThe whole file is checked first, and a file that fails writes nothing:\n\n- a malformed record, a project's, a session's or a client's id\n  included, is a 422 that names it;\n- a file holding a project, a session or a client whose id is another\n  account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`;\n- a billing whose project or client, or an override whose session, is in\n  neither the file nor the account is a 422 that names it;\n- a client or a billing that its route would refuse, against the file\n  over the account (a currency the API does not know, or one changed\n  once priced; billing on a project that is not freelance, or a billed\n  project moved away from freelance; billing moved to a client in\n  another currency), is that route's error, its detail naming the\n  record. The retroactive gate is not applied: a restore puts back what\n  was.\n\nClients are written first, then projects as a project write is: the\ncontract's checks, and the reconcile against the contract it replaces.\nA refusal there is that write's error and stops the import, with no\ntransaction: the clients and the projects before it in the file stay\nwritten, and nothing after them is. Then each project's billing, the\nbeats and the overrides. Absences and adjustments go last, through their\nown routes' rules, against the projects as restored, and one those rules\nrefuse (an absence on a project that is no longer a day job; an\nadjustment outside the contract's first day through today in `tz`) is\nleft out and listed under `skipped` with the code its route would\nanswer. Billing is never skipped: its rules ran before the first\nwrite.",
         "operationId": "import_full_json_api_export_import_post",
         "parameters": [
           {
@@ -7458,6 +8844,32 @@
         "summary": "Get Suggestions",
         "tags": [
           "intelligence"
+        ]
+      }
+    },
+    "/api/meta/currencies": {
+      "get": {
+        "description": "Every currency a client may be billed in, by code, with its minor\nunits \u2014 the API's own table, the one source of how many digits a\ncurrency has: the browser's ICU data disagrees with ISO 4217 on some.\nThe SPA names each code itself. Cacheable for a day, like the region\nlist: it changes only with a release.",
+        "operationId": "list_currencies_api_meta_currencies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CurrencyResponse"
+                  },
+                  "title": "Response List Currencies Api Meta Currencies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Currencies",
+        "tags": [
+          "Meta"
         ]
       }
     },
