@@ -9,15 +9,15 @@ there would make every stored record unreadable (`_check_contract` and
 `check_region` keep a contract's the same way).
 
 A write that would change billable figures before the current month, in
-the request's timezone, needs `rewrite_past` (`past_change`, `link_change`):
-those months may have been invoiced. Attaching a project for the first
-time is not gated, since no figure existed, and neither is an override —
-editing a past entry is itself the consent.
+the request's timezone, needs `rewrite_past` (`past_change`, `link_change`,
+`marked_change`): those months may have been invoiced. Attaching a project
+for the first time is not gated, since no figure existed, and neither is an
+override — editing a past entry is itself the consent.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -25,8 +25,10 @@ from beats.domain.billing import (
     BillingPeriod,
     assemble_billing,
     link_change,
+    marked_change,
     month_range,
     past_change,
+    utc_midnight,
     utc_range,
 )
 from beats.domain.currencies import check_currency
@@ -42,6 +44,7 @@ from beats.domain.exceptions import (
     RetroactiveChange,
 )
 from beats.domain.models import (
+    Beat,
     BillableOverride,
     BillingTerm,
     Client,
@@ -83,16 +86,29 @@ def _locked(client: Client, billings: Iterable[ProjectBilling]) -> bool:
 
 
 def _check_move(
-    previous: Client, client: Client, terms: Iterable[BillingTerm], month_start: date
+    previous: Client,
+    client: Client,
+    terms: Iterable[BillingTerm],
+    month_start: date,
+    *,
+    marked: bool,
 ) -> None:
     """CURRENCY_MISMATCH for a project's billing moved from `previous` to
     `client` in another currency, while the terms it would have there carry
-    a rate of their own, or a billable term dated before `month_start`."""
-    if previous.currency != client.currency and any(
-        term.rate_minor is not None or (term.billable and term.effective_from < month_start)
-        for term in terms
+    a rate of their own, or a billable term dated before `month_start`, or
+    while an entry before it is marked billable (`marked`)."""
+    if previous.currency != client.currency and (
+        marked
+        or any(
+            term.rate_minor is not None or (term.billable and term.effective_from < month_start)
+            for term in terms
+        )
     ):
         raise CurrencyMismatch()
+
+
+def _earliest(*days: date | None) -> date | None:
+    return min((day for day in days if day is not None), default=None)
 
 
 @contextmanager
@@ -239,12 +255,13 @@ class BillingService:
         - Moving it to a client in another currency is refused (409
           CURRENCY_MISMATCH) while the terms it would have there carry a
           rate of their own, or a billable term dated before the current
-          month: the rate was entered in the old currency, and the past
-          hours were billed in it. Terms that drop both move nothing.
+          month, or while an entry before it is marked billable: the rate
+          was entered in the old currency, and the past hours were billed
+          in it. Terms that drop both, with no such mark, move nothing.
         - Attaching it the first time is not gated. Otherwise a change to the
           terms dated before the current month, or any move to another
-          client while a term is dated there, needs `rewrite_past` (409
-          RETROACTIVE_CHANGE).
+          client while a term is dated there or an entry there is marked
+          billable, needs `rewrite_past` (409 RETROACTIVE_CHANGE).
         """
         project = await self.projects.get_by_id(project_id)
         if project.kind is not ProjectKind.FREELANCE:
@@ -256,9 +273,10 @@ class BillingService:
             changes = [past_change(stored.terms, terms, month_start)]
             if stored.client_id != client_id:
                 previous = await self.clients.get_by_id(stored.client_id)
-                _check_move(previous, client, terms, month_start)
-                changes.append(link_change([*stored.terms, *terms], month_start))
-            self._gate(min((day for day in changes if day is not None), default=None), rewrite_past)
+                marked = await self._marked_change(project_id, month_start, tz)
+                _check_move(previous, client, terms, month_start, marked=marked is not None)
+                changes += [link_change([*stored.terms, *terms], month_start), marked]
+            self._gate(_earliest(*changes), rewrite_past)
         billing = await self.billings.upsert(
             ProjectBilling(project_id=project_id, client_id=client_id, terms=terms)
         )
@@ -269,13 +287,52 @@ class BillingService:
     ) -> None:
         """Stop billing a project: its hours are in no client's figures from
         then on, in every month. 404 when it is not billed; a term dated
-        before the current month needs `rewrite_past` (409
-        RETROACTIVE_CHANGE)."""
+        before the current month, or an entry there marked billable, needs
+        `rewrite_past` (409 RETROACTIVE_CHANGE)."""
         stored = await self.billings.get(project_id)
         if stored is None:
             raise ProjectNotBilled()
-        self._gate(link_change(stored.terms, self._month_start(tz)), rewrite_past)
+        month_start = self._month_start(tz)
+        self._gate(
+            _earliest(
+                link_change(stored.terms, month_start),
+                await self._marked_change(project_id, month_start, tz),
+            ),
+            rewrite_past,
+        )
         await self.billings.delete(project_id)
+
+    async def _marked_change(
+        self,
+        project_id: str,
+        month_start: date,
+        tz: ZoneInfo,
+        beats: Sequence[Beat] = (),
+        overrides: Sequence[BillableOverride] = (),
+    ) -> date | None:
+        """`marked_change` for one project: the earliest day before
+        `month_start` with an entry of it marked billable, None when there
+        is none. A backup's `beats` and `overrides` are laid over the
+        account's, as its restore would leave them. The overrides are read
+        first, a small set; the project's beats before the month only when
+        one of them marks an entry billable."""
+        marks = {
+            override.beat_id: override.billable for override in await self.overrides.list_all()
+        }
+        marks.update((override.beat_id, override.billable) for override in overrides)
+        marked = {beat_id for beat_id, billable in marks.items() if billable}
+        if not marked:
+            return None
+        stored = await self.beats.list_started_between(
+            [project_id], datetime.min.replace(tzinfo=UTC), utc_midnight(month_start, tz)
+        )
+        merged = {beat.id: beat for beat in [*stored, *beats]}
+        return marked_change(
+            (beat for beat in merged.values() if beat.project_id == project_id),
+            marked,
+            month_start,
+            tz,
+        )
 
     @staticmethod
     def _gate(first_day: date | None, rewrite_past: bool) -> None:
@@ -360,6 +417,8 @@ class BillingService:
         projects: Sequence[Project],
         clients: Sequence[Client],
         billings: Sequence[ProjectBilling],
+        beats: Sequence[Beat],
+        overrides: Sequence[BillableOverride],
         tz: ZoneInfo,
     ) -> None:
         """The rules the client and billing writes apply, run over what a
@@ -377,7 +436,8 @@ class BillingService:
           PROJECT_HAS_BILLING, as `restore_project` would answer it.
         - Billing is on a project that is freelance as the file leaves it
           (NOT_FREELANCE), and billing the file moves to a client in another
-          currency is held to `set_project_billing`'s rule (CURRENCY_MISMATCH).
+          currency is held to `set_project_billing`'s rule (CURRENCY_MISMATCH),
+          the file's beats and billable marks laid over the account's.
 
         That each billing's project and client is in the file or the account
         is the import's to check first. The retroactive gate is not applied:
@@ -428,8 +488,21 @@ class BillingService:
                 if before is not None and before.client_id != billing.client_id:
                     previous = stored_clients.get(before.client_id)
                     moved_to = merged.get(billing.client_id)
-                    if previous is not None and moved_to is not None:
-                        _check_move(previous, moved_to, billing.terms, month_start)
+                    if (
+                        previous is not None
+                        and moved_to is not None
+                        and previous.currency != moved_to.currency
+                    ):
+                        marked = await self._marked_change(
+                            billing.project_id, month_start, tz, beats, overrides
+                        )
+                        _check_move(
+                            previous,
+                            moved_to,
+                            billing.terms,
+                            month_start,
+                            marked=marked is not None,
+                        )
 
     async def restore_client(self, client: Client) -> None:
         """Write a client read from a backup, keeping its id and its archive

@@ -32,7 +32,7 @@ invoice does.
 """
 
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Container, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -453,7 +453,33 @@ def past_change[T: _Dated](old: Sequence[T], new: Sequence[T], month_start: date
 def link_change(terms: Sequence[_Dated], month_start: date) -> date | None:
     """`past_change` for a write that moves every term at once — a project
     moved to another client, or its billing stopped: from the earliest term
-    dated before `month_start`, None when there is none."""
+    dated before `month_start`, None when there is none. `marked_change` is
+    the other half of what such a write moves."""
     return min(
         (term.effective_from for term in terms if term.effective_from < month_start), default=None
+    )
+
+
+def marked_change(
+    beats: Iterable[Beat], marked: Container[str | None], month_start: date, tz: ZoneInfo
+) -> date | None:
+    """The earliest local day before `month_start` that a finished beat in
+    `beats` whose id is `marked` (billable by an override) started on; None
+    when there is none.
+
+    An override bills its entry whatever the terms say, before the first
+    one too, so a project billed from this month on can have past figures
+    that no term is dated under: a write that moves every term at once moves
+    those as well.
+    """
+    return min(
+        (
+            day
+            for beat in beats
+            if beat.id in marked
+            and beat.end is not None
+            and _microseconds(beat.start, beat.end) >= 0
+            and (day := local_date(beat.start, tz)) < month_start
+        ),
+        default=None,
     )

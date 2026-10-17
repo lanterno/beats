@@ -304,7 +304,14 @@ async def import_full_json(
             len(foreign_projects), len(foreign_beats), len(foreign_clients)
         )
     await _check_references(backup, project_repo, client_repo, beat_repo)
-    await billing_service.check_restore(backup.projects, backup.clients, backup.project_billing, tz)
+    await billing_service.check_restore(
+        backup.projects,
+        backup.clients,
+        backup.project_billing,
+        backup.beats,
+        backup.billable_overrides,
+        tz,
+    )
 
     counts = ImportCounts(
         projects=0,
