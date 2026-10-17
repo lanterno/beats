@@ -16,7 +16,7 @@
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import type { AdjustmentKind, LedgerAdjustment } from "@/entities/project";
-import { useRecordAdjustment, useRemoveAdjustment } from "@/entities/project";
+import { MAX_BALANCE_HOURS, useRecordAdjustment, useRemoveAdjustment } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { cn, parseIsoDate } from "@/shared/lib";
 import { Button, Dialog } from "@/shared/ui";
@@ -53,9 +53,6 @@ const MODES: { mode: Mode; label: string; hint: string }[] = [
 		hint: "A balance above this is brought down to it as the day starts; one below is left alone.",
 	},
 ];
-
-/** The API's bound on an adjustment's hours. */
-const MAX_HOURS = 10_000;
 
 const FIELD =
 	"w-full bg-secondary border-0 rounded-xl text-foreground px-3 py-2 text-[13.5px] font-mono font-bold focus:outline-hidden focus:ring-[3px] focus:ring-accent";
@@ -97,8 +94,8 @@ function parseHours(mode: Mode, text: string): { hours: number } | { error: stri
 	if (text.trim() === "") return { error: "Enter the hours." };
 	const value = Number(text);
 	if (!Number.isFinite(value)) return { error: "Enter the hours as a number." };
-	if (Math.abs(value) > MAX_HOURS)
-		return { error: `At most ${MAX_HOURS.toLocaleString("en-US")} h.` };
+	if (Math.abs(value) > MAX_BALANCE_HOURS)
+		return { error: `At most ${MAX_BALANCE_HOURS.toLocaleString("en-US")} h.` };
 	if (mode === "payout" || mode === "credit") {
 		if (value <= 0) return { error: "Enter the hours to move, more than 0." };
 		return { hours: mode === "payout" ? -value : value };
@@ -229,8 +226,8 @@ export function AdjustmentDialog({
 							type="number"
 							inputMode="decimal"
 							step="0.25"
-							min={mode === "reset" ? -MAX_HOURS : 0}
-							max={MAX_HOURS}
+							min={mode === "reset" ? -MAX_BALANCE_HOURS : 0}
+							max={MAX_BALANCE_HOURS}
 							value={hours}
 							onChange={(e) => setHours(e.target.value)}
 							onBlur={() => setTouched(true)}

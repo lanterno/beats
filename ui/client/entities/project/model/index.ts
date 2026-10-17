@@ -14,6 +14,7 @@ export {
 	formatSignedHours,
 	isTimeBased,
 	isTimeBasedOn,
+	MAX_BALANCE_HOURS,
 	SCHEDULE_TYPE_LABELS,
 	sortTerms,
 	termHoursPerDay,
