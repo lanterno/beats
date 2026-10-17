@@ -192,7 +192,7 @@ failing would make every stored record unreadable, which is why
   never out of the module: a new client cannot pick it, and a client
   already priced in it still reads, with the same minor units. So the
   stored currency is not checked again when a client is updated; only a
-  new one is.
+  new one is, and the client dialog keeps offering a client its own.
 - **The currency is locked once priced** (Decision 12). `ClientResponse`
   carries `currency_locked` so the picker can say so before the user tries.
 - **A client with billed projects** cannot be deleted (Decision 13).
@@ -203,9 +203,10 @@ failing would make every stored record unreadable, which is why
   (409 `CURRENCY_MISMATCH`) while the terms it would have there carry a
   rate of the project's own, which was entered in the old currency, or a
   billable term dated before the current month, whose hours were billed in
-  it. Terms that drop both move nothing, so they pass: to really change
-  currency, stop billing and attach the project again, or start a new
-  project.
+  it, or while an entry before the current month is marked billable, for
+  the same reason. Terms that drop both, with no such mark, move nothing,
+  so they pass: to really change currency, stop billing and attach the
+  project again, or start a new project.
 - **The kind guard** sits in `ProjectService.update_project`, which
   `restore_project` goes through too, behind the narrow `BillingPresence`
   port. It reads billing only when the project is not freelance after the
@@ -265,6 +266,10 @@ yet — is not in billing at all.
   real length.
 - **A running beat** is left out, and sets its client's `running` when it
   would itself be billable.
+- **A beat that ends before it starts**, which `POST /api/beats/` and a
+  restore both take, is no time worked: it is left out of the lines, the
+  entries and `unattached`, rather than taking hours, and money, off the
+  beats beside it.
 
 ### Lines and rounding
 
@@ -322,14 +327,20 @@ lists and reads no beats: it keeps the terms of each dated before
 `month_start`, and answers the earliest date at which the two differ — a
 term added, removed, or changed in its rate, its flag or its date — or
 none. `link_change(terms, month_start)` is the earliest term dated before
-it, for a write that moves every term at once.
+it, for a write that moves every term at once. Such a write also moves
+every entry marked billable, which an override bills whatever the terms
+say, before the first term too: `marked_change` is the earliest day before
+`month_start` that one of the project's entries marked billable started on.
+It is the one check that reads beats, and only when some override marks
+an entry billable: the overrides first, a small set, then the project's
+beats before the month.
 
 | Write | Gated from |
 |---|---|
 | `PUT /api/clients/{id}` | `past_change` over the client's rates |
 | `PUT /api/billing/projects/{id}`, same client | `past_change` over the terms |
-| the same, another client | the earlier of that and `link_change` over the old and the new terms together |
-| `DELETE /api/billing/projects/{id}` | `link_change` over the stored terms |
+| the same, another client | the earliest of that, `link_change` over the old and the new terms together, and `marked_change` |
+| `DELETE /api/billing/projects/{id}` | the earlier of `link_change` over the stored terms and `marked_change` |
 
 Not gated: attaching a project the first time (no figure existed, and the
 "Billable from" day the user sees and picks is the consent), an override
@@ -446,7 +457,8 @@ The import checks the whole file before writing anything:
    not freelance as the file leaves it (`NOT_FREELANCE`); a billed project
    the file moves away from freelance without billing it anew
    (`PROJECT_HAS_BILLING`); billing moved to a client in another currency
-   (`CURRENCY_MISMATCH`). The first refusal is the route's own error, its
+   (`CURRENCY_MISMATCH`), the file's sessions and billable marks laid on
+   the account's for the marks it counts. The first refusal is the route's own error, its
    detail naming the record (`project_billing.0: Only a freelance project
    is billed`). The retroactive gate is not applied.
 
@@ -475,8 +487,11 @@ is safe.
   then what the amount leaves out — hours on client projects not billed,
   hours with no rate yet, a timer still running. Then one panel per client:
   the rate in force today, the month's figure, the lines as a table, and
-  the entries, each with its Billable pill. Freelance hours billed to no
-  one get a panel of their own, each with *Bill it*. The month is the URL's
+  the entries, each with its Billable pill, which always reads "Billable"
+  and draws which way it is set: a check and the holiday tint on, struck
+  through off, so its name is the words on it whichever way. Freelance
+  hours billed to no one get a panel of their own, each with *Bill it*,
+  before the first client too. The month is the URL's
   `?month=`, stepped with ‹ ›; next stops at the current month.
 - **The nav offers Clients** once there is a client, archived or not, or a
   freelance project. Before that the page would only say "add a client",
@@ -491,7 +506,10 @@ is safe.
   units in the API's `minor_units`; `parseMoney` reads the text, never
   `parseFloat`: one `.` or `,` as the separator, at most `minor_units`
   digits after it — more are refused, never rounded — and no thousands
-  separators, signs, zero, or more than the API's maximum.
+  separators, signs, zero, or more than the API's maximum. A `,` before
+  exactly three digits is refused in every currency: "25,000" is twenty-five
+  thousand to one reader and 25.000 to another, and with three decimals
+  (IQD, KWD) both parse.
 - **Consent** is `withPastConsent`: a write goes with `rewrite_past` false;
   on `RETROACTIVE_CHANGE` the user is asked in the API's own words, and the
   write is sent again with it true only if they agree.
