@@ -800,7 +800,7 @@
         "type": "object"
       },
       "ContractWeek": {
-        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation. `worked` is every hour on the project that\nweek; `remaining` subtracts only the hours inside the contract's dates,\nas the balance does, so the two differ on a week it starts or ends.\nEach figure is rounded on its own, so `worked + remaining` can miss\n`expected` by a hundredth.",
+        "description": "A day job's week against its contract, plus the running balance.\n\nTyped because it crosses the wire (see `ProjectBreakdownEntry`).\n`expected` and `remaining` are None when the contract owes nothing by\nnature that week \u2014 no weekday has a time-based term in force \u2014 as\ndistinct from 0, which is a week the contract owed nothing by\ncircumstance (every weekday a holiday, or after `ended_on`). `balance`\nis None on the same rule for today. `remaining` goes negative once the\nweek is over its expectation. `worked` is every hour on the project that\nweek; `remaining` subtracts only the hours the balance counts \u2014 inside\nthe contract's dates, under a term that owes hours \u2014 so the two differ\non a week it starts or ends, or a term that owes nothing begins or ends.\nEach figure is rounded on its own, so `worked + remaining` can miss\n`expected` by a hundredth.",
         "properties": {
           "balance": {
             "anyOf": [
@@ -2231,7 +2231,7 @@
         "type": "string"
       },
       "LedgerTotals": {
-        "description": "The balance as of today and the three terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through \u00b7\nadjusted\" lines and the ledger's foot. The opening balance is the\ncontract's own.",
+        "description": "The balance as of today and the three terms that move it, since the\ncontract started \u2014 the standing's \"worked since \u00b7 expected through \u00b7\nadjusted\" lines and the ledger's foot. The opening balance is the\ncontract's own. `worked` is the hours the balance counts: through\n`ended_on`, under a term that owes hours. Hours worked under an\nobjective or 0-hour term are in the weeks' `worked` and not here.",
         "properties": {
           "adjusted": {
             "title": "Adjusted",
@@ -8808,6 +8808,80 @@
           }
         },
         "summary": "Get Project Summary",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/timesheet.csv": {
+      "get": {
+        "description": "A day job's month as a timesheet, for the employer: one row per\nfinished day of the month inside the contract \u2014 through yesterday in\n`tz`, from the first term, through `ended_on` \u2014 with the hours expected,\nworked and their difference, the weekday holiday's name and absence\ntype, the balance adjustment and what it moved, and the balance at the\nday's close; a \"brought forward\" row first and a \"total\" row last. A\nfigure the contract has no expectation for is blank. Worked hours are\nbucketed by the local day each beat started on, in `tz`, and a running\ntimer counts up to now, as on `/ledger`. The file is sent as an\nattachment without a filename; the caller names it.\n409 on a project that is not a day job (NOT_A_DAY_JOB), without a\ncontract (NO_CONTRACT), or for a month with no finished day inside the\ncontract (OUTSIDE_CONTRACT).",
+        "operationId": "get_timesheet_csv_api_projects__project_id__timesheet_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "The month as CSV, one row per finished day."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Timesheet Csv",
         "tags": [
           "Projects"
         ]

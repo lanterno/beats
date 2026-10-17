@@ -2,6 +2,7 @@
 export {
 	ApiError,
 	type ApiErrorField,
+	apiErrorFrom,
 	apiFieldErrors,
 	apiMutate,
 	del,

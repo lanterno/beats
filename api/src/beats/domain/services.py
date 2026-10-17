@@ -15,6 +15,7 @@ from beats.domain.contracts import (
     round_hours,
     term_on,
     week_expectation,
+    within_contract,
 )
 from beats.domain.exceptions import (
     AbsenceNotFound,
@@ -22,6 +23,7 @@ from beats.domain.exceptions import (
     AdjustmentNotFound,
     AdjustmentOutsideBalance,
     InvalidEndTime,
+    MonthOutsideContract,
     NoActiveTimer,
     NoContract,
     NoObjectMatched,
@@ -65,6 +67,12 @@ from beats.domain.ports import (
     ProjectStore,
     TimerBeatStore,
     TimerProjectReader,
+)
+from beats.domain.timesheet import (
+    COMPANY_HOLIDAY,
+    Timesheet,
+    assemble_timesheet,
+    timesheet_range,
 )
 from beats.domain.utils import local_date, normalize_tz
 from beats.domain.vacation import vacation_year
@@ -294,7 +302,7 @@ def _check_contract(project: Project) -> None:
     if contract.holiday_country is not None:
         check_region(contract.holiday_country, contract.holiday_subdivision)
     vacation = contract.vacation
-    if vacation is not None and not counts_worked(contract, vacation.opening_on):
+    if vacation is not None and not within_contract(contract, vacation.opening_on):
         raise VacationOpeningOutsideContract(vacation.opening_on)
 
 
@@ -695,6 +703,40 @@ class ContractService:
             project, contract, absences, holidays, worked, adjustments, today, weeks
         )
 
+    async def timesheet(self, project_id: str, month: date, tz: ZoneInfo) -> Timesheet:
+        """The finished days of `month` (its 1st) inside the contract, a row
+        each, with the balance brought forward and carried forward
+        (`domain/timesheet.py`). Today is the request's, in `tz`: the sheet
+        runs through yesterday, and a running timer counts up to now on the
+        day it started, as on the ledger.
+
+        One beats read, one absence read, one adjustment read and one
+        calendar build, over the contract's life through the sheet's last
+        day: every close needs every day since the contract started, not
+        only the month's. A company holiday goes by `COMPANY_HOLIDAY`, not
+        the name typed for it. 409 on a project that is not a day job
+        (NOT_A_DAY_JOB), without a contract (NO_CONTRACT), or for a month
+        with no finished day inside the contract (OUTSIDE_CONTRACT).
+        """
+        project = await self._day_job(project_id)
+        contract = project.contract
+        if contract is None:
+            raise NoContract()
+        span = timesheet_range(contract, month, self._now(tz).date())
+        if span is None:
+            raise MonthOutsideContract()
+        first, last = span
+        beats = await self.beat_repo.list_by_project(project_id)
+        absences = await self.absence_repo.list_by_project(project_id, contract.starts_on, last)
+        adjustments = await self.adjustment_repo.list_by_project(
+            project_id, contract.starts_on, last
+        )
+        holidays = contract_holidays(
+            contract, contract.starts_on, last, company_name=COMPANY_HOLIDAY
+        )
+        worked = worked_by_local_day(beats, tz)
+        return assemble_timesheet(contract, absences, holidays, worked, adjustments, first, last)
+
     async def weeks_for(
         self, projects: Iterable[Project], beats_by_pid: Mapping[str, list[Beat]], tz: ZoneInfo
     ) -> dict[str, ContractWeek]:
@@ -780,7 +822,7 @@ class ContractService:
         days: list[ContractDay] = []
         expected_raw = 0.0
         worked_raw = 0.0
-        counted_raw = 0.0  # worked inside the contract's dates, as the balance counts it
+        counted_raw = 0.0  # worked as the balance counts it (`counts_worked`)
         for offset in range(7):
             day = week_of + timedelta(days=offset)
             expected_day = expected_on(contract, day, holiday_days, by_day)

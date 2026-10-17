@@ -31,7 +31,7 @@ from datetime import date
 from fractions import Fraction
 from math import floor
 
-from beats.domain.contracts import absences_by_day, counts_worked
+from beats.domain.contracts import absences_by_day, within_contract
 from beats.domain.models import (
     Absence,
     AbsenceType,
@@ -69,7 +69,7 @@ def vacation_cost(
         return 0.0
     if day < entitlement.opening_on or day.weekday() >= 5 or day in holidays:
         return 0.0
-    if not counts_worked(contract, day):
+    if not within_contract(contract, day):
         return 0.0
     return 0.5 if absence.half_day else 1.0
 

@@ -196,6 +196,28 @@ class TestLedgerWeeks:
         assert second.balance_end == pytest.approx(first.balance_end + 30 - 25.2)
         assert second.balance_moved == pytest.approx(30 - 25.2)
 
+    def test_hours_under_an_objective_term_move_no_close(self):
+        # AHM-82. 60 % from 5 January, objective from Wednesday 4 February,
+        # 80 % from 16 February. The week of 2 February owes Monday and
+        # Tuesday (10.08) and counts only their 12 h of its 30; the week
+        # after owes nothing and has no close; the 80 % week moves from the
+        # close the 60 % term left, its own 30 h against 33.6. None of the
+        # 48 h worked under the objective term is overtime.
+        objective = ContractTerm(
+            effective_from=date(2026, 2, 4), schedule_type=ScheduleType.OBJECTIVE
+        )
+        contract = _contract(_term(FIRST_TERM, 0.6), objective, _term(SECOND_TERM, 0.8))
+        by_monday = {w.week_of: w for w in _ledger(_day_job(contract)).weeks}
+        split = by_monday[date(2026, 2, 2)]
+        assert (split.worked, split.contract_expected) == (30, pytest.approx(10.08))
+        assert split.balance_moved == pytest.approx(12 - 10.08)
+        assert split.balance_end == pytest.approx(OPENING + 4 * 4.8 + 1.92)
+        owed_nothing = by_monday[date(2026, 2, 9)]
+        assert (owed_nothing.worked, owed_nothing.balance_end) == (30, None)
+        after = by_monday[SECOND_TERM]
+        assert after.balance_moved == pytest.approx(30 - 33.6)
+        assert after.balance_end == pytest.approx(split.balance_end + 30 - 33.6)
+
     def test_a_term_starting_on_saturday_leaves_its_week_before_the_contract(self):
         # The same rule for both figures: no weekday owes, so no expectation
         # and no closing balance — but the Saturday's hours count, and move
@@ -217,6 +239,26 @@ class TestLedgerWeeks:
         assert by_monday[FIRST_TERM + timedelta(weeks=1)].balance_moved == pytest.approx(
             2 + 30 - 25.2
         )
+
+    def test_a_term_starting_on_saturday_after_one_that_owes_nothing_moves_the_next_close(self):
+        # AHM-82. 60 % from 5 January, objective for the week of 12 January,
+        # 60 % again from Saturday 17 January with 2 h worked that day. The
+        # objective week has no close, and the Saturday's hours count: they
+        # are in the next week's +/− rather than in none, so the close
+        # before the gap plus the move reaches the close after it.
+        saturday = date(2026, 1, 17)
+        objective = ContractTerm(
+            effective_from=date(2026, 1, 12), schedule_type=ScheduleType.OBJECTIVE
+        )
+        contract = _contract(
+            _term(FIRST_TERM, 0.6), objective, _term(saturday, 0.6), _term(SECOND_TERM, 0.8)
+        )
+        ledger = _ledger(_day_job(contract), worked={**_worked(), saturday: 2.0})
+        by_monday = {w.week_of: w for w in ledger.weeks}
+        before, gap, after = (by_monday[FIRST_TERM + timedelta(weeks=n)] for n in range(3))
+        assert (gap.balance_end, gap.balance_moved) == (None, None)
+        assert after.balance_moved == pytest.approx(2 + 30 - 25.2)
+        assert after.balance_end == pytest.approx(before.balance_end + after.balance_moved)
 
     def test_sunday_hours_close_with_their_own_week(self):
         # 3 h on Sunday 22 February and nothing else: the week ending that

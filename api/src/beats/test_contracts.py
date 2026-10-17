@@ -276,6 +276,36 @@ class TestBalance:
         # Wednesday's 5 h neither count as overtime nor were expected.
         assert balance(contract, [], set(), worked, [], today=FRI) == 0
 
+    @pytest.mark.parametrize(
+        "owes_nothing",
+        [
+            _term(WED, ScheduleType.OBJECTIVE),
+            _term(WED, ScheduleType.CUSTOM, weekly_hours=0),
+        ],
+        ids=["objective", "0 h"],
+    )
+    def test_hours_under_a_term_that_owes_nothing_are_not_overtime(self, owes_nothing):
+        # AHM-82. Full time from Monday, a term that owes nothing from
+        # Wednesday through Sunday, full time again the Monday after. 8 h a
+        # weekday for both weeks and 4 h on the Saturday: Monday and Tuesday
+        # break even, the 28 h in between expect nothing and so count for
+        # nothing, and the second week starts from the Tuesday close.
+        next_monday = MON + timedelta(weeks=1)
+        contract = _contract(_full_time(MON), owes_nothing, _full_time(next_monday))
+        worked = {
+            day: 8.0 for day in (MON + timedelta(days=n) for n in range(12)) if day.weekday() < 5
+        }
+        worked[SAT] = 4.0
+        second_friday = next_monday + timedelta(days=4)
+        running = running_balance(
+            contract, [], set(), worked, [], today=second_friday, closes_on=[TUE, SUN]
+        )
+        assert running.closes == {TUE: 0, SUN: 0}
+        # Counted: Monday-Tuesday's 16 and the second week's 40, today's 8 among them.
+        assert running.terms.worked == 56
+        assert running.terms.expected_through == 48
+        assert running.terms.balance == 8
+
 
 def _adjust(day: date, kind: AdjustmentKind, hours: float) -> BalanceAdjustment:
     return BalanceAdjustment(project_id="p1", date=day, kind=kind, hours=hours)

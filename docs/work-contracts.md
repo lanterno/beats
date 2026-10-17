@@ -48,7 +48,11 @@ goal. Git history has the plans.
    breaks, no rounding, no manual day entries.
 8. **Objective-based day jobs** have no expectation and no balance —
    but the user may still set a *personal* weekly goal on them, which
-   is the existing `weekly_goal` field doing what it always did.
+   is the existing `weekly_goal` field doing what it always did. The
+   same holds day by day on a contract that changes: hours worked under
+   an objective term, or a term of 0 hours, count toward no balance, so
+   a time-based term after one starts from the balance the last left
+   and not from overtime the stretch never owed.
 9. **Contract changes are first-class.** Part-time → 80% → full-time is
    the normal life of a contract, and every calculation is term-aware
    down to the day.
@@ -56,6 +60,7 @@ goal. Git history has the plans.
     history of how a goal changed over time.
 11. **Timesheets and export are a follow-up.** The product goal of this
     iteration is the *week*: expected, worked, remaining, balance.
+    The monthly timesheet followed (AHM-30): see "The timesheet" below.
 12. **Employer holidays are dated full days on the contract.** Where an
     employer's days off differ from its region's, the contract says so in
     two lists: `company_holidays` adds days (Christmas Eve, a bridge day),
@@ -288,9 +293,11 @@ worked(range)   = Σ beat duration on this project, by local day
 
 ```
 balance(today) = opening_balance_hours
-               + worked(start .. min(today, ended_on))
+               + counted(start .. min(today, ended_on))
                - expected(start .. yesterday)
                + adjusted(start .. today)
+
+counted(d) = worked(d) if the term in force on d owes hours, else 0
 
 adjusted(d), at the start of d, against b = the close of d − 1:
     delta → hours
@@ -302,6 +309,17 @@ Today's expectation is charged tomorrow, so the balance does not read
 −6 h every morning; today's work counts at once. `start` is the first
 term's `effective_from`. `ended_on` freezes work and expectation: nothing
 is expected after it, and time tracked after it is not overtime either.
+
+**A term that owes nothing counts no work.** An objective term, or one
+of 0 hours, expects nothing of its days, so the hours worked under it
+are not overtime: they are in the week's `worked`, and in no balance,
+`balance_worked`, close, `balance_moved` or `remaining`. A time-based
+term that follows starts from the close the last one left. Under the
+personal goal those hours never carried forward either, which is what
+Decision 10 asks of the 0-hour terms the migration wrote. Leave is
+counted apart: a day off under such a term still costs vacation
+(Decision 14). `counts_worked` in `contracts.py` decides it for every
+reader of the running pass.
 
 **Adjustments apply at the start of their day**, against the previous
 day's close, before the day's work. They count from `start` on, whatever
@@ -324,12 +342,12 @@ every adjustment's `applied` together, so no two can disagree and a
 ledger of a hundred weeks costs what one does. A day's **close** is the
 balance at the end of it, before the next day's adjustment. A week's
 **closing balance** is its Sunday close. On the week a contract starts or
-ends mid-week, `worked` counts hours the balance does not, so the move
-between two closes is not `worked − expected`; on any week it also
-includes the week's adjustments. The ledger therefore sends each closed
-week's **move**, `balance_moved`: the close less the one before, less the
-adjustments between, read off the same pass whether or not the week
-before is shown.
+ends mid-week, or a term that owes nothing begins or ends, `worked`
+counts hours the balance does not, so the move between two closes is not
+`worked − expected`; on any week it also includes the week's adjustments.
+The ledger therefore sends each closed week's **move**, `balance_moved`:
+the close less the one before, less the adjustments between, read off
+the same pass whether or not the week before is shown.
 
 **Day boundaries** use the request timezone (`tz`, default UTC). A beat
 belongs whole to the local day it started on, and a running timer counts
@@ -377,7 +395,10 @@ goal in its cached profile, and beside today, in the day context, the
 adjusted week, what is left of it, the balance and its by-Sunday
 projection (`coach/contract_section.py`). Its `get_patterns` tool builds
 the service with the same reader, so its pacing and stale-project cards
-quote the Inbox's figure.
+quote the Inbox's figure. The hours all of them count against it are the
+week card's too: worked on a day the balance counts (`counts_worked`), so
+on a week a term that owes nothing begins or ends, the hours under it are
+tracked and owe the figure nothing.
 
 ### Vacation
 
@@ -408,6 +429,97 @@ a company holiday costs no leave either. `booked` counts planned days as
 well as taken ones; there is no split by today, so the clock is read only
 for the default year.
 
+### The timesheet
+
+A day job's month as a CSV, for the employer (`domain/timesheet.py`, pure
+like the ledger, through `GET /api/projects/{id}/timesheet.csv?month=`).
+It is a download and nothing else: there is no JSON route, and the page
+shows none of its figures (Decision 11; project-page.md's Decision 11).
+
+```
+first = max(the 1st, start)
+last  = min(the month's end, ended_on, yesterday)     no day → 409
+
+brought forward = opening_balance_hours           if first = start
+                  close(first − 1)                otherwise, null when its term owes nothing
+each day d:       expected(d), worked(d), worked − expected,
+                  the adjustment and its applied, close(d)
+carried forward = close(last)
+
+brought forward + difference + adjusted = carried forward
+```
+
+- **What a sheet covers** is the month's finished days inside the
+  contract. A contract starting mid-month starts its first sheet then,
+  `ended_on` stops its last, and the current month runs through yesterday,
+  so on the 1st it has none. The month's end comes off the calendar
+  (`calendar.monthrange`), so December 9999 is a month like any other: in
+  the future, 409.
+- **One pass, the ledger's.** Every close, every adjustment's `applied`
+  and the figure brought forward come from one `running_balance` pass over
+  the contract's life through `last`, so the sheet agrees with the ledger
+  and the week on the day it is downloaded. The service reads beats,
+  absences, adjustments and the calendar from `start`, not from the 1st:
+  a close needs every day before it.
+- **The null rule is the row's.** A day whose term owes nothing (`owes`:
+  an objective or 0-hour term) has no expected, difference or balance —
+  blank cells. Its hours are in the day's worked and the total's, as on
+  the ledger, but not in the balance (`counts_worked`), so the total's
+  difference is the rows', worked less expected over the days that have
+  one: without such a day it is the total's worked − expected.
+  A weekend, a holiday or a day off under an owing term is 0.00, not
+  blank. Brought forward follows the same rule for the day before `first`;
+  on the sheet that starts on the contract's first day it is the opening
+  balance. The total's expected is the sum of the days that have one, and
+  blank when none does.
+- **Months chain.** One month's carried forward is the next month's
+  brought forward, and whenever both are set the identity above holds —
+  exact on the raw figures, and within 0.02 in the file, since each of the
+  four is rounded on its own from a raw sum, as the ledger's totals are.
+  Rows sum to the total only within a few cents the same way: to the cent,
+  not to the bit. Each row moves the balance by its difference plus its
+  adjustment.
+- **Adjustments are in the sheet.** A day carries the kind of the balance
+  adjustment dated on it (`delta`, `reset`, `cap`) and what it moved the
+  balance by, at the start of that day, against the close before; the
+  total's `adjusted` is their sum. So a month with a payout still adds up.
+  A settlement dated after `ended_on` falls after the last sheet: that
+  sheet carries forward the final balance, before it, as the ledger's
+  `ended_balance` does. The adjustment's note is not in the file.
+- **What is counted.** The total's `holiday` cell counts the weekday
+  holidays of the sheet; its `absence` cell the weekday absences that are
+  not on a holiday, a half day as ½ — a vacation booked on a public holiday
+  was given by the holiday. A holiday or an absence on a weekend is
+  neither named nor counted, since a weekend owes nothing under any term.
+  Vacation days show as absences of type `vacation`; the entitlement's
+  figures are not in the sheet (`/vacation` has them).
+- **A company holiday reads `company holiday`**, not the name typed for
+  it: the file goes to the employer, and the name is the user's own text
+  (`contract_holidays(…, company_name=…)`). A public holiday keeps the
+  library's name, in the language `holidays.py` picks.
+- **A running timer counts as it runs**, on the day it started, as on the
+  ledger: a timer still running from yesterday is charged to yesterday,
+  and yesterday's row and every balance after it grow until it stops.
+  Stopping or correcting it changes a re-download.
+- **A sheet is a snapshot.** Recording a beat, an absence or an adjustment
+  in the month later, or replacing the contract (`PUT /contract` replaces
+  the terms and the opening balance), changes what a fresh download says.
+  Nothing is versioned. A month cut short says so in the file's name
+  (`…-2026-10-through-15.csv`), which the SPA gives it; the server sends
+  `Content-Disposition: attachment` with no filename, which a cross-origin
+  page could not read anyway.
+- **The file** is RFC 4180: comma-separated, a dot for decimals, two fixed
+  decimals, UTF-8 without a BOM, CRLF line ends, one header row and no
+  other metadata. German-locale Excel expects semicolons; its import dialog
+  reads this file, and no parser has to guess. The columns are `date,
+  weekday, expected, worked, difference, holiday, absence, half_day,
+  adjustment, adjusted, balance`; a "brought forward" row comes first, with
+  only its balance, and a "total" row last. A rounded −0.0 is written
+  0.00, so a day worked exactly to contract does not read −0.00. Nothing
+  in it is text the user typed — not an absence's note, not an
+  adjustment's, not a company holiday's name — so there is no formula
+  injection to guard against.
+
 ---
 
 ## Migration
@@ -429,7 +541,8 @@ must be stored once and then owned by the user. Per project:
      — the ObjectId's date if it has none; `custom`;
      `weekly_hours = weekly_goal`.
    - every `effective_from` override becomes a `custom` term on that
-     date at its hours; `weekly_goal is None` → `weekly_hours = 0`. An
+     date at its hours; `weekly_goal is None` → `weekly_hours = 0`, a
+     term that owes nothing and so counts no hours toward the balance. An
      override dated on or before the base date was already in force,
      so it *replaces* the base term's hours — the latest such override
      wins, as it did under `effective_goal` — and the project's own
@@ -491,6 +604,7 @@ region check, and every project write reconciles the adjustments
 | `GET /api/projects/{id}/contract/week?week_of=` | `{week_of, expected, worked, remaining, balance, balance_as_of, balance_opening, balance_worked, balance_expected_through, balance_adjusted, days: [{date, expected, worked, holiday, absence}]}` |
 | `GET /api/projects/{id}/ledger?weeks=` | any kind: N weeks (1–104, default 8) newest first, each with `contract_expected`, `balance_end`, `balance_moved` and its `adjustments` (each with `applied`); `since`; `totals` as of today, `adjusted` among them; `ended_balance` |
 | `GET /api/projects/{id}/holidays?year=&include=not_given` | the contract's holidays by date as `[{date, name, source, given}]`: the region's the employer gives and the company's (`source: region \| company`), all `given: true`; `include=not_given` adds the region's on `holidays_not_given` with `given: false`, even where a company day covers the date, which is then listed twice, the region's row first. Only company days without a region; `[]` without a contract |
+| `GET /api/projects/{id}/timesheet.csv?month=` | a day job's month (`YYYY-MM`, required) as CSV, one row per finished day inside the contract, a "brought forward" row first and a "total" row last; `Content-Disposition: attachment`, no filename |
 | `GET /api/projects/{id}/vacation?year=` | one year of the entitlement in days: `{year, accrued, carried_in, available, booked, remaining}`; `year` defaults to the current one in `tz` |
 | `GET/POST/DELETE /api/projects/{id}/absences` | list by range, create (upsert on date, 201), delete (204) |
 | `POST /api/projects/{id}/adjustments?tz=` | a delta, reset or cap (upsert on date, keeps the id, 201); `tz` required |
@@ -520,8 +634,11 @@ region check, and every project write reconciles the adjustments
   without mentioning `contract` clears it. Nothing dormant is kept for
   an undo: it would be a contract no route could read.
 - **Wrong kind is a 409**, not a 400: `NOT_A_DAY_JOB` on the contract,
-  week, holidays, vacation and absence routes; `NO_CONTRACT` for the week
-  or the vacation year of a day job without one. The vacation year is also
+  week, holidays, vacation, timesheet and absence routes; `NO_CONTRACT` for
+  the week, the vacation year or the timesheet of a day job without one.
+  The timesheet is also 409 `OUTSIDE_CONTRACT` for a month with no
+  finished day inside the contract, and its `month` a 422 naming it unless
+  it is `YYYY-MM` (`0000-01` included). The vacation year is also
   409 `NO_VACATION_ENTITLEMENT` on a contract without one, and
   `VACATION_YEAR_OUT_OF_RANGE` for a year before the opening's or after
   `ended_on`'s ("Vacation is counted from 2026 through 2028"). An unknown region is 400 `UNKNOWN_HOLIDAY_REGION`;
@@ -668,16 +785,21 @@ notification, which looks for the brief of UTC's today
 
 `/api/export/full` carries the contract, its entitlement included, the
 absences and the balance adjustments, so a backup restores the same
-balance. `PRIVACY.md` and `DATA.md` state this; a change happens
-there first.
+balance. The monthly timesheet carries, per day, the hours worked and
+expected, the balance adjustment's kind and what it moved, the public
+holiday's name or `company holiday`, the absence type and half-day flag,
+and the balance — no note of any kind. Device tokens can reach it through
+the `/api/projects` prefix, as they can the ledger. `PRIVACY.md` and
+`DATA.md` state this; a change happens there first.
 
 ---
 
 ## Follow-ups and open questions
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
-contracts follow-ups* (AHM-30 to AHM-36): the monthly timesheet, the
-companion's week card, and whether `hours_per_day` should be configurable
-for a 4-day full-time week. Vacation entitlement is Decision 14.
+contracts follow-ups* (AHM-30 to AHM-36): the companion's week card, and
+whether `hours_per_day` should be configurable for a 4-day full-time
+week. Vacation entitlement is Decision 14, the monthly timesheet "The
+timesheet", and the coach's view of the week "What leaves Beats".
 The balance ledger's read side was built by
 [project-page.md](project-page.md), its write side by Decision 13.

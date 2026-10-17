@@ -153,6 +153,35 @@ function getReadHeaders(): Record<string, string> {
 	return headers;
 }
 
+/**
+ * The ApiError a non-ok response stands for, read off the envelope
+ * (`{detail, code, fields?}`). A 401 also ends the session and sends the
+ * browser home, whoever made the call: an expired token is the same on
+ * every route.
+ */
+export async function apiErrorFrom(response: Response): Promise<ApiError> {
+	// Handle expired/invalid session tokens
+	if (response.status === 401) {
+		endSession();
+		window.location.replace("/");
+	}
+
+	const errorBody = await response.json().catch(() => ({}));
+	const fields = Array.isArray(errorBody.fields)
+		? (errorBody.fields as ApiErrorField[])
+		: undefined;
+	const baseMessage =
+		errorBody.detail || errorBody.message || `Request failed: ${response.statusText}`;
+	// Append the per-field messages to the human message so any
+	// caller that just renders err.message gets useful detail —
+	// "Validation failed for 2 fields: name (field required), email
+	// (invalid format)". Forms that need structured access still
+	// have err.fields untouched.
+	const message =
+		fields && fields.length > 0 ? appendFieldDetails(baseMessage, fields) : baseMessage;
+	return new ApiError(response.status, message, errorBody.code, fields);
+}
+
 export async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T> {
 	const isWrite = options?.method && options.method !== "GET";
 	const defaultHeaders = isWrite ? getAuthHeaders() : getReadHeaders();
@@ -166,26 +195,7 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	});
 
 	if (!response.ok) {
-		// Handle expired/invalid session tokens
-		if (response.status === 401) {
-			endSession();
-			window.location.replace("/");
-		}
-
-		const errorBody = await response.json().catch(() => ({}));
-		const fields = Array.isArray(errorBody.fields)
-			? (errorBody.fields as ApiErrorField[])
-			: undefined;
-		const baseMessage =
-			errorBody.detail || errorBody.message || `Request failed: ${response.statusText}`;
-		// Append the per-field messages to the human message so any
-		// caller that just renders err.message gets useful detail —
-		// "Validation failed for 2 fields: name (field required), email
-		// (invalid format)". Forms that need structured access still
-		// have err.fields untouched.
-		const message =
-			fields && fields.length > 0 ? appendFieldDetails(baseMessage, fields) : baseMessage;
-		throw new ApiError(response.status, message, errorBody.code, fields);
+		throw await apiErrorFrom(response);
 	}
 
 	// Handle empty responses (204 No Content)

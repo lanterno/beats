@@ -1,5 +1,5 @@
 // Low-level API functions
-export type { AdjustmentInput } from "./projectApi";
+export { type AdjustmentInput, downloadTimesheet } from "./projectApi";
 
 // TanStack Query hooks
 export {

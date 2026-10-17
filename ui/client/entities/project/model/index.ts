@@ -77,6 +77,13 @@ export {
 	weekRange,
 	weekSentence,
 } from "./standing";
+// The monthly timesheet: the months offered, their labels, the file's name
+export {
+	type TimesheetMonth,
+	timesheetFilename,
+	timesheetMonthLabel,
+	timesheetMonths,
+} from "./timesheet";
 // Types
 export type {
 	AdjustmentKind,
