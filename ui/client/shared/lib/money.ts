@@ -45,7 +45,7 @@ export type ParsedMoney = { ok: true; minor: number } | { ok: false; reason: str
 
 // Digits, then optionally one "." or "," and the digits after it. Nothing
 // else: no sign, no thousands separator, no currency symbol.
-const AMOUNT = /^(\d+)(?:[.,](\d+))?$/;
+const AMOUNT = /^(\d+)(?:([.,])(\d+))?$/;
 
 /**
  * A rate typed into a field, in minor units. Read off the string, never
@@ -53,7 +53,9 @@ const AMOUNT = /^(\d+)(?:[.,](\d+))?$/;
  * separator is "." or ","; more fraction digits than the currency has are
  * refused, never rounded, and so are thousands separators ("1,000.00"),
  * signs, zero, and anything over `RATE_MINOR_MAX` — what the API would
- * answer 422 for.
+ * answer 422 for. A "," before exactly three digits is refused too, in
+ * every currency: "25,000" is twenty-five thousand to one reader and 25.000
+ * to another, and in a currency with three decimals (IQD, KWD) both parse.
  */
 export function parseMoney(text: string, minorUnits: number): ParsedMoney {
 	const trimmed = text.trim();
@@ -65,7 +67,13 @@ export function parseMoney(text: string, minorUnits: number): ParsedMoney {
 			reason: "Use digits, with one . or , before the fraction, and no thousands separator.",
 		};
 	}
-	const [, whole, fraction = ""] = match;
+	const [, whole, separator, fraction = ""] = match;
+	if (separator === "," && fraction.length === 3) {
+		return {
+			ok: false,
+			reason: `"${trimmed}" could have a thousands separator: write it without one, with a "." before any fraction.`,
+		};
+	}
 	if (fraction.length > minorUnits) {
 		return {
 			ok: false,
