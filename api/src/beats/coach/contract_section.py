@@ -194,11 +194,13 @@ def _project_lines(name: str, contract: Contract, week: ContractWeek, today: dat
     if week.expected is not None and week.remaining is not None:
         # The page's three figures, each the API's own and printed as the
         # page prints it; worked is the page's Worked, never read back off
-        # the other two (`_hours`). Labelled as the goal line labels it: by
-        # the term in force on the week's Monday (or its first day under the
-        # contract), since a term changing mid-week governs from the next
-        # Monday. Today's term would send a second percentage the goal line
-        # does not show.
+        # the other two (`_hours`). Labelled by the term in force on the
+        # week's Monday, as the goal line is, since a term changing mid-week
+        # governs from the next Monday; today's term would send a second
+        # percentage the goal line does not show. On a week the contract
+        # starts inside, Monday has no term, so the label is the first day's:
+        # the goal line does not carry the contract that week (`goal_term`
+        # reads Monday only), but the term's percentage is still worth saying.
         term = term_on(contract, max(week.week_of, contract.starts_on))
         label = fmt_contract_goal(term) if term is not None else "contract"
         lines.append(
