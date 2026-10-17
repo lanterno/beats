@@ -610,6 +610,7 @@ region check, and every project write reconciles the adjustments
 | `POST /api/projects/{id}/adjustments?tz=` | a delta, reset or cap (upsert on date, keeps the id, 201); `tz` required |
 | `DELETE /api/projects/{id}/adjustments/{adjustment_id}` | 204, or 404 when it is not on this project |
 | `GET /api/meta/holiday-regions` | `[{code, name, subdivisions: [{code, name}]}]`; `Cache-Control: public, max-age=86400`; behind the normal auth |
+| `GET /api/meta/holidays?country=&subdivision=&year=` | one region's public holidays for a year as `[{date, name}]`, by date, as the region gives them: no contract is read, so it answers for a region no contract names yet. `country` and `year` required (422 naming the one missing); an unknown country or subdivision is 400 `UNKNOWN_HOLIDAY_REGION`; cacheable and session-only like the region list |
 
 - **Omitted is not null on `PUT /api/projects`.** Older clients do not
   send `kind` or `contract`, so the route reads `model_fields_set`: left
