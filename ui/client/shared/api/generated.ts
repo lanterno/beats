@@ -2035,7 +2035,9 @@ export interface paths {
         };
         /**
          * Total Work Time Per Month On Project
-         * @description Get total time per month for a project.
+         * @description A project's hours per month, keyed 'YYYY-MM', and the minutes of them
+         *     all. Hours are bucketed by the local month of the day each beat started
+         *     on, in `tz`, and a running timer counts up to now, as on `/ledger`.
          */
         get: operations["total_work_time_per_month_on_project_api_projects__project_id__total__get"];
         put?: never;
@@ -6603,7 +6605,7 @@ export interface operations {
         parameters: {
             query?: {
                 archived?: boolean;
-                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
+                /** @description Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes, a running timer counted up to now), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted ⇒ slim response. */
                 include?: string | null;
                 /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
                 tz?: string | null;
@@ -7462,7 +7464,10 @@ export interface operations {
     };
     total_work_time_per_month_on_project_api_projects__project_id__total__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
             header?: never;
             path: {
                 project_id: string;

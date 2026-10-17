@@ -7753,7 +7753,7 @@
             }
           },
           {
-            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+            "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes, a running timer counted up to now), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
             "in": "query",
             "name": "include",
             "required": false,
@@ -7766,7 +7766,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
+              "description": "Comma-separated aggregations to populate per project. Supported: 'totals' (total_minutes, a running timer counted up to now), 'this_week' (weekly_minutes + effective_goal trio, and on a day job the contract's expected / worked / remaining / balance), 'last_tracked' (last_tracked_at). Omitted \u21d2 slim response.",
               "title": "Include"
             }
           },
@@ -9031,7 +9031,7 @@
     },
     "/api/projects/{project_id}/total/": {
       "get": {
-        "description": "Get total time per month for a project.",
+        "description": "A project's hours per month, keyed 'YYYY-MM', and the minutes of them\nall. Hours are bucketed by the local month of the day each beat started\non, in `tz`, and a running timer counts up to now, as on `/ledger`.",
         "operationId": "total_work_time_per_month_on_project_api_projects__project_id__total__get",
         "parameters": [
           {
@@ -9041,6 +9041,24 @@
             "schema": {
               "title": "Project Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
             }
           }
         ],
