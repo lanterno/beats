@@ -74,6 +74,17 @@ goal. Git history has the plans.
     The calendar's `include=not_given` still lists that region day, as
     not given, beside the company day: an editor that could see only one
     of the two marks could not clear the other.
+    What stands in for a rule is a copy: the Holidays dialog copies the
+    year before's company days into the year it shows, each on the same
+    month and day, as rows the user checks and saves. It leaves out a
+    date that already has a company day or is a public holiday the
+    employer gives as the dialog's ticks stand, saved or not, and says so
+    (a public holiday the year's calendar has not brought in yet is
+    copied, and its row then says it changes nothing); a day that lands on a weekend is copied and its row says it
+    changes nothing, since a weekend owes nothing.
+    29 February into a year without one is left out with a note, not
+    moved to the 28th or 1 March: a leap-day policy does not say which
+    neighbour the employer would give, so the user adds it by hand.
 13. **Balance adjustments replace editing the opening balance.** A payout,
     a year-end reset or a cap is a dated record of its own, so the opening
     balance stays what was banked before Beats and the ledger shows when

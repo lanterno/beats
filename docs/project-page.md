@@ -294,8 +294,14 @@ yet — start the timer in the sidebar."
   seen and removed, but only once that year's calendar is in: until then,
   or when it fails to load, every date not given would look left over. A
   company day on a date marked not given is refused, and its row offers
-  "Clear the mark". A region change in the settings form clears neither
-  list. The constants' "2 company days · 1 not given" are counted off
+  "Clear the mark". A company day on a public holiday or a weekend says on
+  its row that it changes nothing. "Copy last year's company days", shown
+  while the year before has one, adds that year's days as unsaved rows
+  (`copyCompanyDays` in `entities/project/model`) and says under it what it
+  left out (Decision 12), until a company day is edited or removed. Both
+  this and a row's note read a public holiday as the ticks stand, not as
+  saved. A region change in the settings form clears neither list. The
+  constants' "2 company days · 1 not given" are counted off
   `/holidays?include=not_given`, not the raw lists, so a leftover date is
   never counted, nor a date not given that a company day covers.
 - **The booking dialog records with `POST …/absences`**, the API's upsert,

@@ -13,13 +13,20 @@
  * it can be seen and removed: on its own it does nothing, but a later region
  * with a holiday that day would quietly make it a working day. While a save
  * is in flight the dialog stays open, as the booking dialog does.
+ *
+ * "Copy last year's company days" adds the year before's days as rows of
+ * this one (`copyCompanyDays`), saved like any other; a line under it says
+ * what it left out. It shows only while that year has a day to copy.
  */
 
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CopyPlus, Plus, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import type { Contract, Project } from "@/entities/project";
 import {
+	copyCompanyDays,
+	describeCompanyDaysCopy,
+	hasCompanyDaysIn,
 	toApiContract,
 	useHolidayRegions,
 	useProjectHolidays,
@@ -100,6 +107,9 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const [nextKey, setNextKey] = useState(contract.companyHolidays.length);
 	const [errors, setErrors] = useState<Map<number, RowErrors>>(new Map());
 	const [general, setGeneral] = useState<string[]>([]);
+	// What the last copy did, said on the page it was made on until a row is
+	// edited or removed, when it could name days no longer there.
+	const [copied, setCopied] = useState<{ year: number; words: string } | null>(null);
 	const [saving, setSaving] = useState(false);
 
 	const updateContract = useUpdateContract();
@@ -120,7 +130,9 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 
 	const region = (calendar ?? []).filter((h) => h.source === "region");
 	const regionDates = new Set(region.map((h) => h.date));
-	const givenRegionDates = new Set(region.filter((h) => h.given).map((h) => h.date));
+	// Given as the ticks stand, not as stored: the calendar's `given` is the
+	// saved list, and an unsaved tick is what Save sends.
+	const givenRegionDates = new Set(region.filter((h) => !notGiven.has(h.date)).map((h) => h.date));
 	// Only a loaded year can say a date is not the region's: until then, or
 	// when the read fails, every date not given would look left over.
 	const leftovers = calendar
@@ -139,6 +151,12 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const setRow = (key: number, patch: Partial<CompanyRow>) => {
 		setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 		clearErrors(key);
+		setCopied(null);
+	};
+
+	const removeRow = (key: number) => {
+		setRows((all) => all.filter((r) => r.key !== key));
+		setCopied(null);
 	};
 
 	const toggleGiven = (date: string, given: boolean) =>
@@ -152,6 +170,18 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 	const addRow = () => {
 		setRows((all) => [...all, { key: nextKey, year, date: "", name: "" }]);
 		setNextKey((k) => k + 1);
+	};
+
+	// A copied day on a public holiday the calendar has not brought in yet
+	// is copied, and its row then says it changes nothing.
+	const copyLastYear = () => {
+		const copy = copyCompanyDays(rows, year, givenRegionDates);
+		setRows((all) => [
+			...all,
+			...copy.copied.map((h, i) => ({ key: nextKey + i, year, date: h.date, name: h.name })),
+		]);
+		setNextKey((k) => k + copy.copied.length);
+		setCopied({ year, words: describeCompanyDaysCopy(copy, year) });
 	};
 
 	const save = () => {
@@ -306,10 +336,14 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 					<ul className="mt-1.5 flex flex-col">
 						{shown.map((row, i) => {
 							const own = errors.get(row.key) ?? {};
-							const already =
-								!own.date && givenRegionDates.has(row.date)
+							// A weekend owes nothing under any term, so a company day there gives nothing.
+							const note = own.date
+								? null
+								: givenRegionDates.has(row.date)
 									? "Already a public holiday — changes nothing"
-									: null;
+									: parseIsoDate(row.date) && !isWeekdayIso(row.date)
+										? "On a weekend — changes nothing"
+										: null;
 							const errorId = `${id}-row-${row.key}-error`;
 							return (
 								<li key={row.key} className={ROW}>
@@ -320,7 +354,7 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 											onChange={(e) => setRow(row.key, { date: e.target.value })}
 											aria-label={`Company holiday ${i + 1}: date`}
 											aria-invalid={own.date ? true : undefined}
-											aria-describedby={own.date || own.name || already ? errorId : undefined}
+											aria-describedby={own.date || own.name || note ? errorId : undefined}
 											className={cn(FIELD, "font-mono font-bold w-[9.5rem] flex-none")}
 										/>
 										<input
@@ -331,12 +365,12 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 											placeholder="e.g. Christmas Eve"
 											aria-label={`Company holiday ${i + 1}: name`}
 											aria-invalid={own.name ? true : undefined}
-											aria-describedby={own.date || own.name || already ? errorId : undefined}
+											aria-describedby={own.date || own.name || note ? errorId : undefined}
 											className={FIELD}
 										/>
 										<button
 											type="button"
-											onClick={() => setRows((all) => all.filter((r) => r.key !== row.key))}
+											onClick={() => removeRow(row.key)}
 											disabled={saving}
 											aria-label={`Remove company holiday ${i + 1}`}
 											className={REMOVE}
@@ -344,7 +378,7 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 											<Trash2 className="w-[13px] h-[13px]" aria-hidden="true" />
 										</button>
 									</div>
-									{(own.date || own.name || already) && (
+									{(own.date || own.name || note) && (
 										<p
 											id={errorId}
 											className={cn(
@@ -352,7 +386,7 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 												own.date || own.name ? "text-destructive-ink" : "text-muted-foreground",
 											)}
 										>
-											{[own.date, own.name, already].filter(Boolean).join(" · ")}
+											{[own.date, own.name, note].filter(Boolean).join(" · ")}
 										</p>
 									)}
 									{own.notGiven && (
@@ -373,10 +407,21 @@ export function HolidaysDialog({ project, todayIso, onClose }: HolidaysDialogPro
 							);
 						})}
 					</ul>
-					<Button type="button" variant="secondary" size="sm" onClick={addRow} className="mt-2">
-						<Plus aria-hidden="true" />
-						Add a day
-					</Button>
+					<div className="mt-2 flex flex-wrap gap-2">
+						<Button type="button" variant="secondary" size="sm" onClick={addRow}>
+							<Plus aria-hidden="true" />
+							Add a day
+						</Button>
+						{hasCompanyDaysIn(rows, year - 1) && (
+							<Button type="button" variant="secondary" size="sm" onClick={copyLastYear}>
+								<CopyPlus aria-hidden="true" />
+								Copy last year's company days
+							</Button>
+						)}
+					</div>
+					<p role="status" className="mt-2 text-xs text-muted-foreground font-medium empty:hidden">
+						{copied?.year === year ? copied.words : ""}
+					</p>
 				</section>
 
 				{leftovers.length > 0 && (
