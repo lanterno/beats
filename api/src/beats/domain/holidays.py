@@ -2,7 +2,8 @@
 
 Everything downstream takes holidays as a plain `set[date]`, so the arithmetic
 in `contracts.py` never touches this module and the library is exchangeable
-from one place. What is exposed: the dates in a range for one region, the
+from one place. What is exposed: the dates in a range for one region, a
+region's year as the settings form previews it (`region_holidays`), the
 holidays of one contract (`contract_calendar`, `contract_holidays` — the one
 place the region's calendar meets the employer's own additions and removals),
 the list of regions for a picker, and the check the project service runs on a
@@ -49,6 +50,14 @@ class Holiday(BaseModel):
     given: bool
 
 
+class RegionHoliday(BaseModel):
+    """One public holiday of a region, as the region gives it: no contract's
+    additions or removals."""
+
+    date: date
+    name: str
+
+
 class Subdivision(BaseModel):
     code: str
     name: str
@@ -78,6 +87,17 @@ def named_holidays_between(
             if start <= day <= end
         )
     return found
+
+
+def region_holidays(country: str, subdivision: str | None, year: int) -> list[RegionHoliday]:
+    """The region's public holidays in `year`, by date. A region a contract
+    does not name yet has no contract to read them through: the settings form
+    asks for this one before saving a region change, to say which dates the
+    contract marks as not given the new region has a holiday on.
+    Raises `UnknownHolidayRegion` unless `check_region` passes."""
+    check_region(country, subdivision)
+    region = named_holidays_between(country, subdivision, date(year, 1, 1), date(year, 12, 31))
+    return [RegionHoliday(date=day, name=name) for day, name in sorted(region.items())]
 
 
 def contract_calendar(
