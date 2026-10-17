@@ -288,8 +288,9 @@ yet — start the timer in the sidebar."
   list unless asked: when the new region has a holiday on a date marked
   not given that the stored region had none on, the form lists the date
   under the picker with the holiday's name, since the mark would make it
-  a working day, and offers to clear the mark in the same save
-  (docs/work-contracts.md, "The UI's rules"). A mark the new region has
+  a working day, and offers to clear the mark in the same save. Save
+  waits for the two calendars, and a failed read says the marks went
+  unchecked (docs/work-contracts.md, "The UI's rules"). A mark the new region has
   no holiday on is left for "No longer a holiday here". The constants'
   "2 company days · 1 not given" are counted off
   `/holidays?include=not_given`, not the raw lists, so a leftover date is

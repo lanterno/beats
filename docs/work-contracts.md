@@ -741,8 +741,13 @@ region check, and every project write reconciles the adjustments
   the old one had none, by the new holiday's name — less a date a company
   day covers, which stays a day off either way. "Clear the marks" ("the
   mark" for one) drops those dates in the same save, "Keep the marks"
-  takes that back, and a further region change starts over. Until both calendars are in, or
-  when one fails, nothing is said.
+  takes that back, and a further region change starts over. Save waits
+  for both calendars, under "Checking … holidays", so no mark comes into
+  force unseen. When one fails, after the client's retries, the form
+  says the marks could not be checked and what saving does to them, and
+  offers "Try again"; Save is let go then, since the SPA ships apart
+  from the API and holding it would block every region change against
+  an API without the route.
 - **Balance wording.** `describeBalance` rounds to the decimal shown
   before judging the sign — −0.04 h reads "even" — and never prints a
   bare signed number: "+4.5 h over", "−2.0 h owed". The API's twin, for
