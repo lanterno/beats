@@ -386,7 +386,10 @@ export interface paths {
         get: operations["list_beats_api_beats__get"];
         /**
          * Update Beat
-         * @description Update an existing beat.
+         * @description Edit a beat's project, start and end. The note and every other stored
+         *     field stay as stored; the tags are re-derived from the new times when the
+         *     daemon has flow windows for them, and kept when it has none. A beat the
+         *     caller does not hold is a 404.
          */
         put: operations["update_beat_api_beats__put"];
         /**
@@ -4008,7 +4011,9 @@ export interface components {
         };
         /**
          * UpdateBeatRequest
-         * @description Request body for updating a beat. Tags are auto-derived, not sent.
+         * @description Request body for editing a beat: these fields, and only these, change.
+         *     Tags are auto-derived, not sent. The note is not editable here: it comes
+         *     from an import, stays as stored, and a `note` in the body is ignored.
          */
         UpdateBeatRequest: {
             /** End */
