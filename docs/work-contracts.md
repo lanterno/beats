@@ -424,10 +424,13 @@ goal in its cached profile, and beside today, in the day context, the
 adjusted week, what is left of it, the balance and its by-Sunday
 projection (`coach/contract_section.py`). Its `get_patterns` tool builds
 the service with the same reader, so its pacing and stale-project cards
-quote the Inbox's figure. The hours all of them count against it are the
-week card's too: worked on a day the balance counts (`counts_worked`), so
-on a week a term that owes nothing begins or ends, the hours under it are
-tracked and owe the figure nothing.
+quote the Inbox's figure. A read that raises for one project leaves that
+project on its nominal goal, logged by id, and every other project's line
+and cards come through, in the Inbox and the tool alike (`week_goals`).
+The hours all of them count against it are the week card's too: worked
+on a day the balance counts (`counts_worked`), so on a week a term that
+owes nothing begins or ends, the hours under it are tracked and owe the
+figure nothing.
 
 ### Vacation
 
