@@ -309,7 +309,10 @@ class VacationEntitlement(BaseModel):
 # Far beyond any real balance, and small enough that a sum of many records
 # stays finite: a balance that overflowed would serialize as null. It bounds
 # the two figures a client types into the balance: the opening and an
-# adjustment's hours.
+# adjustment's hours. Both models are re-validated on every read, the
+# opening with every project of its user, so a stored figure past the bound
+# is a 500 there: it is never narrowed without first finding the stored
+# figures past the new one.
 _BALANCE_HOURS_BOUND = 10_000
 
 
