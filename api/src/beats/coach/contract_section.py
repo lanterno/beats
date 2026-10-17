@@ -50,7 +50,7 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from beats.coach.repos import fmt_contract_goal
-from beats.domain.contracts import counts_worked, owes, round_hours, term_on
+from beats.domain.contracts import owes, round_hours, term_on, within_contract
 from beats.domain.holidays import HolidaySource, contract_calendar
 from beats.domain.models import Contract, ContractDay, ContractWeek, Project
 
@@ -165,7 +165,7 @@ def _shortened(contract: Contract, day: ContractDay) -> bool:
     nothing to start with and says nothing the coach needs."""
     return (
         day.date.weekday() < 5
-        and counts_worked(contract, day.date)
+        and within_contract(contract, day.date)
         and owes(term_on(contract, day.date))
     )
 
