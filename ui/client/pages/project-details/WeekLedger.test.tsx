@@ -59,12 +59,12 @@ const DAY_JOB: ProjectWithDuration = {
 };
 
 function week(weekOf: string, patch: Partial<LedgerWeek> = {}): LedgerWeek {
-	return {
+	const row = {
 		weekOf,
 		worked: 33.6,
 		days: [6.72, 6.72, 6.72, 6.72, 6.72, 0, 0],
 		effectiveGoal: 33.6,
-		effectiveGoalType: "target",
+		effectiveGoalType: "target" as const,
 		effectiveGoalOverridden: false,
 		contractExpected: 33.6,
 		balanceEnd: 5,
@@ -72,6 +72,13 @@ function week(weekOf: string, patch: Partial<LedgerWeek> = {}): LedgerWeek {
 		adjustments: [],
 		...patch,
 	};
+	// The API's move on a full week of the contract, null exactly when the
+	// close is; a week a contract starts or ends in sends its own.
+	const moved =
+		row.balanceEnd === null || row.contractExpected === null
+			? null
+			: Math.round((row.worked - row.contractExpected) * 100) / 100;
+	return { balanceMoved: moved, ...row };
 }
 
 const LEDGER: Ledger = {
