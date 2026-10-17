@@ -26,6 +26,46 @@ describe("describeImport", () => {
 		).toBe("Imported 3 projects, 120 sessions, time off on 4 days and 1 balance adjustment");
 	});
 
+	it("names clients, project billing and billable marks only when a backup brings some", () => {
+		expect(
+			describeImport({
+				imported: {
+					projects: 2,
+					beats: 40,
+					absences: 0,
+					balance_adjustments: 0,
+					clients: 2,
+					project_billing: 3,
+					billable_overrides: 1,
+				},
+				skipped: [],
+			}).message,
+		).toBe(
+			"Imported 2 projects, 40 sessions, 2 clients, billing for 3 projects and 1 billable mark",
+		);
+		expect(
+			describeImport({
+				imported: {
+					projects: 1,
+					beats: 5,
+					absences: 0,
+					balance_adjustments: 0,
+					clients: 0,
+					project_billing: 0,
+					billable_overrides: 0,
+				},
+				skipped: [],
+			}).message,
+		).toBe("Imported 1 project and 5 sessions");
+		// An API older than the 1.2 backup sends no billing counts at all.
+		expect(
+			describeImport({
+				imported: { projects: 1, beats: 5, absences: 2, balance_adjustments: 0 },
+				skipped: [],
+			}).message,
+		).toBe("Imported 1 project, 5 sessions and time off on 2 days");
+	});
+
 	it("says what it left out, by kind, so a partial import does not read as complete", () => {
 		const skip = (collection: "absences" | "balance_adjustments") => ({
 			collection,
