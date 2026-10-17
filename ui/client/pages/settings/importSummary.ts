@@ -6,11 +6,17 @@ type Counts = Schemas["ImportCounts"];
  * `POST /api/export/import`'s answer, as this page may receive it. The SPA
  * and the API ship on their own, and an API older than the 1.1 backup
  * answers with `projects` and `beats` alone: no time off, no adjustments,
- * and nothing `skipped`.
+ * and nothing `skipped`; one older than 1.2 has no clients, no project
+ * billing and no billable marks.
  */
 export type ImportResult = {
 	imported: Pick<Counts, "projects" | "beats"> &
-		Partial<Pick<Counts, "absences" | "balance_adjustments">>;
+		Partial<
+			Pick<
+				Counts,
+				"absences" | "balance_adjustments" | "clients" | "project_billing" | "billable_overrides"
+			>
+		>;
 	skipped?: Schemas["ImportSkip"][];
 };
 
@@ -35,9 +41,9 @@ function listed(parts: string[]): string {
 }
 
 /**
- * The toast after a backup import. Time off and adjustments are named only
- * when there are some, so a backup without a day job reads as it always
- * did. A record the import left out is one the project would not take now
+ * The toast after a backup import. Time off, adjustments, clients, project
+ * billing and billable marks are named only when there are some, so a
+ * backup without a day job or a client reads as it always did. A record the import left out is one the project would not take now
  * (time off on a project that is no longer a day job, an adjustment outside
  * the contract), and the toast says so, rather than the import reading as
  * complete.
@@ -51,6 +57,12 @@ export function describeImport({ imported, skipped = [] }: ImportResult): Import
 	const adjustments = imported.balance_adjustments ?? 0;
 	if (absences > 0) parts.push(timeOff(absences));
 	if (adjustments > 0) parts.push(count(adjustments, "balance adjustment", "balance adjustments"));
+	const clients = imported.clients ?? 0;
+	const billed = imported.project_billing ?? 0;
+	const marks = imported.billable_overrides ?? 0;
+	if (clients > 0) parts.push(count(clients, "client", "clients"));
+	if (billed > 0) parts.push(`billing for ${count(billed, "project", "projects")}`);
+	if (marks > 0) parts.push(count(marks, "billable mark", "billable marks"));
 
 	const skippedAbsences = skipped.filter((s) => s.collection === "absences").length;
 	const skippedAdjustments = skipped.length - skippedAbsences;
