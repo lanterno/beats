@@ -2941,7 +2941,8 @@ class _FakeBeatRepoForServices:
     """In-memory BeatRepository fake for TimerService / BeatService.
     Implements get_active, get_last, create, update, delete, list,
     list_by_project, get_by_id with the same contract the real repo
-    exposes (raising NoObjectMatched where applicable)."""
+    exposes (raising NoObjectMatched where applicable, and BeatNotFound
+    from update, as the port says)."""
 
     def __init__(self, beats: builtins.list[Beat] | None = None):
         self._beats: list[Beat] = list(beats or [])
@@ -2973,9 +2974,9 @@ class _FakeBeatRepoForServices:
             if b.id == beat.id:
                 self._beats[i] = b.model_copy(update={f: getattr(beat, f) for f in fields})
                 return self._beats[i]
-        from beats.domain.exceptions import NoObjectMatched
+        from beats.domain.exceptions import BeatNotFound
 
-        raise NoObjectMatched()
+        raise BeatNotFound(beat.id)
 
     async def delete(self, beat_id: str) -> bool:
         for i, b in enumerate(self._beats):
