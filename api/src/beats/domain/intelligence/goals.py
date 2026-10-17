@@ -17,8 +17,19 @@ subtracts for its Remaining: worked on a day the balance counts
 (`counts_worked`), inside the contract's dates under a term that owes hours.
 On a week a term that owes nothing begins or ends, the hours worked under it
 are tracked, and owe the week's figure nothing.
+
+A contract read that raises (Mongo gone, say) costs that project its adjusted
+figure and nothing more: `week_goals` logs it by project id and keeps the
+project's nominal entry. It is caught here, once, and not in each reader,
+because all three take this map: the Inbox's planning line and the pattern
+refresh would otherwise fail whole, and `get_patterns` would hand the coach
+no patterns at all, for one day job's read. The nominal goal over no line: it
+is the term's plain hours, the figure the score already quotes, and off only
+by the week's holidays and absences. A None from the reader is an answer —
+the week expects nothing — and is kept as one.
 """
 
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -27,6 +38,8 @@ from typing import Literal
 from beats.domain.contracts import counts_worked
 from beats.domain.models import GoalType, Project
 from beats.domain.ports import WeekExpectationReader
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -73,13 +86,22 @@ async def week_goals(
 ) -> dict[str, WeekGoal]:
     """`nominal_week_goals`, with each governed week's hours replaced by what
     the contract expects of it after holidays and absences. Without a reader
-    the nominal map is the answer."""
+    the nominal map is the answer, and a project whose read raises keeps its
+    nominal entry, logged."""
     projects = list(projects)
     goals = nominal_week_goals(projects, monday)
     if contracts is None:
         return goals
     for project in projects:
         if project.id and goals[project.id].source == "contract":
-            expected = await contracts.expected_for_week(project, monday)
+            try:
+                expected = await contracts.expected_for_week(project, monday)
+            except Exception:
+                logger.warning(
+                    "project %s: week expectation unavailable, nominal goal kept",
+                    project.id,
+                    exc_info=True,
+                )
+                continue
             goals[project.id] = replace(goals[project.id], hours=expected)
     return goals

@@ -478,6 +478,18 @@ class TestContractValidation:
         with pytest.raises(ValueError, match="twice"):
             _contract(holidays_not_given=[CHRISTMAS, CHRISTMAS])
 
+    @pytest.mark.parametrize(
+        ("opening", "message"),
+        [(-10_001, "greater than or equal"), (10_001, "less than or equal")],
+        ids=["under the bound", "over it"],
+    )
+    def test_an_opening_past_the_bound_rejected(self, opening, message):
+        with pytest.raises(ValueError, match=message):
+            _contract(opening_balance_hours=opening)
+
+    def test_an_opening_on_the_bound_accepted(self):
+        assert _contract(opening_balance_hours=-10_000).opening_balance_hours == -10_000
+
     def test_dates_not_given_need_no_region(self):
         # Inert without one, and kept: an older client that clears the region
         # must not make the contract impossible to save.

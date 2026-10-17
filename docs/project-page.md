@@ -388,14 +388,7 @@ match shows the figures and no sentence — never a guessed one. The code is
   On a week without one it falls back to worked − expected, else worked −
   goal. Worked − expected is wrong on the week a contract starts or ends
   mid-week, or a term that owes nothing begins or ends, because `worked`
-  counts hours the balance does not (see *The ledger route*). Against an
-  API that predates `balance_moved`, the SPA reads the move off the
-  closes: between two when the row and the one before both have one,
-  from the opening balance on the contract's first close, each less the
-  adjustments inside it — the week's own between two closes; on the
-  first close every one from `since` through the week's Sunday, since a
-  weekend start leaves the start week without a close and an adjustment
-  filed there is still inside the next week's move.
+  counts hours the balance does not (see *The ledger route*).
 - **The since line is worked − expected with the opening and the
   adjustments in brackets** ("+8.5 h (+2.0 h brought forward, −40.0 h
   adjusted)"), so it adds up to the standing's balance. The standing's
@@ -408,7 +401,7 @@ match shows the figures and no sentence — never a guessed one. The code is
   and the line is the balance's proof, not a tally.
 - **The ended rule's final balance is `ended_balance`**, the close on the
   end day, so a settlement after the end appears as its own row and not
-  inside the "final" figure; an API without it falls back to the totals.
+  inside the "final" figure; while it is null the rule gives none.
 
 ---
 
@@ -454,11 +447,10 @@ null.
 `balance_as_of` (date), `balance_opening`, `balance_worked`,
 `balance_expected_through`, `balance_adjusted` — null exactly when
 `balance` is null, and required-nullable like it, so the generated type
-does not call them optional. The SPA parses the three new figures
-(`adjustments`, `adjusted`, `balance_adjusted`) and `ended_balance` as
-optional, so it reads an API that predates them: such an API keeps no
-adjustments, and `[]` and 0 are its true figures. `balance_moved` is
-optional to the SPA too, which reads the move off the closes without it.
+does not call them optional. The SPA parses every one of them, and
+`adjustments`, `adjusted`, `balance_moved` and `ended_balance` on the
+ledger, as required: a response without one fails to parse rather than
+reading as no adjustments.
 
 What the shape settles:
 

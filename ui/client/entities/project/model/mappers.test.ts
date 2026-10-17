@@ -187,6 +187,7 @@ describe("toContractWeek", () => {
 			balance_opening: null,
 			balance_worked: null,
 			balance_expected_through: null,
+			balance_adjusted: null,
 			days: [
 				{ date: "2026-04-06", expected: 0, worked: 4, holiday: null, absence: null },
 				{

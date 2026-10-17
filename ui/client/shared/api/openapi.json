@@ -663,6 +663,8 @@
           },
           "opening_balance_hours": {
             "default": 0,
+            "maximum": 10000.0,
+            "minimum": -10000.0,
             "title": "Opening Balance Hours",
             "type": "number"
           },
