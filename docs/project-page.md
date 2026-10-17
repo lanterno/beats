@@ -168,8 +168,9 @@ register shows the term as a labelled gap or a step at zero. *Before the
 first term*: "Contract starts Mon Sep 14, 2026 · 33.6 h/week", worked
 only. *The last day*: still live — that day's hours count and its
 expectation is charged the next morning — so the balance, its projection
-(the close) and the week read as on any other day, and the ledger's
-closing rule reads "Ends Mon Aug 31, 2026 · today". *After `ended_on`*,
+(the close) and the week read as on any other day; the header, the
+register and the ledger's closing rule already say "ended", the rule
+without its final balance ("Ended Mon Aug 31, 2026"). *After `ended_on`*,
 from the next day: "Final balance · ended Aug 31" with the proof frozen
 at that date, bar an "adjusted" line once a settlement after the end
 moves the balance, and no projection. *Missing region*: a notice line in
