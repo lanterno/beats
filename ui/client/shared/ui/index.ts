@@ -8,6 +8,7 @@ export { BrandMark } from "./brand-mark";
 export { Button, type ButtonProps, buttonVariants } from "./button";
 export { ColorPicker } from "./color-picker";
 export { type CommandItem, CommandPalette } from "./command-palette";
+export { type ConfirmRequest, useConfirm } from "./confirm-dialog";
 export { Dialog, type DialogProps } from "./dialog";
 export { EmptyState } from "./empty-state";
 export { FocusMode } from "./focus-mode";

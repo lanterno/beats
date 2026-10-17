@@ -37,3 +37,4 @@ export {
 	type UnattachedHours,
 	withPastConsent,
 } from "./model";
+export { BillableSwitch, type BillableSwitchProps } from "./ui";

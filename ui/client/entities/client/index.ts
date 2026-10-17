@@ -16,3 +16,4 @@ export {
 	useUpdateClient,
 } from "./api";
 export type { Client, ClientInput, Currency, RateTerm } from "./model";
+export { ClientDialog, type ClientDialogProps } from "./ui";
