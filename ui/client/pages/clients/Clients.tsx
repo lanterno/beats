@@ -90,6 +90,27 @@ export default function Clients() {
 		(archivedClients ?? []).length === 0 &&
 		(report?.clients.length ?? 0) === 0;
 	const name = monthName(month);
+	// The freelance hours billed to no one, with or without a client yet:
+	// with none, a first freelance project's hours are all there is.
+	const unattached = report && report.unattached.length > 0 && (
+		<Panel role="region" aria-label="Not billed to a client" padding="px-6 py-[22px]">
+			<p className="text-[13px] font-medium text-foreground leading-normal">
+				<span className="font-bold">Not billed to a client:</span>{" "}
+				{report.unattached.map((item, i) => (
+					<span key={item.projectId}>
+						{i > 0 && " · "}
+						{item.name} ({hoursText(item.hours)}){" "}
+						<Link to={`/project/${item.projectId}`} className={LINKISH}>
+							Bill it
+						</Link>
+					</span>
+				))}
+			</p>
+			<p className="mt-1 text-xs text-muted-foreground font-medium">
+				Freelance hours in {name} that no client's figure counts.
+			</p>
+		</Panel>
+	);
 
 	const save = async (input: ClientInput): Promise<boolean> => {
 		if (editor?.mode !== "edit") {
@@ -184,24 +205,27 @@ export default function Clients() {
 			) : !report ? (
 				<p className="text-sm text-muted-foreground px-2">Loading…</p>
 			) : noClients ? (
-				<Panel padding="px-6 py-[22px]">
-					<p className="font-heading text-lg font-extrabold text-foreground">
-						Clients are who you bill.
-					</p>
-					<p className="mt-1 text-[13px] text-muted-foreground font-medium leading-normal">
-						Add one, then choose it on a freelance project.
-					</p>
-					<Button
-						type="button"
-						variant="secondary"
-						size="sm"
-						className="mt-3"
-						onClick={() => setEditor({ mode: "new" })}
-					>
-						<Plus aria-hidden="true" />
-						Add a client
-					</Button>
-				</Panel>
+				<>
+					<Panel padding="px-6 py-[22px]">
+						<p className="font-heading text-lg font-extrabold text-foreground">
+							Clients are who you bill.
+						</p>
+						<p className="mt-1 text-[13px] text-muted-foreground font-medium leading-normal">
+							Add one, then choose it on a freelance project.
+						</p>
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							className="mt-3"
+							onClick={() => setEditor({ mode: "new" })}
+						>
+							<Plus aria-hidden="true" />
+							Add a client
+						</Button>
+					</Panel>
+					{unattached}
+				</>
 			) : (
 				<>
 					{summary && (
@@ -235,25 +259,7 @@ export default function Clients() {
 						);
 					})}
 
-					{report.unattached.length > 0 && (
-						<Panel role="region" aria-label="Not billed to a client" padding="px-6 py-[22px]">
-							<p className="text-[13px] font-medium text-foreground leading-normal">
-								<span className="font-bold">Not billed to a client:</span>{" "}
-								{report.unattached.map((item, i) => (
-									<span key={item.projectId}>
-										{i > 0 && " · "}
-										{item.name} ({hoursText(item.hours)}){" "}
-										<Link to={`/project/${item.projectId}`} className={LINKISH}>
-											Bill it
-										</Link>
-									</span>
-								))}
-							</p>
-							<p className="mt-1 text-xs text-muted-foreground font-medium">
-								Freelance hours in {name} that no figure above counts.
-							</p>
-						</Panel>
-					)}
+					{unattached}
 
 					{(archivedClients ?? []).length > 0 && (
 						<div className="px-2">
