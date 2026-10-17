@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_minutes
+from beats.coach.repos import CoachRepos, build_repos, fmt_contract_goal, fmt_hours, fmt_minutes
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.utils import local_date, local_dt
 
@@ -129,8 +129,9 @@ async def _handle_get_projects(ctx: _ToolContext, tool_input: dict) -> str:
         term = p.goal_term(monday)
         if term is not None:
             # A governing term of 0 hours is no goal, and hides the personal one.
+            # The hours to the hundredth, as the page's term reads (`fmt_hours`).
             hours, _ = p.effective_goal(monday)
-            goal = f" (goal: {hours:g}h/wk, {fmt_contract_goal(term)})" if hours else ""
+            goal = f" (goal: {fmt_hours(hours)}h/wk, {fmt_contract_goal(term)})" if hours else ""
         elif p.weekly_goal:
             goal = f" (goal: {p.weekly_goal}h/wk {p.goal_type})"
         else:

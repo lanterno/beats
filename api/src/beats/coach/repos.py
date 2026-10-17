@@ -71,6 +71,19 @@ def fmt_percent(fraction: float) -> str:
     return repr(whole / 100).removesuffix(".0")
 
 
+def fmt_hours(hours: float) -> str:
+    """A term's weekly hours (42 × 0.6875) as the page prints them ("28.88"):
+    the SPA's `termHoursPerWeek` and `formatHours`, each
+    `Math.round(hours * 100) / 100`, written out as JavaScript writes a
+    number. To the hundredth, a tie rounded up, and no trailing zeros, so
+    33.6 is "33.6" and 40 "40", never "28.875" or "31.24875"."""
+    scaled = hours * 100
+    whole = math.floor(scaled)
+    if scaled - whole >= 0.5:
+        whole += 1
+    return repr(whole / 100).removesuffix(".0")
+
+
 def fmt_contract_goal(term: ContractTerm) -> str:
     """A time-based term as the coach names a goal's origin, in one breath:
     "contract, 80%" for part-time, "contract, full-time", or just "contract"
