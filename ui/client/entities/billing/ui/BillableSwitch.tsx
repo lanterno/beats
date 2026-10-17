@@ -6,9 +6,15 @@
  * says. A marked entry carries a quiet "marked by you" and a way back to
  * the project's rule. The mark changes in the cache at once and is put back
  * if the write fails, with the API's reason in a toast.
+ *
+ * The pill always reads "Billable", and which way it is set is drawn, not
+ * written: a check and the holiday tint when on, struck through and muted
+ * when off. Its name holds the words on it, as a voice user says them, and
+ * stays put, since `aria-checked` says the rest; a name that read "Not
+ * billable" would be announced "Not billable, off".
  */
 
-import { RotateCcw } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
@@ -55,10 +61,11 @@ export function BillableSwitch({ beatId, billable, overridden, entryLabel }: Bil
 					PILL,
 					billable
 						? "bg-tint-holiday text-tint-holiday-ink"
-						: "bg-secondary text-muted-foreground hover:text-foreground",
+						: "bg-secondary text-muted-foreground line-through hover:text-foreground",
 				)}
 			>
-				{billable ? "Billable" : "Not billable"}
+				{billable && <Check className="w-3 h-3" aria-hidden="true" />}
+				Billable
 			</button>
 			{overridden && (
 				<>
