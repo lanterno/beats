@@ -92,29 +92,23 @@ export async function createProject(input: {
 	return parseApiResponse(ApiProjectSchema, data);
 }
 
-/**
- * Archive a project. Uses the dedicated POST /api/projects/{id}/archive
- * endpoint (not a generic update) so the call can't silently wipe fields
- * the UI Project type doesn't yet manage.
- */
+/** Archive a project, through the dedicated POST /api/projects/{id}/archive. */
 export async function archiveProject(projectId: string): Promise<void> {
 	await post<{ status: string }>(`/api/projects/${projectId}/archive`, {});
 }
 
-/**
- * Restore an archived project. Symmetric to archiveProject — uses the
- * dedicated /unarchive endpoint for the same reason.
- */
+/** Restore an archived project. Symmetric to archiveProject, through /unarchive. */
 export async function unarchiveProject(projectId: string): Promise<void> {
 	await post<{ status: string }>(`/api/projects/${projectId}/unarchive`, {});
 }
 
 /**
- * Wholesale replace of a project. `kind` and `contract` are the two fields
- * the API reads by presence: leave either out and the stored value stays;
- * `contract: null` clears it. A PUT that moves a day job to another kind
- * must leave `contract` out — the API clears it with the kind, and refuses
- * a contract sent alongside any other kind (409 NOT_A_DAY_JOB).
+ * Update a project. The API reads every field bar `id` and `name` by
+ * presence: leave one out and the stored value stays; send it and it is
+ * replaced, `null` (or `[]` for `autostart_repos`) clearing it. A PUT that
+ * moves a day job to another kind must leave `contract` out — the API clears
+ * it with the kind, and refuses a contract sent alongside any other kind
+ * (409 NOT_A_DAY_JOB).
  */
 export async function updateProject(project: {
 	id: string;

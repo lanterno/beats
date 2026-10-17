@@ -3797,7 +3797,7 @@
         "type": "object"
       },
       "UpdateProjectRequest": {
-        "description": "Request body for updating a project.\n\nThe update is a wholesale replace, so a client that predates a field\nwould reset it on every colour change if \"not sent\" read as \"clear\".\n`kind` and `contract` therefore tell the two apart through\n`model_fields_set`: left out, the stored value is kept; `contract: null`\nclears the contract. `kind` has no empty state, so null reads as left\nout there.",
+        "description": "Request body for updating a project.\n\nOnly `id` and `name` are required, and every other field is read by\npresence (`model_fields_set`): left out, the stored value is kept; sent,\nit replaces it. A client sends what it edits, and must not wipe what it\ndoes not know: the project page's colour picker sends no GitHub repo,\ncategory or autostart repos, and while \"not sent\" read as \"clear\" every\ncolour change reset all three. The defaults below are therefore never\nwritten over a stored value.\n\n`null` clears `description`, `color`, `weekly_goal`, `github_repo`,\n`category` and `contract`; `[]` clears `autostart_repos`. `archived` and\n`goal_type` have no empty state and refuse null (422); `kind` has none\neither, and reads null as left out. A day job moved to another kind\nloses its contract with it; a contract sent with any other kind is a 409.",
         "properties": {
           "archived": {
             "default": false,
@@ -7869,7 +7869,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing project.",
+        "description": "Update an existing project. A field the request leaves out keeps its\nstored value; one it sends replaces it, `null` clearing a nullable one.",
         "operationId": "update_project_api_projects__put",
         "requestBody": {
           "content": {
@@ -9079,7 +9079,7 @@
     },
     "/api/projects/{project_id}/unarchive": {
       "post": {
-        "description": "Restore an archived project (symmetric to /archive). Distinct from\nPUT /api/projects/ \u2014 using a dedicated endpoint keeps callers from\nsilently dropping fields they don't yet manage via a generic update.",
+        "description": "Restore an archived project (symmetric to /archive).",
         "operationId": "unarchive_project_api_projects__project_id__unarchive_post",
         "parameters": [
           {
