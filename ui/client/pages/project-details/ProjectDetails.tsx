@@ -1,8 +1,8 @@
 /**
  * Project Details Page — the identity on the sky, the standing, the open
  * week's days and the ledger of earlier weeks, with the contract (or the
- * goal), the time off and the quiet facts in a rail
- * (docs/project-page.md, "The page").
+ * goal), the time off — or a freelance project's billing — and the quiet
+ * facts in a rail (docs/project-page.md, "The page").
  *
  * The page owns the reads the panels share: `/contract/week` for the open
  * week, the current week (the balance is pinned to today) and the next
@@ -17,6 +17,7 @@
 import { ChevronLeft, Clock } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router";
+import { useBillableOverrides, useProjectBillings } from "@/entities/billing";
 import {
 	type ContractWeek,
 	LoadingSpinner,
@@ -34,6 +35,7 @@ import {
 	toIsoDate,
 } from "@/shared/lib";
 import { type AbsenceBooking, AbsenceDialog } from "./AbsenceDialog";
+import { BillingPanel } from "./BillingPanel";
 import { ContractRegister } from "./ContractRegister";
 import { nextWeekdayAfter } from "./dates";
 import { HolidaysDialog } from "./HolidaysDialog";
@@ -114,6 +116,10 @@ export default function ProjectDetails() {
 	const ledger = ledgerQuery.data;
 	// On the current week the open week is the current week's query, polled with it.
 	const openQuery = weekOf === thisMonday ? currentWeekQuery : openWeekQuery;
+	// Only a freelance project is billed; its billing is the rail's and the session rows' pill's.
+	const billingsQuery = useProjectBillings({ enabled: project?.kind === "freelance" });
+	const billing = projectId ? billingsQuery.data?.get(projectId) : undefined;
+	const { data: overrides } = useBillableOverrides({ enabled: billing !== undefined });
 
 	const openSettings = (field: ProjectFormAutoFocusField) => {
 		setSettingsFocus(field);
@@ -220,6 +226,7 @@ export default function ProjectDetails() {
 								contractWeek={openQuery.data}
 								ledgerWeek={ledgerWeek}
 								running={running}
+								billing={billing && overrides ? { billing, overrides } : undefined}
 								onChangeAbsence={(date, absence) =>
 									openBooking(
 										{
@@ -267,6 +274,16 @@ export default function ProjectDetails() {
 								bookButtonRef={timeOffBookRef}
 								onOpenAbsence={(next) => openBooking(next, timeOffBook)}
 								onOpenWeek={openWeekFromLedger}
+							/>
+						)}
+						{project.kind === "freelance" && (
+							<BillingPanel
+								project={project}
+								todayIso={today}
+								firstTrackedIso={firstTrackedIso}
+								billing={billing}
+								loading={billingsQuery.isLoading}
+								error={billingsQuery.error}
 							/>
 						)}
 						<QuietFacts project={project} sessions={sessionList} todayIso={today} />

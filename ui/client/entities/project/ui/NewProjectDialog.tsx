@@ -18,7 +18,7 @@ import { useCreateProject, useHolidayRegions, useProjects } from "../api";
 import type { Project } from "../model";
 import { extractCategories, toProject } from "../model";
 import { ProjectForm, type ProjectFormValues } from "./ProjectForm";
-import { projectWriteFromForm } from "./projectFormWire";
+import { isKindRefusal, projectWriteFromForm } from "./projectFormWire";
 
 interface NewProjectDialogProps {
 	open: boolean;
@@ -27,9 +27,15 @@ interface NewProjectDialogProps {
 	onCreated?: (project: Project) => void;
 }
 
-/** A 422 with fields is the form's to show, beside the inputs; anything else is toasted. */
+/**
+ * A 422 with fields, or a billed project's kind change, is the form's to
+ * show beside the inputs; anything else is toasted.
+ */
 export function isInlineFormError(err: unknown): boolean {
-	return err instanceof ApiError && err.isValidationError() && (err.fields?.length ?? 0) > 0;
+	return (
+		(err instanceof ApiError && err.isValidationError() && (err.fields?.length ?? 0) > 0) ||
+		isKindRefusal(err)
+	);
 }
 
 export function NewProjectDialog({ open, onClose, onCreated }: NewProjectDialogProps) {

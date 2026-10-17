@@ -4,7 +4,7 @@
  */
 
 import type { ApiContract, ApiProjectKind } from "@/shared/api";
-import { apiFieldErrors } from "@/shared/api";
+import { ApiError, apiFieldErrors } from "@/shared/api";
 import type { Contract, ContractFrameErrors, TermFieldErrors } from "../model";
 import { contractFieldErrors, contractFromForm, termFromForm, toApiContract } from "../model";
 import type { ProjectFormValues } from "./ProjectForm";
@@ -43,6 +43,15 @@ export function projectWriteFromForm(
 		kind: "day_job",
 		contract: toApiContract(contractFromForm(values.contract, terms, kept)),
 	};
+}
+
+/**
+ * A billed project keeps its kind: billing lives only on a freelance
+ * project, as a contract lives only on a day job, so the API refuses the
+ * change (409 PROJECT_HAS_BILLING) until billing is stopped.
+ */
+export function isKindRefusal(err: unknown): boolean {
+	return err instanceof ApiError && err.code === "PROJECT_HAS_BILLING";
 }
 
 export interface ProjectFormErrors {
@@ -97,6 +106,10 @@ const TOP_LEVEL: Record<string, keyof Omit<ProjectFormErrors, "term" | "contract
  */
 export function projectFormFieldErrors(err: unknown): ProjectFormErrors {
 	const out = emptyProjectFormErrors();
+	if (isKindRefusal(err)) {
+		out.kind = "Stop billing this project before changing its kind";
+		return out;
+	}
 	const fields = apiFieldErrors(err);
 	const contractPaths: Record<string, string> = {};
 	for (const [path, message] of Object.entries(fields)) {

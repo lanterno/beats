@@ -26,19 +26,25 @@ const billingKeys = {
 	month: (month: string, tz: string) => [...billingKeys.all, "month", month, tz] as const,
 };
 
-/** Every billed project's billing, by project id. A project not in it is not billed. */
-export function useProjectBillings() {
+/**
+ * Every billed project's billing, by project id. A project not in it is not
+ * billed. `enabled: false` where no project on screen could be — a page of a
+ * day job reads nothing of billing.
+ */
+export function useProjectBillings({ enabled = true }: { enabled?: boolean } = {}) {
 	return useQuery({
 		queryKey: billingKeys.projects(),
 		queryFn: (): Promise<Map<string, ProjectBilling>> => fetchProjectBillings(),
+		enabled,
 	});
 }
 
 /** Every entry mark, by entry id. */
-export function useBillableOverrides() {
+export function useBillableOverrides({ enabled = true }: { enabled?: boolean } = {}) {
 	return useQuery({
 		queryKey: billingKeys.entries(),
 		queryFn: (): Promise<Map<string, boolean>> => fetchBillableOverrides(),
+		enabled,
 	});
 }
 

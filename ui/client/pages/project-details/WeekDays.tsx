@@ -15,6 +15,8 @@ import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ABSENCE_TYPE_LABELS } from "@/entities/absence";
+import type { ProjectBilling } from "@/entities/billing";
+import { BillableSwitch, entryBillable } from "@/entities/billing";
 import { useProjectGitActivityByWeek } from "@/entities/github";
 import { useFocusScores, useRefreshFocusScores } from "@/entities/intelligence";
 import { useProjectPlannedByWeek } from "@/entities/planning";
@@ -35,7 +37,15 @@ import {
 	useUpdateSession,
 } from "@/entities/session";
 import { describeError } from "@/shared/api";
-import { addIsoDays, cn, getDayName, mondayOfIso, parseIsoDate, parseUtcIso } from "@/shared/lib";
+import {
+	addIsoDays,
+	browserTimeZone,
+	cn,
+	getDayName,
+	mondayOfIso,
+	parseIsoDate,
+	parseUtcIso,
+} from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { clock, hours1, hoursMinutes } from "./dates";
 import { LABEL, LINKISH, LIVE_DOT, NAV_BUTTON, SUB, TINT, TINT_PILL, TONE } from "./styles";
@@ -54,6 +64,12 @@ export interface WeekDaysProps {
 	ledgerWeek?: LedgerWeek;
 	/** The timer, when it runs on this project. */
 	running: RunningBeat | null;
+	/**
+	 * A billed project's billing and every entry mark: each finished session
+	 * then carries its Billable pill. The running one has none — it is not
+	 * billed until it stops.
+	 */
+	billing?: { billing: ProjectBilling; overrides: ReadonlyMap<string, boolean> };
 	/** "Change" on a day off: the booking dialog on that day, with what the day holds. */
 	onChangeAbsence: (dateIso: string, absence: DayAbsence) => void;
 	/** "Book time off" on a weekday the contract governs: the booking dialog on that day. */
@@ -228,6 +244,7 @@ export function WeekDays({
 	contractWeek,
 	ledgerWeek,
 	running,
+	billing,
 	onChangeAbsence,
 	onBookTimeOff,
 }: WeekDaysProps) {
@@ -242,6 +259,8 @@ export function WeekDays({
 	const { byMondayIso: planned } = useProjectPlannedByWeek(project.id, [weekOf]);
 	const { byMondayIso: commits } = useProjectGitActivityByWeek(project.id, [weekOf]);
 	const now = useNow();
+	// The zone the API buckets the report in, so the pill counts the day it does.
+	const tz = browserTimeZone();
 
 	const [open, setOpen] = useState<Record<string, boolean>>({});
 	const [editing, setEditing] = useState<string | null>(null);
@@ -494,6 +513,15 @@ export function WeekDays({
 													)}
 												</span>
 												<span className="text-[12.5px] font-bold font-mono text-foreground flex items-center gap-2.5">
+													{billing && (
+														<span className="font-body">
+															<BillableSwitch
+																beatId={session.id}
+																entryLabel={`${day.name} ${day.number}, ${clock(session.startTime)}`}
+																{...entryBillable(session, billing.billing, billing.overrides, tz)}
+															/>
+														</span>
+													)}
 													{hoursMinutes(session.duration)}
 													{confirming === session.id ? (
 														<span className="inline-flex items-center gap-1">
