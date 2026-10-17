@@ -79,6 +79,12 @@ describe("isFirstWeek", () => {
 		expect(isFirstWeek(contract, "2026-09-13")).toBe(true);
 		expect(isFirstWeek(contract, "2026-09-14")).toBe(false);
 	});
+
+	it("ends on the contract's last day, whose close the projection then gives", () => {
+		const short = { ...contract, endedOn: "2026-09-10" };
+		expect(isFirstWeek(short, "2026-09-09")).toBe(true);
+		expect(isFirstWeek(short, "2026-09-10")).toBe(false);
+	});
 });
 
 describe("projection", () => {
