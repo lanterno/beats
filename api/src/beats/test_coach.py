@@ -1422,6 +1422,29 @@ class TestRecentDataSummary:
         assert f"**{local_day.isoformat()}** (0.8h): Alpha (45m)" in out
         assert f"**{start.date().isoformat()}**" not in out
 
+    async def test_the_last_seven_days_are_seven_dates(self, monkeypatch, patch_repos):
+        """On Saturday 17 October the seven days are Sunday the 11th to today,
+        as the header, the docstring and PRIVACY.md say: a session on the 10th
+        is an eighth day, and is left out."""
+        instant = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
+
+        class _At(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        monkeypatch.setattr(memory_rewrite_module, "datetime", _At)
+        beats = [
+            _completed_beat("2026-10-10T10:00:00", 30, project_id="p1"),
+            _completed_beat("2026-10-11T10:00:00", 45, project_id="p1"),
+        ]
+        patch_repos(_fake_coach_repos(projects=[_project("p1", "Alpha")], beats=beats))
+
+        out = await memory_rewrite_module._recent_data_summary("user-1")
+
+        assert "**2026-10-11** (0.8h): Alpha (45m)" in out
+        assert "2026-10-10" not in out
+
 
 class TestRewriteCoachMemory:
     """Nightly memory compaction. Reads the last 7 days, asks the LLM
