@@ -132,7 +132,10 @@ def amount_of(hours: Decimal, rate_minor: int) -> int:
 
 def _microseconds(start: datetime, end: datetime) -> int:
     # In UTC: two datetimes in one zone subtract on the wall clock, which
-    # would lose or gain the hour the clocks change by.
+    # would lose or gain the hour the clocks change by. Negative for an end
+    # before its start, which POST /api/beats/ and a restore both take: the
+    # callers leave such a beat out, so it cannot take time, and money, off
+    # the beats beside it.
     return (end.astimezone(UTC) - start.astimezone(UTC)) // _MICROSECOND
 
 
@@ -260,6 +263,8 @@ def assemble_client(
             running = running or resolved.billable
             continue
         length = _microseconds(beat.start, beat.end)
+        if length < 0:
+            continue  # an end before its start: no time worked (`_microseconds`)
         if resolved.billable:
             billable[beat.project_id, day] += length
         else:
@@ -407,7 +412,7 @@ def assemble_billing(
             or not first <= local_date(beat.start, tz) <= last
         ):
             continue
-        unbilled[beat.project_id] += _microseconds(beat.start, beat.end)
+        unbilled[beat.project_id] += max(_microseconds(beat.start, beat.end), 0)
     unattached = sorted(
         (
             UnattachedHours(project_id, projects[project_id].name, hours_of(length))
