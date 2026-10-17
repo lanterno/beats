@@ -390,16 +390,25 @@ export function useHolidayRegions() {
 }
 
 /**
+ * A region's calendar as `useRegionCalendar` reads it: still loading, failed
+ * (after the client's own retries), or in, by date and name.
+ */
+export type RegionCalendar =
+	| { status: "pending" }
+	| { status: "error"; retry: () => void }
+	| { status: "success"; holidays: ReadonlyMap<string, string> };
+
+/**
  * One region's public holidays over `years`, by date and name, as the
  * region gives them — the calendar of a region the contract may not name
  * yet, for the settings form's region change. `country` "" is no region,
- * which has none. Undefined until every year is in, and while one fails.
+ * which has none. In only once every year is; a failed year fails it.
  */
 export function useRegionCalendar(
 	country: string,
 	subdivision: string,
 	years: readonly number[],
-): ReadonlyMap<string, string> | undefined {
+): RegionCalendar {
 	return useQueries({
 		queries: country
 			? years.map((year) => ({
@@ -410,13 +419,22 @@ export function useRegionCalendar(
 					gcTime: 24 * 60 * 60_000,
 				}))
 			: [],
-		combine: (results) => {
-			const calendar = new Map<string, string>();
-			for (const { data } of results) {
-				if (!data) return undefined;
-				for (const holiday of data) calendar.set(holiday.date, holiday.name);
+		combine: (results): RegionCalendar => {
+			const failed = results.filter((result) => result.isError);
+			if (failed.length > 0) {
+				return {
+					status: "error",
+					retry: () => {
+						for (const result of failed) void result.refetch();
+					},
+				};
 			}
-			return calendar;
+			const holidays = new Map<string, string>();
+			for (const { data } of results) {
+				if (!data) return { status: "pending" };
+				for (const holiday of data) holidays.set(holiday.date, holiday.name);
+			}
+			return { status: "success", holidays };
 		},
 	});
 }

@@ -17,7 +17,8 @@
  * where "fix this term" and "new term from a date" are two different
  * actions instead of one ambiguous edit. A region change that would make a
  * date the contract marks as not given a working day says so under the
- * picker and offers to clear the mark (RevivedNotGivenNotice). A
+ * picker and offers to clear the mark (RevivedNotGivenNotice); Save waits
+ * for both regions' calendars, or for one to fail, which the notice says. A
  * time-based day job hides the personal weekly goal — the contract is the
  * goal; an objective one keeps it (Decision 8).
  *
@@ -267,6 +268,17 @@ export function ProjectForm({
 	// Whether the form is describing a contract at all: the frame of the one
 	// that exists, or the first term of a new one.
 	const editsContract = isDayJob && (existingContract !== undefined || values.addContract);
+	// A region change on a contract that marks dates as not given: the marks
+	// are bare dates, and the new region may have a holiday on one. Save
+	// waits for the notice's check, so no mark comes into force unseen.
+	const changesMarkedRegion =
+		editsContract &&
+		existingContract !== undefined &&
+		existingContract.holidaysNotGiven.length > 0 &&
+		(values.contract.holidayCountry !== (existingContract.holidayCountry ?? "") ||
+			values.contract.holidaySubdivision !== (existingContract.holidaySubdivision ?? ""));
+	const [regionChecked, setRegionChecked] = useState(false);
+	const holdsSave = changesMarkedRegion && !regionChecked;
 	// The contract is the goal when it owes hours — judged by the term in
 	// force today on an existing contract, or by the one being typed.
 	const contractIsTimeBased = existingContract
@@ -303,6 +315,7 @@ export function ProjectForm({
 
 	const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
+		if (holdsSave) return;
 		const next = validate();
 		setClientErrors(next);
 		if (hasProjectFormErrors(next)) {
@@ -332,13 +345,6 @@ export function ProjectForm({
 		? (selectedRegion?.subdivisions.find((sd) => sd.code === values.contract.holidaySubdivision)
 				?.name ?? values.contract.holidaySubdivision)
 		: (selectedRegion?.name ?? values.contract.holidayCountry);
-	// A region change on a contract that marks dates as not given: the marks
-	// are bare dates, and the new region may have a holiday on one.
-	const changesMarkedRegion =
-		existingContract !== undefined &&
-		existingContract.holidaysNotGiven.length > 0 &&
-		(values.contract.holidayCountry !== (existingContract.holidayCountry ?? "") ||
-			values.contract.holidaySubdivision !== (existingContract.holidaySubdivision ?? ""));
 	// Until the list arrives, keep whatever code the contract already has
 	// selectable so a re-render cannot blank it.
 	const countryOptions: HolidayRegion[] =
@@ -646,6 +652,7 @@ export function ProjectForm({
 									regionName={selectedRegionName}
 									cleared={values.clearedNotGiven.length > 0}
 									onClear={(dates) => set("clearedNotGiven", dates)}
+									onChecked={setRegionChecked}
 								/>
 							)}
 
@@ -857,7 +864,7 @@ export function ProjectForm({
 			)}
 
 			<div className="flex gap-2 pt-1">
-				<Button type="submit" disabled={!trimmedName || submitting} className="flex-1">
+				<Button type="submit" disabled={!trimmedName || submitting || holdsSave} className="flex-1">
 					{submitting ? "Saving…" : submitLabel}
 				</Button>
 				{onCancel && (
