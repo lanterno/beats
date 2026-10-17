@@ -183,10 +183,15 @@ class TimerService:
         if end_normalized < start:
             raise InvalidEndTime()
 
+        # Only the end and the tags are written: the beat was read before the
+        # flow-window await, and anything written to it meanwhile (a start
+        # moved earlier, a note imported) must not be reverted to that read.
         active.end = end
+        written = {"end"}
         if self.flow_repo is not None:
             active.tags = await derive_flow_tags(self.flow_repo, active.start, end)
-        return await self.beat_repo.update(active)
+            written.add("tags")
+        return await self.beat_repo.update(active, written)
 
     async def get_status(self) -> dict:
         """Get the current timer status.
@@ -241,11 +246,15 @@ class BeatService:
         return await self.beat_repo.get_by_id(beat_id)
 
     async def update_beat(self, beat: Beat) -> Beat:
-        """Update an existing beat, re-deriving tags from daemon flow signals.
+        """Write an edit's project, start and end onto the stored beat,
+        re-deriving tags from daemon flow signals, and return the beat as
+        stored. Nothing else is written: the note and any other stored field
+        stay as they are, whatever `beat` carries for them.
 
         If the daemon has no windows for the (possibly edited) range we keep the
         beat's existing tags rather than wiping them — non-destructive for any
-        tags captured before this range was last touched.
+        tags captured before this range was last touched. A beat reopened
+        (`end` None) keeps its tags too; the stop that closes it derives them.
         """
         # Validate the beat can be stopped if end is being set
         if beat.end:
@@ -253,14 +262,13 @@ class BeatService:
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        written = {"project_id", "start", "end"}
         if self.flow_repo is not None and beat.end is not None:
             derived = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
             if derived:
                 beat.tags = derived
-            elif beat.id is not None:
-                existing = await self.beat_repo.get_by_id(beat.id)
-                beat.tags = existing.tags
-        return await self.beat_repo.update(beat)
+                written.add("tags")
+        return await self.beat_repo.update(beat, written)
 
     async def delete_beat(self, beat_id: str) -> bool:
         """Delete a beat by ID."""

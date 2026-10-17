@@ -12,7 +12,7 @@ hold exactly one document per user.
 """
 
 import builtins
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol
 
@@ -204,7 +204,7 @@ class BeatRepository(Protocol):
     async def get_active(self) -> Beat | None: ...
     async def get_last(self) -> Beat: ...
     async def create(self, beat: Beat) -> Beat: ...
-    async def update(self, beat: Beat) -> Beat: ...
+    async def update(self, beat: Beat, fields: Collection[str]) -> Beat: ...
     async def delete(self, beat_id: str) -> bool: ...
     async def list(
         self, project_id: str | None = None, date_filter: date | None = None
@@ -254,8 +254,27 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
     async def create(self, beat: Beat) -> Beat:
         return await self._insert(beat)
 
-    async def update(self, beat: Beat) -> Beat:
-        return await self._replace(beat.id, beat)
+    async def update(self, beat: Beat, fields: Collection[str]) -> Beat:
+        """Write `fields` of `beat` onto the stored beat with its id, and only
+        those: a `$set`, not a replace, so a field the write does not name
+        keeps what is stored, whatever happened to it since the caller read
+        it. A field written as None is unset, the shape `create` stores a
+        running beat's `end` in. Scoped to this user like every other write:
+        an id the user does not hold is `BeatNotFound`."""
+        if beat.id is None:
+            raise ValueError("Beat ID is required for update")
+        data = beat.model_dump(mode=self.dump_mode, include=set(fields))
+        changes: dict[str, Any] = {}
+        if values := {k: v for k, v in data.items() if v is not None}:
+            changes["$set"] = values
+        if unset := {k: "" for k, v in data.items() if v is None}:
+            changes["$unset"] = unset
+        doc = await self.collection.find_one_and_update(
+            self._q({"_id": ObjectId(beat.id)}), changes, return_document=ReturnDocument.AFTER
+        )
+        if doc is None:
+            raise BeatNotFound(beat.id)
+        return self._load(doc)
 
     async def delete(self, beat_id: str) -> bool:
         return await self._delete_one({"_id": ObjectId(beat_id)})

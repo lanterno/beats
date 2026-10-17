@@ -102,7 +102,9 @@ class CreateBeatRequest(BaseModel):
 
 
 class UpdateBeatRequest(BaseModel):
-    """Request body for updating a beat. Tags are auto-derived, not sent."""
+    """Request body for editing a beat: these fields, and only these, change.
+    Tags are auto-derived, not sent. The note is not editable here: it comes
+    from an import, stays as stored, and a `note` in the body is ignored."""
 
     id: str
     project_id: str
