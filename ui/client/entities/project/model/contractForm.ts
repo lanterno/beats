@@ -7,7 +7,7 @@
  */
 
 import { parseIsoDate, todayIso } from "@/shared/lib";
-import { fromPercent, sortTerms, toPercent } from "./contract";
+import { fromPercent, MAX_BALANCE_HOURS, sortTerms, toPercent } from "./contract";
 import type { CarryOver, Contract, ContractTerm, ScheduleType, VacationEntitlement } from "./types";
 
 /** One term as its inputs hold it. Percentage is a percent here (80), a fraction on the wire. */
@@ -165,11 +165,13 @@ export function validateContractFrame(
 	firstTermStarts: string | undefined,
 ): ContractFrameErrors {
 	const errors: ContractFrameErrors = {};
-	if (
-		values.openingBalanceHours.trim() !== "" &&
-		Number.isNaN(Number(values.openingBalanceHours))
-	) {
-		errors.openingBalanceHours = "Enter a number of hours (negative if owed)";
+	if (values.openingBalanceHours.trim() !== "") {
+		const opening = Number(values.openingBalanceHours);
+		if (Number.isNaN(opening)) {
+			errors.openingBalanceHours = "Enter a number of hours (negative if owed)";
+		} else if (Math.abs(opening) > MAX_BALANCE_HOURS) {
+			errors.openingBalanceHours = `At most ${MAX_BALANCE_HOURS.toLocaleString("en-US")} h, banked or owed`;
+		}
 	}
 	if (values.endedOn.trim() !== "") {
 		if (!parseIsoDate(values.endedOn)) {
