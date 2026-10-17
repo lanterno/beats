@@ -441,7 +441,7 @@ each day d:       expected(d), worked(d), worked − expected,
                   the adjustment and its applied, close(d)
 carried forward = close(last)
 
-brought forward + worked − expected + adjusted = carried forward
+brought forward + difference + adjusted = carried forward
 ```
 
 - **What a sheet covers** is the month's finished days inside the
@@ -458,7 +458,10 @@ brought forward + worked − expected + adjusted = carried forward
   a close needs every day before it.
 - **The null rule is the row's.** A day whose term owes nothing (`owes`:
   an objective or 0-hour term) has no expected, difference or balance —
-  blank cells — while its hours still count, as they do in the balance.
+  blank cells. Its hours are in the day's worked and the total's, as on
+  the ledger, but not in the balance (`counts_worked`), so the total's
+  difference is the rows', worked less expected over the days that have
+  one: without such a day it is the total's worked − expected.
   A weekend, a holiday or a day off under an owing term is 0.00, not
   blank. Brought forward follows the same rule for the day before `first`;
   on the sheet that starts on the contract's first day it is the opening
@@ -466,8 +469,8 @@ brought forward + worked − expected + adjusted = carried forward
   blank when none does.
 - **Months chain.** One month's carried forward is the next month's
   brought forward, and whenever both are set the identity above holds —
-  exact on the raw figures, and within 0.025 in the file, since each of the
-  five is rounded on its own from a raw sum, as the ledger's totals are.
+  exact on the raw figures, and within 0.02 in the file, since each of the
+  four is rounded on its own from a raw sum, as the ledger's totals are.
   Rows sum to the total only within a few cents the same way: to the cent,
   not to the bit. Each row moves the balance by its difference plus its
   adjustment.
