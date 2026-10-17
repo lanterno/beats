@@ -708,8 +708,11 @@ region check, and every project write reconciles the adjustments
   goal's, completed beats only, by UTC date.
 - **Holidays are cached per region and year**: the balance rebuilds
   every year since the contract started on each request, and some
-  regions cost ~10 ms a year. Company days and the dates not given come
-  from the contract the request already read, and cost nothing.
+  regions cost ~10 ms a year. The cache keeps the 4,096 most recently
+  read (some 20 MB at most), because `/api/meta/holidays` takes any
+  region and year from any session and an unbounded one would grow with
+  whatever it is asked. Company days and the dates not given come from
+  the contract the request already read, and cost nothing.
 - **Device tokens** reach every route under `/api/projects`, since
   `DEVICE_ALLOWED_PREFIXES` matches by prefix. That exposes nothing new:
   a device could already `PUT /api/projects`. `/api/meta` is
