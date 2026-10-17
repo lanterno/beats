@@ -78,9 +78,9 @@ goal. Git history has the plans.
     year before's company days into the year it shows, each on the same
     month and day, as rows the user checks and saves. It leaves out a
     date that already has a company day or is a public holiday the
-    employer gives, and says so (a public holiday the year's calendar has
-    not brought in yet is copied, and its row then says it changes
-    nothing); a day that lands on a weekend is copied and its row says it
+    employer gives as the dialog's ticks stand, saved or not, and says so
+    (a public holiday the year's calendar has not brought in yet is
+    copied, and its row then says it changes nothing); a day that lands on a weekend is copied and its row says it
     changes nothing, since a weekend owes nothing.
     29 February into a year without one is left out with a note, not
     moved to the 28th or 1 March: a leap-day policy does not say which
