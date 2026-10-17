@@ -44,6 +44,7 @@ from beats.coach.repos import (
     LLM_USAGE_COLLECTION,
     CoachRepos,
     fmt_contract_goal,
+    fmt_hours,
     fmt_minutes,
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker
@@ -2484,6 +2485,30 @@ class TestBuildUserContext:
         utc_ctx = await context_module.build_user_context("user-1", repos)
         assert "  Acme: 42h/week (contract, full-time)" in utc_ctx.splitlines()
 
+    async def test_goal_line_and_get_projects_give_a_terms_hours_as_the_page(self):
+        """68.75 % of 42 h is 28.875 h, which the page shows as 28.88 h. The
+        goal line and get_projects said 28.875."""
+        from beats.domain.models import Contract, ContractTerm, Project, ProjectKind, ScheduleType
+
+        term = ContractTerm(
+            effective_from=date(2026, 1, 5),
+            schedule_type=ScheduleType.PART_TIME,
+            full_time_hours=42,
+            percentage=0.6875,
+        )
+        job = Project(
+            id="job", name="Acme", kind=ProjectKind.DAY_JOB, contract=Contract(terms=[term])
+        )
+        repos = _fake_coach_repos(projects=[job])
+
+        user_ctx = await context_module.build_user_context("user-1", repos)
+        tool = await tools_module.execute_tool(
+            "user-1", "get_projects", {}, repos=repos, projects=[job]
+        )
+
+        assert "  Acme: 28.88h/week (contract, 68.75%)" in user_ctx.splitlines()
+        assert "- Acme (goal: 28.88h/wk, contract, 68.75%)" in tool
+
     async def test_weekly_totals_are_the_users_weeks(self, monkeypatch):
         """At 18:00 on Tuesday 20 October in Los Angeles, an hour from 20:00
         on Sunday the 18th belongs to the week of 12 October there, though
@@ -3818,6 +3843,27 @@ class TestPartTimePercentReadsAsThePage:
         week = await service.week_for(job, [], None, ZURICH)
         lines = contract_section([job], {"job": week}, CONTRACT_TODAY)
         assert lines[1].startswith("  Acme (contract, 87.5%): this week expects")
+
+
+class TestPartTimeHoursReadAsThePage:
+    """`fmt_hours` prints a term's weekly hours as the page does with
+    `termHoursPerWeek` and `formatHours` (`Math.round(hours * 100) / 100`),
+    not as the raw product of full-time hours and percentage."""
+
+    @pytest.mark.parametrize(
+        ("full_time", "fraction", "shown"),
+        # What node prints for `formatHours(termHoursPerWeek(term))`. The
+        # first three were "28.875", "31.24875" and "13.332".
+        [
+            (42, 0.6875, "28.88"),
+            (37.5, 0.8333, "31.25"),
+            (40, 0.3333, "13.33"),
+            (42, 0.8, "33.6"),
+            (40, 0.5, "20"),
+        ],
+    )
+    def test_matches_the_spa(self, full_time, fraction, shown):
+        assert fmt_hours(full_time * fraction) == shown
 
 
 def _to_fixed_1(hours: float) -> str:
