@@ -285,6 +285,42 @@ describe("HolidaysDialog", () => {
 		]);
 	});
 
+	it("leaves out a copied day on a public holiday ticked back on, though saved as not given", async () => {
+		hooks.holidays.mockImplementation((year: number) =>
+			year === 2026 ? [holiday("2026-12-25", "Christmas Day", false)] : [],
+		);
+		renderDialog({
+			companyHolidays: [{ date: "2025-12-25", name: "Firm Christmas" }],
+			holidaysNotGiven: ["2026-12-25"],
+		});
+
+		await userEvent.click(within(dialog()).getByRole("checkbox", { name: /Christmas Day/ }));
+		await userEvent.click(
+			within(dialog()).getByRole("button", { name: "Copy last year's company days" }),
+		);
+
+		expect(within(dialog()).getByRole("status")).toHaveTextContent(
+			"Nothing copied from 2025. Left out: Dec 25, already a public holiday.",
+		);
+	});
+
+	it("copies a day on a public holiday just unticked, and names no public holiday on its row", async () => {
+		renderDialog({ companyHolidays: [{ date: "2025-12-25", name: "Firm Christmas" }] });
+
+		await userEvent.click(within(dialog()).getByRole("checkbox", { name: /Christmas Day/ }));
+		await userEvent.click(
+			within(dialog()).getByRole("button", { name: "Copy last year's company days" }),
+		);
+
+		expect(within(dialog()).getByRole("status")).toHaveTextContent(
+			"Copied 1 day from 2025 — save to keep it.",
+		);
+		expect(within(dialog()).getByLabelText("Company holiday 1: date")).toHaveValue("2026-12-25");
+		expect(
+			within(dialog()).getByLabelText("Company holiday 1: name"),
+		).not.toHaveAccessibleDescription();
+	});
+
 	it("offers the copy only on a year whose year before has a company day", async () => {
 		renderDialog({ companyHolidays: [{ date: "2026-12-24", name: "Christmas Eve" }] });
 		const copy = { name: "Copy last year's company days" };
