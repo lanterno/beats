@@ -25,7 +25,13 @@ from pymongo import MongoClient
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from beats.auth.session import SessionManager
-from beats.domain.models import FlowWindow
+from beats.domain.models import (
+    BillingTerm,
+    Client,
+    FlowWindow,
+    ProjectBilling,
+    RateTerm,
+)
 from beats.infrastructure.repositories import serialize_to_document
 
 EMAIL = "e2e@example.test"
@@ -109,6 +115,78 @@ def _seed_flow(db, user_id: str) -> None:
     db.flow_windows.insert_many(docs)
 
 
+def _seed_billing(db, user_id: str) -> None:
+    """A client billed for a freelance project, for the Clients page and the
+    project page's billing panel.
+
+    The client panel's lines table and amount, and the billing panel, exist
+    only once a project is billed and has hours in the month on screen: a
+    client at 85.00 EUR an hour from 1 January, a freelance project billable
+    at that rate from the same day, and two finished sessions in the last
+    three hours, so this month's report has a line and a non-zero amount
+    (unless the month began less than three hours ago). The client and the
+    billing are written through their models and the repository's
+    serialiser, so the stored shape is the API's.
+    """
+    if db.clients.find_one({"user_id": user_id}):
+        return
+    now = datetime.now(UTC)
+    new_year = now.date().replace(month=1, day=1)
+
+    client_id = ObjectId()
+    client = Client(
+        id=str(client_id),
+        name="E2E Client",
+        currency="EUR",
+        rates=[RateTerm(effective_from=new_year, rate_minor=8500)],
+    )
+    db.clients.insert_one(
+        {
+            **serialize_to_document(client.model_dump(mode="json", exclude_none=True)),
+            "user_id": user_id,
+        }
+    )
+
+    project_id = ObjectId()
+    db.projects.insert_one(
+        {
+            "_id": project_id,
+            "user_id": user_id,
+            "name": "E2E Client Work",
+            "description": "Seeded for the end-to-end suite: a billed freelance project",
+            "color": "#3d8bd4",
+            "archived": False,
+            "kind": "freelance",
+            "goal_overrides": [],
+            "autostart_repos": [],
+        }
+    )
+    billing = ProjectBilling(
+        project_id=str(project_id),
+        client_id=str(client_id),
+        terms=[BillingTerm(effective_from=new_year, billable=True)],
+    )
+    db.project_billing.insert_one(
+        {
+            **serialize_to_document(billing.model_dump(mode="json", exclude_none=True)),
+            "user_id": user_id,
+        }
+    )
+
+    db.timeLogs.insert_many(
+        [
+            {
+                "user_id": user_id,
+                "project_id": str(project_id),
+                "start": now - timedelta(minutes=start),
+                "end": now - timedelta(minutes=start - length),
+                "tags": [],
+            }
+            for start, length in ((180, 60), (90, 75))
+        ]
+    )
+
+
 def main() -> int:
     dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "beats")
@@ -135,6 +213,7 @@ def main() -> int:
             )
         _seed_content(client[db_name], user_id)
         _seed_flow(client[db_name], user_id)
+        _seed_billing(client[db_name], user_id)
     finally:
         client.close()
 
