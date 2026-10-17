@@ -2992,6 +2992,17 @@ class TestBillingMonthAPI:
         assert resp.status_code == 409, resp.text
         assert resp.json()["code"] == "MONTH_NOT_STARTED"
 
+    def test_the_calendars_first_month_east_of_greenwich_is_empty(self, client, auth_headers):
+        # Midnight on 1 January of year 1 in Berlin is before the first
+        # instant UTC can hold; it was a 500.
+        resp = client.get(
+            "/api/billing/month",
+            params={"month": "0001-01", "tz": "Europe/Berlin"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["first"], resp.json()["clients"]) == ("0001-01-01", [])
+
     def test_a_month_end_to_end(self, client, auth_headers):
         kite = _create_client(client, auth_headers, rates=KITE_RATE)
         website = _freelance(client, auth_headers, "Website")
