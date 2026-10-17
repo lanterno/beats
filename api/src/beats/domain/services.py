@@ -29,6 +29,7 @@ from beats.domain.exceptions import (
     NoObjectMatched,
     NotADayJob,
     NoVacationEntitlement,
+    ProjectHasBilling,
     ProjectNotFound,
     TimerAlreadyRunning,
     UnknownHolidayRegion,
@@ -60,6 +61,8 @@ from beats.domain.ports import (
     AbsenceStore,
     AdjustmentStore,
     BeatStore,
+    BillableOverrideRemover,
+    BillingPresence,
     ContractAdjustments,
     FlowWindowReader,
     ProjectBeatReader,
@@ -226,8 +229,14 @@ class TimerService:
 class BeatService:
     """Service for managing beat CRUD operations."""
 
-    def __init__(self, beat_repo: BeatStore, flow_repo: FlowWindowReader | None = None):
+    def __init__(
+        self,
+        beat_repo: BeatStore,
+        overrides: BillableOverrideRemover,
+        flow_repo: FlowWindowReader | None = None,
+    ):
         self.beat_repo = beat_repo
+        self.overrides = overrides
         self.flow_repo = flow_repo
 
     async def create_beat(self, beat: Beat) -> Beat:
@@ -263,8 +272,12 @@ class BeatService:
         return await self.beat_repo.update(beat)
 
     async def delete_beat(self, beat_id: str) -> bool:
-        """Delete a beat by ID."""
-        return await self.beat_repo.delete(beat_id)
+        """Delete a beat by ID, and its billable override with it. The
+        override goes whether or not the beat was there: one left without
+        its beat is a leftover either way."""
+        deleted = await self.beat_repo.delete(beat_id)
+        await self.overrides.delete(beat_id)
+        return deleted
 
     async def list_beats(
         self,
@@ -343,10 +356,12 @@ class ProjectService:
         project_repo: ProjectStore,
         beat_repo: ProjectBeatReader,
         adjustments: ContractAdjustments,
+        billing: BillingPresence,
     ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
         self.adjustments = adjustments
+        self.billing = billing
 
     async def create_project(self, project: Project) -> Project:
         """Create a new project. A new project has no balance adjustments, so
@@ -360,8 +375,20 @@ class ProjectService:
         """Update an existing project, reconciling its balance adjustments
         against the contract it had (`_reconcile_adjustments`). The previous
         contract is a required keyword so no caller skips that by accident;
-        one that leaves the contract alone passes the one it read."""
+        one that leaves the contract alone passes the one it read.
+
+        A billed project keeps its kind: moving it away from freelance is
+        refused (409 PROJECT_HAS_BILLING) until its billing is stopped, as a
+        contract lives only on a day job. Asked only of a project that is not
+        freelance after the write, so the colour picker on a freelance project
+        reads nothing."""
         _check_contract(project)
+        if (
+            project.kind is not ProjectKind.FREELANCE
+            and project.id is not None
+            and await self.billing.exists(project.id)
+        ):
+            raise ProjectHasBilling()
         purge_after = await self._reconcile_adjustments(
             project.id, previous_contract, project.contract
         )
@@ -373,10 +400,11 @@ class ProjectService:
     async def restore_project(self, project: Project) -> Project:
         """Write a project read from a backup, keeping its id: an update when
         the id is one of this user's projects, a create otherwise. Either way
-        it is an ordinary project write — the contract's checks, and on an
-        update the reconcile against the contract it replaces — so a backup
-        cannot leave adjustments behind that a contract write would have
-        purged or refused."""
+        it is an ordinary project write — the contract's checks, the kind
+        guard, and on an update the reconcile against the contract it
+        replaces — so a backup cannot leave adjustments behind that a
+        contract write would have purged or refused, nor billing on a
+        project that is no longer freelance."""
         if project.id is not None:
             try:
                 existing = await self.project_repo.get_by_id(project.id)

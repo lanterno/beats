@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException, Query, Request, status
 from pydantic import AfterValidator
 
 from beats.domain.analytics import AnalyticsService
+from beats.domain.billing_service import BillingService
 from beats.domain.calendar import CalendarService
 from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
@@ -21,8 +22,10 @@ from beats.infrastructure.repositories import (
     AbsenceRepository,
     AdjustmentRepository,
     BeatRepository,
+    BillableOverrideRepository,
     BiometricDayRepository,
     CalendarIntegrationRepository,
+    ClientRepository,
     DeviceRegistrationRepository,
     FitbitIntegrationRepository,
     FlowWindowRepository,
@@ -31,8 +34,10 @@ from beats.infrastructure.repositories import (
     MongoAbsenceRepository,
     MongoAdjustmentRepository,
     MongoBeatRepository,
+    MongoBillableOverrideRepository,
     MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
+    MongoClientRepository,
     MongoDeviceRegistrationRepository,
     MongoFitbitIntegrationRepository,
     MongoFlowWindowRepository,
@@ -41,6 +46,7 @@ from beats.infrastructure.repositories import (
     MongoOuraIntegrationRepository,
     MongoPairingCodeRepository,
     MongoPendingSuggestionRepository,
+    MongoProjectBillingRepository,
     MongoProjectRepository,
     MongoSignalSummaryRepository,
     MongoWebhookRepository,
@@ -49,6 +55,7 @@ from beats.infrastructure.repositories import (
     OuraIntegrationRepository,
     PairingCodeRepository,
     PendingSuggestionRepository,
+    ProjectBillingRepository,
     ProjectRepository,
     SignalSummaryRepository,
     WebhookRepository,
@@ -183,6 +190,17 @@ get_project_repository = _user_scoped(MongoProjectRepository, "projects")
 get_flow_window_repository = _user_scoped(MongoFlowWindowRepository, "flow_windows")
 
 
+get_client_repository = _user_scoped(MongoClientRepository, "clients")
+
+
+get_project_billing_repository = _user_scoped(MongoProjectBillingRepository, "project_billing")
+
+
+get_billable_override_repository = _user_scoped(
+    MongoBillableOverrideRepository, "billable_overrides"
+)
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
@@ -194,10 +212,12 @@ def get_timer_service(
 
 def get_beat_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    override_repo: Annotated[BillableOverrideRepository, Depends(get_billable_override_repository)],
     flow_repo: Annotated[FlowWindowRepository, Depends(get_flow_window_repository)],
 ) -> BeatService:
-    """Get the beat service with injected repository."""
-    return BeatService(beat_repo=beat_repo, flow_repo=flow_repo)
+    """Get the beat service with injected repositories. The billable
+    overrides are there for the delete: a beat's override goes with it."""
+    return BeatService(beat_repo=beat_repo, overrides=override_repo, flow_repo=flow_repo)
 
 
 get_absence_repository = _user_scoped(MongoAbsenceRepository, "absences")
@@ -225,12 +245,34 @@ def get_project_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     adjustment_repo: Annotated[AdjustmentRepository, Depends(get_adjustment_repository)],
+    billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
 ) -> ProjectService:
     """Get the project service with injected repositories. The adjustments
     are there for the contract writes: the balance adjustments go with the
-    contract, and a first day moved later past one is refused."""
+    contract, and a first day moved later past one is refused. The billing is
+    there for the kind: a billed project stays freelance."""
     return ProjectService(
-        project_repo=project_repo, beat_repo=beat_repo, adjustments=adjustment_repo
+        project_repo=project_repo,
+        beat_repo=beat_repo,
+        adjustments=adjustment_repo,
+        billing=billing_repo,
+    )
+
+
+def get_billing_service(
+    client_repo: Annotated[ClientRepository, Depends(get_client_repository)],
+    billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
+    override_repo: Annotated[BillableOverrideRepository, Depends(get_billable_override_repository)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+) -> BillingService:
+    """Get the billing service with injected repositories."""
+    return BillingService(
+        clients=client_repo,
+        billings=billing_repo,
+        overrides=override_repo,
+        projects=project_repo,
+        beats=beat_repo,
     )
 
 
@@ -289,6 +331,12 @@ ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 ContractServiceDep = Annotated[ContractService, Depends(get_contract_service)]
 AbsenceRepoDep = Annotated[AbsenceRepository, Depends(get_absence_repository)]
 AdjustmentRepoDep = Annotated[AdjustmentRepository, Depends(get_adjustment_repository)]
+ClientRepoDep = Annotated[ClientRepository, Depends(get_client_repository)]
+ProjectBillingRepoDep = Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)]
+BillableOverrideRepoDep = Annotated[
+    BillableOverrideRepository, Depends(get_billable_override_repository)
+]
+BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]

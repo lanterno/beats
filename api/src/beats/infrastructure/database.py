@@ -43,6 +43,13 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.balance_adjustments.create_index(
         [("user_id", 1), ("project_id", 1), ("date", 1)], unique=True
     )
+    await db.clients.create_index("user_id")
+    # One billing per project: a second write replaces the first. By client
+    # too, for the reads that ask what is billed to one.
+    await db.project_billing.create_index([("user_id", 1), ("project_id", 1)], unique=True)
+    await db.project_billing.create_index([("user_id", 1), ("client_id", 1)])
+    # One billable override per beat, the same way.
+    await db.billable_overrides.create_index([("user_id", 1), ("beat_id", 1)], unique=True)
 
 
 class Database:

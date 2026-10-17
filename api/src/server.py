@@ -24,8 +24,10 @@ from beats.api.routers.analytics import router as analytics_router
 from beats.api.routers.auth import get_session_manager, limiter
 from beats.api.routers.auth import router as auth_router
 from beats.api.routers.beats import router as beats_router
+from beats.api.routers.billing import router as billing_router
 from beats.api.routers.biometrics import router as biometrics_router
 from beats.api.routers.calendar import router as calendar_router
+from beats.api.routers.clients import router as clients_router
 from beats.api.routers.coach import router as coach_router
 from beats.api.routers.device import router as device_router
 from beats.api.routers.export import router as export_router
@@ -72,7 +74,11 @@ except PackageNotFoundError:  # running from a source tree without an install
 # Paths that never require authentication
 PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange")
 
-# Paths that device tokens (daemon) are allowed to access
+# Paths that device tokens (daemon) are allowed to access.
+#
+# Money lives under /api/clients and /api/billing on purpose. Never add them
+# here, and never put billing under /api/projects or /api/beats, which are
+# prefix matches (docs/billing.md).
 DEVICE_ALLOWED_PREFIXES = (
     # Wall-clock firmware reads /status on a 10s poll for the timer
     # state + today_minutes + theme. Without this prefix, the
@@ -293,6 +299,8 @@ app.include_router(projects_router)
 app.include_router(absences_router)
 app.include_router(adjustments_router)
 app.include_router(meta_router)
+app.include_router(clients_router)
+app.include_router(billing_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)

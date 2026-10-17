@@ -338,6 +338,14 @@ class RetroactiveChange(DomainException):
         )
 
 
+class ProjectNotBilled(DomainException):
+    """Raised when billing is stopped on a project that is not billed. A
+    project of someone else's, or none at all, is not billed either."""
+
+    status_code = 404
+    message = "This project is not billed"
+
+
 class MonthNotStarted(DomainException):
     """Raised when a billing month after the current one is asked for."""
 
