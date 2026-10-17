@@ -975,6 +975,19 @@ class TestContractAPI:
         assert [t["effective_from"] for t in contract["terms"]] == [CONTRACT_START, WEEK]
         assert resp.json()["kind"] == "day_job"
 
+    @pytest.mark.parametrize("opening", [-10_001, 10_001], ids=["owed", "banked"])
+    def test_an_opening_past_the_bound_is_422_at_the_opening(self, client, auth_headers, opening):
+        project = _day_job(client, auth_headers)
+        resp = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "opening_balance_hours": opening},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert [f["path"] for f in body["fields"]] == ["opening_balance_hours"]
+
     def test_replace_contract_on_a_side_project_is_409(self, client, auth_headers):
         project = _create_project(client, auth_headers)
         resp = client.put(
