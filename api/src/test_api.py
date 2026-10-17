@@ -2875,6 +2875,51 @@ class TestProjectBillingAPI:
         resp = client.delete(url, params={"tz": "UTC", "rewrite_past": True}, headers=auth_headers)
         assert resp.status_code == 404, resp.text
 
+    def test_a_past_entry_marked_billable_is_a_past_figure_too(self, client, auth_headers):
+        # Billed from this month on, the project's one past figure is an
+        # entry marked billable, at the client's rate: no term is dated
+        # before this month, and moving or stopping the billing still
+        # rewrites it.
+        kite = _create_client(client, auth_headers, rates=KITE_RATE)
+        other = _create_client(client, auth_headers, name="Other euros", rates=KITE_RATE)
+        dollars = _create_client(
+            client,
+            auth_headers,
+            name="Acme",
+            currency="USD",
+            rates=[{"effective_from": "2026-01-01", "rate_minor": 20000}],
+        )
+        project = _freelance(client, auth_headers)
+        now = _billable_from(_this_month())
+        assert _bill(client, auth_headers, project["id"], kite["id"], now).status_code == 200
+        start = f"{_last_month() + timedelta(days=10)}T09:00:00"
+        past = _beat(client, auth_headers, project["id"], start, 240)
+        resp = client.put(
+            f"/api/billing/entries/{past['id']}", json={"billable": True}, headers=auth_headers
+        )
+        assert resp.status_code == 200, resp.text
+        last_month = f"{_last_month():%Y-%m}"
+        before = _month(client, auth_headers, last_month)
+        mine = {kite["id"], other["id"], dollars["id"]}
+        assert [
+            (c["name"], c["amount_minor"]) for c in before["clients"] if c["client_id"] in mine
+        ] == [("Acme", 0), ("Other euros", 0), ("Studio Kite", 34000)]
+
+        resp = _bill(client, auth_headers, project["id"], other["id"], now)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "RETROACTIVE_CHANGE"
+        resp = _bill(client, auth_headers, project["id"], dollars["id"], now, rewrite_past=True)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "CURRENCY_MISMATCH"
+        resp = client.delete(
+            f"/api/billing/projects/{project['id']}",
+            params={"tz": "UTC", "rewrite_past": False},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "RETROACTIVE_CHANGE"
+        assert _month(client, auth_headers, last_month) == before
+
 
 class TestBillableEntriesAPI:
     """/api/billing/entries — one entry marked against its project's term,
@@ -5255,6 +5300,37 @@ class TestBackupImport:
         assert (
             next(b for b in billed if b["project_id"] == website["id"])["client_id"] == kite["id"]
         )
+
+    def test_a_move_to_another_currency_counts_the_files_billable_marks(self, client, auth_headers):
+        # Billed from this month on, the project has a past figure only once
+        # an entry before it is marked billable; here the file marks it, as
+        # it moves the billing to a client in dollars.
+        kite = _create_client(client, auth_headers, rates=KITE_RATE)
+        dollars = _create_client(client, auth_headers, name="Dollar Co", currency="USD")
+        project = _freelance(client, auth_headers, "Marked")
+        now = _billable_from(_this_month())
+        assert _bill(client, auth_headers, project["id"], kite["id"], now).status_code == 200
+        past = _beat(
+            client,
+            auth_headers,
+            project["id"],
+            f"{_last_month() + timedelta(days=10)}T09:00:00",
+            60,
+        )
+        file = {
+            "project_billing": [
+                {"project_id": project["id"], "client_id": dollars["id"], "terms": now}
+            ],
+            "billable_overrides": [{"beat_id": past["id"], "billable": True}],
+        }
+
+        resp = self._import(client, auth_headers, file)
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "CURRENCY_MISMATCH"
+        assert resp.json()["detail"].startswith("project_billing.0: "), resp.text
+        marks = client.get("/api/billing/entries", headers=auth_headers).json()
+        assert past["id"] not in [mark["beat_id"] for mark in marks]
 
     def test_a_backup_from_before_billing_imports_and_leaves_billing_alone(
         self, client, auth_headers
