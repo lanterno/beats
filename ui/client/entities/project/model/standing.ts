@@ -35,11 +35,15 @@ export function weekLabel(weekOf: string, todayIso: string): string {
  * The first seven days under the contract (Decision 2): the balance is
  * charged a day at a time and has not had a full week to settle, so the page
  * shows it muted with the first-week line. False before the contract starts
- * — that is another state — and without a term. The coach's twin is
- * `_is_first_week` in api/src/beats/coach/contract_section.py; a change to
- * either is made in both.
+ * — that is another state — and without a term. False too from the
+ * contract's last day on: a full week will never come in, and on that day
+ * the projection is where the contract closes, so the page shows it instead.
+ * The coach's twin is `_is_first_week` in
+ * api/src/beats/coach/contract_section.py; a change to either is made in
+ * both.
  */
 export function isFirstWeek(contract: Contract, todayIso: string): boolean {
+	if (contract.endedOn !== undefined && contract.endedOn <= todayIso) return false;
 	const first = sortTerms(contract.terms)[0];
 	if (!first) return false;
 	return first.effectiveFrom <= todayIso && todayIso < addIsoDays(first.effectiveFrom, 7);
@@ -68,6 +72,9 @@ export interface Projection {
  * the day closes; `met` adds what is still to go. Null without a balance or
  * an expectation, and when `todayIso` is not in the week: the balance is
  * pinned to today whatever week is open, so only the current week projects.
+ * On the week a contract ends, the days after `endedOn` expect nothing and
+ * the balance freezes at its close, so through the last day the projection
+ * is where the contract closes.
  * The coach's twin is `_by_sunday` in api/src/beats/coach/contract_section.py;
  * a change to either is made in both.
  */
