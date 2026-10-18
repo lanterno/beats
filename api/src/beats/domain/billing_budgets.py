@@ -57,7 +57,6 @@ from beats.domain.utils import local_date
 
 _ZERO_HOURS = Decimal("0.00")
 _MICROSECONDS_PER_HOUR = 3_600_000_000
-_MICROSECONDS_PER_SECOND = 1_000_000
 
 # The pace is read over the last min(_PACE_DAYS, elapsed) days, and only
 # once _PACE_FIRST_DAY days of the period have passed: a monthly budget
@@ -213,13 +212,18 @@ def percent_used(limit: int, spent: int) -> int:
 
 def _instant(since: datetime, hours: Fraction) -> datetime | None:
     """`hours` after `since`, in UTC, rounded up to the whole second; None
-    past the last instant a datetime holds, which no timer reaches."""
-    microseconds = ceil(hours * _MICROSECONDS_PER_HOUR)
-    microseconds = -(-microseconds // _MICROSECONDS_PER_SECOND) * _MICROSECONDS_PER_SECOND
+    past the last instant a datetime holds, which no timer reaches. The sum
+    is what is rounded, not `hours` alone: a timer's start is stamped to
+    the microsecond."""
     try:
-        return since.astimezone(UTC) + timedelta(microseconds=microseconds)
+        instant = since.astimezone(UTC) + timedelta(
+            microseconds=ceil(hours * _MICROSECONDS_PER_HOUR)
+        )
+        if instant.microsecond:
+            instant = instant.replace(microsecond=0) + timedelta(seconds=1)
     except OverflowError:
         return None
+    return instant
 
 
 def running_crossings(
