@@ -130,7 +130,7 @@ def amount_of(hours: Decimal, rate_minor: int) -> int:
     return int((hours * rate_minor).quantize(Decimal(1), ROUND_HALF_UP))
 
 
-def _microseconds(start: datetime, end: datetime) -> int:
+def microseconds_of(start: datetime, end: datetime) -> int:
     # In UTC: two datetimes in one zone subtract on the wall clock, which
     # would lose or gain the hour the clocks change by. Negative for an end
     # before its start, which POST /api/beats/ and a restore both take: the
@@ -282,9 +282,9 @@ def assemble_client(
         if beat.end is None:
             running = running or resolved.billable
             continue
-        length = _microseconds(beat.start, beat.end)
+        length = microseconds_of(beat.start, beat.end)
         if length < 0:
-            continue  # an end before its start: no time worked (`_microseconds`)
+            continue  # an end before its start: no time worked (`microseconds_of`)
         if resolved.billable:
             billable[beat.project_id, day] += length
         else:
@@ -432,7 +432,7 @@ def assemble_billing(
             or not first <= local_date(beat.start, tz) <= last
         ):
             continue
-        unbilled[beat.project_id] += max(_microseconds(beat.start, beat.end), 0)
+        unbilled[beat.project_id] += max(microseconds_of(beat.start, beat.end), 0)
     unattached = sorted(
         (
             UnattachedHours(project_id, projects[project_id].name, hours_of(length))
@@ -490,7 +490,7 @@ def marked_change(
             for beat in beats
             if beat.id in marked
             and beat.end is not None
-            and _microseconds(beat.start, beat.end) >= 0
+            and microseconds_of(beat.start, beat.end) >= 0
             and (day := local_date(beat.start, tz)) < month_start
         ),
         default=None,
