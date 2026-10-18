@@ -110,8 +110,16 @@ export default defineConfig(() => ({
 			},
 			workbox: {
 				globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
+				// In the freelancer's own browser the app's worker controls "/",
+				// and would answer a navigation to the report page with the app's
+				// shell (and its Not found). /report, /report/, /report?… and
+				// /report.html go to the network (docs/billing.md, *The public page*).
+				navigateFallbackDenylist: [/^\/report(?:\.html)?(?:[/?]|$)/],
 				runtimeCaching: [
 					{
+						// Every /api/ GET. The public report is a POST, which the Cache
+						// API cannot store, and it depends on that to stay out of this
+						// cache: never cache POSTs here.
 						urlPattern: /^https?:\/\/.*\/api\//,
 						handler: "NetworkFirst",
 						options: {
