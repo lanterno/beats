@@ -28,10 +28,11 @@ pre-commit:
     # `flutter analyze` is the Dart equivalent of biome — runs in <2s
     # on the touched files alone and catches a long tail of
     # diagnostics (unused imports, type warnings, deprecated API).
+    # `env -u` for the reason given at companion-test.
     companion-analyze:
       root: companion/
       glob: "*.dart"
-      run: flutter analyze {staged_files}
+      run: env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter analyze {staged_files}
 
 pre-push:
   commands:
@@ -83,9 +84,14 @@ pre-push:
     # widget, bundle labels, and insights URL building. Without this
     # hook a Dart-only regression would land silently — same gap
     # daemon-test closed for the Go side.
+    # Git exports GIT_DIR to hooks, and in a worktree it is absolute. The
+    # Flutter tool reads its own version by running git in the SDK
+    # checkout, so it would read this repo instead, report 0.0.0-unknown
+    # and fail version solving before a test runs. `env -u` gives it the
+    # SDK's own repository back.
     companion-test:
       root: companion/
-      run: flutter test
+      run: env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter test
     # The VS Code extension uses node --test (built-in, no framework
     # dep) for its pure-helper tests — covers buildInsightsUrl, the
     # status-bar formatter, and parity assertions that keep the
