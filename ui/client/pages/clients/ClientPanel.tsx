@@ -229,22 +229,28 @@ export function ClientPanel({
 			status,
 			billingStartedOn: earliestTerm(clientBillings.filter((b) => b.projectId === status.scopeId)),
 		});
-	const pencil = (name: string, onClick: () => void) => (
-		<button type="button" onClick={onClick} aria-label={`Edit ${name}'s budget`} className={OP}>
-			<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
-		</button>
-	);
+	// An archived client's budgets are shown, and offer no write: archived
+	// clients are in no picker, and its budgets never alert.
+	const writable = !billing.archived;
+	const pencil = (name: string, onClick: () => void) =>
+		writable && (
+			<button type="button" onClick={onClick} aria-label={`Edit ${name}'s budget`} className={OP}>
+				<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
+			</button>
+		);
 
 	const budgetBlock = budgetsFailed ? (
 		<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
 			Budgets aren't available right now.
 		</p>
 	) : budgets === undefined ? null : budgets.length === 0 ? (
-		<p className="mt-2.5">
-			<button type="button" onClick={editClientBudget} className={LINKISH}>
-				Set a budget
-			</button>
-		</p>
+		writable && (
+			<p className="mt-2.5">
+				<button type="button" onClick={editClientBudget} className={LINKISH}>
+					Set a budget
+				</button>
+			</p>
+		)
 	) : (
 		<section aria-label={`${billing.name}'s budgets`} className="mt-3">
 			<h3 className={LABEL}>Budget</h3>
@@ -278,7 +284,7 @@ export function ClientPanel({
 					</li>
 				))}
 			</ul>
-			{!ownBudget && (
+			{!ownBudget && writable && (
 				<button type="button" onClick={editClientBudget} className={LINKISH}>
 					Set a budget for {billing.name}
 				</button>
