@@ -59,6 +59,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.vsix
+          # Matches release-daemon.yml, so the release is a prerelease for a
+          # hyphenated tag whichever workflow creates it first.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           # release-daemon.yml is the primary author of the release body;
           # we just append our artifact. Setting `append_body: false`
           # would clobber it, so leave it alone.

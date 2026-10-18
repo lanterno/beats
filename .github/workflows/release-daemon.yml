@@ -121,6 +121,10 @@ jobs:
         with:
           files: dist/*
           overwrite_files: false
+          # A tag with a hyphen (v1.0.0-rc.1) is a prerelease, never the
+          # repo's Latest release.
+          # release-vscode.yml passes it too, as either may create the release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           body: |
             Cross-compiled `beatsd` binaries for darwin and linux
