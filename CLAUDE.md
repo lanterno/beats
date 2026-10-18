@@ -64,7 +64,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~20s for 1234 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~20s for 1298 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -96,7 +96,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 1234-test suite takes about 20 seconds.
+  the full 1298-test suite takes about 20 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -113,16 +113,18 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 721 of them across 90 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
-- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 35 of them, last
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 751 of them across 93 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 37 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
   MongoDB behind it; the dev server starts itself. A `setup` project
   mints a session with `api/scripts/e2e_session.py` and plants it in
   localStorage — every page under test sits behind `ProtectedRoute`, and the
   passkey ceremony that normally issues a session cannot run headless. The same
   script seeds a project, three tagged sessions and a week of flow windows,
-  and a client billed for a freelance project with two sessions this month,
-  because several assertions are about UI that only exists once there is data.
+  a client billed for a freelance project with two sessions this month, and a
+  billing budget on each (40 h a month on the client; €200.00 in total on the
+  project, which those sessions leave near its limit), because several
+  assertions are about UI that only exists once there is data.
   Layout is what the suite is for that the unit tests cannot be: jsdom draws
   nothing, so a bar at no height or a panel's failure state is checked here.
 
