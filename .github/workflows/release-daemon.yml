@@ -110,9 +110,17 @@ jobs:
             -exec mv {} dist/ \;
           ls -la dist
 
+      # overwrite_files: false keeps what a release first published. The
+      # archives are not byte-reproducible (tar records each file's mtime),
+      # so "Re-run all jobs" on a tag builds new bytes under the same names;
+      # replacing the published ones would leave the checksums in main's
+      # formula naming archives that are gone, and every install would fail
+      # its checksum. Skipped instead, the release keeps the archives the
+      # formula's checksums name.
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          overwrite_files: false
           generate_release_notes: true
           body: |
             Cross-compiled `beatsd` binaries for darwin and linux
