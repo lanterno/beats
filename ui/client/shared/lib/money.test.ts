@@ -3,10 +3,18 @@
  * read off the string, digit by digit, into the integer minor units the
  * API stores; a fraction finer than the currency's is refused, never
  * rounded, since a rate the user did not write is a rate they did not
- * agree to. `minorUnits` is always the API's, from its currency table.
+ * agree to. `minorUnits` is always the API's, from its currency table. A
+ * billing budget's hours are read the same way, into hundredths.
  */
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatRate, minorToInput, parseMoney } from "./money";
+import {
+	BILLING_BUDGET_MINOR_MAX,
+	formatMoney,
+	formatRate,
+	minorToInput,
+	parseHours,
+	parseMoney,
+} from "./money";
 
 const EUR = 2;
 const JPY = 0;
@@ -71,6 +79,53 @@ describe("parseMoney", () => {
 		const parsed = parseMoney("85.505", EUR);
 		expect(parsed.ok).toBe(false);
 		if (!parsed.ok) expect(parsed.reason).toMatch(/2 digits/);
+	});
+});
+
+describe("parseHours", () => {
+	const hundredths = (text: string) => {
+		const parsed = parseHours(text);
+		return parsed.ok ? parsed.hundredths : null;
+	};
+
+	it("reads hours into hundredths, with either separator", () => {
+		expect(hundredths("40")).toBe(4000);
+		expect(hundredths("37.5")).toBe(3750);
+		expect(hundredths("37,5")).toBe(3750);
+		expect(hundredths("0.01")).toBe(1);
+	});
+
+	it("refuses a third decimal rather than rounding it", () => {
+		// 37.333 h would be stored as 37.33: an amount the user did not type.
+		expect(hundredths("37.333")).toBeNull();
+	});
+
+	it("refuses a comma before three digits, which reads either way", () => {
+		expect(hundredths("25,000")).toBeNull();
+		expect(hundredths("25.000")).toBeNull();
+		expect(hundredths("25000")).toBe(2_500_000);
+	});
+
+	it("refuses zero and more than the API's 100,000 h", () => {
+		expect(hundredths("0")).toBeNull();
+		expect(hundredths("0.00")).toBeNull();
+		expect(hundredths("100000")).toBe(10_000_000);
+		expect(hundredths("100000.01")).toBeNull();
+	});
+});
+
+describe("parseMoney with a billing budget's cap", () => {
+	it("takes up to the API's BILLING_BUDGET_MINOR_MAX, far past a rate's", () => {
+		const budget = (text: string) => {
+			const parsed = parseMoney(text, EUR, BILLING_BUDGET_MINOR_MAX);
+			return parsed.ok ? parsed.minor : null;
+		};
+		expect(budget("10200")).toBe(1_020_000);
+		expect(budget("10000000000.00")).toBe(1_000_000_000_000);
+		expect(budget("10000000000.01")).toBeNull();
+		// A rate's cap is unchanged without it.
+		expect(minor("10200")).toBe(1_020_000);
+		expect(minor("1000000.01")).toBeNull();
 	});
 });
 
