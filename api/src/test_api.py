@@ -5406,10 +5406,11 @@ class TestCsvAndJsonExport:
             "clients",
             "project_billing",
             "billable_overrides",
+            "billing_budgets",
         }
-        # 1.2 is the format that carries clients and their billing, beside
-        # 1.1's absences and balance adjustments.
-        assert body["version"] == "1.2"
+        # 1.3 is the format that carries billing budgets, beside 1.2's
+        # clients and their billing and 1.1's absences and balance adjustments.
+        assert body["version"] == "1.3"
 
     def test_full_json_export_carries_absences_and_adjustments(self, client, auth_headers):
         """What a day job's balance is made of beyond its contract and its
@@ -5607,6 +5608,7 @@ class TestBackupImport:
             "clients": len(backup["clients"]),
             "project_billing": len(backup["project_billing"]),
             "billable_overrides": len(backup["billable_overrides"]),
+            "billing_budgets": len(backup["billing_budgets"]),
         }
         after = self._standing(client, auth_headers, pid)
         assert after[0]["balance"] is not None
@@ -5643,13 +5645,13 @@ class TestBackupImport:
         )
 
     def test_a_backup_from_the_previous_build_imports(self, client, auth_headers):
-        # 1.0 had no absences or adjustments, nor billing; a file without the
-        # keys is a backup with none of them, not a 422.
+        # 1.0 had no absences or adjustments, nor billing or its budgets; a
+        # file without the keys is a backup with none of them, not a 422.
         project = _day_job(client, auth_headers)
         _log(client, auth_headers, project["id"], "2026-03-02T08:00:00+00:00", 60)
         backup = self._export(client, auth_headers)
         backup["version"] = "1.0"
-        for key in (*BILLING_BACKUP_KEYS, "absences", "balance_adjustments"):
+        for key in (*BILLING_BACKUP_KEYS, "billing_budgets", "absences", "balance_adjustments"):
             del backup[key]
 
         resp = self._import(client, auth_headers, backup)
@@ -5665,6 +5667,7 @@ class TestBackupImport:
                 "clients": 0,
                 "project_billing": 0,
                 "billable_overrides": 0,
+                "billing_budgets": 0,
             },
             "skipped": [],
         }
@@ -5863,7 +5866,7 @@ class TestBackupImport:
         assert (figures["archived"], figures["amount_minor"]) == (True, 17000)
 
         backup = self._export(client, auth_headers)
-        assert backup["version"] == "1.2"
+        assert backup["version"] == "1.3"
         for collection in (
             "projects",
             "timeLogs",
@@ -6086,6 +6089,143 @@ class TestBackupImport:
         assert self._imported_billing(resp) == (0, 0, 0)
         billed = client.get("/api/billing/projects", headers=auth_headers).json()
         assert website["id"] in [b["project_id"] for b in billed]
+
+    # --- 1.3: billing budgets ---
+
+    @staticmethod
+    def _money_billing_budget(client, headers, project_id: str, **fields) -> None:
+        resp = _put_billing_budget(
+            client,
+            headers,
+            "projects",
+            project_id,
+            unit="money",
+            period="total",
+            limit_hours=None,
+            limit_minor=100000,
+            starts_on="2026-03-01",
+            **fields,
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_billing_budgets_are_the_same_after_a_round_trip(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        kite, website = self._billed(client, auth_headers, "Budgeted round trip")
+        _beat(client, auth_headers, website["id"], "2026-03-10T09:00:00", 120)
+        self._money_billing_budget(client, auth_headers, website["id"])
+        resp = _put_billing_budget(client, auth_headers, "clients", kite["id"])
+        assert resp.status_code == 200, resp.text
+        mine = {kite["id"], website["id"]}
+
+        def readings() -> list[dict]:
+            return [s for s in _billing_budgets(client, auth_headers) if s["scope_id"] in mine]
+
+        before = readings()
+        assert [(s["scope"], s["amount_minor"]) for s in before] == [
+            ("client", 0),
+            ("project", 17000),
+        ]
+
+        backup = self._export(client, auth_headers)
+        assert backup["version"] == "1.3"
+        assert {b["scope_id"] for b in backup["billing_budgets"]} >= mine
+        for collection in ("projects", "timeLogs", *BILLING_BACKUP_KEYS, "billing_budgets"):
+            mongo[collection].delete_many({"user_id": auth_info["user_id"]})
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["imported"]["billing_budgets"] == len(backup["billing_budgets"])
+        assert resp.json()["skipped"] == []
+        assert readings() == before
+
+    def test_a_backup_from_before_billing_budgets_leaves_the_accounts_alone(
+        self, client, auth_headers
+    ):
+        _, website = self._billed(client, auth_headers, "Before budgets")
+        self._money_billing_budget(client, auth_headers, website["id"])
+        backup = self._export(client, auth_headers)
+        backup["version"] = "1.2"
+        del backup["billing_budgets"]
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["imported"]["billing_budgets"] == 0
+        scopes = [s["scope_id"] for s in _billing_budgets(client, auth_headers)]
+        assert website["id"] in scopes
+
+    def test_a_billing_budget_on_a_scope_nowhere_is_a_422_naming_it(self, client, auth_headers):
+        budget = {**_billing_budget_body(), "scope": "client", "scope_id": NOWHERE}
+        file = {
+            "billing_budgets": [
+                {**budget, "scope": "project"},
+                budget,
+            ]
+        }
+
+        resp = self._import(client, auth_headers, file)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == [
+            "billing_budgets.0.scope_id",
+            "billing_budgets.1.scope_id",
+        ]
+
+    def test_a_budget_on_a_project_billed_nowhere_is_refused_and_writes_nothing(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        # A client and a project only the file holds: they would be written
+        # first, were the budget not checked before any write.
+        acme = _create_client(client, auth_headers, name="Only in the file")
+        unbilled = _freelance(client, auth_headers, "Only in the file")
+        exported = self._export(client, auth_headers)
+        file = {
+            "clients": [c for c in exported["clients"] if c["id"] == acme["id"]],
+            "projects": [p for p in exported["projects"] if p["id"] == unbilled["id"]],
+            "billing_budgets": [
+                {**_billing_budget_body(), "scope": "project", "scope_id": unbilled["id"]}
+            ],
+        }
+        mongo.clients.delete_one({"user_id": auth_info["user_id"], "name": acme["name"]})
+        mongo.projects.delete_one({"user_id": auth_info["user_id"], "name": unbilled["name"]})
+
+        resp = self._import(client, auth_headers, file)
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "BILLING_BUDGET_NEEDS_BILLING"
+        assert resp.json()["detail"].startswith("billing_budgets.0: "), resp.text
+        assert client.get(f"/api/clients/{acme['id']}", headers=auth_headers).status_code == 404
+        listed = client.get("/api/projects/", params={"archived": True}, headers=auth_headers)
+        listed = [*listed.json(), *client.get("/api/projects/", headers=auth_headers).json()]
+        assert unbilled["id"] not in [p["id"] for p in listed]
+
+    def test_a_files_own_budget_replaces_the_accounts_before_a_move(self, client, auth_headers):
+        # The account's money budget would hold the project in euros; the
+        # file carries one in hours for it, so the move to dollars is what
+        # the file leaves consistent.
+        euros = _create_client(client, auth_headers, name="Replaced euros")
+        dollars = _create_client(client, auth_headers, name="Replaced dollars", currency="USD")
+        project = _freelance(client, auth_headers, "Replaced")
+        now = _billable_from(_this_month())
+        assert _bill(client, auth_headers, project["id"], euros["id"], now).status_code == 200
+        self._money_billing_budget(client, auth_headers, project["id"])
+        file = {
+            "project_billing": [
+                {"project_id": project["id"], "client_id": dollars["id"], "terms": now}
+            ],
+            "billing_budgets": [
+                {**_billing_budget_body(), "scope": "project", "scope_id": project["id"]}
+            ],
+        }
+
+        resp = self._import(client, auth_headers, file)
+
+        assert resp.status_code == 200, resp.text
+        [status] = [
+            s for s in _billing_budgets(client, auth_headers) if s["scope_id"] == project["id"]
+        ]
+        assert (status["client_id"], status["unit"]) == (dollars["id"], "hours")
 
 
 class TestIntelligenceInbox:
