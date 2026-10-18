@@ -11,8 +11,9 @@ import { billingBudgetState, useBillingBudgets } from "@/entities/billing";
 import { browserTimeZone, useNow } from "@/shared/lib";
 
 export function useBillingBudgetAttention(showClients: boolean): boolean {
-	const { data } = useBillingBudgets(browserTimeZone(), { enabled: showClients });
-	const budgets = showClients ? (data ?? []) : [];
+	const { data, isError } = useBillingBudgets(browserTimeZone(), { enabled: showClients });
+	// A failed refetch keeps the last good data beside its error: it lights nothing.
+	const budgets = showClients && !isError ? (data ?? []) : [];
 	// A minute's tick, only while a running timer could use one up.
 	const now = useNow(60_000, { enabled: budgets.some((b) => b.active && b.running) });
 	return budgets.some((b) => b.active && billingBudgetState(b, now) === "used_up");

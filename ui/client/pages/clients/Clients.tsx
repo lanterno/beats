@@ -72,8 +72,10 @@ export default function Clients() {
 
 	const monthQuery = useBillingMonth(month, tz);
 	const budgetsQuery = useBillingBudgets(tz, { enabled: current });
-	const budgets = current ? budgetsQuery.data : undefined;
+	// A failed refetch keeps the last good data beside its error: read none,
+	// so no note or row outlives the failure line.
 	const budgetsFailed = current && budgetsQuery.isError;
+	const budgets = current && !budgetsFailed ? budgetsQuery.data : undefined;
 	// A minute's tick, only while a running timer could cross a threshold on screen.
 	const now = useNow(60_000, { enabled: (budgets ?? []).some((b) => b.running) });
 	const { data: clients, isLoading: clientsLoading } = useClients();

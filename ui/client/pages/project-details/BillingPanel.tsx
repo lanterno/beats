@@ -156,8 +156,11 @@ function Billed({
 	const client = [...(active ?? []), ...(archived ?? [])].find((c) => c.id === billing.clientId);
 	const terms = sortTerms(billing.terms);
 	const inForce = inForceOn(terms, todayIso);
-	const budget = budgets.data?.find((b) => b.scope === "project" && b.scopeId === project.id);
-	const clientBudget = budgets.data?.find(
+	// A failed refetch keeps the last good data beside its error: read none,
+	// so the client's line and the confirmation do not outlive the failure.
+	const budgetsRead = budgets.isError ? undefined : budgets.data;
+	const budget = budgetsRead?.find((b) => b.scope === "project" && b.scopeId === project.id);
+	const clientBudget = budgetsRead?.find(
 		(b) => b.scope === "client" && b.scopeId === billing.clientId,
 	);
 	// A minute's tick, only while a running timer could cross a threshold here.
