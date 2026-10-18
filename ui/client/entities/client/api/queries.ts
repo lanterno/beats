@@ -2,7 +2,7 @@
  * Client TanStack Query Hooks
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { billingRootKey, clientsRootKey } from "@/shared/api";
+import { billingRootKey, clientsRootKey, reportLinksRootKey } from "@/shared/api";
 import type { Client, ClientInput, Currency } from "../model";
 import {
 	archiveClient,
@@ -106,11 +106,14 @@ export function useUnarchiveClient() {
 	});
 }
 
+/** A deleted client's report links go with it, so they are read again too. */
 export function useDeleteClient() {
+	const queryClient = useQueryClient();
 	const invalidate = useInvalidateAfterClientWrite();
 	return useMutation({
 		mutationFn: (clientId: string) => deleteClient(clientId),
-		onSuccess: invalidate,
+		onSuccess: () =>
+			Promise.all([invalidate(), queryClient.invalidateQueries({ queryKey: reportLinksRootKey })]),
 		// 409 CLIENT_HAS_PROJECTS is an answer, not a failure to retry.
 		retry: false,
 	});

@@ -472,6 +472,38 @@ const BillingBudgetStatusSchema = z.object({
 export type ApiBillingBudgetStatus = z.infer<typeof BillingBudgetStatusSchema>;
 export const ApiBillingBudgetStatusListSchema = z.array(BillingBudgetStatusSchema);
 
+// Report links (docs/billing.md, phase 1c). These mirror the API's
+// `ReportLinkResponse`, `ReportLinkCreatedResponse` and
+// `ReportLinksTurnOffResponse`. A link is listed without its token, which
+// only the create's answer carries, once; `projects` is its frozen list by
+// current name, so a project that left the client has left it too. The
+// report a link shows is `PublicReportSchema`, in `shared/report`.
+
+const ReportLinkProjectSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+});
+
+const ReportLinkSchema = z.object({
+	id: z.string(),
+	client_id: z.string(),
+	label: z.string().nullable(), // the maker's own, never shown to the client
+	first: z.string(), // YYYY-MM-DD
+	last: z.string(), // YYYY-MM-DD
+	tz: z.string(), // the zone its days are counted in
+	show_amounts: z.boolean(),
+	show_notes: z.boolean(),
+	projects: z.array(ReportLinkProjectSchema),
+	expires_on: z.string(), // YYYY-MM-DD, the last day it opens
+	created_at: z.string(), // ISO datetime
+	state: z.enum(["live", "ended"]), // read today in `tz`
+});
+
+export type ApiReportLink = z.infer<typeof ReportLinkSchema>;
+export const ApiReportLinkListSchema = z.array(ReportLinkSchema);
+export const ApiReportLinkCreatedSchema = ReportLinkSchema.extend({ token: z.string() });
+export const ReportLinksTurnedOffSchema = z.object({ turned_off: z.number().int() });
+
 export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),

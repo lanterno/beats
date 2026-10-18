@@ -2,7 +2,7 @@
  * Billing TanStack Query Hooks
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { billingRootKey, clientsRootKey } from "@/shared/api";
+import { billingRootKey, clientsRootKey, reportLinksRootKey } from "@/shared/api";
 import type {
 	BillingBudgetInput,
 	BillingBudgetScope,
@@ -91,7 +91,8 @@ export function useBillingBudgets(tz: string, { enabled = true }: { enabled?: bo
 /**
  * A billing write moves every billing figure, and the clients too: whether
  * a client's currency is locked depends on a project of it having a rate,
- * or on a money billing budget.
+ * or on a money billing budget. And the report links: a project moved to
+ * another client, or no longer billed, leaves its old client's links.
  */
 function useInvalidateAfterBillingWrite() {
 	const queryClient = useQueryClient();
@@ -99,6 +100,7 @@ function useInvalidateAfterBillingWrite() {
 		Promise.all([
 			queryClient.invalidateQueries({ queryKey: billingKeys.all }),
 			queryClient.invalidateQueries({ queryKey: clientsRootKey }),
+			queryClient.invalidateQueries({ queryKey: reportLinksRootKey }),
 		]);
 }
 
