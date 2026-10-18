@@ -31,8 +31,10 @@ export function BillingBudgetMeter({
 	state,
 	label,
 }: BillingBudgetMeterProps) {
-	const value = Math.max(0, Math.min(percentUsed, 100));
-	// A running timer's crossing lifts the state before the figures move.
+	// A running timer's crossing lifts the state before the figures move, so
+	// the bar runs full and the meter says so: the percent is from before it.
+	const lifted = state === "used_up" && percentUsed < 100;
+	const value = lifted ? 100 : Math.max(0, Math.min(percentUsed, 100));
 	const width = state === "used_up" ? 100 : value;
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: a native <meter> draws its own bar, which takes neither the warning's tick nor the theme's fills.
@@ -42,7 +44,7 @@ export function BillingBudgetMeter({
 			aria-valuemin={0}
 			aria-valuemax={100}
 			aria-valuenow={value}
-			aria-valuetext={`${percentUsed}% used`}
+			aria-valuetext={lifted ? "Used up by the running timer" : `${percentUsed}% used`}
 			className="relative h-1.5 w-full rounded-full bg-muted"
 		>
 			<div
