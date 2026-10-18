@@ -3,8 +3,8 @@
 # Homebrew formula for beatsd, the Beats ambient flow tracking daemon.
 #
 # This directory is the tap. Homebrew reads a tapped repo's
-# HomebrewFormula/, so the beats repo itself is lanterno/beats; as the repo
-# is not named homebrew-<x>, users tap it by URL:
+# HomebrewFormula/, so this repo is itself the tap lanterno/beats; as it is
+# not named homebrew-<x>, users tap it by URL:
 #
 #   brew tap lanterno/beats https://github.com/lanterno/beats
 #   brew install beatsd
