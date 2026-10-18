@@ -118,7 +118,8 @@ jobs:
       # replacing the published ones would leave the checksums in main's
       # formula naming archives that are gone, and every install would fail
       # its checksum. Skipped instead, the release keeps the archives the
-      # formula's checksums name.
+      # formula's checksums name, and the homebrew job, which reads its
+      # checksums from the release, bumps the formula to those.
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
@@ -164,15 +165,15 @@ jobs:
   #   workflow, and the API (Cloud Build) and SPA (ui.yml) deploys fire only
   #   on api/**, terraform/** and ui/** anyway.
   #
-  # Re-running this job alone ("Re-run failed jobs", or the job's own
-  # re-run) reuses the run's archives: it pushes the formula if an earlier
-  # attempt stopped short, and nothing if main already has it. "Re-run all
-  # jobs" rebuilds the archives, which are not byte-identical (tar records
-  # mtimes); the release keeps the ones it first published
-  # (overwrite_files: false), so the URL check below fails and main's
-  # formula, which still installs, stays as it was. A rerun of an older
-  # tag, after a newer one reached main, leaves the formula alone rather
-  # than downgrade everyone.
+  # The checksums come from the published release's sidecars, not this
+  # run's build, so the formula names exactly what the release serves.
+  # That makes every rerun safe. "Re-run all jobs" rebuilds the archives,
+  # which are not byte-identical (tar records mtimes), but the release keeps
+  # the ones it first published, sidecars included (overwrite_files: false),
+  # and this job bumps to those. Any rerun, of this job alone or of all of
+  # them, pushes the formula if an earlier attempt stopped short and nothing
+  # if main already has it. A rerun of an older tag, after a newer one
+  # reached main, leaves the formula alone rather than downgrade everyone.
   homebrew:
     name: Homebrew formula
     needs: [build, release]
@@ -201,13 +202,17 @@ jobs:
         with:
           ref: main
 
-      # Outside the checkout, so the commit below can only pick up the
-      # formula.
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: beatsd-*
-          path: ${{ runner.temp }}/artifacts
-          merge-multiple: true
+      # The sidecars of the published release, not this run's build: after
+      # "Re-run all jobs" the two differ, and the release's are the ones a
+      # user downloads. Outside the checkout, so the commit below can only
+      # pick up the formula.
+      - name: Download the release's checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+            -p 'beatsd-*.tar.gz.sha256' -D "${RUNNER_TEMP}/sidecars"
+          ls -la "${RUNNER_TEMP}/sidecars"
 
       - name: Bump the formula
         id: bump
@@ -228,7 +233,7 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          HomebrewFormula/bump.sh "$version" "${RUNNER_TEMP}/artifacts"
+          HomebrewFormula/bump.sh "$version" "${RUNNER_TEMP}/sidecars"
           if git diff --quiet -- "$FORMULA"; then
             echo "main's formula already names beatsd ${version} and these checksums; nothing to push."
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -237,15 +242,16 @@ jobs:
           git diff -- "$FORMULA"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      # The sidecars hash what the build uploaded; this proves each URL the
-      # formula names serves those bytes, for the three platforms the install
-      # test below does not download.
+      # Proves each URL the formula names serves the bytes its sidecar
+      # hashes, including the three platforms the install test below does
+      # not download. A release whose archive and sidecar disagree (a partial
+      # upload, a file replaced by hand) stops here.
       - name: Release URLs serve the checksummed archives
         if: steps.bump.outputs.changed == 'true'
         run: |
           for platform in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
             archive="beatsd-${platform}.tar.gz"
-            want=$(awk '{ print $1 }' "${RUNNER_TEMP}/artifacts/${archive}.sha256")
+            want=$(awk '{ print $1 }' "${RUNNER_TEMP}/sidecars/${archive}.sha256")
             got=$(curl -fsSL --retry 3 \
               "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${archive}" |
               shasum -a 256 | awk '{ print $1 }')
