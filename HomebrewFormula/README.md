@@ -28,7 +28,7 @@ exception. Homebrew looks for a tap's formulae in `Formula/`, then
 makes this repo a tap with nothing else to set up: the release workflow
 commits to `main` with the run's own token. Homebrew reads only
 the `*.rb` files here; this README and `bump.sh` are ignored. The cost is
-that tapping clones the whole repo: about 11 MB to download, some 60 MB
+that tapping clones the whole repo: about 11 MB to download, some 22 MB
 on disk.
 
 The formula is reviewed in pull requests like any other file. Only its
