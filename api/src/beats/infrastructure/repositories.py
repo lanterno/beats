@@ -47,6 +47,7 @@ from beats.domain.models import (
     PendingSuggestion,
     Project,
     ProjectBilling,
+    ReportLink,
     SignalSummary,
     SSOFlow,
     User,
@@ -241,6 +242,7 @@ class ProjectRepository(Protocol):
     async def create(self, project: Project) -> Project: ...
     async def update(self, project: Project) -> Project: ...
     async def list(self, archived: bool = False) -> builtins.list[Project]: ...
+    async def names_of(self, project_ids: Iterable[str]) -> dict[str, str]: ...
     async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
 
 
@@ -422,6 +424,23 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
 
     async def list(self, archived: bool = False) -> builtins.list[Project]:
         return await self._find_many({"archived": archived})
+
+    async def names_of(self, project_ids: Iterable[str]) -> dict[str, str]:
+        """The names of these projects of the caller's, by id, archived ones
+        too; a malformed id, or another user's, is left out. Only the name is
+        read: a report link is made, and its report read, from these."""
+        oids = []
+        for project_id in project_ids:
+            try:
+                oids.append(ObjectId(project_id))
+            except InvalidId:
+                continue
+        if not oids:
+            return {}
+        docs = await self.collection.find(self._q({"_id": {"$in": oids}}), {"name": 1}).to_list(
+            length=None
+        )
+        return {str(doc["_id"]): doc["name"] for doc in docs}
 
     async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
         return await self._ids_held_elsewhere(ids)
@@ -1140,3 +1159,41 @@ class MongoBillableOverrideRepository(MongoStore[BillableOverride], BillableOver
 
     async def delete(self, beat_id: str) -> bool:
         return await self._delete_one({"beat_id": beat_id})
+
+
+class ReportLinkRepository(Protocol):
+    async def create(self, link: ReportLink) -> ReportLink: ...
+    async def list(self, client_id: str | None) -> builtins.list[ReportLink]: ...
+    async def delete(self, link_id: str) -> bool: ...
+    async def delete_all(self, client_id: str | None) -> int: ...
+
+
+class MongoReportLinkRepository(MongoStore[ReportLink], ReportLinkRepository):
+    """The caller's report links, for the management routes. The public read
+    finds a link by its token's hash through `MongoReportLinkResolver`
+    instead, before its owner is known."""
+
+    model = ReportLink
+
+    async def create(self, link: ReportLink) -> ReportLink:
+        return await self._insert(link)
+
+    async def list(self, client_id: str | None) -> builtins.list[ReportLink]:
+        links = await self._find_many({"client_id": client_id} if client_id is not None else None)
+        # Newest first, sorted here rather than on the stored ISO string: one
+        # made on a whole second is written without its fraction, and would
+        # sort before one made a moment earlier in that second.
+        return sorted(links, key=lambda link: (link.created_at, link.id or ""), reverse=True)
+
+    async def delete(self, link_id: str) -> bool:
+        try:
+            oid = ObjectId(link_id)
+        except InvalidId:
+            return False
+        return await self._delete_one({"_id": oid})
+
+    async def delete_all(self, client_id: str | None) -> int:
+        """One client's links, or with None every one of the caller's."""
+        extra = {"client_id": client_id} if client_id is not None else None
+        result = await self.collection.delete_many(self._q(extra))
+        return result.deleted_count

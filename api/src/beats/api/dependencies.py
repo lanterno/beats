@@ -16,6 +16,7 @@ from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.oura import OuraService
+from beats.domain.report_link_service import ReportLinkService
 from beats.domain.services import BeatService, ContractService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
@@ -50,6 +51,7 @@ from beats.infrastructure.repositories import (
     MongoPendingSuggestionRepository,
     MongoProjectBillingRepository,
     MongoProjectRepository,
+    MongoReportLinkRepository,
     MongoSignalSummaryRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
@@ -59,6 +61,7 @@ from beats.infrastructure.repositories import (
     PendingSuggestionRepository,
     ProjectBillingRepository,
     ProjectRepository,
+    ReportLinkRepository,
     SignalSummaryRepository,
     WebhookRepository,
     WeeklyDigestRepository,
@@ -285,6 +288,32 @@ def get_billing_service(
     )
 
 
+get_report_link_repository = _user_scoped(MongoReportLinkRepository, "report_links")
+
+
+def get_report_link_key(settings: Annotated[Settings, Depends(get_settings)]) -> bytes:
+    """The key a report link's token is hashed under. A dependency, so a
+    test can run the app under another key, as a rotation would."""
+    return settings.report_link_key.encode()
+
+
+def get_report_link_service(
+    link_repo: Annotated[ReportLinkRepository, Depends(get_report_link_repository)],
+    client_repo: Annotated[ClientRepository, Depends(get_client_repository)],
+    billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    key: Annotated[bytes, Depends(get_report_link_key)],
+) -> ReportLinkService:
+    """Get the report link service, all of it the caller's."""
+    return ReportLinkService(
+        links=link_repo,
+        clients=client_repo,
+        billings=billing_repo,
+        projects=project_repo,
+        key=key,
+    )
+
+
 def get_analytics_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
 ) -> AnalyticsService:
@@ -348,6 +377,7 @@ BillableOverrideRepoDep = Annotated[
 # For the backup's export alone; every other reader goes through BillingService.
 BillingBudgetRepoDep = Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)]
 BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
+ReportLinkServiceDep = Annotated[ReportLinkService, Depends(get_report_link_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]

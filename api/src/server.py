@@ -38,6 +38,7 @@ from beats.api.routers.meta import router as meta_router
 from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
+from beats.api.routers.report_links import router as report_links_router
 from beats.api.routers.signals import router as signals_router
 from beats.api.routers.sso import router as sso_router
 from beats.api.routers.timer import router as timer_router
@@ -77,8 +78,9 @@ PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange")
 # Paths that device tokens (daemon) are allowed to access.
 #
 # Money lives under /api/clients and /api/billing on purpose — clients and
-# their rates, project billing, billable marks, and billing budgets with what
-# they have spent. Never add them here, and never put billing under
+# their rates, project billing, billable marks, billing budgets with what
+# they have spent, and report links, whose create answers with a token that
+# opens a client's report. Never add them here, and never put billing under
 # /api/projects or /api/beats, which are prefix matches (docs/billing.md).
 DEVICE_ALLOWED_PREFIXES = (
     # Wall-clock firmware reads /status on a 10s poll for the timer
@@ -302,6 +304,7 @@ app.include_router(adjustments_router)
 app.include_router(meta_router)
 app.include_router(clients_router)
 app.include_router(billing_router)
+app.include_router(report_links_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)

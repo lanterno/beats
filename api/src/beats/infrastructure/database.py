@@ -58,6 +58,11 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.billing_budgets.create_index(
         [("user_id", 1), ("scope", 1), ("scope_id", 1)], unique=True
     )
+    # The one read of report links that is not user-scoped: a public request
+    # knows only the token, and finds its link by the token's HMAC.
+    await db.report_links.create_index("token_hash", unique=True)
+    # A client's links, newest first, and the cascades by client.
+    await db.report_links.create_index([("user_id", 1), ("client_id", 1), ("created_at", -1)])
 
 
 class Database:

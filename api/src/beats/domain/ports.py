@@ -32,6 +32,7 @@ from beats.domain.models import (
     FlowWindow,
     Project,
     ProjectBilling,
+    ReportLink,
 )
 
 
@@ -263,3 +264,42 @@ class BillableOverrideStore(Protocol):
     async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]: ...
     async def upsert(self, override: BillableOverride) -> BillableOverride: ...
     async def delete(self, beat_id: str) -> bool: ...
+
+
+# Report links (docs/billing.md, phase 1c). Each port a report link is made or
+# read through names one client, or one link, and nothing wider: none has a
+# `list_all`, and none lists projects, so a reader built from them cannot reach
+# another client's data without first widening a port here.
+
+
+class ClientById(Protocol):
+    """One client by id. `ClientNotFound` for one that is not the caller's,
+    a malformed id included."""
+
+    async def get_by_id(self, client_id: str) -> Client: ...
+
+
+class BillingsByClient(Protocol):
+    """The billings of the projects billed to one client now."""
+
+    async def list_by_client(self, client_id: str) -> list[ProjectBilling]: ...
+
+
+class ProjectNames(Protocol):
+    """The names of these projects, by id, and nothing else of them. An id
+    that is not one of the caller's projects, a malformed one included, is
+    left out."""
+
+    async def names_of(self, project_ids: Iterable[str]) -> dict[str, str]: ...
+
+
+class ReportLinkStore(Protocol):
+    """The caller's report links. `delete` is False for one that is not
+    theirs, a malformed id included. `list`, newest first, and `delete_all`
+    take a client's id, or None for every client's."""
+
+    async def create(self, link: ReportLink) -> ReportLink: ...
+    # builtins.list because this class defines a method called `list`.
+    async def list(self, client_id: str | None) -> builtins.list[ReportLink]: ...
+    async def delete(self, link_id: str) -> bool: ...
+    async def delete_all(self, client_id: str | None) -> int: ...
