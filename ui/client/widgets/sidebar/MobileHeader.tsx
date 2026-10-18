@@ -28,6 +28,7 @@ import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
+import { useBillingBudgetAttention } from "./useBillingBudgetAttention";
 import { useShowClients } from "./useShowClients";
 
 interface MobileHeaderProps extends TimerProps {
@@ -36,7 +37,8 @@ interface MobileHeaderProps extends TimerProps {
 
 const NAV = [
 	{ to: "/projects", title: "Projects", Icon: Layers },
-	// Only once there is someone or something to bill (`useShowClients`).
+	// Only once there is someone or something to bill (`useShowClients`); with
+	// a dot while a billing budget is used up (`useBillingBudgetAttention`).
 	{ to: "/clients", title: "Clients", Icon: Briefcase },
 	{ to: "/plan", title: "Weekly Plan", Icon: CalendarDays },
 	{ to: "/coach", title: "Coach", Icon: Sparkles },
@@ -53,6 +55,7 @@ export function MobileHeader(props: MobileHeaderProps) {
 	const { isRunning, elapsedSeconds, customStartTime, selectedProjectId, projects } = props;
 	const showClients = useShowClients(projects);
 	const nav = NAV.filter((item) => item.to !== "/clients" || showClients);
+	const budgetUsedUp = useBillingBudgetAttention(showClients);
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
 	let totalSeconds = elapsedSeconds;
@@ -148,10 +151,21 @@ export function MobileHeader(props: MobileHeaderProps) {
 										key={to}
 										to={to}
 										onClick={closeDrawer}
-										className="grid place-items-center w-8 h-8 rounded-full bg-secondary text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+										className="relative grid place-items-center w-8 h-8 rounded-full bg-secondary text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 										title={title}
+										aria-label={
+											to === "/clients" && budgetUsedUp
+												? "Clients, a billing budget is used up"
+												: undefined
+										}
 									>
 										<Icon className="w-4 h-4" />
+										{to === "/clients" && budgetUsedUp && (
+											<span
+												aria-hidden="true"
+												className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-destructive ring-2 ring-sidebar"
+											/>
+										)}
 									</Link>
 								))}
 							</nav>
