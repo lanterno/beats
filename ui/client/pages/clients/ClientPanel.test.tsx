@@ -128,4 +128,25 @@ describe("ClientPanel", () => {
 		expect(panel).toHaveTextContent("Nothing logged for Studio Kite in October.");
 		expect(within(panel).queryByRole("button", { name: /Set a budget/ })).toBeNull();
 	});
+
+	it("on an archived client, shows its budgets and offers no write", () => {
+		const archived = { ...KITE, archived: true };
+		const own: BillingBudgetStatus = {
+			...WEBSITE_BUDGET,
+			scope: "client",
+			scopeId: "c1",
+			name: "Studio Kite",
+			active: false,
+		};
+		const panel = renderPanel(archived, {
+			budgets: [own, { ...WEBSITE_BUDGET, active: false }],
+			now: Date.now(),
+		});
+		expect(within(panel).getAllByRole("meter")).toHaveLength(2);
+		expect(within(panel).queryByRole("button", { name: /budget/ })).toBeNull();
+		cleanup();
+
+		const none = renderPanel(archived, { budgets: [] });
+		expect(within(none).queryByRole("button", { name: /budget/ })).toBeNull();
+	});
 });
