@@ -1,5 +1,7 @@
 import type {
 	ApiBillableOverride,
+	ApiBillingBudget,
+	ApiBillingBudgetStatus,
 	ApiBillingEntry,
 	ApiBillingLine,
 	ApiBillingMonth,
@@ -8,6 +10,9 @@ import type {
 	ApiProjectBilling,
 } from "@/shared/api";
 import type {
+	BillingBudget,
+	BillingBudgetInput,
+	BillingBudgetStatus,
 	BillingEntry,
 	BillingLine,
 	BillingMonth,
@@ -114,5 +119,65 @@ export function toBillingMonth(api: ApiBillingMonth): BillingMonth {
 			name: item.name,
 			hours: item.hours,
 		})),
+	};
+}
+
+export function toBillingBudget(api: ApiBillingBudget): BillingBudget {
+	return {
+		scope: api.scope,
+		scopeId: api.scope_id,
+		clientId: api.client_id,
+		currency: api.currency,
+		minorUnits: api.minor_units,
+		unit: api.unit,
+		period: api.period,
+		limitHours: api.limit_hours ?? undefined,
+		limitMinor: api.limit_minor ?? undefined,
+		startsOn: api.starts_on ?? undefined,
+		warnAtPercent: api.warn_at_percent,
+	};
+}
+
+export function toBillingBudgetStatus(api: ApiBillingBudgetStatus): BillingBudgetStatus {
+	return {
+		...toBillingBudget(api),
+		name: api.name,
+		active: api.active,
+		upcoming: api.upcoming,
+		first: api.first,
+		last: api.last ?? undefined,
+		through: api.through ?? undefined,
+		billableHours: api.billable_hours,
+		unpricedHours: api.unpriced_hours,
+		amountMinor: api.amount_minor,
+		remainingHours: api.remaining_hours ?? undefined,
+		remainingMinor: api.remaining_minor ?? undefined,
+		percentUsed: api.percent_used,
+		state: api.state,
+		runsOutOn: api.runs_out_on ?? undefined,
+		running: api.running
+			? {
+					projectId: api.running.project_id,
+					since: api.running.since,
+					priced: api.running.priced,
+					nearAt: api.running.near_at ?? undefined,
+					overAt: api.running.over_at ?? undefined,
+				}
+			: undefined,
+	};
+}
+
+/**
+ * The write body: every key the API requires, the other unit's limit and a
+ * monthly budget's `starts_on` sent as null.
+ */
+export function toApiBillingBudgetInput(input: BillingBudgetInput) {
+	return {
+		unit: input.unit,
+		period: input.period,
+		limit_hours: input.unit === "hours" ? (input.limitHours ?? null) : null,
+		limit_minor: input.unit === "money" ? (input.limitMinor ?? null) : null,
+		starts_on: input.period === "total" ? (input.startsOn ?? null) : null,
+		warn_at_percent: input.warnAtPercent,
 	};
 }

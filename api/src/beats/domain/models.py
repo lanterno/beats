@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
+from decimal import Decimal
 from enum import StrEnum
 from itertools import pairwise
 from typing import Annotated, Literal
@@ -784,6 +785,119 @@ class ProjectBilling(ProjectBillingFields):
 
     project_id: str
     terms: list[BillingTerm] = Field(default_factory=list)
+
+
+# A lifetime cap: 100,000 h is over eleven years of every hour.
+BILLING_BUDGET_HOURS_MAX = Decimal("100000")
+# 10,000,000,000.00 in a two-decimal currency: far inside the 2**53 a
+# JavaScript number holds.
+BILLING_BUDGET_MINOR_MAX = 1_000_000_000_000
+
+# In hundredths, as every hour figure of billing is: 37.333 is refused, not
+# rounded. A JSON number arrives here and is held exactly; `true` is refused.
+_BillingBudgetHours = Annotated[Decimal, Field(gt=0, le=BILLING_BUDGET_HOURS_MAX, decimal_places=2)]
+# Strict, as `RateTerm.rate_minor`: lax mode reads a bool as an int.
+_BillingBudgetMinor = Annotated[int, Field(strict=True, gt=0, le=BILLING_BUDGET_MINOR_MAX)]
+
+
+class BillingBudgetScope(StrEnum):
+    """What a billing budget limits: every project billed to a client, or
+    one billed project."""
+
+    CLIENT = "client"
+    PROJECT = "project"
+
+
+class BillingBudgetUnit(StrEnum):
+    HOURS = "hours"  # billable hours, priced or not
+    MONEY = "money"  # the priced amount, in the client's currency
+
+
+class BillingBudgetPeriod(StrEnum):
+    MONTHLY = "monthly"  # the calendar month, every month
+    TOTAL = "total"  # one cap from `starts_on` on, with no end
+
+
+class BillingBudgetFields(BaseModel):
+    """A billing budget as a write sends it — the body of `PUT
+    /api/billing/budgets/…` — so its validators are the 422. Every key is
+    required, null where it may be, as `ClientFields`: a key an older client
+    leaves out must be refused, not read as cleared. Declared in this order
+    so each validator finds `unit` and `period` in `info.data` — unless one
+    of them failed, and then its own error is the answer."""
+
+    unit: BillingBudgetUnit
+    period: BillingBudgetPeriod
+    limit_hours: _BillingBudgetHours | None
+    # In the minor units of the scope's client's currency. No currency is
+    # stored: a money budget locks its client's (docs/billing.md).
+    limit_minor: _BillingBudgetMinor | None
+    starts_on: date_type | None  # a total's first day; null on a monthly budget
+    # The early warning. The second threshold is always 100 %.
+    warn_at_percent: int = Field(strict=True, ge=1, le=99)
+
+    # Field validators rather than model ones, so the 422 names the key.
+
+    @field_validator("limit_hours")
+    @classmethod
+    def a_limit_in_hours_only_in_hours(
+        cls, hours: Decimal | None, info: ValidationInfo
+    ) -> Decimal | None:
+        unit = info.data.get("unit")
+        if unit is BillingBudgetUnit.HOURS and hours is None:
+            msg = "a budget in hours takes limit_hours"
+            raise ValueError(msg)
+        if unit is BillingBudgetUnit.MONEY and hours is not None:
+            msg = "a budget in money takes limit_minor, not limit_hours"
+            raise ValueError(msg)
+        return hours
+
+    @field_validator("limit_minor")
+    @classmethod
+    def a_limit_in_money_only_in_money(cls, minor: int | None, info: ValidationInfo) -> int | None:
+        unit = info.data.get("unit")
+        if unit is BillingBudgetUnit.MONEY and minor is None:
+            msg = "a budget in money takes limit_minor"
+            raise ValueError(msg)
+        if unit is BillingBudgetUnit.HOURS and minor is not None:
+            msg = "a budget in hours takes limit_hours, not limit_minor"
+            raise ValueError(msg)
+        return minor
+
+    @field_validator("starts_on")
+    @classmethod
+    def a_start_only_on_a_total(
+        cls, day: date_type | None, info: ValidationInfo
+    ) -> date_type | None:
+        period = info.data.get("period")
+        if period is BillingBudgetPeriod.TOTAL and day is None:
+            msg = "a total budget takes the day it starts on"
+            raise ValueError(msg)
+        if period is BillingBudgetPeriod.MONTHLY and day is not None:
+            msg = "a monthly budget is the calendar month and takes no starts_on"
+            raise ValueError(msg)
+        return day
+
+
+class BillingBudget(BillingBudgetFields):
+    """A limit on a client, or on one billed project, in hours or in money,
+    monthly or in total (docs/billing.md, phase 1b). One per scope, in its
+    own collection, addressed by its scope: it has no id. Only the limit is
+    stored; what is spent and what is left are worked out on every read
+    (`domain/billing_budgets.py`).
+
+    That a project scope is billed, and the currency rules, are checked
+    where a budget is written, as `Client`'s currency is: this model is
+    re-validated on every read."""
+
+    scope: BillingBudgetScope
+    scope_id: str  # a client's id or a project's
+    # Defaulted here, unlike on a write: a None is not stored. The default
+    # is validated too, so a key left out meets the unit's and the period's
+    # rules as a null does — a backup written by hand may leave one out.
+    limit_hours: _BillingBudgetHours | None = Field(default=None, validate_default=True)
+    limit_minor: _BillingBudgetMinor | None = Field(default=None, validate_default=True)
+    starts_on: date_type | None = Field(default=None, validate_default=True)
 
 
 class BillableOverride(BaseModel):

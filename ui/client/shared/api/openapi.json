@@ -251,6 +251,445 @@
         "title": "BillableOverrideResponse",
         "type": "object"
       },
+      "BillingBudgetPeriod": {
+        "enum": [
+          "monthly",
+          "total"
+        ],
+        "title": "BillingBudgetPeriod",
+        "type": "string"
+      },
+      "BillingBudgetRequest": {
+        "description": "Request body for a billing budget: the domain's fields, every key\nrequired, null where it may be. Exactly the limit of its `unit` is set\n(`limit_hours` to the hundredth, or `limit_minor` in the client's\ncurrency), and `starts_on` only on a total.",
+        "properties": {
+          "limit_hours": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Hours"
+          },
+          "limit_minor": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000000000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Minor"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BillingBudgetPeriod"
+          },
+          "starts_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts On"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/BillingBudgetUnit"
+          },
+          "warn_at_percent": {
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Warn At Percent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unit",
+          "period",
+          "limit_hours",
+          "limit_minor",
+          "starts_on",
+          "warn_at_percent"
+        ],
+        "title": "BillingBudgetRequest",
+        "type": "object"
+      },
+      "BillingBudgetResponse": {
+        "description": "A billing budget as stored, with its client and that client's\ncurrency and minor units, the currency a `limit_minor` is in.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "limit_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Hours"
+          },
+          "limit_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Minor"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BillingBudgetPeriod"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BillingBudgetScope"
+          },
+          "scope_id": {
+            "title": "Scope Id",
+            "type": "string"
+          },
+          "starts_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts On"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/BillingBudgetUnit"
+          },
+          "warn_at_percent": {
+            "title": "Warn At Percent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scope",
+          "scope_id",
+          "client_id",
+          "currency",
+          "minor_units",
+          "unit",
+          "period",
+          "limit_hours",
+          "limit_minor",
+          "starts_on",
+          "warn_at_percent"
+        ],
+        "title": "BillingBudgetResponse",
+        "type": "object"
+      },
+      "BillingBudgetRunningResponse": {
+        "description": "A running timer that counts on a billing budget, and the instants,\nin UTC, at which it alone would cross the warning and the limit: null\nonce crossed, and both null when it has no rate under a money budget or\nanother timer counts too.",
+        "properties": {
+          "near_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near At"
+          },
+          "over_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over At"
+          },
+          "priced": {
+            "title": "Priced",
+            "type": "boolean"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "since",
+          "priced",
+          "near_at",
+          "over_at"
+        ],
+        "title": "BillingBudgetRunningResponse",
+        "type": "object"
+      },
+      "BillingBudgetScope": {
+        "description": "What a billing budget limits: every project billed to a client, or\none billed project.",
+        "enum": [
+          "client",
+          "project"
+        ],
+        "title": "BillingBudgetScope",
+        "type": "string"
+      },
+      "BillingBudgetState": {
+        "enum": [
+          "under",
+          "near",
+          "used_up"
+        ],
+        "title": "BillingBudgetState",
+        "type": "string"
+      },
+      "BillingBudgetStatusResponse": {
+        "description": "A billing budget read as of today: the current month, or a total from\n`starts_on`, through `through`. The three figures are there whatever the\nunit; only the unit's own `remaining_\u2026` is set, negative when over. No\nfigure counts a running timer: `running` answers it. An upcoming total\nhas no figures, no projection and no running timer. `active` is false\nwhile its client or its project is archived: it is read, but never\nalerts.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "limit_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Hours"
+          },
+          "limit_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Minor"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "percent_used": {
+            "title": "Percent Used",
+            "type": "integer"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BillingBudgetPeriod"
+          },
+          "remaining_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Hours"
+          },
+          "remaining_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Minor"
+          },
+          "running": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingBudgetRunningResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runs_out_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs Out On"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BillingBudgetScope"
+          },
+          "scope_id": {
+            "title": "Scope Id",
+            "type": "string"
+          },
+          "starts_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts On"
+          },
+          "state": {
+            "$ref": "#/components/schemas/BillingBudgetState"
+          },
+          "through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Through"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/BillingBudgetUnit"
+          },
+          "unpriced_hours": {
+            "title": "Unpriced Hours",
+            "type": "number"
+          },
+          "upcoming": {
+            "title": "Upcoming",
+            "type": "boolean"
+          },
+          "warn_at_percent": {
+            "title": "Warn At Percent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scope",
+          "scope_id",
+          "client_id",
+          "name",
+          "active",
+          "currency",
+          "minor_units",
+          "unit",
+          "period",
+          "limit_hours",
+          "limit_minor",
+          "starts_on",
+          "warn_at_percent",
+          "upcoming",
+          "first",
+          "last",
+          "through",
+          "billable_hours",
+          "unpriced_hours",
+          "amount_minor",
+          "remaining_hours",
+          "remaining_minor",
+          "percent_used",
+          "state",
+          "runs_out_on",
+          "running"
+        ],
+        "title": "BillingBudgetStatusResponse",
+        "type": "object"
+      },
+      "BillingBudgetUnit": {
+        "enum": [
+          "hours",
+          "money"
+        ],
+        "title": "BillingBudgetUnit",
+        "type": "string"
+      },
       "BillingEntryResponse": {
         "description": "A finished entry of a billed project, billable or not. `day` is the\nlocal day it started on, which decides its month and its rate. `hours`\nis for display; the lines are the figures.",
         "properties": {
@@ -912,7 +1351,7 @@
         "type": "object"
       },
       "ClientResponse": {
-        "description": "A client as stored, with its currency's minor units from the API's\ntable, and whether its currency is locked: something is priced in it,\nso it can no longer change.",
+        "description": "A client as stored, with its currency's minor units from the API's\ntable, and whether its currency is locked: something is priced in it,\nor a money billing budget is in it, so it can no longer change.",
         "properties": {
           "archived": {
             "title": "Archived",
@@ -2457,6 +2896,10 @@
             "title": "Billable Overrides",
             "type": "integer"
           },
+          "billing_budgets": {
+            "title": "Billing Budgets",
+            "type": "integer"
+          },
           "clients": {
             "title": "Clients",
             "type": "integer"
@@ -2477,7 +2920,8 @@
           "balance_adjustments",
           "clients",
           "project_billing",
-          "billable_overrides"
+          "billable_overrides",
+          "billing_budgets"
         ],
         "title": "ImportCounts",
         "type": "object"
@@ -6046,6 +6490,245 @@
         ]
       }
     },
+    "/api/billing/budgets": {
+      "get": {
+        "description": "Every billing budget, read as of today in `tz`, by client name: a\nclient's own first, then its projects' by name. `[]` when there are none.\n\nWhat is spent is what 1a's lines bill \u2014 billable hours, or their priced\namount in the client's currency \u2014 summed month by month so a total\nagrees with the months invoiced. Hours with no rate are reported as\n`unpriced_hours` and never counted as money. A running timer is in no\nfigure: `running` gives the instants it alone would cross the warning\nand the limit. A budget on an archived client or project is read with\n`active: false`.",
+        "operationId": "list_billing_budgets_api_billing_budgets_get",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BillingBudgetStatusResponse"
+                  },
+                  "title": "Response List Billing Budgets Api Billing Budgets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Billing Budgets",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/api/billing/budgets/clients/{client_id}": {
+      "delete": {
+        "description": "Take a client's billing budget away. Always 204: with no budget, or no\nclient, there is nothing left to clear.",
+        "operationId": "remove_client_billing_budget_api_billing_budgets_clients__client_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Client Billing Budget",
+        "tags": [
+          "Billing"
+        ]
+      },
+      "put": {
+        "description": "Give a client its billing budget, over every project billed to it,\nreplacing the one it had: in hours or in money (its currency), monthly\nor in total from `starts_on`, with a warning at `warn_at_percent` and\nagain at 100 %. 404 CLIENT_NOT_FOUND for a client that is not the\ncaller's. Not gated: a budget changes no billable figure.",
+        "operationId": "set_client_billing_budget_api_billing_budgets_clients__client_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingBudgetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Client Billing Budget",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/api/billing/budgets/projects/{project_id}": {
+      "delete": {
+        "description": "Take a project's billing budget away. Always 204, as for a client.",
+        "operationId": "remove_project_billing_budget_api_billing_budgets_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Project Billing Budget",
+        "tags": [
+          "Billing"
+        ]
+      },
+      "put": {
+        "description": "Give a billed project its billing budget, replacing the one it had;\nmoney is in the currency of the client its billing names. 404 for a\nproject that is not the caller's; 409 BILLING_BUDGET_NEEDS_BILLING for\none that is not billed.",
+        "operationId": "set_project_billing_budget_api_billing_budgets_projects__project_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingBudgetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Project Billing Budget",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/api/billing/entries": {
       "get": {
         "description": "Every entry marked billable or not against its project's term. They\nare exceptions, so the list is small.",
@@ -6262,7 +6945,7 @@
     },
     "/api/billing/projects/{project_id}": {
       "delete": {
-        "description": "Stop billing a project, in every month. 404 when it is not billed;\n409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated\nbefore the current month in `tz`, or an entry there is marked billable.",
+        "description": "Stop billing a project, in every month. 404 when it is not billed;\n409 PROJECT_HAS_BILLING_BUDGET without `remove_billing_budget=true` when\nit has a billing budget, which then goes with it; 409 RETROACTIVE_CHANGE\nwithout `rewrite_past=true` when a term is dated before the current\nmonth in `tz`, or an entry there is marked billable. Both keys are\nrequired; a refusal leaves the billing and the budget as they were.",
         "operationId": "remove_project_billing_api_billing_projects__project_id__delete",
         "parameters": [
           {
@@ -6282,6 +6965,17 @@
             "schema": {
               "description": "The caller has confirmed a change to figures before the current month.",
               "title": "Rewrite Past",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The caller has confirmed that the project's billing budget goes too.",
+            "in": "query",
+            "name": "remove_billing_budget",
+            "required": true,
+            "schema": {
+              "description": "The caller has confirmed that the project's billing budget goes too.",
+              "title": "Remove Billing Budget",
               "type": "boolean"
             }
           },
@@ -6322,7 +7016,7 @@
         ]
       },
       "put": {
-        "description": "Bill a freelance project to a client under dated terms, replacing\nwhat it had: from each term's `effective_from`, whether its hours are\nbillable and, optionally, at a rate of its own (`rate_minor`, in the\nclient's currency); without one they take the client's rate in force\nthat day. Strictly ascending, one a day.\n\n404 for a project, or a client (CLIENT_NOT_FOUND), that is not the\ncaller's; 409 NOT_FREELANCE for a project of another kind; 409\nCURRENCY_MISMATCH for a move to a client in another currency while a\nrate of the project's own, a billable term before the current month, or\nan entry before it marked billable would be read in it. Attaching a\nproject the first time is not gated; after that, a change to terms dated\nbefore the current month in `tz`, or a move to another client while one\nis or an entry there is marked billable, is a 409 RETROACTIVE_CHANGE\nwithout `rewrite_past: true`.",
+        "description": "Bill a freelance project to a client under dated terms, replacing\nwhat it had: from each term's `effective_from`, whether its hours are\nbillable and, optionally, at a rate of its own (`rate_minor`, in the\nclient's currency); without one they take the client's rate in force\nthat day. Strictly ascending, one a day.\n\n404 for a project, or a client (CLIENT_NOT_FOUND), that is not the\ncaller's; 409 NOT_FREELANCE for a project of another kind; 409\nCURRENCY_MISMATCH for a move to a client in another currency while the\nproject's money billing budget, a rate of the project's own, a billable\nterm before the current month, or an entry before it marked billable\nwould be read in it. Attaching a\nproject the first time is not gated; after that, a change to terms dated\nbefore the current month in `tz`, or a move to another client while one\nis or an entry there is marked billable, is a 409 RETROACTIVE_CHANGE\nwithout `rewrite_past: true`.",
         "operationId": "set_project_billing_api_billing_projects__project_id__put",
         "parameters": [
           {
@@ -6763,7 +7457,7 @@
     },
     "/api/clients/{client_id}": {
       "delete": {
-        "description": "Delete a client. 409 CLIENT_HAS_PROJECTS while a project is billed to\nit: archive it instead, so past reports keep its name and currency.",
+        "description": "Delete a client, and its billing budget with it. 409\nCLIENT_HAS_PROJECTS while a project is billed to it: archive it instead,\nso past reports keep its name and currency.",
         "operationId": "delete_client_api_clients__client_id__delete",
         "parameters": [
           {
@@ -6844,7 +7538,7 @@
         ]
       },
       "put": {
-        "description": "Replace a client's name, contact, currency and default rates.\n\n409 CURRENCY_IN_USE when the currency changes once something is priced\nin it (`currency_locked`). A rate change dated before the current month\nin `tz` may change figures already invoiced: without `rewrite_past:\ntrue` it is a 409 RETROACTIVE_CHANGE naming the first month touched.\n`tz` and `rewrite_past` are both required.",
+        "description": "Replace a client's name, contact, currency and default rates.\n\n409 CURRENCY_IN_USE when the currency changes once something is priced\nin it, or a money billing budget is in it (`currency_locked`). A rate\nchange dated before the current month in `tz` may change figures\nalready invoiced: without `rewrite_past: true` it is a 409\nRETROACTIVE_CHANGE naming the first month touched.\n`tz` and `rewrite_past` are both required.",
         "operationId": "update_client_api_clients__client_id__put",
         "parameters": [
           {
@@ -7850,7 +8544,7 @@
     },
     "/api/export/full": {
       "get": {
-        "description": "Export everything a balance and a bill are made of, as JSON for\nbackup: the projects (contract included), the sessions, the absences and\nthe balance adjustments; the clients, each project's billing and the\nentries marked billable or not.",
+        "description": "Export everything a balance and a bill are made of, as JSON for\nbackup: the projects (contract included), the sessions, the absences and\nthe balance adjustments; the clients, each project's billing, the\nentries marked billable or not, and the billing budgets.",
         "operationId": "export_full_json_api_export_full_get",
         "responses": {
           "200": {
@@ -7870,7 +8564,7 @@
     },
     "/api/export/import": {
       "post": {
-        "description": "Import a full JSON backup, version 1.0, 1.1 or 1.2, into the caller's\naccount. Safe to re-import: projects, beats and clients are written by\nid, a project's billing replaces the one on its project and an override\nthe one on its beat, and an absence or an adjustment replaces the one on\nits project and date, as its own route does.\n\nThe whole file is checked first, and a file that fails writes nothing:\n\n- a malformed record, a project's, a session's or a client's id\n  included, is a 422 that names it;\n- a file holding a project, a session or a client whose id is another\n  account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`;\n- a billing whose project or client, or an override whose session, is in\n  neither the file nor the account is a 422 that names it;\n- a client or a billing that its route would refuse, against the file\n  over the account (a currency the API does not know, or one changed\n  once priced; billing on a project that is not freelance, or a billed\n  project moved away from freelance; billing moved to a client in\n  another currency), is that route's error, its detail naming the\n  record. The retroactive gate is not applied: a restore puts back what\n  was.\n\nClients are written first, then projects as a project write is: the\ncontract's checks, and the reconcile against the contract it replaces.\nA refusal there is that write's error and stops the import, with no\ntransaction: the clients and the projects before it in the file stay\nwritten, and nothing after them is. Then each project's billing, the\nbeats and the overrides. Absences and adjustments go last, through their\nown routes' rules, against the projects as restored, and one those rules\nrefuse (an absence on a project that is no longer a day job; an\nadjustment outside the contract's first day through today in `tz`) is\nleft out and listed under `skipped` with the code its route would\nanswer. Billing is never skipped: its rules ran before the first\nwrite.",
+        "description": "Import a full JSON backup, version 1.0 to 1.3, into the caller's\naccount. Safe to re-import: projects, beats and clients are written by\nid, a project's billing replaces the one on its project, a billing\nbudget the one on its scope and an override the one on its beat, and an\nabsence or an adjustment replaces the one on its project and date, as\nits own route does. Nothing is deleted: the account's own budgets\nsurvive a file without them.\n\nThe whole file is checked first, and a file that fails writes nothing:\n\n- a malformed record, a project's, a session's or a client's id\n  included, is a 422 that names it;\n- a file holding a project, a session or a client whose id is another\n  account's is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`;\n- a billing whose project or client, an override whose session, or a\n  billing budget whose client or project is in neither the file nor the\n  account is a 422 that names it;\n- a client, a billing or a billing budget that its route would refuse,\n  against the file over the account (a currency the API does not know,\n  or one changed once priced or under a money budget; billing on a\n  project that is not freelance, or a billed project moved away from\n  freelance; billing moved to a client in another currency; a budget on\n  a project billed nowhere), is that route's error, its detail naming\n  the record. The retroactive gate is not applied: a restore puts back\n  what was.\n\nClients are written first, then projects as a project write is: the\ncontract's checks, and the reconcile against the contract it replaces.\nA refusal there is that write's error and stops the import, with no\ntransaction: the clients and the projects before it in the file stay\nwritten, and nothing after them is. Then each project's billing, the\nbilling budgets, the beats and the overrides. Absences and adjustments go last, through their\nown routes' rules, against the projects as restored, and one those rules\nrefuse (an absence on a project that is no longer a day job; an\nadjustment outside the contract's first day through today in `tz`) is\nleft out and listed under `skipped` with the code its route would\nanswer. Billing, budgets included, is never skipped: its rules ran\nbefore the first write.",
         "operationId": "import_full_json_api_export_import_post",
         "parameters": [
           {

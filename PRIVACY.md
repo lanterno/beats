@@ -10,14 +10,14 @@ Beats is a self-tracking system. It records what you work on, for how long, and 
 
 If you mark a project as a day job, Beats also stores its contract — the hours owed each week as a percentage of a full-time basis, the dates those terms changed, an opening balance — the employer's holiday region as two ISO codes, the employer's own days off where they differ from that region's (dates, with the names you give them, and the region's holidays the employer does not give), the vacation days the job gives if you track them (days per year, how unused days carry over, and the days left on a date you choose), and the days you were absent (vacation, sick or other, whole or half), and any dated adjustments you make to the balance (a payout, a reset or a cap, with a note if you give one). From those it works out what the week expects of you, a running overtime balance and the vacation days you have left.
 
-If you bill freelance work, Beats also stores your clients — each one's name, a contact's name and email address if you give them, the currency you bill in and its dated hourly rates — which of your freelance projects is billed to which client, from when, whether its hours are billable and at what rate, and the sessions you marked billable or not. From those it works out what each month comes to per client. A contact's name and email address are someone else's details: Beats shows them to you, mails nothing to them and sends them nowhere.
+If you bill freelance work, Beats also stores your clients — each one's name, a contact's name and email address if you give them, the currency you bill in and its dated hourly rates — which of your freelance projects is billed to which client, from when, whether its hours are billable and at what rate, the sessions you marked billable or not, and a budget you set on a client or a billed project, in hours or money. From those it works out what each month comes to per client, and how much of each budget is spent, what is left and when it may run out; none of that is stored, and no alert about it is sent anywhere. A contact's name and email address are someone else's details: Beats shows them to you, mails nothing to them and sends them nowhere.
 
 ## Who can see your data
 
 - **You.** Through the web app, the daemon, the editor extension, the companion app, and the export endpoint.
 - **Me, the operator.** I can read any document in the database. I do not log into your account or read your sessions without a reason, but I am not going to pretend a single-operator service has a privileged-access boundary it does not have. If you would not be comfortable with me being able to see something, do not put it in Beats.
 - **The hosting providers** that run the infrastructure (Google Cloud for the API, MongoDB Atlas / GCP for the database, Firebase Hosting for the web app). They see encrypted-at-transit traffic and storage they manage on their side. Standard cloud-provider terms apply.
-- **Not your clients.** A client is a record in your account, not an account of theirs, and sees nothing. No paired device — a phone, the daemon, the wall clock — can read your clients, rates, billing or amounts either: those routes refuse a device's token. If sharing a report with a client is ever added, you will create each link yourself, and this page will say so before the release that adds it.
+- **Not your clients.** A client is a record in your account, not an account of theirs, and sees nothing. No paired device — a phone, the daemon, the wall clock — can read your clients, rates, billing, budgets or amounts either: those routes refuse a device's token. If sharing a report with a client is ever added, you will create each link yourself, and this page will say so before the release that adds it.
 - **No one else.** Beats does not sell, share, or syndicate your data. There are no advertising partners. There is no analytics provider with PII.
 
 ## Authentication
@@ -62,7 +62,7 @@ The coach feature sends prompts to the [Anthropic Claude API](https://www.anthro
 - last night's biometrics — sleep, HRV, resting heart rate, readiness — if a health source is connected
 - flow signals from the daemon, including the repository and language you spent most time in
 
-Never sent: your clients and their contacts, rates, which projects or entries are billable, or any amount of money. A project's name is sent as before, and may be a client's name if you named it so.
+Never sent: your clients and their contacts, rates, which projects or entries are billable, your billing budgets and what they have spent, or any amount of money. A project's name is sent as before, and may be a client's name if you named it so.
 
 Anthropic processes that data under their terms; Beats does not send it anywhere else.
 
@@ -70,9 +70,9 @@ If you do not want any data leaving the Beats database, do not use the coach.
 
 ## Export and deletion
 
-- **Export**: anytime, via `/api/export` — your projects (contract included, archived ones too), sessions, absences and balance adjustments, and your clients (archived ones and their contacts too), each project's billing and the sessions you marked billable or not, as a JSON backup you can import again, or your sessions as CSV. Plans, webhooks, signals, biometrics and coach history are not in it yet.
+- **Export**: anytime, via `/api/export` — your projects (contract included, archived ones too), sessions, absences and balance adjustments, and your clients (archived ones and their contacts too), each project's billing, the sessions you marked billable or not and your billing budgets, as a JSON backup you can import again, or your sessions as CSV. Plans, webhooks, signals, biometrics and coach history are not in it yet.
 - **Timesheet**: a day job's monthly timesheet, via `/api/projects/{id}/timesheet.csv`, is a CSV for your employer. It holds per day the hours worked and expected, any balance adjustment, the public holiday's name (a company holiday reads "company holiday"), the absence type and whether it was a half day (never the absence's note), and the balance.
-- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, balance adjustments, clients and their contacts, project billing, billable marks, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
+- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account and I will delete every document associated with your user — projects, sessions, contracts, absences, balance adjustments, clients and their contacts, project billing, billable marks, billing budgets, coach history, biometrics, flow signals and paired devices — and reply to confirm. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
 
 ## Changes
 

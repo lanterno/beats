@@ -30,6 +30,7 @@ import { DeviceStatus } from "./DeviceStatus";
 import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
+import { useBillingBudgetAttention } from "./useBillingBudgetAttention";
 import { useShowClients } from "./useShowClients";
 
 interface SidebarProps extends TimerProps {
@@ -38,7 +39,8 @@ interface SidebarProps extends TimerProps {
 
 const NAV = [
 	{ to: "/projects", title: "Projects", Icon: Layers, prefix: true },
-	// Only once there is someone or something to bill (`useShowClients`).
+	// Only once there is someone or something to bill (`useShowClients`); with
+	// a dot while a billing budget is used up (`useBillingBudgetAttention`).
 	{ to: "/clients", title: "Clients", Icon: Briefcase, prefix: false },
 	{ to: "/plan", title: "Weekly Plan", Icon: CalendarDays, prefix: false },
 	{ to: "/coach", title: "Coach", Icon: Sparkles, prefix: false },
@@ -54,6 +56,7 @@ export function Sidebar(props: SidebarProps) {
 	const { user } = useAuth();
 	const showClients = useShowClients(projects);
 	const nav = NAV.filter((item) => item.to !== "/clients" || showClients);
+	const budgetUsedUp = useBillingBudgetAttention(showClients);
 
 	const handleLogout = async () => {
 		await signOut();
@@ -84,14 +87,25 @@ export function Sidebar(props: SidebarProps) {
 								key={to}
 								to={to}
 								className={cn(
-									"grid place-items-center w-8 h-8 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+									"relative grid place-items-center w-8 h-8 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
 									isActive(to, prefix)
 										? "bg-sidebar-accent text-sidebar-primary"
 										: "bg-secondary text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
 								)}
 								title={title}
+								aria-label={
+									to === "/clients" && budgetUsedUp
+										? "Clients, a billing budget is used up"
+										: undefined
+								}
 							>
 								<Icon className="w-4 h-4" />
+								{to === "/clients" && budgetUsedUp && (
+									<span
+										aria-hidden="true"
+										className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-destructive ring-2 ring-sidebar"
+									/>
+								)}
 							</Link>
 						))}
 					</nav>

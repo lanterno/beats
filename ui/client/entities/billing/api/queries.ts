@@ -3,12 +3,22 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingRootKey, clientsRootKey } from "@/shared/api";
-import type { BillingMonth, ProjectBilling, ProjectBillingInput } from "../model";
+import type {
+	BillingBudgetInput,
+	BillingBudgetScope,
+	BillingBudgetStatus,
+	BillingMonth,
+	ProjectBilling,
+	ProjectBillingInput,
+} from "../model";
 import {
 	clearEntryBillable,
+	deleteBillingBudget,
 	fetchBillableOverrides,
+	fetchBillingBudgets,
 	fetchBillingMonth,
 	fetchProjectBillings,
+	putBillingBudget,
 	removeProjectBilling,
 	setEntryBillable,
 	setProjectBilling,
@@ -24,6 +34,7 @@ const billingKeys = {
 	projects: () => [...billingKeys.all, "projects"] as const,
 	entries: () => [...billingKeys.all, "entries"] as const,
 	month: (month: string, tz: string) => [...billingKeys.all, "month", month, tz] as const,
+	budgets: (tz: string) => [...billingKeys.all, "budgets", tz] as const,
 };
 
 /**
@@ -61,8 +72,26 @@ export function useBillingMonth(month: string, tz: string) {
 }
 
 /**
+ * Every billing budget, read as of today. Never fresh from the cache, as the
+ * month: any entry, mark, rate or timer written since moves it, and it sits
+ * under the billing root so each of those refreshes it. No interval: a
+ * running timer's crossings are instants, which the page compares with the
+ * clock (`billingBudgetState`). `enabled: false` where nothing on screen
+ * reads a budget — a past month, a nav with no Clients.
+ */
+export function useBillingBudgets(tz: string, { enabled = true }: { enabled?: boolean } = {}) {
+	return useQuery({
+		queryKey: billingKeys.budgets(tz),
+		queryFn: (): Promise<BillingBudgetStatus[]> => fetchBillingBudgets(tz),
+		staleTime: 0,
+		enabled,
+	});
+}
+
+/**
  * A billing write moves every billing figure, and the clients too: whether
- * a client's currency is locked depends on a project of it having a rate.
+ * a client's currency is locked depends on a project of it having a rate,
+ * or on a money billing budget.
  */
 function useInvalidateAfterBillingWrite() {
 	const queryClient = useQueryClient();
@@ -96,12 +125,52 @@ export function useSetProjectBilling() {
 	});
 }
 
-/** Stop billing a project, through `withPastConsent` like the set. */
+/**
+ * Stop billing a project, through `withPastConsent` like the set.
+ * `removeBillingBudget` is true only from a confirmation that named the
+ * project's budget; without it the API refuses while there is one.
+ */
 export function useRemoveProjectBilling() {
 	const invalidate = useInvalidateAfterBillingWrite();
 	return useMutation({
-		mutationFn: ({ projectId, rewritePast }: { projectId: string; rewritePast: boolean }) =>
-			removeProjectBilling(projectId, rewritePast),
+		mutationFn: ({
+			projectId,
+			rewritePast,
+			removeBillingBudget,
+		}: {
+			projectId: string;
+			rewritePast: boolean;
+			removeBillingBudget: boolean;
+		}) => removeProjectBilling(projectId, rewritePast, removeBillingBudget),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+/** Give a client or a billed project its billing budget, replacing the one it had. */
+export function useSetBillingBudget() {
+	const invalidate = useInvalidateAfterBillingWrite();
+	return useMutation({
+		mutationFn: ({
+			scope,
+			scopeId,
+			input,
+		}: {
+			scope: BillingBudgetScope;
+			scopeId: string;
+			input: BillingBudgetInput;
+		}) => putBillingBudget(scope, scopeId, input),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+/** Take a billing budget away. */
+export function useRemoveBillingBudget() {
+	const invalidate = useInvalidateAfterBillingWrite();
+	return useMutation({
+		mutationFn: ({ scope, scopeId }: { scope: BillingBudgetScope; scopeId: string }) =>
+			deleteBillingBudget(scope, scopeId),
 		onSuccess: invalidate,
 		retry: false,
 	});

@@ -33,6 +33,8 @@ from beats.domain.models import (
     BalanceAdjustment,
     Beat,
     BillableOverride,
+    BillingBudget,
+    BillingBudgetScope,
     BiometricDay,
     CalendarIntegration,
     Client,
@@ -1064,6 +1066,42 @@ class MongoProjectBillingRepository(MongoStore[ProjectBilling], ProjectBillingRe
 
     async def delete(self, project_id: str) -> bool:
         return await self._delete_one({"project_id": project_id})
+
+
+class BillingBudgetRepository(Protocol):
+    async def list_all(self) -> list[BillingBudget]: ...
+    async def get(self, scope: BillingBudgetScope, scope_id: str) -> BillingBudget | None: ...
+    async def upsert(self, budget: BillingBudget) -> BillingBudget: ...
+    async def delete(self, scope: BillingBudgetScope, scope_id: str) -> bool: ...
+
+
+class MongoBillingBudgetRepository(MongoStore[BillingBudget], BillingBudgetRepository):
+    model = BillingBudget
+
+    async def list_all(self) -> list[BillingBudget]:
+        return await self._find_many()
+
+    async def get(self, scope: BillingBudgetScope, scope_id: str) -> BillingBudget | None:
+        return await self._find_one({"scope": scope.value, "scope_id": scope_id})
+
+    async def upsert(self, budget: BillingBudget) -> BillingBudget:
+        # A replace, as a project's billing: the document IS the budget, so a
+        # limit in the unit it no longer has must not survive. The (user,
+        # scope, scope id) unique index makes this filter its identity.
+        data = self._dump(budget)
+        data.pop("_id", None)
+        result = await self.collection.find_one_and_replace(
+            self._q({"scope": data["scope"], "scope_id": data["scope_id"]}),
+            data,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if result is None:
+            raise RuntimeError("upsert of BillingBudget returned no document")
+        return self._load(result)
+
+    async def delete(self, scope: BillingBudgetScope, scope_id: str) -> bool:
+        return await self._delete_one({"scope": scope.value, "scope_id": scope_id})
 
 
 class BillableOverrideRepository(Protocol):

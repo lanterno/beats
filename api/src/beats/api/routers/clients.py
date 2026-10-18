@@ -62,9 +62,10 @@ async def update_client(
     """Replace a client's name, contact, currency and default rates.
 
     409 CURRENCY_IN_USE when the currency changes once something is priced
-    in it (`currency_locked`). A rate change dated before the current month
-    in `tz` may change figures already invoiced: without `rewrite_past:
-    true` it is a 409 RETROACTIVE_CHANGE naming the first month touched.
+    in it, or a money billing budget is in it (`currency_locked`). A rate
+    change dated before the current month in `tz` may change figures
+    already invoiced: without `rewrite_past: true` it is a 409
+    RETROACTIVE_CHANGE naming the first month touched.
     `tz` and `rewrite_past` are both required."""
     fields = ClientFields.model_validate(request.model_dump(exclude={"rewrite_past"}))
     record = await service.update_client(
@@ -88,7 +89,8 @@ async def unarchive_client(client_id: str, service: BillingServiceDep):
 
 @router.delete("/{client_id}", status_code=http.HTTPStatus.NO_CONTENT)
 async def delete_client(client_id: str, service: BillingServiceDep) -> Response:
-    """Delete a client. 409 CLIENT_HAS_PROJECTS while a project is billed to
-    it: archive it instead, so past reports keep its name and currency."""
+    """Delete a client, and its billing budget with it. 409
+    CLIENT_HAS_PROJECTS while a project is billed to it: archive it instead,
+    so past reports keep its name and currency."""
     await service.delete_client(client_id)
     return Response(status_code=http.HTTPStatus.NO_CONTENT)

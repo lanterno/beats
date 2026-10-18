@@ -47,16 +47,20 @@ export {
 	calculateDurationMinutes,
 	formatDuration,
 	formatSecondsToTime,
+	hoursText,
 	isValidTimeRange,
 } from "./format";
 // Fuzzy matching (command palette)
 export { fuzzyRank } from "./fuzzyMatch";
-// Money: integer minor units shown, and a typed rate read
+// Money: integer minor units shown, and a typed rate, budget or hours read
 export {
+	BILLING_BUDGET_MINOR_MAX,
 	formatMoney,
 	formatRate,
 	minorToInput,
+	type ParsedHours,
 	type ParsedMoney,
+	parseHours,
 	parseMoney,
 	RATE_MINOR_MAX,
 } from "./money";
@@ -70,6 +74,7 @@ export { type CommandContext, useCommandActions } from "./useCommandActions";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+export { useNow } from "./useNow";
 export { useOAuthCallback } from "./useOAuthCallback";
 export { notifySyncWork, type SyncSnapshot, useSyncEngine, useSyncStatus } from "./useSyncEngine";
 export type { Density, ThemeName } from "./useTheme";

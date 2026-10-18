@@ -76,9 +76,10 @@ PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange")
 
 # Paths that device tokens (daemon) are allowed to access.
 #
-# Money lives under /api/clients and /api/billing on purpose. Never add them
-# here, and never put billing under /api/projects or /api/beats, which are
-# prefix matches (docs/billing.md).
+# Money lives under /api/clients and /api/billing on purpose — clients and
+# their rates, project billing, billable marks, and billing budgets with what
+# they have spent. Never add them here, and never put billing under
+# /api/projects or /api/beats, which are prefix matches (docs/billing.md).
 DEVICE_ALLOWED_PREFIXES = (
     # Wall-clock firmware reads /status on a 10s poll for the timer
     # state + today_minutes + theme. Without this prefix, the

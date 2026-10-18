@@ -1,13 +1,15 @@
 /**
  * The Clients page's sentence, before any figure: what the month comes to,
  * then what is in no amount — hours on client projects that are not
- * billable, billable hours with no rate, a timer still running. Every
- * number is the API's; this only puts them into words. An amount is always
+ * billable, billable hours with no rate, a timer still running — and, in
+ * the current month, each billing budget near or used up. Every number is
+ * the API's; this only puts them into words. An amount is always
  * in one currency, so several currencies are listed, never added.
  */
 
-import type { BillingMonth } from "@/entities/billing";
-import { formatMoney } from "@/shared/lib";
+import type { BillingBudgetStatus, BillingMonth } from "@/entities/billing";
+import { describeBillingBudget } from "@/entities/billing";
+import { formatMoney, hoursText } from "@/shared/lib";
 
 export interface MonthSummary {
 	/** "€3,527.50 billable so far in October, across 2 clients." */
@@ -22,11 +24,6 @@ export function monthName(month: string): string {
 	return date.toLocaleDateString("en-US", { month: "long" });
 }
 
-/** "41.5 h", "6 h", "3.25 h": the API's hundredths, without trailing zeros. */
-export function hoursText(hours: number): string {
-	return `${Number(hours.toFixed(2))} h`;
-}
-
 function sum(values: number[]): number {
 	// The API's figures are hundredths; summing floats must not invent a third decimal.
 	return Math.round(values.reduce((total, v) => total + v, 0) * 100) / 100;
@@ -39,11 +36,17 @@ function listed(parts: string[]): string {
 
 /**
  * The sentence for a month. `current` says the month is still running, so
- * its figures are "so far".
+ * its figures are "so far". A billing budget reads as of today, so only the
+ * current month notes one: each active budget near or used up by `now`,
+ * after the month's own notes. An archived scope's budget never alerts.
  */
 export function describeMonth(
 	month: BillingMonth,
-	{ current }: { current: boolean },
+	{
+		current,
+		budgets = [],
+		now = Date.now(),
+	}: { current: boolean; budgets?: readonly BillingBudgetStatus[]; now?: number },
 ): MonthSummary {
 	const when = `${current ? "so far " : ""}in ${monthName(month.month)}`;
 	const billed = month.clients.filter((client) => client.billableHours > 0);
@@ -68,6 +71,13 @@ export function describeMonth(
 	const running = month.clients.filter((client) => client.running).map((client) => client.name);
 	if (running.length > 0) {
 		notes.push(`A timer is running for ${listed(running)}; it counts once stopped.`);
+	}
+	if (current) {
+		for (const budget of budgets) {
+			if (!budget.active) continue;
+			const { note } = describeBillingBudget(budget, now);
+			if (note) notes.push(note);
+		}
 	}
 	return { headline, notes };
 }

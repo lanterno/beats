@@ -401,6 +401,77 @@ export const BillingMonthSchema = z.object({
 
 export type ApiBillingMonth = z.infer<typeof BillingMonthSchema>;
 
+// Billing budgets (docs/billing.md, phase 1b). These mirror the API's
+// `BillingBudgetResponse`, `BillingBudgetRunningResponse` and
+// `BillingBudgetStatusResponse`. A budget is addressed by its scope, so it
+// has no id; only the limit of its `unit` is set, and `starts_on` only on a
+// total. Every figure in a status is the API's, worked out as of today.
+
+const BillingBudgetScopeSchema = z.enum(["client", "project"]);
+const BillingBudgetUnitSchema = z.enum(["hours", "money"]);
+const BillingBudgetPeriodSchema = z.enum(["monthly", "total"]);
+
+export const ApiBillingBudgetSchema = z.object({
+	scope: BillingBudgetScopeSchema,
+	scope_id: z.string(),
+	client_id: z.string(),
+	currency: z.string(), // the client's: a limit_minor is in it
+	minor_units: z.number().int(),
+	unit: BillingBudgetUnitSchema,
+	period: BillingBudgetPeriodSchema,
+	limit_hours: z.number().nullable(),
+	limit_minor: z.number().int().nullable(),
+	starts_on: z.string().nullable(), // YYYY-MM-DD, a total's first day
+	warn_at_percent: z.number().int(),
+});
+
+export type ApiBillingBudget = z.infer<typeof ApiBillingBudgetSchema>;
+
+// A running timer that counts on the budget, and the UTC instants at which
+// it alone would cross the warning and the limit: null once crossed, both
+// null when it has no rate under a money budget or another timer counts.
+const BillingBudgetRunningSchema = z.object({
+	project_id: z.string(),
+	since: z.string(), // ISO datetime
+	priced: z.boolean(),
+	near_at: z.string().nullable(),
+	over_at: z.string().nullable(),
+});
+
+export type ApiBillingBudgetRunning = z.infer<typeof BillingBudgetRunningSchema>;
+
+const BillingBudgetStatusSchema = z.object({
+	scope: BillingBudgetScopeSchema,
+	scope_id: z.string(),
+	client_id: z.string(),
+	name: z.string(), // the client's, or the project's
+	active: z.boolean(), // false while its client or project is archived: never alerts
+	currency: z.string(),
+	minor_units: z.number().int(),
+	unit: BillingBudgetUnitSchema,
+	period: BillingBudgetPeriodSchema,
+	limit_hours: z.number().nullable(),
+	limit_minor: z.number().int().nullable(),
+	starts_on: z.string().nullable(),
+	warn_at_percent: z.number().int(),
+	upcoming: z.boolean(), // a total whose first day is after today: no figures yet
+	first: z.string(), // YYYY-MM-DD
+	last: z.string().nullable(), // a month's end; null on a total
+	through: z.string().nullable(), // today; null while upcoming
+	billable_hours: z.number(),
+	unpriced_hours: z.number(), // the part of billable_hours with no rate
+	amount_minor: z.number().int(),
+	remaining_hours: z.number().nullable(), // only the unit's own; negative when over
+	remaining_minor: z.number().int().nullable(),
+	percent_used: z.number().int(), // rounded down, not capped
+	state: z.enum(["under", "near", "used_up"]),
+	runs_out_on: z.string().nullable(), // YYYY-MM-DD at the recent pace
+	running: BillingBudgetRunningSchema.nullable(),
+});
+
+export type ApiBillingBudgetStatus = z.infer<typeof BillingBudgetStatusSchema>;
+export const ApiBillingBudgetStatusListSchema = z.array(BillingBudgetStatusSchema);
+
 export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),
