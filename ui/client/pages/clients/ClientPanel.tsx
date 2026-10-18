@@ -18,7 +18,7 @@
  */
 
 import { ChevronRight, Pencil } from "lucide-react";
-import { useState } from "react";
+import { type Ref, useRef, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import type {
@@ -187,6 +187,10 @@ export function ClientPanel({
 	const [entriesOpen, setEntriesOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [budgetEditor, setBudgetEditor] = useState<BudgetEditor | null>(null);
+	// Whichever of the client's budget controls is on the page — "Set a
+	// budget", its pencil, "Set a budget for …" — takes focus back when a
+	// save or a remove has taken the one that opened the dialog away.
+	const clientBudgetButton = useRef<HTMLButtonElement>(null);
 
 	const { currency, minorUnits } = billing;
 	const money = (minor: number) => formatMoney(minor, currency, minorUnits);
@@ -232,9 +236,15 @@ export function ClientPanel({
 	// An archived client's budgets are shown, and offer no write: archived
 	// clients are in no picker, and its budgets never alert.
 	const writable = !billing.archived;
-	const pencil = (name: string, onClick: () => void) =>
+	const pencil = (name: string, onClick: () => void, ref?: Ref<HTMLButtonElement>) =>
 		writable && (
-			<button type="button" onClick={onClick} aria-label={`Edit ${name}'s budget`} className={OP}>
+			<button
+				ref={ref}
+				type="button"
+				onClick={onClick}
+				aria-label={`Edit ${name}'s budget`}
+				className={OP}
+			>
 				<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
 			</button>
 		);
@@ -246,7 +256,12 @@ export function ClientPanel({
 	) : budgets === undefined ? null : budgets.length === 0 ? (
 		writable && (
 			<p className="mt-2.5">
-				<button type="button" onClick={editClientBudget} className={LINKISH}>
+				<button
+					ref={clientBudgetButton}
+					type="button"
+					onClick={editClientBudget}
+					className={LINKISH}
+				>
 					Set a budget
 				</button>
 			</p>
@@ -261,7 +276,7 @@ export function ClientPanel({
 							status={ownBudget}
 							now={now}
 							title={billing.name}
-							actions={pencil(billing.name, editClientBudget)}
+							actions={pencil(billing.name, editClientBudget, clientBudgetButton)}
 						/>
 					</li>
 				)}
@@ -285,7 +300,12 @@ export function ClientPanel({
 				))}
 			</ul>
 			{!ownBudget && writable && (
-				<button type="button" onClick={editClientBudget} className={LINKISH}>
+				<button
+					ref={clientBudgetButton}
+					type="button"
+					onClick={editClientBudget}
+					className={LINKISH}
+				>
 					Set a budget for {billing.name}
 				</button>
 			)}
@@ -537,6 +557,7 @@ export function ClientPanel({
 					budget={budgetEditor.status}
 					billingStartedOn={budgetEditor.billingStartedOn}
 					todayIso={todayIso}
+					returnFocus={() => clientBudgetButton.current}
 					onClose={() => setBudgetEditor(null)}
 				/>
 			)}
