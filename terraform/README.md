@@ -145,6 +145,11 @@ deploys), or apply a known-good image from a workstation once no build is
 deploying, `terraform apply -var="container_image_tag=<good sha>"` from
 `terraform/`. The next push to `main` deploys over a workstation apply.
 
+That holds for commits that carry the guard. A build runs the
+`api/cloudbuild.yaml` of its own commit, so re-running the build of a commit
+from before it (AHM-92) runs the old pipeline, which applies that commit's
+image whatever is live: a rollback, without a lock.
+
 While Terraform manages the Cloud Build trigger configuration, it doesn't directly rerun builds. Here are your options:
 
 ### Option 1: Manual Trigger via gcloud CLI (Recommended)
