@@ -11,6 +11,15 @@
 export const RATE_MINOR_MAX = 100_000_000;
 
 /**
+ * The API's `BILLING_BUDGET_MINOR_MAX` (`domain/models.py`): a money billing
+ * budget's cap, 10,000,000,000.00 at two decimals, far inside 2^53.
+ */
+export const BILLING_BUDGET_MINOR_MAX = 1_000_000_000_000;
+
+/** The API's `BILLING_BUDGET_HOURS_MAX`, 100,000 h, in hundredths. */
+const BILLING_BUDGET_HUNDREDTHS_MAX = 10_000_000;
+
+/**
  * "€3,527.50", "¥6,650", "KWD 16.419": `minor` in its currency, with exactly
  * `minorUnits` decimals. `minor / 10 ** minorUnits` is exact for display at
  * every amount the API can send (at most 2^53 minor units). en-US, as the
@@ -110,11 +119,25 @@ export function parseAmount(
 
 /**
  * A rate typed into a field, in minor units, through `parseAmount` at the
- * currency's `minorUnits` and capped at `RATE_MINOR_MAX`.
+ * currency's `minorUnits` and capped at `max`: `RATE_MINOR_MAX` for a rate,
+ * `BILLING_BUDGET_MINOR_MAX` for a billing budget.
  */
-export function parseMoney(text: string, minorUnits: number): ParsedMoney {
-	const parsed = parseAmount(text, minorUnits, RATE_MINOR_MAX, {
+export function parseMoney(text: string, minorUnits: number, max = RATE_MINOR_MAX): ParsedMoney {
+	const parsed = parseAmount(text, minorUnits, max, {
 		wholeOnly: "This currency has no fraction: use a whole amount.",
 	});
 	return parsed.ok ? { ok: true, minor: parsed.units } : parsed;
+}
+
+export type ParsedHours = { ok: true; hundredths: number } | { ok: false; reason: string };
+
+/**
+ * Hours typed into a field, in hundredths, as the API keeps a billing
+ * budget's `limit_hours`: at most two decimals, refused rather than
+ * rounded, more than zero and at most 100,000 h. The caller sends
+ * `hundredths / 100`, which is the nearest double to the hundredths typed.
+ */
+export function parseHours(text: string): ParsedHours {
+	const parsed = parseAmount(text, 2, BILLING_BUDGET_HUNDREDTHS_MAX);
+	return parsed.ok ? { ok: true, hundredths: parsed.units } : parsed;
 }

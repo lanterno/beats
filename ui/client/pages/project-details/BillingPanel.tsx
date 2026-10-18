@@ -147,7 +147,11 @@ function Billed({
 	const handleStop = async () => {
 		try {
 			const stopped = await withPastConsent(async (rewritePast) => {
-				await removeBilling.mutateAsync({ projectId: project.id, rewritePast });
+				await removeBilling.mutateAsync({
+					projectId: project.id,
+					rewritePast,
+					removeBillingBudget: false,
+				});
 				return true;
 			}, askPast);
 			if (stopped) toast.success(`${project.name} is no longer billed`);

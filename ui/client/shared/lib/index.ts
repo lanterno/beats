@@ -52,12 +52,15 @@ export {
 } from "./format";
 // Fuzzy matching (command palette)
 export { fuzzyRank } from "./fuzzyMatch";
-// Money: integer minor units shown, and a typed rate read
+// Money: integer minor units shown, and a typed rate, budget or hours read
 export {
+	BILLING_BUDGET_MINOR_MAX,
 	formatMoney,
 	formatRate,
 	minorToInput,
+	type ParsedHours,
 	type ParsedMoney,
+	parseHours,
 	parseMoney,
 	RATE_MINOR_MAX,
 } from "./money";

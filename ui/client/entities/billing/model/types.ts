@@ -111,3 +111,87 @@ export interface BillingMonth {
 	clients: ClientBilling[];
 	unattached: UnattachedHours[];
 }
+
+/** What a billing budget limits: every project billed to a client, or one billed project. */
+export type BillingBudgetScope = "client" | "project";
+
+/** Hours, or money in the scope's client's one currency. */
+export type BillingBudgetUnit = "hours" | "money";
+
+/** The calendar month, every month; or one cap from `startsOn` on, with no end. */
+export type BillingBudgetPeriod = "monthly" | "total";
+
+/** Under the warning, past it, or at or past the limit. Over is a negative remaining. */
+export type BillingBudgetState = "under" | "near" | "used_up";
+
+/**
+ * What a billing budget write sends: every key, the other unit's limit and
+ * a monthly budget's `startsOn` as absent, which go out as null.
+ */
+export interface BillingBudgetInput {
+	unit: BillingBudgetUnit;
+	period: BillingBudgetPeriod;
+	/** To the hundredth; only on an hours budget. */
+	limitHours?: number;
+	/** In the client's currency; only on a money budget. */
+	limitMinor?: number;
+	/** YYYY-MM-DD; only on a total. */
+	startsOn?: string;
+	/** 1 to 99; 100 % is always the second threshold. */
+	warnAtPercent: number;
+}
+
+/** A billing budget as stored, with its client's currency beside a money limit. */
+export interface BillingBudget extends BillingBudgetInput {
+	scope: BillingBudgetScope;
+	scopeId: string;
+	clientId: string;
+	currency: string;
+	minorUnits: number;
+}
+
+/**
+ * A running timer that counts on the budget. `nearAt` and `overAt` are the
+ * instants (UTC ISO) at which this timer alone would cross the warning and
+ * the limit: absent once crossed, and both absent when it has no rate under
+ * a money budget or another timer counts too.
+ */
+export interface BillingBudgetRunning {
+	projectId: string;
+	since: string; // ISO datetime
+	priced: boolean;
+	nearAt?: string;
+	overAt?: string;
+}
+
+/**
+ * A billing budget read as of today: the current month, or a total from
+ * `startsOn` through today. The three figures are there whatever the unit;
+ * only the unit's own remaining figure is, negative when over. No figure
+ * counts a running timer: `running` answers it. An upcoming total has no
+ * figures, no projection and no running timer. `active` is false while its
+ * client or project is archived: it is read, but never alerts.
+ */
+export interface BillingBudgetStatus extends BillingBudget {
+	/** The client's name, or the project's. */
+	name: string;
+	active: boolean;
+	upcoming: boolean;
+	first: string; // YYYY-MM-DD
+	/** The month's last day; absent on a total. */
+	last?: string;
+	/** Today; absent while upcoming. */
+	through?: string;
+	billableHours: number;
+	/** The part of `billableHours` with no rate. */
+	unpricedHours: number;
+	amountMinor: number;
+	remainingHours?: number;
+	remainingMinor?: number;
+	/** Rounded down and not capped, so it never reads 100 before the limit. */
+	percentUsed: number;
+	state: BillingBudgetState;
+	/** YYYY-MM-DD, at the recent pace; absent wherever the API makes no guess. */
+	runsOutOn?: string;
+	running?: BillingBudgetRunning;
+}

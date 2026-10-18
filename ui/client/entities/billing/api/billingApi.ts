@@ -6,6 +6,8 @@
 
 import {
 	ApiBillableOverrideListSchema,
+	ApiBillingBudgetSchema,
+	ApiBillingBudgetStatusListSchema,
 	ApiProjectBillingListSchema,
 	ApiProjectBillingSchema,
 	BillingMonthSchema,
@@ -15,9 +17,20 @@ import {
 	put,
 } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
-import type { BillingMonth, ProjectBilling, ProjectBillingInput } from "../model";
+import type {
+	BillingBudget,
+	BillingBudgetInput,
+	BillingBudgetScope,
+	BillingBudgetStatus,
+	BillingMonth,
+	ProjectBilling,
+	ProjectBillingInput,
+} from "../model";
 import {
+	toApiBillingBudgetInput,
 	toApiProjectBillingInput,
+	toBillingBudget,
+	toBillingBudgetStatus,
 	toBillingMonth,
 	toOverrideMap,
 	toProjectBilling,
@@ -50,13 +63,21 @@ export async function setProjectBilling(
 }
 
 /**
- * Stop billing a project. RETROACTIVE_CHANGE without `rewritePast` when it
- * has terms before the current month.
+ * Stop billing a project. PROJECT_HAS_BILLING_BUDGET without
+ * `removeBillingBudget` when it has a billing budget, which then goes with
+ * it; RETROACTIVE_CHANGE without `rewritePast` when it has terms before the
+ * current month. Send `removeBillingBudget` true only once the user has seen
+ * the budget named.
  */
-export async function removeProjectBilling(projectId: string, rewritePast: boolean): Promise<void> {
+export async function removeProjectBilling(
+	projectId: string,
+	rewritePast: boolean,
+	removeBillingBudget: boolean,
+): Promise<void> {
 	const params = new URLSearchParams({
 		tz: browserTimeZone(),
 		rewrite_past: String(rewritePast),
+		remove_billing_budget: String(removeBillingBudget),
 	});
 	await del<void>(`/api/billing/projects/${projectId}?${params.toString()}`);
 }
@@ -85,4 +106,42 @@ export async function fetchBillingMonth(month: string, tz: string): Promise<Bill
 	const params = new URLSearchParams({ month, tz });
 	const data = await get<unknown>(`/api/billing/month?${params.toString()}`);
 	return toBillingMonth(parseApiResponse(BillingMonthSchema, data));
+}
+
+const BUDGET_PATHS: Record<BillingBudgetScope, string> = {
+	client: "/api/billing/budgets/clients",
+	project: "/api/billing/budgets/projects",
+};
+
+/** Every billing budget, read as of today in `tz`, by client name; `[]` when there are none. */
+export async function fetchBillingBudgets(tz: string): Promise<BillingBudgetStatus[]> {
+	const params = new URLSearchParams({ tz });
+	const data = await get<unknown>(`/api/billing/budgets?${params.toString()}`);
+	return parseApiResponse(ApiBillingBudgetStatusListSchema, data).map(toBillingBudgetStatus);
+}
+
+/**
+ * Give a client, or a billed project, its billing budget, replacing the one
+ * it had. 404 when the scope is not yours, 409 BILLING_BUDGET_NEEDS_BILLING
+ * on a project that is not billed, and a 422 naming the key. Not gated: a
+ * budget changes no billable figure.
+ */
+export async function putBillingBudget(
+	scope: BillingBudgetScope,
+	scopeId: string,
+	input: BillingBudgetInput,
+): Promise<BillingBudget> {
+	const data = await put<unknown>(
+		`${BUDGET_PATHS[scope]}/${scopeId}`,
+		toApiBillingBudgetInput(input),
+	);
+	return toBillingBudget(parseApiResponse(ApiBillingBudgetSchema, data));
+}
+
+/** Take a billing budget away. 204 whether or not there was one. */
+export async function deleteBillingBudget(
+	scope: BillingBudgetScope,
+	scopeId: string,
+): Promise<void> {
+	await del<void>(`${BUDGET_PATHS[scope]}/${scopeId}`);
 }
