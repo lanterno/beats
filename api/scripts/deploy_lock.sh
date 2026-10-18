@@ -17,11 +17,13 @@
 #            cannot be read is never broken. One that names this build is its
 #            own, made by a create whose response was lost and that gcloud
 #            retried.
-#   decide   holding the mutex, read the commit the Cloud Run service runs and
-#            decide whether this build deploys: "skip" when this build's commit
-#            is a strict ancestor of the live one (a newer build got there
-#            first), "apply" otherwise. Deciding inside the mutex is the point:
-#            no newer build can apply between the check and this build's apply.
+#   decide   holding the mutex, read the commit the Cloud Run service serves
+#            (its latest ready revision, which is older than the spec when the
+#            newest revision failed to start) and decide whether this build
+#            deploys: "skip" when this build's commit is a strict ancestor of
+#            the live one (a newer build got there first), "apply" otherwise.
+#            Deciding inside the mutex is the point: no newer build can apply
+#            between the check and this build's apply.
 #   release  delete the mutex, conditional on the generation this build
 #            created, so a build whose mutex was broken as stale never deletes
 #            the one another build now holds.
@@ -174,17 +176,48 @@ decide() {
 	is_sha "$COMMIT_SHA" || die "COMMIT_SHA must be a full 40-character commit sha, got '$COMMIT_SHA'"
 	mkdir -p "$DEPLOY_STATE_DIR"
 
-	local work image live_sha="" decision reason
+	local work out image ready created digest_ref tags live_sha="" decision reason
 	work=$(mktemp -d)
 	# shellcheck disable=SC2064 # expand $work now; it is local to this function
 	trap "rm -rf '$work'" EXIT
 
-	if image=$(gcloud run services describe "$CLOUD_RUN_SERVICE" --region "$CLOUD_RUN_REGION" \
-		--project "$GCP_PROJECT" --format='value(spec.template.spec.containers[0].image)' \
+	if out=$(gcloud run services describe "$CLOUD_RUN_SERVICE" --region "$CLOUD_RUN_REGION" \
+		--project "$GCP_PROJECT" \
+		--format='value[separator="|"](spec.template.spec.containers[0].image,status.latestReadyRevisionName,status.latestCreatedRevisionName)' \
 		2>"$work/describe.err"); then
-		# Terraform deploys <registry>/<image>:<commit sha>; the tag follows the last ':'.
-		live_sha=${image##*:}
-		log "live image: ${image:-none}"
+		# '|', not value()'s tab: read folds adjacent tabs, so an empty field
+		# (no ready revision) would shift the next one into its place.
+		image="" ready="" created=""
+		IFS='|' read -r image ready created <<<"$out" || true
+		if [[ -z $ready ]]; then
+			log "service $CLOUD_RUN_SERVICE has no revision that became ready; nothing is serving"
+		elif [[ $ready == "$created" ]]; then
+			# The newest revision is the one serving, so the spec's image is live.
+			# Terraform deploys <registry>/<image>:<commit sha>; the tag follows the last ':'.
+			live_sha=${image##*:}
+			log "live image: ${image:-none} (revision $ready)"
+		else
+			# The newest revision never became ready. Traffic follows the latest
+			# ready revision, so the API still runs an older image than the spec
+			# names, and comparing with the spec would skip a build the API has
+			# not got. A revision pins its image by digest; the registry says
+			# which commit tags carry that digest.
+			log "the newest revision $created never became ready; $ready is serving"
+			digest_ref=$(gcloud run revisions describe "$ready" --region "$CLOUD_RUN_REGION" \
+				--project "$GCP_PROJECT" --format='value(status.imageDigest)') ||
+				die "could not read the image of revision $ready"
+			[[ $digest_ref == *@sha256:* ]] || die "revision $ready has no image digest ('$digest_ref')"
+			tags=$(gcloud artifacts docker tags list "${digest_ref%@*}" \
+				--filter="version~${digest_ref##*@}\$" --format='value(tag)' 2>/dev/null) ||
+				die "could not list the registry tags of ${digest_ref%@*}"
+			tags=$(grep -E '^[0-9a-f]{40}$' <<<"$tags" || true)
+			if [[ $(wc -l <<<"$tags") -eq 1 && -n $tags ]]; then
+				live_sha=$tags
+				log "live image: $digest_ref, tagged $live_sha (revision $ready)"
+			else
+				log "cannot tell which commit revision $ready runs: its digest carries commit tags '${tags//$'\n'/ }'"
+			fi
+		fi
 	elif grep -q 'Cannot find service' "$work/describe.err"; then
 		log "service $CLOUD_RUN_SERVICE does not exist yet in $CLOUD_RUN_REGION"
 	else
@@ -195,7 +228,7 @@ decide() {
 	fi
 
 	if [[ -z $live_sha ]]; then
-		decision=apply reason="nothing is live to compare with"
+		decision=apply reason="no live commit is known to compare with"
 	elif [[ $live_sha == "$COMMIT_SHA" ]]; then
 		decision=apply reason="this commit is already live; re-applying its configuration"
 	elif ! is_sha "$live_sha"; then
