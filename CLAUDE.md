@@ -388,7 +388,14 @@ The two halves ship independently: the SPA on every push to `main` that touches
 skew — an old SPA against a newer API is a real state to reason about when
 changing anything both ends share.
 
-- **Deploy**: Terraform owns all Cloud Run config. Cloud Build builds the image and runs `terraform apply`.
+- **Deploy**: Terraform owns all Cloud Run config. Cloud Build builds the image and runs
+  `terraform apply`, one build at a time: a mutex in the state bucket (`beats/deploy.lock`,
+  `api/scripts/deploy_lock.sh`) covers both the apply and a check that the live commit does
+  not already contain this one. A build superseded that way succeeds without deploying, so
+  re-running an old build is no rollback: revert on `main` instead. A stuck lock is broken
+  by the next build after 40 minutes, or by hand with
+  `gcloud storage rm gs://beats-476914-terraform-state/beats/deploy.lock`; terraform/README.md
+  has the detail, and what to do when a killed apply also left Terraform's state lock.
 - **State**: GCS backend (`beats-476914-terraform-state`), shared by local and CI.
 - **Secrets**: `terraform.tfvars` stored in Secret Manager (`beats-terraform-tfvars`) for CI.
 - **Integrations**: Google Calendar and GitHub use per-user OAuth (system-wide client ID/secret, per-user tokens in MongoDB).

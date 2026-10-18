@@ -50,4 +50,4 @@ MongoDB hosted in the cloud.
 
 ### Deployment
 
-Pushes to `main` trigger Google Cloud Build, which builds the Docker image, pushes it to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run. The SPA half of that deployment ships separately, from the `deploy` job in `.github/workflows/ui.yml` — so the two can skew, and an older SPA against a newer API is a real state to reason about.
+Pushes to `main` trigger Google Cloud Build, which builds the Docker image, pushes it to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run, one build at a time and never an older commit than the one live (see [`terraform/README.md`](../terraform/README.md#how-a-deploy-runs)). The SPA half of that deployment ships separately, from the `deploy` job in `.github/workflows/ui.yml` — so the two can skew, and an older SPA against a newer API is a real state to reason about.
