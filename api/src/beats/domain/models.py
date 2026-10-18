@@ -892,10 +892,12 @@ class BillingBudget(BillingBudgetFields):
 
     scope: BillingBudgetScope
     scope_id: str  # a client's id or a project's
-    # Defaulted here, unlike on a write: a None is not stored.
-    limit_hours: _BillingBudgetHours | None = None
-    limit_minor: _BillingBudgetMinor | None = None
-    starts_on: date_type | None = None
+    # Defaulted here, unlike on a write: a None is not stored. The default
+    # is validated too, so a key left out meets the unit's and the period's
+    # rules as a null does — a backup written by hand may leave one out.
+    limit_hours: _BillingBudgetHours | None = Field(default=None, validate_default=True)
+    limit_minor: _BillingBudgetMinor | None = Field(default=None, validate_default=True)
+    starts_on: date_type | None = Field(default=None, validate_default=True)
 
 
 class BillableOverride(BaseModel):
