@@ -28,6 +28,11 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
+          name  = "REPORT_LINK_KEY"
+          value = var.report_link_key
+        }
+
+        env {
           name  = "WEBAUTHN_RP_ID"
           value = var.webauthn_rp_id
         }
