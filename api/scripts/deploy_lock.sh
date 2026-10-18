@@ -41,7 +41,7 @@
 #                              an abandoned mutex can be broken (acquire)
 #   DEPLOY_LOCK_POLL_SECONDS   seconds between attempts; 10 if unset (acquire)
 #   DEPLOY_RETRY_SECONDS       seconds before retrying a failed call; 5 if
-#                              unset (release)
+#                              unset (decide, release)
 #   BUILD_ID, COMMIT_SHA       this build; written into the mutex so a stuck
 #                              one says whose it is (acquire; COMMIT_SHA: decide)
 #   CLOUD_RUN_SERVICE, CLOUD_RUN_REGION, GCP_PROJECT
@@ -77,6 +77,26 @@ require_seconds() {
 }
 
 is_sha() { [[ $1 =~ ^[0-9a-f]{40}$ ]]; }
+
+# retry ERR_FILE FINAL_PATTERN COMMAND...: runs a read a network blip can
+# fail up to three times, DEPLOY_RETRY_SECONDS and then twice that apart,
+# printing its stdout. The last try's stderr is left in ERR_FILE. A try whose
+# stderr matches FINAL_PATTERN (when not empty) is an answer, such as "not
+# found", and is not repeated.
+retry() {
+	local err_file=$1 final=$2 attempt delay=${DEPLOY_RETRY_SECONDS:-5}
+	shift 2
+	for attempt in 1 2 3; do
+		"$@" 2>"$err_file" && return 0
+		if [[ -n $final ]] && grep -q -- "$final" "$err_file"; then
+			return 1
+		fi
+		((attempt < 3)) || return 1
+		log "$1 $2 $3 failed (try $attempt of 3), retrying in ${delay}s: $(tail -n 1 "$err_file")"
+		sleep "$delay"
+		delay=$((delay * 2))
+	done
+}
 
 acquire() {
 	require DEPLOY_LOCK_OBJECT DEPLOY_STATE_DIR DEPLOY_LOCK_STALE_SECONDS \
@@ -170,6 +190,12 @@ If no build is deploying, clear it by hand: gcloud storage rm $DEPLOY_LOCK_OBJEC
 	done
 }
 
+# A clone into a fresh directory, so a retry does not meet a failed try's leftovers.
+clone_fresh() {
+	rm -rf "$2"
+	git clone --quiet --filter=blob:none --no-checkout "$1" "$2"
+}
+
 decide() {
 	require COMMIT_SHA CLOUD_RUN_SERVICE CLOUD_RUN_REGION GCP_PROJECT DEPLOY_REPO_URL \
 		DEPLOY_STATE_DIR
@@ -181,10 +207,12 @@ decide() {
 	# shellcheck disable=SC2064 # expand $work now; it is local to this function
 	trap "rm -rf '$work'" EXIT
 
-	if out=$(gcloud run services describe "$CLOUD_RUN_SERVICE" --region "$CLOUD_RUN_REGION" \
+	# Every read below holds the mutex and runs after the image build, so a blip
+	# is retried before it fails the build and strands this commit undeployed.
+	if out=$(retry "$work/describe.err" 'Cannot find service' \
+		gcloud run services describe "$CLOUD_RUN_SERVICE" --region "$CLOUD_RUN_REGION" \
 		--project "$GCP_PROJECT" \
-		--format='value[separator="|"](spec.template.spec.containers[0].image,status.latestReadyRevisionName,status.latestCreatedRevisionName)' \
-		2>"$work/describe.err"); then
+		--format='value[separator="|"](spec.template.spec.containers[0].image,status.latestReadyRevisionName,status.latestCreatedRevisionName)'); then
 		# '|', not value()'s tab: read folds adjacent tabs, so an empty field
 		# (no ready revision) would shift the next one into its place.
 		image="" ready="" created=""
@@ -203,13 +231,15 @@ decide() {
 			# not got. A revision pins its image by digest; the registry says
 			# which commit tags carry that digest.
 			log "the newest revision $created never became ready; $ready is serving"
-			digest_ref=$(gcloud run revisions describe "$ready" --region "$CLOUD_RUN_REGION" \
+			digest_ref=$(retry "$work/revision.err" "" \
+				gcloud run revisions describe "$ready" --region "$CLOUD_RUN_REGION" \
 				--project "$GCP_PROJECT" --format='value(status.imageDigest)') ||
-				die "could not read the image of revision $ready"
+				die "could not read the image of revision $ready: $(<"$work/revision.err")"
 			[[ $digest_ref == *@sha256:* ]] || die "revision $ready has no image digest ('$digest_ref')"
-			tags=$(gcloud artifacts docker tags list "${digest_ref%@*}" \
-				--filter="version~${digest_ref##*@}\$" --format='value(tag)' 2>/dev/null) ||
-				die "could not list the registry tags of ${digest_ref%@*}"
+			tags=$(retry "$work/tags.err" "" \
+				gcloud artifacts docker tags list "${digest_ref%@*}" \
+				--filter="version~${digest_ref##*@}\$" --format='value(tag)') ||
+				die "could not list the registry tags of ${digest_ref%@*}: $(<"$work/tags.err")"
 			tags=$(grep -E '^[0-9a-f]{40}$' <<<"$tags" || true)
 			if [[ $(wc -l <<<"$tags") -eq 1 && -n $tags ]]; then
 				live_sha=$tags
@@ -237,8 +267,8 @@ decide() {
 		# Cloned only now, holding the mutex: a clone taken before could miss a
 		# commit a newer build deployed meanwhile and mistake it for unknown.
 		# A failed clone fails the build rather than guessing.
-		git clone --quiet --filter=blob:none --no-checkout "$DEPLOY_REPO_URL" "$work/repo" ||
-			die "could not clone $DEPLOY_REPO_URL to compare commits"
+		retry "$work/clone.err" "" clone_fresh "$DEPLOY_REPO_URL" "$work/repo" ||
+			die "could not clone $DEPLOY_REPO_URL to compare commits: $(<"$work/clone.err")"
 		git -C "$work/repo" cat-file -e "$COMMIT_SHA^{commit}" 2>/dev/null ||
 			die "this build's commit $COMMIT_SHA is not in $DEPLOY_REPO_URL"
 		if ! git -C "$work/repo" cat-file -e "$live_sha^{commit}" 2>/dev/null; then
