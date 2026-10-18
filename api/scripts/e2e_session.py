@@ -17,6 +17,7 @@ import json
 import os
 import sys
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from bson import ObjectId
@@ -26,6 +27,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from beats.auth.session import SessionManager
 from beats.domain.models import (
+    BillingBudget,
+    BillingBudgetPeriod,
+    BillingBudgetScope,
+    BillingBudgetUnit,
     BillingTerm,
     Client,
     FlowWindow,
@@ -187,6 +192,57 @@ def _seed_billing(db, user_id: str) -> None:
     )
 
 
+def _seed_billing_budgets(db, user_id: str) -> None:
+    """A billing budget on the seeded client and one on its billed project,
+    for the budget rows on the Clients page and in the Billing panel.
+
+    The rows, and the meter in each, exist only once a budget does: 40 hours
+    a month on the client, and €200.00 in total since 1 January on the
+    project, which the seeded sessions' €191.25 leaves near its limit. Guarded
+    on its own collection rather than inside `_seed_billing`, so a database
+    seeded before budgets existed gets them too. Written through the model
+    and the repository's serialiser, so the stored shape is the API's.
+    """
+    if db.billing_budgets.find_one({"user_id": user_id}):
+        return
+    client = db.clients.find_one({"user_id": user_id})
+    billing = db.project_billing.find_one({"user_id": user_id})
+    if client is None or billing is None:
+        return
+    new_year = datetime.now(UTC).date().replace(month=1, day=1)
+    budgets = [
+        BillingBudget(
+            scope=BillingBudgetScope.CLIENT,
+            scope_id=str(client["_id"]),
+            unit=BillingBudgetUnit.HOURS,
+            period=BillingBudgetPeriod.MONTHLY,
+            limit_hours=Decimal("40"),
+            limit_minor=None,
+            starts_on=None,
+            warn_at_percent=80,
+        ),
+        BillingBudget(
+            scope=BillingBudgetScope.PROJECT,
+            scope_id=billing["project_id"],
+            unit=BillingBudgetUnit.MONEY,
+            period=BillingBudgetPeriod.TOTAL,
+            limit_hours=None,
+            limit_minor=20000,
+            starts_on=new_year,
+            warn_at_percent=80,
+        ),
+    ]
+    db.billing_budgets.insert_many(
+        [
+            {
+                **serialize_to_document(budget.model_dump(mode="json", exclude_none=True)),
+                "user_id": user_id,
+            }
+            for budget in budgets
+        ]
+    )
+
+
 def main() -> int:
     dsn = os.environ.get("DB_DSN", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "beats")
@@ -214,6 +270,7 @@ def main() -> int:
         _seed_content(client[db_name], user_id)
         _seed_flow(client[db_name], user_id)
         _seed_billing(client[db_name], user_id)
+        _seed_billing_budgets(client[db_name], user_id)
     finally:
         client.close()
 
