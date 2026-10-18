@@ -128,9 +128,9 @@ proof, or a side project's pace, beside the open week), `WeekDays` ("Days") and
 its step chart and the month's timesheet download, `TimesheetDownload`, or the
 goal), `TimeOff` on a day job (whose tally reads the vacation entitlement's year
 when the contract has one), `BillingPanel` on a freelance project (its client and
-dated billing terms, edited through `BillingDialog`; the page reads the billing and
-the entry marks and hands them to it and to `WeekDays`, whose finished sessions then
-carry a Billable pill), and `QuietFacts`. The layout
+dated billing terms, edited through `BillingDialog`, and its billing budget; the page
+reads the billing and the entry marks and hands them to it and to `WeekDays`, whose
+finished sessions then carry a Billable pill), and `QuietFacts`. The layout
 queries the content column (`@container/content`), not the viewport, and the rail sits
 beside the column from 860 px of it. Every figure is the API's, a ledger row's +/− too
 on a week that closes (its `balance_moved`); the page's own arithmetic — the sentence,
@@ -145,14 +145,27 @@ the sentence (`summary.ts`), a `ClientPanel` per client, the freelance hours bil
 no one. The sidebar offers it once there is a client or a freelance project
 (`useShowClients`). Every hour and amount is the API's `/api/billing/month`; the SPA
 never prices. Money is integer minor units with the API's `minor_units`
-(`shared/lib/money.ts`: `formatMoney`, `parseMoney` reads the string, never
-`parseFloat`). The one billing rule run here is the flag, `entryBillable` in
-`entities/billing/model/resolve.ts`, parity-tested against the Python. A write that may
-change a month already over goes through `withPastConsent`, which asks in the API's
-words before sending again with `rewrite_past`. `ClientDialog` and `BillableSwitch` live
-in their entities, since both the Clients page and the project page open them; the
-query roots a session or timer write invalidates are in `shared/api/keys.ts`, so no
-entity imports another.
+(`shared/lib/money.ts`: `formatMoney`; `parseAmount` reads the string, never
+`parseFloat`, and `parseMoney` and `parseHours` are made of it). The one billing rule
+run here is the flag, `entryBillable` in `entities/billing/model/resolve.ts`,
+parity-tested against the Python. A write that may change a month already over goes
+through `withPastConsent`, which asks in the API's words before sending again with
+`rewrite_past`. `ClientDialog` and `BillableSwitch` live in their entities, since both
+the Clients page and the project page open them; the query roots a session or timer
+write invalidates are in `shared/api/keys.ts`, so no entity imports another.
+
+Billing budgets (phase 1b) are read as of today with `useBillingBudgets`, under the
+billing root, so every billing write, session write and timer start or stop refreshes
+them; `useTimer` also refreshes the root when the polled status's `since` changes, so a
+timer started from a device reaches them. Their words, and the only thing worked out
+here, a running timer's crossing instant against the clock, are pure functions in
+`entities/billing/model/budget.ts` (`describeBillingBudget`, `billingBudgetState`);
+`BillingBudgetRow`, `BillingBudgetMeter` and `BillingBudgetDialog` live in the entity,
+since the Clients page and the Billing panel both draw and edit them. The minute's tick
+is `useNow` and the hours are `hoursText`, both in `shared/lib`, so an entity or a widget
+can read them. The Clients nav item wears a dot only while an active budget is used up
+(`widgets/sidebar/useBillingBudgetAttention.ts`). When the budgets cannot be read, each
+block says "Budgets aren't available right now." and the rest renders as before.
 
 ## Testing
 
