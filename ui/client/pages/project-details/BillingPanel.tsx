@@ -6,6 +6,13 @@
  * change from a day, and this month's billable figure from the API, which
  * links to the Clients page. Without billing it asks who the work is for.
  *
+ * Under the month's figure sits the project's billing budget (docs/billing.md,
+ * phase 1b) — its row with edit and remove, or "+ Set a budget" — and, when
+ * its client has a budget of its own, a read-only line saying this project
+ * counts toward it too. With a budget, "Stop billing" names it, and only
+ * that confirmation sends `remove_billing_budget`; when the budgets cannot
+ * be read the line says so and the rest of the panel is as it was.
+ *
  * Every change PUTs the whole billing through `BillingDialog`; a remove
  * here and "Stop billing" go through `withPastConsent` as the dialog's
  * saves do, so nothing in a month already over changes unasked. The page
@@ -18,11 +25,15 @@ import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import type { BillingTerm, ProjectBilling } from "@/entities/billing";
+import type { BillingBudgetStatus, BillingTerm, ProjectBilling } from "@/entities/billing";
 import {
+	BillingBudgetDialog,
+	BillingBudgetRow,
 	inForceOn,
 	monthOf,
+	useBillingBudgets,
 	useBillingMonth,
+	useRemoveBillingBudget,
 	useRemoveProjectBilling,
 	useSetProjectBilling,
 	withPastConsent,
@@ -31,7 +42,16 @@ import type { Client } from "@/entities/client";
 import { useClients } from "@/entities/client";
 import type { ProjectWithDuration } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { browserTimeZone, cn, formatMoney, formatRate } from "@/shared/lib";
+import {
+	browserTimeZone,
+	cn,
+	formatDateShort,
+	formatMoney,
+	formatRate,
+	hoursText,
+	parseIsoDate,
+	useNow,
+} from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
 import { BillingDialog, type BillingDialogMode } from "./BillingDialog";
 import { plainDate } from "./dates";
@@ -83,6 +103,28 @@ function describeBillingTerm(
 		: "billable at the client's rate, which has none yet";
 }
 
+/**
+ * "4.5 h left this month", "€120.00 over since Sep 1", "starts Nov 1": what
+ * is left of the client's budget, in the API's figures, for the line that
+ * says the project counts toward it.
+ */
+function clientBudgetLeft(status: BillingBudgetStatus): string {
+	const day = (iso: string) => {
+		const d = parseIsoDate(iso);
+		return d ? formatDateShort(d) : iso;
+	};
+	if (status.upcoming) return `starts ${day(status.first)}`;
+	const hours = status.unit === "hours";
+	const remaining = (hours ? status.remainingHours : status.remainingMinor) ?? 0;
+	const figure = hours
+		? hoursText(Math.abs(remaining))
+		: formatMoney(Math.abs(remaining), status.currency, status.minorUnits);
+	const when = status.period === "monthly" ? "this month" : `since ${day(status.first)}`;
+	if (remaining < 0) return `${figure} over ${when}`;
+	if (remaining === 0) return `used up ${when}`;
+	return `${figure} left ${when}`;
+}
+
 function Billed({
 	project,
 	billing,
@@ -100,17 +142,27 @@ function Billed({
 	const month = useBillingMonth(monthOf(todayIso), tz);
 	const setBilling = useSetProjectBilling();
 	const removeBilling = useRemoveProjectBilling();
+	const budgets = useBillingBudgets(tz);
+	const removeBudget = useRemoveBillingBudget();
 	const { confirm, confirmDialog } = useConfirm();
 	const [dialog, setDialog] = useState<{ key: number; mode: BillingDialogMode } | null>(null);
 	const [pendingIndex, setPendingIndex] = useState<number | null>(null);
 	const [confirmingStop, setConfirmingStop] = useState(false);
+	const [budgetOpen, setBudgetOpen] = useState(false);
 	const dialogs = useRef(0);
 	const changeButton = useRef<HTMLButtonElement>(null);
+	const budgetButton = useRef<HTMLButtonElement>(null);
 
 	const client = [...(active ?? []), ...(archived ?? [])].find((c) => c.id === billing.clientId);
 	const terms = sortTerms(billing.terms);
 	const inForce = inForceOn(terms, todayIso);
-	const busy = setBilling.isPending || removeBilling.isPending;
+	const budget = budgets.data?.find((b) => b.scope === "project" && b.scopeId === project.id);
+	const clientBudget = budgets.data?.find(
+		(b) => b.scope === "client" && b.scopeId === billing.clientId,
+	);
+	// A minute's tick, only while a running timer could cross a threshold here.
+	const now = useNow(60_000, { enabled: Boolean(budget?.running || clientBudget?.running) });
+	const busy = setBilling.isPending || removeBilling.isPending || removeBudget.isPending;
 	const askPast = (detail: string) =>
 		confirm({
 			title: "Change a month already over?",
@@ -144,13 +196,18 @@ function Billed({
 		}
 	};
 
-	const handleStop = async () => {
+	/**
+	 * `removeBillingBudget` is true only from the confirmation that named the
+	 * budget: a tab that never saw one sends false, and the API's refusal
+	 * shows in its own words.
+	 */
+	const handleStop = async (removeBillingBudget: boolean) => {
 		try {
 			const stopped = await withPastConsent(async (rewritePast) => {
 				await removeBilling.mutateAsync({
 					projectId: project.id,
 					rewritePast,
-					removeBillingBudget: false,
+					removeBillingBudget,
 				});
 				return true;
 			}, askPast);
@@ -161,6 +218,15 @@ function Billed({
 			setConfirmingStop(false);
 		}
 	};
+
+	const handleRemoveBudget = () =>
+		removeBudget.mutate(
+			{ scope: "project", scopeId: project.id },
+			{
+				onSuccess: () => toast.success("Budget removed"),
+				onError: (err) => toast.error(describeError(err, "Failed to remove the budget")),
+			},
+		);
 
 	// This month's figures for the project: its lines' sums, as the Clients page shows them.
 	const lines = (month.data?.clients ?? [])
@@ -277,17 +343,82 @@ function Billed({
 				</p>
 			)}
 
+			<div className="mt-3">
+				{budgets.isError ? (
+					<p className="text-[12.5px] text-muted-foreground font-medium">
+						Budgets aren't available right now.
+					</p>
+				) : budget ? (
+					<BillingBudgetRow
+						status={budget}
+						now={now}
+						title="Budget"
+						actions={
+							<span className={OPS}>
+								<button
+									ref={budgetButton}
+									type="button"
+									onClick={() => setBudgetOpen(true)}
+									disabled={busy}
+									aria-label="Edit the budget"
+									className={OP}
+								>
+									<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
+								</button>
+								<button
+									type="button"
+									onClick={handleRemoveBudget}
+									disabled={busy}
+									aria-label="Remove the budget"
+									className={cn(OP, "hover:text-destructive")}
+								>
+									{removeBudget.isPending ? (
+										<Loader2 className="w-[11px] h-[11px] animate-spin" aria-hidden="true" />
+									) : (
+										<Trash2 className="w-[11px] h-[11px]" aria-hidden="true" />
+									)}
+								</button>
+							</span>
+						}
+						className="group"
+					/>
+				) : budgets.data ? (
+					<button
+						ref={budgetButton}
+						type="button"
+						onClick={() => setBudgetOpen(true)}
+						disabled={busy}
+						className={LINKISH}
+					>
+						+ Set a budget
+					</button>
+				) : null}
+				{clientBudget && (
+					<p className="mt-1.5 text-[12.5px] font-medium text-muted-foreground">
+						Also counts toward {clientBudget.name}'s budget:{" "}
+						<span className="font-mono font-bold text-foreground">
+							{clientBudgetLeft(clientBudget)}
+						</span>{" "}
+						<Link to="/clients" className={LINKISH}>
+							→ Clients
+						</Link>
+					</p>
+				)}
+			</div>
+
 			<div className="mt-2.5 pt-2.5 border-t border-border text-xs text-muted-foreground font-medium">
 				{confirmingStop ? (
 					<span className="inline-flex flex-wrap items-center gap-1.5">
-						Stop billing {project.name}? Its terms go; its hours stay.
+						{budget
+							? `Stop billing ${project.name}? Its terms and its budget go; its hours stay.`
+							: `Stop billing ${project.name}? Its terms go; its hours stay.`}
 						<Button
 							type="button"
 							variant="destructive"
 							size="sm"
 							className="h-7 px-2.5 text-xs"
 							disabled={busy}
-							onClick={() => void handleStop()}
+							onClick={() => void handleStop(budget !== undefined)}
 						>
 							Stop billing
 						</Button>
@@ -323,6 +454,20 @@ function Billed({
 					firstTrackedIso={firstTrackedIso}
 					returnFocus={() => changeButton.current}
 					onClose={() => setDialog((d) => (d?.key === dialog.key ? null : d))}
+				/>
+			)}
+			{budgetOpen && (
+				<BillingBudgetDialog
+					scope="project"
+					scopeId={project.id}
+					name={project.name}
+					currency={billing.currency}
+					minorUnits={billing.minorUnits}
+					budget={budget}
+					billingStartedOn={terms[0]?.effectiveFrom}
+					todayIso={todayIso}
+					returnFocus={() => budgetButton.current}
+					onClose={() => setBudgetOpen(false)}
 				/>
 			)}
 			{confirmDialog}
