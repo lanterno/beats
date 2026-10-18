@@ -50,7 +50,7 @@ UNDER, NEAR, USED_UP = BillingBudgetState.UNDER, BillingBudgetState.NEAR, Billin
 PROJECTS = {"p1": _project(), "p2": _project("p2", "Shop")}
 
 
-def _budget(
+def _billing_budget(
     unit: BillingBudgetUnit,
     limit: str | int,
     *,
@@ -120,7 +120,9 @@ class TestSpend:
             _beat(NOV_1, timedelta(hours=1, seconds=18)),
         ]
         status = _status(
-            _budget(MONEY, 100000, period=TOTAL, starts_on=OCT_1), beats, today=date(2026, 11, 5)
+            _billing_budget(MONEY, 100000, period=TOTAL, starts_on=OCT_1),
+            beats,
+            today=date(2026, 11, 5),
         )
         assert (status.billable_hours, status.amount_minor) == (Decimal("2.02"), 17170)
         one_range = assemble_client(
@@ -142,7 +144,7 @@ class TestSpend:
             _beat(date(2026, 9, 30), _hours(4)),
             *_daily(OCT_1, OCT_18, timedelta(hours=1, minutes=7)),
         ]
-        status = _status(_budget(HOURS, "40"), beats, client=client, billings=billings)
+        status = _status(_billing_budget(HOURS, "40"), beats, client=client, billings=billings)
         report = assemble_client(client, billings, PROJECTS, beats, {}, OCT_1, OCT_18, BERLIN)
         assert (status.first, status.last, status.through) == (OCT_1, OCT_31, OCT_18)
         assert (status.billable_hours, status.amount_minor) == (
@@ -159,9 +161,9 @@ class TestSpend:
             _beat(date(2026, 10, 5), _hours(2)),
             _beat(date(2026, 10, 6), _hours(3), project_id="p2"),
         ]
-        client = _status(_budget(MONEY, 100000), beats, billings=billings)
+        client = _status(_billing_budget(MONEY, 100000), beats, billings=billings)
         website = _status(
-            _budget(MONEY, 100000, scope=BillingBudgetScope.PROJECT, scope_id="p1"),
+            _billing_budget(MONEY, 100000, scope=BillingBudgetScope.PROJECT, scope_id="p1"),
             beats,
             billings=billings,
         )
@@ -181,7 +183,7 @@ class TestSpend:
         # at the client's rate, one marked not billable after it does not.
         early, late = _beat(date(2026, 10, 5), _hours(2)), _beat(date(2026, 10, 12), _hours(3))
         status = _status(
-            _budget(HOURS, "40"),
+            _billing_budget(HOURS, "40"),
             [early, late],
             billings=[_billing(_term(date(2026, 10, 10)))],
             overrides={early.id: True, late.id: False},
@@ -190,9 +192,11 @@ class TestSpend:
 
     def test_a_beat_started_at_23_30_on_the_31st_is_octobers(self):
         beats = [_beat(OCT_31, _hours(1), at=time(23, 30))]  # until 00:30 on 1 November
-        october = _status(_budget(HOURS, "40"), beats, today=OCT_31)
-        november = _status(_budget(HOURS, "40"), beats, today=NOV_1)
-        total = _status(_budget(HOURS, "40", period=TOTAL, starts_on=OCT_1), beats, today=NOV_1)
+        october = _status(_billing_budget(HOURS, "40"), beats, today=OCT_31)
+        november = _status(_billing_budget(HOURS, "40"), beats, today=NOV_1)
+        total = _status(
+            _billing_budget(HOURS, "40", period=TOTAL, starts_on=OCT_1), beats, today=NOV_1
+        )
         assert october.billable_hours == total.billable_hours == Decimal("1.00")
         assert (november.first, november.billable_hours) == (NOV_1, Decimal("0.00"))
 
@@ -207,7 +211,9 @@ class TestSpend:
 
         monkeypatch.setattr("beats.domain.billing_budgets.assemble_client", counting)
         beats = [_beat(OCT_1, _hours(2))]
-        status = _status(_budget(HOURS, "400", period=TOTAL, starts_on=date(1, 1, 1)), beats)
+        status = _status(
+            _billing_budget(HOURS, "400", period=TOTAL, starts_on=date(1, 1, 1)), beats
+        )
         assert status.billable_hours == Decimal("2.00")
         assert assembled == [OCT_1, OCT_1]  # the period, then the pace's window
 
@@ -232,7 +238,9 @@ class TestState:
         assert [percent_used(4000, spent) for spent in (3984, 4000, 4350)] == [99, 100, 108]
 
     def test_over_is_a_negative_remaining(self):
-        status = _status(_budget(HOURS, "40"), _daily(OCT_1, date(2026, 10, 3), _hours(14.5)))
+        status = _status(
+            _billing_budget(HOURS, "40"), _daily(OCT_1, date(2026, 10, 3), _hours(14.5))
+        )
         assert (status.state, status.remaining_hours, status.remaining_minor) == (
             USED_UP,
             Decimal("-3.50"),
@@ -249,7 +257,7 @@ class TestState:
         ]
         priced = _daily(OCT_1, OCT_18, _hours(1))
         unpriced = [_beat(date(2026, 10, 9), _hours(3.5), project_id="p2")]
-        budget = _budget(MONEY, 200000)
+        budget = _billing_budget(MONEY, 200000)
         status = _status(budget, priced + unpriced, client=client, billings=billings)
         assert (status.amount_minor, status.unpriced_hours) == (153000, Decimal("3.50"))
         assert (status.state, status.percent_used, status.runs_out_on) == (UNDER, 76, None)
@@ -258,7 +266,7 @@ class TestState:
         )
 
     def test_an_upcoming_total_has_no_figures_yet(self):
-        budget = _budget(HOURS, "120", period=TOTAL, starts_on=NOV_1)
+        budget = _billing_budget(HOURS, "120", period=TOTAL, starts_on=NOV_1)
         beats = [*_daily(OCT_1, date(2026, 10, 17), _hours(3)), _running(OCT_18, time(9))]
         status = _status(budget, beats)
         assert (status.upcoming, status.first, status.last, status.through) == (
@@ -283,7 +291,7 @@ class TestRunning:
     def test_hours_cross_at_the_hours_left(self):
         # 30 h spent of 40, warned at 32: a timer since 09:10 (07:10 UTC).
         beats = [*_daily(OCT_1, date(2026, 10, 10), _hours(3)), _running(OCT_18, time(9, 10))]
-        status = _status(_budget(HOURS, "40"), beats)
+        status = _status(_billing_budget(HOURS, "40"), beats)
         assert status.billable_hours == Decimal("30.00")  # the running beat is in no figure
         assert status.running == (
             "p1",
@@ -298,7 +306,7 @@ class TestRunning:
         # midnight, but the beat is the 18th's. 80.00 of 100.00 is 0.9412 h,
         # 3388.2 s; 100.00 is 1.1765 h, 4235.3 s.
         client = _client((JAN_1, 8500), (date(2026, 10, 19), 17000))
-        status = _status(_budget(MONEY, 10000), [_running(OCT_18, time(22))], client=client)
+        status = _status(_billing_budget(MONEY, 10000), [_running(OCT_18, time(22))], client=client)
         assert status.running == (
             "p1",
             _utc(OCT_18, 20),
@@ -314,7 +322,7 @@ class TestRunning:
             *_daily(OCT_1, date(2026, 10, 8), _hours(3)),
             _running(OCT_18, time(9, 10, 0, 500000)),
         ]
-        status = _status(_budget(HOURS, "40"), beats)
+        status = _status(_billing_budget(HOURS, "40"), beats)
         assert status.running is not None
         assert (status.running.near_at, status.running.over_at) == (
             _utc(OCT_18, 15, 10, 1),
@@ -324,33 +332,38 @@ class TestRunning:
     def test_an_unpriced_beat_spends_hours_but_no_money(self):
         client = _client((date(2026, 10, 19), 8500))  # no rate yet on the 18th
         beats = [_running(OCT_18, time(9))]
-        money = _status(_budget(MONEY, 10000), beats, client=client)
-        hours = _status(_budget(HOURS, "10"), beats, client=client)
+        money = _status(_billing_budget(MONEY, 10000), beats, client=client)
+        hours = _status(_billing_budget(HOURS, "10"), beats, client=client)
         assert money.running == ("p1", _utc(OCT_18, 7), False, None, None)
         assert hours.running == ("p1", _utc(OCT_18, 7), False, _utc(OCT_18, 15), _utc(OCT_18, 17))
 
     def test_a_beat_marked_not_billable_does_not_count(self):
         beat = _running(OCT_18, time(9))
-        assert _status(_budget(HOURS, "40"), [beat], overrides={beat.id: False}).running is None
+        assert (
+            _status(_billing_budget(HOURS, "40"), [beat], overrides={beat.id: False}).running
+            is None
+        )
 
     def test_a_beat_started_before_the_period_belongs_to_it_and_not_this_one(self):
         beats = [_running(OCT_31, time(23))]
-        assert _status(_budget(HOURS, "40"), beats, today=NOV_1).running is None
-        total = _status(_budget(HOURS, "40", period=TOTAL, starts_on=OCT_1), beats, today=NOV_1)
+        assert _status(_billing_budget(HOURS, "40"), beats, today=NOV_1).running is None
+        total = _status(
+            _billing_budget(HOURS, "40", period=TOTAL, starts_on=OCT_1), beats, today=NOV_1
+        )
         assert total.running is not None
         assert total.running.since == _utc(OCT_31, 22)
 
     def test_a_threshold_already_crossed_has_no_instant(self):
         beats = [*_daily(OCT_1, date(2026, 10, 11), _hours(3)), _running(OCT_18, time(9))]
-        near = _status(_budget(HOURS, "40"), beats)  # 33 h: past the warning
-        used_up = _status(_budget(HOURS, "33"), beats)
+        near = _status(_billing_budget(HOURS, "40"), beats)  # 33 h: past the warning
+        used_up = _status(_billing_budget(HOURS, "33"), beats)
         assert near.running == ("p1", _utc(OCT_18, 7), True, None, _utc(OCT_18, 14))
         assert used_up.running == ("p1", _utc(OCT_18, 7), True, None, None)
 
     def test_two_running_beats_name_the_earliest_and_give_no_instant(self):
         beats = [_running(OCT_18, time(11), project_id="p2"), _running(OCT_18, time(9))]
         billings = [_billing(_term(JAN_1)), _billing(_term(JAN_1), project_id="p2")]
-        status = _status(_budget(HOURS, "40"), beats, billings=billings)
+        status = _status(_billing_budget(HOURS, "40"), beats, billings=billings)
         assert status.running == ("p1", _utc(OCT_18, 7), True, None, None)
 
     def test_the_night_the_clocks_go_back_is_elapsed_time(self):
@@ -360,7 +373,7 @@ class TestRunning:
             *_daily(OCT_1, date(2026, 10, 7), _hours(5)),
             _running(date(2026, 10, 24), time(23)),
         ]
-        status = _status(_budget(HOURS, "40"), beats, today=date(2026, 10, 25))
+        status = _status(_billing_budget(HOURS, "40"), beats, today=date(2026, 10, 25))
         assert status.running is not None
         assert status.running.over_at == _utc(date(2026, 10, 25), 2)
         assert status.running.over_at.astimezone(BERLIN).time() == time(3)
@@ -394,8 +407,8 @@ class TestProjection:
 
     def test_a_monthly_budget_first_projects_on_the_7th(self):
         beats = _daily(OCT_1, date(2026, 10, 7), _hours(1))
-        on_6th = _status(_budget(HOURS, "10"), beats[:6], today=date(2026, 10, 6))
-        on_7th = _status(_budget(HOURS, "10"), beats, today=date(2026, 10, 7))
+        on_6th = _status(_billing_budget(HOURS, "10"), beats[:6], today=date(2026, 10, 6))
+        on_7th = _status(_billing_budget(HOURS, "10"), beats, today=date(2026, 10, 7))
         assert (on_6th.runs_out_on, on_7th.runs_out_on) == (None, date(2026, 10, 10))
 
     def test_the_pace_is_the_last_28_days(self):
@@ -405,7 +418,7 @@ class TestProjection:
             *_daily(date(2026, 7, 1), date(2026, 7, 31), _hours(10)),
             *_daily(date(2026, 9, 21), OCT_18, _hours(1)),
         ]
-        budget = _budget(HOURS, "400", period=TOTAL, starts_on=date(2026, 7, 1))
+        budget = _billing_budget(HOURS, "400", period=TOTAL, starts_on=date(2026, 7, 1))
         status = _status(budget, beats)
         assert (status.remaining_hours, status.runs_out_on) == (
             Decimal("62.00"),
