@@ -196,6 +196,21 @@ class TestSpend:
         assert october.billable_hours == total.billable_hours == Decimal("1.00")
         assert (november.first, november.billable_hours) == (NOV_1, Decimal("0.00"))
 
+    def test_a_total_from_long_ago_works_out_only_the_months_it_has_beats_in(self, monkeypatch):
+        # From 1 January of year 1 is some 24,300 months: one assemble each,
+        # twice a read, made every budgets read take most of a second.
+        assembled: list[date] = []
+
+        def counting(*args):
+            assembled.append(args[5])
+            return assemble_client(*args)
+
+        monkeypatch.setattr("beats.domain.billing_budgets.assemble_client", counting)
+        beats = [_beat(OCT_1, _hours(2))]
+        status = _status(_budget(HOURS, "400", period=TOTAL, starts_on=date(1, 1, 1)), beats)
+        assert status.billable_hours == Decimal("2.00")
+        assert assembled == [OCT_1, OCT_1]  # the period, then the pace's window
+
 
 class TestState:
     @pytest.mark.parametrize(
