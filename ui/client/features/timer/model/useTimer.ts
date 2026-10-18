@@ -45,6 +45,8 @@ export function useTimer() {
 
 	const apiStartTimeRef = useRef<string | null>(null);
 	const isSyncingFromApiRef = useRef(false);
+	// The polled status's `since`, once one has loaded: undefined before, null while idle.
+	const seenSinceRef = useRef<string | null | undefined>(undefined);
 
 	// Fetch timer status from API. Interval adapts to running state and pauses
 	// on hidden tabs; TanStack Query also refetches on focus / reconnect.
@@ -61,6 +63,15 @@ export function useTimer() {
 	// Sync local state from fetched status
 	useEffect(() => {
 		if (!status) return;
+
+		// A timer started or stopped elsewhere — the companion, the daemon, the
+		// wall clock — moves the billing budgets' running timer: read them again.
+		// The first status is not a change.
+		const since = status.isBeating ? (status.since ?? null) : null;
+		if (seenSinceRef.current !== undefined && seenSinceRef.current !== since) {
+			queryClient.invalidateQueries({ queryKey: billingRootKey });
+		}
+		seenSinceRef.current = since;
 
 		if (status.isBeating && status.since && status.project?.id) {
 			const startTime = parseUtcIso(status.since);
@@ -100,7 +111,7 @@ export function useTimer() {
 				isSyncingFromApiRef.current = false;
 			});
 		}
-	}, [status]);
+	}, [status, queryClient]);
 
 	// Update localStorage when timer state changes (but not from API sync)
 	useEffect(() => {
@@ -145,6 +156,8 @@ export function useTimer() {
 			});
 			if (result.status === "sent") {
 				queryClient.invalidateQueries({ queryKey: timerStatusKey });
+				// A billing budget answers a running timer with the instants it crosses at.
+				queryClient.invalidateQueries({ queryKey: billingRootKey });
 			} else {
 				notifySyncWork();
 			}
