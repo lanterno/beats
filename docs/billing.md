@@ -16,17 +16,19 @@ and the finished sessions, Beats works out a month's figures per client.
 The decisions below were made in the design of phase 1a of Organisations
 (AHM-88) and are recorded so that later work does not re-litigate them.
 The rest says what was built on them and why. Phase 1b, billing budgets
-(AHM-95), has a section of its own, *Billing budgets (phase 1b)*: it builds
-on these decisions and changes none of them. How the project page shows a
-project's billing is in [project-page.md](project-page.md).
+(AHM-95), and phase 1c, report links (AHM-96), have sections of their own,
+*Billing budgets (phase 1b)* and *Report links (phase 1c)*. Each builds on
+these decisions; 1c narrows decision 1, and says so there. How the project
+page shows a project's billing is in [project-page.md](project-page.md).
 
 ---
 
 ## Decisions
 
 1. **A client is a record in your own account.** Not an account of
-   theirs, not an organisation: nothing is shared with a client, and a
-   client sees nothing. Phase 2 can link "my client Acme" to an Acme
+   theirs, not an organisation: a client never signs in, and sees nothing
+   but a report link you make for them (phase 1c), which shows what that
+   link was made to show. Phase 2 can link "my client Acme" to an Acme
    organisation without moving the record.
 2. **Billing lives in its own collections**, `clients`, `project_billing`
    and `billable_overrides`, under its own routes, `/api/clients` and
@@ -108,7 +110,9 @@ project's billing is in [project-page.md](project-page.md).
 14. **The privacy wall** is the collection boundary of Decision 2, the two
     prefixes no device token reaches, and a coach with no port to them.
     Budgets, report links and organisations extend it without moving data
-    (see *Billing budgets (phase 1b)* and *How later phases build on it*).
+    (see *Billing budgets (phase 1b)*, *Report links (phase 1c)* and *How
+    later phases build on it*). A report link is the one door through the
+    wall, and it opens onto one client's billed hours only.
 15. **Naming.** Phase 1b's limits are *billing budgets*, never "budgets"
     alone: `WeeklyPlan.budgets` already means a week's planned hours per
     project.
@@ -116,7 +120,8 @@ project's billing is in [project-page.md](project-page.md).
 Left out of 1a, each addable later without migrating data: tax (amounts
 are net), invoices, billing increments (time is billed exactly, to
 0.01 h), exchange rates, unique client names, billing columns in the
-sessions CSV, a separate client details page, notes in the report.
+sessions CSV, a separate client details page, notes in the report (a report
+link carries them when it says so, phase 1c).
 
 ---
 
@@ -200,7 +205,7 @@ failing would make every stored record unreadable, which is why
   (phase 1b). `ClientResponse` carries `currency_locked` so the picker can
   say so before the user tries.
 - **A client with billed projects** cannot be deleted (Decision 13). One
-  that can takes its billing budget with it.
+  that can takes its billing budget and its report links with it.
 - **A project's billing**: the project is the caller's (404) and freelance
   (409 `NOT_FREELANCE`); the client is the caller's (404
   `CLIENT_NOT_FOUND`), archived or not, since a restored backup may bill
@@ -318,8 +323,8 @@ yet — is not in billing at all.
 - `unattached`: every freelance project, archived or not, with finished
   hours in the range and no billing. Those hours are in no figure, and the
   page says so.
-- No notes and no tags. Whether a client's report shows notes is a
-  decision for report links.
+- No notes and no tags. A report link shows notes when it was made to
+  (phase 1c); it never shows tags.
 
 `assemble_client` takes one client's inputs only — its billings, their
 projects, their beats and those beats' overrides — and `assemble_billing`
@@ -365,8 +370,9 @@ apply it."*
 
 ## HTTP contract
 
-Every route needs a session token, and none sits under a device prefix: a
-device token gets 403 on all of them, and the comment beside
+Every route here needs a session token, and none sits under a device prefix
+(the one public route, a report link's, is 1c's: *Report links (phase 1c)*):
+a device token gets 403 on all of them, and the comment beside
 `DEVICE_ALLOWED_PREFIXES` says never to add them, nor to put billing under
 `/api/projects` or `/api/beats`. Someone else's client, project or beat is
 not found (404), never forbidden, and so is a malformed id.
@@ -380,7 +386,7 @@ not found (404), never forbidden, and so is a malformed id.
 | GET | `/api/clients/{id}` | | 404 `CLIENT_NOT_FOUND` |
 | PUT | `/api/clients/{id}?tz=` | `ClientUpdateRequest`: the same keys and `rewrite_past` | 409 `CURRENCY_IN_USE`, `RETROACTIVE_CHANGE`; 400; 422 |
 | POST | `/api/clients/{id}/archive`, `/unarchive` | | the client |
-| DELETE | `/api/clients/{id}` | | 204, and the client's billing budget goes too; 409 `CLIENT_HAS_PROJECTS` |
+| DELETE | `/api/clients/{id}` | | 204, and the client's billing budget and report links go too; 409 `CLIENT_HAS_PROJECTS` |
 
 A write sends every key, null where it may be: `name`, `contact_name`,
 `contact_email`, `currency`, `rates`. A client comes back with
@@ -572,9 +578,14 @@ is safe.
 - **Devices** are kept off by the choice of prefixes, the comment in
   `server.py`, and one HTTP test: a device token gets 403 on
   `/api/clients/`, `/api/billing/month`, `/api/billing/entries/{id}`,
-  `GET /api/billing/budgets` and `PUT /api/billing/budgets/clients/{id}`.
+  `GET /api/billing/budgets` and `PUT /api/billing/budgets/clients/{id}`,
+  and on every `/api/billing/report-links` route and
+  `POST /api/public/reports`.
 - **Webhooks** are unchanged; there are no billing events, and no budget
   events: `timer.start` and `timer.stop` carry what they always did.
+- **Report links** reach none of them: no coach port, no device prefix, no
+  webhook event for making, turning off or opening one. What a link shows,
+  and to whom, is in *Report links (phase 1c)*.
 - **A contact's name and email** belong to a third party. They are shown,
   never mailed or sent anywhere, and they are in the export and in an
   account's deletion (PRIVACY.md).
@@ -854,6 +865,8 @@ is resolved here, with 1a's own `resolve_entry`.
   (a month's end, or none on a total), `through` (today, or none while
   upcoming) and `upcoming`.
 - `month_slices(first, last)` cuts a span of days at each 1st of a month.
+  It is in `billing.py`, since report links cut their days the same way
+  (phase 1c).
 - `scope_spend(client, billings, projects, beats, overrides, first,
   through, tz)` sums `assemble_client` over each slice: `billable_hours`,
   `unpriced_hours` and `amount_minor`. `billings` is already narrowed to the
@@ -1090,6 +1103,377 @@ Each addable later without migrating data:
 
 ---
 
+## Report links (phase 1c)
+
+> A freelancer makes a link for one client, some of that client's billed
+> projects and a stretch of finished days, and sends it. Whoever holds it
+> sees those projects' billable hours, month by month and day by day, and
+> the amounts and session notes only if the link was made to show them,
+> with no sign-in. It can be turned off at any time, and it stops working
+> on a day chosen when it was made.
+
+A **report link** is a credential handed to a third party: anyone holding it
+sees the report, and it may be forwarded, pasted into a chat that unfurls it,
+opened by a mail scanner or left in a browser's history. So the design starts
+from what the report may show, and makes everything else unreachable rather
+than filtered: *a fact that must not cross is never read for a public request,
+has no field to travel in, and has no code path that could put it there.* The
+code says *report link* (`ReportLink`, `report_links`, `REPORT_…`,
+`useReportLinks`), and the public read *public report* (`PublicReport…`,
+`/api/public/reports`); the UI says "report link" in Settings and "Share" on
+the client's panel.
+
+The decisions below were made in the design of AHM-96. They build on 1a's
+decisions and 1b's; 1a's decision 1 is narrowed to make room for them, and
+none other changes. "Decision N" in this section means one of its own.
+
+### Decisions
+
+1. **What crosses, and only this.** The client's name; the link's first and
+   last day; per calendar month in it, its days, its billable hours and per
+   project its hours; per day and project, the billable hours. With amounts,
+   also the client's currency and minor units, each line's days, rate and
+   amount, each month's and the link's amount and unpriced hours. With notes,
+   each day's session notes. Nothing else: no other client, no personal, side
+   or day-job project, no `unattached` hours, no totals across clients, no
+   billing budget, no tags, flow, biometrics, coach, calendar or contract, no
+   non-billable time, no `running`, no clock times or session counts, no
+   `source` or `overridden`, no id of any record, no contact, no project
+   description, colour or repository, nothing from the account (email,
+   display name), and none of the link's own settings (its time zone, label,
+   expiry, creation date).
+2. **The token travels in the URL fragment and a POST body.**
+   `https://lifepete.com/report#lpr_…`; the page posts the token to
+   `/api/public/reports`. A fragment is never sent to a server, so the token
+   is in no request log, hosting log, proxy log or `Referer`, and a POST is
+   out of the service worker's reach: Workbox's `api-cache` caches every
+   `/api/` GET by URL alone, which would be one URL for every token. The
+   fragment does not stop a mail rewriter, history sync or an archiver from
+   keeping the whole URL; the expiry and turning a link off are what limit
+   those.
+3. **The token is 256 random bits, kept only as an HMAC.** `lpr_` and
+   `secrets.token_urlsafe(32)`. The database holds
+   `HMAC-SHA256(REPORT_LINK_KEY, token)`, under a required key of its own,
+   at least 32 bytes, with no default. A salt or a slow hash protects
+   low-entropy secrets and would add nothing here but a CPU sink on a public
+   route; the key adds one thing plain SHA-256 cannot: it lives outside the
+   database, so rotating it ends every link at once, after a restore, a leak
+   or an account compromise, and a database restore cannot roll it back. It
+   is not `JWT_SECRET`, so neither rotation does the other's job.
+4. **The token is shown once.** The create answers with it; nothing else
+   ever does, and the API builds no URL. The SPA builds
+   `${location.origin}/report#${token}`, so lifepete.com, a self-hosted
+   origin and `localhost` need no setting.
+5. **Finished days only.** A link's last day is before today in its time
+   zone (409 `RANGE_NOT_OVER`), and it covers at most 366 days. A range that
+   ran through today would make the day rows a live record of when sessions
+   start and stop, to within a poll: the presence signal `running` is left
+   out to avoid.
+6. **Months, through `month_slices`, as 1b's decision 7.** A link is cut at
+   each 1st and `assemble_client` runs over each month on its own. A whole
+   month in a link is that client's entry on the Clients page for the month,
+   in the link's time zone, to the hundredth and the minor unit; a partial
+   month at either end is rounded on its own, and the page says it is part
+   of a month. Do not "fix" it into one range.
+7. **Hours-only links are assembled priced, then merged.** Each month's lines
+   become one row per project, the sum of its rounded line hours, with no
+   days. Its hours equal the invoice's, and nothing shows when a rate
+   changed, when one was first set, or that a project's own rate equals the
+   client's: each splits a line (1a's decision 7). No money has a field to
+   travel in.
+8. **The projects are chosen and frozen, and only ever leave.** A link names
+   some of the projects billed to its client when it is made, all by default,
+   and reads those still billed to the client. A write that leaves a project
+   billed elsewhere, or nowhere, first removes it from the old client's
+   links: a move, a stop, and an import, which is ungated. So a project moved
+   to Kite never appears on a Kite link sent before the move, and one moved
+   away and back never returns to a link it left. A new link can include it.
+9. **Figures are live.** Each open assembles the report again from the
+   current terms, rates, overrides and sessions. Not every change to a closed
+   month is gated (an override, a session edit, an import), so a link over an
+   invoiced month can change after it was sent, and the page prints "Figures
+   as they stand on" the viewer's date. A frozen copy is an invoice, a later
+   phase.
+10. **Day rows, not entries.** Per day and project, the billable entries
+    summed exactly and rounded once, for display: the lines are the figures.
+    No clock times and no session counts, which would show how the
+    freelancer works.
+11. **Amounts and notes are decided per link, at creation.** `show_amounts`
+    and `show_notes` are required strict booleans; the dialog starts both
+    off. Non-billable time has no switch: a link shows what the client pays
+    for.
+12. **The expiry is required**, the last day the link works in its time
+    zone, at most 366 days ahead. An ended link stays listed, as *Ended*,
+    until it is removed: Beats auto-deletes nothing (DATA.md).
+13. **Turning a link off deletes it.** There is no revoked flag for a read
+    to forget, no un-revoke, and no edit: what a link shows, its days, its
+    projects and its expiry are what was agreed when it was sent. Replace is
+    a delete, then a new link.
+14. **Every dead link answers the same.** Unknown, malformed, turned off,
+    ended, its client gone, its stored zone no longer known: one 404,
+    `REPORT_NOT_FOUND`, the same bytes and headers. The likeliest reason to
+    turn a link off is that it reached the wrong person, and any word beyond
+    "not valid" would tell that person something.
+15. **Nothing is recorded about a viewer.** No opened-at, no count, no
+    address. The viewer agreed to nothing, a mail scanner opens every link,
+    and a public route that only reads is a smaller surface. The platform's
+    request log is the only record, and PRIVACY.md says what it holds.
+16. **Links are in no backup.** Not in `/api/export/full`, and `just backup`
+    leaves the collection out. A restore of either must never bring back a
+    link that was turned off, and the URL that would make a restored link
+    useful is stored nowhere. A provider snapshot restored on lifepete.com is
+    followed by rotating `REPORT_LINK_KEY`. The backup stays at 1.3.
+17. **The privacy wall extends, with one door.** A collection of its own
+    scoped by `user_id`; management under `/api/billing`, which no device
+    reaches; one public route that reads through ports able to reach one
+    client's billed projects; no coach port, no webhook event.
+
+### Data model
+
+`report_links`, one document per link, user-scoped through `MongoStore` and
+stored in JSON form, as 1a's collections are. The models are in
+`domain/models.py`, beside `ProjectBilling`.
+
+```python
+REPORT_RANGE_MAX_DAYS = 366
+REPORT_LINK_MAX_LIFETIME_DAYS = 366
+REPORT_LINK_PROJECTS_MAX = 50
+
+class ReportScope:              # what a report covers, the preview's body; every key required
+    client_id: str
+    project_ids: list[str]      # 1-50, unique; each billed to the client at creation
+    first: date                 # local days in `tz`, inclusive
+    last: date                  # first <= last, at most 366 days
+    show_amounts: bool          # strict
+    show_notes: bool            # strict
+
+class ReportLinkFields(ReportScope):  # the create's body: every key required, null where it may be
+    label: str | None           # stripped, 1-120; the freelancer's own, never public
+    expires_on: date            # the last day it works, in `tz`
+
+class ReportLink(ReportLinkFields):   # collection `report_links`
+    id: str | None
+    token_hash: str             # HMAC-SHA256(REPORT_LINK_KEY, token), hex
+    tz: str                     # the create's `?tz=`; decides every day
+    created_at: datetime
+```
+
+- **The shape rules are field validators** (the range's order and length, unique
+  ids); the rules that read the clock or other records (the range is over, the
+  expiry is ahead, each project is billed to the client) are checked in the
+  service, for 1a's reason.
+- **`project_ids` only shrinks**, through the billing writes of decision 8,
+  and may shrink to none. So `ReportLink` drops the create's minimum of one,
+  and restores the label's default, since a stored `None` is left out of the
+  document: a stored link must stay readable, and one whose projects have
+  all left answers an empty report.
+- **No TTL and no token hint.** An ended link is refused in code
+  (`is_live`), so no BSON date has to survive the JSON dump; the last four
+  characters of a token would be a piece of the secret in the database.
+- **Indexes**: `report_links (token_hash)`, unique, the one read that is not
+  user-scoped; `(user_id, client_id, created_at)` for the list and the
+  cascades.
+- **Two stores, as for pairing codes.** `MongoReportLinkRepository`, user-scoped,
+  for the management routes and the cascades. `MongoReportLinkResolver`, with one
+  method, `find(token_hash) -> (user_id, ReportLink) | None`, the only code
+  that reads a link without a `user_id`. The comparison is the equality
+  lookup on the unique index of the HMAC: the caller picks the token, not its
+  hash, so its timing tells them nothing, and it is not to be "hardened" into
+  a load-and-compare loop.
+
+### The arithmetic
+
+Pure, in `domain/report_links.py`, made of `domain/billing.py`.
+`assemble_client` and `_lines` are 1a's, unchanged, and `month_slices` moves
+from `billing_budgets.py` to `billing.py`, where both phases import it.
+
+- `report_months(client, billings, projects, beats, overrides, first, last,
+  tz)`: `assemble_client` over each of `month_slices(first, last)`, the beats
+  read once and handed to each month.
+- `day_rows(entries, notes)`: billable entries by local day and project,
+  microseconds summed (`microseconds_of`, billing's own exact duration),
+  `hours_of` once.
+- `merge_hours(lines)`: an hours-only month's rows, one per project.
+- `public_report(link, client, project_names, months, notes)`: builds the
+  response by name, picking each class from the link's flags, never by
+  `model_dump()` of a domain object.
+- `is_live(link, today)`: `today <= expires_on`. `token_hash`, `new_token`,
+  `well_formed`.
+
+### The service
+
+- **`PublicReportReader`**, built for the link's owner, never the caller.
+  Its constructor takes `ClientById`, `BillingsByClient`, `ProjectNames`
+  (the names of the link's projects, and nothing else of them),
+  `ReportBeatReader` and `OverridesFor`, narrow Protocols in
+  `domain/ports.py` with no `list_all` among them, so passing a whole
+  `ClientStore` is a type error. The beat read leaves `tags` out in the
+  Mongo projection, and `note` too unless the link shows notes. A billing
+  whose project has gone is skipped, as `period` skips it.
+- **`ReportLinkService`** checks a create: the client is the caller's,
+  archived or not (404 `CLIENT_NOT_FOUND`); each project is billed to it and
+  exists (409 `PROJECT_NOT_BILLED_TO_CLIENT`, naming `project_ids.N`); the
+  last day is before today in `tz` (409 `RANGE_NOT_OVER`); `expires_on` is
+  from today to 366 days ahead (422). It mints the token and stores the
+  HMAC. The preview runs the same checks, all but the expiry, then reads
+  through `PublicReportReader`.
+- **`BillingService` gains one port**, `ReportLinkScope`, with
+  `drop_project(client_id, project_id)` and `delete_for_client(client_id)`.
+  `set_project_billing` to another client, `remove_project_billing` and
+  `restore_project_billing` naming another client drop the project from the
+  old client's links before their own write, so a failure between leaves a
+  link narrower, never wider. `delete_client` deletes the budget, then the
+  links, then the client.
+
+### HTTP contract
+
+```
+POST /api/public/reports          {"token": "lpr_…"}     no session
+→ 200 PublicReport | 404 REPORT_NOT_FOUND | 422 | 429 REPORT_RATE_LIMITED
+```
+
+| Method | Path | Body, params | Answers |
+|---|---|---|---|
+| GET | `/api/billing/report-links?client_id=` | `client_id` optional | links, newest first, `state` `live` or `ended`; never the token or its hash |
+| POST | `/api/billing/report-links?tz=` | `ReportLinkFields` | 201 with `token`, once; 404 `CLIENT_NOT_FOUND`; 409 `PROJECT_NOT_BILLED_TO_CLIENT`, `RANGE_NOT_OVER`; 422; 400 `INVALID_TIMEZONE` |
+| POST | `/api/billing/report-links/preview?tz=` | `ReportScope`: the same, without `label` and `expires_on` | 200 `PublicReport`, the public route's own projection; nothing stored |
+| DELETE | `/api/billing/report-links/{id}` | | 204; 404 when it is not the caller's |
+| POST | `/api/billing/report-links/turn-off` | `{client_id}`, required, null for every client | `{turned_off: n}` |
+
+```jsonc
+// POST /api/public/reports, a link with amounts and notes
+{ "client_name": "Studio Kite", "first": "2026-09-15", "last": "2026-10-31",
+  "shows": { "amounts": true, "notes": true }, "billable_hours": 71.5,
+  "money": { "currency": "EUR", "minor_units": 2, "amount_minor": 607750, "unpriced_hours": 0.0 },
+  "months": [{ "month": "2026-09", "first": "2026-09-15", "last": "2026-09-30",
+               "whole_month": false, "billable_hours": 30.0,
+               "amount_minor": 255000, "unpriced_hours": 0.0,
+               "lines": [{ "project_name": "Website", "first": "2026-09-15", "last": "2026-09-30",
+                           "hours": 30.0, "rate_minor": 8500, "amount_minor": 255000 }],
+               "days": [{ "day": "2026-09-16", "project_name": "Website", "hours": 2.5,
+                          "notes": ["Navigation fixes"] }] }] }
+```
+
+- **Without amounts** there is no `money`, no month `amount_minor` or
+  `unpriced_hours`, and each line is `{project_name, hours}`. **Without
+  notes** no day has `notes`. Absent is not null: on a priced link an
+  unpriced line's `rate_minor` and `amount_minor` are null, "no rate set", as
+  on `/api/billing/month`. Each shape is its own class with
+  `extra="forbid"`, never `exclude_none`. The 200 is written from the built
+  shape (`JSONResponse(report.model_dump(mode="json"))`), not re-serialised
+  through the route's `response_model`, which is there for the OpenAPI
+  document.
+- **The public prefix is `"/api/public/"`, with the slash**: the match is
+  `startswith`, and a later `/api/publications` must not become public. Its
+  handler takes no `CurrentUserId` and never reads `request.state.user_id`,
+  which a valid session still sets on a public path; a device token gets
+  `DEVICE_PATH_FORBIDDEN` there, as everywhere off its prefixes.
+- **Headers**: a path-scoped middleware adds `Cache-Control: no-store`,
+  `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow,
+  noarchive` and `X-Content-Type-Options: nosniff` to every answer under the
+  prefix, the 404, 422 and 429 included. The 404 is returned, not raised, as
+  one constant body. Nothing is promised for a 500.
+- **The rate limit is per link**: 60 a minute, keyed by the token's HMAC and
+  counted only once the link is found, in memory per instance. There is no
+  per-address limit: slowapi sees the proxy's address on Cloud Run and behind
+  nginx, so it would be one bucket for every visitor, which a script could
+  empty (AHM-98). A junk token costs one HMAC and one indexed read, as any
+  401 does.
+- **CORS** is unchanged: `https://lifepete.com` is already an origin, and the
+  page sends `credentials: "omit"`.
+- **Never in `IDEMPOTENT_PATH_PREFIXES`**: `mutation_log` keeps 2xx bodies,
+  and the create's body holds the token.
+- **Routes that gain behaviour**, their shapes unchanged:
+  `PUT /api/billing/projects/{id}` to another client and
+  `DELETE /api/billing/projects/{id}` drop the project from the old client's
+  links (decision 8), as the import does for a billing it moves;
+  `DELETE /api/clients/{id}` deletes the client's links.
+
+### The public page
+
+- **Its own HTML entry**, `report.html`, served at `/report` (Firebase
+  rewrite, nginx `location`), not a route of the app. The app's tree attaches
+  the session, signs out on a 401 and sends the browser to `/` (dropping the
+  fragment), registers the service worker, loads Plausible when
+  `VITE_PLAUSIBLE_DOMAIN` is set and Google Fonts always. The report page does
+  none of it: a bare `fetch` with `credentials: "omit"`, no registration, no
+  analytics, the brand faces' Latin subsets bundled as same-origin files, and
+  a CSP (`default-src 'none'`, `connect-src` the API only, `frame-ancestors
+  'none'`) on `/report` and `/report.html` alike.
+- **The fence.** A Biome override keeps its imports away from
+  `@/shared/api`, `@/shared/session`, `@/features`, `@/entities`, `@/app`
+  and the other pages. Its tree imports `@/shared/lib/*` and `@/shared/ui/*`
+  modules directly, never their barrels, which reach the session and the
+  API client; `pnpm build` fails if the built page names either
+  (`ui/scripts/check-report-bundle.mjs`).
+- **One view, two places**: `widgets/client-report`'s `ClientReportView`
+  draws the page and the dialog's preview, from one schema in
+  `shared/report`.
+- **A document, not the app**: a cream panel on a plain background, no sky
+  and no nav; month sections, each line's arithmetic, day rows folded on
+  screen and open in print; "How these figures are worked out"; "Figures as
+  they stand on" the viewer's date; "Days are counted in the sender's time
+  zone"; "This page records nothing about you"; "Prepared with {APP_NAME}".
+  The title is "Hours report", never the client's name. Date-only strings go
+  through `parseIsoDate`.
+- **Dead**: *"This report link isn't valid. It may have been turned off or
+  have ended, or the address may be incomplete. Ask whoever sent it for a new
+  one."* No fragment, or a malformed one, shows it without a request. The
+  document is `no-store`, and a page restored from the back-forward cache
+  fetches again.
+- **The service worker** is registered from `main.tsx`, not injected, and
+  `/report`, its variants and `report.html` are on its navigation-fallback
+  denylist, so the freelancer's own browser does not answer them with the
+  app's shell.
+
+### The UI's rules
+
+- **Share** on the client's panel opens the dialog: days from chips (*Last
+  month*, *Last 3 months*, *This month to yesterday*, which is disabled on the
+  1st, or the calendar), the client's billed projects all checked, *Show
+  amounts* and *Include notes* off, the time zone shown and changeable, *Works
+  until* from chips with none preselected, an optional label, and the live
+  preview with its warnings in plain sentences (hours with no rate, notes
+  that will be shown, projects left out, names shown as written).
+- **The link is shown once**, with Copy (selecting the field where the
+  clipboard API is missing, as on a plain-`http` self-hosted stack), and the
+  sentences that it will not be shown again and that email security tools may
+  open it. The create is a plain `post` with no retry and no offline queue,
+  and the token stays in the dialog's state alone.
+- **Report links** on the panel and in Settings list each link with its days,
+  what it shows, its projects, its time zone and *Works until* or *Ended*,
+  and "Not on this link: …" for billed projects it leaves out. Turn off,
+  Remove, Replace (delete first) and, in Settings, *Turn off all report
+  links*. The Passkeys section says how many links still work, whatever
+  happens to a passkey.
+- **Report links are refreshed** by every billing write and every client
+  delete, since a move, a stop or a delete changes their projects.
+- **The dev server** rewrites `/report` to `report.html` as Firebase and
+  nginx do, so a link made locally opens locally.
+- **When the routes cannot be reached**, the Share action and the lists say
+  "Report links aren't available right now", and nothing else is affected.
+  Ship the API first, with `REPORT_LINK_KEY` set before it.
+
+### Left out of 1c
+
+Each addable later without migrating data:
+
+- **Editing a link**, extending one, or bringing an ended one back.
+- **A sender name, a logo or a message** on the page.
+- **Per-entry rows, clock times, non-billable hours** as per-link switches.
+- **A range through today**, or whole months only.
+- **Frozen figures**: that is an invoice.
+- **Viewer tracking**: last opened, a count, "your client viewed it".
+- **A per-address rate limit**, once the proxy's `X-Forwarded-For` is trusted
+  per deployment (AHM-98).
+- **Links in the backup**: metadata without hashes would be backup 1.4.
+- **A fresh passkey assertion** before a link is made.
+- **Server-side PDF or CSV**; the browser's print is the PDF.
+- **Links for several clients**, or from the companion or the phone apps.
+- **`RETROACTIVE_CHANGE` naming the links** that show a month it changes.
+
+---
+
 ## How later phases build on it
 
 - **1b, billing budgets.** Built: see *Billing budgets (phase 1b)*. A
@@ -1099,12 +1483,13 @@ Each addable later without migrating data:
   `assemble_client` over the scope, so a total agrees with the invoices to
   the minor unit; unpriced hours are reported as unpriced, never as zero. A
   money budget never mixes currencies, because a client has one.
-- **1c, report links.** A link names one client and a range, under a new
-  public prefix, and is served by `assemble_client` with only that
-  client's inputs, through an allowlist of what a client may see; amounts
-  only when the link says so. It cannot structurally reach other clients,
-  personal projects, flow, biometrics or the coach, and since running
-  beats are left out it shows the same figures on every read.
+- **1c, report links.** Built: see *Report links (phase 1c)*. A link names
+  one client, some of its billed projects and a stretch of finished days,
+  is opened with no sign-in under `/api/public/`, and is served by
+  `assemble_client` month by month with only that client's inputs, through
+  typed shapes that have no field for anything a client may not see; amounts
+  and notes only when the link says so. It cannot structurally reach other
+  clients, personal projects, budgets, flow, biometrics or the coach.
 - **Phase 2, organisations.** An organisation-owned project gains an owner
   on `Project`; a contractor's `project_billing` stays in their own
   collection, keyed by their `user_id` and the organisation's project id,
