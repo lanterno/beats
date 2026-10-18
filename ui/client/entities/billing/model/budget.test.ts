@@ -152,6 +152,11 @@ describe("describeBillingBudget", () => {
 		expect(describeBillingBudget(upcoming, NOON)).toEqual({
 			sentence: "Starts Nov 1: 120 h in total.",
 		});
+		// One that starts in another year than today's names it.
+		expect(
+			describeBillingBudget({ ...upcoming, startsOn: "2028-01-05", first: "2028-01-05" }, NOON)
+				.sentence,
+		).toBe("Starts Jan 5, 2028: 120 h in total.");
 	});
 
 	it("says around when a running timer uses the rest, then that it did", () => {
