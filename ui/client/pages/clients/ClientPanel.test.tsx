@@ -3,12 +3,17 @@
  * leaves running time out until it stops (`running` on the client), and the
  * panel must say that rather than that nothing was logged — the sentence
  * above it says a timer is running for the same client.
+ *
+ * And its billing budgets in the current month: a row for each, sentence
+ * and meter, a quiet "Set a budget" while the client has none of its own,
+ * nothing at all in a month already over, and a line of its own when the
+ * budgets cannot be read.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClientBilling } from "@/entities/billing";
-import { ClientPanel } from "./ClientPanel";
+import type { BillingBudgetStatus, ClientBilling } from "@/entities/billing";
+import { ClientPanel, type ClientPanelProps } from "./ClientPanel";
 
 const { idle } = vi.hoisted(() => ({
 	// A mutation nothing here sends.
@@ -40,7 +45,7 @@ const KITE: ClientBilling = {
 	entries: [],
 };
 
-function renderPanel(billing: ClientBilling) {
+function renderPanel(billing: ClientBilling, props: Partial<ClientPanelProps> = {}) {
 	render(
 		<MemoryRouter>
 			<ClientPanel
@@ -50,10 +55,36 @@ function renderPanel(billing: ClientBilling) {
 				monthName="October"
 				projectNames={new Map()}
 				onEdit={vi.fn()}
+				{...props}
 			/>
 		</MemoryRouter>,
 	);
+	return screen.getByRole("region", { name: billing.name });
 }
+
+const WEBSITE_BUDGET: BillingBudgetStatus = {
+	scope: "project",
+	scopeId: "p1",
+	clientId: "c1",
+	name: "Website",
+	active: true,
+	currency: "EUR",
+	minorUnits: 2,
+	unit: "money",
+	period: "total",
+	limitMinor: 1_020_000,
+	startsOn: "2026-09-01",
+	warnAtPercent: 80,
+	upcoming: false,
+	first: "2026-09-01",
+	through: "2026-10-17",
+	billableHours: 84,
+	unpricedHours: 0,
+	amountMinor: 684_250,
+	remainingMinor: 335_750,
+	percentUsed: 67,
+	state: "under",
+};
 
 afterEach(cleanup);
 
@@ -63,5 +94,38 @@ describe("ClientPanel", () => {
 		const panel = screen.getByRole("region", { name: "Studio Kite" });
 		expect(panel).not.toHaveTextContent("Nothing logged");
 		expect(panel).toHaveTextContent("a timer is running");
+	});
+
+	it("draws each budget's row, and offers one for the client while it has none", () => {
+		const panel = renderPanel(KITE, { budgets: [WEBSITE_BUDGET], now: Date.now() });
+		const block = within(panel).getByRole("region", { name: "Studio Kite's budgets" });
+		expect(block).toHaveTextContent("€6,842.50 of €10,200.00 since Sep 1 · €3,357.50 left.");
+		expect(within(block).getByRole("meter", { name: "Website's budget" })).toHaveAttribute(
+			"aria-valuenow",
+			"67",
+		);
+		expect(within(block).getByRole("button", { name: "Edit Website's budget" })).toBeVisible();
+		expect(
+			within(block).getByRole("button", { name: "Set a budget for Studio Kite" }),
+		).toBeVisible();
+	});
+
+	it("offers a budget and nothing more when there is none", () => {
+		const panel = renderPanel(KITE, { budgets: [] });
+		expect(within(panel).getByRole("button", { name: "Set a budget" })).toBeVisible();
+		expect(within(panel).queryByRole("region", { name: "Studio Kite's budgets" })).toBeNull();
+	});
+
+	it("shows no budget in a month already over", () => {
+		const panel = renderPanel(KITE);
+		expect(within(panel).queryByRole("button", { name: /Set a budget/ })).toBeNull();
+		expect(within(panel).queryByRole("meter")).toBeNull();
+	});
+
+	it("says the budgets cannot be read, and draws the month as before", () => {
+		const panel = renderPanel(KITE, { budgetsFailed: true });
+		expect(panel).toHaveTextContent("Budgets aren't available right now.");
+		expect(panel).toHaveTextContent("Nothing logged for Studio Kite in October.");
+		expect(within(panel).queryByRole("button", { name: /Set a budget/ })).toBeNull();
 	});
 });

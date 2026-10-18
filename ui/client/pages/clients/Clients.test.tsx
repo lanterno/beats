@@ -24,6 +24,7 @@ vi.mock("@/entities/billing", async () => {
 	return {
 		...actual,
 		useBillingMonth: () => state.month,
+		useBillingBudgets: () => ({ data: [], isError: false }),
 		useProjectBillings: () => ({ data: new Map() }),
 		useBillableOverrides: () => ({ data: new Map() }),
 	};

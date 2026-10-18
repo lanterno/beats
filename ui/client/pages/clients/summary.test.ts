@@ -1,10 +1,16 @@
 /**
  * The Clients page's sentence: one currency, several (listed, never
- * added), hours that have no rate or are not billable, and a timer still
- * running, each in the API's figures.
+ * added), hours that have no rate or are not billable, a timer still
+ * running, and in the current month the billing budgets near or used up,
+ * each in the API's figures.
  */
 import { describe, expect, it } from "vitest";
-import type { BillingMonth, ClientBilling, CurrencyTotal } from "@/entities/billing";
+import type {
+	BillingBudgetStatus,
+	BillingMonth,
+	ClientBilling,
+	CurrencyTotal,
+} from "@/entities/billing";
 import { describeMonth } from "./summary";
 
 function client(overrides: Partial<ClientBilling>): ClientBilling {
@@ -118,6 +124,98 @@ describe("describeMonth", () => {
 		expect(describeMonth(october, { current: true })).toEqual({
 			headline: "Nothing billable so far in October.",
 			notes: ["A timer is running for Studio Kite; it counts once stopped."],
+		});
+	});
+
+	describe("billing budgets", () => {
+		const NOW = new Date(2026, 9, 18, 12, 0).getTime();
+		const october = month(
+			[client({ billableHours: 41.5, amountMinor: 352750 })],
+			[total({ billableHours: 41.5, amountMinor: 352750 })],
+		);
+		const plain = describeMonth(october, { current: true });
+
+		function budget(overrides: Partial<BillingBudgetStatus>): BillingBudgetStatus {
+			return {
+				scope: "client",
+				scopeId: "c1",
+				clientId: "c1",
+				name: "Studio Kite",
+				active: true,
+				currency: "EUR",
+				minorUnits: 2,
+				unit: "hours",
+				period: "monthly",
+				limitHours: 40,
+				warnAtPercent: 80,
+				upcoming: false,
+				first: "2026-10-01",
+				last: "2026-10-31",
+				through: "2026-10-18",
+				billableHours: 18,
+				unpricedHours: 0,
+				amountMinor: 153000,
+				remainingHours: 22,
+				percentUsed: 45,
+				state: "under",
+				...overrides,
+			};
+		}
+
+		const near = budget({
+			billableHours: 35.5,
+			remainingHours: 4.5,
+			percentUsed: 88,
+			state: "near",
+		});
+		const over = budget({
+			scope: "project",
+			scopeId: "p1",
+			name: "Website",
+			billableHours: 42,
+			remainingHours: -2,
+			percentUsed: 105,
+			state: "used_up",
+		});
+
+		it("notes each budget near or used up, after the month's own notes", () => {
+			expect(
+				describeMonth(october, { current: true, budgets: [near, budget({}), over], now: NOW }),
+			).toEqual({
+				headline: plain.headline,
+				notes: [
+					"Studio Kite's budget for October is 88% used: 4.5 h left.",
+					"Website's budget is used up: 2 h over.",
+				],
+			});
+		});
+
+		it("notes no budget of an archived scope", () => {
+			expect(
+				describeMonth(october, {
+					current: true,
+					budgets: [
+						{ ...near, active: false },
+						{ ...over, active: false },
+					],
+					now: NOW,
+				}),
+			).toEqual(plain);
+		});
+
+		it("notes no budget in a month already over, and none without budgets", () => {
+			expect(
+				describeMonth(month(october.clients, october.totals, "2026-09"), {
+					current: false,
+					budgets: [near, over],
+					now: NOW,
+				}).notes,
+			).toEqual([]);
+			expect(describeMonth(october, { current: true, budgets: [], now: NOW })).toEqual(plain);
+			expect(plain).toEqual({
+				headline: "€3,527.50 billable so far in October, across 1 client.",
+				notes: [],
+			});
 		});
 	});
 });
