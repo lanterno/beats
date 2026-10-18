@@ -35,6 +35,11 @@ goal. Git history has the plans.
    the product. A `custom` term stores `weekly_hours` directly.
 3. **No working pattern.** A week owes `weekly_hours`; a day off owes
    `weekly_hours / 5` less. We never ask which weekdays are worked.
+   The divisor stays five: the contract in use is a five-day week. Some
+   employers run a four-day full-time week, where a day off is worth a
+   quarter of the week. That would need a `days_per_week` on the term,
+   with the vacation unit (Decision 14) following it, and it waits for
+   someone who works one.
 4. **Holidays come from the `holidays` package** — country + subdivision
    code, with the library's own substitute-day rules. We store two codes
    and derive everything.
@@ -118,8 +123,6 @@ goal. Git history has the plans.
       entitlement is not scaled by the percentage — that would count the
       cut twice (80% of 25 is 20 days, four weeks) — and a 4-day week with
       20 days is entered as 25. The percentage shows in hours, not days.
-      If `hours_per_day` becomes configurable for a 4-day week (AHM-36),
-      this unit follows it.
     - *Counting starts at the opening*, which is required with the
       entitlement. Nothing before it is reconstructed: every contract the
       migration made starts at the project's first beat, possibly years
@@ -852,9 +855,9 @@ the `/api/projects` prefix, as they can the ledger. `PRIVACY.md` and
 ## Follow-ups and open questions
 
 Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
-contracts follow-ups* (AHM-30 to AHM-36): the companion's week card, and
-whether `hours_per_day` should be configurable for a 4-day full-time
-week. Vacation entitlement is Decision 14, the monthly timesheet "The
-timesheet", and the coach's view of the week "What leaves Beats".
+contracts follow-ups* (AHM-30 to AHM-36): the companion's week card. A
+four-day full-time week is Decision 3, vacation entitlement Decision 14,
+the monthly timesheet "The timesheet", and the coach's view of the week
+"What leaves Beats".
 The balance ledger's read side was built by
 [project-page.md](project-page.md), its write side by Decision 13.
