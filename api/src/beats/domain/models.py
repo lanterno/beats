@@ -787,6 +787,94 @@ class ProjectBilling(ProjectBillingFields):
     terms: list[BillingTerm] = Field(default_factory=list)
 
 
+# A report link covers at most 366 days and works for at most 366 days from
+# the day it is made: a year, a leap year's included (docs/billing.md, phase
+# 1c).
+REPORT_RANGE_MAX_DAYS = 366
+REPORT_LINK_MAX_LIFETIME_DAYS = 366
+REPORT_LINK_PROJECTS_MAX = 50
+
+
+class ReportScope(BaseModel):
+    """What a report covers and shows: one client, some of its billed
+    projects, the days `first` through `last` in the link's time zone. The
+    body of `POST /api/billing/report-links/preview`, so its validators are
+    the 422. Every key is required, as `ClientFields`: a key an older client
+    leaves out must be refused, not read as a default.
+
+    That the projects are billed to the client, and that the range is over,
+    read other records and the clock: they are checked where a link is made
+    (`ReportLinkService`), since a stored link is re-validated on every read
+    and must not become unreadable when a project moves or a day passes."""
+
+    client_id: str
+    project_ids: list[str] = Field(min_length=1, max_length=REPORT_LINK_PROJECTS_MAX)
+    first: date_type
+    last: date_type
+    # Strict, so `"true"` is a 422: what a link shows is never guessed.
+    show_amounts: bool = Field(strict=True)
+    show_notes: bool = Field(strict=True)
+
+    # Field validators rather than model ones, so the 422 names the key.
+
+    @field_validator("project_ids")
+    @classmethod
+    def a_project_named_once(cls, project_ids: list[str]) -> list[str]:
+        if len(set(project_ids)) != len(project_ids):
+            msg = "a project is named once"
+            raise ValueError(msg)
+        return project_ids
+
+    @field_validator("last")
+    @classmethod
+    def at_most_a_year_from_first(cls, last: date_type, info: ValidationInfo) -> date_type:
+        # `first` is declared first and so is in `info.data` — unless it
+        # failed, and then its own error is the answer.
+        first = info.data.get("first")
+        if first is None:
+            return last
+        if last < first:
+            msg = "the last day cannot be before the first"
+            raise ValueError(msg)
+        if (last - first).days >= REPORT_RANGE_MAX_DAYS:
+            msg = f"a report covers at most {REPORT_RANGE_MAX_DAYS} days"
+            raise ValueError(msg)
+        return last
+
+
+class ReportLinkFields(ReportScope):
+    """A report link as the create sends it — the body of `POST
+    /api/billing/report-links`. Every key is required, null where it may be.
+    That `expires_on` is from today to `REPORT_LINK_MAX_LIFETIME_DAYS` ahead
+    reads the clock, and is checked where the link is made."""
+
+    label: _Name | None  # the freelancer's own; never on the report
+    expires_on: date_type  # the last day it works, in the link's time zone
+
+
+class ReportLink(ReportLinkFields, TzNormalizedModel):
+    """A link that shows one client's report to whoever holds it, with no
+    sign-in (docs/billing.md, phase 1c). One per link, in its own
+    collection. The token is never stored: only its HMAC under
+    `REPORT_LINK_KEY`, so a database cannot show it again, and rotating the
+    key ends every link. Turning a link off deletes it; there is no revoked
+    flag for a read to forget."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    # Looser than the create's, since this model is re-validated on every
+    # read: a project leaving the client is pulled out of a link's
+    # `project_ids` (only ever shrinking), down to none, and such a link
+    # still answers, with an empty report. Still unique, by the validator.
+    project_ids: list[str] = Field(max_length=REPORT_LINK_PROJECTS_MAX)
+    # Defaulted here, unlike on a write: a None is not stored.
+    label: _Name | None = None
+    token_hash: str  # HMAC-SHA256(REPORT_LINK_KEY, token), hex
+    tz: str  # the create's `?tz=`: the zone every day of the link is in
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 # A lifetime cap: 100,000 h is over eleven years of every hour.
 BILLING_BUDGET_HOURS_MAX = Decimal("100000")
 # 10,000,000,000.00 in a two-decimal currency: far inside the 2**53 a
