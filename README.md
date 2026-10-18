@@ -135,6 +135,7 @@ api/                          Python API (FastAPI + MongoDB)
 ui/                           React SPA (Vite + TypeScript)
 companion/                    Flutter desktop and mobile app
 daemon/                       Go daemon: signal collection + Flow Score
+HomebrewFormula/              Homebrew tap for beatsd (this repo is the tap)
 integrations/vscode-beats/    VS Code extension
 wall-clock/                   ESP32 firmware
 shared/                       Data shared across surfaces: app labels, brand name, logo
@@ -195,7 +196,7 @@ Open work — bugs, follow-ups, open questions — is tracked in
 | [Architecture](ARCHITECTURE.md) | How the API, the web app and the wall clock are put together |
 | [Companion](companion/README.md) | The Flutter companion: what it does on a Mac and a phone, its architecture, pairing and the API |
 | [Daemon](daemon/README.md) | `beatsd`: the flow score, the auto-timer, and its CLI |
-| [Homebrew formula](integrations/homebrew-formula/README.md) | Publishing `brew install lanterno/beats/beatsd` |
+| [Homebrew formula](HomebrewFormula/README.md) | This repo as the `beatsd` tap, and how a release reaches `brew upgrade` |
 
 ## Community
 

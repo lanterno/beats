@@ -1,9 +1,9 @@
 name: Daemon
 on:
   push:
-    paths: [daemon/**, .github/workflows/daemon.yml]
+    paths: [daemon/**, HomebrewFormula/**, .github/workflows/daemon.yml]
   pull_request:
-    paths: [daemon/**, .github/workflows/daemon.yml]
+    paths: [daemon/**, HomebrewFormula/**, .github/workflows/daemon.yml]
 
 # Read the code, nothing more; a job that needs a write asks for it itself.
 permissions:
@@ -55,6 +55,46 @@ jobs:
       - name: app-label tables are current
         run: python3 ../scripts/gen_app_labels.py --check
       - run: go test ./... -v -race
+
+  # The formula in HomebrewFormula/ is what `brew install beatsd` reads from
+  # main, and release-daemon.yml rewrites its version and checksums with
+  # bump.sh on every release. Checking both here fails a broken formula, or
+  # one bump.sh no longer matches, in review instead of on users' machines
+  # or at release.
+  formula:
+    name: Homebrew formula
+    runs-on: ubuntu-latest
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - run: ruby -c HomebrewFormula/beatsd.rb
+      # Dummy sidecars, a different checksum per archive, against a copy:
+      # bump.sh reads its result back and fails unless each checksum landed
+      # on the line after its own archive's url.
+      - name: bump.sh matches the formula
+        run: |
+          sidecars="${RUNNER_TEMP}/sidecars"
+          mkdir -p "$sidecars"
+          n=0
+          for platform in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+            n=$((n + 1))
+            archive="beatsd-${platform}.tar.gz"
+            printf '%064d  %s\n' "$n" "$archive" > "${sidecars}/${archive}.sha256"
+          done
+          cp HomebrewFormula/beatsd.rb "${RUNNER_TEMP}/beatsd.rb"
+          HomebrewFormula/bump.sh 0.0.1 "$sidecars" "${RUNNER_TEMP}/beatsd.rb"
+          ruby -c "${RUNNER_TEMP}/beatsd.rb"
+      # The runner image ships Homebrew at /home/linuxbrew, off the PATH.
+      # `brew style` on a bare file applies the rules for Homebrew's own
+      # code, so the formula goes in a throwaway tap, as a tap's would.
+      - name: brew style
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew tap-new --no-git beats-ci/check
+          cp HomebrewFormula/beatsd.rb "$(brew --repository beats-ci/check)/Formula/beatsd.rb"
+          brew style beats-ci/check/beatsd
 
   # The windows collector is the one surface with no coverage from the
   # ubuntu job: its Raw Input sink can only be exercised on a real

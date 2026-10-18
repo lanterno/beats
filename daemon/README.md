@@ -27,8 +27,14 @@ go build -o beatsd ./cmd/beatsd
 ./beatsd run             # foreground; ^C to stop
 ```
 
-For background use, install via [Homebrew](../integrations/homebrew-formula/README.md) and
-`brew services start beatsd`.
+For background use, install with [Homebrew](../HomebrewFormula/README.md) —
+this repo is the tap — and run it as a service:
+
+```bash
+brew tap lanterno/beats https://github.com/lanterno/beats
+brew install beatsd
+brew services start beatsd
+```
 
 ## Commands
 
@@ -231,8 +237,11 @@ it for the same reason.
 
 For tagged releases, `.github/workflows/release-daemon.yml` builds
 darwin + linux × arm64 + amd64 tarballs plus a windows/amd64 zip and
-uploads them to the GitHub release. Bump the
-[Homebrew formula](../integrations/homebrew-formula/) SHA256s afterwards.
+uploads them to the GitHub release. For a release tag (not a prerelease
+such as `v1.0.0-rc.1`), the same workflow then points the
+[Homebrew formula](../HomebrewFormula/) at the release's version and
+checksums, install-tests it and commits it to `main`, so `brew upgrade
+beatsd` picks it up with nothing done by hand.
 
 ## Troubleshooting
 

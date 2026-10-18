@@ -1,13 +1,15 @@
 name: Release Daemon
-# Triggers on tag push (e.g. `git tag v0.1.0 && git push --tags`).
+# Triggers on tag push (e.g. `git tag v0.9.1 && git push origin v0.9.1`).
 # Cross-compiles the daemon for darwin and linux on both arm64 and amd64,
 # plus windows on amd64; packages each (tar.gz, or zip for windows) and
 # attaches them to a GitHub release.
 #
-# These binaries are what the Homebrew formula at
-# integrations/homebrew-formula/beatsd.rb downloads — once the
-# homebrew-beats tap repo exists, bumping the formula's URL + sha256 to
-# a new release here is the entire upgrade path for users.
+# These binaries are what Homebrew installs. This repo is the tap: the
+# formula is HomebrewFormula/beatsd.rb. For a release tag (not a prerelease
+# such as v1.0.0-rc.1), the homebrew job points the formula at this
+# release's version and checksums, install-tests it, and commits it to
+# main, so `brew upgrade beatsd` picks the release up with nothing done by
+# hand. HomebrewFormula/README.md has the whole path.
 
 on:
   push:
@@ -110,9 +112,22 @@ jobs:
             -exec mv {} dist/ \;
           ls -la dist
 
+      # overwrite_files: false keeps what a release first published. The
+      # archives are not byte-reproducible (tar records each file's mtime),
+      # so "Re-run all jobs" on a tag builds new bytes under the same names;
+      # replacing the published ones would leave the checksums in main's
+      # formula naming archives that are gone, and every install would fail
+      # its checksum. Skipped instead, the release keeps the archives the
+      # formula's checksums name, and the homebrew job, which reads its
+      # checksums from the release, bumps the formula to those.
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          overwrite_files: false
+          # A tag with a hyphen (v1.0.0-rc.1) is a prerelease, never the
+          # repo's Latest release.
+          # release-vscode.yml passes it too, as either may create the release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           body: |
             Cross-compiled `beatsd` binaries for darwin and linux
@@ -120,8 +135,11 @@ jobs:
             each archive; windows ships as a `.zip`, the rest as
             `.tar.gz`.
 
-            Homebrew users: `brew upgrade beatsd` once the tap formula is
-            bumped. Manual install:
+            Homebrew: `brew tap lanterno/beats https://github.com/lanterno/beats`
+            once, then `brew install beatsd`, or `brew upgrade beatsd` if you
+            have it. This workflow commits the formula for this release to
+            main a few minutes after it publishes (prerelease tags are left
+            out). Manual install:
 
             ```bash
             curl -L -o beatsd.tar.gz \
@@ -129,3 +147,168 @@ jobs:
             tar xzf beatsd.tar.gz
             ./beatsd version
             ```
+
+  # Points the formula at this release and commits it to main.
+  #
+  # - main, not the tag: every line of the formula but the version and the
+  #   checksums is main's, reviewed in pull requests. The tag supplies only
+  #   those values, so a formula fix merged after the tag was cut is kept,
+  #   not reverted by the release.
+  # - A bot commit, not a pull request: a pull request opened with the run's
+  #   GITHUB_TOKEN triggers no CI and would wait on a human to merge a
+  #   change that is mechanical (bump.sh rewrites five lines) and
+  #   install-tested below before it is pushed.
+  # - The install test runs before the push, so a formula that does not
+  #   install, fails `brew test` or reports the wrong version never reaches
+  #   anyone's `brew upgrade`.
+  # - The commit deploys nothing: a push made with GITHUB_TOKEN triggers no
+  #   workflow, and the API (Cloud Build) and SPA (ui.yml) deploys fire only
+  #   on api/**, terraform/** and ui/** anyway.
+  #
+  # The checksums come from the published release's sidecars, not this
+  # run's build, so the formula names exactly what the release serves.
+  # That makes every rerun safe. "Re-run all jobs" rebuilds the archives,
+  # which are not byte-identical (tar records mtimes), but the release keeps
+  # the ones it first published, sidecars included (overwrite_files: false),
+  # and this job bumps to those. Any rerun, of this job alone or of all of
+  # them, pushes the formula if an earlier attempt stopped short and nothing
+  # if main already has it. A rerun of an older tag, after a newer one
+  # reached main, leaves the formula alone rather than downgrade everyone.
+  homebrew:
+    name: Homebrew formula
+    needs: [build, release]
+    # A tag with a hyphen is a prerelease (v1.0.0-rc.1); the formula ships
+    # releases only.
+    if: ${{ !contains(github.ref_name, '-') }}
+    # macOS, so the install test runs the darwin binary most users get.
+    runs-on: macos-latest
+    # One formula writer at a time: a second tag's run waits for the first
+    # rather than race it on main, and a run already pushing is never
+    # cancelled. GitHub keeps one waiting run per group, the newest, which
+    # is the release the formula wants anyway.
+    concurrency:
+      group: homebrew-formula
+      cancel-in-progress: false
+    # The push to main.
+    permissions:
+      contents: write
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+      FORMULA: HomebrewFormula/beatsd.rb
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      # The sidecars of the published release, not this run's build: after
+      # "Re-run all jobs" the two differ, and the release's are the ones a
+      # user downloads. Outside the checkout, so the commit below can only
+      # pick up the formula.
+      - name: Download the release's checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+            -p 'beatsd-*.tar.gz.sha256' -D "${RUNNER_TEMP}/sidecars"
+          ls -la "${RUNNER_TEMP}/sidecars"
+
+      - name: Bump the formula
+        id: bump
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          current=$(awk -F'"' '/^  version "/ { print $2; exit }' "$FORMULA")
+          newer=$(awk -v a="$current" -v b="$version" 'BEGIN {
+            split(a, x, "."); split(b, y, ".")
+            for (i = 1; i <= 3; i++) {
+              if (x[i] + 0 > y[i] + 0) { print 1; exit }
+              if (x[i] + 0 < y[i] + 0) { print 0; exit }
+            }
+            print 0
+          }')
+          if [ "$newer" = 1 ]; then
+            echo "main's formula is at beatsd ${current}, newer than ${version}; leaving it."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          HomebrewFormula/bump.sh "$version" "${RUNNER_TEMP}/sidecars"
+          if git diff --quiet -- "$FORMULA"; then
+            echo "main's formula already names beatsd ${version} and these checksums; nothing to push."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff -- "$FORMULA"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Proves each URL the formula names serves the bytes its sidecar
+      # hashes, including the three platforms the install test below does
+      # not download. A release whose archive and sidecar disagree (a partial
+      # upload, a file replaced by hand) stops here.
+      - name: Release URLs serve the checksummed archives
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          for platform in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+            archive="beatsd-${platform}.tar.gz"
+            want=$(awk '{ print $1 }' "${RUNNER_TEMP}/sidecars/${archive}.sha256")
+            got=$(curl -fsSL --retry 3 \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${archive}" |
+              shasum -a 256 | awk '{ print $1 }')
+            if [ "$got" != "$want" ]; then
+              echo "::error::${archive} from the release hashes to ${got}, its sidecar says ${want}"
+              exit 1
+            fi
+            echo "${archive}: ${got}"
+          done
+
+      # Homebrew installs a formula only from a tap, so a throwaway one holds
+      # the bumped file. The install downloads from the release, so this is
+      # the published tarball and checksum a user will get.
+      - name: Install and test the formula
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          brew tap-new --no-git beats-ci/release
+          cp "$FORMULA" "$(brew --repository beats-ci/release)/Formula/beatsd.rb"
+          brew install beats-ci/release/beatsd
+          brew test beats-ci/release/beatsd
+          reported=$("$(brew --prefix beats-ci/release/beatsd)/bin/beatsd" version | awk 'NR == 1 { print $2 }')
+          if [ "$reported" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::the installed beatsd reports '${reported}', not ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          echo "beatsd version: ${reported}"
+          cp "$FORMULA" "${RUNNER_TEMP}/tested-beatsd.rb"
+
+      # A push rejected because main moved while this job ran is rebased onto
+      # the new main and retried. A conflict, which only a hand edit of the
+      # same lines could cause, fails the job rather than guess. So does a
+      # rebase that changes the formula (a pull request edited another part
+      # of it meanwhile): the file would no longer be the one install-tested
+      # above. Re-running this job bumps and tests main's new formula.
+      - name: Commit the formula to main
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'build(homebrew): beatsd %s\n\nThe formula now installs the %s release, built and install-tested by\n%s\n' \
+            "$VERSION" "$GITHUB_REF_NAME" "$RUN_URL" > "${RUNNER_TEMP}/message"
+          git add "$FORMULA"
+          git commit -F "${RUNNER_TEMP}/message"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            [ "$attempt" = 3 ] && break
+            echo "The push was rejected (attempt ${attempt}); rebasing onto main."
+            git pull --rebase origin main
+            if ! cmp -s "$FORMULA" "${RUNNER_TEMP}/tested-beatsd.rb"; then
+              echo "::error::main changed ${FORMULA} while this job ran, so the rebased formula is not the one install-tested; re-run this job to bump and test main's new formula"
+              exit 1
+            fi
+          done
+          echo "::error::could not push the formula to main after 3 attempts"
+          exit 1
