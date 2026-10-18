@@ -17,6 +17,7 @@ const { hooks } = vi.hoisted(() => ({
 	hooks: {
 		removeBilling: vi.fn(),
 		budgets: [] as unknown[],
+		budgetsFailed: false,
 	},
 }));
 
@@ -26,7 +27,7 @@ vi.mock("@/entities/billing", async () => {
 	return {
 		...actual,
 		useBillingMonth: () => ({ data: undefined }),
-		useBillingBudgets: () => ({ data: hooks.budgets, isError: false }),
+		useBillingBudgets: () => ({ data: hooks.budgets, isError: hooks.budgetsFailed }),
 		useSetProjectBilling: idle,
 		useRemoveBillingBudget: idle,
 		useRemoveProjectBilling: () => ({ isPending: false, mutateAsync: hooks.removeBilling }),
@@ -93,6 +94,7 @@ beforeEach(() => {
 	hooks.removeBilling.mockReset();
 	hooks.removeBilling.mockResolvedValue(undefined);
 	hooks.budgets = [];
+	hooks.budgetsFailed = false;
 });
 afterEach(cleanup);
 
@@ -124,5 +126,17 @@ describe("BillingPanel's Stop billing", () => {
 				removeBillingBudget: false,
 			}),
 		);
+	});
+});
+
+describe("BillingPanel when the budgets cannot be read", () => {
+	it("says so, and shows nothing of a reading it had before", async () => {
+		// TanStack keeps the last good data beside a failed refetch's error.
+		hooks.budgets = [BUDGET, { ...BUDGET, scope: "client", scopeId: "c1", name: "Studio Kite" }];
+		hooks.budgetsFailed = true;
+		const panel = await stopBilling();
+		expect(panel).toHaveTextContent("Budgets aren't available right now.");
+		expect(panel).not.toHaveTextContent("Also counts toward");
+		expect(panel).toHaveTextContent("Stop billing Website? Its terms go; its hours stay.");
 	});
 });
