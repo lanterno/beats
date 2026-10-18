@@ -147,6 +147,18 @@ def month_range(month: date, today: date) -> tuple[date, date]:
     return month, min(month_end(month), today)
 
 
+def month_slices(first: date, last: date) -> list[tuple[date, date]]:
+    """The days `first` through `last`, cut at each 1st of a month."""
+    slices: list[tuple[date, date]] = []
+    while first <= last:
+        end = min(month_end(first), last)
+        slices.append((first, end))
+        if end == date.max:
+            break
+        first = end + timedelta(days=1)
+    return slices
+
+
 def utc_midnight(day: date, tz: ZoneInfo) -> datetime:
     """The instant `day` starts in `tz`, in UTC. East of Greenwich, 1 January
     of year 1 starts before the first instant UTC can hold, and nothing
