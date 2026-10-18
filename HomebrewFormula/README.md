@@ -142,8 +142,11 @@ brew developer off   # tap-new turns developer mode on; skip if you had it on
   user unit; `brew services start beatsd` starts it.
 - The binary lands in `/opt/homebrew/bin` (Apple Silicon) or
   `/usr/local/bin` (Intel).
-- It is not notarized, so on macOS Gatekeeper asks once; allow it in
-  System Settings → Privacy & Security. Signing needs an Apple Developer
-  account (AHM-14).
+- The binary is not notarized. A `brew install` still runs it without a
+  Gatekeeper prompt, since Homebrew quarantines cask downloads only, never a
+  formula's. A copy downloaded by hand from the release page in a browser
+  is quarantined: clear it with `xattr -d com.apple.quarantine beatsd`, or
+  allow it in System Settings → Privacy & Security. Signing and
+  notarization need an Apple Developer account (AHM-14).
 - No cask: `beatsd` is a CLI, not a `.app`. The Mac app's cask is a
   separate item (AHM-48).
