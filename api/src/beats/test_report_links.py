@@ -3,23 +3,30 @@ phase 1c).
 
 They reuse `test_billing.py`'s Studio Kite, billed in euros at 85.00/h from
 1 January through Website, and mostly read September and October 2026 in
-Berlin, which leaves summer time on Sunday 25 October.
+Berlin, which leaves summer time on Sunday 25 October. The last two classes
+are the public read's contracts between layers: the reader asks its narrow
+ports for one client's billed projects and nothing else, and the beat read
+leaves tags, and notes unless shown, in Mongo.
 """
 
 import json
+import os
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
+from pymongo import AsyncMongoClient
 
 from beats.domain.billing import assemble_billing, assemble_client
 from beats.domain.exceptions import RangeNotOver, ReportLinkExpiryOutOfRange
 from beats.domain.models import (
     Beat,
+    BillableOverride,
     Client,
     Project,
     ProjectBilling,
@@ -27,6 +34,7 @@ from beats.domain.models import (
     ReportLinkFields,
     ReportScope,
 )
+from beats.domain.report_link_service import PublicReportReader
 from beats.domain.report_links import (
     TOKEN_SHAPE,
     HoursReport,
@@ -42,6 +50,7 @@ from beats.domain.report_links import (
     token_hash,
     well_formed,
 )
+from beats.infrastructure.repositories import MongoBeatRepository
 from beats.test_billing import (
     BERLIN,
     JAN_1,
@@ -639,3 +648,147 @@ class TestPublicShape:
             text = json.dumps(report.model_dump(mode="json"))
             assert "Website" in text
             assert not re.search(r"[0-9a-f]{24}", text)
+
+
+class _Recorder:
+    """The calls the fakes below were asked, by method."""
+
+    def __init__(self) -> None:
+        self.calls: dict[str, list] = defaultdict(list)
+
+
+class _Clients:
+    def __init__(self, recorder: _Recorder, client: Client) -> None:
+        self.recorder, self.client = recorder, client
+
+    async def get_by_id(self, client_id: str) -> Client:
+        self.recorder.calls["get_by_id"].append(client_id)
+        return self.client
+
+
+class _Billings:
+    def __init__(self, recorder: _Recorder, billings: list[ProjectBilling]) -> None:
+        self.recorder, self.billings = recorder, billings
+
+    async def list_by_client(self, client_id: str) -> list[ProjectBilling]:
+        self.recorder.calls["list_by_client"].append(client_id)
+        return [billing for billing in self.billings if billing.client_id == client_id]
+
+
+class _Names:
+    def __init__(self, recorder: _Recorder, names: dict[str, str]) -> None:
+        self.recorder, self.names = recorder, names
+
+    async def names_of(self, project_ids: Iterable[str]) -> dict[str, str]:
+        asked = sorted(project_ids)
+        self.recorder.calls["names_of"].append(asked)
+        return {project_id: self.names[project_id] for project_id in asked}
+
+
+class _Beats:
+    def __init__(self, recorder: _Recorder, beats: list[Beat]) -> None:
+        self.recorder, self.beats = recorder, beats
+
+    async def list_finished_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime, *, notes: bool
+    ) -> list[Beat]:
+        ids = sorted(project_ids)
+        self.recorder.calls["list_finished_between"].append((ids, start, end, notes))
+        return [beat for beat in self.beats if beat.project_id in ids]
+
+
+class _Overrides:
+    def __init__(self, recorder: _Recorder) -> None:
+        self.recorder = recorder
+
+    async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]:
+        self.recorder.calls["list_for"].append(sorted(beat_ids))
+        return []
+
+
+class TestReaderPorts:
+    @pytest.mark.parametrize("show_notes", [False, True])
+    async def test_the_reader_reaches_only_its_ports(self, show_notes):
+        # Fakes with only the narrow Protocols' methods: a reader that asked
+        # for anything else, a list of every client or project among them,
+        # would fail here with an AttributeError.
+        recorder = _Recorder()
+        beats = [
+            _beat(date(2026, 10, 2), _hours(2)),
+            _beat(date(2026, 10, 3), _hours(1), project_id="p2"),
+            _beat(date(2026, 10, 4), _hours(4), project_id="p3"),
+        ]
+        reader = PublicReportReader(
+            clients=_Clients(recorder, _client((JAN_1, 8500))),
+            billings=_Billings(
+                recorder,
+                [
+                    _billing(_term(JAN_1)),
+                    _billing(_term(JAN_1), project_id="p2"),
+                    _billing(_term(JAN_1), project_id="p3", client_id="c2"),
+                ],
+            ),
+            projects=_Names(recorder, {"p1": "Website", "p2": "Logo", "p3": "API"}),
+            beats=_Beats(recorder, beats),
+            overrides=_Overrides(recorder),
+        )
+        # p2 is billed to the client and left out; p3 is another client's.
+        scope = ReportScope.model_validate(
+            _scope(project_ids=["p1", "p3"], first=OCT_1, last=OCT_31, show_notes=show_notes)
+        )
+
+        report = await reader.read(scope, BERLIN)
+
+        assert [line.project_name for month in report.months for line in month.lines] == ["Website"]
+        assert recorder.calls["get_by_id"] == ["c1"]
+        assert recorder.calls["names_of"] == [["p1"]]
+        [(ids, start, end, notes)] = recorder.calls["list_finished_between"]
+        assert (ids, notes) == (["p1"], show_notes)
+        assert (start, end) == (
+            datetime(2026, 9, 30, 22, tzinfo=UTC),
+            datetime(2026, 10, 31, 23, tzinfo=UTC),
+        )
+        assert recorder.calls["list_for"] == [[beats[0].id]]
+
+
+@pytest.fixture
+async def db():
+    client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+    try:
+        yield client[os.environ.get("DB_NAME", "beats_test")]
+    finally:
+        await client.close()
+
+
+class TestReportBeatRead:
+    """The public report's beat read leaves `tags` in Mongo, and `note` too
+    unless the link shows notes. A response cannot show that — a read that
+    fetched them and dropped them later would pass every HTTP test — so it
+    is pinned on the repository."""
+
+    USER = "report-beat-reader"
+
+    async def test_tags_never_leave_mongo_and_notes_only_when_shown(self, db):
+        beats = MongoBeatRepository(db.timeLogs, user_id=self.USER)
+        start = datetime(2026, 3, 10, 9, tzinfo=UTC)
+        await db.timeLogs.delete_many({"user_id": self.USER})
+        try:
+            stored = await beats.create(
+                Beat(
+                    project_id="p1",
+                    start=start,
+                    end=start + timedelta(hours=1),
+                    note="a note",
+                    tags=["a tag"],
+                )
+            )
+            await beats.create(Beat(project_id="p1", start=start + timedelta(hours=2)))
+            span = (start - timedelta(days=1), start + timedelta(days=1))
+
+            without = await beats.list_finished_between(["p1"], *span, notes=False)
+            noted = await beats.list_finished_between(["p1"], *span, notes=True)
+        finally:
+            await db.timeLogs.delete_many({"user_id": self.USER})
+
+        assert [(beat.id, beat.note, beat.tags) for beat in without] == [(stored.id, None, [])]
+        assert [(beat.id, beat.note, beat.tags) for beat in noted] == [(stored.id, "a note", [])]

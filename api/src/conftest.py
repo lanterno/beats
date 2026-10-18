@@ -119,6 +119,20 @@ def _clear_device_cache():
     device_access.clear()
 
 
+@pytest.fixture(autouse=True)
+def _clear_report_rate():
+    """Report link opens are counted per link, process-wide, for a minute.
+
+    Without this, one test's sixty opens of a link would spend the next
+    test's budget, and a 429 would surface where nobody asked for one.
+    """
+    from beats.api import report_rate
+
+    report_rate.clear()
+    yield
+    report_rate.clear()
+
+
 @pytest.fixture(scope="class", autouse=True)
 def clean_db(mongo, _indexes):
     """Empty every collection before each test class.
