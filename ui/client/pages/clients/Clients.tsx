@@ -12,9 +12,11 @@
  * up; a past month shows none, since a budget is never read against a
  * month already over. A client's record
  * is edited in `ClientDialog`, and a change to a month already over asks
- * first, in the API's words (`withPastConsent`). When the billing routes
- * cannot be reached — an older API during a deploy — the page says so and
- * nothing else on the site is affected.
+ * first, in the API's words (`withPastConsent`). Every client's report
+ * links are read once here and handed to each panel, which shares and
+ * lists them. When the billing routes cannot be reached — an older API
+ * during a deploy — the page says so and nothing else on the site is
+ * affected.
  */
 
 import { Briefcase, ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -40,6 +42,7 @@ import {
 	useUpdateClient,
 } from "@/entities/client";
 import { useArchivedProjects, useProjects } from "@/entities/project";
+import { useReportLinks } from "@/entities/report-link";
 import { describeError } from "@/shared/api";
 import { browserTimeZone, cn, hoursText, todayIso as readToday, useNow } from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
@@ -84,6 +87,9 @@ export default function Clients() {
 	const { data: overrides } = useBillableOverrides();
 	const { data: projects } = useProjects();
 	const { data: archivedProjects } = useArchivedProjects();
+	// Every client's links in one read, as Settings reads them.
+	const linksQuery = useReportLinks();
+	const reportLinksFailed = linksQuery.isError;
 	const create = useCreateClient();
 	const update = useUpdateClient();
 	const unarchive = useUnarchiveClient();
@@ -273,6 +279,12 @@ export default function Clients() {
 								budgets={budgets?.filter((b) => b.clientId === billing.clientId)}
 								budgetsFailed={budgetsFailed}
 								now={now}
+								reportLinks={
+									reportLinksFailed
+										? undefined
+										: linksQuery.data?.filter((link) => link.clientId === billing.clientId)
+								}
+								reportLinksFailed={reportLinksFailed}
 								onEdit={() => client && setEditor({ mode: "edit", client })}
 							/>
 						);

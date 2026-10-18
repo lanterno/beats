@@ -88,3 +88,14 @@ export function notOnLink(
 export function describeShows(link: Pick<ReportLink, "showAmounts" | "showNotes">): string {
 	return `${link.showAmounts ? "Hours and amounts" : "Hours"}${link.showNotes ? " · with notes" : ""}`;
 }
+
+/**
+ * The question before a live link is turned off, in the Clients page's list
+ * and in Settings: whoever holds it loses the report, for good.
+ */
+export const TURN_OFF_QUESTION = {
+	title: "Turn off this report link?",
+	detail:
+		"Anyone with this link will see “This report link isn't valid”. It can't be turned back on.",
+	confirmLabel: "Turn off",
+} as const;
