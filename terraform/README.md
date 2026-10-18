@@ -79,22 +79,33 @@ one build at a time**, in three steps, with the logic in
 1. **`deploy-lock`** takes a mutex, the object
    `gs://beats-476914-terraform-state/beats/deploy.lock` (beside Terraform's
    own `default.tflock`). It is created only if absent, so one build holds it
-   while the others poll every ten seconds, for up to 25 minutes. It names the
-   build and commit that hold it. One older than 20 minutes is presumed left by
-   a build killed mid-deploy, and the next waiter deletes it and carries on.
-2. Holding the mutex, the same step reads the image the Cloud Run service runs
-   and compares its commit with this build's in a fresh clone of the repo. If
-   the live commit already contains this one, a newer build has deployed
-   first, and this build **skips the apply and succeeds without deploying**;
-   its log names the live commit. In every other case it applies: a newer
-   commit, the same commit (a deliberate re-run re-applies the configuration),
-   or a live tag it cannot place (`latest`, a commit not in the repo, no
-   service yet). It fails the build, without deploying, only when it cannot
-   tell: the clone fails, or the service cannot be read.
+   while the others poll every ten seconds, for up to 45 minutes. It names the
+   build and commit that hold it and when they took it. A live deploy can
+   hold it for nearly half an hour (five minutes of `-lock-timeout`, then the
+   provider's 20-minute timeout on the Cloud Run service), so only one older
+   than 40 minutes is presumed left by a build killed mid-deploy; the next
+   waiter deletes it and carries on.
+2. Holding the mutex, the same step reads which commit the Cloud Run service
+   serves: the commit tag of its image or, when the newest revision never
+   became ready and traffic stayed on an older one, the commit tag Artifact
+   Registry has on that revision's image digest. It compares that commit with
+   this build's in a fresh clone of the repo. If the live commit already
+   contains this one, a newer build has deployed first, and this build **skips
+   the apply and succeeds without deploying**; its log names the live commit.
+   In every other case it applies: a newer commit, the same commit (a
+   deliberate re-run re-applies the configuration), or a live image it cannot
+   place (`latest`, a commit not in the repo, a digest with no single commit
+   tag, no service yet).
 3. **`terraform-apply`** runs `terraform apply`, or skips it as decided, and
    **`deploy-unlock`** releases the mutex, then fails the build if the apply
    failed. The release deletes the mutex only if it is still the one this
    build created.
+
+A build fails without deploying when the guard cannot tell what to do: it
+waited 45 minutes without getting the mutex, this build's commit is not in the
+repo, or the service, a revision, the registry or the clone cannot be read
+(each is tried three times first). It also fails when it cannot release the
+mutex, so a lock left behind is never a green build.
 
 Terraform's own state lock is not the queue. Waiting on it would hand it to
 whichever build asked next, so an older build could apply after a newer one
@@ -104,21 +115,37 @@ is for a person running Terraform from a workstation at the same moment.
 
 ### A stuck deploy lock
 
-A build that dies holding the mutex delays the next deploy by up to 20
-minutes, after which that build clears it. To clear it at once, first check no
-build is deploying (`gcloud builds list --project=beats-476914 --ongoing`):
+A build that dies holding the mutex delays the next deploy by up to 40
+minutes, after which the next waiting build breaks it. To clear it at once,
+first check no build is deploying
+(`gcloud builds list --project=beats-476914 --ongoing`):
 
 ```bash
 gcloud storage cat gs://beats-476914-terraform-state/beats/deploy.lock   # who holds it
+gcloud storage objects describe gs://beats-476914-terraform-state/beats/deploy.lock \
+  --format='value(creation_time)'                                        # since when
 gcloud storage rm gs://beats-476914-terraform-state/beats/deploy.lock
 ```
 
+A build that died inside `terraform-apply` (cancelled, or stopped by the
+build timeout) can also leave Terraform's own state lock,
+`beats/default.tflock`, which never expires. Every later build then waits out
+`-lock-timeout` and fails with "Error acquiring the state lock". Once you are
+sure no apply is running, clear it from `terraform/` with
+`terraform force-unlock <LOCK_ID>`; the ID is in that error, or in
+`gcloud storage cat gs://beats-476914-terraform-state/beats/default.tflock`.
+
 ## Rerunning Builds
 
-While Terraform manages the Cloud Build trigger configuration, it doesn't directly rerun builds. Here are your options:
-
 A re-run of the live commit re-applies it. A re-run of an older commit, one
-the live commit already contains, succeeds without deploying.
+the live commit already contains, succeeds without deploying: **re-running an
+old build does not roll the API back.** To roll back, revert on `main`
+(`git revert`, merged like any change: a new commit, which the guard
+deploys), or apply a known-good image from a workstation once no build is
+deploying, `terraform apply -var="container_image_tag=<good sha>"` from
+`terraform/`. The next push to `main` deploys over a workstation apply.
+
+While Terraform manages the Cloud Build trigger configuration, it doesn't directly rerun builds. Here are your options:
 
 ### Option 1: Manual Trigger via gcloud CLI (Recommended)
 
