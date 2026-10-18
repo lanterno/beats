@@ -1,12 +1,13 @@
 import type { Schemas } from "@/shared/api";
 
 type Counts = Schemas["ImportCounts"];
-type BillingCounts = "clients" | "project_billing" | "billable_overrides";
+type BillingCounts = "clients" | "project_billing" | "billable_overrides" | "billing_budgets";
 
 /**
  * What this page reads of `POST /api/export/import`'s answer. The SPA and
- * the API ship on their own, and an API older than the 1.2 backup answers
- * without clients, project billing or billable marks.
+ * the API ship on their own: an API older than the 1.2 backup answers
+ * without clients, project billing or billable marks, and one older than
+ * 1.3 without billing budgets.
  */
 export type ImportResult = Pick<Schemas["ImportResponse"], "skipped"> & {
 	imported: Omit<Counts, BillingCounts> & Partial<Pick<Counts, BillingCounts>>;
