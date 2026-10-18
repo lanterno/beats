@@ -17,28 +17,28 @@
 class Beatsd < Formula
   desc "Ambient flow tracking daemon for Beats"
   homepage "https://github.com/lanterno/beats"
-  version "0.9.0"
+  version "0.9.1"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/lanterno/beats/releases/download/v#{version}/beatsd-darwin-arm64.tar.gz"
-      sha256 "e9366f189e763251dbd818b287df67d6e3a1e22464818e94030e0fe64b751324"
+      sha256 "08472d23641f5ee586d3dd9561adf653cff788cb50a5647118ddf3263c20bf0d"
     end
     on_intel do
       url "https://github.com/lanterno/beats/releases/download/v#{version}/beatsd-darwin-amd64.tar.gz"
-      sha256 "a82fcc3ff7111001be004034a381a7f5b16c48169b740f3fa809ac54e1928dbd"
+      sha256 "87c178dc06295e166b2c68bb71ae30b86bea4f80a84b8f6519bffba60b7b80ac"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/lanterno/beats/releases/download/v#{version}/beatsd-linux-arm64.tar.gz"
-      sha256 "efb469cb99a68193eb433c29c9db4b6da31fa7f2eccf5a6b409f13f8f7cc18b4"
+      sha256 "458d3d5a3ccf4451bfc9eb64656e7a9bcfbc2743e22e0dd2974120ac25145af5"
     end
     on_intel do
       url "https://github.com/lanterno/beats/releases/download/v#{version}/beatsd-linux-amd64.tar.gz"
-      sha256 "1e8b0eba50a38955111f4f4c75a6ccad89cc1244e713dac649544105f416723a"
+      sha256 "01df62f7e390fac7eb754cc5169ed7e8d156c065957cc3e88d272ab67ffd9165"
     end
   end
 
