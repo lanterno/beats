@@ -47,6 +47,7 @@ export {
 	calculateDurationMinutes,
 	formatDuration,
 	formatSecondsToTime,
+	hoursText,
 	isValidTimeRange,
 } from "./format";
 // Fuzzy matching (command palette)

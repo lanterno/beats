@@ -14,6 +14,11 @@ export function formatDuration(minutes: number): string {
 	return `${hours}h ${remainingMins.toFixed(2)}m`;
 }
 
+/** "41.5 h", "6 h", "3.25 h": the API's hundredths, without trailing zeros. */
+export function hoursText(hours: number): string {
+	return `${Number(hours.toFixed(2))} h`;
+}
+
 export function calculateDurationMinutes(startTime: string, endTime: string): number {
 	const start = parseUtcIso(startTime);
 	const end = parseUtcIso(endTime);

@@ -36,10 +36,10 @@ import {
 } from "@/entities/client";
 import { useArchivedProjects, useProjects } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { browserTimeZone, cn, todayIso as readToday } from "@/shared/lib";
+import { browserTimeZone, cn, hoursText, todayIso as readToday } from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
 import { ClientPanel } from "./ClientPanel";
-import { describeMonth, hoursText, monthName } from "./summary";
+import { describeMonth, monthName } from "./summary";
 import { useOpenMonth } from "./useOpenMonth";
 
 type Editor = { mode: "new" } | { mode: "edit"; client: Client };

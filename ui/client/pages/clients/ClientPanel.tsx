@@ -25,11 +25,11 @@ import {
 	formatDateShort,
 	formatMoney,
 	formatRate,
+	hoursText,
 	parseIsoDate,
 	parseUtcIso,
 } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
-import { hoursText } from "./summary";
 
 export interface ClientPanelProps {
 	billing: ClientBilling;

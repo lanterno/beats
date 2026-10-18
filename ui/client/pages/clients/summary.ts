@@ -7,7 +7,7 @@
  */
 
 import type { BillingMonth } from "@/entities/billing";
-import { formatMoney } from "@/shared/lib";
+import { formatMoney, hoursText } from "@/shared/lib";
 
 export interface MonthSummary {
 	/** "€3,527.50 billable so far in October, across 2 clients." */
@@ -20,11 +20,6 @@ export interface MonthSummary {
 export function monthName(month: string): string {
 	const date = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1, 12);
 	return date.toLocaleDateString("en-US", { month: "long" });
-}
-
-/** "41.5 h", "6 h", "3.25 h": the API's hundredths, without trailing zeros. */
-export function hoursText(hours: number): string {
-	return `${Number(hours.toFixed(2))} h`;
 }
 
 function sum(values: number[]): number {
