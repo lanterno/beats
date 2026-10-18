@@ -12,6 +12,9 @@ from beats.brand import APP_NAME
 # but more importantly an attacker who can guess or brute-force a
 # short shared secret can mint arbitrary session tokens for any user.
 JWT_SECRET_MIN_BYTES = 32
+# The report-link key is held to the same floor: an HMAC key shorter than
+# the hash's output (32 bytes for SHA-256) weakens it (RFC 2104 §3).
+REPORT_LINK_KEY_MIN_BYTES = 32
 
 _api_dir = Path(__file__).resolve().parent.parent.parent
 
@@ -98,6 +101,26 @@ class Settings(BaseSettings):
         if len(v.encode("utf-8")) < JWT_SECRET_MIN_BYTES:
             raise ValueError(
                 f"JWT_SECRET must be at least {JWT_SECRET_MIN_BYTES} bytes "
+                f"(got {len(v.encode('utf-8'))}). "
+                "Generate one with: openssl rand -base64 48"
+            )
+        return v
+
+    # Report links: the key their tokens are stored under, as
+    # HMAC-SHA256(key, token). It lives outside the database, so rotating it
+    # ends every report link at once and a database restore cannot roll it
+    # back. Its own key, not JWT_SECRET: rotating one must not do the other's
+    # job. No default: a deployment without it refuses to boot.
+    report_link_key: str = Field(validation_alias="REPORT_LINK_KEY")
+
+    @field_validator("report_link_key")
+    @classmethod
+    def _validate_report_link_key_length(cls, v: str) -> str:
+        """REPORT_LINK_KEY must be at least 32 bytes, as JWT_SECRET must.
+        Generate one with: `openssl rand -base64 48`."""
+        if len(v.encode("utf-8")) < REPORT_LINK_KEY_MIN_BYTES:
+            raise ValueError(
+                f"REPORT_LINK_KEY must be at least {REPORT_LINK_KEY_MIN_BYTES} bytes "
                 f"(got {len(v.encode('utf-8'))}). "
                 "Generate one with: openssl rand -base64 48"
             )
