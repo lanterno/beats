@@ -135,6 +135,7 @@ api/                          Python API (FastAPI + MongoDB)
 ui/                           React SPA (Vite + TypeScript)
 companion/                    Flutter desktop and mobile app
 daemon/                       Go daemon: signal collection + Flow Score
+HomebrewFormula/              Homebrew tap for beatsd (this repo is the tap)
 integrations/vscode-beats/    VS Code extension
 wall-clock/                   ESP32 firmware
 shared/                       Data shared across surfaces: app labels, brand name, logo
