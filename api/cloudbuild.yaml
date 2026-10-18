@@ -53,11 +53,15 @@ steps:
     env:
       - 'DEPLOY_LOCK_OBJECT=gs://${_PROJECT_ID}-terraform-state/beats/deploy.lock'
       - 'DEPLOY_STATE_DIR=/workspace/.deploy'
-      # An apply holds the mutex for minutes; one held for twenty was left by
-      # a build that was killed mid-deploy.
-      - 'DEPLOY_LOCK_STALE_SECONDS=1200'
+      # A deploy usually holds the mutex for a few minutes, and a live one can
+      # hold it for nearly half an hour: the checks and terraform init, five
+      # minutes of -lock-timeout, then the Google provider's default 20-minute
+      # timeout on the Cloud Run service. A waiter that broke a live holder's
+      # mutex would bring back the race this exists to stop, so only one held
+      # for forty minutes is taken for abandoned.
+      - 'DEPLOY_LOCK_STALE_SECONDS=2400'
       # Longer than the stale threshold, so a waiter outlasts an abandoned mutex.
-      - 'DEPLOY_LOCK_WAIT_SECONDS=1500'
+      - 'DEPLOY_LOCK_WAIT_SECONDS=2700'
       - 'BUILD_ID=$BUILD_ID'
       - 'COMMIT_SHA=$COMMIT_SHA'
       - 'CLOUD_RUN_SERVICE=${_IMAGE_NAME}'
@@ -127,9 +131,11 @@ options:
   machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY
 
-# Twenty minutes covered a build and an apply; deploy-lock may now also wait up
-# to DEPLOY_LOCK_WAIT_SECONDS (25 minutes) for the builds ahead of this one.
-timeout: '3000s'
+# Room for the image build and push (minutes), deploy-lock's wait of up to
+# DEPLOY_LOCK_WAIT_SECONDS (45 minutes) for the builds ahead of this one, and
+# this build's own hold of up to half an hour (see DEPLOY_LOCK_STALE_SECONDS).
+# A build stopped by its timeout mid-apply leaves both locks behind.
+timeout: '5400s'
 
 tags:
   - 'docker'
