@@ -64,6 +64,9 @@ importers:
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.7.0
+      workbox-window:
+        specifier: ^7.4.1
+        version: 7.4.1
       zod:
         specifier: ^4.6.1
         version: 4.6.5
