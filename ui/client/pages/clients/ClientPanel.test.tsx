@@ -9,7 +9,9 @@
  * nothing at all in a month already over, and a line of its own when the
  * budgets cannot be read.
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BillingBudgetStatus, ClientBilling } from "@/entities/billing";
@@ -148,5 +150,46 @@ describe("ClientPanel", () => {
 
 		const none = renderPanel(archived, { budgets: [] });
 		expect(within(none).queryByRole("button", { name: /budget/ })).toBeNull();
+	});
+
+	it("gives focus to the client's budget control when a save or a remove took the opener away", async () => {
+		// The first budget's save takes "Set a budget" off the page, and
+		// the billing root's refetch lands before the dialog closes.
+		const own: BillingBudgetStatus = {
+			...WEBSITE_BUDGET,
+			scope: "client",
+			scopeId: "c1",
+			name: "Studio Kite",
+		};
+		const panel = (budgets: BillingBudgetStatus[]) => (
+			<QueryClientProvider client={new QueryClient()}>
+				<MemoryRouter>
+					<ClientPanel
+						billing={KITE}
+						todayIso="2026-10-17"
+						tz="Europe/Berlin"
+						monthName="October"
+						projectNames={new Map()}
+						budgets={budgets}
+						now={Date.now()}
+						onEdit={vi.fn()}
+					/>
+				</MemoryRouter>
+			</QueryClientProvider>
+		);
+		const { rerender } = render(panel([]));
+
+		await userEvent.click(screen.getByRole("button", { name: "Set a budget" }));
+		expect(screen.getByRole("dialog")).toBeInTheDocument();
+		rerender(panel([own]));
+		await userEvent.keyboard("{Escape}");
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Edit Studio Kite's budget" })).toHaveFocus(),
+		);
+
+		await userEvent.click(screen.getByRole("button", { name: "Edit Studio Kite's budget" }));
+		rerender(panel([]));
+		await userEvent.keyboard("{Escape}");
+		await waitFor(() => expect(screen.getByRole("button", { name: "Set a budget" })).toHaveFocus());
 	});
 });
