@@ -16,7 +16,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
-from beats.api.middleware import IdempotencyMiddleware, ensure_mutation_log_indexes
+from beats.api.middleware import (
+    IdempotencyMiddleware,
+    PublicResponseHeadersMiddleware,
+    ensure_mutation_log_indexes,
+)
 from beats.api.routers.absences import router as absences_router
 from beats.api.routers.account import router as account_router
 from beats.api.routers.adjustments import router as adjustments_router
@@ -38,6 +42,7 @@ from beats.api.routers.meta import router as meta_router
 from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
+from beats.api.routers.public_reports import router as public_reports_router
 from beats.api.routers.report_links import router as report_links_router
 from beats.api.routers.signals import router as signals_router
 from beats.api.routers.sso import router as sso_router
@@ -72,8 +77,12 @@ try:
 except PackageNotFoundError:  # running from a source tree without an install
     API_VERSION = "0.0.0+unknown"
 
-# Paths that never require authentication
-PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange")
+# Paths that never require authentication. Matched with `startswith`, so
+# "/api/public/" keeps its trailing slash: without it a later
+# "/api/publications" would be public too. A handler under it never reads
+# `request.state.user_id`, which a valid session still sets here, and takes
+# no session dependency (`routers/public_reports.py`).
+PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange", "/api/public/")
 
 # Paths that device tokens (daemon) are allowed to access.
 #
@@ -305,6 +314,7 @@ app.include_router(meta_router)
 app.include_router(clients_router)
 app.include_router(billing_router)
 app.include_router(report_links_router)
+app.include_router(public_reports_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)
@@ -327,6 +337,11 @@ app.add_middleware(IdempotencyMiddleware)
 
 # Add authentication middleware
 app.add_middleware(AuthenticationMiddleware)
+
+# Outside authentication, so its 403 to a device token gets the headers too.
+# The 404, 422 and 429 of the exception handlers and the routes pass through
+# it; a 500 from Starlette's ServerErrorMiddleware does not.
+app.add_middleware(PublicResponseHeadersMiddleware)
 
 
 @app.get("/health")

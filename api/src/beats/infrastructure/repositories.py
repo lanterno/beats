@@ -229,6 +229,9 @@ class BeatRepository(Protocol):
     async def list_started_between(
         self, project_ids: Iterable[str], start: datetime, end: datetime
     ) -> builtins.list[Beat]: ...
+    async def list_finished_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime, *, notes: bool
+    ) -> builtins.list[Beat]: ...
     async def exists(self, beat_id: str) -> bool: ...
     async def restore(self, beat: Beat) -> None: ...
     async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
@@ -361,6 +364,28 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
         return await self._find_many(
             {"project_id": {"$in": ids}, "start": {"$gte": start, "$lt": end}}
         )
+
+    async def list_finished_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime, *, notes: bool
+    ) -> builtins.list[Beat]:
+        """The finished beats of these projects that started in [start, end),
+        for the public report's read. `tags` never leaves Mongo for it, nor
+        `note` unless the link shows notes: what is not read cannot cross."""
+        ids = list(project_ids)
+        if not ids:
+            return []
+        projection = {"tags": 0} if notes else {"tags": 0, "note": 0}
+        docs = await self.collection.find(
+            self._q(
+                {
+                    "project_id": {"$in": ids},
+                    "start": {"$gte": start, "$lt": end},
+                    "end": {"$ne": None},
+                }
+            ),
+            projection,
+        ).to_list(length=None)
+        return [self._load(doc) for doc in docs]
 
     async def exists(self, beat_id: str) -> bool:
         # A malformed id is "no such beat", as `MongoProjectRepository.exists`
@@ -1197,3 +1222,30 @@ class MongoReportLinkRepository(MongoStore[ReportLink], ReportLinkRepository):
         extra = {"client_id": client_id} if client_id is not None else None
         result = await self.collection.delete_many(self._q(extra))
         return result.deleted_count
+
+
+class ReportLinkResolver(Protocol):
+    async def find(self, token_hash: str) -> tuple[str, ReportLink] | None: ...
+
+
+class MongoReportLinkResolver(ReportLinkResolver):
+    """Not user-scoped: a public request knows only a link's token, and its
+    owner is known once the link is found. The only code that reads a report
+    link without a `user_id`, as `MongoPairingCodeRepository` reads a code.
+
+    The lookup is an equality match on the unique index of the token's HMAC.
+    The caller picks the token, not its hash, so the lookup's timing tells
+    them nothing they can steer: it is not to be "hardened" into loading
+    links and comparing them in constant time."""
+
+    def __init__(self, collection: AsyncCollection):
+        self.collection = collection
+
+    async def find(self, token_hash: str) -> tuple[str, ReportLink] | None:
+        """The owner's user id and the link, or None when no link has this
+        hash."""
+        doc = await self.collection.find_one({"token_hash": token_hash})
+        if doc is None:
+            return None
+        user_id = doc.pop("user_id")
+        return user_id, ReportLink(**serialize_from_document(doc))

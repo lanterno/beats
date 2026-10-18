@@ -5,9 +5,11 @@ from beats.api.middleware.idempotency import (
     IdempotencyMiddleware,
     ensure_mutation_log_indexes,
 )
+from beats.api.middleware.public_headers import PublicResponseHeadersMiddleware
 
 __all__ = [
     "IDEMPOTENT_PATH_PREFIXES",
     "IdempotencyMiddleware",
+    "PublicResponseHeadersMiddleware",
     "ensure_mutation_log_indexes",
 ]

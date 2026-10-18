@@ -6,14 +6,21 @@ in `server.py`), and every route needs a session. A link or a client that is
 not the caller's is not found (404), never forbidden, a malformed id
 included. The create answers with the link's token once; nothing else ever
 does, and the database holds only its HMAC. The report itself is opened
-under /api/public (`public_reports.py`).
+under /api/public (`public_reports.py`); the preview here builds it with the
+same reader, for the caller's own scope, and stores nothing.
 """
 
 import http
 
 from fastapi import APIRouter, Query, Response
+from fastapi.responses import JSONResponse
 
-from beats.api.dependencies import ReportLinkServiceDep, RequiredTimezoneDep
+from beats.api.dependencies import (
+    CurrentUserId,
+    ReportLinkServiceDep,
+    RequiredTimezoneDep,
+    public_report_reader,
+)
 from beats.api.schemas import (
     ReportLinkCreatedResponse,
     ReportLinkProjectResponse,
@@ -21,7 +28,8 @@ from beats.api.schemas import (
     ReportLinksTurnOffRequest,
     ReportLinksTurnOffResponse,
 )
-from beats.domain.models import ReportLink, ReportLinkFields
+from beats.domain.models import ReportLink, ReportLinkFields, ReportScope
+from beats.domain.report_links import HoursReport, PricedReport
 
 router = APIRouter(
     prefix="/api/billing/report-links",
@@ -80,6 +88,23 @@ async def create_report_link(
     names = await service.project_names([made.link])
     response = _response(made.link, names, live=service.live(made.link))
     return ReportLinkCreatedResponse(**response.model_dump(), token=made.token)
+
+
+@router.post("/preview", response_model=PricedReport | HoursReport)
+async def preview_report(
+    request: ReportScope,
+    service: ReportLinkServiceDep,
+    tz: RequiredTimezoneDep,
+    user_id: CurrentUserId,
+) -> Response:
+    """The report a link over this scope would show, exactly as its holder
+    will see it: the public route's reader and shapes, and nothing stored.
+    The create's body without `label` and `expires_on`, refused as the
+    create refuses it (404 CLIENT_NOT_FOUND, 409
+    PROJECT_NOT_BILLED_TO_CLIENT, 409 RANGE_NOT_OVER), so it reads only the
+    caller's own client's billed projects over finished days."""
+    report = await service.preview(request, tz, public_report_reader(user_id))
+    return JSONResponse(report.model_dump(mode="json"))
 
 
 @router.post("/turn-off", response_model=ReportLinksTurnOffResponse)

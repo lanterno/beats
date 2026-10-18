@@ -10,6 +10,11 @@ become unreadable when a project moves or a day passes.
 
 The token is minted here and handed back once, in `ReportLinkMade`; only its
 HMAC under `REPORT_LINK_KEY` is stored.
+
+`PublicReportReader` builds the report a link shows, for the public route
+and the preview alike. It is built for the link's owner, never for whoever
+is asking, and from ports that reach one client's billed projects and
+nothing else: no `list_all`, no project list, no budget, no coach.
 """
 
 import builtins
@@ -18,10 +23,88 @@ from datetime import date, datetime
 from typing import NamedTuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from beats.domain.billing import utc_range
 from beats.domain.exceptions import ProjectNotBilledToClient, ReportLinkNotFound
-from beats.domain.models import ReportLink, ReportLinkFields, ReportScope
-from beats.domain.ports import BillingsByClient, ClientById, ProjectNames, ReportLinkStore
-from beats.domain.report_links import check_expiry, check_range_over, is_live, new_token
+from beats.domain.models import Project, ReportLink, ReportLinkFields, ReportScope
+from beats.domain.ports import (
+    BillingsByClient,
+    ClientById,
+    OverridesFor,
+    ProjectNames,
+    ReportBeatReader,
+    ReportLinkStore,
+)
+from beats.domain.report_links import (
+    HoursReport,
+    PricedReport,
+    check_expiry,
+    check_range_over,
+    is_live,
+    new_token,
+    public_report,
+    report_months,
+)
+
+
+class PublicReportReader:
+    """What a report link shows, read for its owner from narrow ports: one
+    client, the billings of the projects billed to it now, those projects'
+    names, their finished beats in the range and those beats' overrides.
+
+    The projects read are the link's own that are still billed to its
+    client, so a project moved there after the link was made, or named by a
+    link it was never on, is never read. The beat read leaves tags in Mongo,
+    and notes unless the link shows them."""
+
+    def __init__(
+        self,
+        clients: ClientById,
+        billings: BillingsByClient,
+        projects: ProjectNames,
+        beats: ReportBeatReader,
+        overrides: OverridesFor,
+    ):
+        self.clients = clients
+        self.billings = billings
+        self.projects = projects
+        self.beats = beats
+        self.overrides = overrides
+
+    async def read(self, scope: ReportScope, tz: ZoneInfo) -> PricedReport | HoursReport:
+        """The report over `scope`, its days in `tz`. `ClientNotFound` when
+        the client has gone; a billing whose project has gone is skipped, as
+        `BillingService.period` skips it."""
+        client = await self.clients.get_by_id(scope.client_id)
+        wanted = set(scope.project_ids)
+        billings = [
+            billing
+            for billing in await self.billings.list_by_client(scope.client_id)
+            if billing.project_id in wanted
+        ]
+        names = await self.projects.names_of(billing.project_id for billing in billings)
+        billings = [billing for billing in billings if billing.project_id in names]
+        start, end = utc_range(scope.first, scope.last, tz)
+        beats = await self.beats.list_finished_between(
+            [billing.project_id for billing in billings], start, end, notes=scope.show_notes
+        )
+        overrides = await self.overrides.list_for(beat.id for beat in beats if beat.id is not None)
+        months = report_months(
+            client,
+            billings,
+            # `assemble_client` takes projects; it reads their names alone.
+            {project_id: Project(id=project_id, name=name) for project_id, name in names.items()},
+            beats,
+            {override.beat_id: override.billable for override in overrides},
+            scope.first,
+            scope.last,
+            tz,
+        )
+        notes = (
+            {beat.id: beat.note for beat in beats if beat.id is not None and beat.note}
+            if scope.show_notes
+            else None
+        )
+        return public_report(scope, client, names, months, notes)
 
 
 class ReportLinkMade(NamedTuple):
@@ -104,6 +187,16 @@ class ReportLinkService:
         except ZoneInfoNotFoundError, ValueError:
             return False
         return is_live(link, self._now(zone).date())
+
+    async def preview(
+        self, scope: ReportScope, tz: ZoneInfo, reader: PublicReportReader
+    ) -> PricedReport | HoursReport:
+        """The report a link over `scope` would show, by the public read
+        itself, with nothing stored: refused as a create would be, but for
+        the expiry, so the caller can only preview their own client's billed
+        projects over finished days."""
+        await self.check_scope(scope, self._now(tz).date())
+        return await reader.read(scope, tz)
 
     async def check_scope(self, scope: ReportScope, today: date) -> None:
         """What a report may cover, `today` in its zone: the caller's client

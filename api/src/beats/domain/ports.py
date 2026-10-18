@@ -303,3 +303,19 @@ class ReportLinkStore(Protocol):
     async def list(self, client_id: str | None) -> builtins.list[ReportLink]: ...
     async def delete(self, link_id: str) -> bool: ...
     async def delete_all(self, client_id: str | None) -> int: ...
+
+
+class ReportBeatReader(Protocol):
+    """The finished beats of some projects started in a span of instants, as
+    a report link's report reads them: never their tags, and their notes
+    only when `notes`, both left out in the read itself."""
+
+    async def list_finished_between(
+        self, project_ids: Iterable[str], start: datetime, end: datetime, *, notes: bool
+    ) -> list[Beat]: ...
+
+
+class OverridesFor(Protocol):
+    """The billable overrides of these beats, and no others."""
+
+    async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]: ...
