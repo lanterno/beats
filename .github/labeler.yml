@@ -11,7 +11,7 @@ companion:
       - any-glob-to-any-file: ["companion/**"]
 daemon:
   - changed-files:
-      - any-glob-to-any-file: ["daemon/**", "integrations/homebrew-formula/**"]
+      - any-glob-to-any-file: ["daemon/**", "HomebrewFormula/**"]
 vscode:
   - changed-files:
       - any-glob-to-any-file: ["integrations/vscode-beats/**"]
