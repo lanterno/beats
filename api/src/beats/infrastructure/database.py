@@ -53,6 +53,11 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.project_billing.create_index([("user_id", 1), ("client_id", 1)])
     # One billable override per beat, the same way.
     await db.billable_overrides.create_index([("user_id", 1), ("beat_id", 1)], unique=True)
+    # One billing budget per scope — a client, or a billed project — the same
+    # way. Every other read lists the whole collection, a small set.
+    await db.billing_budgets.create_index(
+        [("user_id", 1), ("scope", 1), ("scope_id", 1)], unique=True
+    )
 
 
 class Database:

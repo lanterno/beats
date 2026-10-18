@@ -23,6 +23,7 @@ from beats.infrastructure.repositories import (
     AdjustmentRepository,
     BeatRepository,
     BillableOverrideRepository,
+    BillingBudgetRepository,
     BiometricDayRepository,
     CalendarIntegrationRepository,
     ClientRepository,
@@ -35,6 +36,7 @@ from beats.infrastructure.repositories import (
     MongoAdjustmentRepository,
     MongoBeatRepository,
     MongoBillableOverrideRepository,
+    MongoBillingBudgetRepository,
     MongoBiometricDayRepository,
     MongoCalendarIntegrationRepository,
     MongoClientRepository,
@@ -201,6 +203,9 @@ get_billable_override_repository = _user_scoped(
 )
 
 
+get_billing_budget_repository = _user_scoped(MongoBillingBudgetRepository, "billing_budgets")
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
@@ -265,14 +270,18 @@ def get_billing_service(
     override_repo: Annotated[BillableOverrideRepository, Depends(get_billable_override_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
+    billing_budget_repo: Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)],
 ) -> BillingService:
-    """Get the billing service with injected repositories."""
+    """Get the billing service with injected repositories. It is the only
+    service given the billing budgets: no device route and no coach port
+    reaches them."""
     return BillingService(
         clients=client_repo,
         billings=billing_repo,
         overrides=override_repo,
         projects=project_repo,
         beats=beat_repo,
+        budgets=billing_budget_repo,
     )
 
 

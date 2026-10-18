@@ -1,5 +1,6 @@
-"""Clients, project billing and billable overrides: the writes and their
-rules, and the report the arithmetic in `domain/billing.py` makes of them.
+"""Clients, project billing, billable overrides and billing budgets: the
+writes and their rules, and the reports the arithmetic in
+`domain/billing.py` and `domain/billing_budgets.py` makes of them.
 
 Every store here is user-scoped, so someone else's client, project or beat
 is not found (404) rather than forbidden. The rules a write must satisfy
@@ -12,12 +13,13 @@ A write that would change billable figures before the current month, in
 the request's timezone, needs `rewrite_past` (`past_change`, `link_change`,
 `marked_change`): those months may have been invoiced. Attaching a project
 for the first time is not gated, since no figure existed, and neither is an
-override — editing a past entry is itself the consent.
+override — editing a past entry is itself the consent. Nor is a billing
+budget: it changes no billable figure, and only its current period is read.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -31,9 +33,15 @@ from beats.domain.billing import (
     utc_midnight,
     utc_range,
 )
+from beats.domain.billing_budgets import (
+    BillingBudgetStatus,
+    billing_budget_days,
+    billing_budget_status,
+)
 from beats.domain.currencies import check_currency
 from beats.domain.exceptions import (
     BeatNotFound,
+    BillingBudgetNeedsBilling,
     ClientHasProjects,
     CurrencyInUse,
     CurrencyMismatch,
@@ -46,6 +54,9 @@ from beats.domain.exceptions import (
 from beats.domain.models import (
     Beat,
     BillableOverride,
+    BillingBudget,
+    BillingBudgetFields,
+    BillingBudgetScope,
     BillingTerm,
     Client,
     ClientFields,
@@ -56,6 +67,7 @@ from beats.domain.models import (
 from beats.domain.ports import (
     BillableOverrideStore,
     BillingBeatReader,
+    BillingBudgetStore,
     BillingProjectReader,
     ClientStore,
     ProjectBillingStore,
@@ -72,6 +84,11 @@ class ClientRecord(NamedTuple):
 class BilledProject(NamedTuple):
     billing: ProjectBilling
     client: Client  # for the currency the terms' rates are in
+
+
+class BillingBudgetRecord(NamedTuple):
+    budget: BillingBudget
+    client: Client  # the scope's, for the currency a money limit is in
 
 
 def _priced(billings: Iterable[ProjectBilling]) -> bool:
@@ -126,10 +143,10 @@ def _naming(record: str) -> Iterator[None]:
 class BillingService:
     """Clients and what is billed to them.
 
-    The clock is read for one thing, "the 1st of this month in the request's
-    timezone", which is where the closed past ends and where a report's
-    current month stops; a test hands in a fixed instant, as it does to
-    `ContractService`.
+    The clock is read for one thing, "today in the request's timezone":
+    its month's 1st is where the closed past ends and where a report's
+    current month stops, and it is the day a billing budget is read on; a
+    test hands in a fixed instant, as it does to `ContractService`.
     """
 
     def __init__(
@@ -139,6 +156,7 @@ class BillingService:
         overrides: BillableOverrideStore,
         projects: BillingProjectReader,
         beats: BillingBeatReader,
+        budgets: BillingBudgetStore,
         now: Callable[[ZoneInfo], datetime] = datetime.now,
     ):
         self.clients = clients
@@ -146,6 +164,7 @@ class BillingService:
         self.overrides = overrides
         self.projects = projects
         self.beats = beats
+        self.budgets = budgets
         self._now = now
 
     def _month_start(self, tz: ZoneInfo) -> date:
@@ -407,6 +426,133 @@ class BillingService:
         after that."""
         first, last = month_range(month, self._now(tz).date())
         return await self.period(first, last, tz)
+
+    # ------------------------------------------------------------------ #
+    # Billing budgets
+    # ------------------------------------------------------------------ #
+
+    async def billing_budget_statuses(self, tz: ZoneInfo) -> list[BillingBudgetStatus]:
+        """Every billing budget, read as of today in `tz`
+        (`billing_budget_status`), by client name: a client's own budget
+        first, then its projects' by project name.
+
+        The budgets are read first, and with none nothing else is, so the
+        read costs nothing for someone who never set one. Otherwise one read
+        each of the clients, the billings, the projects (archived ones too),
+        the beats of every project in a scope — over the union of the
+        periods, running ones included — and their overrides. A budget whose
+        client, project or billing has gone, which only a crash between two
+        writes could leave, is skipped, as `period` skips such a billing.
+        """
+        budgets = await self.budgets.list_all()
+        if not budgets:
+            return []
+        today = self._now(tz).date()
+        clients = {client.id: client for client in await self.clients.list_all()}
+        projects = {
+            project.id: project
+            for project in [
+                *await self.projects.list(archived=False),
+                *await self.projects.list(archived=True),
+            ]
+            if project.id is not None
+        }
+        billings = [
+            billing
+            for billing in await self.billings.list_all()
+            if billing.project_id in projects and billing.client_id in clients
+        ]
+        billing_of = {billing.project_id: billing for billing in billings}
+
+        # Each budget with its client and the billings in its scope.
+        scoped: list[tuple[BillingBudget, Client, list[ProjectBilling]]] = []
+        for budget in budgets:
+            if budget.scope is BillingBudgetScope.CLIENT:
+                client = clients.get(budget.scope_id)
+                if client is None:
+                    continue
+                scope_billings = [b for b in billings if b.client_id == client.id]
+            else:
+                billing = billing_of.get(budget.scope_id)
+                if billing is None:
+                    continue
+                client, scope_billings = clients[billing.client_id], [billing]
+            scoped.append((budget, client, scope_billings))
+
+        firsts = [
+            days.first
+            for days in (billing_budget_days(budget, today) for budget, _, _ in scoped)
+            if not days.upcoming
+        ]
+        beats: list[Beat] = []
+        if firsts:
+            wanted = {b.project_id for _, _, scope_billings in scoped for b in scope_billings}
+            beats = await self.beats.list_started_between(
+                sorted(wanted),
+                utc_midnight(min(firsts), tz),
+                utc_midnight(today + timedelta(days=1), tz),
+            )
+        overrides = {
+            override.beat_id: override.billable
+            for override in await self.overrides.list_for(
+                beat.id for beat in beats if beat.id is not None
+            )
+        }
+
+        statuses: list[tuple[tuple[str, str, int, str, str], BillingBudgetStatus]] = []
+        for budget, client, scope_billings in scoped:
+            # An archived client, or an archived project with a budget, is
+            # read but never alerts. An archived project still counts toward
+            # its client's budget: it is billed.
+            active = not client.archived and (
+                budget.scope is BillingBudgetScope.CLIENT or not projects[budget.scope_id].archived
+            )
+            status = billing_budget_status(
+                budget, client, scope_billings, projects, beats, overrides, today, tz, active
+            )
+            project_first = budget.scope is BillingBudgetScope.PROJECT
+            key = (
+                client.name.casefold(),
+                client.id or "",
+                int(project_first),
+                status.name.casefold() if project_first else "",
+                budget.scope_id,
+            )
+            statuses.append((key, status))
+        return [status for _, status in sorted(statuses, key=lambda pair: pair[0])]
+
+    async def set_billing_budget(
+        self, scope: BillingBudgetScope, scope_id: str, fields: BillingBudgetFields
+    ) -> BillingBudgetRecord:
+        """Give a client, or a billed project, its billing budget, replacing
+        the one it had.
+
+        - The client, or the project, must be the caller's (404, the
+          client's CLIENT_NOT_FOUND), a malformed id included. An archived
+          client is allowed, as it is billed to: a restore may carry it.
+        - A project must be billed (409 BILLING_BUDGET_NEEDS_BILLING): no
+          figure on an unbilled one could spend it.
+
+        Not gated: a budget changes no billable figure, and only the current
+        period is ever read against it.
+        """
+        if scope is BillingBudgetScope.CLIENT:
+            client = await self.clients.get_by_id(scope_id)
+        else:
+            await self.projects.get_by_id(scope_id)
+            billing = await self.billings.get(scope_id)
+            if billing is None:
+                raise BillingBudgetNeedsBilling()
+            client = await self.clients.get_by_id(billing.client_id)
+        budget = await self.budgets.upsert(
+            BillingBudget(**fields.model_dump(), scope=scope, scope_id=scope_id)
+        )
+        return BillingBudgetRecord(budget, client)
+
+    async def remove_billing_budget(self, scope: BillingBudgetScope, scope_id: str) -> None:
+        """Take a scope's billing budget away. Idempotent: whether or not
+        there was one, or a scope, the answer is the same."""
+        await self.budgets.delete(scope, scope_id)
 
     # ------------------------------------------------------------------ #
     # Restore, for import: every rule was checked before the first write

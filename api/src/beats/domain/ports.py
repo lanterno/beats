@@ -25,6 +25,8 @@ from beats.domain.models import (
     BalanceAdjustment,
     Beat,
     BillableOverride,
+    BillingBudget,
+    BillingBudgetScope,
     Client,
     ContractWeek,
     FlowWindow,
@@ -241,6 +243,17 @@ class ProjectBillingStore(Protocol):
     async def list_by_client(self, client_id: str) -> list[ProjectBilling]: ...
     async def upsert(self, billing: ProjectBilling) -> ProjectBilling: ...
     async def delete(self, project_id: str) -> bool: ...
+
+
+class BillingBudgetStore(Protocol):
+    """Billing budgets, one per scope: upsert is keyed on the scope, so a
+    second write replaces the first. `list_all` is a small set, at most one
+    per client and billed project."""
+
+    async def list_all(self) -> list[BillingBudget]: ...
+    async def get(self, scope: BillingBudgetScope, scope_id: str) -> BillingBudget | None: ...
+    async def upsert(self, budget: BillingBudget) -> BillingBudget: ...
+    async def delete(self, scope: BillingBudgetScope, scope_id: str) -> bool: ...
 
 
 class BillableOverrideStore(Protocol):

@@ -7,9 +7,14 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from beats.domain.billing import RateSource
+from beats.domain.billing_budgets import BillingBudgetState
 from beats.domain.models import (
     AbsenceType,
     AdjustmentKind,
+    BillingBudgetFields,
+    BillingBudgetPeriod,
+    BillingBudgetScope,
+    BillingBudgetUnit,
     BillingTerm,
     ClientFields,
     Contract,
@@ -377,6 +382,80 @@ class BillingMonthResponse(BaseModel):
     totals: list[CurrencyTotalResponse]
     clients: list[ClientBillingResponse]
     unattached: list[UnattachedHoursResponse]
+
+
+class BillingBudgetRequest(BillingBudgetFields):
+    """Request body for a billing budget: the domain's fields, every key
+    required, null where it may be. Exactly the limit of its `unit` is set
+    (`limit_hours` to the hundredth, or `limit_minor` in the client's
+    currency), and `starts_on` only on a total."""
+
+
+class BillingBudgetResponse(BaseModel):
+    """A billing budget as stored, with its client and that client's
+    currency and minor units, the currency a `limit_minor` is in."""
+
+    scope: BillingBudgetScope
+    scope_id: str
+    client_id: str
+    currency: str
+    minor_units: int
+    unit: BillingBudgetUnit
+    period: BillingBudgetPeriod
+    limit_hours: float | None
+    limit_minor: int | None
+    starts_on: date_type | None
+    warn_at_percent: int
+
+
+class BillingBudgetRunningResponse(BaseModel):
+    """A running timer that counts on a billing budget, and the instants,
+    in UTC, at which it alone would cross the warning and the limit: null
+    once crossed, and both null when it has no rate under a money budget or
+    another timer counts too."""
+
+    project_id: str
+    since: datetime
+    priced: bool
+    near_at: datetime | None
+    over_at: datetime | None
+
+
+class BillingBudgetStatusResponse(BaseModel):
+    """A billing budget read as of today: the current month, or a total from
+    `starts_on`, through `through`. The three figures are there whatever the
+    unit; only the unit's own `remaining_…` is set, negative when over. No
+    figure counts a running timer: `running` answers it. An upcoming total
+    has no figures, no projection and no running timer. `active` is false
+    while its client or its project is archived: it is read, but never
+    alerts."""
+
+    scope: BillingBudgetScope
+    scope_id: str
+    client_id: str
+    name: str
+    active: bool
+    currency: str
+    minor_units: int
+    unit: BillingBudgetUnit
+    period: BillingBudgetPeriod
+    limit_hours: float | None
+    limit_minor: int | None
+    starts_on: date_type | None
+    warn_at_percent: int
+    upcoming: bool
+    first: date_type
+    last: date_type | None
+    through: date_type | None
+    billable_hours: float
+    unpriced_hours: float
+    amount_minor: int
+    remaining_hours: float | None
+    remaining_minor: int | None
+    percent_used: int
+    state: BillingBudgetState
+    runs_out_on: date_type | None
+    running: BillingBudgetRunningResponse | None
 
 
 class CurrencyResponse(BaseModel):

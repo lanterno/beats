@@ -346,6 +346,17 @@ class ProjectNotBilled(DomainException):
     message = "This project is not billed"
 
 
+class BillingBudgetNeedsBilling(DomainException):
+    """Raised when a billing budget is set on a project that is not billed:
+    no figure on it could ever spend one. A conflict with the project's
+    billing, named for budgets so it is never mistaken for `ProjectNotBilled`,
+    which stopping billing answers."""
+
+    status_code = 409
+    message = "Bill this project to a client before giving it a budget"
+    code = "BILLING_BUDGET_NEEDS_BILLING"
+
+
 class MonthNotStarted(DomainException):
     """Raised when a billing month after the current one is asked for."""
 
