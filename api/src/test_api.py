@@ -3668,6 +3668,278 @@ class TestBillingBudgetsAPI:
         assert mongo.billing_budgets.count_documents({"scope_id": kite["id"]}) == 0
 
 
+# --- Report links (docs/billing.md, phase 1c) ---
+
+TOKEN_PATTERN = r"^lpr_[A-Za-z0-9_-]{43}$"
+
+
+def _today() -> date:
+    return datetime.now(UTC).date()
+
+
+def _report_link_body(client_id: str, project_ids: list[str], **fields) -> dict:
+    """A whole create body over BILLED_MONTH, hours only, working 30 days."""
+    return {
+        "client_id": client_id,
+        "project_ids": project_ids,
+        "first": "2026-03-01",
+        "last": "2026-03-31",
+        "show_amounts": False,
+        "show_notes": False,
+        "label": None,
+        "expires_on": str(_today() + timedelta(days=30)),
+        **fields,
+    }
+
+
+def _post_report_link(client, headers, body: dict, tz: str = "UTC"):
+    return client.post("/api/billing/report-links", params={"tz": tz}, json=body, headers=headers)
+
+
+def _report_link(client, headers, client_id: str, project_ids: list[str], **fields) -> dict:
+    resp = _post_report_link(client, headers, _report_link_body(client_id, project_ids, **fields))
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def _report_links(client, headers, **params) -> list[dict]:
+    resp = client.get("/api/billing/report-links", params=params, headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def _billed_client(client, headers, name: str = "Studio Kite", *projects: str) -> tuple[dict, list]:
+    """A client at KITE_RATE and freelance projects billed to it from March
+    2026: attached for the first time, so ungated."""
+    kite = _create_client(client, headers, name=name, rates=KITE_RATE)
+    billed = []
+    for project_name in projects or ("Website",):
+        project = _freelance(client, headers, project_name)
+        terms = _billable_from("2026-03-01")
+        assert _bill(client, headers, project["id"], kite["id"], terms).status_code == 200
+        billed.append(project)
+    return kite, billed
+
+
+class TestReportLinksAPI:
+    """/api/billing/report-links — making, listing and turning off the links
+    a client's report is opened with."""
+
+    @pytest.fixture(autouse=True)
+    def _no_links(self, mongo):
+        # The lists and the turn-off counts are about each test's own links.
+        mongo.report_links.delete_many({})
+
+    def test_a_link_is_made_and_its_token_shown_once(self, client, auth_headers, mongo):
+        import hashlib
+        import hmac
+        import re
+
+        from bson import ObjectId
+
+        from beats.settings import settings
+
+        kite, [website] = _billed_client(client, auth_headers)
+
+        made = _report_link(client, auth_headers, kite["id"], [website["id"]], label="March")
+
+        assert re.fullmatch(TOKEN_PATTERN, made["token"])
+        assert (made["label"], made["state"], made["tz"]) == ("March", "live", "UTC")
+        assert made["projects"] == [{"id": website["id"], "name": "Website"}]
+        stored = mongo.report_links.find_one({"_id": ObjectId(made["id"])})
+        expected = hmac.new(
+            settings.report_link_key.encode(), made["token"].encode(), hashlib.sha256
+        ).hexdigest()
+        assert stored["token_hash"] == expected
+        [listed] = _report_links(client, auth_headers)
+        assert listed["id"] == made["id"]
+        assert listed["state"] == "live"
+        assert listed["projects"] == [{"id": website["id"], "name": "Website"}]
+        assert "token" not in listed
+        assert "token_hash" not in listed
+        assert "token_hash" not in made
+
+    def test_the_token_is_stored_nowhere(self, client, auth_headers, mongo):
+        # Sent with a client id, so a later change that let the idempotency
+        # middleware replay this route would store the 201 body, token and
+        # all, in mutation_log, and fail here.
+        kite, [website] = _billed_client(client, auth_headers)
+        resp = _post_report_link(
+            client,
+            {**auth_headers, "X-Client-Id": "report-link-create-1"},
+            _report_link_body(kite["id"], [website["id"]]),
+        )
+        assert resp.status_code == 201, resp.text
+        token = resp.json()["token"]
+
+        for name in mongo.list_collection_names():
+            for doc in mongo[name].find():
+                assert token not in json.dumps(doc, default=str), name
+
+    @pytest.mark.parametrize("key", ["show_notes", "expires_on", "project_ids", "label"])
+    def test_every_key_is_required(self, client, auth_headers, key):
+        kite, [website] = _billed_client(client, auth_headers)
+        body = _report_link_body(kite["id"], [website["id"]])
+        del body[key]
+
+        resp = _post_report_link(client, auth_headers, body)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == [key]
+
+    def test_a_string_is_not_a_bool(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+        body = _report_link_body(kite["id"], [website["id"]], show_amounts="true")
+
+        resp = _post_report_link(client, auth_headers, body)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["show_amounts"]
+
+    def test_another_users_client_is_not_found(
+        self, client, auth_headers, other_auth_headers, mongo
+    ):
+        kite, [website] = _billed_client(client, auth_headers)
+
+        for client_id in (kite["id"], "not-an-id"):
+            body = _report_link_body(client_id, [website["id"]])
+            resp = _post_report_link(client, other_auth_headers, body)
+            assert resp.status_code == 404, resp.text
+            assert resp.json()["code"] == "CLIENT_NOT_FOUND"
+        assert mongo.report_links.count_documents({"client_id": kite["id"]}) == 0
+
+    def test_a_project_billed_elsewhere_is_named(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+        _, [api] = _billed_client(client, auth_headers, "Acme", "API")
+        body = _report_link_body(kite["id"], [website["id"], api["id"]])
+
+        resp = _post_report_link(client, auth_headers, body)
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "PROJECT_NOT_BILLED_TO_CLIENT"
+        assert resp.json()["fields"][0]["path"] == "project_ids.1"
+
+    def test_the_range_must_be_over(self, client, auth_headers):
+        from zoneinfo import ZoneInfo
+
+        kite, [website] = _billed_client(client, auth_headers)
+        # Fourteen hours ahead of UTC: its today is often UTC's tomorrow.
+        today = datetime.now(ZoneInfo("Pacific/Kiritimati")).date()
+        body = _report_link_body(
+            kite["id"],
+            [website["id"]],
+            first=str(today - timedelta(days=10)),
+            last=str(today),
+            expires_on=str(today + timedelta(days=30)),
+        )
+
+        resp = _post_report_link(client, auth_headers, body, tz="Pacific/Kiritimati")
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "RANGE_NOT_OVER"
+
+    def test_the_expiry_bounds(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+
+        for expires_on in (_today() - timedelta(days=1), _today() + timedelta(days=367)):
+            body = _report_link_body(kite["id"], [website["id"]], expires_on=str(expires_on))
+            resp = _post_report_link(client, auth_headers, body)
+            assert resp.status_code == 422, resp.text
+            assert [f["path"] for f in resp.json()["fields"]] == ["expires_on"]
+
+    def test_tz_is_required_and_known(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+        body = _report_link_body(kite["id"], [website["id"]])
+
+        missing = client.post("/api/billing/report-links", json=body, headers=auth_headers)
+        unknown = _post_report_link(client, auth_headers, body, tz="Mars/Olympus")
+
+        assert missing.status_code == 422, missing.text
+        assert [f["path"] for f in missing.json()["fields"]] == ["tz"]
+        assert unknown.status_code == 400, unknown.text
+        assert unknown.json()["code"] == "INVALID_TIMEZONE"
+
+    def test_an_archived_client_takes_a_link(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+        resp = client.post(f"/api/clients/{kite['id']}/archive", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+
+        made = _report_link(client, auth_headers, kite["id"], [website["id"]])
+
+        assert made["state"] == "live"
+
+    def test_turning_off_deletes_and_twice_is_404(
+        self, client, auth_headers, other_auth_headers, mongo
+    ):
+        from bson import ObjectId
+
+        kite, [website] = _billed_client(client, auth_headers)
+        made = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        theirs_kite, [theirs_site] = _billed_client(client, other_auth_headers)
+        theirs = _report_link(client, other_auth_headers, theirs_kite["id"], [theirs_site["id"]])
+
+        first = client.delete(f"/api/billing/report-links/{made['id']}", headers=auth_headers)
+        again = client.delete(f"/api/billing/report-links/{made['id']}", headers=auth_headers)
+        other = client.delete(f"/api/billing/report-links/{theirs['id']}", headers=auth_headers)
+        malformed = client.delete("/api/billing/report-links/not-an-id", headers=auth_headers)
+
+        assert first.status_code == 204, first.text
+        # Deleted, not flagged: there is no revoked field for a read to forget.
+        assert mongo.report_links.find_one({"_id": ObjectId(made["id"])}) is None
+        for resp in (again, other, malformed):
+            assert resp.status_code == 404, resp.text
+            assert resp.json()["code"] == "REPORT_LINK_NOT_FOUND"
+        assert mongo.report_links.find_one({"_id": ObjectId(theirs["id"])}) is not None
+
+    def test_an_ended_link_is_listed_as_ended(self, client, auth_headers, mongo):
+        from bson import ObjectId
+
+        kite, [website] = _billed_client(client, auth_headers)
+        made = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        mongo.report_links.update_one(
+            {"_id": ObjectId(made["id"])}, {"$set": {"expires_on": "2026-04-30"}}
+        )
+
+        [listed] = _report_links(client, auth_headers, client_id=kite["id"])
+
+        assert (listed["id"], listed["state"]) == (made["id"], "ended")
+
+    def test_a_clients_links_newest_first(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+        acme, [api] = _billed_client(client, auth_headers, "Acme", "API")
+        older = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        newer = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        elsewhere = _report_link(client, auth_headers, acme["id"], [api["id"]])
+
+        kites = _report_links(client, auth_headers, client_id=kite["id"])
+        every = _report_links(client, auth_headers)
+
+        assert [link["id"] for link in kites] == [newer["id"], older["id"]]
+        assert [link["id"] for link in every] == [elsewhere["id"], newer["id"], older["id"]]
+
+    def test_turn_off_all(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers)
+        acme, [api] = _billed_client(client, auth_headers, "Acme", "API")
+        _report_link(client, auth_headers, kite["id"], [website["id"]])
+        _report_link(client, auth_headers, acme["id"], [api["id"]])
+        _report_link(client, auth_headers, acme["id"], [api["id"]])
+
+        def turn_off(body: dict):
+            return client.post(
+                "/api/billing/report-links/turn-off", json=body, headers=auth_headers
+            )
+
+        missing = turn_off({})
+        kites = turn_off({"client_id": kite["id"]})
+        rest = turn_off({"client_id": None})
+
+        assert missing.status_code == 422, missing.text
+        assert [f["path"] for f in missing.json()["fields"]] == ["client_id"]
+        assert (kites.status_code, kites.json()) == (200, {"turned_off": 1})
+        assert (rest.status_code, rest.json()) == (200, {"turned_off": 2})
+        assert _report_links(client, auth_headers) == []
+
+
 class TestBeatsDirectAPI:
     """Test suite for Beat (time log) management endpoints"""
 
@@ -7869,10 +8141,11 @@ class TestDevicePairingAPI:
         assert resp.status_code == 403
 
     def test_device_token_reaches_no_money(self, client, auth_headers):
-        """Clients, rates, billable marks and billing budgets are kept off
-        every paired device: none of their routes sits under a device prefix
-        (see the comment on `DEVICE_ALLOWED_PREFIXES`), so a route moved under
-        /api/projects or /api/beats, or a prefix added, shows here."""
+        """Clients, rates, billable marks, billing budgets and report links
+        are kept off every paired device: none of their routes sits under a
+        device prefix (see the comment on `DEVICE_ALLOWED_PREFIXES`), so a
+        route moved under /api/projects or /api/beats, or a prefix added,
+        shows here."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})
@@ -7890,6 +8163,19 @@ class TestDevicePairingAPI:
             client.put(
                 "/api/billing/budgets/clients/x",
                 json=_billing_budget_body(),
+                headers=device_headers,
+            ),
+            client.get("/api/billing/report-links", headers=device_headers),
+            client.post(
+                "/api/billing/report-links",
+                params={"tz": "UTC"},
+                json=_report_link_body("x", ["y"]),
+                headers=device_headers,
+            ),
+            client.delete("/api/billing/report-links/x", headers=device_headers),
+            client.post(
+                "/api/billing/report-links/turn-off",
+                json={"client_id": None},
                 headers=device_headers,
             ),
         ):
