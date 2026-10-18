@@ -6172,6 +6172,29 @@ class TestBackupImport:
             "billing_budgets.1.scope_id",
         ]
 
+    def test_a_billing_budget_without_its_limit_or_start_is_a_422_naming_them(
+        self, client, auth_headers
+    ):
+        # A file written by hand, or by another tool, can leave a key out
+        # where an export writes null: it must be refused as the null is,
+        # not stored to fail every budgets read after it.
+        kite = _create_client(client, auth_headers, name="Keys left out")
+        total = {"scope": "client", "scope_id": kite["id"], "unit": "hours", "period": "total"}
+        money = {**total, "unit": "money", "period": "monthly"}
+        file = {
+            "billing_budgets": [{**total, "warn_at_percent": 80}, {**money, "warn_at_percent": 80}]
+        }
+
+        resp = self._import(client, auth_headers, file)
+
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == [
+            "billing_budgets.0.limit_hours",
+            "billing_budgets.0.starts_on",
+            "billing_budgets.1.limit_minor",
+        ]
+        assert kite["id"] not in [s["scope_id"] for s in _billing_budgets(client, auth_headers)]
+
     def test_a_budget_on_a_project_billed_nowhere_is_refused_and_writes_nothing(
         self, client, auth_headers, auth_info, mongo
     ):
