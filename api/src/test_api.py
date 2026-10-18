@@ -2777,7 +2777,7 @@ class TestClientsAPI:
 
         resp = client.delete(
             f"/api/billing/projects/{project['id']}",
-            params={"tz": "UTC", "rewrite_past": False},
+            params={"tz": "UTC", "rewrite_past": False, "remove_billing_budget": False},
             headers=auth_headers,
         )
         assert resp.status_code == 204, resp.text
@@ -2977,7 +2977,7 @@ class TestProjectBillingAPI:
 
         resp = client.delete(
             f"/api/billing/projects/{project['id']}",
-            params={"tz": "UTC", "rewrite_past": True},
+            params={"tz": "UTC", "rewrite_past": True, "remove_billing_budget": False},
             headers=auth_headers,
         )
         assert resp.status_code == 204, resp.text
@@ -2992,18 +2992,19 @@ class TestProjectBillingAPI:
         terms = _billable_from(_last_month())
         assert _bill(client, auth_headers, project["id"], kite["id"], terms).status_code == 200
         url = f"/api/billing/projects/{project['id']}"
+        params = {"tz": "UTC", "remove_billing_budget": False}
 
-        resp = client.delete(url, params={"tz": "UTC"}, headers=auth_headers)
+        resp = client.delete(url, params=params, headers=auth_headers)
         assert resp.status_code == 422, resp.text
         assert [f["path"] for f in resp.json()["fields"]] == ["rewrite_past"]
-        resp = client.delete(url, params={"tz": "UTC", "rewrite_past": False}, headers=auth_headers)
+        resp = client.delete(url, params={**params, "rewrite_past": False}, headers=auth_headers)
         assert resp.status_code == 409, resp.text
         assert resp.json()["code"] == "RETROACTIVE_CHANGE"
-        resp = client.delete(url, params={"tz": "UTC", "rewrite_past": True}, headers=auth_headers)
+        resp = client.delete(url, params={**params, "rewrite_past": True}, headers=auth_headers)
         assert resp.status_code == 204, resp.text
         listed = client.get("/api/billing/projects", headers=auth_headers).json()
         assert project["id"] not in [b["project_id"] for b in listed]
-        resp = client.delete(url, params={"tz": "UTC", "rewrite_past": True}, headers=auth_headers)
+        resp = client.delete(url, params={**params, "rewrite_past": True}, headers=auth_headers)
         assert resp.status_code == 404, resp.text
 
     def test_a_past_entry_marked_billable_is_a_past_figure_too(self, client, auth_headers):
@@ -3044,7 +3045,7 @@ class TestProjectBillingAPI:
         assert resp.json()["code"] == "CURRENCY_MISMATCH"
         resp = client.delete(
             f"/api/billing/projects/{project['id']}",
-            params={"tz": "UTC", "rewrite_past": False},
+            params={"tz": "UTC", "rewrite_past": False, "remove_billing_budget": False},
             headers=auth_headers,
         )
         assert resp.status_code == 409, resp.text
@@ -3531,6 +3532,140 @@ class TestBillingBudgetsAPI:
             "near_at": begun + timedelta(hours=32),
             "over_at": begun + timedelta(hours=40),
         }
+
+    def test_a_money_budget_locks_its_clients_currency_where_hours_do_not(
+        self, client, auth_headers
+    ):
+        # No rate anywhere, so only a budget could lock the currency.
+        acme = _create_client(client, auth_headers, name="Acme", currency="USD")
+        website = _freelance(client, auth_headers)
+        terms = _billable_from(_this_month())
+        assert _bill(client, auth_headers, website["id"], acme["id"], terms).status_code == 200
+
+        def locked() -> bool:
+            got = client.get(f"/api/clients/{acme['id']}", headers=auth_headers).json()
+            listed = client.get("/api/clients/", headers=auth_headers).json()
+            [same] = [c["currency_locked"] for c in listed if c["id"] == acme["id"]]
+            assert same == got["currency_locked"]
+            return got["currency_locked"]
+
+        assert _put_billing_budget(client, auth_headers, "clients", acme["id"]).status_code == 200
+        assert (
+            _put_billing_budget(client, auth_headers, "projects", website["id"]).status_code == 200
+        )
+        assert locked() is False
+        resp = _put_client(client, auth_headers, acme["id"], name="Acme", currency="EUR")
+        assert resp.status_code == 200, resp.text
+
+        money = {"unit": "money", "limit_hours": None, "limit_minor": 100000}
+        for scope, scope_id in (("projects", website["id"]), ("clients", acme["id"])):
+            resp = _put_billing_budget(client, auth_headers, scope, scope_id, **money)
+            assert resp.status_code == 200, resp.text
+            assert locked() is True
+            resp = _put_client(client, auth_headers, acme["id"], name="Acme", currency="GBP")
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["code"] == "CURRENCY_IN_USE"
+            assert "billing budgets" in resp.json()["detail"]
+            # Back to hours: nothing is in its currency again.
+            assert _put_billing_budget(client, auth_headers, scope, scope_id).status_code == 200
+            assert locked() is False
+
+    def test_a_money_budget_keeps_its_project_in_its_currency(self, client, auth_headers):
+        # Billed from this month on, at the client's rate: without a budget
+        # the project moves to a client in any currency.
+        kite = _create_client(client, auth_headers)
+        euros = _create_client(client, auth_headers, name="Other euros")
+        dollars = _create_client(client, auth_headers, name="Acme", currency="USD")
+        website = _freelance(client, auth_headers)
+        terms = _billable_from(_this_month())
+        assert _bill(client, auth_headers, website["id"], kite["id"], terms).status_code == 200
+        money = {"unit": "money", "limit_hours": None, "limit_minor": 100000}
+        resp = _put_billing_budget(client, auth_headers, "projects", website["id"], **money)
+        assert resp.status_code == 200, resp.text
+
+        resp = _bill(client, auth_headers, website["id"], dollars["id"], terms, rewrite_past=True)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "CURRENCY_MISMATCH"
+        assert resp.json()["detail"].startswith("This project's billing budget is in EUR"), resp
+        # To a client in the same currency it moves, budget and all.
+        assert _bill(client, auth_headers, website["id"], euros["id"], terms).status_code == 200
+        [status] = _billing_budgets(client, auth_headers)
+        assert (status["client_id"], status["unit"]) == (euros["id"], "money")
+
+        # An hours budget moves anywhere.
+        resp = _put_billing_budget(client, auth_headers, "projects", website["id"])
+        assert resp.status_code == 200, resp.text
+        assert _bill(client, auth_headers, website["id"], dollars["id"], terms).status_code == 200
+        [status] = _billing_budgets(client, auth_headers)
+        assert (status["client_id"], status["currency"]) == (dollars["id"], "USD")
+
+    def test_stopping_billing_names_the_billing_budget(self, client, auth_headers):
+        kite = _create_client(client, auth_headers)
+        website = _freelance(client, auth_headers, "Website")
+        terms = _billable_from(_this_month())
+        assert _bill(client, auth_headers, website["id"], kite["id"], terms).status_code == 200
+        assert (
+            _put_billing_budget(client, auth_headers, "projects", website["id"]).status_code == 200
+        )
+        url = f"/api/billing/projects/{website['id']}"
+        params = {"tz": "UTC", "rewrite_past": False}
+
+        def billed() -> bool:
+            listed = client.get("/api/billing/projects", headers=auth_headers).json()
+            return website["id"] in [b["project_id"] for b in listed]
+
+        resp = client.delete(url, params=params, headers=auth_headers)
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["remove_billing_budget"]
+        resp = client.delete(
+            url, params={**params, "remove_billing_budget": False}, headers=auth_headers
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "PROJECT_HAS_BILLING_BUDGET"
+        assert resp.json()["detail"].startswith("Website has a billing budget"), resp.text
+        assert billed()
+        assert len(_billing_budgets(client, auth_headers)) == 1
+
+        resp = client.delete(
+            url, params={**params, "remove_billing_budget": True}, headers=auth_headers
+        )
+        assert resp.status_code == 204, resp.text
+        assert not billed()
+        assert _billing_budgets(client, auth_headers) == []
+
+    def test_a_declined_past_change_keeps_the_billing_and_its_budget(
+        self, client, auth_headers, mongo
+    ):
+        kite = _create_client(client, auth_headers)
+        website = _freelance(client, auth_headers)
+        terms = _billable_from(_last_month())
+        assert _bill(client, auth_headers, website["id"], kite["id"], terms).status_code == 200
+        assert (
+            _put_billing_budget(client, auth_headers, "projects", website["id"]).status_code == 200
+        )
+
+        resp = client.delete(
+            f"/api/billing/projects/{website['id']}",
+            params={"tz": "UTC", "rewrite_past": False, "remove_billing_budget": True},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "RETROACTIVE_CHANGE"
+        listed = client.get("/api/billing/projects", headers=auth_headers).json()
+        assert website["id"] in [b["project_id"] for b in listed]
+        assert mongo.billing_budgets.count_documents({"scope_id": website["id"]}) == 1
+
+    def test_deleting_a_client_takes_its_budget(self, client, auth_headers, mongo):
+        # Read through the collection: a budget whose client is gone is
+        # skipped on read, so the list could not tell.
+        kite = _create_client(client, auth_headers)
+        assert _put_billing_budget(client, auth_headers, "clients", kite["id"]).status_code == 200
+
+        resp = client.delete(f"/api/clients/{kite['id']}", headers=auth_headers)
+
+        assert resp.status_code == 204, resp.text
+        assert mongo.billing_budgets.count_documents({"scope_id": kite["id"]}) == 0
 
 
 class TestBeatsDirectAPI:
@@ -5888,6 +6023,54 @@ class TestBackupImport:
         marks = client.get("/api/billing/entries", headers=auth_headers).json()
         assert past["id"] not in [mark["beat_id"] for mark in marks]
 
+    def test_the_accounts_money_budget_holds_a_currency_through_a_restore(
+        self, client, auth_headers
+    ):
+        # No rate anywhere: only the account's money budget on the project
+        # keeps its client's currency, and keeps it from moving to dollars.
+        euros = _create_client(client, auth_headers, name="Budgeted euros")
+        dollars = _create_client(client, auth_headers, name="Budgeted dollars", currency="USD")
+        project = _freelance(client, auth_headers, "Budgeted")
+        now = _billable_from(_this_month())
+        assert _bill(client, auth_headers, project["id"], euros["id"], now).status_code == 200
+        resp = _put_billing_budget(
+            client,
+            auth_headers,
+            "projects",
+            project["id"],
+            unit="money",
+            limit_hours=None,
+            limit_minor=100000,
+        )
+        assert resp.status_code == 200, resp.text
+        [record] = [
+            c for c in self._export(client, auth_headers)["clients"] if c["id"] == euros["id"]
+        ]
+        cases = [
+            ({"clients": [{**record, "currency": "GBP"}]}, "CURRENCY_IN_USE", "clients.0"),
+            (
+                {
+                    "project_billing": [
+                        {"project_id": project["id"], "client_id": dollars["id"], "terms": now}
+                    ]
+                },
+                "CURRENCY_MISMATCH",
+                "project_billing.0",
+            ),
+        ]
+        for file, code, where in cases:
+            resp = self._import(client, auth_headers, file)
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["code"] == code
+            assert resp.json()["detail"].startswith(f"{where}: "), resp.text
+
+        got = client.get(f"/api/clients/{euros['id']}", headers=auth_headers).json()
+        assert got["currency"] == "EUR"
+        billed = client.get("/api/billing/projects", headers=auth_headers).json()
+        assert (
+            next(b for b in billed if b["project_id"] == project["id"])["client_id"] == euros["id"]
+        )
+
     def test_a_backup_from_before_billing_imports_and_leaves_billing_alone(
         self, client, auth_headers
     ):
@@ -7420,7 +7603,7 @@ class TestMultiUserIsolation:
             client.delete(f"/api/clients/{kite['id']}", headers=other),
             client.delete(
                 f"/api/billing/projects/{project['id']}",
-                params={"tz": "UTC", "rewrite_past": True},
+                params={"tz": "UTC", "rewrite_past": True, "remove_billing_budget": False},
                 headers=other,
             ),
         ):
