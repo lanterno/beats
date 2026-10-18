@@ -38,6 +38,8 @@
 #                              stale threshold, or a waiter could give up before
 #                              an abandoned mutex can be broken (acquire)
 #   DEPLOY_LOCK_POLL_SECONDS   seconds between attempts; 10 if unset (acquire)
+#   DEPLOY_RETRY_SECONDS       seconds before retrying a failed call; 5 if
+#                              unset (release)
 #   BUILD_ID, COMMIT_SHA       this build; written into the mutex so a stuck
 #                              one says whose it is (acquire; COMMIT_SHA: decide)
 #   CLOUD_RUN_SERVICE, CLOUD_RUN_REGION, GCP_PROJECT
@@ -225,27 +227,40 @@ decide() {
 
 release() {
 	require DEPLOY_LOCK_OBJECT DEPLOY_STATE_DIR
-	local gen_file="$DEPLOY_STATE_DIR/lock-generation" gen current
+	local gen_file="$DEPLOY_STATE_DIR/lock-generation" gen current err="" attempt
 	if [[ ! -s $gen_file ]]; then
 		log "this build holds no mutex; nothing to release"
 		return 0
 	fi
 	gen=$(<"$gen_file")
-	if gcloud storage rm --if-generation-match="$gen" "$DEPLOY_LOCK_OBJECT" >/dev/null 2>&1; then
-		rm -f "$gen_file"
-		log "released $DEPLOY_LOCK_OBJECT (generation $gen)"
-		return 0
-	fi
-	if current=$(gcloud storage objects describe "$DEPLOY_LOCK_OBJECT" \
-		--format='value(generation)' 2>/dev/null); then
-		if [[ $current == "$gen" ]]; then
-			die "could not delete this build's mutex (generation $gen). Later builds will break it once it passes their stale threshold, or clear it by hand: gcloud storage rm $DEPLOY_LOCK_OBJECT"
+	for attempt in 1 2 3; do
+		if err=$(gcloud storage rm --if-generation-match="$gen" "$DEPLOY_LOCK_OBJECT" 2>&1 >/dev/null); then
+			rm -f "$gen_file"
+			log "released $DEPLOY_LOCK_OBJECT (generation $gen)"
+			return 0
 		fi
-		log "the mutex is now generation $current, not this build's $gen (presumably broken as stale); leaving it alone"
-	else
-		log "the mutex (generation $gen) is already gone"
-	fi
-	rm -f "$gen_file"
+		# The delete failed. Only a mutex that is gone, or is now another
+		# generation, is no longer this build's to release; anything unclear
+		# (the look failing too) is retried, then fails the build.
+		if current=$(gcloud storage objects describe "$DEPLOY_LOCK_OBJECT" \
+			--format='value(generation)' 2>&1); then
+			if [[ $current != "$gen" ]]; then
+				log "the mutex is now generation $current, not this build's $gen (presumably broken as stale); leaving it alone"
+				rm -f "$gen_file"
+				return 0
+			fi
+		elif [[ $current == *"not found: 404"* ]]; then
+			log "the mutex (generation $gen) is already gone"
+			rm -f "$gen_file"
+			return 0
+		else
+			err="$err
+$current"
+		fi
+		log "release attempt $attempt of 3 failed: $err"
+		((attempt == 3)) || sleep "${DEPLOY_RETRY_SECONDS:-5}"
+	done
+	die "could not delete this build's mutex (generation $gen). Later builds will break it once it passes their stale threshold, or clear it by hand: gcloud storage rm $DEPLOY_LOCK_OBJECT"
 }
 
 case ${1:-} in
