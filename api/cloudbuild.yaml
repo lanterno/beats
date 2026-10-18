@@ -36,17 +36,92 @@ steps:
           > /workspace/terraform/terraform.tfvars
     id: 'fetch-tfvars'
 
-  # Terraform init + apply
+  # Deploys are serialized, and a build never rolls the API back. Every push to
+  # main that touches api/ or terraform/ starts a build, so merges seconds apart
+  # run side by side; everything above runs in parallel across them, and only
+  # the decide-and-apply below takes turns. Waiting on Terraform's own state
+  # lock would not do: whichever build got it next would apply, newest or not.
+  # deploy-lock takes a mutex in the state bucket, then, holding it, compares
+  # this commit with the one Cloud Run runs: a build whose commit the live one
+  # already contains skips the apply and succeeds. The mutex is released in
+  # deploy-unlock, a step of its own because Cloud Build stops at the first
+  # failing step, so terraform-apply records its status instead of failing.
+  # api/scripts/deploy_lock.sh holds the logic and documents each variable.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-lock'
+    entrypoint: bash
+    env:
+      - 'DEPLOY_LOCK_OBJECT=gs://${_PROJECT_ID}-terraform-state/beats/deploy.lock'
+      - 'DEPLOY_STATE_DIR=/workspace/.deploy'
+      # A deploy usually holds the mutex for a few minutes, and a live one can
+      # hold it for nearly half an hour: the checks and terraform init, five
+      # minutes of -lock-timeout, then the Google provider's default 20-minute
+      # timeout on the Cloud Run service. A waiter that broke a live holder's
+      # mutex would bring back the race this exists to stop, so only one held
+      # for forty minutes is taken for abandoned.
+      - 'DEPLOY_LOCK_STALE_SECONDS=2400'
+      # Longer than the stale threshold, so a waiter outlasts an abandoned mutex.
+      - 'DEPLOY_LOCK_WAIT_SECONDS=2700'
+      - 'BUILD_ID=$BUILD_ID'
+      - 'COMMIT_SHA=$COMMIT_SHA'
+      - 'CLOUD_RUN_SERVICE=${_IMAGE_NAME}'
+      - 'CLOUD_RUN_REGION=${_REGION}'
+      - 'GCP_PROJECT=${_PROJECT_ID}'
+      # The repository the trigger builds (github_owner/github_repo in terraform/).
+      - 'DEPLOY_REPO_URL=https://github.com/lanterno/beats'
+    args:
+      - '-c'
+      - |
+        bash api/scripts/deploy_lock.sh acquire || exit 1
+        if ! bash api/scripts/deploy_lock.sh decide; then
+          bash api/scripts/deploy_lock.sh release
+          exit 1
+        fi
+
+  # Terraform init + apply, unless deploy-lock found a newer commit live. Exits 0
+  # either way so deploy-unlock runs; the apply's status fails the build there.
+  # -lock-timeout waits out a person running terraform from a workstation.
   - name: 'hashicorp/terraform:1.16'
+    id: 'terraform-apply'
     dir: 'terraform'
     entrypoint: sh
     args:
       - '-c'
       - |
-        terraform init -input=false && \
-        terraform apply -auto-approve -input=false \
-          -var="container_image_tag=$COMMIT_SHA"
-    id: 'terraform-apply'
+        decision=$$(cat /workspace/.deploy/decision 2>/dev/null)
+        if [ "$$decision" = skip ]; then
+          echo "A newer commit is live; not deploying $COMMIT_SHA."
+          echo 0 > /workspace/.deploy/apply-status
+        elif [ "$$decision" = apply ]; then
+          terraform init -input=false && \
+          terraform apply -auto-approve -input=false -lock-timeout=5m \
+            -var="container_image_tag=$COMMIT_SHA"
+          echo $$? > /workspace/.deploy/apply-status
+        else
+          echo "deploy-lock left no decision ('$$decision'); not deploying." >&2
+          echo 1 > /workspace/.deploy/apply-status
+        fi
+        exit 0
+
+  # Release the mutex, then fail the build if the apply failed, so a failed
+  # deploy still shows a red check on the commit.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-unlock'
+    entrypoint: bash
+    env:
+      - 'DEPLOY_LOCK_OBJECT=gs://${_PROJECT_ID}-terraform-state/beats/deploy.lock'
+      - 'DEPLOY_STATE_DIR=/workspace/.deploy'
+    args:
+      - '-c'
+      - |
+        bash api/scripts/deploy_lock.sh release
+        released=$$?
+        status=$$(cat /workspace/.deploy/apply-status 2>/dev/null || echo 1)
+        if [ "$$status" != 0 ]; then
+          echo "terraform-apply recorded a failure (exit $$status)." >&2
+          exit 1
+        fi
+        exit "$$released"
 
 images:
   - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'
@@ -56,7 +131,11 @@ options:
   machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY
 
-timeout: '1200s'
+# Room for the image build and push (minutes), deploy-lock's wait of up to
+# DEPLOY_LOCK_WAIT_SECONDS (45 minutes) for the builds ahead of this one, and
+# this build's own hold of up to half an hour (see DEPLOY_LOCK_STALE_SECONDS).
+# A build stopped by its timeout mid-apply leaves both locks behind.
+timeout: '5400s'
 
 tags:
   - 'docker'

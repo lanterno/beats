@@ -71,10 +71,15 @@ On every push to `main` that changes `api/**` or `terraform/**`:
 
 1. Cloud Build builds and pushes the Docker image (tagged with commit SHA)
 2. Cloud Build fetches `terraform.tfvars` from Secret Manager
-3. Cloud Build runs `terraform apply -var="container_image_tag=$COMMIT_SHA"`
+3. Cloud Build waits its turn on the deploy lock, then runs
+   `terraform apply -var="container_image_tag=$COMMIT_SHA"`, unless the commit
+   live on Cloud Run already contains this one, in which case the build
+   succeeds without deploying (see [How a Deploy Runs](README.md#how-a-deploy-runs))
 4. Terraform updates the Cloud Run service with the new image and all env vars
 
-Local `terraform apply` and CI/CD share the same GCS state — no conflicts.
+Local `terraform apply` and CI/CD share the same GCS state, and Terraform's
+state lock keeps them from applying at once: a CI apply waits up to five
+minutes for a local one to finish.
 
 ## Updating environment variables
 
