@@ -3242,6 +3242,297 @@ class TestBillingMonthAPI:
         ]
 
 
+def _billing_budget_body(**fields) -> dict:
+    return {
+        "unit": "hours",
+        "period": "monthly",
+        "limit_hours": 40,
+        "limit_minor": None,
+        "starts_on": None,
+        "warn_at_percent": 80,
+        **fields,
+    }
+
+
+def _put_billing_budget(client, headers, scope: str, scope_id: str, **fields):
+    return client.put(
+        f"/api/billing/budgets/{scope}/{scope_id}",
+        json=_billing_budget_body(**fields),
+        headers=headers,
+    )
+
+
+def _billing_budgets(client, headers, tz: str = "UTC") -> list[dict]:
+    resp = client.get("/api/billing/budgets", params={"tz": tz}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+class TestBillingBudgetsAPI:
+    """/api/billing/budgets — a limit on a client or a billed project, read
+    as of today. "Today" is the real one in UTC, the timezone these send, as
+    the gate tests above work it out; spent hours are logged last month, so
+    a total budget from then counts them whatever the day."""
+
+    @pytest.fixture(autouse=True)
+    def _no_billing_budgets(self, mongo):
+        # clean_db is class-scoped, and the read lists every budget.
+        mongo.billing_budgets.delete_many({})
+
+    def test_a_round_trip(self, client, auth_headers):
+        assert _billing_budgets(client, auth_headers) == []
+        kite = _create_client(client, auth_headers, rates=KITE_RATE)
+        website = _freelance(client, auth_headers, "Website")
+        assert (
+            _bill(
+                client, auth_headers, website["id"], kite["id"], _billable_from(_last_month())
+            ).status_code
+            == 200
+        )
+        _beat(client, auth_headers, website["id"], f"{_last_month()}T09:00:00", 120)
+
+        resp = _put_billing_budget(
+            client,
+            auth_headers,
+            "clients",
+            kite["id"],
+            unit="money",
+            limit_hours=None,
+            limit_minor=500000,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "scope": "client",
+            "scope_id": kite["id"],
+            "client_id": kite["id"],
+            "currency": "EUR",
+            "minor_units": 2,
+            "unit": "money",
+            "period": "monthly",
+            "limit_hours": None,
+            "limit_minor": 500000,
+            "starts_on": None,
+            "warn_at_percent": 80,
+        }
+        # A second write on the scope replaces the first, the money limit
+        # included: it would be refused on every read beside a limit in hours.
+        resp = _put_billing_budget(
+            client, auth_headers, "clients", kite["id"], limit_hours=37.5, warn_at_percent=90
+        )
+        assert resp.status_code == 200, resp.text
+        resp = _put_billing_budget(
+            client,
+            auth_headers,
+            "projects",
+            website["id"],
+            unit="money",
+            period="total",
+            limit_hours=None,
+            limit_minor=20000,
+            starts_on=str(_last_month()),
+        )
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["scope"], resp.json()["client_id"]) == ("project", kite["id"])
+        # Another client sorts by its name, before Studio Kite.
+        acme = _create_client(client, auth_headers, name="acme", currency="JPY")
+        assert _put_billing_budget(client, auth_headers, "clients", acme["id"]).status_code == 200
+
+        today = datetime.now(UTC).date()
+        month_end = (_this_month() + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+        statuses = _billing_budgets(client, auth_headers)
+        assert [(s["scope"], s["name"]) for s in statuses] == [
+            ("client", "acme"),
+            ("client", "Studio Kite"),
+            ("project", "Website"),
+        ]
+        _, monthly, total = statuses
+        assert {key: monthly[key] for key in monthly if key != "runs_out_on"} == {
+            "scope": "client",
+            "scope_id": kite["id"],
+            "client_id": kite["id"],
+            "name": "Studio Kite",
+            "active": True,
+            "currency": "EUR",
+            "minor_units": 2,
+            "unit": "hours",
+            "period": "monthly",
+            "limit_hours": 37.5,
+            "limit_minor": None,
+            "starts_on": None,
+            "warn_at_percent": 90,
+            "upcoming": False,
+            "first": str(_this_month()),
+            "last": str(month_end),
+            "through": str(today),
+            # Last month's two hours are not this month's.
+            "billable_hours": 0.0,
+            "unpriced_hours": 0.0,
+            "amount_minor": 0,
+            "remaining_hours": 37.5,
+            "remaining_minor": None,
+            "percent_used": 0,
+            "state": "under",
+            "running": None,
+        }
+        assert monthly["runs_out_on"] is None
+        # Two hours at 85.00 EUR is 170.00 of 200.00: past the warning at 80 %.
+        keys = ("first", "last", "through", "billable_hours", "amount_minor")
+        assert {key: total[key] for key in keys} == {
+            "first": str(_last_month()),
+            "last": None,
+            "through": str(today),
+            "billable_hours": 2.0,
+            "amount_minor": 17000,
+        }
+        keys = ("currency", "remaining_hours", "remaining_minor", "percent_used", "state")
+        assert {key: total[key] for key in keys} == {
+            "currency": "EUR",
+            "remaining_hours": None,
+            "remaining_minor": 3000,
+            "percent_used": 85,
+            "state": "near",
+        }
+
+    def test_tz_is_required(self, client, auth_headers):
+        resp = client.get("/api/billing/budgets", headers=auth_headers)
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == ["tz"]
+
+    @pytest.mark.parametrize(
+        ("body", "field"),
+        [
+            (
+                {key: value for key, value in _billing_budget_body().items() if key != "starts_on"},
+                "starts_on",
+            ),
+            (_billing_budget_body(limit_hours=37.333), "limit_hours"),
+        ],
+        ids=["a key left out", "a third decimal"],
+    )
+    def test_a_write_is_refused_naming_its_key(self, client, auth_headers, body, field):
+        kite = _create_client(client, auth_headers)
+        resp = client.put(
+            f"/api/billing/budgets/clients/{kite['id']}", json=body, headers=auth_headers
+        )
+        assert resp.status_code == 422, resp.text
+        assert [f["path"] for f in resp.json()["fields"]] == [field]
+
+    def test_another_users_scope_or_a_malformed_id_is_not_found(
+        self, client, auth_headers, other_auth_headers
+    ):
+        theirs = _create_client(client, other_auth_headers)
+        their_project = _freelance(client, other_auth_headers)
+        billed = _bill(
+            client,
+            other_auth_headers,
+            their_project["id"],
+            theirs["id"],
+            _billable_from(_this_month()),
+        )
+        assert billed.status_code == 200, billed.text
+
+        resp = _put_billing_budget(client, auth_headers, "clients", theirs["id"])
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "CLIENT_NOT_FOUND"
+        assert _put_billing_budget(client, auth_headers, "clients", "nope").status_code == 404
+        for project_id in (their_project["id"], "nope"):
+            resp = _put_billing_budget(client, auth_headers, "projects", project_id)
+            assert resp.status_code == 404, resp.text
+        assert _billing_budgets(client, other_auth_headers) == []
+
+    def test_a_project_budget_needs_billing(self, client, auth_headers):
+        unbilled = _freelance(client, auth_headers)
+        resp = _put_billing_budget(client, auth_headers, "projects", unbilled["id"])
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "BILLING_BUDGET_NEEDS_BILLING"
+        assert _billing_budgets(client, auth_headers) == []
+
+    def test_a_delete_is_204_whether_or_not_there_was_one(self, client, auth_headers):
+        kite = _create_client(client, auth_headers)
+        website = _freelance(client, auth_headers)
+        assert (
+            _bill(
+                client, auth_headers, website["id"], kite["id"], _billable_from(_this_month())
+            ).status_code
+            == 200
+        )
+        assert _put_billing_budget(client, auth_headers, "clients", kite["id"]).status_code == 200
+        assert (
+            _put_billing_budget(client, auth_headers, "projects", website["id"]).status_code == 200
+        )
+
+        for scope, scope_id in (("clients", kite["id"]), ("projects", website["id"])):
+            for _ in range(2):
+                resp = client.delete(
+                    f"/api/billing/budgets/{scope}/{scope_id}", headers=auth_headers
+                )
+                assert resp.status_code == 204, resp.text
+        assert _billing_budgets(client, auth_headers) == []
+
+    def test_an_archived_scope_is_read_but_never_alerts(self, client, auth_headers):
+        kite = _create_client(client, auth_headers)
+        website = _freelance(client, auth_headers)
+        assert (
+            _bill(
+                client, auth_headers, website["id"], kite["id"], _billable_from(_this_month())
+            ).status_code
+            == 200
+        )
+        assert _put_billing_budget(client, auth_headers, "clients", kite["id"]).status_code == 200
+        assert (
+            _put_billing_budget(client, auth_headers, "projects", website["id"]).status_code == 200
+        )
+
+        # An archived project: its own budget is quiet, its client's is not.
+        client.post(f"/api/projects/{website['id']}/archive", headers=auth_headers)
+        assert [s["active"] for s in _billing_budgets(client, auth_headers)] == [True, False]
+        # An archived client quiets both, and a write on it is still taken.
+        client.post(f"/api/clients/{kite['id']}/archive", headers=auth_headers)
+        client.post(f"/api/projects/{website['id']}/unarchive", headers=auth_headers)
+        assert [s["active"] for s in _billing_budgets(client, auth_headers)] == [False, False]
+        resp = _put_billing_budget(client, auth_headers, "clients", kite["id"], limit_hours=10)
+        assert resp.status_code == 200, resp.text
+
+    def test_a_running_timer_is_answered_with_instants_not_figures(self, client, auth_headers):
+        kite = _create_client(client, auth_headers, rates=KITE_RATE)
+        website = _freelance(client, auth_headers)
+        assert (
+            _bill(
+                client, auth_headers, website["id"], kite["id"], _billable_from(_this_month())
+            ).status_code
+            == 200
+        )
+        assert _put_billing_budget(client, auth_headers, "clients", kite["id"]).status_code == 200
+        [before] = _billing_budgets(client, auth_headers)
+        assert before["running"] is None
+
+        # On the minute, so it started today in UTC whenever this runs.
+        since = datetime.now(UTC).replace(second=0, microsecond=0, tzinfo=None)
+        running = _beat(client, auth_headers, website["id"], since.isoformat(), None)
+        try:
+            [during] = _billing_budgets(client, auth_headers)
+        finally:
+            client.delete(f"/api/beats/{running['id']}", headers=auth_headers)
+
+        # Nothing it has run so far is in a figure: only the instants move.
+        assert {**during, "running": None} == before
+        assert {key: during["running"][key] for key in ("project_id", "priced")} == {
+            "project_id": website["id"],
+            "priced": True,
+        }
+        instants = {
+            key: datetime.fromisoformat(during["running"][key])
+            for key in ("since", "near_at", "over_at")
+        }
+        # 40 h with a warning at 80 %, none of it spent: 32 h and 40 h from the start.
+        begun = since.replace(tzinfo=UTC)
+        assert instants == {
+            "since": begun,
+            "near_at": begun + timedelta(hours=32),
+            "over_at": begun + timedelta(hours=40),
+        }
+
+
 class TestBeatsDirectAPI:
     """Test suite for Beat (time log) management endpoints"""
 
@@ -7232,10 +7523,10 @@ class TestDevicePairingAPI:
         assert resp.status_code == 403
 
     def test_device_token_reaches_no_money(self, client, auth_headers):
-        """Clients, rates and billable marks are kept off every paired device:
-        none of their routes sits under a device prefix (see the comment on
-        `DEVICE_ALLOWED_PREFIXES`), so a route moved under /api/projects or
-        /api/beats, or a prefix added, shows here."""
+        """Clients, rates, billable marks and billing budgets are kept off
+        every paired device: none of their routes sits under a device prefix
+        (see the comment on `DEVICE_ALLOWED_PREFIXES`), so a route moved under
+        /api/projects or /api/beats, or a prefix added, shows here."""
         resp = client.post("/api/device/pair/code", headers=auth_headers)
         code = resp.json()["code"]
         resp = client.post("/api/device/pair/exchange", json={"code": code})
@@ -7249,6 +7540,12 @@ class TestDevicePairingAPI:
                 headers=device_headers,
             ),
             client.put("/api/billing/entries/x", json={"billable": True}, headers=device_headers),
+            client.get("/api/billing/budgets", params={"tz": "UTC"}, headers=device_headers),
+            client.put(
+                "/api/billing/budgets/clients/x",
+                json=_billing_budget_body(),
+                headers=device_headers,
+            ),
         ):
             assert resp.status_code == 403, resp.text
             assert resp.json()["code"] == "DEVICE_PATH_FORBIDDEN"
