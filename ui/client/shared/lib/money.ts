@@ -43,21 +43,36 @@ export function minorToInput(minor: number, minorUnits: number): string {
 
 export type ParsedMoney = { ok: true; minor: number } | { ok: false; reason: string };
 
+/** An amount read off a field, in whole units of its last decimal place. */
+export type ParsedAmount = { ok: true; units: number } | { ok: false; reason: string };
+
+/** The sentences `parseAmount` gives that depend on what is being typed. */
+export interface AmountMessages {
+	/** With no decimal places, a fraction was typed. */
+	wholeOnly?: string;
+}
+
 // Digits, then optionally one "." or "," and the digits after it. Nothing
 // else: no sign, no thousands separator, no currency symbol.
 const AMOUNT = /^(\d+)(?:([.,])(\d+))?$/;
 
 /**
- * A rate typed into a field, in minor units. Read off the string, never
- * through `parseFloat`, so 0.1 + 0.2 never reaches a rate. The decimal
- * separator is "." or ","; more fraction digits than the currency has are
+ * An amount typed into a field, as an integer count of its smallest step:
+ * hundredths at two `places`, whole units at none. Read off the string,
+ * never through `parseFloat`, so 0.1 + 0.2 never reaches a figure. The
+ * decimal separator is "." or ","; more fraction digits than `places` are
  * refused, never rounded, and so are thousands separators ("1,000.00"),
- * signs, zero, and anything over `RATE_MINOR_MAX` — what the API would
- * answer 422 for. A "," before exactly three digits is refused too, in
- * every currency: "25,000" is twenty-five thousand to one reader and 25.000
- * to another, and in a currency with three decimals (IQD, KWD) both parse.
+ * signs, zero, and anything over `max` (in the same units) — what the API
+ * would answer 422 for. A "," before exactly three digits is refused too,
+ * at every `places`: "25,000" is twenty-five thousand to one reader and
+ * 25.000 to another, and with three places (IQD, KWD) both parse.
  */
-export function parseMoney(text: string, minorUnits: number): ParsedMoney {
+export function parseAmount(
+	text: string,
+	places: number,
+	max: number,
+	messages: AmountMessages = {},
+): ParsedAmount {
 	const trimmed = text.trim();
 	if (trimmed === "") return { ok: false, reason: "Enter an amount." };
 	const match = AMOUNT.exec(trimmed);
@@ -74,22 +89,32 @@ export function parseMoney(text: string, minorUnits: number): ParsedMoney {
 			reason: `"${trimmed}" could have a thousands separator: write it without one, with a "." before any fraction.`,
 		};
 	}
-	if (fraction.length > minorUnits) {
+	if (fraction.length > places) {
 		return {
 			ok: false,
 			reason:
-				minorUnits === 0
-					? "This currency has no fraction: use a whole amount."
-					: `At most ${minorUnits} digits after the separator.`,
+				places === 0
+					? (messages.wholeOnly ?? "Use a whole amount.")
+					: `At most ${places} digits after the separator.`,
 		};
 	}
-	const max = RATE_MINOR_MAX / 10 ** minorUnits;
-	const tooLarge = `At most ${max.toLocaleString("en-US", { minimumFractionDigits: minorUnits })}.`;
+	const tooLarge = `At most ${(max / 10 ** places).toLocaleString("en-US", { minimumFractionDigits: places })}.`;
 	// Past this many digits the whole part alone is over the cap, and
 	// Number would start to lose them.
 	if (whole.replace(/^0+/, "").length > 15) return { ok: false, reason: tooLarge };
-	const minor = Number(whole) * 10 ** minorUnits + Number(fraction.padEnd(minorUnits, "0") || "0");
-	if (minor === 0) return { ok: false, reason: "An amount is more than zero." };
-	if (minor > RATE_MINOR_MAX) return { ok: false, reason: tooLarge };
-	return { ok: true, minor };
+	const units = Number(whole) * 10 ** places + Number(fraction.padEnd(places, "0") || "0");
+	if (units === 0) return { ok: false, reason: "An amount is more than zero." };
+	if (units > max) return { ok: false, reason: tooLarge };
+	return { ok: true, units };
+}
+
+/**
+ * A rate typed into a field, in minor units, through `parseAmount` at the
+ * currency's `minorUnits` and capped at `RATE_MINOR_MAX`.
+ */
+export function parseMoney(text: string, minorUnits: number): ParsedMoney {
+	const parsed = parseAmount(text, minorUnits, RATE_MINOR_MAX, {
+		wholeOnly: "This currency has no fraction: use a whole amount.",
+	});
+	return parsed.ok ? { ok: true, minor: parsed.units } : parsed;
 }
