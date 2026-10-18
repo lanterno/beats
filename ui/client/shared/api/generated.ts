@@ -652,6 +652,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/billing/report-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Report Links
+         * @description The caller's report links, newest first, live and ended: an ended
+         *     link stays listed until it is removed. Never a token.
+         */
+        get: operations["list_report_links_api_billing_report_links_get"];
+        put?: never;
+        /**
+         * Create Report Link
+         * @description Make a report link for one client, some of its billed projects and a
+         *     stretch of finished days, counted in `tz`. Every key is required, null
+         *     where it may be. Answers with `token`, once: it is stored only as a hash.
+         *
+         *     404 CLIENT_NOT_FOUND for a client that is not the caller's (archived
+         *     ones take links); 409 PROJECT_NOT_BILLED_TO_CLIENT, naming
+         *     `project_ids.N`, for a project not billed to it now; 409 RANGE_NOT_OVER
+         *     when `last` is not before today in `tz`; 422 when `expires_on` is not
+         *     from today to 366 days ahead; 400 INVALID_TIMEZONE.
+         */
+        post: operations["create_report_link_api_billing_report_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/report-links/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Report
+         * @description The report a link over this scope would show, exactly as its holder
+         *     will see it: the public route's reader and shapes, and nothing stored.
+         *     The create's body without `label` and `expires_on`, refused as the
+         *     create refuses it (404 CLIENT_NOT_FOUND, 409
+         *     PROJECT_NOT_BILLED_TO_CLIENT, 409 RANGE_NOT_OVER), so it reads only the
+         *     caller's own client's billed projects over finished days.
+         */
+        post: operations["preview_report_api_billing_report_links_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/report-links/turn-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn Off Report Links
+         * @description Turn off one client's report links, or with `client_id: null` every
+         *     one, for a session that may have been someone else's. Each is deleted,
+         *     and answers as a link that never existed.
+         */
+        post: operations["turn_off_report_links_api_billing_report_links_turn_off_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/report-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Report Link
+         * @description Turn a link off, or remove an ended one: it is deleted, can't be
+         *     turned back on, and answers as a link that never existed. 404
+         *     REPORT_LINK_NOT_FOUND when it is not the caller's, or is already gone.
+         */
+        delete: operations["delete_report_link_api_billing_report_links__link_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/biometrics/": {
         parameters: {
             query?: never;
@@ -2473,6 +2575,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Report
+         * @description The report a link shows: one client's billable hours over the link's
+         *     finished days, by month and by day, with the amounts and the session
+         *     notes only if the link was made to show them. No session; one sent
+         *     along is ignored.
+         *
+         *     404 REPORT_NOT_FOUND, the same bytes for every dead link; 429
+         *     REPORT_RATE_LIMITED past 60 opens of one link in a minute; 422 for a
+         *     body that is not `{"token": "<at most 64 characters>"}`.
+         */
+        post: operations["open_report_api_public_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/signals/all": {
         parameters: {
             query?: never;
@@ -3981,6 +4110,59 @@ export interface components {
          */
         HolidaySource: "region" | "company";
         /**
+         * HoursLine
+         * @description One project's hours in a month: its priced lines merged.
+         */
+        HoursLine: {
+            /** Hours */
+            hours: number;
+            /** Project Name */
+            project_name: string;
+        };
+        /** HoursMonth */
+        HoursMonth: {
+            /** Billable Hours */
+            billable_hours: number;
+            /** Days */
+            days: components["schemas"]["ReportDay"][] | components["schemas"]["NotedReportDay"][];
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Lines */
+            lines: components["schemas"]["HoursLine"][];
+            /** Month */
+            month: string;
+            /** Whole Month */
+            whole_month: boolean;
+        };
+        /** HoursReport */
+        HoursReport: {
+            /** Billable Hours */
+            billable_hours: number;
+            /** Client Name */
+            client_name: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Months */
+            months: components["schemas"]["HoursMonth"][];
+            shows: components["schemas"]["ReportShows"];
+        };
+        /**
          * ImportCounts
          * @description How many of each record a backup import wrote.
          */
@@ -4274,6 +4456,20 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        /** NotedReportDay */
+        NotedReportDay: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Hours */
+            hours: number;
+            /** Notes */
+            notes: string[];
+            /** Project Name */
+            project_name: string;
+        };
         /** OuraConnectRequest */
         OuraConnectRequest: {
             /** Access Token */
@@ -4423,6 +4619,78 @@ export interface components {
              * @default 0
              */
             total_samples: number;
+        };
+        /**
+         * PricedLine
+         * @description A run of days of one project at one rate, as the invoice has it.
+         */
+        PricedLine: {
+            /** Amount Minor */
+            amount_minor: number | null;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Hours */
+            hours: number;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Project Name */
+            project_name: string;
+            /** Rate Minor */
+            rate_minor: number | null;
+        };
+        /** PricedMonth */
+        PricedMonth: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Billable Hours */
+            billable_hours: number;
+            /** Days */
+            days: components["schemas"]["ReportDay"][] | components["schemas"]["NotedReportDay"][];
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Lines */
+            lines: components["schemas"]["PricedLine"][];
+            /** Month */
+            month: string;
+            /** Unpriced Hours */
+            unpriced_hours: number;
+            /** Whole Month */
+            whole_month: boolean;
+        };
+        /** PricedReport */
+        PricedReport: {
+            /** Billable Hours */
+            billable_hours: number;
+            /** Client Name */
+            client_name: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            money: components["schemas"]["ReportMoney"];
+            /** Months */
+            months: components["schemas"]["PricedMonth"][];
+            shows: components["schemas"]["ReportShows"];
         };
         /**
          * ProductivityScoreResponse
@@ -4609,6 +4877,21 @@ export interface components {
             /** Weekly Minutes */
             weekly_minutes?: number | null;
         };
+        /** PublicReportError */
+        PublicReportError: {
+            /** Code */
+            code: string;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * PublicReportRequest
+         * @description A report link's token, as the page read it after the `#`.
+         */
+        PublicReportRequest: {
+            /** Token */
+            token: string;
+        };
         /**
          * RateSource
          * @description Which level a line's rate comes from.
@@ -4717,6 +5000,226 @@ export interface components {
             token: string;
             /** Verified */
             verified: boolean;
+        };
+        /** ReportDay */
+        ReportDay: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Hours */
+            hours: number;
+            /** Project Name */
+            project_name: string;
+        };
+        /**
+         * ReportLinkCreatedResponse
+         * @description A link just made, with its token: the only time the token is shown.
+         */
+        ReportLinkCreatedResponse: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string | null;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Projects */
+            projects: components["schemas"]["ReportLinkProjectResponse"][];
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Notes */
+            show_notes: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "live" | "ended";
+            /** Token */
+            token: string;
+            /** Tz */
+            tz: string;
+        };
+        /**
+         * ReportLinkFields
+         * @description A report link as the create sends it — the body of `POST
+         *     /api/billing/report-links`. Every key is required, null where it may be.
+         *     That `expires_on` is from today to `REPORT_LINK_MAX_LIFETIME_DAYS` ahead
+         *     reads the clock, and is checked where the link is made.
+         */
+        ReportLinkFields: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Label */
+            label: string | null;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Project Ids */
+            project_ids: string[];
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Notes */
+            show_notes: boolean;
+        };
+        /**
+         * ReportLinkProjectResponse
+         * @description A project a report link shows, by its current name.
+         */
+        ReportLinkProjectResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ReportLinkResponse
+         * @description A report link as its maker sees it: what it covers and shows, the
+         *     zone its days are counted in, its last day, and whether it still opens
+         *     (`live`) or has ended, read today in that zone. Never its token, nor the
+         *     token's hash. `projects` is the frozen list, by current name: a project
+         *     that has left the client has left the link.
+         */
+        ReportLinkResponse: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string | null;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Projects */
+            projects: components["schemas"]["ReportLinkProjectResponse"][];
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Notes */
+            show_notes: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "live" | "ended";
+            /** Tz */
+            tz: string;
+        };
+        /**
+         * ReportLinksTurnOffRequest
+         * @description Turn off one client's report links, or with `client_id: null` every
+         *     one. The key is required, so an empty body is never read as "all".
+         */
+        ReportLinksTurnOffRequest: {
+            /** Client Id */
+            client_id: string | null;
+        };
+        /** ReportLinksTurnOffResponse */
+        ReportLinksTurnOffResponse: {
+            /** Turned Off */
+            turned_off: number;
+        };
+        /** ReportMoney */
+        ReportMoney: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Currency */
+            currency: string;
+            /** Minor Units */
+            minor_units: number;
+            /** Unpriced Hours */
+            unpriced_hours: number;
+        };
+        /**
+         * ReportScope
+         * @description What a report covers and shows: one client, some of its billed
+         *     projects, the days `first` through `last` in the link's time zone. The
+         *     body of `POST /api/billing/report-links/preview`, so its validators are
+         *     the 422. Every key is required, as `ClientFields`: a key an older client
+         *     leaves out must be refused, not read as a default.
+         *
+         *     That the projects are billed to the client, and that the range is over,
+         *     read other records and the clock: they are checked where a link is made
+         *     (`ReportLinkService`), since a stored link is re-validated on every read
+         *     and must not become unreadable when a project moves or a day passes.
+         */
+        ReportScope: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Project Ids */
+            project_ids: string[];
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Notes */
+            show_notes: boolean;
+        };
+        /**
+         * ReportShows
+         * @description What the link was made to show, so the page knows its shape.
+         */
+        ReportShows: {
+            /** Amounts */
+            amounts: boolean;
+            /** Notes */
+            notes: boolean;
         };
         /**
          * RhythmSlotResponse
@@ -6249,6 +6752,207 @@ export interface operations {
             header?: never;
             path: {
                 project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_report_links_api_billing_report_links_get: {
+        parameters: {
+            query?: {
+                /** @description One client's links; all of them without. */
+                client_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportLinkResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_report_link_api_billing_report_links_post: {
+        parameters: {
+            query: {
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportLinkFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportLinkCreatedResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_report_api_billing_report_links_preview_post: {
+        parameters: {
+            query: {
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportScope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricedReport"] | components["schemas"]["HoursReport"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    turn_off_report_links_api_billing_report_links_turn_off_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportLinksTurnOffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportLinksTurnOffResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_report_link_api_billing_report_links__link_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
             };
             cookie?: never;
         };
@@ -9190,6 +9894,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_report_api_public_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricedReport"] | components["schemas"]["HoursReport"];
+                };
+            };
+            /** @description REPORT_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReportError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description REPORT_RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReportError"];
                 };
             };
         };

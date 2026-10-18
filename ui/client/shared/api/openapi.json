@@ -2877,6 +2877,131 @@
         "title": "HolidaySource",
         "type": "string"
       },
+      "HoursLine": {
+        "additionalProperties": false,
+        "description": "One project's hours in a month: its priced lines merged.",
+        "properties": {
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_name",
+          "hours"
+        ],
+        "title": "HoursLine",
+        "type": "object"
+      },
+      "HoursMonth": {
+        "additionalProperties": false,
+        "properties": {
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReportDay"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NotedReportDay"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Days"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/HoursLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "whole_month": {
+            "title": "Whole Month",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "month",
+          "first",
+          "last",
+          "whole_month",
+          "billable_hours",
+          "lines",
+          "days"
+        ],
+        "title": "HoursMonth",
+        "type": "object"
+      },
+      "HoursReport": {
+        "additionalProperties": false,
+        "properties": {
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "client_name": {
+            "title": "Client Name",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/HoursMonth"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "shows": {
+            "$ref": "#/components/schemas/ReportShows"
+          }
+        },
+        "required": [
+          "client_name",
+          "first",
+          "last",
+          "shows",
+          "billable_hours",
+          "months"
+        ],
+        "title": "HoursReport",
+        "type": "object"
+      },
       "ImportCounts": {
         "description": "How many of each record a backup import wrote.",
         "properties": {
@@ -3549,6 +3674,39 @@
         "title": "MonthlyTotalsResponse",
         "type": "object"
       },
+      "NotedReportDay": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "project_name",
+          "hours",
+          "notes"
+        ],
+        "title": "NotedReportDay",
+        "type": "object"
+      },
       "OuraConnectRequest": {
         "properties": {
           "access_token": {
@@ -3869,6 +4027,181 @@
           "hour"
         ],
         "title": "PostSignalSummaryRequest",
+        "type": "object"
+      },
+      "PricedLine": {
+        "additionalProperties": false,
+        "description": "A run of days of one project at one rate, as the invoice has it.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "rate_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Minor"
+          }
+        },
+        "required": [
+          "project_name",
+          "first",
+          "last",
+          "hours",
+          "rate_minor",
+          "amount_minor"
+        ],
+        "title": "PricedLine",
+        "type": "object"
+      },
+      "PricedMonth": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReportDay"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NotedReportDay"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Days"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PricedLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "unpriced_hours": {
+            "title": "Unpriced Hours",
+            "type": "number"
+          },
+          "whole_month": {
+            "title": "Whole Month",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "month",
+          "first",
+          "last",
+          "whole_month",
+          "billable_hours",
+          "amount_minor",
+          "unpriced_hours",
+          "lines",
+          "days"
+        ],
+        "title": "PricedMonth",
+        "type": "object"
+      },
+      "PricedReport": {
+        "additionalProperties": false,
+        "properties": {
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "client_name": {
+            "title": "Client Name",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "money": {
+            "$ref": "#/components/schemas/ReportMoney"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/PricedMonth"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "shows": {
+            "$ref": "#/components/schemas/ReportShows"
+          }
+        },
+        "required": [
+          "client_name",
+          "first",
+          "last",
+          "shows",
+          "billable_hours",
+          "money",
+          "months"
+        ],
+        "title": "PricedReport",
         "type": "object"
       },
       "ProductivityScoreResponse": {
@@ -4378,6 +4711,40 @@
         "title": "ProjectsListItemResponse",
         "type": "object"
       },
+      "PublicReportError": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "PublicReportError",
+        "type": "object"
+      },
+      "PublicReportRequest": {
+        "additionalProperties": false,
+        "description": "A report link's token, as the page read it after the `#`.",
+        "properties": {
+          "token": {
+            "maxLength": 64,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "PublicReportRequest",
+        "type": "object"
+      },
       "RateSource": {
         "description": "Which level a line's rate comes from.",
         "enum": [
@@ -4582,6 +4949,424 @@
           "token"
         ],
         "title": "RegistrationVerifyResponse",
+        "type": "object"
+      },
+      "ReportDay": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "project_name",
+          "hours"
+        ],
+        "title": "ReportDay",
+        "type": "object"
+      },
+      "ReportLinkCreatedResponse": {
+        "description": "A link just made, with its token: the only time the token is shown.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ReportLinkProjectResponse"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_notes": {
+            "title": "Show Notes",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "live",
+              "ended"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "label",
+          "first",
+          "last",
+          "tz",
+          "show_amounts",
+          "show_notes",
+          "projects",
+          "expires_on",
+          "created_at",
+          "state",
+          "token"
+        ],
+        "title": "ReportLinkCreatedResponse",
+        "type": "object"
+      },
+      "ReportLinkFields": {
+        "description": "A report link as the create sends it \u2014 the body of `POST\n/api/billing/report-links`. Every key is required, null where it may be.\nThat `expires_on` is from today to `REPORT_LINK_MAX_LIFETIME_DAYS` ahead\nreads the clock, and is checked where the link is made.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "project_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Project Ids",
+            "type": "array"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_notes": {
+            "title": "Show Notes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "client_id",
+          "project_ids",
+          "first",
+          "last",
+          "show_amounts",
+          "show_notes",
+          "label",
+          "expires_on"
+        ],
+        "title": "ReportLinkFields",
+        "type": "object"
+      },
+      "ReportLinkProjectResponse": {
+        "description": "A project a report link shows, by its current name.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ReportLinkProjectResponse",
+        "type": "object"
+      },
+      "ReportLinkResponse": {
+        "description": "A report link as its maker sees it: what it covers and shows, the\nzone its days are counted in, its last day, and whether it still opens\n(`live`) or has ended, read today in that zone. Never its token, nor the\ntoken's hash. `projects` is the frozen list, by current name: a project\nthat has left the client has left the link.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ReportLinkProjectResponse"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_notes": {
+            "title": "Show Notes",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "live",
+              "ended"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "label",
+          "first",
+          "last",
+          "tz",
+          "show_amounts",
+          "show_notes",
+          "projects",
+          "expires_on",
+          "created_at",
+          "state"
+        ],
+        "title": "ReportLinkResponse",
+        "type": "object"
+      },
+      "ReportLinksTurnOffRequest": {
+        "description": "Turn off one client's report links, or with `client_id: null` every\none. The key is required, so an empty body is never read as \"all\".",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "ReportLinksTurnOffRequest",
+        "type": "object"
+      },
+      "ReportLinksTurnOffResponse": {
+        "properties": {
+          "turned_off": {
+            "title": "Turned Off",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "turned_off"
+        ],
+        "title": "ReportLinksTurnOffResponse",
+        "type": "object"
+      },
+      "ReportMoney": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor_units": {
+            "title": "Minor Units",
+            "type": "integer"
+          },
+          "unpriced_hours": {
+            "title": "Unpriced Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "currency",
+          "minor_units",
+          "amount_minor",
+          "unpriced_hours"
+        ],
+        "title": "ReportMoney",
+        "type": "object"
+      },
+      "ReportScope": {
+        "description": "What a report covers and shows: one client, some of its billed\nprojects, the days `first` through `last` in the link's time zone. The\nbody of `POST /api/billing/report-links/preview`, so its validators are\nthe 422. Every key is required, as `ClientFields`: a key an older client\nleaves out must be refused, not read as a default.\n\nThat the projects are billed to the client, and that the range is over,\nread other records and the clock: they are checked where a link is made\n(`ReportLinkService`), since a stored link is re-validated on every read\nand must not become unreadable when a project moves or a day passes.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "project_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Project Ids",
+            "type": "array"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_notes": {
+            "title": "Show Notes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "client_id",
+          "project_ids",
+          "first",
+          "last",
+          "show_amounts",
+          "show_notes"
+        ],
+        "title": "ReportScope",
+        "type": "object"
+      },
+      "ReportShows": {
+        "additionalProperties": false,
+        "description": "What the link was made to show, so the page knows its shape.",
+        "properties": {
+          "amounts": {
+            "title": "Amounts",
+            "type": "boolean"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "amounts",
+          "notes"
+        ],
+        "title": "ReportShows",
         "type": "object"
       },
       "RhythmSlotResponse": {
@@ -7079,6 +7864,273 @@
         "summary": "Set Project Billing",
         "tags": [
           "Billing"
+        ]
+      }
+    },
+    "/api/billing/report-links": {
+      "get": {
+        "description": "The caller's report links, newest first, live and ended: an ended\nlink stays listed until it is removed. Never a token.",
+        "operationId": "list_report_links_api_billing_report_links_get",
+        "parameters": [
+          {
+            "description": "One client's links; all of them without.",
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One client's links; all of them without.",
+              "title": "Client Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportLinkResponse"
+                  },
+                  "title": "Response List Report Links Api Billing Report Links Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Report Links",
+        "tags": [
+          "Report links"
+        ]
+      },
+      "post": {
+        "description": "Make a report link for one client, some of its billed projects and a\nstretch of finished days, counted in `tz`. Every key is required, null\nwhere it may be. Answers with `token`, once: it is stored only as a hash.\n\n404 CLIENT_NOT_FOUND for a client that is not the caller's (archived\nones take links); 409 PROJECT_NOT_BILLED_TO_CLIENT, naming\n`project_ids.N`, for a project not billed to it now; 409 RANGE_NOT_OVER\nwhen `last` is not before today in `tz`; 422 when `expires_on` is not\nfrom today to 366 days ahead; 400 INVALID_TIMEZONE.",
+        "operationId": "create_report_link_api_billing_report_links_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportLinkFields"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportLinkCreatedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Report Link",
+        "tags": [
+          "Report links"
+        ]
+      }
+    },
+    "/api/billing/report-links/preview": {
+      "post": {
+        "description": "The report a link over this scope would show, exactly as its holder\nwill see it: the public route's reader and shapes, and nothing stored.\nThe create's body without `label` and `expires_on`, refused as the\ncreate refuses it (404 CLIENT_NOT_FOUND, 409\nPROJECT_NOT_BILLED_TO_CLIENT, 409 RANGE_NOT_OVER), so it reads only the\ncaller's own client's billed projects over finished days.",
+        "operationId": "preview_report_api_billing_report_links_preview_post",
+        "parameters": [
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportScope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PricedReport"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HoursReport"
+                    }
+                  ],
+                  "title": "Response Preview Report Api Billing Report Links Preview Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Report",
+        "tags": [
+          "Report links"
+        ]
+      }
+    },
+    "/api/billing/report-links/turn-off": {
+      "post": {
+        "description": "Turn off one client's report links, or with `client_id: null` every\none, for a session that may have been someone else's. Each is deleted,\nand answers as a link that never existed.",
+        "operationId": "turn_off_report_links_api_billing_report_links_turn_off_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportLinksTurnOffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportLinksTurnOffResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Turn Off Report Links",
+        "tags": [
+          "Report links"
+        ]
+      }
+    },
+    "/api/billing/report-links/{link_id}": {
+      "delete": {
+        "description": "Turn a link off, or remove an ended one: it is deleted, can't be\nturned back on, and answers as a link that never existed. 404\nREPORT_LINK_NOT_FOUND when it is not the caller's, or is already gone.",
+        "operationId": "delete_report_link_api_billing_report_links__link_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "title": "Link Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Report Link",
+        "tags": [
+          "Report links"
         ]
       }
     },
@@ -11326,6 +12378,76 @@
         "summary": "Get Vacation",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/api/public/reports": {
+      "post": {
+        "description": "The report a link shows: one client's billable hours over the link's\nfinished days, by month and by day, with the amounts and the session\nnotes only if the link was made to show them. No session; one sent\nalong is ignored.\n\n404 REPORT_NOT_FOUND, the same bytes for every dead link; 429\nREPORT_RATE_LIMITED past 60 opens of one link in a minute; 422 for a\nbody that is not `{\"token\": \"<at most 64 characters>\"}`.",
+        "operationId": "open_report_api_public_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PricedReport"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HoursReport"
+                    }
+                  ],
+                  "title": "Response Open Report Api Public Reports Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicReportError"
+                }
+              }
+            },
+            "description": "REPORT_NOT_FOUND"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicReportError"
+                }
+              }
+            },
+            "description": "REPORT_RATE_LIMITED"
+          }
+        },
+        "summary": "Open Report",
+        "tags": [
+          "Public"
         ]
       }
     },
