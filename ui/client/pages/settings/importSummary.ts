@@ -35,12 +35,12 @@ function listed(parts: string[]): string {
 
 /**
  * The toast after a backup import. Time off, adjustments, clients, project
- * billing and billable marks are named only when there are some, so a
- * backup without a day job or a client reads as it always did. A record
- * the import left out is one the project would not take now (time off on
- * a project that is no longer a day job, an adjustment outside the
- * contract), and the toast says so, rather than the import reading as
- * complete.
+ * billing, billable marks and billing budgets are named only when there
+ * are some, so a backup without a day job or a client reads as it always
+ * did. A record the import left out is one the project would not take now
+ * (time off on a project that is no longer a day job, an adjustment
+ * outside the contract), and the toast says so, rather than the import
+ * reading as complete.
  */
 export function describeImport({ imported, skipped }: ImportResult): ImportSummary {
 	const parts = [
@@ -53,9 +53,11 @@ export function describeImport({ imported, skipped }: ImportResult): ImportSumma
 	const clients = imported.clients ?? 0;
 	const billed = imported.project_billing ?? 0;
 	const marks = imported.billable_overrides ?? 0;
+	const budgets = imported.billing_budgets ?? 0;
 	if (clients > 0) parts.push(count(clients, "client", "clients"));
 	if (billed > 0) parts.push(`billing for ${count(billed, "project", "projects")}`);
 	if (marks > 0) parts.push(count(marks, "billable mark", "billable marks"));
+	if (budgets > 0) parts.push(count(budgets, "budget", "budgets"));
 
 	const skippedAbsences = skipped.filter((s) => s.collection === "absences").length;
 	const skippedAdjustments = skipped.length - skippedAbsences;
