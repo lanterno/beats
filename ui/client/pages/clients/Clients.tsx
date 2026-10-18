@@ -6,7 +6,11 @@
  * with ‹ ›, and the current month is month to date.
  *
  * The month's figures are the API's (`/api/billing/month`, in the browser's
- * zone), never added up here; the page only names them. A client's record
+ * zone), never added up here; the page only names them. In the current
+ * month each client's billing budgets (`/api/billing/budgets`, as of
+ * today) follow its figure, and the sentence notes each one near or used
+ * up; a past month shows none, since a budget is never read against a
+ * month already over. A client's record
  * is edited in `ClientDialog`, and a change to a month already over asks
  * first, in the API's words (`withPastConsent`). When the billing routes
  * cannot be reached — an older API during a deploy — the page says so and
@@ -22,6 +26,7 @@ import {
 	nextMonth,
 	prevMonth,
 	useBillableOverrides,
+	useBillingBudgets,
 	useBillingMonth,
 	useProjectBillings,
 	withPastConsent,
@@ -36,7 +41,7 @@ import {
 } from "@/entities/client";
 import { useArchivedProjects, useProjects } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { browserTimeZone, cn, hoursText, todayIso as readToday } from "@/shared/lib";
+import { browserTimeZone, cn, hoursText, todayIso as readToday, useNow } from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
 import { ClientPanel } from "./ClientPanel";
 import { describeMonth, monthName } from "./summary";
@@ -66,6 +71,11 @@ export default function Clients() {
 	const { confirm, confirmDialog } = useConfirm();
 
 	const monthQuery = useBillingMonth(month, tz);
+	const budgetsQuery = useBillingBudgets(tz, { enabled: current });
+	const budgets = current ? budgetsQuery.data : undefined;
+	const budgetsFailed = current && budgetsQuery.isError;
+	// A minute's tick, only while a running timer could cross a threshold on screen.
+	const now = useNow(60_000, { enabled: (budgets ?? []).some((b) => b.running) });
 	const { data: clients, isLoading: clientsLoading } = useClients();
 	const { data: archivedClients } = useClients({ archived: true });
 	const { data: billings } = useProjectBillings();
@@ -83,7 +93,7 @@ export default function Clients() {
 		[...(projects ?? []), ...(archivedProjects ?? [])].map((p) => [p.id, p.name]),
 	);
 	const report = monthQuery.data;
-	const summary = report ? describeMonth(report, { current }) : null;
+	const summary = report ? describeMonth(report, { current, budgets, now }) : null;
 	const noClients =
 		!clientsLoading &&
 		(clients ?? []).length === 0 &&
@@ -258,6 +268,9 @@ export default function Clients() {
 								projectNames={projectNames}
 								projectBillings={billings}
 								overrides={overrides}
+								budgets={budgets?.filter((b) => b.clientId === billing.clientId)}
+								budgetsFailed={budgetsFailed}
+								now={now}
 								onEdit={() => client && setEditor({ mode: "edit", client })}
 							/>
 						);

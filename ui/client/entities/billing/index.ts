@@ -59,4 +59,6 @@ export {
 	type BillingBudgetDialogProps,
 	BillingBudgetMeter,
 	type BillingBudgetMeterProps,
+	BillingBudgetRow,
+	type BillingBudgetRowProps,
 } from "./ui";

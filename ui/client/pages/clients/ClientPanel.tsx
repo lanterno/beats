@@ -9,14 +9,32 @@
  * figure above is their sum. A line with no rate at either level has no
  * amount, and says where to set one. Every figure is the API's; the pill
  * alone is worked out here (`entryBillable`), so a tap shows at once.
+ *
+ * In the current month the month's figure is followed by the client's
+ * billing budgets (docs/billing.md, phase 1b): its own, then each of its
+ * projects', each a sentence and a meter with a pencil that opens
+ * `BillingBudgetDialog` for that scope. Without a budget of its own the
+ * panel offers a quiet "Set a budget", and nothing more.
  */
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import type { BillingEntry, ClientBilling, ProjectBilling } from "@/entities/billing";
-import { BillableSwitch, entryBillable, inForceOn } from "@/entities/billing";
+import type {
+	BillingBudgetScope,
+	BillingBudgetStatus,
+	BillingEntry,
+	ClientBilling,
+	ProjectBilling,
+} from "@/entities/billing";
+import {
+	BillableSwitch,
+	BillingBudgetDialog,
+	BillingBudgetRow,
+	entryBillable,
+	inForceOn,
+} from "@/entities/billing";
 import type { Client } from "@/entities/client";
 import { useArchiveClient, useDeleteClient, useUnarchiveClient } from "@/entities/client";
 import { describeError } from "@/shared/api";
@@ -43,12 +61,32 @@ export interface ClientPanelProps {
 	projectNames: ReadonlyMap<string, string>;
 	projectBillings?: ReadonlyMap<string, ProjectBilling>;
 	overrides?: ReadonlyMap<string, boolean>;
+	/**
+	 * The client's billing budgets, its own and its projects', read as of
+	 * today: only in the current month, since a budget is never read
+	 * against a month already over. Absent, the panel shows none.
+	 */
+	budgets?: readonly BillingBudgetStatus[];
+	/** The budgets could not be read — an older API during a deploy. */
+	budgetsFailed?: boolean;
+	/** The clock a running timer's instants are read against. */
+	now?: number;
 	onEdit: () => void;
+}
+
+interface BudgetEditor {
+	scope: BillingBudgetScope;
+	scopeId: string;
+	name: string;
+	status?: BillingBudgetStatus;
+	billingStartedOn?: string;
 }
 
 const LABEL = "font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground";
 const LINKISH =
 	"text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+const OP =
+	"grid place-items-center w-[22px] h-[22px] rounded-full text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const TH =
 	"py-1.5 font-body text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground";
 
@@ -83,6 +121,11 @@ function rateToday(client: Client, todayIso: string): string {
 		? `${formatDateShort(since)}${since.getFullYear() === Number(todayIso.slice(0, 4)) ? "" : `, ${since.getFullYear()}`}`
 		: rate.effectiveFrom;
 	return `${formatRate(rate.rateMinor, client.currency, client.minorUnits)} since ${sinceText}`;
+}
+
+/** The earliest term of these billings: when billing started. */
+function earliestTerm(billings: readonly ProjectBilling[]): string | undefined {
+	return billings.flatMap((b) => b.terms.map((term) => term.effectiveFrom)).sort()[0];
 }
 
 function EntryRow({
@@ -133,6 +176,9 @@ export function ClientPanel({
 	projectNames,
 	projectBillings,
 	overrides,
+	budgets,
+	budgetsFailed = false,
+	now = Date.now(),
 	onEdit,
 }: ClientPanelProps) {
 	const archive = useArchiveClient();
@@ -140,6 +186,7 @@ export function ClientPanel({
 	const remove = useDeleteClient();
 	const [entriesOpen, setEntriesOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
+	const [budgetEditor, setBudgetEditor] = useState<BudgetEditor | null>(null);
 
 	const { currency, minorUnits } = billing;
 	const money = (minor: number) => formatMoney(minor, currency, minorUnits);
@@ -160,6 +207,84 @@ export function ClientPanel({
 		billing.lines.find((line) => line.projectId === projectId)?.projectName ??
 		"A project";
 	const pending = archive.isPending || unarchive.isPending || remove.isPending;
+
+	const clientBillings = projectBillings
+		? [...projectBillings.values()].filter((b) => b.clientId === billing.clientId)
+		: [];
+	const ownBudget = budgets?.find((b) => b.scope === "client");
+	const projectBudgets = (budgets ?? []).filter((b) => b.scope === "project");
+	const editClientBudget = () =>
+		setBudgetEditor({
+			scope: "client",
+			scopeId: billing.clientId,
+			name: billing.name,
+			status: ownBudget,
+			billingStartedOn: earliestTerm(clientBillings),
+		});
+	const editProjectBudget = (status: BillingBudgetStatus) =>
+		setBudgetEditor({
+			scope: "project",
+			scopeId: status.scopeId,
+			name: status.name,
+			status,
+			billingStartedOn: earliestTerm(clientBillings.filter((b) => b.projectId === status.scopeId)),
+		});
+	const pencil = (name: string, onClick: () => void) => (
+		<button type="button" onClick={onClick} aria-label={`Edit ${name}'s budget`} className={OP}>
+			<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
+		</button>
+	);
+
+	const budgetBlock = budgetsFailed ? (
+		<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
+			Budgets aren't available right now.
+		</p>
+	) : budgets === undefined ? null : budgets.length === 0 ? (
+		<p className="mt-2.5">
+			<button type="button" onClick={editClientBudget} className={LINKISH}>
+				Set a budget
+			</button>
+		</p>
+	) : (
+		<section aria-label={`${billing.name}'s budgets`} className="mt-3">
+			<h3 className={LABEL}>Budget</h3>
+			<ul className="mt-1 flex flex-col">
+				{ownBudget && (
+					<li className="py-2">
+						<BillingBudgetRow
+							status={ownBudget}
+							now={now}
+							title={billing.name}
+							actions={pencil(billing.name, editClientBudget)}
+						/>
+					</li>
+				)}
+				{projectBudgets.map((status) => (
+					<li key={status.scopeId} className="py-2 border-t border-border first:border-t-0">
+						<BillingBudgetRow
+							status={status}
+							now={now}
+							title={status.name}
+							actions={pencil(status.name, () => editProjectBudget(status))}
+							unpricedAction={
+								<Link
+									to={`/project/${status.scopeId}`}
+									className="font-bold underline underline-offset-[3px] rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+								>
+									Set its rate
+								</Link>
+							}
+						/>
+					</li>
+				))}
+			</ul>
+			{!ownBudget && (
+				<button type="button" onClick={editClientBudget} className={LINKISH}>
+					Set a budget for {billing.name}
+				</button>
+			)}
+		</section>
+	);
 
 	const handleArchive = () => {
 		const write = billing.archived ? unarchive : archive;
@@ -249,12 +374,15 @@ export function ClientPanel({
 			</div>
 
 			{billing.lines.length === 0 && billing.entries.length === 0 ? (
-				<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
-					{/* A running timer is left out of the month until it stops. */}
-					{billing.running
-						? `Nothing finished for ${billing.name} in ${monthName} yet: a timer is running, and counts once stopped.`
-						: `Nothing logged for ${billing.name} in ${monthName}.`}
-				</p>
+				<>
+					<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
+						{/* A running timer is left out of the month until it stops. */}
+						{billing.running
+							? `Nothing finished for ${billing.name} in ${monthName} yet: a timer is running, and counts once stopped.`
+							: `Nothing logged for ${billing.name} in ${monthName}.`}
+					</p>
+					{budgetBlock}
+				</>
 			) : (
 				<>
 					<p className="mt-3 font-mono text-[15px] font-bold text-foreground">
@@ -270,6 +398,8 @@ export function ClientPanel({
 							</span>
 						)}
 					</p>
+
+					{budgetBlock}
 
 					{billing.lines.length > 0 && (
 						<div className="mt-3 -mx-1 overflow-x-auto">
@@ -389,6 +519,20 @@ export function ClientPanel({
 						</div>
 					)}
 				</>
+			)}
+
+			{budgetEditor && (
+				<BillingBudgetDialog
+					scope={budgetEditor.scope}
+					scopeId={budgetEditor.scopeId}
+					name={budgetEditor.name}
+					currency={currency}
+					minorUnits={minorUnits}
+					budget={budgetEditor.status}
+					billingStartedOn={budgetEditor.billingStartedOn}
+					todayIso={todayIso}
+					onClose={() => setBudgetEditor(null)}
+				/>
 			)}
 		</Panel>
 	);
