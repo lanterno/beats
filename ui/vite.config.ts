@@ -35,6 +35,10 @@ export default defineConfig(() => ({
 		},
 		VitePWA({
 			registerType: "autoUpdate",
+			// main.tsx registers the worker itself (`virtual:pwa-register`), so
+			// no HTML entry is given the plugin's registerSW.js: the report page
+			// (report.html) must never register the app's worker.
+			injectRegister: false,
 			includeAssets: [
 				"favicon.svg",
 				"favicon.ico",
