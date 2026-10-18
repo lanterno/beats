@@ -41,7 +41,8 @@ The repo name is parameterized as `${var.github_owner}/${var.github_repo}`
 (see [`variables.tf`](variables.tf)) — defaults to `lanterno/beats`. The
 single trigger this stack defines (`${var.api_service_name}-build` in
 [`cloudbuild.tf`](cloudbuild.tf)) builds the API Docker image, pushes it
-to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run.
+to Artifact Registry, and runs `terraform apply` to deploy to Cloud Run
+(one build at a time; see [How a Deploy Runs](#how-a-deploy-runs)).
 
 The UI is **not** built by Cloud Build — it ships from GitHub Actions to
 Firebase Hosting (see "UI Deployment" below). So there's only one repo to
@@ -65,9 +66,59 @@ connect.
 **Note:** After the GitHub connection, run `terraform apply` again so the
 trigger's `repo_name` reference resolves cleanly.
 
+## How a Deploy Runs
+
+Each build runs [`api/cloudbuild.yaml`](../api/cloudbuild.yaml): build the
+image, push it tagged with the commit and `latest`, fetch `terraform.tfvars`
+from Secret Manager, then deploy. Every push to `main` touching `api/**` or
+`terraform/**` starts a build, so merges seconds apart run side by side. The
+steps up to the tfvars fetch run in parallel across builds; **the deploy runs
+one build at a time**, in three steps, with the logic in
+[`api/scripts/deploy_lock.sh`](../api/scripts/deploy_lock.sh):
+
+1. **`deploy-lock`** takes a mutex, the object
+   `gs://beats-476914-terraform-state/beats/deploy.lock` (beside Terraform's
+   own `default.tflock`). It is created only if absent, so one build holds it
+   while the others poll every ten seconds, for up to 25 minutes. It names the
+   build and commit that hold it. One older than 20 minutes is presumed left by
+   a build killed mid-deploy, and the next waiter deletes it and carries on.
+2. Holding the mutex, the same step reads the image the Cloud Run service runs
+   and compares its commit with this build's in a fresh clone of the repo. If
+   the live commit already contains this one, a newer build has deployed
+   first, and this build **skips the apply and succeeds without deploying**;
+   its log names the live commit. In every other case it applies: a newer
+   commit, the same commit (a deliberate re-run re-applies the configuration),
+   or a live tag it cannot place (`latest`, a commit not in the repo, no
+   service yet). It fails the build, without deploying, only when it cannot
+   tell: the clone fails, or the service cannot be read.
+3. **`terraform-apply`** runs `terraform apply`, or skips it as decided, and
+   **`deploy-unlock`** releases the mutex, then fails the build if the apply
+   failed. The release deletes the mutex only if it is still the one this
+   build created.
+
+Terraform's own state lock is not the queue. Waiting on it would hand it to
+whichever build asked next, so an older build could apply after a newer one
+and put the older image back. The check has to happen under a lock that also
+covers the apply, which is what the mutex is. `-lock-timeout=5m` on the apply
+is for a person running Terraform from a workstation at the same moment.
+
+### A stuck deploy lock
+
+A build that dies holding the mutex delays the next deploy by up to 20
+minutes, after which that build clears it. To clear it at once, first check no
+build is deploying (`gcloud builds list --project=beats-476914 --ongoing`):
+
+```bash
+gcloud storage cat gs://beats-476914-terraform-state/beats/deploy.lock   # who holds it
+gcloud storage rm gs://beats-476914-terraform-state/beats/deploy.lock
+```
+
 ## Rerunning Builds
 
 While Terraform manages the Cloud Build trigger configuration, it doesn't directly rerun builds. Here are your options:
+
+A re-run of the live commit re-applies it. A re-run of an older commit, one
+the live commit already contains, succeeds without deploying.
 
 ### Option 1: Manual Trigger via gcloud CLI (Recommended)
 
