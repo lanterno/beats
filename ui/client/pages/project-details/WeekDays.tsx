@@ -45,12 +45,12 @@ import {
 	mondayOfIso,
 	parseIsoDate,
 	parseUtcIso,
+	useNow,
 } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { clock, hours1, hoursMinutes } from "./dates";
 import { LABEL, LINKISH, LIVE_DOT, NAV_BUTTON, SUB, TINT, TINT_PILL, TONE } from "./styles";
 import type { RunningBeat } from "./useRunningBeat";
-import { useNow } from "./useRunningBeat";
 
 export interface WeekDaysProps {
 	project: ProjectWithDuration;

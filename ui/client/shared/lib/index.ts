@@ -71,6 +71,7 @@ export { type CommandContext, useCommandActions } from "./useCommandActions";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+export { useNow } from "./useNow";
 export { useOAuthCallback } from "./useOAuthCallback";
 export { notifySyncWork, type SyncSnapshot, useSyncEngine, useSyncStatus } from "./useSyncEngine";
 export type { Density, ThemeName } from "./useTheme";
