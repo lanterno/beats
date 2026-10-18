@@ -5,15 +5,20 @@ without Go, and `brew upgrade` keeps it current.
 
 ```bash
 brew tap lanterno/beats https://github.com/lanterno/beats
+brew trust --formula lanterno/beats/beatsd
 brew install beatsd
 beatsd pair <code>          # a 6-char code from the web's Settings → Daemon
 brew services start beatsd  # LaunchAgent on macOS, systemd user unit on Linux
 ```
 
 The URL in `brew tap` is needed because the repo's name lacks the
-`homebrew-` prefix Homebrew otherwise assumes. After it, `brew update`
-follows `main`, and
-`brew install lanterno/beats/beatsd` works as well as the bare name.
+`homebrew-` prefix Homebrew otherwise assumes. `brew trust` is needed
+because Homebrew loads nothing from a tap outside its own until told to,
+and refuses the install with "untrusted tap" otherwise; `--formula` trusts
+`beatsd` alone rather than everything the repo could ever hold (the entry
+lives in `~/.homebrew/trust.json`, and `brew untrust` takes it back).
+After that, `brew update` follows `main`, and `brew install
+lanterno/beats/beatsd` works as well as the bare name.
 
 | File | What it is |
 |------|------------|
