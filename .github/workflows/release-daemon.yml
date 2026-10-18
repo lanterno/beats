@@ -136,8 +136,8 @@ jobs:
             `.tar.gz`.
 
             Homebrew: `brew tap lanterno/beats https://github.com/lanterno/beats`
-            once, then `brew install beatsd`, or `brew upgrade beatsd` if you
-            have it. This workflow commits the formula for this release to
+            and `brew trust --formula lanterno/beats/beatsd` once, then
+            `brew install beatsd`, or `brew upgrade beatsd` if you have it. This workflow commits the formula for this release to
             main a few minutes after it publishes (prerelease tags are left
             out). Manual install:
 
