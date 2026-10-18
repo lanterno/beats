@@ -13,7 +13,10 @@
 #            exactly one build holds it. A mutex older than
 #            DEPLOY_LOCK_STALE_SECONDS was left by a build that was killed
 #            mid-deploy; it is deleted, conditional on its generation so two
-#            waiters cannot both break it, and the wait goes on.
+#            waiters cannot both break it, and the wait goes on. One whose age
+#            cannot be read is never broken. One that names this build is its
+#            own, made by a create whose response was lost and that gcloud
+#            retried.
 #   decide   holding the mutex, read the commit the Cloud Run service runs and
 #            decide whether this build deploys: "skip" when this build's commit
 #            is a strict ancestor of the live one (a newer build got there
@@ -81,13 +84,14 @@ acquire() {
 
 	mkdir -p "$DEPLOY_STATE_DIR"
 	local holder_file="$DEPLOY_STATE_DIR/lock-holder"
-	printf 'build_id=%s\ncommit_sha=%s\nacquired_at=%s\n' \
-		"$BUILD_ID" "$COMMIT_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$holder_file"
-
 	local deadline=$(($(date +%s) + DEPLOY_LOCK_WAIT_SECONDS))
-	local out info gen held_gen created age holder now
+	local out info err gen held_gen created age content holder now
 	local last_logged_gen="" polls=0 vanished=0
 	while :; do
+		# Stamped afresh on each attempt, so the mutex says when it was taken,
+		# not when this build began to wait.
+		printf 'build_id=%s\ncommit_sha=%s\nacquired_at=%s\n' \
+			"$BUILD_ID" "$COMMIT_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$holder_file"
 		if out=$(gcloud storage cp --if-generation-match=0 --print-created-message \
 			"$holder_file" "$DEPLOY_LOCK_OBJECT" 2>&1); then
 			# The created message ends in the version-specific URL, <object>#<generation>.
@@ -104,35 +108,57 @@ Remove it by hand: gcloud storage rm $DEPLOY_LOCK_OBJECT"
 		# with the bucket; only an object that exists tells the two apart.
 		if ! info=$(gcloud storage objects describe "$DEPLOY_LOCK_OBJECT" \
 			--format='value(generation,creation_time.date("%s"))' 2>&1); then
-			# Released between the create and the look: try again at once, but a
-			# create that keeps failing on a missing object is a broken bucket.
+			# Released between the create and the look: try again at once. Any
+			# other error waits a poll first. A create that keeps failing while
+			# the object cannot be seen is a broken bucket.
 			vanished=$((vanished + 1))
-			((vanished < 3)) || die "cannot create $DEPLOY_LOCK_OBJECT, and it does not exist:
+			((vanished < 3)) || die "cannot create $DEPLOY_LOCK_OBJECT, and cannot see it:
 $out
 $info"
+			[[ $info == *"not found: 404"* ]] || sleep "$poll"
 			continue
 		fi
 		vanished=0
-		read -r held_gen created <<<"$info"
+		held_gen="" created=""
+		read -r held_gen created <<<"$info" || true
 		created=${created%%.*}
-		now=$(date +%s)
-		age=$((now - created))
-		holder=$(gcloud storage cat "$DEPLOY_LOCK_OBJECT#$held_gen" 2>/dev/null | tr '\n' ' ' || true)
+		content=$(gcloud storage cat "$DEPLOY_LOCK_OBJECT#$held_gen" 2>/dev/null || true)
+		holder=$(tr '\n' ' ' <<<"$content")
 		holder=${holder% }
 
-		if ((age >= DEPLOY_LOCK_STALE_SECONDS)); then
-			log "the mutex (generation $held_gen, ${age}s old: ${holder:-holder unreadable}) is past the ${DEPLOY_LOCK_STALE_SECONDS}s stale threshold; presuming its build was killed and breaking it"
-			gcloud storage rm --if-generation-match="$held_gen" "$DEPLOY_LOCK_OBJECT" >/dev/null 2>&1 ||
-				log "another build broke or released it first"
-			continue
+		# gcloud retries a create whose response was lost; the retry then finds
+		# the object the first try made and fails. That mutex is this build's own.
+		if [[ $held_gen =~ ^[0-9]+$ ]] && grep -qxF "build_id=$BUILD_ID" <<<"$content"; then
+			printf '%s\n' "$held_gen" >"$DEPLOY_STATE_DIR/lock-generation"
+			log "acquired $DEPLOY_LOCK_OBJECT (generation $held_gen) for build $BUILD_ID at $COMMIT_SHA; an earlier try of this build's create had made it"
+			return 0
+		fi
+
+		now=$(date +%s)
+		if [[ $held_gen =~ ^[0-9]+$ && $created =~ ^[0-9]+$ ]]; then
+			age="$((now - created))s old"
+			if ((now - created >= DEPLOY_LOCK_STALE_SECONDS)); then
+				log "the mutex (generation $held_gen, $age: ${holder:-holder unreadable}) is past the ${DEPLOY_LOCK_STALE_SECONDS}s stale threshold; presuming its build was killed and breaking it"
+				if err=$(gcloud storage rm --if-generation-match="$held_gen" "$DEPLOY_LOCK_OBJECT" 2>&1 >/dev/null); then
+					continue
+				fi
+				# Lost to another waiter or a release, or the delete was refused:
+				# either way wait a poll, rather than spin.
+				log "could not break it: $err"
+			fi
+		else
+			# An age that cannot be read is never taken for a stale one: the
+			# mutex may be live.
+			age="of unknown age"
+			log "could not read the mutex's generation and age from '$info'; not breaking it"
 		fi
 
 		if ((now >= deadline)); then
-			die "gave up after ${DEPLOY_LOCK_WAIT_SECONDS}s; the mutex is still held (generation $held_gen, ${age}s old: ${holder:-holder unreadable}).
+			die "gave up after ${DEPLOY_LOCK_WAIT_SECONDS}s; the mutex is still held (generation $held_gen, $age: ${holder:-holder unreadable}).
 If no build is deploying, clear it by hand: gcloud storage rm $DEPLOY_LOCK_OBJECT"
 		fi
 		if [[ $held_gen != "$last_logged_gen" ]] || ((polls % 6 == 0)); then
-			log "waiting: held by ${holder:-an unreadable holder} (generation $held_gen, ${age}s old)"
+			log "waiting: held by ${holder:-an unreadable holder} (generation $held_gen, $age)"
 			last_logged_gen=$held_gen
 		fi
 		polls=$((polls + 1))
