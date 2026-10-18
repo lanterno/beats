@@ -4613,6 +4613,160 @@ class TestReportLinkIsolation:
         assert self._text(client, link) == before
 
 
+class TestReportLinkCascades:
+    """A project that leaves a client leaves that client's report links, and
+    never comes back to them, whichever write takes it away; a deleted
+    client's links go with it (docs/billing.md, phase 1c, decision 8).
+
+    Acme is in euros here, as Kite is: a project with terms dated before
+    this month cannot move to a client in another currency. Those terms are
+    in March 2026, so every move and stop confirms `rewrite_past`."""
+
+    @staticmethod
+    def _kite_and_acme(client, headers) -> tuple[dict, dict, dict, dict]:
+        """Kite with Website and Logo billed to it and an hour on each in
+        March, and Acme with nothing billed."""
+        kite, [website, logo] = _billed_client(client, headers, "Studio Kite", "Website", "Logo")
+        _beat(client, headers, website["id"], "2026-03-10T09:00:00", 60)
+        _beat(client, headers, logo["id"], "2026-03-11T09:00:00", 60)
+        acme = _create_client(client, headers, name="Acme", rates=KITE_RATE)
+        return kite, acme, website, logo
+
+    @staticmethod
+    def _move(client, headers, project_id: str, client_id: str) -> None:
+        terms = _billable_from("2026-03-01")
+        resp = _bill(client, headers, project_id, client_id, terms, rewrite_past=True)
+        assert resp.status_code == 200, resp.text
+
+    @staticmethod
+    def _stop(client, headers, project_id: str) -> None:
+        resp = client.delete(
+            f"/api/billing/projects/{project_id}",
+            params={"tz": "UTC", "rewrite_past": True, "remove_billing_budget": False},
+            headers=headers,
+        )
+        assert resp.status_code == 204, resp.text
+
+    @staticmethod
+    def _listed(client, headers, link: dict) -> dict:
+        [listed] = [row for row in _report_links(client, headers) if row["id"] == link["id"]]
+        return listed
+
+    def _on_link(self, client, headers, link: dict) -> list[str]:
+        return [project["id"] for project in self._listed(client, headers, link)["projects"]]
+
+    @staticmethod
+    def _text(client, link: dict) -> str:
+        resp = _open_report(client, link["token"])
+        assert resp.status_code == 200, resp.text
+        return resp.text
+
+    def test_a_project_moved_away_leaves_the_link(self, client, auth_headers):
+        kite, acme, website, logo = self._kite_and_acme(client, auth_headers)
+        link = _report_link(client, auth_headers, kite["id"], [website["id"], logo["id"]])
+
+        self._move(client, auth_headers, logo["id"], acme["id"])
+
+        assert self._on_link(client, auth_headers, link) == [website["id"]]
+        text = self._text(client, link)
+        assert "Website" in text
+        assert "Logo" not in text
+
+    def test_a_link_whose_last_project_left_still_answers(self, client, auth_headers):
+        kite, acme, _, logo = self._kite_and_acme(client, auth_headers)
+        link = _report_link(client, auth_headers, kite["id"], [logo["id"]])
+
+        self._move(client, auth_headers, logo["id"], acme["id"])
+
+        listed = self._listed(client, auth_headers, link)
+        assert (listed["state"], listed["projects"]) == ("live", [])
+        # Still on, so the report and not the dead link's 404: empty, as a
+        # stored link with no project left reads back.
+        report = json.loads(self._text(client, link))
+        assert report["billable_hours"] == 0
+        assert [(month["lines"], month["days"]) for month in report["months"]] == [([], [])]
+
+    def test_moved_back_it_does_not_return(self, client, auth_headers):
+        kite, acme, website, logo = self._kite_and_acme(client, auth_headers)
+        link = _report_link(client, auth_headers, kite["id"], [website["id"], logo["id"]])
+
+        self._move(client, auth_headers, logo["id"], acme["id"])
+        self._move(client, auth_headers, logo["id"], kite["id"])
+
+        assert self._on_link(client, auth_headers, link) == [website["id"]]
+        assert "Logo" not in self._text(client, link)
+
+    def test_stopped_then_attached_again_it_does_not_return(self, client, auth_headers):
+        kite, _, website, logo = self._kite_and_acme(client, auth_headers)
+        link = _report_link(client, auth_headers, kite["id"], [website["id"], logo["id"]])
+
+        self._stop(client, auth_headers, logo["id"])
+        terms = _billable_from("2026-03-01")
+        assert _bill(client, auth_headers, logo["id"], kite["id"], terms).status_code == 200
+
+        assert self._on_link(client, auth_headers, link) == [website["id"]]
+        assert "Logo" not in self._text(client, link)
+
+    def test_an_older_backup_does_not_bring_it_back(self, client, auth_headers):
+        kite, acme, website, logo = self._kite_and_acme(client, auth_headers)
+        kite_link = _report_link(client, auth_headers, kite["id"], [website["id"], logo["id"]])
+        backup = client.get("/api/export/full", headers=auth_headers).content
+        self._move(client, auth_headers, logo["id"], acme["id"])
+        acme_link = _report_link(client, auth_headers, acme["id"], [logo["id"]])
+
+        # The file bills Logo to Kite again, and so moves it away from Acme.
+        resp = client.post(
+            "/api/export/import",
+            params={"tz": "UTC"},
+            files={"file": ("backup.json", backup, "application/json")},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert self._on_link(client, auth_headers, kite_link) == [website["id"]]
+        assert "Logo" not in self._text(client, kite_link)
+        assert self._on_link(client, auth_headers, acme_link) == []
+
+    def test_a_project_moved_in_is_not_on_an_old_link(self, client, auth_headers):
+        kite, acme, website, _ = self._kite_and_acme(client, auth_headers)
+        api = _freelance(client, auth_headers, "API work")
+        terms = _billable_from("2026-03-01")
+        assert _bill(client, auth_headers, api["id"], acme["id"], terms).status_code == 200
+        _beat(client, auth_headers, api["id"], "2026-03-12T09:00:00", 60)
+        link = _report_link(client, auth_headers, kite["id"], [website["id"]])
+
+        self._move(client, auth_headers, api["id"], kite["id"])
+
+        assert self._on_link(client, auth_headers, link) == [website["id"]]
+        assert "API work" not in self._text(client, link)
+        # Chosen in a link made after the move, it is on that one.
+        later = _report_link(client, auth_headers, kite["id"], [website["id"], api["id"]])
+        assert "API work" in self._text(client, later)
+
+    def test_deleting_a_client_deletes_its_links(self, client, auth_headers, mongo):
+        lantern, [lamp] = _billed_client(client, auth_headers, "Lantern", "Lamp")
+        link = _report_link(client, auth_headers, lantern["id"], [lamp["id"]])
+        self._stop(client, auth_headers, lamp["id"])
+
+        resp = client.delete(f"/api/clients/{lantern['id']}", headers=auth_headers)
+
+        assert resp.status_code == 204, resp.text
+        assert link["id"] not in [row["id"] for row in _report_links(client, auth_headers)]
+        assert mongo.report_links.count_documents({"client_id": lantern["id"]}) == 0
+        assert _open_report(client, link["token"]).json()["code"] == "REPORT_NOT_FOUND"
+
+    def test_archiving_keeps_links_working(self, client, auth_headers):
+        kite, _, website, _ = self._kite_and_acme(client, auth_headers)
+        link = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        before = self._text(client, link)
+
+        resp = client.post(f"/api/clients/{kite['id']}/archive", headers=auth_headers)
+
+        assert resp.status_code == 200, resp.text
+        assert self._listed(client, auth_headers, link)["state"] == "live"
+        assert self._text(client, link) == before
+
+
 class TestBeatsDirectAPI:
     """Test suite for Beat (time log) management endpoints"""
 
@@ -6357,6 +6511,18 @@ class TestCsvAndJsonExport:
         # clients and their billing and 1.1's absences and balance adjustments.
         assert body["version"] == "1.3"
 
+    def test_the_export_carries_no_report_link(self, client, auth_headers):
+        # A link is a view of a bill, not part of one, and one restored from
+        # a file could be one that was turned off since (DATA.md, Export).
+        kite, [website] = _billed_client(client, auth_headers)
+        _report_link(client, auth_headers, kite["id"], [website["id"]])
+
+        resp = client.get("/api/export/full", headers=auth_headers)
+
+        assert resp.status_code == 200, resp.text
+        assert "report_links" not in resp.json()
+        assert "lpr_" not in resp.text
+
     def test_full_json_export_carries_absences_and_adjustments(self, client, auth_headers):
         """What a day job's balance is made of beyond its contract and its
         sessions is in the backup: every absence and every adjustment, with
@@ -7194,6 +7360,36 @@ class TestBackupImport:
             s for s in _billing_budgets(client, auth_headers) if s["scope_id"] == project["id"]
         ]
         assert (status["client_id"], status["unit"]) == (dollars["id"], "hours")
+
+    def test_an_import_makes_no_link(self, client, auth_headers, mongo):
+        kite, [website] = _billed_client(client, auth_headers, "Imported links", "Imported")
+        from bson import ObjectId
+
+        made = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        stored = mongo.report_links.find_one({"_id": ObjectId(made["id"])}, {"_id": 0})
+        assert stored is not None
+        before = list(mongo.report_links.find().sort("_id"))
+        # A link's whole document, under a new hash, as a file might carry it.
+        planted = {**stored, "token_hash": "0" * 64, "label": "Planted"}
+        file = {"report_links": [planted, {**planted, "id": made["id"]}]}
+
+        resp = self._import(client, auth_headers, file)
+
+        assert resp.status_code == 200, resp.text
+        assert list(mongo.report_links.find().sort("_id")) == before
+
+    def test_a_turned_off_link_stays_off_after_an_old_backup(self, client, auth_headers):
+        kite, [website] = _billed_client(client, auth_headers, "Turned off", "Off")
+        link = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        backup = self._export(client, auth_headers)
+        resp = client.delete(f"/api/billing/report-links/{link['id']}", headers=auth_headers)
+        assert resp.status_code == 204, resp.text
+
+        resp = self._import(client, auth_headers, backup)
+
+        assert resp.status_code == 200, resp.text
+        assert link["id"] not in [row["id"] for row in _report_links(client, auth_headers)]
+        assert _open_report(client, link["token"]).json()["code"] == "REPORT_NOT_FOUND"
 
 
 class TestIntelligenceInbox:
