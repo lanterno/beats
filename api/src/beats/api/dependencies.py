@@ -213,6 +213,9 @@ get_billable_override_repository = _user_scoped(
 get_billing_budget_repository = _user_scoped(MongoBillingBudgetRepository, "billing_budgets")
 
 
+get_report_link_repository = _user_scoped(MongoReportLinkRepository, "report_links")
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
@@ -278,10 +281,12 @@ def get_billing_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     billing_budget_repo: Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)],
+    link_repo: Annotated[ReportLinkRepository, Depends(get_report_link_repository)],
 ) -> BillingService:
     """Get the billing service with injected repositories. It is the only
     service given the billing budgets: no device route and no coach port
-    reaches them."""
+    reaches them. It takes the report links for the cascades alone: a
+    project leaving a client leaves its links, and a client's go with it."""
     return BillingService(
         clients=client_repo,
         billings=billing_repo,
@@ -289,10 +294,8 @@ def get_billing_service(
         projects=project_repo,
         beats=beat_repo,
         budgets=billing_budget_repo,
+        report_links=link_repo,
     )
-
-
-get_report_link_repository = _user_scoped(MongoReportLinkRepository, "report_links")
 
 
 def get_report_link_key(settings: Annotated[Settings, Depends(get_settings)]) -> bytes:

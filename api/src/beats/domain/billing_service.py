@@ -15,6 +15,14 @@ the request's timezone, needs `rewrite_past` (`past_change`, `link_change`,
 for the first time is not gated, since no figure existed, and neither is an
 override — editing a past entry is itself the consent. Nor is a billing
 budget: it changes no billable figure, and only its current period is read.
+
+A report link names its projects when it is made, and a project that
+leaves its client leaves that client's links for good: a move away, a
+stop and a restore that bills it elsewhere each drop it from the old
+client's links (`ReportLinkScope.drop_project`) before their own write, so
+a failure between the two leaves a link narrower than it was, never wider.
+Billed to the client again later, it does not come back to them; a link
+made after can include it.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -74,6 +82,7 @@ from beats.domain.ports import (
     BillingProjectReader,
     ClientStore,
     ProjectBillingStore,
+    ReportLinkScope,
 )
 
 
@@ -185,6 +194,7 @@ class BillingService:
         projects: BillingProjectReader,
         beats: BillingBeatReader,
         budgets: BillingBudgetStore,
+        report_links: ReportLinkScope,
         now: Callable[[ZoneInfo], datetime] = datetime.now,
     ):
         self.clients = clients
@@ -193,6 +203,7 @@ class BillingService:
         self.projects = projects
         self.beats = beats
         self.budgets = budgets
+        self.report_links = report_links
         self._now = now
 
     def _month_start(self, tz: ZoneInfo) -> date:
@@ -260,14 +271,16 @@ class BillingService:
 
     async def delete_client(self, client_id: str) -> None:
         """Delete a client no project is billed to; while one is, 409
-        CLIENT_HAS_PROJECTS — archive it instead. Its billing budget goes
-        with it: with nothing billed it counts nothing. The budget is deleted
-        first, so a failure between the two leaves a client without its
-        budget, never a budget without its client."""
+        CLIENT_HAS_PROJECTS — archive it instead. Its billing budget and its
+        report links go with it: with nothing billed one counts nothing and
+        the others show nothing. They are deleted first, the budget, then
+        the links, so a failure between leaves a client without them, never
+        them without their client."""
         await self.clients.get_by_id(client_id)
         if await self.billings.list_by_client(client_id):
             raise ClientHasProjects()
         await self.budgets.delete(BillingBudgetScope.CLIENT, client_id)
+        await self.report_links.delete_for_client(client_id)
         await self.clients.delete(client_id)
 
     async def _record(self, client: Client) -> ClientRecord:
@@ -316,6 +329,7 @@ class BillingService:
           terms dated before the current month, or any move to another
           client while a term is dated there or an entry there is marked
           billable, needs `rewrite_past` (409 RETROACTIVE_CHANGE).
+        - A move takes it off the old client's report links first.
         """
         project = await self.projects.get_by_id(project_id)
         if project.kind is not ProjectKind.FREELANCE:
@@ -339,6 +353,8 @@ class BillingService:
                 )
                 changes += [link_change([*stored.terms, *terms], month_start), marked]
             self._gate(_earliest(*changes), rewrite_past)
+            if stored.client_id != client_id:
+                await self.report_links.drop_project(stored.client_id, project_id)
         billing = await self.billings.upsert(
             ProjectBilling(project_id=project_id, client_id=client_id, terms=terms)
         )
@@ -358,8 +374,9 @@ class BillingService:
         - a term dated before the current month, or an entry there marked
           billable, needs `rewrite_past` (409 RETROACTIVE_CHANGE).
 
-        The budget is deleted before the billing, so a failure between the
-        two leaves a billed project without its budget, never a budget on a
+        The project leaves its client's report links, then the budget is
+        deleted, then the billing, so a failure between leaves a billed
+        project without its budget or off a link, never a budget on a
         project that is not billed."""
         stored = await self.billings.get(project_id)
         if stored is None:
@@ -375,6 +392,7 @@ class BillingService:
             ),
             rewrite_past,
         )
+        await self.report_links.drop_project(stored.client_id, project_id)
         if budget is not None:
             await self.budgets.delete(BillingBudgetScope.PROJECT, project_id)
         await self.billings.delete(project_id)
@@ -746,7 +764,12 @@ class BillingService:
 
     async def restore_project_billing(self, billing: ProjectBilling) -> None:
         """Write a project's billing read from a backup. Not gated, and the
-        client may be archived."""
+        client may be archived. A billing that moves the project to another
+        client takes it off the stored client's report links first, as a
+        move does."""
+        stored = await self.billings.get(billing.project_id)
+        if stored is not None and stored.client_id != billing.client_id:
+            await self.report_links.drop_project(stored.client_id, billing.project_id)
         await self.billings.upsert(billing)
 
     async def restore_billing_budget(self, budget: BillingBudget) -> None:

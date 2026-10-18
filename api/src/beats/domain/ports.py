@@ -305,6 +305,15 @@ class ReportLinkStore(Protocol):
     async def delete_all(self, client_id: str | None) -> int: ...
 
 
+class ReportLinkScope(Protocol):
+    """What billing writes ask of report links: a project leaving a client
+    leaves that client's links, and a deleted client's links go. Each
+    answers how many links it changed."""
+
+    async def drop_project(self, client_id: str, project_id: str) -> int: ...
+    async def delete_for_client(self, client_id: str) -> int: ...
+
+
 class ReportBeatReader(Protocol):
     """The finished beats of some projects started in a span of instants, as
     a report link's report reads them: never their tags, and their notes

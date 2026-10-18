@@ -1191,12 +1191,14 @@ class ReportLinkRepository(Protocol):
     async def list(self, client_id: str | None) -> builtins.list[ReportLink]: ...
     async def delete(self, link_id: str) -> bool: ...
     async def delete_all(self, client_id: str | None) -> int: ...
+    async def drop_project(self, client_id: str, project_id: str) -> int: ...
+    async def delete_for_client(self, client_id: str) -> int: ...
 
 
 class MongoReportLinkRepository(MongoStore[ReportLink], ReportLinkRepository):
-    """The caller's report links, for the management routes. The public read
-    finds a link by its token's hash through `MongoReportLinkResolver`
-    instead, before its owner is known."""
+    """The caller's report links, for the management routes and the billing
+    writes' cascades. The public read finds a link by its token's hash
+    through `MongoReportLinkResolver` instead, before its owner is known."""
 
     model = ReportLink
 
@@ -1222,6 +1224,18 @@ class MongoReportLinkRepository(MongoStore[ReportLink], ReportLinkRepository):
         extra = {"client_id": client_id} if client_id is not None else None
         result = await self.collection.delete_many(self._q(extra))
         return result.deleted_count
+
+    async def drop_project(self, client_id: str, project_id: str) -> int:
+        """Take a project off every one of a client's links that names it.
+        A link left with none stays, and answers an empty report."""
+        result = await self.collection.update_many(
+            self._q({"client_id": client_id, "project_ids": project_id}),
+            {"$pull": {"project_ids": project_id}},
+        )
+        return result.modified_count
+
+    async def delete_for_client(self, client_id: str) -> int:
+        return await self.delete_all(client_id)
 
 
 class ReportLinkResolver(Protocol):
