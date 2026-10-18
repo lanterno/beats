@@ -151,11 +151,28 @@ func TestRunOpen_PrintPathWritesBareURL(t *testing.T) {
 
 // --- --here / resolveHereRepo / gitToplevel ---
 
+// clearGitRepoEnv unsets the variables that point git at a repository
+// other than the one its directory argument is in. Git exports GIT_DIR to
+// hooks, so under lefthook's pre-push `git -C <dir>` would resolve the
+// pushing worktree whatever <dir> is. gitToplevel keeps honouring them on
+// purpose (beatsd run from a hook should see the hook's repo); these
+// tests are about the directory.
+func clearGitRepoEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+	} {
+		t.Setenv(name, "") // restores the original value after the test
+		os.Unsetenv(name)
+	}
+}
+
 func TestGitToplevel_FromInsideThisRepoReturnsRoot(t *testing.T) {
 	// We run from cmd/beatsd/, three levels deep in the beats repo.
 	// gitToplevel should walk up to the actual top-level. Using the
 	// test's own location is a reliable real-git fixture without
 	// having to scaffold a temporary repo.
+	clearGitRepoEnv(t)
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -183,6 +200,7 @@ func TestGitToplevel_OutsideAnyRepoReturnsNotOk(t *testing.T) {
 	// back to the bare cwd. This used to probe a hard-coded "/tmp",
 	// which simply skipped on Windows — the one platform whose path
 	// handling this is most worth exercising.
+	clearGitRepoEnv(t)
 	dir := t.TempDir()
 	if _, ok := gitToplevel(dir); ok {
 		t.Errorf("expected %q to not be inside any git repo", dir)
