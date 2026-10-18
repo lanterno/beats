@@ -10,6 +10,7 @@ scripts/                      Cross-surface codegen (gen_app_labels.py, gen_bran
 api/                          Python (FastAPI + PyMongo/MongoDB)
 ui/                           React 19 SPA (Vite + TypeScript)
 daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
+HomebrewFormula/              The beatsd Homebrew formula; this repo is the tap, and a release bumps it
 companion/                    Flutter desktop companion (timer, coach, integrations)
 integrations/vscode-beats/    VS Code extension (workspace heartbeats + status bar)
 wall-clock/                   ESP32 firmware (Arduino/C++)
