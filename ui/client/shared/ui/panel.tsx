@@ -5,7 +5,7 @@
  */
 import type * as React from "react";
 
-import { cn } from "../lib";
+import { cn } from "../lib/cn";
 
 export interface PanelProps extends React.ComponentPropsWithRef<"div"> {
 	/** The inner padding as a Tailwind utility. Defaults to `p-6`; pass `p-0` for a flush list. */
