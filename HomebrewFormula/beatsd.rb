@@ -7,6 +7,7 @@
 # not named homebrew-<x>, users tap it by URL:
 #
 #   brew tap lanterno/beats https://github.com/lanterno/beats
+#   brew trust --formula lanterno/beats/beatsd
 #   brew install beatsd
 #
 # On every release tag, .github/workflows/release-daemon.yml runs bump.sh

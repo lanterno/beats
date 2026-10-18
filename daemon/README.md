@@ -32,6 +32,7 @@ this repo is the tap — and run it as a service:
 
 ```bash
 brew tap lanterno/beats https://github.com/lanterno/beats
+brew trust --formula lanterno/beats/beatsd
 brew install beatsd
 brew services start beatsd
 ```
