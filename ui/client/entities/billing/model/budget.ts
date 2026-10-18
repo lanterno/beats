@@ -71,7 +71,11 @@ export function describeBillingBudget(
 	status: BillingBudgetStatus,
 	now: number,
 ): BillingBudgetWords {
-	const year = parseIsoDate(status.through ?? status.first)?.getFullYear() ?? 0;
+	// Today's year, to name another: the API's today, or the clock's while
+	// a total is upcoming and has none.
+	const year = status.through
+		? (parseIsoDate(status.through)?.getFullYear() ?? 0)
+		: new Date(now).getFullYear();
 	const figure = (hours: number, minor: number) =>
 		status.unit === "hours"
 			? hoursText(hours)
