@@ -13,9 +13,9 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 | API      | Google Cloud Run                                                           | A container in the stack                                                 | Stateless — request handling only                    |
 | Database | External MongoDB cluster, reached by the connection string Terraform takes | MongoDB container, `beats-mongo-data` volume, not published outside the stack | Every collection listed below                   |
 | Web app  | Firebase Hosting                                                           | nginx in the same stack, one origin with the API                         | Static assets only                                   |
-| Secrets  | GCP Secret Manager                                                         | `api/.env` and the environment on the host                               | OAuth client secrets, Anthropic API key, infra creds |
-| Logs     | Google Cloud Logging                                                       | Container logs (`just logs`)                                             | Request logs (no request bodies)                     |
-| Backups  | None configured in this repo                                               | `just backup <dir>`: a gzipped mongodump archive, taken on demand        | The database                                         |
+| Secrets  | GCP Secret Manager                                                         | `api/.env` and the environment on the host                               | OAuth client secrets, Anthropic API key, the report-link key, infra creds |
+| Logs     | Google Cloud Logging                                                       | Container logs (`just logs`)                                             | Request logs (no request bodies, so never a report link's secret) |
+| Backups  | None configured in this repo                                               | `just backup <dir>`: a gzipped mongodump archive of every collection but `report_links`, taken on demand | The database                                         |
 
 ## What's stored, by domain
 
@@ -56,7 +56,7 @@ No passwords are stored — Beats does not have a password login path.
   `rate_minor` (the hourly rate in the currency's minor units: cents for EUR), `archived`
   and `created_at`. The contact's name and email address are a third party's: shown to
   you, sent nowhere. A client is deleted only while no project is billed to it, and its
-  billing budget goes with it.
+  billing budget and report links go with it.
 - **Project billing**: one document per billed freelance project — `user_id`,
   `project_id`, `client_id`, and `terms[]`, each an `effective_from`, `billable` and an
   optional `rate_minor` of the project's own. Unique on `(user_id, project_id)`, so a
@@ -75,6 +75,20 @@ No passwords are stored — Beats does not have a password login path.
 - **Billable marks**: one document per session you marked billable or not, against its
   project's terms — `user_id`, `beat_id`, `billable`. Unique on `(user_id, beat_id)`.
   Deleted with the session.
+- **Report links**: one document per link you make for a client — `user_id`,
+  `client_id`, `project_ids` (the client's projects the link covers, chosen when it
+  is made), `first` and `last` (the days it covers, all finished when it is made),
+  `tz` (the time zone those days are counted in), `show_amounts`, `show_notes`,
+  `label` (yours, never shown on the link), `expires_on` (the last day it works),
+  `created_at`, and `token_hash`: an HMAC-SHA256 of the link's secret under the
+  server's `REPORT_LINK_KEY`. The secret is shown once, when the link is made, and
+  never stored; rotating the key ends every link. Unique on `token_hash`. Turning a
+  link off deletes the document; an ended one stays listed until you remove it.
+  `project_ids` only shrinks: moving a project to another client, stopping its
+  billing, or importing a backup that bills it elsewhere removes it from its old
+  client's links first. Deleted with its client. What a link shows is derived on each
+  opening from the client, its billing, the projects' names, the sessions and their
+  marks, and nothing about its being opened is stored.
 - **Beats (sessions)**: start, end, project id, tags, a note.
   The tags are derived from the daemon's flow windows when a session is logged, stopped
   or its times are edited; an edit over no windows keeps the tags it had. The note comes
@@ -119,7 +133,7 @@ Coach prompts are sent to the [Anthropic Claude API](https://www.anthropic.com/)
 
 ## Retention
 
-Beats does not auto-delete anything. Beats, notes, coach history, and biometrics persist until you delete them or delete your account.
+Beats does not auto-delete anything. An ended report link stays listed until you remove it. Beats, notes, coach history, and biometrics persist until you delete them or delete your account.
 
 ## Export
 
@@ -138,8 +152,12 @@ holds the hours worked and expected, the balance adjustment's kind and what it m
 the public holiday's name (a company holiday reads `company holiday`, not the name typed
 for it), the absence type and half-day flag (never the absence's note), and the balance.
 
-Plans, webhooks, signals, biometrics and coach history are in neither export; they stay
-in the database until deleted.
+Plans, webhooks, signals, biometrics, coach history and report links are in neither
+export; they stay in the database until deleted. An import never creates, changes or
+deletes a report link, and a `report_links` key in a file is ignored: a restore must
+never bring back a link you turned off, and the secret that would make a restored link
+useful is stored nowhere. After restoring onto another server or into an empty
+database, make the links again.
 
 `POST /api/export/import` takes a `/full` file back, a `1.2` one from before billing
 budgets were exported, a `1.1` one from before billing was or a `1.0` one from before
@@ -182,6 +200,13 @@ Email <ahmed.elghareeb@proton.me> from the address on your account. I will:
 3. Reply to confirm
 
 Backups (if any operational backup exists at the time) roll off on the provider's standard window.
+
+A database snapshot is a backup too. `just backup` leaves `report_links` out, and
+`just restore` drops and restores only what the archive holds, so a self-hosted
+restore neither brings back a link you turned off nor ends one made since. On
+lifepete.com, after restoring any snapshot of the database, the operator rotates
+`REPORT_LINK_KEY`, which ends every report link: one turned off after the snapshot
+would otherwise work again.
 
 ## Changes
 
