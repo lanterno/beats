@@ -174,11 +174,16 @@ def scope_spend(
         beats_of[local_date(beat.start, tz).replace(day=1)].append(beat)
     billable_hours, unpriced_hours, amount_minor = _ZERO_HOURS, _ZERO_HOURS, 0
     for slice_first, slice_last in month_slices(first, through):
+        month_beats = beats_of.get(slice_first.replace(day=1))
+        if not month_beats:
+            # A month with no beats bills nothing, and a total started long
+            # ago is mostly such months: each assemble walks every day.
+            continue
         month = assemble_client(
             client,
             billings,
             projects,
-            beats_of.get(slice_first.replace(day=1), []),
+            month_beats,
             overrides,
             slice_first,
             slice_last,
