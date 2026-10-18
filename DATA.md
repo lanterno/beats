@@ -55,13 +55,23 @@ No passwords are stored — Beats does not have a password login path.
   `contact_email`, `currency` (an ISO 4217 code), `rates[]`, each an `effective_from` and a
   `rate_minor` (the hourly rate in the currency's minor units: cents for EUR), `archived`
   and `created_at`. The contact's name and email address are a third party's: shown to
-  you, sent nowhere. A client is deleted only while no project is billed to it.
+  you, sent nowhere. A client is deleted only while no project is billed to it, and its
+  billing budget goes with it.
 - **Project billing**: one document per billed freelance project — `user_id`,
   `project_id`, `client_id`, and `terms[]`, each an `effective_from`, `billable` and an
   optional `rate_minor` of the project's own. Unique on `(user_id, project_id)`, so a
   second billing on a project replaces the first. Kept apart from the project document,
   which paired devices read. A month's billable hours and amounts are derived from it,
   the client and the sessions on request; none is stored.
+- **Billing budgets**: one document per client or billed project you set a limit on —
+  `user_id`, `scope` (`client` or `project`), `scope_id`, `unit` (`hours` or `money`),
+  `period` (`monthly` or `total`), `limit_hours` or `limit_minor` (the one its unit takes;
+  money in the minor units of the client's currency, which is not stored again), a
+  `starts_on` on a total, and `warn_at_percent`. Unique on `(user_id, scope, scope_id)`, so
+  a second budget on a scope replaces the first. Only the limit is stored: what is spent,
+  what is left, the warning and the projection are derived from it, the billing and the
+  sessions on request, and no alert is stored or sent. Deleted with its project's billing
+  when you stop billing it and say the budget goes too, or with its client.
 - **Billable marks**: one document per session you marked billable or not, against its
   project's terms — `user_id`, `beat_id`, `billable`. Unique on `(user_id, beat_id)`.
   Deleted with the session.
@@ -115,11 +125,11 @@ Beats does not auto-delete anything. Beats, notes, coach history, and biometrics
 
 `/api/export` returns the authenticated user's data. Nothing is held back behind a tier.
 
-- **`/full`**, a JSON backup (version `1.2`), holds everything a day job's balance and a
+- **`/full`**, a JSON backup (version `1.3`), holds everything a day job's balance and a
   client's bill are made of: every project, archived ones too, with its contract; every
   session; every absence, including one kept from when its project was a day job; every
   balance adjustment; every client, archived ones too; every project's billing; every
-  billable mark.
+  billable mark; every billing budget whose client, or billed project, is still there.
 - **`/csv/sessions`** is a CSV of the completed sessions alone.
 
 A day job with a contract also has a monthly timesheet,
@@ -131,29 +141,37 @@ for it), the absence type and half-day flag (never the absence's note), and the 
 Plans, webhooks, signals, biometrics and coach history are in neither export; they stay
 in the database until deleted.
 
-`POST /api/export/import` takes a `/full` file back, a `1.1` one from before billing
-was exported or a `1.0` one from before absences and adjustments were, into the account
-that sends it. Re-importing is safe: projects, sessions and clients are matched by id, a
-billing by its project, a billable mark by its session, an absence or an adjustment by
-its project and date. The file is checked whole first, and a file that fails writes
-nothing: a malformed record, a malformed id included, is a 422; a file holding projects,
-sessions or clients of another account is a 409 `BACKUP_OF_ANOTHER_ACCOUNT`; a billing
-whose project or client, or a mark whose session, is in neither the file nor the account
-is a 422 naming it; and a client or a billing that its own route would refuse, against
-the file laid on the account (an unknown currency, billing on a project that is not
-freelance, and the rest in [docs/billing.md](docs/billing.md)), is that route's error,
-naming the record. A restore is not asked to confirm a change to a past month.
+`POST /api/export/import` takes a `/full` file back, a `1.2` one from before billing
+budgets were exported, a `1.1` one from before billing was or a `1.0` one from before
+absences and adjustments were, into the account that sends it. Re-importing is safe:
+projects, sessions and clients are matched by id, a billing by its project, a billing
+budget by its client or project, a billable mark by its session, an absence or an
+adjustment by its project and date. An import never deletes, so the account's own billing
+budgets survive a file without them. The file is checked whole first, and a file that
+fails writes nothing: a malformed record, a malformed id included, is a 422; a file
+holding projects, sessions or clients of another account is a 409
+`BACKUP_OF_ANOTHER_ACCOUNT`; a billing whose project or client, a billing budget whose
+client or project, or a mark whose session, is in neither the file nor the account is a
+422 naming it; and a client, a billing or a billing budget that its own route would
+refuse, against the file laid on the account (an unknown currency, billing on a project
+that is not freelance, a budget on a project billed nowhere, and the rest in
+[docs/billing.md](docs/billing.md)), is that route's error, naming the record. A restore
+is not asked to confirm a change to a past month.
 
 The rest goes through the same rules as the app's own writes, in this order: the
-clients; the projects, each as a project write; each project's billing; the sessions;
-the billable marks; then absences and adjustments, against the projects as restored and
-the `tz` sent. A project write those rules refuse (a contract that would strand an
+clients; the projects, each as a project write; each project's billing; the billing
+budgets; the sessions; the billable marks; then absences and adjustments, against the
+projects as restored and the `tz` sent. A project write those rules refuse (a contract that would strand an
 adjustment, say) stops the import with that write's error: the clients and the projects
 before it in the file are already restored, and nothing after it is written, no billing,
-sessions, marks, absences or adjustments. Fixing the conflict and importing the file
+budgets, sessions, marks, absences or adjustments. Fixing the conflict and importing the file
 again is safe. A refused absence or adjustment does not stop it (time off on a project that
 is no longer a day job, an adjustment outside its contract): it is left out, and the
 response lists it under `skipped`.
+
+An API older than the file drops what it does not know without a word: a `1.3` file
+imported into an API from before billing budgets restores everything but the budgets, as
+a `1.2` file does into one from before billing.
 
 ## Deletion
 

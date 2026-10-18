@@ -291,17 +291,23 @@ nothing.
   `currency` and `minor_units` beside every amount. The minor units come from the API's
   table (`domain/currencies.py`, served at `/api/meta/currencies`), never from `Intl`, whose
   ICU data disagrees with ISO 4217 on some codes. A client has one currency, locked once
-  anything is priced in it (409 `CURRENCY_IN_USE`). The arithmetic is pure, in
-  `domain/billing.py`: `Decimal`, rounded half-up once per report line (hours to 0.01, the
-  amount to a whole minor unit), every total a sum of lines, and a beat billed on the local
-  day it started on in a required `tz`; a running beat is not billed. Billing is never a
-  field of `Project` or `Beat` and never under a device prefix: clients, project billing and
-  billable overrides are their own collections, under `/api/clients` and `/api/billing` (the
-  comment beside `DEVICE_ALLOWED_PREFIXES` in `server.py`). Only a freelance project is
-  billed (409 `NOT_FREELANCE`), and a billed one keeps its kind (409 `PROJECT_HAS_BILLING`).
-  A write that would change figures before the 1st of the current month in `tz` needs
+  anything is priced in it or a money billing budget is in it (409 `CURRENCY_IN_USE`). The
+  arithmetic is pure, in `domain/billing.py`: `Decimal`, rounded half-up once per report
+  line (hours to 0.01, the amount to a whole minor unit), every total a sum of lines, and a
+  beat billed on the local day it started on in a required `tz`; a running beat is not
+  billed. Billing is never a field of `Project` or `Beat` and never under a device prefix:
+  clients, project billing, billable overrides and billing budgets are their own
+  collections, under `/api/clients` and `/api/billing` (the comment beside
+  `DEVICE_ALLOWED_PREFIXES` in `server.py`). Only a freelance project is billed (409
+  `NOT_FREELANCE`), and a billed one keeps its kind (409 `PROJECT_HAS_BILLING`). A write
+  that would change figures before the 1st of the current month in `tz` needs
   `rewrite_past: true`, else 409 `RETROACTIVE_CHANGE` naming the month; the SPA's
-  `withPastConsent` asks in the API's words and sends again. The decisions are in
+  `withPastConsent` asks in the API's words and sends again. A billing budget, one per
+  client or billed project, stores only its limit: what it has spent is summed month by
+  month from the same lines (`domain/billing_budgets.py`), so a total agrees with the
+  invoices, and a running timer is in no figure but answered with the instants at which it
+  would cross the warning and the limit. Stopping billing on a project with one needs
+  `remove_billing_budget=true` (409 `PROJECT_HAS_BILLING_BUDGET`). The decisions are in
   [docs/billing.md](docs/billing.md).
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
   (`:root[data-theme="dusk"]`), picked in Settings beside the density. `useTheme.ts` owns the
@@ -401,7 +407,7 @@ changing anything both ends share.
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/clients` | Clients you bill: CRUD, archive and unarchive; one currency each and dated default rates (`rate_minor`, minor units an hour). `PUT` takes `tz` and `rewrite_past`. No device token |
-| `/api/billing` | `/projects` (every billed project; PUT, DELETE `/{id}`: a freelance project's client and dated billing terms), `/entries` (every override; PUT, DELETE `/{beat_id}`: one entry marked billable or not), `/month?month=&tz=` (each client's lines, entries and amount, totals per currency, and freelance hours billed to no one). No device token |
+| `/api/billing` | `/projects` (every billed project; PUT, DELETE `/{id}`: a freelance project's client and dated billing terms; the DELETE takes `tz`, `rewrite_past` and `remove_billing_budget`), `/entries` (every override; PUT, DELETE `/{beat_id}`: one entry marked billable or not), `/month?month=&tz=` (each client's lines, entries and amount, totals per currency, and freelance hours billed to no one), `/budgets?tz=` (every billing budget read as of today: spent, left, state, projection and a running timer's crossing instants; PUT, DELETE `/budgets/clients/{id}`, `/budgets/projects/{id}`: one limit per client or billed project, in hours or money, monthly or in total). No device token |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
 | `/api/intelligence` | Digests, score, patterns, suggestions, focus scores (a day, or a week), inbox |
 | `/api/plans` | Weekly plans (structured per-project hour targets) |

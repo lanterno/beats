@@ -169,12 +169,30 @@ Rail        BILLING    Studio Kite                                   Change clie
                        From Nov 1, 2026 · not billable                      PLANNED
                        [+ Change from…]
                        This month: 12.5 h billable · €1,062.50 → Clients
+                       Budget                                                ✎ 🗑
+                       €6,842.50 of €10,200.00 since Sep 1 · €3,357.50 left.
+                       ━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━
+                       Also counts toward Studio Kite's budget: 4.5 h left this month → Clients
                        Stop billing
 Days        Thu 2   09:00 → 11:30  …   [Billable] marked by you ↺        2h 30m
 ```
 
 Without billing the panel asks "Who is this work for?" with *Bill this
 project*. Each finished session in Days carries a Billable pill.
+
+**Billing budget states** (the rules are in billing.md, *Billing budgets*).
+*No budget*: "+ Set a budget" where the row would be. *Upcoming*, a total
+that starts after today: "Starts Nov 1: 120 h in total.", with no meter.
+*Near*: the meter's fill turns persimmon past the warning's tick. *Used up*
+or *over*: "40 h of 40 h this month: used up.", or "…: 3.5 h over.", the
+fill in `destructive-ink` at full width. *Running*, a timer on the
+project: a line under the meter, "A timer is running: it uses the last
+4.5 h around 13:40.", then "The running timer used it up around 13:40."
+once the clock passes that instant, which lifts the meter's state too; a
+money budget with no rate for the running hours says they count once a
+rate is set. *The budgets read failed*, an older API during a deploy:
+"Budgets aren't available right now." in place of the row and the
+client's line, and the rest of the Billing panel as before.
 
 **States.** *No contract yet* (day job): the balance slot reads "No
 contract yet. Add the terms and the page keeps a balance from that date."
@@ -357,7 +375,9 @@ yet — start the timer in the sidebar."
   this month · today · 1st of next month) or the calendar, never filled in;
   a row's pencil edits it and its bin removes it. The last term cannot be
   removed: *Stop billing* removes them all, after an inline "Stop billing
-  {name}? Its terms go; its hours stay."
+  {name}? Its terms go; its hours stay." With a billing budget it reads
+  "Stop billing {name}? Its terms and its budget go; its hours stay.", and
+  only that confirmation sends `remove_billing_budget=true`.
 - **Every change PUTs the whole billing**, the client and every term,
   through `withPastConsent`: a change that reaches a month already over
   asks first in the API's words ("This changes billable figures from March
@@ -369,6 +389,16 @@ yet — start the timer in the sidebar."
 - **"This month"** is the project's lines in `/api/billing/month`, summed
   — the API's hours and amounts, never priced here — with a link to the
   Clients page.
+- **The Budget line** reads `GET /api/billing/budgets` and finds the
+  project's budget and its client's. The project's row (`BillingBudgetRow`)
+  has a pencil, which opens `BillingBudgetDialog` with "When billing
+  started" set to the project's first term, and a remove, which sends
+  `DELETE /api/billing/budgets/projects/{id}` with no confirmation, as a
+  budget changes no billable figure. Both are hidden until the row is
+  hovered or focused, where there is hover at all, as a term row's are. The
+  client's budget is read-only here, a line naming what is left of it with a
+  link to the Clients page, where it is edited. A minute's tick re-renders
+  the line only while one of the two has a running timer.
 - **The Billable pill** sits on each finished session row of a billed
   project; the running one has none, as it is not billed until it stops.
   It shows what the month's report counts for that entry (`entryBillable`,
