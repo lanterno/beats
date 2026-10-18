@@ -475,6 +475,7 @@ class ImportCounts(BaseModel):
     clients: int
     project_billing: int
     billable_overrides: int
+    billing_budgets: int
 
 
 class ImportSkip(BaseModel):

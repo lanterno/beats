@@ -621,21 +621,22 @@ class BillingService:
         projects: Sequence[Project],
         clients: Sequence[Client],
         billings: Sequence[ProjectBilling],
+        budgets: Sequence[BillingBudget],
         beats: Sequence[Beat],
         overrides: Sequence[BillableOverride],
         tz: ZoneInfo,
     ) -> None:
-        """The rules the client and billing writes apply, run over what a
-        backup would leave — its records over the account's — before any of
-        it is written, so a file one of them refuses writes nothing. The
-        first refusal is raised as its route raises it, its detail naming
-        the record (`project_billing.0: …`).
+        """The rules the client, billing and billing budget writes apply, run
+        over what a backup would leave — its records over the account's —
+        before any of it is written, so a file one of them refuses writes
+        nothing. The first refusal is raised as its route raises it, its
+        detail naming the record (`project_billing.0: …`).
 
         - A client's currency is one the table knows, when the client is new
           or its currency changes; as on `update_client`, a stored one is not
           checked again. It cannot change once something in the account is
-          priced in it, or a money billing budget of the account's is in it
-          (CURRENCY_IN_USE).
+          priced in it, or a money billing budget of the account's that the
+          file does not replace is in it (CURRENCY_IN_USE).
         - A project the file moves away from freelance while the account
           bills it, and the file does not bill it anew, is
           PROJECT_HAS_BILLING, as `restore_project` would answer it.
@@ -643,18 +644,29 @@ class BillingService:
           (NOT_FREELANCE), and billing the file moves to a client in another
           currency is held to `set_project_billing`'s rule (CURRENCY_MISMATCH),
           the file's beats and billable marks laid over the account's, and
-          the account's money billing budget on the project counted: a
-          restore never deletes one.
+          the account's money billing budget on the project counted unless
+          the file carries the project's budget: a restore never deletes one.
+          A file's own money budget was set under the file's client, so it
+          agrees with the billing the file restores.
+        - A billing budget on a project is on one the file or the account
+          bills (BILLING_BUDGET_NEEDS_BILLING).
 
-        That each billing's project and client is in the file or the account
-        is the import's to check first. The retroactive gate is not applied:
-        a restore puts back what was.
+        That each billing's project and client, and each budget's scope, is
+        in the file or the account is the import's to check first. The
+        retroactive gate is not applied: a restore puts back what was.
         """
         stored_clients = {client.id: client for client in await self.clients.list_all()}
         stored_billings = {
             billing.project_id: billing for billing in await self.billings.list_all()
         }
-        stored_budgets = await self.budgets.list_all()
+        # The account's budgets the file leaves in place: an upsert by scope
+        # replaces the rest.
+        replaced = {(budget.scope, budget.scope_id) for budget in budgets}
+        surviving = [
+            budget
+            for budget in await self.budgets.list_all()
+            if (budget.scope, budget.scope_id) not in replaced
+        ]
         kinds = {
             project.id: project.kind
             for project in [
@@ -675,7 +687,7 @@ class BillingService:
                 if (
                     stored is not None
                     and client.currency != stored.currency
-                    and _locked(stored, stored_billings.values(), stored_budgets)
+                    and _locked(stored, stored_billings.values(), surviving)
                 ):
                     raise CurrencyInUse()
 
@@ -714,9 +726,18 @@ class BillingService:
                                 _money_billing_budget(budget)
                                 and budget.scope is BillingBudgetScope.PROJECT
                                 and budget.scope_id == billing.project_id
-                                for budget in stored_budgets
+                                for budget in surviving
                             ),
                         )
+
+        for i, budget in enumerate(budgets):
+            with _naming(f"billing_budgets.{i}"):
+                if (
+                    budget.scope is BillingBudgetScope.PROJECT
+                    and budget.scope_id not in billed
+                    and budget.scope_id not in stored_billings
+                ):
+                    raise BillingBudgetNeedsBilling()
 
     async def restore_client(self, client: Client) -> None:
         """Write a client read from a backup, keeping its id and its archive
@@ -727,6 +748,11 @@ class BillingService:
         """Write a project's billing read from a backup. Not gated, and the
         client may be archived."""
         await self.billings.upsert(billing)
+
+    async def restore_billing_budget(self, budget: BillingBudget) -> None:
+        """Write a billing budget read from a backup, replacing the one on its
+        scope. Not gated, as no budget write is."""
+        await self.budgets.upsert(budget)
 
     async def restore_override(self, override: BillableOverride) -> None:
         """Write a billable override read from a backup."""

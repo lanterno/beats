@@ -345,6 +345,8 @@ ProjectBillingRepoDep = Annotated[ProjectBillingRepository, Depends(get_project_
 BillableOverrideRepoDep = Annotated[
     BillableOverrideRepository, Depends(get_billable_override_repository)
 ]
+# For the backup's export alone; every other reader goes through BillingService.
+BillingBudgetRepoDep = Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)]
 BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
