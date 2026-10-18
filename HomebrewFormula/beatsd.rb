@@ -54,6 +54,8 @@ class Beatsd < Formula
   end
 
   test do
-    assert_match "beatsd", shell_output("#{bin}/beatsd version")
+    # The release build stamps the tag into the binary (-X main.version),
+    # so this fails if the tarball is not the release the formula names.
+    assert_match "beatsd v#{version}", shell_output("#{bin}/beatsd version")
   end
 end
