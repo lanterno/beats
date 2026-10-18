@@ -292,6 +292,20 @@ class TestRunning:
             _utc(OCT_18, 21, 10, 36),
         )
 
+    def test_a_start_part_way_through_a_second_still_crosses_on_a_whole_one(self):
+        # A timer's start is stamped to the microsecond: 09:10:00.5, 8 h and
+        # 16 h before the warning and the limit.
+        beats = [
+            *_daily(OCT_1, date(2026, 10, 8), _hours(3)),
+            _running(OCT_18, time(9, 10, 0, 500000)),
+        ]
+        status = _status(_budget(HOURS, "40"), beats)
+        assert status.running is not None
+        assert (status.running.near_at, status.running.over_at) == (
+            _utc(OCT_18, 15, 10, 1),
+            _utc(OCT_18, 23, 10, 1),
+        )
+
     def test_an_unpriced_beat_spends_hours_but_no_money(self):
         client = _client((date(2026, 10, 19), 8500))  # no rate yet on the 18th
         beats = [_running(OCT_18, time(9))]
