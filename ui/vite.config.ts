@@ -9,6 +9,19 @@ import { APP_NAME } from "./client/shared/config/brand";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * `/report`, `/report/` and `/report?…` serve report.html in dev and
+ * `vite preview`, as Firebase's rewrite and nginx's location do in
+ * production, so a link made locally (`origin + "/report#" + token`) opens
+ * locally. The fragment never reaches a server, so it needs no handling.
+ */
+const REPORT_PATH = /^\/report\/?(?=[?#]|$)/;
+
+function rewriteReportPath(req: { url?: string }, _res: unknown, next: () => void) {
+	if (req.url && REPORT_PATH.test(req.url)) req.url = req.url.replace(REPORT_PATH, "/report.html");
+	next();
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
 	server: {
@@ -21,6 +34,14 @@ export default defineConfig(() => ({
 	},
 	build: {
 		outDir: "dist/spa",
+		rollupOptions: {
+			// Two pages: the app, and the public report, which shares none of
+			// the app's tree (docs/billing.md, *The public page*).
+			input: {
+				main: path.resolve(__dirname, "index.html"),
+				report: path.resolve(__dirname, "report.html"),
+			},
+		},
 	},
 	plugins: [
 		react(),
@@ -31,6 +52,15 @@ export default defineConfig(() => ({
 			transformIndexHtml: {
 				order: "pre",
 				handler: (html: string) => html.split("%APP_NAME%").join(APP_NAME),
+			},
+		},
+		{
+			name: "report-path",
+			configureServer(server) {
+				server.middlewares.use(rewriteReportPath);
+			},
+			configurePreviewServer(server) {
+				server.middlewares.use(rewriteReportPath);
 			},
 		},
 		VitePWA({

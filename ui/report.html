@@ -1,0 +1,24 @@
+<!doctype html>
+<!--
+  The public report page (docs/billing.md, *The public page*): its own entry,
+  not a route of the app. No theme script, no Open Graph or Twitter tags, no
+  analytics and no name of the product or the client in the title, so an
+  unfurler, a history sync or a mail scanner learns nothing from the shell.
+  Its headers and CSP are in firebase.json and nginx.conf.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Hours report</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <script type="module" src="/client/report.tsx"></script>
+  </body>
+</html>

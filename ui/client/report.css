@@ -1,0 +1,51 @@
+/*
+  The report page's stylesheet: Tailwind and the design tokens, and none of
+  global.css (its Google Fonts import, the sky, the app's layers). Utilities
+  are generated from the files the page draws, not the whole client.
+*/
+@import "tailwindcss" source(none);
+@import "./shared/styles/tokens.css";
+
+@source "./report.tsx";
+@source "./pages/report";
+@source "./widgets/client-report";
+@source "./shared/ui/panel.tsx";
+@source "./shared/ui/button.tsx";
+
+@layer base {
+	* {
+		border-color: var(--color-border);
+	}
+
+	/* A plain soft ground: the afternoon's low haze, no sky. */
+	body {
+		background-color: hsl(var(--background));
+		color: hsl(var(--foreground));
+		font-family: var(--font-body);
+		font-variant-numeric: lining-nums;
+		-webkit-font-smoothing: antialiased;
+		min-height: 100vh;
+	}
+
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-heading);
+		letter-spacing: -0.02em;
+	}
+
+	:where(p, span, li, h1, h2, h3, td, th) {
+		overflow-wrap: anywhere;
+	}
+}
+
+/* A printed report stands alone in an accounts-payable folder. */
+@media print {
+	body {
+		background-color: white;
+	}
+
+	thead {
+		display: table-header-group;
+	}
+}
