@@ -44,6 +44,11 @@ vi.mock("@/entities/client", async () => {
 		useDeleteClient: idle,
 	};
 });
+vi.mock("@/entities/report-link", async () => {
+	const actual =
+		await vi.importActual<typeof import("@/entities/report-link")>("@/entities/report-link");
+	return { ...actual, useReportLinks: () => ({ data: [], isError: false }) };
+});
 vi.mock("@/entities/project", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/project")>("@/entities/project");
 	return {
