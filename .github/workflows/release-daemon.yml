@@ -278,10 +278,14 @@ jobs:
             exit 1
           fi
           echo "beatsd version: ${reported}"
+          cp "$FORMULA" "${RUNNER_TEMP}/tested-beatsd.rb"
 
       # A push rejected because main moved while this job ran is rebased onto
       # the new main and retried. A conflict, which only a hand edit of the
-      # same lines could cause, fails the job rather than guess.
+      # same lines could cause, fails the job rather than guess. So does a
+      # rebase that changes the formula (a pull request edited another part
+      # of it meanwhile): the file would no longer be the one install-tested
+      # above. Re-running this job bumps and tests main's new formula.
       - name: Commit the formula to main
         if: steps.bump.outputs.changed == 'true'
         env:
@@ -301,6 +305,10 @@ jobs:
             [ "$attempt" = 3 ] && break
             echo "The push was rejected (attempt ${attempt}); rebasing onto main."
             git pull --rebase origin main
+            if ! cmp -s "$FORMULA" "${RUNNER_TEMP}/tested-beatsd.rb"; then
+              echo "::error::main changed ${FORMULA} while this job ran, so the rebased formula is not the one install-tested; re-run this job to bump and test main's new formula"
+              exit 1
+            fi
           done
           echo "::error::could not push the formula to main after 3 attempts"
           exit 1
