@@ -41,10 +41,11 @@ archive, so keep those pairs together when editing.
 1. A `v*` tag is pushed. `.github/workflows/release-daemon.yml` builds the
    archives, each with a `.sha256` sidecar, and publishes the GitHub
    release.
-2. Its `homebrew` job checks out `main`, not the tag, and runs `bump.sh`
-   with the tag's version (without the `v`) and the build's sidecars. The
-   rest of the formula stays `main`'s, so a formula fix merged after the
-   tag was cut survives the release.
+2. Its `homebrew` job checks out `main`, not the tag, downloads the
+   sidecars from the published release and runs `bump.sh` with them and
+   the tag's version (without the `v`). The rest of the formula stays
+   `main`'s, so a formula fix merged after the tag was cut survives the
+   release.
 3. It checks that every release URL the formula names serves the bytes its
    sidecar hashes, then installs the bumped formula from a throwaway tap —
    so from the published tarball — runs `brew test`, and checks
@@ -52,8 +53,10 @@ archive, so keep those pairs together when editing.
    reaches `main`.
 4. It commits the formula as github-actions[bot]
    ("build(homebrew): beatsd 0.9.1") and pushes to `main`, rebasing and
-   retrying if `main` moved meanwhile. Users get it on their next
-   `brew update`.
+   retrying if `main` moved meanwhile. If the rebase changed the formula
+   (a pull request edited it while the job ran), the file is no longer the
+   one tested, so the job fails instead of pushing; re-running it bumps and
+   tests the new formula. Users get it on their next `brew update`.
 
 A bot commit rather than a pull request: one opened with the run's
 `GITHUB_TOKEN` triggers no CI and would wait on a human to merge a change
@@ -63,13 +66,12 @@ deploys only fire on `api/**`, `terraform/**` and `ui/**`.
 
 The job stops without a commit when `main`'s formula is already newer than
 the tag (a rerun of an older release does not downgrade anyone) or already
-names this release. Re-running the `homebrew` job alone ("Re-run failed
-jobs", or the job's own re-run) reuses the run's archives, so it pushes the
-formula if an earlier attempt stopped short and nothing otherwise.
-"Re-run all jobs" rebuilds the archives, which are not byte-identical (tar
-records mtimes); the release keeps the ones it first published
-(`overwrite_files: false`), so the URL check fails and `main`'s formula,
-which still installs, stays as it was.
+names this release. Any rerun is safe, of the `homebrew` job alone or of
+all jobs: it pushes the formula if an earlier attempt stopped short and
+nothing otherwise. "Re-run all jobs" rebuilds the archives, which are not
+byte-identical (tar records mtimes), but the release keeps the archives and
+sidecars it first published (`overwrite_files: false`), and the job takes
+its checksums from the release, not from the rebuild.
 
 `.github/workflows/daemon.yml` checks every pull request that touches this
 directory: `ruby -c`, `bump.sh` run on a copy with dummy sidecars (so a
@@ -82,8 +84,11 @@ formula `bump.sh` no longer matches fails in review, not at release), and
 git tag v0.9.1 && git push origin v0.9.1
 ```
 
-Watch the *Release Daemon* run; when its *Homebrew formula* job is green,
-`main` has the bump:
+Watch the *Release Daemon* run. Its *Homebrew formula* job goes green
+either after pushing a `build(homebrew): beatsd 0.9.1` commit to `main` or
+after logging why it left the formula alone (`main` already newer, or
+already at this release), so look for that commit on `main`. Once it is
+there:
 
 ```bash
 brew update && brew upgrade beatsd
