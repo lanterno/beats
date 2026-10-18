@@ -24,7 +24,8 @@ src/beats/
 │   ├── vacation.py      Vacation arithmetic: a year of the entitlement from its dated opening, the carry-over, what a day off costs
 │   ├── timesheet.py     Pure assembly of a day job's month: a row per finished day, brought and carried forward, off the ledger's one pass
 │   ├── billing.py       Pure billing arithmetic: rate and flag resolution, lines as runs of days, Decimal half-up per line, the closed-past check (`past_change`)
-│   ├── billing_service.py BillingService: clients, project billing and billable overrides, their write-time rules, the month report, the backup's dry run
+│   ├── billing_budgets.py Pure billing budget arithmetic: the current period, spend summed month by month over `assemble_client`, the integer state, a running timer's crossing instants, the guarded projection
+│   ├── billing_service.py BillingService: clients, project billing, billable overrides and billing budgets, their write-time rules, the month report, the budgets' reading, the backup's dry run
 │   ├── currencies.py    The ISO 4217 table: the one source of a currency's minor units
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions, and a contract's holiday set (`contract_calendar`, `contract_holidays`)
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
@@ -59,14 +60,15 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Thirteen test files cover different layers (1234 tests, ~20s for the full run):
+Fourteen test files cover different layers (1298 tests, ~20s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 421 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 441 tests.
 - **`src/beats/test_domain.py`** — pure-Python domain tests. Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed, plus one timer stop against the real beat repository, for a write that lands while the stop reads the flow windows; 297 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, balance adjustments among them, plus one round trip through the absence repository; 59 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, balance adjustments and a settlement, the row-to-row balance proof; 32 tests.
 - **`src/beats/test_timesheet.py`** — the monthly timesheet on fixed dates: four months worked out by hand (a mid-month start and term change, weekend work, a vacation week, a half day, a payout, Easter), the month-to-month and row-to-row proofs, the range's clipping, the null rule under an objective term; 27 tests.
 - **`src/beats/test_billing.py`** — the billing arithmetic on fixed dates: rate and flag resolution at both levels, lines as runs of days, bucketing by the local start day across midnight, month ends and DST, the running timer and a beat that ends before it starts, half-up rounding in JPY, EUR and KWD, totals that are sums of lines, who a report lists, the closed-past check, and the term lists' validators; 33 tests.
+- **`src/beats/test_billing_budgets.py`** — the billing budget arithmetic on fixed dates: a run across a month boundary summed month by month (2.02 h, not 2.01), the monthly reading equal to the month report, project beside client scope, overrides, a late beat in Berlin, the integer thresholds and the floored percent, unpriced hours under a money budget, an upcoming total, a running timer's crossing instants (a rate change at midnight, an override of false, two timers, a DST night), every projection guard and the 28-day window, and the model's unit, period and warning rules; 44 tests.
 - **`src/beats/test_vacation.py`** — the vacation arithmetic on fixed dates: the opening on a contract started years before it, each carry-over rule, the end year's pro-rating and rounding, which days cost leave; 14 tests.
 - **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, and the one that moves weekly plans stored under a Sunday to their Monday; 24 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 213 tests.
