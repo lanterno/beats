@@ -256,7 +256,7 @@ class ClientUpdateRequest(ClientFields):
 class ClientResponse(BaseModel):
     """A client as stored, with its currency's minor units from the API's
     table, and whether its currency is locked: something is priced in it,
-    so it can no longer change."""
+    or a money billing budget is in it, so it can no longer change."""
 
     id: str
     name: str

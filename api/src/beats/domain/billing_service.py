@@ -41,6 +41,7 @@ from beats.domain.billing_budgets import (
 from beats.domain.currencies import check_currency
 from beats.domain.exceptions import (
     BeatNotFound,
+    BillingBudgetCurrencyMismatch,
     BillingBudgetNeedsBilling,
     ClientHasProjects,
     CurrencyInUse,
@@ -48,6 +49,7 @@ from beats.domain.exceptions import (
     DomainException,
     NotFreelance,
     ProjectHasBilling,
+    ProjectHasBillingBudget,
     ProjectNotBilled,
     RetroactiveChange,
 )
@@ -57,6 +59,7 @@ from beats.domain.models import (
     BillingBudget,
     BillingBudgetFields,
     BillingBudgetScope,
+    BillingBudgetUnit,
     BillingTerm,
     Client,
     ClientFields,
@@ -77,7 +80,8 @@ from beats.domain.ports import (
 class ClientRecord(NamedTuple):
     client: Client
     # Something is priced in its currency — a rate of its own, or of one of
-    # its projects' — so the currency can no longer change (CURRENCY_IN_USE).
+    # its projects' — or a money billing budget on it or one of its projects
+    # is in it, so the currency can no longer change (CURRENCY_IN_USE).
     currency_locked: bool
 
 
@@ -95,10 +99,30 @@ def _priced(billings: Iterable[ProjectBilling]) -> bool:
     return any(term.rate_minor is not None for billing in billings for term in billing.terms)
 
 
-def _locked(client: Client, billings: Iterable[ProjectBilling]) -> bool:
-    """Whether something is priced in `client`'s currency, among `billings`."""
-    return bool(client.rates) or _priced(
-        billing for billing in billings if billing.client_id == client.id
+def _money_billing_budget(budget: BillingBudget | None) -> bool:
+    return budget is not None and budget.unit is BillingBudgetUnit.MONEY
+
+
+def _locked(
+    client: Client, billings: Iterable[ProjectBilling], budgets: Iterable[BillingBudget]
+) -> bool:
+    """Whether something is priced in `client`'s currency, among `billings`,
+    or a money budget among `budgets` is in it: one on the client, or on a
+    project billed to it."""
+    own = [billing for billing in billings if billing.client_id == client.id]
+    billed = {billing.project_id for billing in own}
+    return (
+        bool(client.rates)
+        or _priced(own)
+        or any(
+            _money_billing_budget(budget)
+            and (
+                budget.scope_id == client.id
+                if budget.scope is BillingBudgetScope.CLIENT
+                else budget.scope_id in billed
+            )
+            for budget in budgets
+        )
     )
 
 
@@ -109,17 +133,21 @@ def _check_move(
     month_start: date,
     *,
     marked: bool,
+    money_billing_budget: bool,
 ) -> None:
     """CURRENCY_MISMATCH for a project's billing moved from `previous` to
-    `client` in another currency, while the terms it would have there carry
-    a rate of their own, or a billable term dated before `month_start`, or
-    while an entry before it is marked billable (`marked`)."""
-    if previous.currency != client.currency and (
-        marked
-        or any(
-            term.rate_minor is not None or (term.billable and term.effective_from < month_start)
-            for term in terms
-        )
+    `client` in another currency, while the project has a money billing
+    budget (`money_billing_budget`: checked first, so the 409 names it), or
+    the terms it would have there carry a rate of their own, or a billable
+    term dated before `month_start`, or while an entry before it is marked
+    billable (`marked`)."""
+    if previous.currency == client.currency:
+        return
+    if money_billing_budget:
+        raise BillingBudgetCurrencyMismatch(previous.currency)
+    if marked or any(
+        term.rate_minor is not None or (term.billable and term.effective_from < month_start)
+        for term in terms
     ):
         raise CurrencyMismatch()
 
@@ -178,7 +206,8 @@ class BillingService:
         """The active clients, or with `archived` the archived ones, by name."""
         clients = await self.clients.list(archived=archived)
         billings = await self.billings.list_all()
-        records = [ClientRecord(client, _locked(client, billings)) for client in clients]
+        budgets = await self.budgets.list_all()
+        records = [ClientRecord(client, _locked(client, billings, budgets)) for client in clients]
         return sorted(records, key=lambda r: (r.client.name.casefold(), r.client.id or ""))
 
     async def get_client(self, client_id: str) -> ClientRecord:
@@ -199,9 +228,9 @@ class BillingService:
         - A new currency must be one the table knows (400). The stored one is
           not checked again: a code withdrawn since must not lock its client
           out of a rename.
-        - The currency cannot change once something is priced in it (409
-          CURRENCY_IN_USE). Before that, a typo made at creation can still
-          be fixed.
+        - The currency cannot change once something is priced in it, or a
+          money billing budget is in it (409 CURRENCY_IN_USE). Before that, a
+          typo made at creation can still be fixed.
         - A rate change dated before the current month needs `rewrite_past`
           (409 RETROACTIVE_CHANGE).
         """
@@ -231,16 +260,21 @@ class BillingService:
 
     async def delete_client(self, client_id: str) -> None:
         """Delete a client no project is billed to; while one is, 409
-        CLIENT_HAS_PROJECTS — archive it instead."""
+        CLIENT_HAS_PROJECTS — archive it instead. Its billing budget goes
+        with it: with nothing billed it counts nothing. The budget is deleted
+        first, so a failure between the two leaves a client without its
+        budget, never a budget without its client."""
         await self.clients.get_by_id(client_id)
         if await self.billings.list_by_client(client_id):
             raise ClientHasProjects()
+        await self.budgets.delete(BillingBudgetScope.CLIENT, client_id)
         await self.clients.delete(client_id)
 
     async def _record(self, client: Client) -> ClientRecord:
         if client.rates or client.id is None:
             return ClientRecord(client, bool(client.rates))
-        return ClientRecord(client, _priced(await self.billings.list_by_client(client.id)))
+        billings = await self.billings.list_by_client(client.id)
+        return ClientRecord(client, _locked(client, billings, await self.budgets.list_all()))
 
     # ------------------------------------------------------------------ #
     # Project billing
@@ -272,11 +306,12 @@ class BillingService:
           NOT_FREELANCE); the client must be the caller's (404
           CLIENT_NOT_FOUND), archived or not.
         - Moving it to a client in another currency is refused (409
-          CURRENCY_MISMATCH) while the terms it would have there carry a
-          rate of their own, or a billable term dated before the current
-          month, or while an entry before it is marked billable: the rate
-          was entered in the old currency, and the past hours were billed
-          in it. Terms that drop both, with no such mark, move nothing.
+          CURRENCY_MISMATCH) while it has a money billing budget, or the
+          terms it would have there carry a rate of their own, or a billable
+          term dated before the current month, or while an entry before it
+          is marked billable: the limit and the rate were entered in the old
+          currency, and the past hours were billed in it. Terms that drop
+          both, with no such mark or budget, move nothing.
         - Attaching it the first time is not gated. Otherwise a change to the
           terms dated before the current month, or any move to another
           client while a term is dated there or an entry there is marked
@@ -293,7 +328,15 @@ class BillingService:
             if stored.client_id != client_id:
                 previous = await self.clients.get_by_id(stored.client_id)
                 marked = await self._marked_change(project_id, month_start, tz)
-                _check_move(previous, client, terms, month_start, marked=marked is not None)
+                budget = await self.budgets.get(BillingBudgetScope.PROJECT, project_id)
+                _check_move(
+                    previous,
+                    client,
+                    terms,
+                    month_start,
+                    marked=marked is not None,
+                    money_billing_budget=_money_billing_budget(budget),
+                )
                 changes += [link_change([*stored.terms, *terms], month_start), marked]
             self._gate(_earliest(*changes), rewrite_past)
         billing = await self.billings.upsert(
@@ -302,15 +345,28 @@ class BillingService:
         return BilledProject(billing, client)
 
     async def remove_project_billing(
-        self, project_id: str, *, rewrite_past: bool, tz: ZoneInfo
+        self, project_id: str, *, rewrite_past: bool, remove_billing_budget: bool, tz: ZoneInfo
     ) -> None:
         """Stop billing a project: its hours are in no client's figures from
-        then on, in every month. 404 when it is not billed; a term dated
-        before the current month, or an entry there marked billable, needs
-        `rewrite_past` (409 RETROACTIVE_CHANGE)."""
+        then on, in every month. Checked in this order, so a refusal leaves
+        both records in place:
+
+        - 404 when it is not billed;
+        - with a billing budget, 409 PROJECT_HAS_BILLING_BUDGET unless
+          `remove_billing_budget`: the budget goes with the billing, and is
+          never lost without being named;
+        - a term dated before the current month, or an entry there marked
+          billable, needs `rewrite_past` (409 RETROACTIVE_CHANGE).
+
+        The budget is deleted before the billing, so a failure between the
+        two leaves a billed project without its budget, never a budget on a
+        project that is not billed."""
         stored = await self.billings.get(project_id)
         if stored is None:
             raise ProjectNotBilled()
+        budget = await self.budgets.get(BillingBudgetScope.PROJECT, project_id)
+        if budget is not None and not remove_billing_budget:
+            raise ProjectHasBillingBudget((await self.projects.get_by_id(project_id)).name)
         month_start = self._month_start(tz)
         self._gate(
             _earliest(
@@ -319,6 +375,8 @@ class BillingService:
             ),
             rewrite_past,
         )
+        if budget is not None:
+            await self.budgets.delete(BillingBudgetScope.PROJECT, project_id)
         await self.billings.delete(project_id)
 
     async def _marked_change(
@@ -576,14 +634,17 @@ class BillingService:
         - A client's currency is one the table knows, when the client is new
           or its currency changes; as on `update_client`, a stored one is not
           checked again. It cannot change once something in the account is
-          priced in it (CURRENCY_IN_USE).
+          priced in it, or a money billing budget of the account's is in it
+          (CURRENCY_IN_USE).
         - A project the file moves away from freelance while the account
           bills it, and the file does not bill it anew, is
           PROJECT_HAS_BILLING, as `restore_project` would answer it.
         - Billing is on a project that is freelance as the file leaves it
           (NOT_FREELANCE), and billing the file moves to a client in another
           currency is held to `set_project_billing`'s rule (CURRENCY_MISMATCH),
-          the file's beats and billable marks laid over the account's.
+          the file's beats and billable marks laid over the account's, and
+          the account's money billing budget on the project counted: a
+          restore never deletes one.
 
         That each billing's project and client is in the file or the account
         is the import's to check first. The retroactive gate is not applied:
@@ -593,6 +654,7 @@ class BillingService:
         stored_billings = {
             billing.project_id: billing for billing in await self.billings.list_all()
         }
+        stored_budgets = await self.budgets.list_all()
         kinds = {
             project.id: project.kind
             for project in [
@@ -613,7 +675,7 @@ class BillingService:
                 if (
                     stored is not None
                     and client.currency != stored.currency
-                    and _locked(stored, stored_billings.values())
+                    and _locked(stored, stored_billings.values(), stored_budgets)
                 ):
                     raise CurrencyInUse()
 
@@ -648,6 +710,12 @@ class BillingService:
                             billing.terms,
                             month_start,
                             marked=marked is not None,
+                            money_billing_budget=any(
+                                _money_billing_budget(budget)
+                                and budget.scope is BillingBudgetScope.PROJECT
+                                and budget.scope_id == billing.project_id
+                                for budget in stored_budgets
+                            ),
                         )
 
     async def restore_client(self, client: Client) -> None:

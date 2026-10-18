@@ -77,9 +77,10 @@ async def set_project_billing(
 
     404 for a project, or a client (CLIENT_NOT_FOUND), that is not the
     caller's; 409 NOT_FREELANCE for a project of another kind; 409
-    CURRENCY_MISMATCH for a move to a client in another currency while a
-    rate of the project's own, a billable term before the current month, or
-    an entry before it marked billable would be read in it. Attaching a
+    CURRENCY_MISMATCH for a move to a client in another currency while the
+    project's money billing budget, a rate of the project's own, a billable
+    term before the current month, or an entry before it marked billable
+    would be read in it. Attaching a
     project the first time is not gated; after that, a change to terms dated
     before the current month in `tz`, or a move to another client while one
     is or an entry there is marked billable, is a 409 RETROACTIVE_CHANGE
@@ -102,11 +103,19 @@ async def remove_project_billing(
     rewrite_past: bool = Query(
         description="The caller has confirmed a change to figures before the current month."
     ),
+    remove_billing_budget: bool = Query(
+        description="The caller has confirmed that the project's billing budget goes too."
+    ),
 ) -> Response:
     """Stop billing a project, in every month. 404 when it is not billed;
-    409 RETROACTIVE_CHANGE without `rewrite_past=true` when a term is dated
-    before the current month in `tz`, or an entry there is marked billable."""
-    await service.remove_project_billing(project_id, rewrite_past=rewrite_past, tz=tz)
+    409 PROJECT_HAS_BILLING_BUDGET without `remove_billing_budget=true` when
+    it has a billing budget, which then goes with it; 409 RETROACTIVE_CHANGE
+    without `rewrite_past=true` when a term is dated before the current
+    month in `tz`, or an entry there is marked billable. Both keys are
+    required; a refusal leaves the billing and the budget as they were."""
+    await service.remove_project_billing(
+        project_id, rewrite_past=rewrite_past, remove_billing_budget=remove_billing_budget, tz=tz
+    )
     return Response(status_code=http.HTTPStatus.NO_CONTENT)
 
 

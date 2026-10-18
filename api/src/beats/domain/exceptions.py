@@ -274,11 +274,15 @@ class UnknownCurrency(DomainException):
 
 class CurrencyInUse(DomainException):
     """Raised when a client's currency is changed once something is priced in
-    it — a rate of the client's, or of any of its projects': every amount
-    would silently be read in the new currency."""
+    it — a rate of the client's, or of any of its projects' — or a money
+    billing budget on it or one of its projects is in it: every amount would
+    silently be read in the new currency."""
 
     status_code = 409
-    message = "This client's rates are in its currency; its currency can no longer change"
+    message = (
+        "This client's rates or billing budgets are in its currency; its currency can no "
+        "longer change"
+    )
     code = "CURRENCY_IN_USE"
 
 
@@ -293,6 +297,18 @@ class CurrencyMismatch(DomainException):
         "moving it to a client in another currency"
     )
     code = "CURRENCY_MISMATCH"
+
+
+class BillingBudgetCurrencyMismatch(CurrencyMismatch):
+    """Raised when a project with a money billing budget is moved to a client
+    in another currency: its limit was set in the old one. The same code as
+    any other such move, with the reason named."""
+
+    def __init__(self, currency: str):
+        super().__init__(
+            f"This project's billing budget is in {currency}; remove it before moving the "
+            "project to a client in another currency"
+        )
 
 
 class ClientHasProjects(DomainException):
@@ -355,6 +371,28 @@ class BillingBudgetNeedsBilling(DomainException):
     status_code = 409
     message = "Bill this project to a client before giving it a budget"
     code = "BILLING_BUDGET_NEEDS_BILLING"
+
+
+class ProjectHasBillingBudget(DomainException):
+    """Raised when billing is stopped on a project with a billing budget and
+    the caller did not say `remove_billing_budget`: the budget would go with
+    it, and is never lost without being named."""
+
+    status_code = 409
+    message = (
+        "This project has a billing budget; stop billing it with its budget, or remove the "
+        "budget first"
+    )
+    code = "PROJECT_HAS_BILLING_BUDGET"
+
+    def __init__(self, project: str | None = None):
+        if project:
+            super().__init__(
+                f"{project} has a billing budget; stop billing it with its budget, or remove "
+                "the budget first"
+            )
+        else:
+            super().__init__()
 
 
 class MonthNotStarted(DomainException):
