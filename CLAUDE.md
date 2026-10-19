@@ -96,7 +96,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 1301-test suite takes about 20 seconds.
+  the full 1401-test suite takes about 20 seconds.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -113,26 +113,34 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 757 of them across 94 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
-- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 37 of them, last
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 810 of them across 102 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 40 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
-  MongoDB behind it; the dev server starts itself. A `setup` project
+  MongoDB behind it; the dev server starts itself, and serves `/report` as the
+  deployments do. A `setup` project
   mints a session with `api/scripts/e2e_session.py` and plants it in
-  localStorage — every page under test sits behind `ProtectedRoute`, and the
+  localStorage — every page under test but the report page, which
+  `report-link.spec.ts` opens with no session, sits behind `ProtectedRoute`, and the
   passkey ceremony that normally issues a session cannot run headless. The same
   script seeds a project, three tagged sessions and a week of flow windows,
-  a client billed for a freelance project with two sessions this month, and a
+  a client billed for a freelance project with two sessions this month and two
+  finished ones last month (a report link covers finished days only), and a
   billing budget on each (40 h a month on the client; €200.00 in total on the
-  project, which those sessions leave near its limit), because several
+  project, which this month's sessions leave near its limit and last month's take
+  past it, except in January), because several
   assertions are about UI that only exists once there is data.
+  The seed is written once per database, so a database seeded before last month's
+  sessions were added never gets them: `docker rm -f beats-dev-mongo` and start it
+  fresh once.
   Layout is what the suite is for that the unit tests cannot be: jsdom draws
   nothing, so a bar at no height or a panel's failure state is checked here.
 
   ```bash
   docker run -d --name beats-dev-mongo -p 27019:27017 mongo:8
   cd api && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<32+ bytes> \
-    uv run uvicorn --app-dir src server:app --port 7999 &
-  cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
+    REPORT_LINK_KEY=<32+ bytes> uv run uvicorn --app-dir src server:app --port 7999 &
+  cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> \
+    REPORT_LINK_KEY=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test) — 322 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
@@ -247,7 +255,9 @@ nothing.
   `main()` only turns `run(args) int` into a process exit, so the CLI dispatch is
   testable without spawning a process. Pure formatters are extracted from CLI commands so they're testable without HTTP fixtures.
 - Dart: `flutter analyze` (no extra linter config); tests use `flutter_test` package.
-- API auth: JWT Bearer token for all endpoints. Two ways to obtain one — beats'
+- API auth: JWT Bearer token for all endpoints, but `POST /api/public/reports`, a report
+  link's report, whose token is in its body: a handler under `/api/public/` never reads a
+  session, even one sent along. Two ways to obtain a session token — beats'
   own WebAuthn passkey login, or single sign-on through an OpenID Connect provider.
   Either way the token is an ordinary beats session; nothing downstream knows which
   door was used.
@@ -298,8 +308,8 @@ nothing.
   line (hours to 0.01, the amount to a whole minor unit), every total a sum of lines, and a
   beat billed on the local day it started on in a required `tz`; a running beat is not
   billed. Billing is never a field of `Project` or `Beat` and never under a device prefix:
-  clients, project billing, billable overrides and billing budgets are their own
-  collections, under `/api/clients` and `/api/billing` (the comment beside
+  clients, project billing, billable overrides, billing budgets and report links are
+  their own collections, under `/api/clients` and `/api/billing` (the comment beside
   `DEVICE_ALLOWED_PREFIXES` in `server.py`). Only a freelance project is billed (409
   `NOT_FREELANCE`), and a billed one keeps its kind (409 `PROJECT_HAS_BILLING`). A write
   that would change figures before the 1st of the current month in `tz` needs
@@ -309,8 +319,13 @@ nothing.
   month from the same lines (`domain/billing_budgets.py`), so a total agrees with the
   invoices, and a running timer is in no figure but answered with the instants at which it
   would cross the warning and the limit. Stopping billing on a project with one needs
-  `remove_billing_budget=true` (409 `PROJECT_HAS_BILLING_BUDGET`). The decisions are in
-  [docs/billing.md](docs/billing.md).
+  `remove_billing_budget=true` (409 `PROJECT_HAS_BILLING_BUDGET`). A report link opens one
+  client's report, over some of its billed projects and a stretch of finished days, with no
+  session: its token (`lpr_` and 256 random bits) rides in the page's fragment,
+  `/report#…`, and is POSTed to `/api/public/reports`; only its HMAC-SHA256 under the
+  required `REPORT_LINK_KEY` is stored (`domain/report_links.py`). Turning a link off
+  deletes it, a project no longer billed to a client comes off that client's links, and
+  deleting the client deletes them. The decisions are in [docs/billing.md](docs/billing.md).
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
   (`:root[data-theme="dusk"]`), picked in Settings beside the density. `useTheme.ts` owns the
   storage keys, and a stored value that is neither hour reads as afternoon. Behind the app and
@@ -323,7 +338,7 @@ nothing.
   paint, so a stored dusk does not flash the afternoon; it repeats the keys and the dusk
   sky's hex, so a change to either is made in both places. The Mac companion is drawn
   in the same two hours from the same tokens, copied into `companion/lib/theme/sky.dart`;
-  a colour changed in `global.css` is changed there too.
+  a colour changed in `ui/client/shared/styles/tokens.css` is changed there too.
 
 ## Daemon CLI
 
@@ -353,10 +368,12 @@ your own — connects through single sign-on or an integration.
 API on an internal network, plus an nginx that serves the built SPA and proxies
 `/api`, on **one** published port, 6008. The root `justfile` wraps it
 (`up-detached`, `down`, `build`, `health`, `logs`, `backup`, `restore`).
-`BEATS_DB_PASSWORD`, `BEATS_RP_ID` and `BEATS_ORIGIN` are required; the rest
-comes from `api/.env`. The SPA and the API share one origin, so it needs no CORS
-entry: `ui/Dockerfile` builds with `VITE_API_URL=""` and fails the build if the
-bundle still names `localhost:7999`.
+`BEATS_DB_PASSWORD`, `BEATS_RP_ID` and `BEATS_ORIGIN` are required; the rest,
+`JWT_SECRET` and `REPORT_LINK_KEY` among it, comes from `api/.env`. The SPA and the
+API share one origin, so it needs no CORS entry: `ui/Dockerfile` builds with
+`VITE_API_URL=""` and fails the build if the bundle still names `localhost:7999`.
+`ui/nginx.conf` gives `/report` the same headers and CSP as `ui/firebase.json`, but
+with `connect-src 'self'`.
 
 ### Single sign-on (OpenID Connect)
 
@@ -390,6 +407,13 @@ on Cloud Run at `api.lifepete.com`. Both are listed in `origins` in
 `api/src/server.py`, and the SPA is built with
 `VITE_API_URL=https://api.lifepete.com`.
 
+The public report page, `/report`, is a second HTML entry (`ui/report.html`) with
+headers and a CSP of its own in `ui/firebase.json`: `no-store`, `noindex`,
+`no-referrer`, no framing, `manifest-src 'self'` for the manifest link the PWA
+plugin adds, and `connect-src https://api.lifepete.com`, the one origin the page
+may call. A new API host changes that CSP as well as `VITE_API_URL`, or every
+report link stops opening in a browser with every test still green.
+
 The two halves ship independently: the SPA on every push to `main` that touches
 `ui/**` (the `deploy` job in `.github/workflows/ui.yml`, needing the
 `FIREBASE_SERVICE_ACCOUNT` secret), the API via Cloud Build. They can therefore
@@ -406,6 +430,9 @@ changing anything both ends share.
   has the detail, and what to do when a killed apply also left Terraform's state lock.
 - **State**: GCS backend (`beats-476914-terraform-state`), shared by local and CI.
 - **Secrets**: `terraform.tfvars` stored in Secret Manager (`beats-terraform-tfvars`) for CI.
+  It carries `report_link_key`, the `REPORT_LINK_KEY` report links are hashed under:
+  an API revision without it does not boot (Cloud Run keeps the old one serving), and
+  rotating it ends every report link.
 - **Integrations**: Google Calendar and GitHub use per-user OAuth (system-wide client ID/secret, per-user tokens in MongoDB).
 
 ## API Routes
@@ -416,7 +443,7 @@ changing anything both ends share.
 | `/api/beats` | Sessions CRUD |
 | `/api/timer` | Timer status |
 | `/api/clients` | Clients you bill: CRUD, archive and unarchive; one currency each and dated default rates (`rate_minor`, minor units an hour). `PUT` takes `tz` and `rewrite_past`. No device token |
-| `/api/billing` | `/projects` (every billed project; PUT, DELETE `/{id}`: a freelance project's client and dated billing terms; the DELETE takes `tz`, `rewrite_past` and `remove_billing_budget`), `/entries` (every override; PUT, DELETE `/{beat_id}`: one entry marked billable or not), `/month?month=&tz=` (each client's lines, entries and amount, totals per currency, and freelance hours billed to no one), `/budgets?tz=` (every billing budget read as of today: spent, left, state, projection and a running timer's crossing instants; PUT, DELETE `/budgets/clients/{id}`, `/budgets/projects/{id}`: one limit per client or billed project, in hours or money, monthly or in total). No device token |
+| `/api/billing` | `/projects` (every billed project; PUT, DELETE `/{id}`: a freelance project's client and dated billing terms; the DELETE takes `tz`, `rewrite_past` and `remove_billing_budget`), `/entries` (every override; PUT, DELETE `/{beat_id}`: one entry marked billable or not), `/month?month=&tz=` (each client's lines, entries and amount, totals per currency, and freelance hours billed to no one), `/budgets?tz=` (every billing budget read as of today: spent, left, state, projection and a running timer's crossing instants; PUT, DELETE `/budgets/clients/{id}`, `/budgets/projects/{id}`: one limit per client or billed project, in hours or money, monthly or in total), `/report-links` (every report link, live and ended, or one client's with `?client_id=`, never a token; POST: make one, answering with its token once; POST `/preview`: the report a link over a scope would show; POST `/turn-off`: one client's links, or every one with `client_id: null`; DELETE `/{id}`: turn one off). No device token |
 | `/api/analytics` | Heatmap, rhythm, gaps, tags |
 | `/api/intelligence` | Digests, score, patterns, suggestions, focus scores (a day, or a week), inbox |
 | `/api/plans` | Weekly plans (structured per-project hour targets) |
@@ -433,4 +460,5 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials, logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
+| `/api/public` | `POST /reports`: a report link's report, its token in the body. No session, and one sent along is ignored; every dead link answers the same 404 `REPORT_NOT_FOUND`, and one link opens at most 60 times a minute on each instance (public) |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |
