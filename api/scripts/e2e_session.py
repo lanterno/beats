@@ -132,18 +132,25 @@ def _seed_billing(db, user_id: str) -> None:
     (unless the month began less than three hours ago). The client and the
     billing are written through their models and the repository's
     serialiser, so the stored shape is the API's.
+
+    A report link covers finished days only, and the share dialog offers last
+    month first, so last month has two finished sessions too, on its 10th
+    (09:00-10:00 UTC) and 11th (09:00-10:15 UTC): 2.25 h at €85.00, €191.25,
+    the figures the report link spec reads. In January the rate and the
+    term start on 1 December instead, so last month is billable then too.
     """
     if db.clients.find_one({"user_id": user_id}):
         return
     now = datetime.now(UTC)
-    new_year = now.date().replace(month=1, day=1)
+    last_month = (now.date().replace(day=1) - timedelta(days=1)).replace(day=1)
+    billed_from = min(now.date().replace(month=1, day=1), last_month)
 
     client_id = ObjectId()
     client = Client(
         id=str(client_id),
         name="E2E Client",
         currency="EUR",
-        rates=[RateTerm(effective_from=new_year, rate_minor=8500)],
+        rates=[RateTerm(effective_from=billed_from, rate_minor=8500)],
     )
     db.clients.insert_one(
         {
@@ -169,7 +176,7 @@ def _seed_billing(db, user_id: str) -> None:
     billing = ProjectBilling(
         project_id=str(project_id),
         client_id=str(client_id),
-        terms=[BillingTerm(effective_from=new_year, billable=True)],
+        terms=[BillingTerm(effective_from=billed_from, billable=True)],
     )
     db.project_billing.insert_one(
         {
@@ -190,6 +197,21 @@ def _seed_billing(db, user_id: str) -> None:
             for start, length in ((180, 60), (90, 75))
         ]
     )
+    db.timeLogs.insert_many(
+        [
+            {
+                "user_id": user_id,
+                "project_id": str(project_id),
+                "start": start,
+                "end": start + timedelta(minutes=length),
+                "tags": [],
+            }
+            for start, length in (
+                (datetime(last_month.year, last_month.month, 10, 9, tzinfo=UTC), 60),
+                (datetime(last_month.year, last_month.month, 11, 9, tzinfo=UTC), 75),
+            )
+        ]
+    )
 
 
 def _seed_billing_budgets(db, user_id: str) -> None:
@@ -198,7 +220,9 @@ def _seed_billing_budgets(db, user_id: str) -> None:
 
     The rows, and the meter in each, exist only once a budget does: 40 hours
     a month on the client, and €200.00 in total since 1 January on the
-    project, which the seeded sessions' €191.25 leaves near its limit. Guarded
+    project, which this month's seeded sessions (€191.25) bring near its
+    limit and last month's (another €191.25) take past it, except in
+    January, when last month comes before the budget starts. Guarded
     on its own collection rather than inside `_seed_billing`, so a database
     seeded before budgets existed gets them too. Written through the model
     and the repository's serialiser, so the stored shape is the API's.
