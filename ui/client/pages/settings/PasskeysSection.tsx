@@ -9,7 +9,8 @@ import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./style
 export interface PasskeysSectionProps {
 	/**
 	 * How many report links still open. None is ended by a passkey's removal
-	 * or a sign-out, so the section says so while there are some.
+	 * or a sign-out, so the section says so while there are some. Removing a
+	 * passkey asks for no confirmation yet (AHM-101).
 	 */
 	liveReportLinks?: number;
 }

@@ -119,7 +119,8 @@ export default defineConfig(() => ({
 					{
 						// Every /api/ GET. The public report is a POST, which the Cache
 						// API cannot store, and it depends on that to stay out of this
-						// cache: never cache POSTs here.
+						// cache: never cache POSTs here. The signed-in GETs it keeps
+						// outlive a sign-out (AHM-99).
 						urlPattern: /^https?:\/\/.*\/api\//,
 						handler: "NetworkFirst",
 						options: {
