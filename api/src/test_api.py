@@ -3963,6 +3963,29 @@ class TestReportLinksAPI:
         assert [(link["id"], link["state"]) for link in listed] == [(ended["id"], "ended")]
         assert _open_report(client, live["token"]).status_code == 404
 
+    def test_a_link_under_another_key_is_listed_as_ended(self, client, auth_headers):
+        # Rotating REPORT_LINK_KEY ends every link (DATA.md): the list must not
+        # go on saying they still work, and Turn off all has none left to end.
+        from beats.api.dependencies import get_report_link_key
+        from server import app
+
+        kite, [website] = _billed_client(client, auth_headers)
+        made = _report_link(client, auth_headers, kite["id"], [website["id"]])
+
+        app.dependency_overrides[get_report_link_key] = lambda: b"k" * 32
+        try:
+            [listed] = _report_links(client, auth_headers)
+            turned_off = client.post(
+                "/api/billing/report-links/turn-off", json={"client_id": None}, headers=auth_headers
+            )
+        finally:
+            app.dependency_overrides.pop(get_report_link_key)
+
+        assert (listed["id"], listed["state"]) == (made["id"], "ended")
+        assert turned_off.json() == {"turned_off": 0}
+        [back] = _report_links(client, auth_headers)
+        assert back["state"] == "live"
+
 
 def _open_report(client, token, headers: dict | None = None, **params):
     return client.post(

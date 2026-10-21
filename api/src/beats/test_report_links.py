@@ -91,6 +91,7 @@ def _link(**fields) -> ReportLink:
             label=None,
             expires_on=OCT_18,
             token_hash="0" * 64,
+            key_id="1" * 64,
             tz="Europe/Berlin",
             **fields,
         )
