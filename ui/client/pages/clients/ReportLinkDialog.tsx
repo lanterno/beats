@@ -202,8 +202,13 @@ function PreviewColumn({
 	/** Why the scope cannot be previewed yet, from the form's own checks. */
 	invalid?: string;
 }) {
-	const settled = useSettled({ scope, tz }, 400);
-	const preview = useReportPreview(settled.scope, settled.tz, { enabled: !invalid });
+	const settled = useSettled({ scope, tz, invalid }, 400);
+	// Asked for only when the form and its settled copy are both valid: just
+	// after a fix, the settled scope is still the one the form refused, and
+	// the API would refuse it too.
+	const preview = useReportPreview(settled.scope, settled.tz, {
+		enabled: !invalid && !settled.invalid,
+	});
 	return (
 		<section aria-label="Preview" className="min-w-0 rounded-[1.25rem] bg-secondary p-2.5 sm:p-3">
 			<h3 className={cn(LABEL, "px-1.5")}>What your client will see</h3>
