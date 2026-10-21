@@ -3939,6 +3939,30 @@ class TestReportLinksAPI:
         assert (rest.status_code, rest.json()) == (200, {"turned_off": 2})
         assert _report_links(client, auth_headers) == []
 
+    @pytest.mark.parametrize("by_client", [True, False])
+    def test_turn_off_leaves_ended_links_listed(self, client, auth_headers, mongo, by_client):
+        # Settings asks "All 1 link … stop opening" of the live ones: an ended
+        # link stays listed until it is removed, by its own Remove.
+        from bson import ObjectId
+
+        kite, [website] = _billed_client(client, auth_headers)
+        live = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        ended = _report_link(client, auth_headers, kite["id"], [website["id"]])
+        mongo.report_links.update_one(
+            {"_id": ObjectId(ended["id"])}, {"$set": {"expires_on": "2026-04-30"}}
+        )
+
+        resp = client.post(
+            "/api/billing/report-links/turn-off",
+            json={"client_id": kite["id"] if by_client else None},
+            headers=auth_headers,
+        )
+
+        assert (resp.status_code, resp.json()) == (200, {"turned_off": 1})
+        listed = _report_links(client, auth_headers)
+        assert [(link["id"], link["state"]) for link in listed] == [(ended["id"], "ended")]
+        assert _open_report(client, live["token"]).status_code == 404
+
 
 def _open_report(client, token, headers: dict | None = None, **params):
     return client.post(
