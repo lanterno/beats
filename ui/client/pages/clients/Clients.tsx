@@ -46,6 +46,7 @@ import { useReportLinks } from "@/entities/report-link";
 import { describeError } from "@/shared/api";
 import { browserTimeZone, cn, hoursText, todayIso as readToday, useNow } from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
+import { ArchivedClientLinks } from "./ArchivedClientLinks";
 import { ClientPanel } from "./ClientPanel";
 import { describeMonth, monthName } from "./summary";
 import { useOpenMonth } from "./useOpenMonth";
@@ -101,6 +102,21 @@ export default function Clients() {
 		[...(projects ?? []), ...(archivedProjects ?? [])].map((p) => [p.id, p.name]),
 	);
 	const report = monthQuery.data;
+	// An archived client has a panel only in a month with entries; its
+	// links are listed under it in the archived list in every other month.
+	const panelled = new Set(report?.clients.map((billing) => billing.clientId));
+	const unpanelledLinks = (clientId: string) =>
+		panelled.has(clientId) || reportLinksFailed
+			? []
+			: (linksQuery.data ?? []).filter((link) => link.clientId === clientId);
+	const shareableFor = (clientId: string) =>
+		[...(billings?.values() ?? [])]
+			.filter((billing) => billing.clientId === clientId)
+			.map((billing) => ({
+				id: billing.projectId,
+				name: projectNames.get(billing.projectId) ?? "A project",
+			}))
+			.sort((a, b) => a.name.localeCompare(b.name));
 	const summary = report ? describeMonth(report, { current, budgets, now }) : null;
 	const noClients =
 		!clientsLoading &&
@@ -308,23 +324,34 @@ export default function Clients() {
 								<Panel padding="px-6 py-3" className="mt-2">
 									<ul className="divide-y divide-border">
 										{(archivedClients ?? []).map((client) => (
-											<li key={client.id} className="flex items-center gap-2 py-2 text-[12.5px]">
-												<span className="font-bold text-foreground">{client.name}</span>
-												<span className="text-muted-foreground">{client.currency}</span>
-												<button
-													type="button"
-													onClick={() =>
-														unarchive.mutate(client.id, {
-															onSuccess: () => toast.success("Client restored"),
-															onError: (err) =>
-																toast.error(describeError(err, "Failed to restore the client")),
-														})
-													}
-													disabled={unarchive.isPending}
-													className={cn(LINKISH, "ml-auto")}
-												>
-													Restore
-												</button>
+											<li key={client.id} className="py-2">
+												<div className="flex items-center gap-2 text-[12.5px]">
+													<span className="font-bold text-foreground">{client.name}</span>
+													<span className="text-muted-foreground">{client.currency}</span>
+													<button
+														type="button"
+														onClick={() =>
+															unarchive.mutate(client.id, {
+																onSuccess: () => toast.success("Client restored"),
+																onError: (err) =>
+																	toast.error(describeError(err, "Failed to restore the client")),
+															})
+														}
+														disabled={unarchive.isPending}
+														className={cn(LINKISH, "ml-auto")}
+													>
+														Restore
+													</button>
+												</div>
+												{unpanelledLinks(client.id).length > 0 && (
+													<ArchivedClientLinks
+														clientId={client.id}
+														clientName={client.name}
+														links={unpanelledLinks(client.id)}
+														shareable={shareableFor(client.id)}
+														projectNames={projectNames}
+													/>
+												)}
 											</li>
 										))}
 									</ul>
