@@ -1254,6 +1254,7 @@ class ReportLinkFields(ReportScope):  # the create's body: every key required, n
 class ReportLink(ReportLinkFields):   # collection `report_links`
     id: str | None
     token_hash: str             # HMAC-SHA256(REPORT_LINK_KEY, token), hex
+    key_id: str                 # the key it was made under: an HMAC of a fixed message
     tz: str                     # the create's `?tz=`; decides every day
     created_at: datetime
 ```
@@ -1298,7 +1299,7 @@ from `billing_budgets.py` to `billing.py`, where both phases import it.
   response by name, picking each class from the link's flags, never by
   `model_dump()` of a domain object.
 - `is_live(link, today)`: `today <= expires_on`. `token_hash`, `new_token`,
-  `well_formed`.
+  `well_formed`, and `key_id(key)`, which names a key without giving it away.
 
 ### The service
 
@@ -1315,15 +1316,22 @@ from `billing_budgets.py` to `billing.py`, where both phases import it.
   exists (409 `PROJECT_NOT_BILLED_TO_CLIENT`, naming `project_ids.N`); the
   last day is before today in `tz` (409 `RANGE_NOT_OVER`); `expires_on` is
   from today to 366 days ahead (422). It mints the token and stores the
-  HMAC. The preview runs the same checks, all but the expiry, then reads
-  through `PublicReportReader`.
+  HMAC and the key's `key_id`, then reads the client's billings again: a
+  project moved or stopped since the check (another tab) deletes the new
+  link and answers the 409, as the check would have. A link is listed
+  `live` when its `key_id` is the running key's and its last day has not
+  passed, so after a rotation every link reads `ended`. Turning links off
+  deletes the live ones and leaves the ended ones listed. The preview runs
+  the same checks, all but the expiry, then reads through
+  `PublicReportReader`.
 - **`BillingService` gains one port**, `ReportLinkScope`, with
   `drop_project(client_id, project_id)` and `delete_for_client(client_id)`.
   `set_project_billing` to another client, `remove_project_billing` and
   `restore_project_billing` naming another client drop the project from the
   old client's links before their own write, so a failure between leaves a
-  link narrower, never wider. `delete_client` deletes the budget, then the
-  links, then the client.
+  link narrower, never wider, and again after it, for a link stored
+  meanwhile whose own second read still saw the project billed there.
+  `delete_client` deletes the budget, then the links, then the client.
 
 ### HTTP contract
 
@@ -1338,7 +1346,7 @@ POST /api/public/reports          {"token": "lpr_…"}     no session
 | POST | `/api/billing/report-links?tz=` | `ReportLinkFields` | 201 with `token`, once; 404 `CLIENT_NOT_FOUND`; 409 `PROJECT_NOT_BILLED_TO_CLIENT`, `RANGE_NOT_OVER`; 422; 400 `INVALID_TIMEZONE` |
 | POST | `/api/billing/report-links/preview?tz=` | `ReportScope`: the same, without `label` and `expires_on` | 200 `PublicReport`, the public route's own projection; nothing stored |
 | DELETE | `/api/billing/report-links/{id}` | | 204; 404 when it is not the caller's |
-| POST | `/api/billing/report-links/turn-off` | `{client_id}`, required, null for every client | `{turned_off: n}` |
+| POST | `/api/billing/report-links/turn-off` | `{client_id}`, required, null for every client | `{turned_off: n}`, the live links deleted; ended ones stay listed |
 
 ```jsonc
 // POST /api/public/reports, a link with amounts and notes
@@ -1401,10 +1409,12 @@ POST /api/public/reports          {"token": "lpr_…"}     no session
   a CSP (`default-src 'none'`, `connect-src` the API only, `frame-ancestors
   'none'`) on `/report` and `/report.html` alike.
 - **The fence.** A Biome override keeps its imports away from
-  `@/shared/api`, `@/shared/session`, `@/features`, `@/entities`, `@/app`
-  and the other pages. Its tree imports `@/shared/lib/*` and `@/shared/ui/*`
-  modules directly, never their barrels, which reach the session and the
-  API client; `pnpm build` fails if the built page names either
+  `@/shared/api`, `@/shared/session`, `@/features`, `@/entities`, `@/app`,
+  the other pages and the other widgets, and refuses `../`: its files import
+  one another as `./` and the rest by an `@/` path the override can see.
+  Its tree imports `@/shared/lib/*` and `@/shared/ui/*` modules directly,
+  never their barrels (by name or by `index`), which reach the session and
+  the API client; `pnpm build` fails if the built page names either
   (`ui/scripts/check-report-bundle.mjs`).
 - **One view, two places**: `widgets/client-report`'s `ClientReportView`
   draws the page and the dialog's preview, from one schema in
@@ -1421,6 +1431,12 @@ POST /api/public/reports          {"token": "lpr_…"}     no session
   one."* No fragment, or a malformed one, shows it without a request. The
   document is `no-store`, and a page restored from the back-forward cache
   fetches again.
+- **Printing leaves the link out.** Browsers print the address, fragment
+  and all, in their own footer, and a saved PDF is forwarded on. The fragment
+  comes off the address while the page prints (the print button takes it off
+  before it asks, `beforeprint` for the browser's own command) and goes back
+  after, and the first printed page has no top or bottom margin, which
+  leaves Chrome and Edge no room for their header and footer on any page.
 - **The service worker** is registered from `main.tsx`, not injected, and
   `/report`, its variants and `report.html` are on its navigation-fallback
   denylist, so the freelancer's own browser does not answer them with the
@@ -1441,11 +1457,14 @@ POST /api/public/reports          {"token": "lpr_…"}     no session
   open it. The create is a plain `post` with no retry and no offline queue,
   and the token stays in the dialog's state alone.
 - **Report links** on the panel and in Settings list each link with its days,
-  what it shows, its projects, its time zone and *Works until* or *Ended*,
-  and "Not on this link: …" for billed projects it leaves out. Turn off,
-  Remove, Replace (delete first) and, in Settings, *Turn off all report
-  links*. The Passkeys section says how many links still work, whatever
-  happens to a passkey.
+  what it shows, its projects, its time zone and *Works until* or *Ended*;
+  the panel also says "Not on this link: …" for billed projects it leaves
+  out. Turn off, Remove, Replace (delete first) and, in Settings, which lists
+  the live links only, *Turn off all report links*, which ends those and
+  leaves the ended ones listed. An archived client with no panel in the
+  month shown has its links under its row in the archived clients list. The
+  Passkeys section says how many links still work, whatever happens to a
+  passkey.
 - **Report links are refreshed** by every billing write and every client
   delete, since a move, a stop or a delete changes their projects.
 - **The dev server** rewrites `/report` to `report.html` as Firebase and
