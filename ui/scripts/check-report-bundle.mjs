@@ -46,24 +46,31 @@ function fail(message) {
 
 const htmlPath = path.join(DIST, "report.html");
 if (!existsSync(htmlPath)) fail("dist/spa/report.html is missing; run vite build first");
-// Comments say what the shell leaves out; only markup is checked.
-const html = readFileSync(htmlPath, "utf8").replace(/<!--[\s\S]*?-->/g, "");
+// Comments say what the shell leaves out; only markup is checked. Removed
+// until none is left, so one comment cannot hide inside another, and a
+// comment left open fails rather than hiding what follows it.
+let html = readFileSync(htmlPath, "utf8");
+for (let prev = ""; prev !== html; ) {
+	prev = html;
+	html = html.replace(/<!--[\s\S]*?-->/g, "");
+}
+if (html.includes("<!--")) fail("report.html has a comment left open");
 
 if (!html.includes("<title>Hours report</title>")) fail("report.html's title is not Hours report");
-for (const tag of html.match(/<script\b[^>]*>/g) ?? []) {
-	if (!/\ssrc="/.test(tag)) fail(`report.html has an inline script: ${tag}`);
+for (const tag of html.match(/<script\b[^>]*>/gi) ?? []) {
+	if (!/\ssrc\s*=/i.test(tag)) fail(`report.html has an inline script: ${tag}`);
 }
 if (/<style\b/i.test(html)) fail("report.html has a <style> element");
 if (/\sstyle="/i.test(html)) fail("report.html has an inline style attribute");
-for (const [, attr, url] of html.matchAll(/\s(src|href)="([^"]*)"/g)) {
+for (const [, attr, url] of html.matchAll(/\s(src|href)\s*=\s*["']?([^"'\s>]*)/gi)) {
 	if (/^(https?:)?\/\//i.test(url)) fail(`report.html's ${attr} names another origin: ${url}`);
 }
 if (/<meta[^>]+(property|name)="(og|twitter):/i.test(html)) {
 	fail("report.html has Open Graph or Twitter meta");
 }
 if (/plausible/i.test(html)) fail("report.html names Plausible");
-if (/registerSW/.test(html)) fail("report.html registers the service worker");
-for (const tag of html.match(/<link\b[^>]*rel="manifest"[^>]*>/g) ?? []) {
+if (/registerSW/i.test(html)) fail("report.html registers the service worker");
+for (const tag of html.match(/<link\b[^>]*rel=["']?manifest[^>]*>/gi) ?? []) {
 	if (tag !== MANIFEST_LINK) fail(`report.html has an unexpected manifest link: ${tag}`);
 }
 
@@ -75,7 +82,7 @@ function local(url, from) {
 }
 
 const queue = [];
-for (const [, url] of html.matchAll(/\s(?:src|href)="([^"]*\.(?:js|css))"/g)) {
+for (const [, url] of html.matchAll(/\s(?:src|href)\s*=\s*["']?([^"'\s>]*\.(?:js|css))/gi)) {
 	queue.push(local(url, htmlPath));
 }
 
