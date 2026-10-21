@@ -13,7 +13,7 @@ import json
 import os
 import re
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -23,18 +23,24 @@ from pydantic import ValidationError
 from pymongo import AsyncMongoClient
 
 from beats.domain.billing import assemble_billing, assemble_client
-from beats.domain.exceptions import RangeNotOver, ReportLinkExpiryOutOfRange
+from beats.domain.billing_service import BillingService
+from beats.domain.exceptions import (
+    ProjectNotBilledToClient,
+    RangeNotOver,
+    ReportLinkExpiryOutOfRange,
+)
 from beats.domain.models import (
     Beat,
     BillableOverride,
     Client,
     Project,
     ProjectBilling,
+    ProjectKind,
     ReportLink,
     ReportLinkFields,
     ReportScope,
 )
-from beats.domain.report_link_service import PublicReportReader
+from beats.domain.report_link_service import PublicReportReader, ReportLinkService
 from beats.domain.report_links import (
     TOKEN_SHAPE,
     HoursReport,
@@ -50,7 +56,15 @@ from beats.domain.report_links import (
     token_hash,
     well_formed,
 )
-from beats.infrastructure.repositories import MongoBeatRepository
+from beats.infrastructure.repositories import (
+    MongoBeatRepository,
+    MongoBillableOverrideRepository,
+    MongoBillingBudgetRepository,
+    MongoClientRepository,
+    MongoProjectBillingRepository,
+    MongoProjectRepository,
+    MongoReportLinkRepository,
+)
 from beats.test_billing import (
     BERLIN,
     JAN_1,
@@ -793,3 +807,150 @@ class TestReportBeatRead:
 
         assert [(beat.id, beat.note, beat.tags) for beat in without] == [(stored.id, None, [])]
         assert [(beat.id, beat.note, beat.tags) for beat in noted] == [(stored.id, "a note", [])]
+
+
+Hook = Callable[[], Awaitable[object]] | None
+
+
+class _HookedLinks(MongoReportLinkRepository):
+    """Runs another request's write just before a link is stored, once."""
+
+    before_insert: Hook = None
+
+    async def create(self, link: ReportLink) -> ReportLink:
+        run, self.before_insert = self.before_insert, None
+        if run is not None:
+            await run()
+        return await super().create(link)
+
+
+class _HookedBillings(MongoProjectBillingRepository):
+    """Runs another request's write just before a billing is written or
+    deleted, once."""
+
+    before_write: Hook = None
+
+    async def _hook(self) -> None:
+        run, self.before_write = self.before_write, None
+        if run is not None:
+            await run()
+
+    async def upsert(self, billing: ProjectBilling) -> ProjectBilling:
+        await self._hook()
+        return await super().upsert(billing)
+
+    async def delete(self, project_id: str) -> bool:
+        await self._hook()
+        return await super().delete(project_id)
+
+
+class TestRacingWrites:
+    """A link made while one of its projects leaves the client, from two
+    tabs at once: the project must not stay on the link, or it would come
+    back to it once billed to the client again (docs/billing.md, phase 1c).
+    Against real Mongo, with the other request's write run inside this
+    one's at the point where the two could interleave."""
+
+    USER = "report-link-racer"
+    NOW = datetime(2026, 10, 21, 12, tzinfo=UTC)
+
+    @pytest.fixture
+    async def wired(self, db):
+        collections = ("clients", "projects", "project_billing", "report_links")
+        for name in collections:
+            await db[name].delete_many({"user_id": self.USER})
+        clients = MongoClientRepository(db.clients, user_id=self.USER)
+        projects = MongoProjectRepository(db.projects, user_id=self.USER)
+        billings = _HookedBillings(db.project_billing, user_id=self.USER)
+        links = _HookedLinks(db.report_links, user_id=self.USER)
+        kite = await clients.create(Client(name="Kite", currency="EUR"))
+        acme = await clients.create(Client(name="Acme", currency="EUR"))
+        website = await projects.create(Project(name="Website", kind=ProjectKind.FREELANCE))
+        assert kite.id is not None
+        assert acme.id is not None
+        assert website.id is not None
+        await billings.upsert(_billing(_term(OCT_1), project_id=website.id, client_id=kite.id))
+        billing = BillingService(
+            clients=clients,
+            billings=billings,
+            overrides=MongoBillableOverrideRepository(db.billable_overrides, user_id=self.USER),
+            projects=projects,
+            beats=MongoBeatRepository(db.timeLogs, user_id=self.USER),
+            budgets=MongoBillingBudgetRepository(db.billing_budgets, user_id=self.USER),
+            report_links=links,
+            now=lambda tz: self.NOW,
+        )
+        service = ReportLinkService(
+            links=links,
+            clients=clients,
+            billings=billings,
+            projects=projects,
+            key=KEY_A,
+            now=lambda tz: self.NOW,
+        )
+        try:
+            yield billing, service, billings, links, (kite.id, acme.id, website.id)
+        finally:
+            for name in collections:
+                await db[name].delete_many({"user_id": self.USER})
+
+    @staticmethod
+    def _leave(billing: BillingService, how: str, ids: tuple[str, str, str]):
+        _, acme, website = ids
+
+        async def leave():
+            if how == "move":
+                await billing.set_project_billing(
+                    website, acme, [_term(OCT_1)], rewrite_past=False, tz=UTC_ZONE
+                )
+            elif how == "stop":
+                await billing.remove_project_billing(
+                    website, rewrite_past=False, remove_billing_budget=False, tz=UTC_ZONE
+                )
+            else:
+                await billing.restore_project_billing(
+                    _billing(_term(OCT_1), project_id=website, client_id=acme)
+                )
+
+        return leave
+
+    @staticmethod
+    def _make(service: ReportLinkService, ids: tuple[str, str, str]):
+        kite, _, website = ids
+        fields = ReportLinkFields.model_validate(
+            {
+                **_scope(client_id=kite, project_ids=[website], first=OCT_1, last=OCT_15),
+                "label": None,
+                "expires_on": NOV_1,
+            }
+        )
+        return service.create(fields, UTC_ZONE)
+
+    @staticmethod
+    async def _back(billing: BillingService, ids: tuple[str, str, str]) -> None:
+        kite, _, website = ids
+        await billing.set_project_billing(
+            website, kite, [_term(OCT_1)], rewrite_past=False, tz=UTC_ZONE
+        )
+
+    @pytest.mark.parametrize("how", ["move", "stop", "restore"])
+    async def test_a_project_leaving_before_the_link_is_stored(self, wired, how):
+        billing, service, _, links, ids = wired
+        links.before_insert = self._leave(billing, how, ids)
+
+        with pytest.raises(ProjectNotBilledToClient):
+            await self._make(service, ids)
+        await self._back(billing, ids)
+
+        assert await links.list(None) == []
+
+    @pytest.mark.parametrize("how", ["move", "stop", "restore"])
+    async def test_a_link_stored_while_the_project_leaves(self, wired, how):
+        billing, service, billings, links, ids = wired
+        billings.before_write = lambda: self._make(service, ids)
+
+        await self._leave(billing, how, ids)()
+        await self._back(billing, ids)
+
+        [link] = await links.list(None)
+        assert link.project_ids == []
