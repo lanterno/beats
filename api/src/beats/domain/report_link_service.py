@@ -170,8 +170,14 @@ class ReportLinkService:
             raise ReportLinkNotFound()
 
     async def turn_off(self, client_id: str | None) -> int:
-        """Turn off one client's links, or with None every one: how many."""
-        return await self.links.delete_all(client_id)
+        """Turn off one client's live links, or with None every live one:
+        how many. An ended link stays listed until it is removed on its own,
+        as the question that asks for this counts only the live ones."""
+        turned_off = 0
+        for link in await self.links.list(client_id):
+            if link.id is not None and self.live(link) and await self.links.delete(link.id):
+                turned_off += 1
+        return turned_off
 
     async def project_names(self, links: Iterable[ReportLink]) -> dict[str, str]:
         """The current names of the projects these links show, by id."""

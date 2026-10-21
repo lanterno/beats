@@ -295,14 +295,13 @@ class ProjectNames(Protocol):
 
 class ReportLinkStore(Protocol):
     """The caller's report links. `delete` is False for one that is not
-    theirs, a malformed id included. `list`, newest first, and `delete_all`
-    take a client's id, or None for every client's."""
+    theirs, a malformed id included. `list`, newest first, takes a client's
+    id, or None for every client's."""
 
     async def create(self, link: ReportLink) -> ReportLink: ...
     # builtins.list because this class defines a method called `list`.
     async def list(self, client_id: str | None) -> builtins.list[ReportLink]: ...
     async def delete(self, link_id: str) -> bool: ...
-    async def delete_all(self, client_id: str | None) -> int: ...
 
 
 class ReportLinkScope(Protocol):
