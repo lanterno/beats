@@ -171,6 +171,26 @@ describe("ReportLinkDialog", () => {
 		);
 	});
 
+	it("never asks for a preview of a scope the form calls invalid", async () => {
+		renderDialog();
+		const boxes = BILLED.map((p) => screen.getByRole("checkbox", { name: p.name }));
+		for (const box of boxes) await userEvent.click(box);
+		// Settled on no projects: nothing to ask for.
+		await waitFor(() =>
+			expect(api.previews[api.previews.length - 1]?.scope.projectIds).toEqual([]),
+		);
+		await userEvent.click(boxes[1]);
+		await waitFor(() =>
+			expect(api.previews[api.previews.length - 1]?.scope.projectIds).toEqual(["p1"]),
+		);
+
+		// The form was valid again a moment before its settled scope caught
+		// up; the query must not have been on for the scope it left.
+		const asked = api.previews.filter((preview) => preview.enabled);
+		expect(asked.every((preview) => preview.scope.projectIds.length > 0)).toBe(true);
+		expect(asked[asked.length - 1]?.scope.projectIds).toEqual(["p1"]);
+	});
+
 	it("the URL is the origin, /report#, the token, and Copy writes exactly it", async () => {
 		const writeText = setSecureContext(true);
 		api.createReportLink.mockResolvedValue(made());
