@@ -2,9 +2,10 @@
  * The page a client opens: without a token worth asking about it asks
  * nothing, every dead link reads the same, the tab's title never takes the
  * client's name, and a page brought back by the back-forward cache asks
- * again, so a link turned off meanwhile shows dead.
+ * again, so a link turned off meanwhile shows dead. While it prints, the
+ * token is off the address the browser prints in its footer.
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HoursReport } from "@/shared/report";
 import { ReportPage } from "./ReportPage";
@@ -49,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	window.history.replaceState(null, "", "/");
 });
@@ -83,6 +85,47 @@ describe("ReportPage", () => {
 		render(<ReportPage />);
 		expect(await screen.findByRole("heading", { name: "Studio Kite" })).toBeTruthy();
 		expect(document.title).toBe("Hours report");
+	});
+
+	it("the print button prints with the token off the address, and puts it back", async () => {
+		const fetchMock = answering(200, REPORT);
+		window.history.replaceState(null, "", `/report#${TOKEN}`);
+		render(<ReportPage />);
+		await screen.findByRole("heading", { name: "Studio Kite" });
+		const printed: string[] = [];
+		vi.stubGlobal(
+			"print",
+			vi.fn(() => printed.push(window.location.href)),
+		);
+		vi.useFakeTimers();
+
+		fireEvent.click(screen.getByRole("button", { name: "Print or save as PDF" }));
+		// Off before the print is asked for, not only once it has begun.
+		expect(window.location.href).not.toContain(TOKEN);
+		vi.runAllTimers();
+
+		expect(printed).toHaveLength(1);
+		expect(printed[0]).not.toContain(TOKEN);
+		expect(printed[0]).toMatch(/\/report$/);
+		expect(window.location.hash).toBe(`#${TOKEN}`);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("printing from the browser's menu takes the token off until it is done", async () => {
+		const fetchMock = answering(200, REPORT);
+		window.history.replaceState(null, "", `/report?utm=mail#${TOKEN}`);
+		render(<ReportPage />);
+		await screen.findByRole("heading", { name: "Studio Kite" });
+
+		window.dispatchEvent(new Event("beforeprint"));
+		expect(window.location.href).not.toContain(TOKEN);
+		expect(window.location.search).toBe("?utm=mail");
+		window.dispatchEvent(new Event("afterprint"));
+
+		expect(window.location.hash).toBe(`#${TOKEN}`);
+		expect(window.location.search).toBe("?utm=mail");
+		// The fragment came back without a hashchange: nothing asked again.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("a page restored from the back-forward cache fetches again", async () => {
