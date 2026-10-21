@@ -92,6 +92,13 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
+# Report links
+variable "report_link_key" {
+  description = "HMAC key for report-link tokens (≥ 32 bytes). Rotating it ends every report link."
+  type        = string
+  sensitive   = true
+}
+
 # WebAuthn Configuration
 variable "webauthn_rp_id" {
   description = "WebAuthn Relying Party ID (domain name, e.g., lifepete.com)"

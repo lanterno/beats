@@ -12,6 +12,9 @@ mongodb_database_name     = "ptc"
 # JWT secret for WebAuthn sessions
 jwt_secret = "your-secure-random-secret"
 
+# HMAC key for report links (openssl rand -base64 48); rotating it ends every link
+report_link_key = "your-secure-random-key"
+
 # Container image tag (CI sets this to commit SHA; use "latest" locally)
 container_image_tag = "latest"
 

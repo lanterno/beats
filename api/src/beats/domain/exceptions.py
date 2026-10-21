@@ -406,6 +406,67 @@ class MonthNotStarted(DomainException):
         super().__init__(f"{_spoken_month(month)} has not started yet")
 
 
+# Report link exceptions (docs/billing.md, phase 1c)
+class RangeNotOver(DomainException):
+    """Raised when a report would cover today or a later day. A report covers
+    finished days only, so its day rows are never a live record of when the
+    freelancer works."""
+
+    status_code = 409
+    message = "A report covers finished days; the last one can be yesterday."
+    code = "RANGE_NOT_OVER"
+
+
+class ReportLinkExpiryOutOfRange(DomainException):
+    """Raised when a report link's last day is before today, or more than
+    366 days ahead, in its time zone. A rule that reads the clock, so it is
+    checked where a link is made, not on the model; the 422 names the field
+    as a validator's would."""
+
+    status_code = 422
+    message = "Validation failed for one field"
+    code = "VALIDATION_ERROR"
+
+    def __init__(self):
+        super().__init__()
+        self.fields = [
+            {
+                "path": "expires_on",
+                "message": "a link works from today to at most 366 days ahead",
+                "type": "value_error",
+            }
+        ]
+
+
+class ProjectNotBilledToClient(DomainException):
+    """Raised when a report link names a project that is not billed to its
+    client now, or does not exist. Another user's project is the same
+    answer; `fields` names the first such entry of `project_ids`."""
+
+    status_code = 409
+    message = "This project is not billed to this client"
+    code = "PROJECT_NOT_BILLED_TO_CLIENT"
+
+    def __init__(self, index: int):
+        super().__init__()
+        self.fields = [
+            {
+                "path": f"project_ids.{index}",
+                "message": "this project is not billed to this client",
+                "type": "value_error",
+            }
+        ]
+
+
+class ReportLinkNotFound(DomainException):
+    """Raised when a report link cannot be found by ID among the caller's
+    own: another user's, a malformed id, or one already turned off."""
+
+    status_code = 404
+    message = "Report link not found"
+    code = "REPORT_LINK_NOT_FOUND"
+
+
 # Beat-related exceptions
 class BeatNotFound(DomainException):
     """Raised when a beat cannot be found by ID."""

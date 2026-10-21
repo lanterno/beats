@@ -1,8 +1,11 @@
 /**
  * Settings Page
- * Appearance, data export, API info, and developer tools.
+ * Appearance, data export, API info, and developer tools. Beside the
+ * passkeys, every report link that still opens, and the way to turn them
+ * all off.
  */
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	Download,
 	FileJson,
@@ -15,7 +18,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
-import { describeError } from "@/shared/api";
+import { useReportLinks } from "@/entities/report-link";
+import { describeError, reportLinksRootKey } from "@/shared/api";
 import { config, publicApiBase } from "@/shared/config";
 import { browserTimeZone, cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
@@ -30,6 +34,7 @@ import { GitHubSection } from "./GitHubSection";
 import { describeImport, type ImportResult } from "./importSummary";
 import { OuraSection } from "./OuraSection";
 import { PasskeysSection } from "./PasskeysSection";
+import { ReportLinksSection } from "./ReportLinksSection";
 import { SingleSignOnSection } from "./SingleSignOnSection";
 import { CHIP_BUTTON, HEADING, HEADING_ICON, LABEL, LEAD } from "./styles";
 import { WebhooksSection } from "./WebhooksSection";
@@ -38,6 +43,9 @@ export default function Settings() {
 	const { data: projects } = useProjects();
 	const [importing, setImporting] = useState(false);
 	const { theme, setTheme, density, setDensity } = useTheme();
+	const queryClient = useQueryClient();
+	const { data: reportLinks } = useReportLinks();
+	const liveReportLinks = (reportLinks ?? []).filter((link) => link.state === "live").length;
 
 	// The address the Developer examples print: on the same-origin self-hosted
 	// build the configured base is empty, which would read `curl /api/...`.
@@ -88,6 +96,9 @@ export default function Settings() {
 				const body = await res.json().catch(() => null);
 				throw new Error(typeof body?.detail === "string" ? body.detail : undefined);
 			}
+			// A restored billing that names another client takes its project
+			// off the old client's report links, which this page lists.
+			void queryClient.invalidateQueries({ queryKey: reportLinksRootKey });
 			const { message, leftOut } = describeImport((await res.json()) as ImportResult);
 			if (leftOut) toast.warning(message, { description: leftOut });
 			else toast.success(message);
@@ -262,7 +273,10 @@ export default function Settings() {
 			<DaemonPrivacySection />
 
 			{/* Passkeys */}
-			<PasskeysSection />
+			<PasskeysSection liveReportLinks={liveReportLinks} />
+
+			{/* Report links: they outlive a session and a passkey */}
+			<ReportLinksSection />
 
 			{/* Identities at sign-in providers */}
 			<SingleSignOnSection />

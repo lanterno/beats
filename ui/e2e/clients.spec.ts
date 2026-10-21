@@ -5,9 +5,9 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
  * page's panel for the seeded client — its amount and the lines table it is
  * made of — and the Billing panel in the rail of the seeded freelance
  * project. `api/scripts/e2e_session.py` seeds both: a client at 85.00 EUR an
- * hour from 1 January, a project billable at that rate, and two finished
- * sessions in the last three hours (so this month has a line, unless the
- * month began less than three hours ago). It also seeds two billing budgets:
+ * hour from 1 January (from 1 December in January), a project billable at
+ * that rate, and two finished sessions in the last three hours (so this month
+ * has a line, unless the month began less than three hours ago). It also seeds two billing budgets:
  * 40 hours a month on the client, and €200.00 in total since 1 January on
  * the project. Nothing here writes, so every run reads the same seed.
  */
@@ -46,8 +46,9 @@ test.describe("Clients and billing", () => {
 		// Exact: the panel holds a region of its own, "E2E Client's budgets".
 		const panel = page.getByRole("region", { name: CLIENT, exact: true });
 		await expectDrawn(panel);
-		// The rate in force today, from the seeded client's one term.
-		await expect(panel).toContainText("€85.00/h since Jan 1");
+		// The rate in force today, from the seeded client's one term: from 1
+		// January, or in January from 1 December, so last month is billable.
+		await expect(panel).toContainText(/€85\.00\/h since (Jan 1|Dec 1, \d{4})/);
 
 		const table = panel.getByRole("table");
 		await expectDrawn(table);

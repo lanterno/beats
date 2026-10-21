@@ -12,14 +12,18 @@ client/
 │                  shell), session.ts (wires auth into the session port)
 ├── pages/         Route-level components — homepage, index, insights, coach,
 │                  plan, projects-index, project-details, clients, settings,
-│                  not-found
-├── widgets/       Cross-page composite UI — sidebar (desktop) + mobile header
+│                  not-found; and report, the public report page (below)
+├── widgets/       Cross-page composite UI — sidebar (desktop) + mobile header,
+│                  client-report (the report a link shows, and its preview)
 ├── features/      User interactions — timer, auth
 ├── entities/      Business objects — project, absence, session, planning,
-│                  coach, intelligence, calendar, github, client, billing
+│                  coach, intelligence, calendar, github, client, billing,
+│                  report-link
 ├── shared/        No business logic — api client, lib helpers, ui primitives,
-│                  config, session port
-└── main.tsx       Entry point
+│                  config, session port, report (the public report's schema),
+│                  styles (the design tokens)
+├── main.tsx       The app's entry point (index.html); registers the service worker
+└── report.tsx     The report page's entry point (report.html); report-zod.ts loads first
 ```
 
 Layer rules: `app/` can import from anything; `pages/` from widgets/features/
@@ -46,7 +50,7 @@ signed-out visitor, which is what a caller reaching it that early would be.
 
 ```bash
 pnpm dev           # Vite dev server on :8080
-pnpm build         # Production build → dist/spa/
+pnpm build         # Production build → dist/spa/, then the report bundle check
 pnpm test          # Vitest unit tests
 pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 ```
@@ -66,16 +70,19 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
   check, all but `noAutofocus` (dialogs focus their first field on purpose).
 - **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives (see
   Theme below)
-- **PWA**: vite-plugin-pwa with workbox runtime caching
+- **PWA**: vite-plugin-pwa with workbox runtime caching. `main.tsx` registers the
+  worker (`injectRegister: false`), so no other HTML entry does, and its navigation
+  fallback never answers `/report` or `/report.html` with the app's shell
 - **Node**: >=25.0.0
 
 ## Theme
 
-Two hours: `afternoon` (light, the default) and `dusk`. `client/global.css` defines
-the tokens on `:root` and redefines them under `:root[data-theme="dusk"]`; they are
+Two hours: `afternoon` (light, the default) and `dusk`. `client/shared/styles/tokens.css`
+defines the tokens on `:root` and redefines them under `:root[data-theme="dusk"]`; they are
 the names every component already reads (`--card`, `--accent`, `--muted-foreground`
 …), as HSL triples so `hsl(var(--x) / .5)` works by hand, and `@theme` maps them to
-Tailwind colours. `shared/lib/useTheme.ts` owns the hour and the density: the
+Tailwind colours; `global.css` and the report page's `report.css` both import it.
+`shared/lib/useTheme.ts` owns the hour and the density: the
 storage keys, the `data-theme` / `data-density` attributes and `theme-color`; a
 stored value that is not one of the two hours reads as afternoon. The inline script
 at the top of `index.html` stamps both before first paint, so a stored dusk does not
@@ -104,7 +111,8 @@ flash, and repeats the keys and the dusk sky's hex — change them in both place
   on a panel by day; small text in a tone takes `--success-ink` or
   `--destructive-ink`, and big figures and fills the tone itself. Vacation, sick,
   holiday and other are the `tint-*` tokens.
-- **Fonts**, loaded from Google Fonts at the top of `global.css`: M PLUS Rounded 1c
+- **Fonts**, loaded from Google Fonts at the top of `global.css` (the report page takes
+  their Latin subsets from Fontsource instead, same-origin): M PLUS Rounded 1c
   (500 / 700 / 800) is `font-heading` and `font-mono` — the display figures and every
   column of digits, whose numerals are one width, so no `tnum`. Zen Maru Gothic
   (400 / 500 / 700) is `font-body`, everything read. Real code is `font-code`, since
@@ -138,6 +146,43 @@ the Sunday projection, the ledger's rows, and the +/− on a week without a clos
 (worked − expected, else worked − goal) — is pure functions in `entities/project/model`
 (`standing.ts`, `ledger.ts`), a test per branch. Tests and E2E specs find the panels by their region names, never by class.
 
+## The report page
+
+`/report#lpr_…` is what a client opens from a report link (`docs/billing.md`, phase 1c),
+and it is not a route of the app: it is a second HTML entry, `report.html`, built
+beside `index.html` (`build.rollupOptions.input` in `vite.config.ts`). `report.tsx`
+loads `report-zod.ts` first (zod's `jitless`, since the page's CSP refuses eval), two
+faces from Fontsource, `report.css` (Tailwind over the report's own files and
+`shared/styles/tokens.css`, none of `global.css`) and `pages/report`, and nothing
+else: no session, no query client, no service worker, no analytics, no theme script.
+`pages/report` reads the token from the fragment and POSTs it with a bare `fetch` and
+no credentials (`fetchReport.ts`), never `apiClient`, whose 401 handling would end a
+session and drop the fragment. One dead state stands for every link that does not
+answer (turned off, ended, never made, cut short), apart from a rate limit or an API
+it cannot reach. While the page prints, the fragment is off the address, since browsers
+print the address in their footer (`ReportPage`), and `report.css` gives the first
+printed page no top or bottom margin, which leaves Chrome and Edge no room for that
+footer on any page. The view is `widgets/client-report` (`ClientReportView`, its words in
+`figures.ts`), drawn from `shared/report`'s schema, and the share dialog's preview
+draws the same view.
+
+- **The fence.** A Biome override in `biome.json` holds `report.tsx`, `report-zod.ts`,
+  `pages/report`, `widgets/client-report` and `shared/report` off `@/shared/api`,
+  `@/shared/session`, every feature, entity, app module, other page and other widget,
+  and off the `@/shared/lib` and `@/shared/ui` barrels (by name or by `index`), which
+  re-export hooks that reach the API and the session. It refuses `../` too: those files
+  import one another as `./` and everything else by an `@/` path the patterns can see. That is the one exception to the barrel rule: these files import a
+  shared module directly (`@/shared/lib/money`, `@/shared/ui/panel`, `@/shared/lib/cn`).
+- **The bundle check.** `pnpm build` ends with `scripts/check-report-bundle.mjs`, which
+  reads `dist/spa` and fails the build if `report.html` or any file it reaches carries
+  inline script or style, another origin, an Open Graph tag, the session's key, an
+  `Authorization` header, Google Fonts, Plausible or the worker, or a font that is
+  not a same-origin file. It is what the CSP in `firebase.json` and `nginx.conf`
+  relies on.
+- **In dev.** The dev and preview servers rewrite `/report`, `/report/` and
+  `/report?…` to `report.html` (the `report-path` plugin), as Firebase and nginx do,
+  so a link made locally opens locally.
+
 ## Clients and billing
 
 `pages/clients` is `/clients`, a month of what each client is owed (`docs/billing.md`):
@@ -167,6 +212,27 @@ can read them. The Clients nav item wears a dot only while an active budget is u
 (`widgets/sidebar/useBillingBudgetAttention.ts`). When the budgets cannot be read, each
 block says "Budgets aren't available right now." and the rest renders as before.
 
+Report links (phase 1c) live in `entities/report-link`. A client with a billed project
+offers Share beside Edit, which opens `ReportLinkDialog` (`pages/clients`): the range,
+the projects, Show amounts and Include notes (both off for a new link), the zone, an expiry that is
+picked and never preset (Create stays off until one is), a label, and beside them the
+preview, which is the preview route's answer drawn by `ClientReportView`. The create
+is `createReportLink`, a plain `post` sent once, never `apiMutate` or a mutation, and
+its token lives in the dialog's state alone and is shown once as the address; closing
+before Copy asks once. Replace turns the old link off before making the new one. The
+client's links are folded under its panel (`ReportLinksSection`), with what each
+leaves out of the client's billed projects (`notOnLink`), and the page reads every
+link once with `useReportLinks` and hands each panel its own; an archived client with
+no panel in the month has its links under its row in the archived list
+(`ArchivedClientLinks`). Settings lists the live ones across clients with Turn off all,
+which ends those and leaves ended ones listed, and the Passkeys section says how many still
+work, since signing out or removing a passkey ends none. The ranges and the expiry
+are counted in the link's zone (`todayIn`). Every link sits under
+`reportLinksRootKey` (`shared/api/keys.ts`), which a billing write, a client delete
+and a backup import invalidate, since each can take a project or a link away. When
+the links cannot be read, the panel and Settings say "Report links aren't available
+right now." and the panel offers no Share.
+
 ## Testing
 
 - Unit tests: `client/**/*.test.{ts,tsx}` (Vitest, jsdom). `.ts` files cover
@@ -175,7 +241,9 @@ block says "Budgets aren't available right now." and the rest renders as before.
   `vitest.config.ts`.
 - E2E tests: `e2e/` (Playwright, Chromium only, auto-starts dev server). Needs a
   running API and Mongo; `e2e/auth.setup.ts` mints and plants a session because
-  every page under test is behind `ProtectedRoute`. See the repo-root CLAUDE.md
+  every page under test is behind `ProtectedRoute`, but the report page:
+  `report-link.spec.ts` makes a link through the Share dialog and opens it in a
+  context with no storage. See the repo-root CLAUDE.md
   for the exact commands.
 - Mocking pattern: see `client/features/auth/components/AuthModal.test.tsx`
   for the canonical setup — vi.mock the API module, the auth store, and

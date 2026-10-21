@@ -7,11 +7,17 @@ FastAPI + PyMongo (async MongoDB) — Python 3.14, managed by uv.
 ```
 src/beats/
 ├── api/          Route handlers + Pydantic schemas
-│   ├── routers/  One file per resource — see CLAUDE.md (root) for the full route table
+│   ├── routers/  One file per resource — see CLAUDE.md (root) for the full route table.
+│   │             Report links are two: `report_links.py`, the freelancer's, under
+│   │             /api/billing/report-links, and `public_reports.py`, the one public
+│   │             read under /api/public/, which takes no session dependency
 │   ├── errors.py     Unified error envelope: {detail, code, fields?}
-│   ├── middleware/   IdempotencyMiddleware (the auth middleware lives in
-│   │                  src/server.py; rate limits are decorator-based via
-│   │                  slowapi on the routes themselves)
+│   ├── middleware/   IdempotencyMiddleware, and PublicResponseHeadersMiddleware (no-store,
+│   │                  noindex, no-referrer on every answer under /api/public/). The auth
+│   │                  middleware lives in src/server.py; rate limits are decorator-based
+│   │                  via slowapi on the routes themselves, but for `report_rate.py`
+│   ├── report_rate.py  How often one report link opens: 60 a minute, keyed by its
+│   │                  token hash, per process; no limit per address (AHM-98)
 │   ├── schemas.py    Request/response Pydantic models
 │   ├── params.py     Query parameters more than one router takes (`MonthQuery`)
 │   └── dependencies.py
@@ -23,9 +29,11 @@ src/beats/
 │   ├── ledger.py        Pure assembly of the project page's weeks (goal, expectation, closing balance and its move, adjustments)
 │   ├── vacation.py      Vacation arithmetic: a year of the entitlement from its dated opening, the carry-over, what a day off costs
 │   ├── timesheet.py     Pure assembly of a day job's month: a row per finished day, brought and carried forward, off the ledger's one pass
-│   ├── billing.py       Pure billing arithmetic: rate and flag resolution, lines as runs of days, Decimal half-up per line, the closed-past check (`past_change`)
+│   ├── billing.py       Pure billing arithmetic: rate and flag resolution, lines as runs of days, Decimal half-up per line, a span cut at each 1st (`month_slices`), the closed-past check (`past_change`)
 │   ├── billing_budgets.py Pure billing budget arithmetic: the current period, spend summed month by month over `assemble_client`, the integer state, a running timer's crossing instants, the guarded projection
-│   ├── billing_service.py BillingService: clients, project billing, billable overrides and billing budgets, their write-time rules, the month report, the budgets' reading, the backup's dry run
+│   ├── billing_service.py BillingService: clients, project billing, billable overrides and billing budgets, their write-time rules, the month report, the budgets' reading, the backup's dry run; a project leaving a client comes off its report links, and a client's links go with it
+│   ├── report_links.py  Report links, pure: the `lpr_` token and its HMAC under `REPORT_LINK_KEY`, the rules that read a clock (passed in as `today`), the public shapes, and the report's arithmetic — `assemble_client` per month, hours-only lines merged per project, day rows
+│   ├── report_link_service.py ReportLinkService (make, list, preview, turn off) and PublicReportReader, which builds a link's report for its owner from ports that reach one client's billed projects
 │   ├── currencies.py    The ISO 4217 table: the one source of a currency's minor units
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions, and a contract's holiday set (`contract_calendar`, `contract_holidays`)
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
@@ -60,15 +68,16 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Fourteen test files cover different layers (1301 tests, ~20s for the full run):
+Fifteen test files cover different layers (1410 tests, ~20s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 442 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router, and for report links also their isolation (an account with a sentinel in every field a report must not reach, each searched for in the report's raw text) and their cascades (moves, stops, restores, client deletes); 495 tests.
 - **`src/beats/test_domain.py`** — pure-Python domain tests. Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed, plus one timer stop against the real beat repository, for a write that lands while the stop reads the flow windows; 297 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, balance adjustments among them, plus one round trip through the absence repository; 59 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, balance adjustments and a settlement, the row-to-row balance proof; 32 tests.
 - **`src/beats/test_timesheet.py`** — the monthly timesheet on fixed dates: four months worked out by hand (a mid-month start and term change, weekend work, a vacation week, a half day, a payout, Easter), the month-to-month and row-to-row proofs, the range's clipping, the null rule under an objective term; 27 tests.
 - **`src/beats/test_billing.py`** — the billing arithmetic on fixed dates: rate and flag resolution at both levels, lines as runs of days, bucketing by the local start day across midnight, month ends and DST, the running timer and a beat that ends before it starts, half-up rounding in JPY, EUR and KWD, totals that are sums of lines, who a report lists, the closed-past check, and the term lists' validators; 33 tests.
 - **`src/beats/test_billing_budgets.py`** — the billing budget arithmetic on fixed dates: a run across a month boundary summed month by month (2.02 h, not 2.01), the monthly reading equal to the month report, project beside client scope, overrides, a late beat in Berlin, the integer thresholds and the floored percent, unpriced hours under a money budget, an upcoming total, a running timer's crossing instants (a rate change at midnight, an override of false, two timers, a DST night), every projection guard and the 28-day window, and the model's unit, period and warning rules; 46 tests.
+- **`src/beats/test_report_links.py`** — the report link arithmetic on fixed dates: the token and its keyed hash, months equal to the Clients page's and rounded on their own, hours-only rows merged across a rate change, day rows summed exactly (two 18-second beats are a hundredth) across midnight and DST, the range and expiry rules, the models, the public shapes (no money at any depth on an hours-only report, no id), the reader's narrow ports, the beat read's projection, and a move, stop or restore racing a link's create, against real Mongo; 56 tests.
 - **`src/beats/test_vacation.py`** — the vacation arithmetic on fixed dates: the opening on a contract started years before it, each carry-over rule, the end year's pro-rating and rounding, which days cost leave; 14 tests.
 - **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, and the one that moves weekly plans stored under a Sunday to their Monday; 24 tests.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses; 213 tests.
@@ -101,7 +110,7 @@ whatever a mock was told to return are not worth pinning.
 
 - `Database` is a singleton; `connect()` is called in the FastAPI lifespan, not at import time
 - Settings use pydantic-settings: env vars override `.env` file values
-- Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min)
+- Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min), `/api/public/` (a report link's report, its token in the body; a handler there never reads `request.state.user_id`, which a valid session still sets, and takes no session dependency)
 - Device tokens (daemon, wall-clock) are a separate JWT type; the auth middleware allows them only on paths in `DEVICE_ALLOWED_PREFIXES`, plus GET/HEAD on `DEVICE_READ_ONLY_PREFIXES` (see `device_may_reach` in `src/server.py`). Adding a new daemon-reachable path means appending to one of those tuples — the read-only one when the prefix also carries writes a device shouldn't make (as `/api/coach/memory` carries delete and rewrite).
 - Error envelope: every non-2xx response carries `{detail, code, fields?}`. Routers can override the auto-mapped code by raising `HTTPException(detail={"code": "X", "message": "..."})` — see `coach.py` and `auth.py` for examples.
 - Multi-user: Each user's data is scoped via `user_id` field on all collections. Repos accept `user_id` in constructor.

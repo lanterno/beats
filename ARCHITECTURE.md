@@ -273,6 +273,7 @@ The API uses Pydantic Settings with environment variable overrides:
 | `DB_DSN` | `mongodb://localhost:27017` | MongoDB connection string |
 | `DB_NAME` | `ptc` | Database name |
 | `JWT_SECRET` | `change-me-in-production` | JWT signing key |
+| `REPORT_LINK_KEY` | none: required, at least 32 bytes | HMAC key report-link tokens are stored under; changing it ends every link |
 | `WEBAUTHN_RP_ID` | `localhost` | WebAuthn relying party ID |
 | `WEBAUTHN_ORIGIN` | `http://localhost:8080` | WebAuthn origin |
 

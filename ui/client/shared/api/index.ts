@@ -15,7 +15,7 @@ export {
 	replayMutation,
 } from "./client";
 // Query-key roots shared across entities
-export { billingRootKey, clientsRootKey } from "./keys";
+export { billingRootKey, clientsRootKey, reportLinksRootKey } from "./keys";
 // Generated OpenAPI types (see ./schema.ts for ergonomic re-exports)
 export type { Paths, Schemas } from "./schema";
 // Re-export types
@@ -50,6 +50,7 @@ export type {
 	ApiProjectKind,
 	ApiProjectListItem,
 	ApiRateTerm,
+	ApiReportLink,
 	ApiUnattachedHours,
 	ApiVacationEntitlement,
 	ApiVacationYear,
@@ -88,6 +89,8 @@ export {
 	ApiProjectBillingSchema,
 	ApiProjectListSchema,
 	ApiProjectSchema,
+	ApiReportLinkCreatedSchema,
+	ApiReportLinkListSchema,
 	BillingMonthSchema,
 	CalendarStatusSchema,
 	ContractWeekSchema,
@@ -107,6 +110,7 @@ export {
 	parseApiResponse,
 	RegionHolidayListSchema,
 	RegionListSchema,
+	ReportLinksTurnedOffSchema,
 	RhythmSlotListSchema,
 	ScoreHistorySchema,
 	TimerStatusSchema,

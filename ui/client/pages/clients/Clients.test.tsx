@@ -4,12 +4,16 @@
  * way to bill them — the state a first freelance project is in, which the
  * sidebar already offers the page for. And when the month cannot be read —
  * an older API during a deploy answers 404 "Not Found" — the page's own
- * sentence and the API's words stay apart.
+ * sentence and the API's words stay apart. An archived client with no panel
+ * in the month still has its report links on the page.
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BillingBudgetStatus, BillingMonth, ClientBilling } from "@/entities/billing";
+import type { Client } from "@/entities/client";
+import type { ReportLink } from "@/entities/report-link";
 import { ApiError } from "@/shared/api";
 import Clients from "./Clients";
 
@@ -17,6 +21,8 @@ const { state, idle } = vi.hoisted(() => ({
 	state: {
 		month: { data: undefined, error: null } as { data?: unknown; error: unknown },
 		budgets: { data: [], isError: false } as { data: unknown[]; isError: boolean },
+		archived: [] as Client[],
+		links: [] as ReportLink[],
 	},
 	// A mutation nothing here sends.
 	idle: () => ({ isPending: false, mutate: vi.fn(), mutateAsync: vi.fn() }),
@@ -36,12 +42,24 @@ vi.mock("@/entities/client", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/client")>("@/entities/client");
 	return {
 		...actual,
-		useClients: () => ({ data: [], isLoading: false }),
+		useClients: ({ archived = false }: { archived?: boolean } = {}) => ({
+			data: archived ? state.archived : [],
+			isLoading: false,
+		}),
 		useCreateClient: idle,
 		useUpdateClient: idle,
 		useUnarchiveClient: idle,
 		useArchiveClient: idle,
 		useDeleteClient: idle,
+	};
+});
+vi.mock("@/entities/report-link", async () => {
+	const actual =
+		await vi.importActual<typeof import("@/entities/report-link")>("@/entities/report-link");
+	return {
+		...actual,
+		useReportLinks: () => ({ data: state.links, isError: false }),
+		useDeleteReportLink: idle,
 	};
 });
 vi.mock("@/entities/project", async () => {
@@ -76,6 +94,8 @@ function renderPage() {
 beforeEach(() => {
 	state.month = { data: month(), error: null };
 	state.budgets = { data: [], isError: false };
+	state.archived = [];
+	state.links = [];
 });
 afterEach(cleanup);
 
@@ -153,5 +173,45 @@ describe("Clients", () => {
 		const panel = screen.getByRole("region", { name: "Studio Kite" });
 		expect(panel).toHaveTextContent("Budgets aren't available right now.");
 		expect(screen.getByRole("region", { name: "Summary" })).not.toHaveTextContent("budget");
+	});
+
+	it("lists an archived client's report links in a month it has no panel in", async () => {
+		state.archived = [
+			{
+				id: "c9",
+				name: "Kite Archive",
+				currency: "EUR",
+				minorUnits: 2,
+				rates: [],
+				archived: true,
+				createdAt: "2026-01-02T10:00:00Z",
+				currencyLocked: false,
+			},
+		];
+		const link: ReportLink = {
+			id: "l1",
+			clientId: "c9",
+			label: "Spring",
+			first: "2026-03-01",
+			last: "2026-03-31",
+			tz: "Europe/Berlin",
+			showAmounts: false,
+			showNotes: false,
+			projects: [],
+			expiresOn: "2026-12-31",
+			createdAt: "2026-04-02T10:00:00Z",
+			state: "live",
+		};
+		state.links = [link, { ...link, id: "l2", label: "Winter", state: "ended" }];
+		renderPage();
+
+		await userEvent.click(screen.getByRole("button", { name: "Archived clients (1)" }));
+		const section = screen.getByRole("region", { name: "Kite Archive's report links" });
+		await userEvent.click(within(section).getByRole("button", { name: "Report links (2)" }));
+
+		expect(within(section).getByText("Spring")).toBeInTheDocument();
+		expect(within(section).getByText("Winter")).toBeInTheDocument();
+		expect(within(section).getByRole("button", { name: "Turn off" })).toBeInTheDocument();
+		expect(within(section).getByRole("button", { name: "Remove" })).toBeInTheDocument();
 	});
 });

@@ -43,7 +43,9 @@ from beats.infrastructure.database import Database
 logger = logging.getLogger(__name__)
 
 # Only mutation endpoints that the offline queue may replay are guarded here.
-# Add to this list as more write paths gain offline support.
+# Add to this list as more write paths gain offline support — but never
+# /api/billing/report-links: its create answers with a token once, and
+# mutation_log keeps 2xx bodies for 72 hours (docs/billing.md, phase 1c).
 IDEMPOTENT_PATH_PREFIXES: tuple[str, ...] = (
     "/api/projects/",  # covers /{id}/start and /stop (narrow match below)
 )

@@ -14,9 +14,10 @@
 #   BEATS_DB_PASSWORD  the MongoDB root password
 #   BEATS_RP_ID        the host name the browser sees, e.g. `localhost`
 #   BEATS_ORIGIN       the origin the browser sees, e.g. `http://localhost:6008`
-# Everything else the API needs (JWT_SECRET, and optionally ANTHROPIC_API_KEY,
-# OAuth clients and OIDC_PROVIDERS for single sign-on) comes from api/.env;
-# see api/.env.example. `just` (./justfile) wraps the commands below.
+# Everything else the API needs (JWT_SECRET, REPORT_LINK_KEY, and optionally
+# ANTHROPIC_API_KEY, OAuth clients and OIDC_PROVIDERS for single sign-on)
+# comes from api/.env; see api/.env.example. `just` (./justfile) wraps the
+# commands below.
 
 name: beats
 
@@ -51,10 +52,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # JWT_SECRET, ANTHROPIC_API_KEY and the OAuth client secrets come from
-    # api/.env; the values below override the ones in it that are wrong for
-    # this topology (the DSN in particular points at localhost, which inside
-    # a container is the container itself).
+    # JWT_SECRET, REPORT_LINK_KEY, ANTHROPIC_API_KEY and the OAuth client
+    # secrets come from api/.env; the values below override the ones in it
+    # that are wrong for this topology (the DSN in particular points at
+    # localhost, which inside a container is the container itself).
     env_file:
       - ./api/.env
     environment:

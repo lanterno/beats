@@ -15,6 +15,13 @@
  * projects', each a sentence and a meter with a pencil that opens
  * `BillingBudgetDialog` for that scope. Without a budget of its own the
  * panel offers a quiet "Set a budget", and nothing more.
+ *
+ * A client with a billed project offers Share beside Edit, which opens
+ * `ReportLinkDialog`: a link the client opens with no sign-in, to some of
+ * these projects' billable hours over finished days (docs/billing.md,
+ * phase 1c). Its links are folded under the entries (`ReportLinksSection`).
+ * When they cannot be read the panel says so, offers no Share, and draws
+ * the month as before.
  */
 
 import { ChevronRight, Pencil } from "lucide-react";
@@ -37,6 +44,7 @@ import {
 } from "@/entities/billing";
 import type { Client } from "@/entities/client";
 import { useArchiveClient, useDeleteClient, useUnarchiveClient } from "@/entities/client";
+import type { ReportLink } from "@/entities/report-link";
 import { describeError } from "@/shared/api";
 import {
 	cn,
@@ -48,6 +56,8 @@ import {
 	parseUtcIso,
 } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
+import { ReportLinkDialog, ReportLinkPreviewDialog } from "./ReportLinkDialog";
+import { ReportLinksSection } from "./ReportLinksSection";
 
 export interface ClientPanelProps {
 	billing: ClientBilling;
@@ -71,8 +81,17 @@ export interface ClientPanelProps {
 	budgetsFailed?: boolean;
 	/** The clock a running timer's instants are read against. */
 	now?: number;
+	/** The client's report links, live and ended, newest first. Absent until they load. */
+	reportLinks?: readonly ReportLink[];
+	/** The report links could not be read — an older API during a deploy. */
+	reportLinksFailed?: boolean;
 	onEdit: () => void;
 }
+
+type Sharing =
+	| { mode: "new" }
+	| { mode: "replace"; link: ReportLink }
+	| { mode: "preview"; link: ReportLink };
 
 interface BudgetEditor {
 	scope: BillingBudgetScope;
@@ -179,6 +198,8 @@ export function ClientPanel({
 	budgets,
 	budgetsFailed = false,
 	now = Date.now(),
+	reportLinks,
+	reportLinksFailed = false,
 	onEdit,
 }: ClientPanelProps) {
 	const archive = useArchiveClient();
@@ -187,6 +208,7 @@ export function ClientPanel({
 	const [entriesOpen, setEntriesOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [budgetEditor, setBudgetEditor] = useState<BudgetEditor | null>(null);
+	const [sharing, setSharing] = useState<Sharing | null>(null);
 	// Whichever of the client's budget controls is on the page — "Set a
 	// budget", its pencil, "Set a budget for …" — takes focus back when a
 	// save or a remove has taken the one that opened the dialog away.
@@ -215,6 +237,10 @@ export function ClientPanel({
 	const clientBillings = projectBillings
 		? [...projectBillings.values()].filter((b) => b.clientId === billing.clientId)
 		: [];
+	// What a report link may cover: the client's billed projects, by name.
+	const shareable = clientBillings
+		.map((b) => ({ id: b.projectId, name: nameOf(b.projectId) }))
+		.sort((a, b) => a.name.localeCompare(b.name));
 	const ownBudget = budgets?.find((b) => b.scope === "client");
 	const projectBudgets = (budgets ?? []).filter((b) => b.scope === "project");
 	const editClientBudget = () =>
@@ -377,6 +403,15 @@ export function ClientPanel({
 						</span>
 					) : (
 						<>
+							{shareable.length > 0 && !reportLinksFailed && (
+								<button
+									type="button"
+									onClick={() => setSharing({ mode: "new" })}
+									className={LINKISH}
+								>
+									Share
+								</button>
+							)}
 							<button type="button" onClick={onEdit} disabled={!client} className={LINKISH}>
 								Edit
 							</button>
@@ -545,6 +580,43 @@ export function ClientPanel({
 						</div>
 					)}
 				</>
+			)}
+
+			{reportLinksFailed ? (
+				<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
+					Report links aren't available right now.
+				</p>
+			) : (
+				reportLinks &&
+				reportLinks.length > 0 && (
+					<ReportLinksSection
+						clientName={billing.name}
+						links={reportLinks}
+						billedProjectIds={shareable.map((project) => project.id)}
+						projectNames={projectNames}
+						onPreview={(link) => setSharing({ mode: "preview", link })}
+						onReplace={(link) => setSharing({ mode: "replace", link })}
+					/>
+				)
+			)}
+
+			{sharing?.mode === "preview" ? (
+				<ReportLinkPreviewDialog
+					link={sharing.link}
+					clientName={billing.name}
+					onClose={() => setSharing(null)}
+				/>
+			) : (
+				sharing && (
+					<ReportLinkDialog
+						key={sharing.mode === "replace" ? sharing.link.id : "new"}
+						clientId={billing.clientId}
+						clientName={billing.name}
+						billedProjects={shareable}
+						replacing={sharing.mode === "replace" ? sharing.link : undefined}
+						onClose={() => setSharing(null)}
+					/>
+				)
 			)}
 
 			{budgetEditor && (

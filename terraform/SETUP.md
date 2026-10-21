@@ -45,6 +45,12 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your actual values
 ```
 
+`report_link_key` is a key you generate, not one you look up:
+`openssl rand -base64 48` (the API refuses one under 32 bytes). Report links are
+stored only as an HMAC of their token under it, so the API does not boot without
+it, and changing it ends every report link at once. Keep it with your other
+secrets, and change it only when that is what you want.
+
 ## Step 5: Apply
 
 ```bash

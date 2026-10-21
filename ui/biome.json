@@ -4,6 +4,7 @@
 		"includes": [
 			"**/client/**",
 			"**/e2e/**",
+			"scripts/**",
 			"vite.config.ts",
 			"vitest.config.ts",
 			"vitest.setup.ts",
@@ -34,5 +35,81 @@
 				"noNonNullAssertion": "off"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": [
+				"client/report.tsx",
+				"client/report-zod.ts",
+				"client/pages/report/**",
+				"client/widgets/client-report/**",
+				"client/shared/report/**"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"paths": {
+									"@/shared/api": "The report page must not reach the session or the API client; import the module directly (docs/billing.md, *The public page*).",
+									"@/shared/session": "The report page must not reach the session or the API client; import the module directly (docs/billing.md, *The public page*).",
+									"@/shared/lib": "The report page must not reach the session or the API client; import the module directly (docs/billing.md, *The public page*).",
+									"@/shared/ui": "The report page must not reach the session or the API client; import the module directly (docs/billing.md, *The public page*)."
+								},
+								"patterns": [
+									{
+										"group": [
+											"@/shared/api/**",
+											"@/shared/session/**",
+											"**/shared/api",
+											"**/shared/api/**",
+											"**/shared/session",
+											"**/shared/session/**",
+											"**/shared/lib",
+											"**/shared/ui",
+											"**/shared/lib/index",
+											"**/shared/lib/index.*",
+											"**/shared/ui/index",
+											"**/shared/ui/index.*"
+										],
+										"message": "The report page must not reach the session or the API client; import the module directly (docs/billing.md, *The public page*)."
+									},
+									{
+										"group": [
+											"@/features",
+											"@/features/**",
+											"@/entities",
+											"@/entities/**",
+											"@/app",
+											"@/app/**",
+											"@/pages",
+											"@/pages/**",
+											"**/features",
+											"**/features/**",
+											"**/entities",
+											"**/entities/**",
+											"**/app",
+											"**/app/**",
+											"@/widgets/**",
+											"!@/widgets/client-report",
+											"!@/widgets/client-report/**",
+											"./pages/**",
+											"!./pages/report",
+											"!./pages/report/**"
+										],
+										"message": "The report page imports no feature, entity, app, other page or other widget (docs/billing.md, *The public page*)."
+									},
+									{
+										"group": ["..", "../**"],
+										"message": "The report page's files import one another as ./ and the rest by its @/ path, so the fence can see it (docs/billing.md, *The public page*)."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		}
+	]
 }

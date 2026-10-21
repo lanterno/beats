@@ -1,0 +1,64 @@
+/*
+  The report page's stylesheet: Tailwind and the design tokens, and none of
+  global.css (its Google Fonts import, the sky, the app's layers). Utilities
+  are generated from the files the page draws, not the whole client.
+*/
+@import "tailwindcss" source(none);
+@import "./shared/styles/tokens.css";
+
+@source "./report.tsx";
+@source "./pages/report";
+@source "./widgets/client-report";
+@source "./shared/ui/panel.tsx";
+@source "./shared/ui/button.tsx";
+
+@layer base {
+	* {
+		border-color: var(--color-border);
+	}
+
+	/* A plain soft ground: the afternoon's low haze, no sky. */
+	body {
+		background-color: hsl(var(--background));
+		color: hsl(var(--foreground));
+		font-family: var(--font-body);
+		font-variant-numeric: lining-nums;
+		-webkit-font-smoothing: antialiased;
+		min-height: 100vh;
+	}
+
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-heading);
+		letter-spacing: -0.02em;
+	}
+
+	:where(p, span, li, h1, h2, h3, td, th) {
+		overflow-wrap: anywhere;
+	}
+}
+
+/*
+  The browser's own print header and footer carry the page's address, and
+  the fragment in it is the link. Chrome and Edge leave them off every page
+  when the first page has no room for them
+  (developer.chrome.com/blog/print-margins), so the first page has no top or
+  bottom margin, and the page's own top padding in print stands in for it.
+  ReportPage also takes the fragment off the address while it prints.
+*/
+@page :first {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+/* A printed report stands alone in an accounts-payable folder. */
+@media print {
+	body {
+		background-color: white;
+	}
+
+	thead {
+		display: table-header-group;
+	}
+}

@@ -34,9 +34,13 @@ logs:
 # Snapshot Mongo into a backup directory. mongodump runs INSIDE the db
 # container -- the database is not published outside the stack and there is
 # no host mongo client to rely on.
+#
+# Every collection but `report_links`. A restore must never bring back a
+# report link that was turned off; `mongorestore --drop` drops only what the
+# archive holds, so the live links are left as they are (DATA.md).
 backup dest:
     mkdir -p {{ dest }}
-    {{ compose }} exec -T db sh -c 'mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --db beats --archive --gzip' > {{ dest }}/beats-mongo.archive.gz
+    {{ compose }} exec -T db sh -c 'mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --db beats --excludeCollection=report_links --archive --gzip' > {{ dest }}/beats-mongo.archive.gz
 
 # Restore a snapshot taken by `just backup`. Destructive: it drops what is
 # there first, so it is never wired to a timer.

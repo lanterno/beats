@@ -16,6 +16,7 @@ from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.oura import OuraService
+from beats.domain.report_link_service import PublicReportReader, ReportLinkService
 from beats.domain.services import BeatService, ContractService, ProjectService, TimerService
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import (
@@ -50,6 +51,8 @@ from beats.infrastructure.repositories import (
     MongoPendingSuggestionRepository,
     MongoProjectBillingRepository,
     MongoProjectRepository,
+    MongoReportLinkRepository,
+    MongoReportLinkResolver,
     MongoSignalSummaryRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
@@ -59,6 +62,8 @@ from beats.infrastructure.repositories import (
     PendingSuggestionRepository,
     ProjectBillingRepository,
     ProjectRepository,
+    ReportLinkRepository,
+    ReportLinkResolver,
     SignalSummaryRepository,
     WebhookRepository,
     WeeklyDigestRepository,
@@ -102,9 +107,11 @@ def _user_scoped[R](repo: Callable[..., R], collection: str) -> Callable[[str], 
 
 
 def _unscoped[R](repo: Callable[..., R], collection: str) -> Callable[[], R]:
-    """Same, for the two collections that are looked up across all users:
-    pairing codes (redeemed by an unauthenticated device) and device
-    registrations (resolved from a device token before its owner is known).
+    """Same, for the three collections that are looked up across all users:
+    pairing codes (redeemed by an unauthenticated device), device
+    registrations (resolved from a device token before its owner is known)
+    and report links (resolved from a link's token before its owner is
+    known).
     """
 
     def dependency() -> R:
@@ -206,6 +213,9 @@ get_billable_override_repository = _user_scoped(
 get_billing_budget_repository = _user_scoped(MongoBillingBudgetRepository, "billing_budgets")
 
 
+get_report_link_repository = _user_scoped(MongoReportLinkRepository, "report_links")
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
@@ -271,10 +281,12 @@ def get_billing_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     billing_budget_repo: Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)],
+    link_repo: Annotated[ReportLinkRepository, Depends(get_report_link_repository)],
 ) -> BillingService:
     """Get the billing service with injected repositories. It is the only
     service given the billing budgets: no device route and no coach port
-    reaches them."""
+    reaches them. It takes the report links for the cascades alone: a
+    project leaving a client leaves its links, and a client's go with it."""
     return BillingService(
         clients=client_repo,
         billings=billing_repo,
@@ -282,6 +294,54 @@ def get_billing_service(
         projects=project_repo,
         beats=beat_repo,
         budgets=billing_budget_repo,
+        report_links=link_repo,
+    )
+
+
+def get_report_link_key(settings: Annotated[Settings, Depends(get_settings)]) -> bytes:
+    """The key a report link's token is hashed under. A dependency, so a
+    test can run the app under another key, as a rotation would."""
+    return settings.report_link_key.encode()
+
+
+def get_report_link_service(
+    link_repo: Annotated[ReportLinkRepository, Depends(get_report_link_repository)],
+    client_repo: Annotated[ClientRepository, Depends(get_client_repository)],
+    billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    key: Annotated[bytes, Depends(get_report_link_key)],
+) -> ReportLinkService:
+    """Get the report link service, all of it the caller's."""
+    return ReportLinkService(
+        links=link_repo,
+        clients=client_repo,
+        billings=billing_repo,
+        projects=project_repo,
+        key=key,
+    )
+
+
+get_report_link_resolver = _unscoped(MongoReportLinkResolver, "report_links")
+
+
+ReportLinkResolverDep = Annotated[ReportLinkResolver, Depends(get_report_link_resolver)]
+ReportLinkKeyDep = Annotated[bytes, Depends(get_report_link_key)]
+
+
+def public_report_reader(user_id: str) -> PublicReportReader:
+    """The reader of a report link's report, built for the link's owner.
+
+    A plain function, not a dependency: the public route calls it with the
+    user id the resolver found, so nothing — a session sent along, an
+    override — can put the caller's id in its place. Each store is the
+    owner's, and goes in as the narrow port the reader asks for."""
+    db = Database.get_db()
+    return PublicReportReader(
+        clients=MongoClientRepository(db.clients, user_id=user_id),
+        billings=MongoProjectBillingRepository(db.project_billing, user_id=user_id),
+        projects=MongoProjectRepository(db.projects, user_id=user_id),
+        beats=MongoBeatRepository(db.timeLogs, user_id=user_id),
+        overrides=MongoBillableOverrideRepository(db.billable_overrides, user_id=user_id),
     )
 
 
@@ -348,6 +408,7 @@ BillableOverrideRepoDep = Annotated[
 # For the backup's export alone; every other reader goes through BillingService.
 BillingBudgetRepoDep = Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)]
 BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
+ReportLinkServiceDep = Annotated[ReportLinkService, Depends(get_report_link_service)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]

@@ -40,7 +40,7 @@ from math import ceil
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
-from beats.domain.billing import assemble_client, resolve_entry
+from beats.domain.billing import assemble_client, month_slices, resolve_entry
 from beats.domain.currencies import minor_units
 from beats.domain.models import (
     Beat,
@@ -139,18 +139,6 @@ def billing_budget_days(budget: BillingBudget, today: date) -> BillingBudgetDays
     if first > today:
         return BillingBudgetDays(first, None, None, True)
     return BillingBudgetDays(first, None, today, False)
-
-
-def month_slices(first: date, last: date) -> list[tuple[date, date]]:
-    """The days `first` through `last`, cut at each 1st of a month."""
-    slices: list[tuple[date, date]] = []
-    while first <= last:
-        end = min(month_end(first), last)
-        slices.append((first, end))
-        if end == date.max:
-            break
-        first = end + timedelta(days=1)
-    return slices
 
 
 def scope_spend(

@@ -1,0 +1,376 @@
+/*
+  The design tokens: the faces, the Tailwind theme, and the two hours'
+  colours. Both HTML entries import this after `@import "tailwindcss"`:
+  `global.css` for the app and `report.css` for the public report page
+  (docs/billing.md, *The public page*), so the report is drawn in the same
+  colours without loading anything else of the app's.
+*/
+
+/*
+  Zen Maru Gothic (and Hiragino, behind it) draws the en and em dash as the
+  full-width Japanese bar: a hairline the width of a character, touching the
+  words either side. This face covers those two characters alone, from a
+  system Latin face, and sits first in the body stack, so every dash in copy
+  reads as a dash while every other character stays Zen Maru's.
+*/
+@font-face {
+  font-family: "Latin Dash";
+  src: local("Helvetica Neue"), local("HelveticaNeue"), local("Segoe UI"), local("Roboto"),
+    local("Arial"), local("DejaVu Sans");
+  unicode-range: U+2013-2014;
+}
+
+/*
+  Two typefaces, both rounded. M PLUS Rounded 1c carries the display figures
+  and every column of digits — its numerals are one width, so `font-mono`
+  keeps aligned figures without `tnum`. Zen Maru Gothic is everything read.
+  Real code (`pre`, `code`) keeps a monospace through `font-code`.
+*/
+@theme {
+  --font-heading:
+    "M PLUS Rounded 1c", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+  --font-body:
+    "Latin Dash", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "M PLUS Rounded 1c", "Zen Maru Gothic", system-ui, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* The panel's shadow, and the dialog's. The colour is per theme. */
+  --shadow-soft: 0 22px 48px -26px var(--shadow-color);
+  --shadow-card: 0 40px 80px -30px var(--shadow-color);
+  --shadow-glow-amber: 0 0 20px -4px hsl(var(--accent) / 0.25);
+
+  /*
+    Every token below is an HSL triple on :root so `hsl(var(--x) / .5)` keeps
+    working wherever it is written by hand. The washes — panel, wash, hairline,
+    the sidebar's — are translucent in the mockup, and the alpha rides in a
+    companion token so the two themes can differ (.93 by day, .94 at dusk).
+  */
+  --color-border: hsl(var(--border) / var(--border-alpha));
+  --color-input: hsl(var(--input) / var(--secondary-alpha));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary) / var(--secondary-alpha));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-ink: hsl(var(--destructive-ink));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-ink: hsl(var(--accent-ink));
+
+  --color-accent-gold: hsl(var(--accent-gold));
+  --color-success: hsl(var(--success));
+  --color-success-ink: hsl(var(--success-ink));
+
+  --color-popover: hsl(var(--popover) / var(--card-alpha));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card) / var(--card-alpha));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-sidebar: hsl(var(--sidebar-background) / var(--sidebar-alpha));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent) / var(--sidebar-accent-alpha));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border) / var(--border-alpha));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  /* The veil behind a dialog or the command palette. */
+  --color-veil: var(--veil);
+
+  /*
+    The tints (Decision 9): sky for vacation, blossom for sick, leaf for a
+    public holiday, a neutral for "other". Each is a fill and its ink.
+  */
+  --color-tint-vacation: var(--tint-vacation);
+  --color-tint-vacation-ink: var(--tint-vacation-ink);
+  --color-tint-sick: var(--tint-sick);
+  --color-tint-sick-ink: var(--tint-sick-ink);
+  --color-tint-holiday: var(--tint-holiday);
+  --color-tint-holiday-ink: var(--tint-holiday-ink);
+  --color-tint-other: var(--tint-other);
+  --color-tint-other-ink: var(--tint-other-ink);
+
+  /*
+    Radii, on the mockup's stops, so the scale stays monotonic (Tailwind's
+    own xl/2xl would otherwise fall below md). Pills are `rounded-full`,
+    the panel is 1.625rem, the dialog 1.75rem.
+  */
+  --radius-sm: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+  --radius-3xl: var(--radius);
+  --radius-4xl: 1.75rem;
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+	*,
+	::after,
+	::before,
+	::backdrop,
+	::file-selector-button {
+		border-color: var(--color-gray-200, currentcolor);
+	}
+}
+
+/*
+  Two hours. `afternoon` on :root, `dusk` under [data-theme="dusk"]; the
+  values are the design's (docs/project-page.md, "The theme"), the
+  look is docs/project-page-mockup.html. Token names are the ones every
+  page already reads, so the pages follow the day the block lands.
+*/
+@layer base {
+	/* Afternoon — half past three on a hill above the fields */
+	:root {
+		color-scheme: light;
+
+		/* the sky's low haze; the sky itself is a fixed layer (.sky) */
+		--background: 185 32% 92%;
+		--foreground: 204 23% 22%;
+
+		/* cloud-white panels, #FFFDF7 at 93 % */
+		--card: 45 100% 98%;
+		--card-alpha: 0.93;
+		--card-foreground: 204 23% 22%;
+
+		--popover: 45 100% 98%;
+		--popover-foreground: 204 23% 22%;
+
+		/* sunlight: today, the running timer, the primary action */
+		--primary: 40 88% 57%;
+		--primary-foreground: 204 23% 22%;
+
+		/* the wash, rgb(114 176 214 / .16): chips, tiles, hover */
+		--secondary: 203 55% 64%;
+		--secondary-alpha: 0.16;
+		--secondary-foreground: 204 23% 22%;
+
+		/*
+		  The track behind a fill and the tint of a passive thing. The mockup's
+		  neutral #EEEBE2 is 1.15:1 on the panel — a goal ring at 0 % vanished —
+		  so this is a sky-grey that still reads on cream (~1.35:1).
+		  --muted-foreground is a step darker than the mockup's ink-2 (#66737D)
+		  because page subtitles sit on the sky, not a panel, until Phase 4.
+		*/
+		--muted: 203 35% 85%;
+		--muted-foreground: 206 10% 40%;
+
+		--accent: 40 88% 57%;
+		--accent-foreground: 204 23% 22%;
+		/* the accent as text on a panel (#8C5E12); #F2B233 itself is not legible there */
+		--accent-ink: 37 77% 31%;
+
+		--accent-gold: 40 88% 57%;
+
+		/* persimmon for hours owed */
+		--destructive: 17 62% 54%;
+		--destructive-foreground: 45 100% 98%;
+		/*
+		  the owed tone as small text on a panel (#A84924, 5.4:1); #D2683F is
+		  3.4:1 there, so --destructive stays for figures and fills
+		*/
+		--destructive-ink: 17 65% 40%;
+
+		/* the hairline, rgb(43 58 68 / .09) */
+		--border: 204 23% 22%;
+		--border-alpha: 0.09;
+		--input: 203 55% 64%;
+		--ring: 40 88% 57%;
+
+		--radius: 1.5rem;
+
+		/* leaf green for hours over */
+		--success: 136 39% 40%;
+		/*
+		  the leaf as small text (5.9:1 on the panel, 4.7:1 on its own 15 % tint);
+		  --success is 3.3–3.9:1 there, so it stays for figures, fills and icons
+		*/
+		--success-ink: 136 45% 30%;
+
+		/* the sidebar: the panel at 82 % and its ink */
+		--sidebar-background: 45 100% 98%;
+		--sidebar-alpha: 0.82;
+		--sidebar-foreground: 204 23% 22%;
+		--sidebar-primary: 37 77% 31%;
+		--sidebar-primary-foreground: 204 23% 22%;
+		/* the heavier wash, rgb(114 176 214 / .28): the row that is on */
+		--sidebar-accent: 203 55% 64%;
+		--sidebar-accent-alpha: 0.28;
+		--sidebar-accent-foreground: 204 23% 22%;
+		--sidebar-border: 204 23% 22%;
+		--sidebar-ring: 40 88% 57%;
+
+		/* kept for the name; the glow it once tinted is now the sky */
+		--body-glow: 185 32% 92%;
+
+		--shadow-color: rgb(43 84 110 / 0.22);
+		--veil: rgb(60 100 130 / 0.38);
+
+		/* the painting */
+		--sky-top: #8cc1e2;
+		--sky-mid: #bcddee;
+		--sky-low: #e4f0f1;
+		--sky-ground: #e9f2e6;
+		--sun: rgb(255 236 170 / 0.75);
+		--cloud: #ffffff;
+		--cloud-shade: rgb(150 185 215 / 0.45);
+		--cloud-alpha: 0.88;
+		--hill-far: #b9d9a8;
+		--hill-mid: #8ac07c;
+		--hill-near: #5c9f5e;
+		/* text straight on the sky glows in this (`.on-sky`): the band the ink was chosen for */
+		--sky-halo: var(--sky-low);
+		--sky-halo-shadow:
+			0 0 1px var(--sky-halo), 0 0 3px var(--sky-halo), 0 0 6px var(--sky-halo),
+			0 0 12px var(--sky-halo);
+
+		/* the tints: vacation, sick, holiday, other — a fill and its ink */
+		--tint-vacation: #d9ebf6;
+		--tint-vacation-ink: #276a8e;
+		--tint-sick: #fbe3d9;
+		--tint-sick-ink: #b04e33;
+		--tint-holiday: #e3f1d3;
+		--tint-holiday-ink: #356f3e;
+		--tint-other: #eeebe2;
+		--tint-other-ink: #6a6258;
+	}
+
+	/* Dusk — the same hill under an indigo sky */
+	:root[data-theme="dusk"] {
+		color-scheme: dark;
+
+		--background: 225 41% 31%;
+		--foreground: 210 36% 95%;
+
+		/* #243049 at 94 % */
+		--card: 221 34% 21%;
+		--card-alpha: 0.94;
+		--card-foreground: 210 36% 95%;
+
+		--popover: 221 34% 21%;
+		--popover-foreground: 210 36% 95%;
+
+		--primary: 41 89% 66%;
+		--primary-foreground: 204 23% 22%;
+
+		/* rgb(140 190 230 / .14) */
+		--secondary: 207 64% 73%;
+		--secondary-alpha: 0.14;
+		--secondary-foreground: 210 36% 95%;
+
+		--muted: 218 19% 28%;
+		--muted-foreground: 214 16% 70%;
+
+		--accent: 41 89% 66%;
+		--accent-foreground: 204 23% 22%;
+		--accent-ink: 41 89% 66%;
+
+		--accent-gold: 41 89% 66%;
+
+		--destructive: 17 81% 73%;
+		--destructive-foreground: 204 23% 22%;
+		/* already 6.4:1 on the dusk panel */
+		--destructive-ink: 17 81% 73%;
+
+		/* rgb(236 241 246 / .10) */
+		--border: 210 36% 95%;
+		--border-alpha: 0.1;
+		--input: 207 64% 73%;
+		--ring: 41 89% 66%;
+
+		--success: 137 48% 69%;
+		/* already 7.6:1 on the dusk panel */
+		--success-ink: 137 48% 69%;
+
+		--sidebar-background: 221 34% 21%;
+		--sidebar-alpha: 0.86;
+		--sidebar-foreground: 210 36% 95%;
+		--sidebar-primary: 41 89% 66%;
+		--sidebar-primary-foreground: 204 23% 22%;
+		/* rgb(140 190 230 / .26) */
+		--sidebar-accent: 207 64% 73%;
+		--sidebar-accent-alpha: 0.26;
+		--sidebar-accent-foreground: 210 36% 95%;
+		--sidebar-border: 210 36% 95%;
+		--sidebar-ring: 41 89% 66%;
+
+		--body-glow: 225 41% 31%;
+
+		--shadow-color: rgb(5 10 25 / 0.55);
+		--veil: rgb(8 14 30 / 0.6);
+
+		--sky-top: #1a2446;
+		--sky-mid: #2e3e6e;
+		--sky-low: #6a5a82;
+		--sky-ground: #c98a63;
+		--sun: rgb(255 170 100 / 0.35);
+		--cloud: #5a6a96;
+		--cloud-shade: rgb(20 30 60 / 0.5);
+		--cloud-alpha: 0.6;
+		--hill-far: #3b5470;
+		--hill-mid: #2c4a44;
+		--hill-near: #1f3a31;
+		--sky-halo: var(--sky-mid);
+
+		--tint-vacation: #2d4a6b;
+		--tint-vacation-ink: #bcd9f0;
+		--tint-sick: #5a3630;
+		--tint-sick-ink: #f5b9a5;
+		--tint-holiday: #2f4a36;
+		--tint-holiday-ink: #bfe3b0;
+		--tint-other: #3b4556;
+		--tint-other-ink: #c9d2dc;
+	}
+
+	/* Density: compact */
+	:root[data-density="compact"] {
+		font-size: 14px;
+	}
+
+	/* Density: spacious */
+	:root[data-density="spacious"] {
+		font-size: 18px;
+	}
+}

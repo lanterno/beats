@@ -6,7 +6,16 @@ import { describeError } from "@/shared/api";
 import { Panel } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
-export function PasskeysSection() {
+export interface PasskeysSectionProps {
+	/**
+	 * How many report links still open. None is ended by a passkey's removal
+	 * or a sign-out, so the section says so while there are some. Removing a
+	 * passkey asks for no confirmation yet (AHM-101).
+	 */
+	liveReportLinks?: number;
+}
+
+export function PasskeysSection({ liveReportLinks = 0 }: PasskeysSectionProps) {
 	// null until the first load answers, so an account with no passkeys (one that signs in
 	// through single sign-on) isn't mistaken for one still loading.
 	const [credentials, setCredentials] = useState<CredentialInfo[] | null>(null);
@@ -64,6 +73,13 @@ export function PasskeysSection() {
 					Passkeys let you sign in securely without a password.
 					{credentials?.length ? " You must keep at least one registered." : null}
 				</p>
+				{liveReportLinks > 0 && (
+					<p className={LEAD}>
+						{liveReportLinks === 1
+							? "1 report link still works whatever happens to your passkeys; turn it off under Report links below."
+							: `${liveReportLinks} report links still work whatever happens to your passkeys; turn them off under Report links below.`}
+					</p>
+				)}
 
 				{credentials === null && !loadError && <p className={LEAD}>Loading...</p>}
 

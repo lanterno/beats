@@ -458,6 +458,51 @@ class BillingBudgetStatusResponse(BaseModel):
     running: BillingBudgetRunningResponse | None
 
 
+class ReportLinkProjectResponse(BaseModel):
+    """A project a report link shows, by its current name."""
+
+    id: str
+    name: str
+
+
+class ReportLinkResponse(BaseModel):
+    """A report link as its maker sees it: what it covers and shows, the
+    zone its days are counted in, its last day, and whether it still opens
+    (`live`) or has ended, read today in that zone. Never its token, nor the
+    token's hash. `projects` is the frozen list, by current name: a project
+    that has left the client has left the link."""
+
+    id: str
+    client_id: str
+    label: str | None
+    first: date_type
+    last: date_type
+    tz: str
+    show_amounts: bool
+    show_notes: bool
+    projects: list[ReportLinkProjectResponse]
+    expires_on: date_type
+    created_at: datetime
+    state: Literal["live", "ended"]
+
+
+class ReportLinkCreatedResponse(ReportLinkResponse):
+    """A link just made, with its token: the only time the token is shown."""
+
+    token: str
+
+
+class ReportLinksTurnOffRequest(BaseModel):
+    """Turn off one client's report links, or with `client_id: null` every
+    one. The key is required, so an empty body is never read as "all"."""
+
+    client_id: str | None
+
+
+class ReportLinksTurnOffResponse(BaseModel):
+    turned_off: int
+
+
 class CurrencyResponse(BaseModel):
     """A currency a client may be billed in, and its minor units."""
 
