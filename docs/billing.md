@@ -1464,7 +1464,7 @@ POST /api/public/reports          {"token": "lpr_…"}     no session
   leaves the ended ones listed. An archived client with no panel in the
   month shown has its links under its row in the archived clients list. The
   Passkeys section says how many links still work, whatever happens to a
-  passkey.
+  passkey (removing one asks for no confirmation yet: AHM-101).
 - **Report links are refreshed** by every billing write and every client
   delete, since a move, a stop or a delete changes their projects.
 - **The dev server** rewrites `/report` to `report.html` as Firebase and
