@@ -8,6 +8,15 @@
  *
  * `document.title` stays "Hours report" (report.html): the client's name is
  * never put where history sync or a previewer would read it.
+ *
+ * While the page prints, the fragment comes off the address. A browser
+ * prints the address in each page's footer, fragment and all, and the
+ * fragment is the link: the PDF a client saves goes on to an accounts
+ * folder or an email archive, and would carry a working link with it. The
+ * print button takes it off before it asks to print; Ctrl+P (or ⌘P) takes
+ * it off on `beforeprint`, which some browsers fire after they have read
+ * the address, so report.css also leaves the browser no room for its own
+ * header and footer. `afterprint` puts it back, so a reload still works.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_NAME } from "@/shared/config";
@@ -24,6 +33,23 @@ export function ReportPage() {
 	);
 	// Only the latest request's answer is drawn.
 	const latest = useRef(0);
+	// The fragment taken off the address while the page prints.
+	const printing = useRef<string | null>(null);
+
+	const hideToken = useCallback(() => {
+		const { hash, pathname, search } = window.location;
+		if (printing.current !== null || !hash) return;
+		printing.current = hash;
+		window.history.replaceState(window.history.state, "", `${pathname}${search}`);
+	}, []);
+
+	const restoreToken = useCallback(() => {
+		const hash = printing.current;
+		if (hash === null) return;
+		printing.current = null;
+		const { pathname, search } = window.location;
+		window.history.replaceState(window.history.state, "", `${pathname}${search}${hash}`);
+	}, []);
 
 	const load = useCallback(async () => {
 		const token = tokenFromHash(window.location.hash);
@@ -45,14 +71,29 @@ export function ReportPage() {
 		const onHash = () => void load();
 		window.addEventListener("pageshow", onShow);
 		window.addEventListener("hashchange", onHash);
+		window.addEventListener("beforeprint", hideToken);
+		window.addEventListener("afterprint", restoreToken);
 		return () => {
 			window.removeEventListener("pageshow", onShow);
 			window.removeEventListener("hashchange", onHash);
+			window.removeEventListener("beforeprint", hideToken);
+			window.removeEventListener("afterprint", restoreToken);
 		};
-	}, [load]);
+	}, [load, hideToken, restoreToken]);
+
+	const print = () => {
+		hideToken();
+		// A task later, so the browser has the plain address before it
+		// reads it for the footer. Printing blocks in most browsers; where
+		// it does not, `afterprint` puts the fragment back.
+		window.setTimeout(() => {
+			window.print();
+			restoreToken();
+		}, 0);
+	};
 
 	return (
-		<main className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12 print:p-0 print:max-w-none">
+		<main className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12 print:px-0 print:pt-[12mm] print:pb-0 print:max-w-none">
 			{state.kind === "ready" ? (
 				<ClientReportView
 					report={state.report}
@@ -63,7 +104,7 @@ export function ReportPage() {
 							variant="outline"
 							size="sm"
 							className="print:hidden"
-							onClick={() => window.print()}
+							onClick={print}
 						>
 							Print or save as PDF
 						</Button>

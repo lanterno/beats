@@ -39,6 +39,19 @@
 	}
 }
 
+/*
+  The browser's own print header and footer carry the page's address, and
+  the fragment in it is the link. Chrome and Edge leave them off every page
+  when the first page has no room for them
+  (developer.chrome.com/blog/print-margins), so the first page has no top or
+  bottom margin, and the page's own top padding in print stands in for it.
+  ReportPage also takes the fragment off the address while it prints.
+*/
+@page :first {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
 /* A printed report stands alone in an accounts-payable folder. */
 @media print {
 	body {
