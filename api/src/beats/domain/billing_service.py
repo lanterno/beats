@@ -20,7 +20,9 @@ A report link names its projects when it is made, and a project that
 leaves its client leaves that client's links for good: a move away, a
 stop and a restore that bills it elsewhere each drop it from the old
 client's links (`ReportLinkScope.drop_project`) before their own write, so
-a failure between the two leaves a link narrower than it was, never wider.
+a failure between the two leaves a link narrower than it was, never wider,
+and again after it, for a link made while the write was landing (whose own
+check, `ReportLinkService.create`, read the project as still billed there).
 Billed to the client again later, it does not come back to them; a link
 made after can include it.
 """
@@ -329,7 +331,8 @@ class BillingService:
           terms dated before the current month, or any move to another
           client while a term is dated there or an entry there is marked
           billable, needs `rewrite_past` (409 RETROACTIVE_CHANGE).
-        - A move takes it off the old client's report links first.
+        - A move takes it off the old client's report links, before and
+          after the write.
         """
         project = await self.projects.get_by_id(project_id)
         if project.kind is not ProjectKind.FREELANCE:
@@ -358,6 +361,8 @@ class BillingService:
         billing = await self.billings.upsert(
             ProjectBilling(project_id=project_id, client_id=client_id, terms=terms)
         )
+        if stored is not None and stored.client_id != client_id:
+            await self.report_links.drop_project(stored.client_id, project_id)
         return BilledProject(billing, client)
 
     async def remove_project_billing(
@@ -377,7 +382,8 @@ class BillingService:
         The project leaves its client's report links, then the budget is
         deleted, then the billing, so a failure between leaves a billed
         project without its budget or off a link, never a budget on a
-        project that is not billed."""
+        project that is not billed. It leaves the links again after, for
+        one made meanwhile."""
         stored = await self.billings.get(project_id)
         if stored is None:
             raise ProjectNotBilled()
@@ -396,6 +402,7 @@ class BillingService:
         if budget is not None:
             await self.budgets.delete(BillingBudgetScope.PROJECT, project_id)
         await self.billings.delete(project_id)
+        await self.report_links.drop_project(stored.client_id, project_id)
 
     async def _marked_change(
         self,
@@ -765,12 +772,19 @@ class BillingService:
     async def restore_project_billing(self, billing: ProjectBilling) -> None:
         """Write a project's billing read from a backup. Not gated, and the
         client may be archived. A billing that moves the project to another
-        client takes it off the stored client's report links first, as a
-        move does."""
+        client takes it off the stored client's report links before and
+        after, as a move does."""
         stored = await self.billings.get(billing.project_id)
-        if stored is not None and stored.client_id != billing.client_id:
-            await self.report_links.drop_project(stored.client_id, billing.project_id)
+        left = (
+            stored.client_id
+            if stored is not None and stored.client_id != billing.client_id
+            else None
+        )
+        if left is not None:
+            await self.report_links.drop_project(left, billing.project_id)
         await self.billings.upsert(billing)
+        if left is not None:
+            await self.report_links.drop_project(left, billing.project_id)
 
     async def restore_billing_budget(self, budget: BillingBudget) -> None:
         """Write a billing budget read from a backup, replacing the one on its

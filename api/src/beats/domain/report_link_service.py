@@ -159,6 +159,18 @@ class ReportLinkService:
                 **fields.model_dump(), token_hash=hashed, key_id=key_id(self._key), tz=tz.key
             )
         )
+        # Checked again now the link is stored. A move or a stop that lands
+        # between the check and the insert drops the project from links
+        # that do not include this one yet; kept, the project would come
+        # back to the link once billed to the client again. A write that
+        # lands after this read drops it from this link itself (BillingService).
+        billed = {
+            billing.project_id for billing in await self.billings.list_by_client(fields.client_id)
+        }
+        for index, project_id in enumerate(fields.project_ids):
+            if project_id not in billed:
+                await self.links.delete(link.id or "")
+                raise ProjectNotBilledToClient(index)
         return ReportLinkMade(link, token)
 
     async def list(self, client_id: str | None) -> builtins.list[ReportLink]:
