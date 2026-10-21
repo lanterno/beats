@@ -67,7 +67,11 @@
 											"**/shared/session",
 											"**/shared/session/**",
 											"**/shared/lib",
-											"**/shared/ui"
+											"**/shared/ui",
+											"**/shared/lib/index",
+											"**/shared/lib/index.*",
+											"**/shared/ui/index",
+											"**/shared/ui/index.*"
 										],
 										"message": "The report page must not reach the session or the API client; import the module directly (docs/billing.md, *The public page*)."
 									},
@@ -86,9 +90,19 @@
 											"**/entities",
 											"**/entities/**",
 											"**/app",
-											"**/app/**"
+											"**/app/**",
+											"@/widgets/**",
+											"!@/widgets/client-report",
+											"!@/widgets/client-report/**",
+											"./pages/**",
+											"!./pages/report",
+											"!./pages/report/**"
 										],
-										"message": "The report page imports no feature, entity, app or other page (docs/billing.md, *The public page*)."
+										"message": "The report page imports no feature, entity, app, other page or other widget (docs/billing.md, *The public page*)."
+									},
+									{
+										"group": ["..", "../**"],
+										"message": "The report page's files import one another as ./ and the rest by its @/ path, so the fence can see it (docs/billing.md, *The public page*)."
 									}
 								]
 							}
