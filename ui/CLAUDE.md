@@ -159,15 +159,19 @@ else: no session, no query client, no service worker, no analytics, no theme scr
 no credentials (`fetchReport.ts`), never `apiClient`, whose 401 handling would end a
 session and drop the fragment. One dead state stands for every link that does not
 answer (turned off, ended, never made, cut short), apart from a rate limit or an API
-it cannot reach. The view is `widgets/client-report` (`ClientReportView`, its words in
+it cannot reach. While the page prints, the fragment is off the address, since browsers
+print the address in their footer (`ReportPage`), and `report.css` gives the first
+printed page no top or bottom margin, which leaves Chrome and Edge no room for that
+footer on any page. The view is `widgets/client-report` (`ClientReportView`, its words in
 `figures.ts`), drawn from `shared/report`'s schema, and the share dialog's preview
 draws the same view.
 
 - **The fence.** A Biome override in `biome.json` holds `report.tsx`, `report-zod.ts`,
   `pages/report`, `widgets/client-report` and `shared/report` off `@/shared/api`,
-  `@/shared/session`, every feature, entity, app module and other page, and off the
-  `@/shared/lib` and `@/shared/ui` barrels, which re-export hooks that reach the API and
-  the session. That is the one exception to the barrel rule: these files import a
+  `@/shared/session`, every feature, entity, app module, other page and other widget,
+  and off the `@/shared/lib` and `@/shared/ui` barrels (by name or by `index`), which
+  re-export hooks that reach the API and the session. It refuses `../` too: those files
+  import one another as `./` and everything else by an `@/` path the patterns can see. That is the one exception to the barrel rule: these files import a
   shared module directly (`@/shared/lib/money`, `@/shared/ui/panel`, `@/shared/lib/cn`).
 - **The bundle check.** `pnpm build` ends with `scripts/check-report-bundle.mjs`, which
   reads `dist/spa` and fails the build if `report.html` or any file it reaches carries
@@ -210,7 +214,7 @@ block says "Budgets aren't available right now." and the rest renders as before.
 
 Report links (phase 1c) live in `entities/report-link`. A client with a billed project
 offers Share beside Edit, which opens `ReportLinkDialog` (`pages/clients`): the range,
-the projects, Show amounts and Show notes (both off for a new link), the zone, an expiry that is
+the projects, Show amounts and Include notes (both off for a new link), the zone, an expiry that is
 picked and never preset (Create stays off until one is), a label, and beside them the
 preview, which is the preview route's answer drawn by `ClientReportView`. The create
 is `createReportLink`, a plain `post` sent once, never `apiMutate` or a mutation, and
@@ -218,8 +222,10 @@ its token lives in the dialog's state alone and is shown once as the address; cl
 before Copy asks once. Replace turns the old link off before making the new one. The
 client's links are folded under its panel (`ReportLinksSection`), with what each
 leaves out of the client's billed projects (`notOnLink`), and the page reads every
-link once with `useReportLinks` and hands each panel its own. Settings lists the live
-ones across clients with Turn off all, and the Passkeys section says how many still
+link once with `useReportLinks` and hands each panel its own; an archived client with
+no panel in the month has its links under its row in the archived list
+(`ArchivedClientLinks`). Settings lists the live ones across clients with Turn off all,
+which ends those and leaves ended ones listed, and the Passkeys section says how many still
 work, since signing out or removing a passkey ends none. The ranges and the expiry
 are counted in the link's zone (`todayIn`). Every link sits under
 `reportLinksRootKey` (`shared/api/keys.ts`), which a billing write, a client delete
