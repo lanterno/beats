@@ -80,15 +80,18 @@ No passwords are stored — Beats does not have a password login path.
   is made), `first` and `last` (the days it covers, all finished when it is made),
   `tz` (the time zone those days are counted in), `show_amounts`, `show_notes`,
   `label` (yours, never shown on the link), `expires_on` (the last day it works),
-  `created_at`, and `token_hash`: an HMAC-SHA256 of the link's secret under the
-  server's `REPORT_LINK_KEY`. The secret is shown once, when the link is made, and
-  never stored; rotating the key ends every link. Unique on `token_hash`. Turning a
-  link off deletes the document; an ended one stays listed until you remove it.
+  `created_at`, `token_hash`: an HMAC-SHA256 of the link's secret under the
+  server's `REPORT_LINK_KEY`, and `key_id`: an HMAC of a fixed message under the same
+  key, which says which key the link was made under and nothing about the key. The
+  secret is shown once, when the link is made, and never stored; rotating the key
+  ends every link, and each is then listed as ended. Unique on `token_hash`. Turning
+  a link off deletes the document; an ended one stays listed until you remove it,
+  and turning all your links off ends the live ones only.
   `project_ids` only shrinks: moving a project to another client, stopping its
   billing, or importing a backup that bills it elsewhere removes it from its old
-  client's links first. Deleted with its client. What a link shows is derived on each
-  opening from the client, its billing, the projects' names, the sessions and their
-  marks, and nothing about its being opened is stored.
+  client's links, before the write and again after it. Deleted with its client. What
+  a link shows is derived on each opening from the client, its billing, the projects'
+  names, the sessions and their marks, and nothing about its being opened is stored.
 - **Beats (sessions)**: start, end, project id, tags, a note.
   The tags are derived from the daemon's flow windows when a session is logged, stopped
   or its times are edited; an edit over no windows keeps the tags it had. The note comes
@@ -153,10 +156,11 @@ the public holiday's name (a company holiday reads `company holiday`, not the na
 for it), the absence type and half-day flag (never the absence's note), and the balance.
 
 Plans, webhooks, signals, biometrics, coach history and report links are in neither
-export; they stay in the database until deleted. An import never creates, changes or
-deletes a report link, and a `report_links` key in a file is ignored: a restore must
-never bring back a link you turned off, and the secret that would make a restored link
-useful is stored nowhere. After restoring onto another server or into an empty
+export; they stay in the database until deleted. An import never creates or deletes a
+report link, and never brings one back or adds a project to one; it can take a project
+off a link, when the file bills that project to another client. A `report_links` key
+in a file is ignored: a restore must never bring back a link you turned off, and the
+secret that would make a restored link useful is stored nowhere. After restoring onto another server or into an empty
 database, make the links again.
 
 `POST /api/export/import` takes a `/full` file back, a `1.2` one from before billing
