@@ -83,6 +83,15 @@ def token_hash(token: str, key: bytes) -> str:
     return hmac.new(key, token.encode(), hashlib.sha256).hexdigest()
 
 
+def key_id(key: bytes) -> str:
+    """Which key a link was made under, stored beside its token's hash. Once
+    `REPORT_LINK_KEY` is rotated no token's hash matches any more, and a
+    link whose `key_id` is not the running key's is listed as ended rather
+    than as one that still works. An HMAC of a fixed message: it names the
+    key and gives nothing of it away."""
+    return hmac.new(key, b"report link key id", hashlib.sha256).hexdigest()
+
+
 def well_formed(token: str) -> bool:
     """Whether `token` could be one this module made: anything else is
     answered as a dead link without a read."""

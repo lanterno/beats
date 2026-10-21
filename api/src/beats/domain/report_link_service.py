@@ -40,6 +40,7 @@ from beats.domain.report_links import (
     check_expiry,
     check_range_over,
     is_live,
+    key_id,
     new_token,
     public_report,
     report_months,
@@ -154,7 +155,9 @@ class ReportLinkService:
         check_expiry(fields.expires_on, today)
         token, hashed = new_token(self._key)
         link = await self.links.create(
-            ReportLink(**fields.model_dump(), token_hash=hashed, tz=tz.key)
+            ReportLink(
+                **fields.model_dump(), token_hash=hashed, key_id=key_id(self._key), tz=tz.key
+            )
         )
         return ReportLinkMade(link, token)
 
@@ -186,8 +189,12 @@ class ReportLinkService:
         )
 
     def live(self, link: ReportLink) -> bool:
-        """Whether a link still opens: today in its zone is no later than its
-        last day. A stored zone that no longer resolves never does."""
+        """Whether a link still opens: it was made under the key the API runs
+        with, and today in its zone is no later than its last day. A link
+        made before `REPORT_LINK_KEY` was rotated never opens again, nor does
+        one whose stored zone no longer resolves."""
+        if link.key_id != key_id(self._key):
+            return False
         try:
             zone = ZoneInfo(link.tz)
         except ZoneInfoNotFoundError, ValueError:

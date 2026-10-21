@@ -871,6 +871,9 @@ class ReportLink(ReportLinkFields, TzNormalizedModel):
     # Defaulted here, unlike on a write: a None is not stored.
     label: _Name | None = None
     token_hash: str  # HMAC-SHA256(REPORT_LINK_KEY, token), hex
+    # Which REPORT_LINK_KEY the hash is under (`report_links.key_id`): a link
+    # made under a key since rotated no longer opens, and is listed as ended.
+    key_id: str
     tz: str  # the create's `?tz=`: the zone every day of the link is in
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
