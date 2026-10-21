@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # Prevents Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
