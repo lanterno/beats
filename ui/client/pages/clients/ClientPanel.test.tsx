@@ -49,17 +49,23 @@ const KITE: ClientBilling = {
 
 function renderPanel(billing: ClientBilling, props: Partial<ClientPanelProps> = {}) {
 	render(
-		<MemoryRouter>
-			<ClientPanel
-				billing={billing}
-				todayIso="2026-10-17"
-				tz="Europe/Berlin"
-				monthName="October"
-				projectNames={new Map()}
-				onEdit={vi.fn()}
-				{...props}
-			/>
-		</MemoryRouter>,
+		// The shared-reports disclosure reads nothing until it is opened,
+		// but its hook still needs a client.
+		<QueryClientProvider client={new QueryClient()}>
+			<MemoryRouter>
+				<ClientPanel
+					billing={billing}
+					todayIso="2026-10-17"
+					tz="Europe/Berlin"
+					monthName="October"
+					monthFirst="2026-10-01"
+					monthLast="2026-10-17"
+					projectNames={new Map()}
+					onEdit={vi.fn()}
+					{...props}
+				/>
+			</MemoryRouter>
+		</QueryClientProvider>,
 	);
 	return screen.getByRole("region", { name: billing.name });
 }
@@ -169,6 +175,8 @@ describe("ClientPanel", () => {
 						todayIso="2026-10-17"
 						tz="Europe/Berlin"
 						monthName="October"
+						monthFirst="2026-10-01"
+						monthLast="2026-10-17"
 						projectNames={new Map()}
 						budgets={budgets}
 						now={Date.now()}

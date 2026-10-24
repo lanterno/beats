@@ -6,6 +6,7 @@
  * an older API during a deploy answers 404 "Not Found" — the page's own
  * sentence and the API's words stay apart.
  */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,9 +68,13 @@ function month(fields: Partial<BillingMonth> = {}): BillingMonth {
 
 function renderPage() {
 	render(
-		<MemoryRouter initialEntries={["/clients"]}>
-			<Clients />
-		</MemoryRouter>,
+		// Each panel's shared-reports disclosure is closed here, so it reads
+		// nothing, but its hook is still called and wants a client.
+		<QueryClientProvider client={new QueryClient()}>
+			<MemoryRouter initialEntries={["/clients"]}>
+				<Clients />
+			</MemoryRouter>
+		</QueryClientProvider>,
 	);
 }
 
