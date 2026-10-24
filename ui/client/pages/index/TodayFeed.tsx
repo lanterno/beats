@@ -5,7 +5,7 @@
 
 import { ChevronDown, Clock, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useFocusScores } from "@/entities/intelligence";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
@@ -38,12 +38,48 @@ function focusColor(score: number): string {
 /** A session whose project has no colour. */
 const NO_COLOR = "var(--color-muted-foreground)";
 
+// The projects index's pill group on the sky: the panel is its ground, and
+// the chosen pill sits on the heavier wash in ink.
+const SKY_GROUP = "bg-sidebar shadow-soft p-1";
+const PILL =
+	"inline-flex items-center gap-1.5 rounded-full font-bold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+const PILL_ON = "bg-sidebar-accent text-foreground";
+const PILL_OFF = "text-muted-foreground hover:text-foreground hover:bg-secondary";
+
+/** What a session row needs of its project; archived projects included, so a row never reads "Unknown". */
+interface ProjectInfo {
+	name: string;
+	color: string;
+	archived: boolean;
+	/** Set when an organisation owns the project (docs/organisations.md). */
+	organisation?: { id: string; name: string; logoUrl?: string };
+}
+
+/** The `?owner=` scope: every project, the personal ones, or one organisation's. */
+type OwnerScope = "all" | "personal" | { organisationId: string };
+
+function ownerScopeFromParam(
+	raw: string | null,
+	organisations: ReadonlyArray<{ id: string }>,
+): OwnerScope {
+	if (raw === "personal") return "personal";
+	if (raw && organisations.some((o) => o.id === raw)) return { organisationId: raw };
+	return "all";
+}
+
+function inOwnerScope(info: ProjectInfo | undefined, scope: OwnerScope): boolean {
+	if (scope === "all") return true;
+	if (scope === "personal") return !info?.organisation;
+	return info?.organisation?.id === scope.organisationId;
+}
+
 function SessionRow({
 	session,
 	projectName,
 	projectColor,
 	projectId,
 	projectArchived,
+	organisationName,
 	focusScore,
 	onDelete,
 	deleting,
@@ -53,6 +89,8 @@ function SessionRow({
 	projectColor: string;
 	projectId: string;
 	projectArchived?: boolean;
+	/** The organisation that owns the project, which can read the entry's note. */
+	organisationName?: string;
 	focusScore?: FocusScore;
 	onDelete?: (sessionId: string) => void;
 	deleting?: boolean;
@@ -139,6 +177,11 @@ function SessionRow({
 							{session.note}
 						</span>
 					)}
+					{session.note && organisationName && (
+						<span className="text-[10.5px] font-medium text-muted-foreground shrink-0 whitespace-nowrap">
+							{organisationName} can read this note
+						</span>
+					)}
 					{session.tags.map((tag) => (
 						<span
 							key={tag}
@@ -199,7 +242,7 @@ function SessionGroup({
 	label: string;
 	sessions: Session[];
 	totalMinutes: number;
-	projectMap: Map<string, { name: string; color: string; archived: boolean }>;
+	projectMap: Map<string, ProjectInfo>;
 	defaultOpen: boolean;
 	focusScoreMap?: Map<string, FocusScore>;
 	onDelete?: (sessionId: string) => void;
@@ -242,6 +285,7 @@ function SessionGroup({
 								projectColor={info?.color || NO_COLOR}
 								projectId={session.projectId}
 								projectArchived={info?.archived}
+								organisationName={info?.organisation?.name}
 								focusScore={focusScoreMap?.get(session.id)}
 								onDelete={onDelete}
 								deleting={deleting}
@@ -272,8 +316,11 @@ export function TodayFeed() {
 	// Map includes archived projects so a session whose project got archived
 	// keeps rendering its name (with an "Archived" chip via SessionRow) instead
 	// of falling through to "Unknown".
-	const projectMap = new Map(
-		(projects || []).map((p) => [p.id, { name: p.name, color: p.color, archived: p.archived }]),
+	const projectMap = new Map<string, ProjectInfo>(
+		(projects || []).map((p) => [
+			p.id,
+			{ name: p.name, color: p.color, archived: p.archived, organisation: p.organisation },
+		]),
 	);
 	const focusScoreMap = new Map((focusScores ?? []).map((f) => [f.beat_id, f]));
 
@@ -282,8 +329,34 @@ export function TodayFeed() {
 	const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
 	const pickerProjects = useMemo(() => visibleProjects(projects), [projects]);
 
+	// The owner scope — Everything · Personal · <each organisation> — over
+	// the one timeline (docs/organisations-roadmap.md, stage 2), kept in the
+	// URL as `?owner=personal|<organisation id>`; absent is everything. It
+	// composes with the project picker.
+	const [searchParams, setSearchParams] = useSearchParams();
+	const organisations = useMemo(() => {
+		const byId = new Map<string, { id: string; name: string }>();
+		for (const p of pickerProjects) {
+			if (p.organisation && !byId.has(p.organisation.id)) {
+				byId.set(p.organisation.id, { id: p.organisation.id, name: p.organisation.name });
+			}
+		}
+		return [...byId.values()];
+	}, [pickerProjects]);
+	const ownerScope = ownerScopeFromParam(searchParams.get("owner"), organisations);
+	const setOwnerScope = (param: string | null) => {
+		const next = new URLSearchParams(searchParams);
+		if (param === null) next.delete("owner");
+		else next.set("owner", param);
+		setSearchParams(next, { replace: true });
+	};
+
 	const scopeToFilter = <T extends { projectId: string }>(list: T[]): T[] =>
-		filterProjectId ? list.filter((s) => s.projectId === filterProjectId) : list;
+		list.filter(
+			(s) =>
+				(!filterProjectId || s.projectId === filterProjectId) &&
+				inOwnerScope(projectMap.get(s.projectId), ownerScope),
+		);
 
 	const today = startOfDay();
 
@@ -346,6 +419,56 @@ export function TodayFeed() {
 				</div>
 			</div>
 
+			{organisations.length > 0 && (
+				// biome-ignore lint/a11y/useSemanticElements: <fieldset> is the rule's suggestion, but these are filter pills rather than form controls, and fieldset's UA min-inline-size breaks the flex row. role="group" with an accessible name is the correct ARIA here.
+				<div
+					className={cn(
+						"flex flex-wrap w-fit max-w-full items-center gap-1 rounded-full mb-3",
+						SKY_GROUP,
+					)}
+					role="group"
+					aria-label="Filter activity by owner"
+				>
+					<button
+						type="button"
+						onClick={() => setOwnerScope(null)}
+						aria-pressed={ownerScope === "all"}
+						className={cn(PILL, "px-3 py-1 text-xs", ownerScope === "all" ? PILL_ON : PILL_OFF)}
+					>
+						Everything
+					</button>
+					<button
+						type="button"
+						onClick={() => setOwnerScope("personal")}
+						aria-pressed={ownerScope === "personal"}
+						className={cn(
+							PILL,
+							"px-3 py-1 text-xs",
+							ownerScope === "personal" ? PILL_ON : PILL_OFF,
+						)}
+					>
+						Personal
+					</button>
+					{organisations.map((org) => {
+						const on =
+							ownerScope !== "all" &&
+							ownerScope !== "personal" &&
+							ownerScope.organisationId === org.id;
+						return (
+							<button
+								key={org.id}
+								type="button"
+								onClick={() => setOwnerScope(org.id)}
+								aria-pressed={on}
+								className={cn(PILL, "px-3 py-1 text-xs", on ? PILL_ON : PILL_OFF)}
+							>
+								{org.name}
+							</button>
+						);
+					})}
+				</div>
+			)}
+
 			<Panel padding="px-3 py-3">
 				{/* Today section — always open */}
 				<div className="pb-1">
@@ -380,6 +503,7 @@ export function TodayFeed() {
 									projectColor={info?.color || NO_COLOR}
 									projectId={session.projectId}
 									projectArchived={info?.archived}
+									organisationName={info?.organisation?.name}
 									focusScore={focusScoreMap.get(session.id)}
 									onDelete={handleDelete}
 									deleting={deleteSession.isPending}

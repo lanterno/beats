@@ -15,6 +15,7 @@ import { ArchiveRestore, GitBranch, Layers, Loader2, Plus, Search, Zap } from "l
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { OrganisationMark } from "@/entities/organisation";
 import {
 	BalanceChip,
 	extractCategories,
@@ -523,6 +524,13 @@ function ProjectsTable({
 											</span>
 										)}
 									</Link>
+									{project.organisation && (
+										<OrganisationMark
+											name={project.organisation.name}
+											logoUrl={project.organisation.logoUrl}
+											className="shrink-0"
+										/>
+									)}
 								</div>
 							</td>
 							<td className="px-3 py-2 font-medium text-muted-foreground truncate">
@@ -663,6 +671,13 @@ function ProjectsCardList({
 							<span className="text-sm font-bold text-foreground truncate flex-1">
 								{project.name}
 							</span>
+							{project.organisation && (
+								<OrganisationMark
+									name={project.organisation.name}
+									logoUrl={project.organisation.logoUrl}
+									className="shrink-0"
+								/>
+							)}
 							<IntegrationIcons project={project} />
 						</div>
 						{project.description && (

@@ -21,6 +21,7 @@
 
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { OrganisationMark } from "@/entities/organisation";
 import { cn, formatDuration } from "@/shared/lib";
 import { useSessionUserKey } from "@/shared/session";
 import type { ProjectWithDuration } from "../model";
@@ -297,6 +298,14 @@ export function ProjectPicker({
 											aria-hidden="true"
 										/>
 										<span className="truncate flex-1 min-w-0">{p.name}</span>
+										{p.organisation && (
+											<OrganisationMark
+												name={p.organisation.name}
+												logoUrl={p.organisation.logoUrl}
+												tileOnly
+												className="shrink-0"
+											/>
+										)}
 										{p.archived && (
 											<span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-px rounded-full bg-secondary text-muted-foreground shrink-0">
 												Archived
