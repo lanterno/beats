@@ -46,20 +46,6 @@
       name="twitter:description"
       content="Free, open-source time-tracking. A background daemon catches your sessions across editor, desktop, and an optional wall clock."
     />
-
-    <!-- Analytics: no-op unless VITE_PLAUSIBLE_DOMAIN is set at build time.
-         Plausible is privacy-friendly and matches the page's positioning. -->
-    <script>
-      (function () {
-        var d = "%VITE_PLAUSIBLE_DOMAIN%";
-        if (!d || d.indexOf("VITE_PLAUSIBLE_DOMAIN") !== -1) return;
-        var s = document.createElement("script");
-        s.defer = true;
-        s.setAttribute("data-domain", d);
-        s.src = "https://plausible.io/js/script.js";
-        document.head.appendChild(s);
-      })();
-    </script>
   </head>
 
   <body>
