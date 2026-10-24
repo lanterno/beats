@@ -11,8 +11,9 @@ minted by `_new_user`, since an organisation is about more than one.
 import asyncio
 import csv
 import io
+import json
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from bson import ObjectId
@@ -211,10 +212,13 @@ class TestOrganisationLifecycle:
         email = _me(client, invitee)["email"]
         invite = _invite(client, auth_headers, org["id"], email=email.upper())
 
-        # Found at sign-in by the address, not sent anywhere.
+        # Found at sign-in by the address, not sent anywhere — who and as
+        # what, but not the way in: an address is not verified at sign-up,
+        # so whoever registered it first is not handed the token.
         [waiting] = client.get("/api/organisations/invitations", headers=invitee).json()
-        assert waiting["token"] == invite["token"]
         assert waiting["organisation"]["name"] == "Acme"
+        assert waiting["role"] == "member"
+        assert "token" not in waiting
 
         # Someone else holding the token learns nothing from it.
         passerby = _new_user()
@@ -566,6 +570,40 @@ class TestOrganisationProjects:
         assert again.status_code == 404
         assert again.json()["code"] == "NOT_ASSIGNED"
 
+    def test_reassigning_keeps_the_members_own_half(self, client, auth_headers):
+        """Taken off by mistake and put back, a member keeps their goal, repo
+        paths and contract — the contract is behind a balance the
+        organisation already read."""
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        client.put(
+            "/api/projects/",
+            json={
+                "id": project["id"],
+                "name": "Platform",
+                "weekly_goal": 30,
+                "autostart_repos": ["/Users/me/platform"],
+            },
+            headers=member,
+        )
+        client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "opening_balance_hours": 5},
+            headers=member,
+        )
+        client.delete(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}",
+            headers=auth_headers,
+        )
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+
+        [mine] = _projects(client, member)
+        assert (mine["weekly_goal"], mine["autostart_repos"]) == (30, ["/Users/me/platform"])
+        assert mine["contract"]["opening_balance_hours"] == 5
+
 
 class TestOrganisationRecord:
     """What the organisation reads, and what the member sees it reading."""
@@ -827,6 +865,14 @@ class TestConnectingAProject:
         assert [a["date"] for a in row["absences"]] == ["2026-03-06"]
         assert row["totals"]["entries"] == 2
         assert row["has_contract"] is True
+        # The balance sums every hour since the contract began, Monday and
+        # Tuesday among them, so it is withheld rather than carry what the
+        # member kept back (rule 4) — and the member's own figure is theirs.
+        assert row["balance"] is None
+        mine_week = client.get(
+            f"/api/projects/{project['id']}/contract/week", params={"tz": "UTC"}, headers=member
+        ).json()
+        assert mine_week["balance"] is not None
 
         # The member keeps everything: all four entries, the goal, the paths,
         # the contract — and the project is now marked as Acme's.
@@ -855,12 +901,27 @@ class TestConnectingAProject:
         member = _new_user()
         _member_of(client, auth_headers, org["id"], member)
         project = self._tracked_day_job(client, member)
+        # A day off already booked for a day to come is the record's from here.
+        future = (date.today() + timedelta(days=30)).isoformat()
+        client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": future, "type": "vacation"},
+            headers=member,
+        )
         connected = self._connect(client, member, org["id"], project["id"], None)
         assert connected.status_code == 200, connected.text
         [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
         assert row["entries"] == []
         assert row["absences"] == []
         assert row["totals"]["entries"] == 0
+        assert row["balance"] is None
+        this_month = date.today().strftime("%Y-%m")
+        future_month = (date.today() + timedelta(days=30)).strftime("%Y-%m")
+        if future_month != this_month:
+            [later] = _members_of_record(
+                _record(client, auth_headers, org["id"], month=future_month), project["id"]
+            )
+            assert [a["date"] for a in later["absences"]] == [future]
         # From now on, tracking is the organisation's.
         started = client.post(f"/api/projects/{project['id']}/start", json={}, headers=member)
         assert started.json()["organisation_id"] == org["id"]
@@ -982,12 +1043,13 @@ class TestLeavingAndRemoval:
             1.5,
             2,
         )
+        assert archived["absences"] == []
         sheet = client.get(f"/api/organisations/{org['id']}/archive.csv", headers=member)
         assert sheet.status_code == 200
         assert sheet.headers["content-type"].startswith("text/csv")
         rows = list(csv.reader(io.StringIO(sheet.text)))
-        assert rows[0] == ["project", "day", "start", "end", "hours", "note"]
-        assert [r[4] for r in rows[1:]] == ["1.00", "0.50"]
+        assert rows[0] == ["project", "day", "kind", "start", "end", "hours", "note"]
+        assert [(r[2], r[5]) for r in rows[1:]] == [("entry", "1.00"), ("entry", "0.50")]
         # And still sees what the organisation sees of them.
         [visible] = _members_of_record(_visible(client, member, org["id"]), project["id"])
         assert visible["hours"] == 1.5
@@ -1142,6 +1204,27 @@ class TestBackupsAndOrganisations:
             client.get(f"/api/beats/{beat['id']}", headers=member).json()["organisation_id"]
             == org["id"]
         )
+
+        # The stamp is never the file's. One stripped from the file comes
+        # back from the project as it stands; one planted on an entry dated
+        # before the member shares from is not written.
+        tampered = json.loads(json.dumps(backup))
+        tampered["beats"][0]["organisation_id"] = None
+        early = {
+            **tampered["beats"][0],
+            "id": str(ObjectId()),
+            "start": "2020-01-01T09:00:00Z",
+            "end": "2020-01-01T10:00:00Z",
+            "organisation_id": org["id"],
+        }
+        tampered["beats"].append(early)
+        assert self._import(client, member, tampered).status_code == 200
+        stamps = {
+            b["id"]: b["organisation_id"]
+            for b in client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()
+        }
+        assert stamps[beat["id"]] == org["id"]
+        assert stamps[early["id"]] is None
 
         # Into an account that is not assigned to it, the project and what is
         # on it are left out and said so, and the rest imports.
