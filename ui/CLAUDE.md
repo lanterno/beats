@@ -207,7 +207,12 @@ Acme…* (`ConnectProjectDialog`, on the page rather than inside the settings dr
 the settings drawer disables the organisation's fields; a note shown on an
 organisation's project says "Acme can read this note".
 Every write that changes what is on the member's own timeline — joining, leaving, an
-assignment, a connect — invalidates the project and session roots too.
+assignment, a connect — invalidates the project and session roots too. The Organisations
+nav item wears a dot while an invitation to this account waits
+(`widgets/sidebar/useInvitationAttention.ts`); the invitation itself is joined through the
+link the inviter sent, since the API hands out no token. A page behind `ProtectedRoute`
+opened while signed out — an invite URL, a project link — is kept (`shared/lib/returnTo.ts`)
+and is where sign-in, passkey or SSO, lands.
 
 ## Testing
 

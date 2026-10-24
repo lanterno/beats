@@ -141,13 +141,16 @@ Then the model's own:
     nor be demoted (409 `LAST_OWNER`). A non-member and an unknown
     organisation read the same, 404 `ORGANISATION_NOT_FOUND`; a member
     without the role is 403 `ORGANISATION_ROLE_REQUIRED`.
-11. **The API sends no email.** An invitation to an address is a token the
-    inviter passes on; the invitee also finds it at sign-in under
-    `/invitations`, matched on their account's address, and only that
-    account can take it (anyone else gets 404). An invite link has no
-    address, is reusable until it expires or is revoked, and with
-    `requires_approval` makes a join request for an admin instead of a
-    member. Every token is 32 URL-safe bytes, stored as read, as 1c's are.
+11. **The API sends no email, and hands out no token.** An invitation to an
+    address is a token the inviter passes on, and only the account holding
+    that address can take it (anyone else gets 404). The invitee also finds
+    at sign-in, under `/invitations`, *who* has invited them and as what —
+    but not the token: an address is not verified at sign-up, so whoever
+    registered it first must not be handed the way in. Joining takes both
+    the link and the address. An invite link has no address, is reusable
+    until it expires or is revoked, and with `requires_approval` makes a
+    join request for an admin instead of a member. Every token is 32
+    URL-safe bytes, stored as read, as 1c's are.
 12. **The audit log is written from the start and read by nothing.**
     `org_audit` records every membership, role, invite, request, project,
     assignment and connection event, and an account's erasure. Stage 4 reads
@@ -170,6 +173,32 @@ Then the model's own:
 15. **The coach stays the member's.** It reads the member's merged projects
     (so it names their day job) and is given no organisation port: nothing in
     it reads another member.
+16. **A balance is shown only when the record is whole.** A balance sums
+    every hour since the contract began, so on a connected project with
+    entries or absences before the day the member chose to share from it
+    would carry what rule 4 keeps back. The record withholds it
+    (`has_unshared`, a yes-or-no read that shows nothing) and shows it only
+    when every entry and absence on the project is the organisation's —
+    where it equals the member's own figure to the hundredth.
+17. **Reassigning keeps the member's half; only a connect replaces it.** An
+    ended assignment reopened by an admin keeps the goal, repo paths and
+    contract it had, since the contract is behind a balance the
+    organisation already read.
+18. **The stamp on a restored beat is never the file's.** A beat the account
+    already holds keeps the stamp it has; one new to the account takes the
+    one the project as it stands gives — an organisation's, and started on
+    or after the member's `shared_from`. A backup from before a connect
+    cannot strip the record, and an edited one cannot plant it.
+19. **The rows stay the person's to edit, in this stage.** A member can
+    still delete or move an entry that is an organisation's record, before
+    and after leaving: rule 1 says the data is theirs, and nothing here is
+    approved or closed yet. Stage 3's locked periods are where an employer's
+    guarantee begins; the erasure pass keeps the record against the account
+    going, not against the person's own edits.
+20. **The last-owner check is made twice.** The count before a demotion,
+    leave or removal is not atomic with the write, so after the write the
+    count is read again and the write undone (409 `LAST_OWNER`) if it left
+    no owner. Two owners leaving at once are both refused.
 
 ---
 
@@ -226,7 +255,7 @@ device token. "Admins" means owner or admin.
 |---|---|---|
 | `GET /` | anyone | My memberships, ended ones included |
 | `POST /` | anyone | Create; I am its owner |
-| `GET /invitations` | anyone | Open invitations addressed to my account's email |
+| `GET /invitations` | anyone | Who has invited my account's email, and as what — no token |
 | `GET /join/{token}`, `POST /join/{token}` | anyone | Preview, then join (`joined`) or request (`pending`) |
 | `GET /{id}`, `PUT /{id}` | members / admins | The organisation and my standing; its settings |
 | `GET /{id}/members` | members | Active members, by the name and address they joined under |
@@ -239,7 +268,7 @@ device token. "Admins" means owner or admin.
 | `POST /{id}/connect` (`tz` required) | members | Connect one of my own projects from `share_from`, or null for now |
 | `GET /{id}/record?month=&tz=` | admins | What the organisation sees |
 | `GET /{id}/visible?month=&tz=` | members, former members | What it sees of me — the same read |
-| `GET /{id}/archive`, `/archive.csv` | members, former members | My own rows that are its record |
+| `GET /{id}/archive`, `/archive.csv` | members, former members | My own entries and absences that are its record |
 
 The record's shape is written field by field (`RecordResponse`), as the
 public report's is, so what crosses cannot grow by inheritance: per project,
