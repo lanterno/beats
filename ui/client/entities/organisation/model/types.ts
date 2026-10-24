@@ -84,9 +84,11 @@ export interface OrganisationCard {
 	logoUrl?: string;
 }
 
-/** An open invitation addressed to the caller's own address. */
+/**
+ * An open invitation addressed to the caller's own address: who, and as
+ * what. Not the token — the way in is the link the inviter passed on.
+ */
 export interface Invitation {
-	token: string;
 	role: OrgRole;
 	expiresAt: string;
 	organisation: OrganisationCard;
@@ -219,6 +221,7 @@ export interface ArchiveProject {
 	color?: string;
 	hours: number;
 	entries: RecordEntry[];
+	absences: RecordAbsence[];
 }
 
 /** The person's own hours that are one organisation's record, by project. */

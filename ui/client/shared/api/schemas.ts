@@ -878,7 +878,6 @@ const OrganisationCardSchema = z.object({
 });
 
 export const ApiInvitationSchema = z.object({
-	token: z.string(),
 	role: OrgRoleSchema,
 	expires_at: z.string(),
 	organisation: OrganisationCardSchema,
@@ -1011,6 +1010,7 @@ export const ApiArchiveSchema = z.object({
 			color: z.string().nullable().optional(),
 			hours: z.number(),
 			entries: z.array(RecordEntrySchema),
+			absences: z.array(RecordAbsenceSchema).optional().default([]),
 		}),
 	),
 });

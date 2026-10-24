@@ -58,10 +58,20 @@ function MemberBlock({ member, project }: { member: MemberRecord; project: strin
 					{hoursText(member.hours)}
 				</span>
 			</div>
-			{member.balance && (
+			{member.balance ? (
 				<p className="text-[12.5px] text-foreground font-medium">
 					Balance {balanceText(member.balance.balance)}, as of {dayText(member.balance.asOf)}.
 				</p>
+			) : (
+				member.hasContract && (
+					// A balance sums every hour since the contract began; on a
+					// connected project with hours before the shared-from day,
+					// the API withholds it rather than carry what was kept back.
+					<p className={LEAD}>
+						Balance not shared: the contract reaches back before the hours shared with the
+						organisation.
+					</p>
+				)
 			)}
 			{quiet ? (
 				<p className={LEAD}>Nothing this month.</p>

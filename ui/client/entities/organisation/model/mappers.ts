@@ -111,7 +111,6 @@ export function toApiInviteInput(input: InviteInput) {
 
 export function toInvitation(api: ApiInvitation): Invitation {
 	return {
-		token: api.token,
 		role: api.role,
 		expiresAt: api.expires_at,
 		organisation: toCard(api.organisation),
@@ -252,6 +251,7 @@ export function toArchive(api: ApiArchive): Archive {
 			color: p.color ?? undefined,
 			hours: p.hours,
 			entries: p.entries.map(toEntry),
+			absences: p.absences.map((a) => ({ date: a.date, type: a.type, halfDay: a.half_day })),
 		})),
 	};
 }
