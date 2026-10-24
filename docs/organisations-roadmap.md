@@ -55,8 +55,8 @@ showing the actual data held.
 
 | Stage | What | State |
 |---|---|---|
-| **1** | Clients for freelancers | **Done** — 1a and 1b on `main`, 1c built on `feat/ahm-74-1c-report-links` |
-| **2** | Foundations: organisations, membership, org projects, leaving | Not started; three decisions open |
+| **1** | Clients for freelancers | **Done** — on `main` |
+| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — the decisions and the model are in [docs/organisations.md](organisations.md) |
 | **3** | Employment: employer contracts, leave requests, timesheet approval | Not started; depends on 2 |
 | **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | Not started; depends on 2 and 3 |
 
@@ -73,9 +73,7 @@ organisations, which is why it went first, and it sells to one of the two
 target groups on its own. The decisions are recorded in
 [docs/billing.md](billing.md); the summary here is only to say what exists.
 
-1a and 1b are on `main`. 1c is built and green on
-`feat/ahm-74-1c-report-links` and has not been merged yet; nothing in stages 2
-to 4 depends on it landing first.
+All three are on `main`.
 
 - **1a — clients and billing.** Clients as records in your own account, one
   currency each, dated default rates; a freelance project billed to a client
@@ -105,13 +103,16 @@ are the same problems one step smaller:
 
 ---
 
-## Stage 2 — Foundations
+## Stage 2 — Foundations · **Done**
 
 **Goal:** an organisation can exist, have members, own projects that appear on
 each member's own timeline, and be left — with the wall of rule 3 enforced
 structurally rather than by vigilance.
 
-Sections 1, 2 and 6 of the epic.
+Sections 1, 2 and 6 of the epic. Built; the decisions it rests on, the data
+model, the HTTP contract and the UI's rules are in
+[docs/organisations.md](organisations.md). The scope and the "done when" below
+are kept as the record of what was asked; every item is in.
 
 ### Scope
 
@@ -277,14 +278,16 @@ split into several issues when it starts — it is a bucket, not a unit of work.
 
 ## Decisions still open
 
-Six, from the epic. Three gate stage 2 and should be answered first.
+Six, from the epic. The three that gated stage 2 are settled and recorded in
+[docs/organisations.md](organisations.md) (decisions 1–3); the rows below say
+how, and the notes under them are kept as the reasoning.
 
-| Decision | Proposal on the table | Gates |
+| Decision | Settled / proposal | Gates |
 |---|---|---|
-| Does an organisation see an entry's **note**? Do personal **tags** cross? | Note yes, with a visible marker on the input; tags no | **2** |
-| Can a manager see that a **timer is running now**? | Off by default, on only with each member's consent | **2** |
-| What does **account deletion** do to records an employer must legally keep? | The organisation keeps the working-time rows, name only as the employer's record; everything else erased | **2** |
-| What does **"day job"** mean once an employer can be an entity? | Personal day jobs stay exactly as they are; nothing forces anyone into an organisation | 3 |
+| Does an organisation see an entry's **note**? Do personal **tags** cross? | **Settled:** note yes, tags no. No surface writes a note today, so the marker goes where a note is shown; any note input brought back ships it | 2 |
+| Can a manager see that a **timer is running now**? | **Settled: no, in any stage.** The record takes finished entries only and carries no running flag | 2 |
+| What does **account deletion** do to records an employer must legally keep? | **Settled:** the stamped working-time rows, the balance's inputs and the name on the membership stay under a tombstone; everything else is erased (`erasure.py`) | 2 |
+| What does **"day job"** mean once an employer can be an entity? | Personal day jobs stay exactly as they are; nothing forces anyone into an organisation. Stage 2 keeps the contract the member's, on their assignment | 3 |
 | Who wins when the **employer's contract terms differ** from the employee's? | — open — | 3 |
 | **Pricing**: seat price, free tier, whether contractors count as seats | — open — | 4 |
 
@@ -369,7 +372,10 @@ contradict the code, as part of the stage that changes it.
 
 ## What the code says about stage 2
 
-Researched against the tree as it stands after 1c.
+Researched against the tree as it stood after 1c, and kept as the reasoning
+behind [docs/organisations.md](organisations.md)'s decisions 4–15; each
+"will bite" below was answered there (the index, the device prefix, the
+backup).
 
 **The wall is one line.** `MongoStore._q`
 (`api/src/beats/infrastructure/repositories.py`) stamps

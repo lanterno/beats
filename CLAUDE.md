@@ -30,7 +30,8 @@ GitHub issues are left to Renovate's Dependency Dashboard.
 
 The one multi-stage epic in flight, **organisations** (AHM-74), has its plan in
 [docs/organisations-roadmap.md](docs/organisations-roadmap.md): the four stages,
-what each needs, and the decisions still open. It is a deliberate exception to
+what each needs, and the decisions still open; stages 1 and 2 are built, and
+stage 2's decisions and model are in [docs/organisations.md](docs/organisations.md). It is a deliberate exception to
 the rule above, made while the Linear workspace is unreachable from the
 development environment; it says so at the top, and it gives way to issues once
 Linear is reachable again.
@@ -103,7 +104,10 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full 1323-test suite takes about 20 seconds.
+  the full suite (1348 tests) takes about 20 seconds. `src/test_organisations.py` holds
+  the organisations contract, including the wall tests in the shape of 1c's: a sentinel
+  planted on a personal project, a tag, a flow window and a biometric is in no byte the
+  organisation can read.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -317,6 +321,23 @@ nothing.
   would cross the warning and the limit. Stopping billing on a project with one needs
   `remove_billing_budget=true` (409 `PROJECT_HAS_BILLING_BUDGET`). The decisions are in
   [docs/billing.md](docs/billing.md).
+- Organisations: a party that owns projects and reads the hours on them
+  ([docs/organisations.md](docs/organisations.md)). One person, one account, one timeline:
+  a membership (`org_members`) adds the organisation's projects a member is assigned to
+  (`org_assignments`) to their own list, merged by `MongoProjectRepository` — the one
+  user-scoped repository whose scope is wider than `user_id`. An organisation's project
+  document carries `ORGANISATION_FIELDS` and no `user_id`; the member's assignment carries
+  `PERSONAL_FIELDS` (goal, overrides, auto-start paths, and in this stage the contract),
+  and a member's write to an organisation field is 409 `ORGANISATION_PROJECT`. A beat or
+  absence written against such a project is stamped `organisation_id`, and the
+  organisation's read (`MongoOrganisationRecords`, behind `/record` and `/visible`) asks
+  for that stamp over its own project ids and nothing else — finished entries with their
+  note, absences without theirs, totals, a contract's balance; no running flag. Connecting
+  a project hands the document over and stamps history from the chosen day; leaving ends
+  the assignments so the project is not found, and both sides keep the stamped rows.
+  Erasing an account (`infrastructure/erasure.py`, `scripts/erase_account.py`) keeps
+  those rows under a tombstone and deletes everything else. Roles are owner ≥ admin ≥
+  member; `/api/organisations` is reachable by no device token.
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
   (`:root[data-theme="dusk"]`), picked in Settings beside the density. `useTheme.ts` owns the
   storage keys, and a stored value that is neither hour reads as afternoon. Behind the app and
@@ -439,5 +460,6 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials, logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
+| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join/{token}` (preview, join or request); per organisation its settings, `/members` (role, removal), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments, `/connect` (one of my projects, from a day; `tz` required), `/record?month=&tz=` (what the organisation sees: finished entries, absences, totals, a contract's balance — admins), `/visible` (the same read, narrowed to me), `/archive` and `/archive.csv` (my own rows that are its record). No device token |
 | `/api/reports` | **Public.** `GET /{token}`: one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |

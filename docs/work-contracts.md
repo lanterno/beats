@@ -29,7 +29,10 @@ goal. Git history has the plans.
 
 1. **The day-job project is the contract.** No separate entity. A user
    with two employers has two day-job projects, each with its own
-   balance. "Project" keeps its name everywhere.
+   balance. "Project" keeps its name everywhere. On an organisation's
+   project (docs/organisations.md, decision 6) the contract is read
+   through the member's assignment, still theirs to write in that stage;
+   the arithmetic does not know the difference.
 2. **Percentage needs a basis.** A time-based term stores
    `full_time_hours` (40, 42, 35 …) and `percentage`; weekly hours are
    the product. A `custom` term stores `weekly_hours` directly.

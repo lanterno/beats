@@ -1298,7 +1298,9 @@ Each addable later without migrating data:
   invoice against.
 - **Organisations**: a client that is an Acme organisation reads its hours
   through membership instead, and the link stays for clients who are not
-  (phase 2).
+  (stage 2, [organisations.md](organisations.md)). Stage 2 settled the notes
+  question for both: an organisation reads an entry's note, a report link
+  still does not.
 
 ---
 
@@ -1318,12 +1320,12 @@ Each addable later without migrating data:
   cannot structurally reach other clients, personal projects, flow,
   biometrics or the coach, and since running beats are left out and the
   range is frozen, it shows the same figures on every read.
-- **Phase 2, organisations.** An organisation-owned project gains an owner
-  on `Project`; a contractor's `project_billing` stays in their own
-  collection, keyed by their `user_id` and the organisation's project id,
-  and the organisation's reads never touch these collections.
-  `NOT_FREELANCE` can loosen to "you are a contractor on it" without moving
-  data.
+- **Stage 2, organisations.** Built: see [organisations.md](organisations.md).
+  An organisation's project document carries `organisation_id` and no
+  `user_id`; billing stayed personal and an organisation's project is billed
+  by nobody (409 `ORGANISATION_PROJECT`), and the organisation's reads never
+  touch these collections. `NOT_FREELANCE` can still loosen to "you are a
+  contractor on it" without moving data.
 - **Invoices.** An invoice is a frozen copy of a `period`'s lines, which
   per-line rounding lets it quote verbatim; an "invoiced through" date can
   replace the month boundary in `past_change`.

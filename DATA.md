@@ -43,9 +43,15 @@ No passwords are stored — Beats does not have a password login path.
   `opening_on` and `opening_days`, the days left on that date as you typed them. The
   vacation figures are derived from it and your absences on request; none is stored.
   On a day job whose contract governs the week,
-  `weekly_goal` is cleared at startup: the contract is the goal.
+  `weekly_goal` is cleared at startup: the contract is the goal. An **organisation's**
+  project (docs/organisations.md) has `organisation_id` instead of `user_id` and only
+  the organisation's fields — name, description, colour, archive flag, kind, GitHub repo,
+  category; the goal, the auto-start paths and the contract live on each member's
+  assignment, below.
 - **Absences**: one document per day off on a day-job project — `user_id`, `project_id`,
-  `date`, `half_day`, `type` (`vacation`, `sick`, `other`), `note`. Unique on
+  `date`, `half_day`, `type` (`vacation`, `sick`, `other`), `note`, and on an
+  organisation's project `organisation_id`, the stamp that makes it that organisation's
+  record (its note is never read through it). Unique on
   `(user_id, project_id, date)`, so a second absence on a day replaces the first.
 - **Balance adjustments**: one document per dated change to a day job's balance —
   `user_id`, `project_id`, `date`, `kind` (`delta`, `reset`, `cap`), `hours` (signed for a
@@ -87,7 +93,11 @@ No passwords are stored — Beats does not have a password login path.
   and sessions alone. Nothing about a reader is recorded — no visit count, no time, no
   address. Deleted when you revoke it or delete its client, and left out of the backup
   on purpose, so an export file carries no live URL to your hours.
-- **Beats (sessions)**: start, end, project id, tags, a note.
+- **Beats (sessions)**: start, end, project id, tags, a note, and on an organisation's
+  project `organisation_id` — the stamp that says the entry is that organisation's
+  working-time record, set when it is tracked there (or shared with it when a project is
+  connected, from the day chosen) and cleared when the entry is moved to a personal
+  project. The organisation's read asks for the stamp and nothing else.
   The tags are derived from the daemon's flow windows when a session is logged, stopped
   or its times are edited; an edit over no windows keeps the tags it had. The note comes
   only from an import. An edit writes the project, start and end it carries and the tags, a
@@ -98,6 +108,35 @@ No passwords are stored — Beats does not have a password login path.
 - **Plans**: weekly plans — a per-project hour target for a given week
 - **Webhooks**: target URLs and which timer events they subscribe to. Deliveries
   are fire-and-forget; no delivery log is kept.
+
+### Organisations
+
+None of these is scoped by `user_id` (docs/organisations.md):
+
+- **Organisations**: `name`, `logo_url`, `week_start`, `holiday_country`,
+  `holiday_subdivision`, `timezone`, `created_at`, `created_by`.
+- **Memberships** (`org_members`): one per person per organisation — `organisation_id`,
+  `user_id`, `role` (`owner`, `admin`, `member`), the `name` and `email` the person
+  joined under, `joined_at`, `left_at`, `left_reason` (`left`, `removed`, `erased`). After
+  an account is erased, `user_id` is a tombstone (`erased:<membership id>`) and the name
+  and email stay, as the employer's record.
+- **Invites** (`org_invites`): `organisation_id`, `token` (32 random bytes, stored as
+  read), `email` or null for a link, `role`, `requires_approval`, `created_by`,
+  `created_at`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at`. The API sends
+  no email: the inviter passes the token on, and the invitee finds it at sign-in by the
+  address on their account.
+- **Join requests** (`org_join_requests`): who used a link with an approval step —
+  `organisation_id`, `user_id`, `invite_id`, `name`, `email`, `requested_at`,
+  `decided_at`, `decision`, `decided_by`.
+- **Assignments** (`org_assignments`): one per member per project — `organisation_id`,
+  `project_id`, `user_id`, `shared_from` (the instant from which the member's hours on the
+  project are the organisation's), `assigned_at`, `assigned_by`, `ended_at`, and the
+  member's personal half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
+  `autostart_repos`, `contract`.
+- **Audit log** (`org_audit`): `organisation_id`, `at`, `actor_user_id`, `event`,
+  `subject_user_id`, `project_id`, `details` — every membership, role, invite, request,
+  project, assignment and connection event, and an erasure. Written now, read by nothing
+  yet.
 
 ### Intelligence and coach
 
@@ -189,7 +228,11 @@ a `1.2` file does into one from before billing.
 
 Email <ahmed.elghareeb@proton.me> from the address on your account. I will:
 
-1. Drop every document keyed to your user id across every collection above
+1. Run `api/scripts/erase_account.py`, which drops every document keyed to your user id
+   across every collection above — except the rows that are an organisation's
+   working-time record (docs/organisations.md, decision 3): entries and absences stamped
+   with an organisation, the balance adjustments and contract behind a balance it read,
+   and your membership's name and email, all kept under a tombstone id no account has
 2. Revoke active sessions and credentials
 3. Reply to confirm
 

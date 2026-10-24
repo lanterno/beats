@@ -11,12 +11,13 @@ client/
 ├── app/           App.tsx (router + providers), Layout.tsx (authenticated
 │                  shell), session.ts (wires auth into the session port)
 ├── pages/         Route-level components — homepage, index, insights, coach,
-│                  plan, projects-index, project-details, clients, settings,
-│                  not-found
+│                  plan, projects-index, project-details, clients, organisations,
+│                  settings, not-found
 ├── widgets/       Cross-page composite UI — sidebar (desktop) + mobile header
 ├── features/      User interactions — timer, auth
 ├── entities/      Business objects — project, absence, session, planning,
-│                  coach, intelligence, calendar, github, client, billing
+│                  coach, intelligence, calendar, github, client, billing,
+│                  organisation
 ├── shared/        No business logic — api client, lib helpers, ui primitives,
 │                  config, session port
 └── main.tsx       Entry point
@@ -193,6 +194,26 @@ anyone's data: no `Layout`, no nav, no sign-in prompt, and one message for every
 link fails, because the API answers one 404 for all of them. It reads through
 `getPublic`, a GET that never attaches the session, so the page cannot read differently
 for its owner than for the client they sent it to.
+
+## Organisations
+
+`entities/organisation` is the SPA's half of docs/organisations.md: the hooks under
+`organisationsRootKey`, `OrganisationMark` (the tile and name every list marks an
+organisation's project with), `describeShareFrom`, `inviteUrl`, and
+`ConnectProjectDialog`. A `Project` carries `organisation` when an organisation owns it
+and a `Session` its `organisationId`. `pages/organisations` is `/organisations` (my
+invitations, my organisations, the ones I left), `/organisations/:id` (the organisation:
+*What Acme can see* and *Leave* for everyone; members, invites, requests, projects,
+assignments and settings for admins), `/organisations/:id/record` and `/visible` (one
+component over two hooks: the organisation's read, and the same read narrowed to me),
+`/organisations/:id/archive` (my own rows that are its record, with a CSV) and
+`/organisations/join/:token`. On the project side: the index, the picker and the sidebar
+mark an organisation's project; the activity feed offers *Everything · Personal · Acme*
+(`?owner=`); the project page's header names the organisation and the settings drawer
+disables the organisation's fields and offers *Connect to an organisation…* on a
+personal one; a note shown on an organisation's project says "Acme can read this note".
+Every write that changes what is on the member's own timeline — joining, leaving, an
+assignment, a connect — invalidates the project and session roots too.
 
 ## Testing
 
