@@ -214,6 +214,16 @@ link the inviter sent, since the API hands out no token. A page behind `Protecte
 opened while signed out — an invite URL, a project link — is kept (`shared/lib/returnTo.ts`)
 and is where sign-in, passkey or SSO, lands.
 
+Employment (stages 3–4): the organisation page adds Teams, pending absence requests (the
+note is addressed to the decider), timesheets with the frozen figures and
+approve / ask-for-changes / reopen, *Your timesheets* with a submit for ended months, the
+audit-log disclosure, Contract… and Enter time… per assignment, and the record page's
+Record/Compliance CSV downloads; managers (scoped to their teams) and viewers read the
+record. On a managed assignment the member's project page asks instead of booking
+(`RequestAbsenceDialog`, the request list in `TimeOff`), the contract register names the
+organisation as the terms' owner, and the rail's Organisation panel carries the project's
+timesheets and submit; a decider-entered session wears "entered for you".
+
 ## Testing
 
 - Unit tests: `client/**/*.test.{ts,tsx}` (Vitest, jsdom). `.ts` files cover
