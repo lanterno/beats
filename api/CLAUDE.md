@@ -25,7 +25,7 @@ src/beats/
 │   ├── timesheet.py     Pure assembly of a day job's month: a row per finished day, brought and carried forward, off the ledger's one pass
 │   ├── billing.py       Pure billing arithmetic: rate and flag resolution, lines as runs of days, Decimal half-up per line, the closed-past check (`past_change`)
 │   ├── billing_budgets.py Pure billing budget arithmetic: the current period, spend summed month by month over `assemble_client`, the integer state, a running timer's crossing instants, the guarded projection
-│   ├── billing_service.py BillingService: clients, project billing, billable overrides and billing budgets, their write-time rules, the month report, the budgets' reading, the backup's dry run
+│   ├── billing_service.py BillingService: clients, project billing, billable overrides, billing budgets and report links, their write-time rules, the month report, one client's range for a link (`client_period`), the budgets' reading, the backup's dry run
 │   ├── currencies.py    The ISO 4217 table: the one source of a currency's minor units
 │   ├── holidays.py      The only importer of the `holidays` package: calendars, regions, and a contract's holiday set (`contract_calendar`, `contract_holidays`)
 │   ├── analytics.py     Heatmap, daily rhythm, untracked gaps
@@ -60,9 +60,9 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Fourteen test files cover different layers (1301 tests, ~20s for the full run):
+Fourteen test files cover different layers (1323 tests, ~20s for the full run):
 
-- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 442 tests.
+- **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router; 464 tests, including `TestReportLinksAPI` for phase 1c — the public read with no Authorization header, and the four assertions that a link cannot reach another client, a personal project, an internal id or a running timer.
 - **`src/beats/test_domain.py`** — pure-Python domain tests. Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed, plus one timer stop against the real beat repository, for a write that lands while the stop reads the flow windows; 297 tests.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, balance adjustments among them, plus one round trip through the absence repository; 59 tests.
 - **`src/beats/test_ledger.py`** — the ledger assembly on fixed dates: a term change, a vacation week, `ended_on`, balance adjustments and a settlement, the row-to-row balance proof; 32 tests.
@@ -101,7 +101,7 @@ whatever a mock was told to return are not worth pinning.
 
 - `Database` is a singleton; `connect()` is called in the FastAPI lifespan, not at import time
 - Settings use pydantic-settings: env vars override `.env` file values
-- Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min)
+- Auth: All endpoints require JWT Bearer token (WebAuthn sessions). Public paths: `/api/auth/*`, `/health`, `/api/device/pair/exchange` (the daemon's pairing-code redemption — unauthenticated by design, rate-limited at 10/min), and `/api/reports/*` (a report link, read by a client with no account — the token in the URL is the whole authorisation, rate-limited at 30/min; it is the only public path that serves a user's data, and `routers/reports.py` opens with the rules that let it)
 - Device tokens (daemon, wall-clock) are a separate JWT type; the auth middleware allows them only on paths in `DEVICE_ALLOWED_PREFIXES`, plus GET/HEAD on `DEVICE_READ_ONLY_PREFIXES` (see `device_may_reach` in `src/server.py`). Adding a new daemon-reachable path means appending to one of those tuples — the read-only one when the prefix also carries writes a device shouldn't make (as `/api/coach/memory` carries delete and rewrite).
 - Error envelope: every non-2xx response carries `{detail, code, fields?}`. Routers can override the auto-mapped code by raising `HTTPException(detail={"code": "X", "message": "..."})` — see `coach.py` and `auth.py` for examples.
 - Multi-user: Each user's data is scoped via `user_id` field on all collections. Repos accept `user_id` in constructor.

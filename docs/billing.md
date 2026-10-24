@@ -1209,12 +1209,20 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
 - **Indexes** (`ensure_indexes`): `report_links (token)`, unique — the public
   lookup, which is the one read in the system that crosses users — and
   `report_links (user_id, client_id)` for the owner's list.
-- **The repository is two things**, as pairing codes are:
+- **The repository is two classes**, as pairing codes are:
   `MongoReportLinkRepository` is user-scoped through `MongoStore` for the
-  owner's list, create and delete; `find_by_token` is unscoped, because the
-  reader is not signed in and the owner is not known until the token resolves.
-  Resolving it is the only place a request's `user_id` comes from anything but
-  a session, and it is commented as such at the call site.
+  owner's list, create and delete, and reaches the service behind the narrow
+  `ReportLinkStore` port, which has no way to resolve a token at all.
+  `MongoReportLinkLookup` is unscoped and does nothing else, because the
+  reader is not signed in and the owner is not known until the token
+  resolves; it answers an `OwnedReportLink`, the link beside the account,
+  since `user_id` is a column of every document and a field of no model.
+  Resolving a token is the only place a request's account comes from anything
+  but a token the caller proved, and the route says so at the call site.
+- **The link is not in the backup.** `GET /api/export/full` stays at 1.3: a
+  backup file that carried live URLs to a year of someone's hours is a worse
+  thing to leave on a laptop than a lost link is to re-mint. A restore
+  therefore brings back the clients and their billing, and no links.
 
 ### What a link shows
 
@@ -1257,11 +1265,15 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
 
 ### The UI's rules
 
-- **The owner's side** is a *Shared reports* block in `ClientPanel`: the
-  client's links, each with its range, its two flags in words, a Copy button
-  and a Revoke button, and a *Share this month* action that mints a link over
-  the open month with amounts and entries on. Copy writes the SPA's own origin
-  plus `/r/{token}`.
+- **The owner's side** is a *Shared reports* disclosure in `ClientPanel`,
+  beside the budgets: the client's links, each with its range, its two flags
+  in words, a Copy button and a Revoke button, and *Share October*, which
+  reveals the two checkboxes and mints a link over the open month. It is
+  closed until asked for and read only then (`enabled`), because the page
+  draws a panel per client and an eager read would be one request per client
+  for something most months nobody opens. Copy writes the SPA's own origin
+  plus `/r/{token}`; an archived client still copies the links it has and
+  makes no more.
 - **The reader's side** is `/r/:token`, a route outside `ProtectedRoute` —
   beside `/auth/callback`, the only other public one — on its own page with no
   `Layout`, no sidebar and no nav: there is nothing for a reader to navigate

@@ -167,6 +167,18 @@ can read them. The Clients nav item wears a dot only while an active budget is u
 (`widgets/sidebar/useBillingBudgetAttention.ts`). When the budgets cannot be read, each
 block says "Budgets aren't available right now." and the rest renders as before.
 
+Report links (phase 1c) let a client read its own hours with no account. Each
+`ClientPanel` carries a *Shared reports* disclosure (`ReportLinksBlock`, in the billing
+entity): the client's links with what each shows in words, Copy, Revoke, and *Share
+<month>* behind two checkboxes. It reads only once opened — a panel per client would
+otherwise be a request per client on load — and Copy builds the URL from the SPA's own
+origin, since the API returns a bare token. The reader's page is `/r/:token`
+(`pages/report`), the second route outside `ProtectedRoute` and the only one that shows
+anyone's data: no `Layout`, no nav, no sign-in prompt, and one message for every way a
+link fails, because the API answers one 404 for all of them. It reads through
+`getPublic`, a GET that never attaches the session, so the page cannot read differently
+for its owner than for the client they sent it to.
+
 ## Testing
 
 - Unit tests: `client/**/*.test.{ts,tsx}` (Vitest, jsdom). `.ts` files cover

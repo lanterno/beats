@@ -75,6 +75,18 @@ No passwords are stored — Beats does not have a password login path.
 - **Billable marks**: one document per session you marked billable or not, against its
   project's terms — `user_id`, `beat_id`, `billable`. Unique on `(user_id, beat_id)`.
   Deleted with the session.
+- **Report links**: one document per link you make for a client to read its own hours
+  without an account — `user_id`, `client_id`, `token` (32 random bytes, URL-safe),
+  `first`, `last`, `tz` (the zone its days are bucketed in, frozen when the link is
+  made), `show_amounts`, `show_entries` and `created_at`. Unique on `token`, which is
+  the one index in the database not led by `user_id`: the reader has no session, so the
+  token is what resolves the account. The token is stored as it is read, not hashed —
+  whoever can read this collection can read the hours it serves out of the same
+  database, and you have to be able to re-open a link you already sent. No figure is
+  stored: every hour and amount is derived on each read, from that client's projects
+  and sessions alone. Nothing about a reader is recorded — no visit count, no time, no
+  address. Deleted when you revoke it or delete its client, and left out of the backup
+  on purpose, so an export file carries no live URL to your hours.
 - **Beats (sessions)**: start, end, project id, tags, a note.
   The tags are derived from the daemon's flow windows when a session is logged, stopped
   or its times are edited; an edit over no windows keeps the tags it had. The note comes
