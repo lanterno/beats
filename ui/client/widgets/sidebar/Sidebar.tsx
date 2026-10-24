@@ -11,6 +11,7 @@
 import {
 	BarChart3,
 	Briefcase,
+	Building2,
 	CalendarDays,
 	Download,
 	Layers,
@@ -42,6 +43,7 @@ const NAV = [
 	// Only once there is someone or something to bill (`useShowClients`); with
 	// a dot while a billing budget is used up (`useBillingBudgetAttention`).
 	{ to: "/clients", title: "Clients", Icon: Briefcase, prefix: false },
+	{ to: "/organisations", title: "Organisations", Icon: Building2, prefix: true },
 	{ to: "/plan", title: "Weekly Plan", Icon: CalendarDays, prefix: false },
 	{ to: "/coach", title: "Coach", Icon: Sparkles, prefix: false },
 	{ to: "/insights", title: "Insights", Icon: BarChart3, prefix: false },

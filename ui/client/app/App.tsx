@@ -16,6 +16,12 @@ import Digests from "@/pages/insights/Digests";
 import MonthlyRetrospective from "@/pages/insights/MonthlyRetrospective";
 import YearInReview from "@/pages/insights/YearInReview";
 import NotFound from "@/pages/not-found";
+import Organisations from "@/pages/organisations";
+import ArchivePage from "@/pages/organisations/ArchivePage";
+import JoinPage from "@/pages/organisations/JoinPage";
+import Organisation from "@/pages/organisations/Organisation";
+import Record from "@/pages/organisations/Record";
+import Visible from "@/pages/organisations/Visible";
 import PlanPage from "@/pages/plan";
 import ProjectDetails from "@/pages/project-details";
 import ProjectsIndex from "@/pages/projects-index";
@@ -111,6 +117,12 @@ export function App() {
 									<Route path="/projects" element={<ProjectsIndex />} />
 									<Route path="/project/:projectId" element={<ProjectDetails />} />
 									<Route path="/clients" element={<Clients />} />
+									<Route path="/organisations" element={<Organisations />} />
+									<Route path="/organisations/join/:token" element={<JoinPage />} />
+									<Route path="/organisations/:id" element={<Organisation />} />
+									<Route path="/organisations/:id/record" element={<Record />} />
+									<Route path="/organisations/:id/visible" element={<Visible />} />
+									<Route path="/organisations/:id/archive" element={<ArchivePage />} />
 									<Route path="/plan" element={<PlanPage />} />
 									<Route path="/coach" element={<Coach />} />
 									<Route path="/settings" element={<Settings />} />
