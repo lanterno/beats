@@ -543,17 +543,24 @@ function ContractVariant({
 			</ul>
 
 			<div className="mt-3.5">
-				<Button
-					ref={setChangeButton}
-					type="button"
-					variant="secondary"
-					size="sm"
-					onClick={() => setEditor({ mode: "add" })}
-					disabled={anyPending}
-				>
-					<Plus aria-hidden="true" />
-					Change contract from…
-				</Button>
+				{project.organisation?.contractManaged ? (
+					// Stage 3: the contract is the employer's to write (409 CONTRACT_MANAGED).
+					<p className="text-xs text-muted-foreground font-medium leading-[1.6]">
+						Managed by {project.organisation.name}: the terms are the organisation's to change.
+					</p>
+				) : (
+					<Button
+						ref={setChangeButton}
+						type="button"
+						variant="secondary"
+						size="sm"
+						onClick={() => setEditor({ mode: "add" })}
+						disabled={anyPending}
+					>
+						<Plus aria-hidden="true" />
+						Change contract from…
+					</Button>
+				)}
 			</div>
 
 			<TimesheetDownload project={project} contract={contract} todayIso={todayIso} />

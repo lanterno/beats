@@ -10,12 +10,31 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Absence } from "@/entities/absence";
+import type { AbsenceRequest } from "@/entities/organisation";
 import type { Holiday, ProjectWithDuration, VacationYear } from "@/entities/project";
 import { TimeOff, type TimeOffProps } from "./TimeOff";
 
 const { hooks } = vi.hoisted(() => ({
-	hooks: { absences: vi.fn(), holidays: vi.fn(), vacationYear: vi.fn() },
+	hooks: {
+		absences: vi.fn(),
+		holidays: vi.fn(),
+		vacationYear: vi.fn(),
+		requests: vi.fn<() => AbsenceRequest[]>(() => []),
+		requestAbsence: vi.fn(),
+		withdraw: vi.fn(),
+	},
 }));
+
+vi.mock("@/entities/organisation", async () => {
+	const actual =
+		await vi.importActual<typeof import("@/entities/organisation")>("@/entities/organisation");
+	return {
+		...actual,
+		useAbsenceRequests: () => ({ data: hooks.requests() }),
+		useRequestAbsence: () => ({ mutate: hooks.requestAbsence, isPending: false }),
+		useWithdrawAbsenceRequest: () => ({ mutate: hooks.withdraw, isPending: false }),
+	};
+});
 
 vi.mock("@/entities/absence", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/absence")>("@/entities/absence");
@@ -116,6 +135,9 @@ function renderTimeOff(overrides: Partial<TimeOffProps> = {}) {
 
 beforeEach(() => {
 	hooks.vacationYear.mockReset();
+	hooks.requestAbsence.mockReset();
+	hooks.withdraw.mockReset();
+	hooks.requests.mockReturnValue([]);
 	hooks.absences.mockReturnValue(ABSENCES);
 	hooks.holidays.mockImplementation((year: number) => HOLIDAYS[year] ?? []);
 });
@@ -218,6 +240,94 @@ describe("TimeOff", () => {
 
 		expect(hooks.vacationYear).not.toHaveBeenCalled();
 		expect(region).toHaveTextContent("2026: 11½ d vacation booked · 1½ d sick");
+	});
+
+	it("asks instead of booking on a managed assignment, and lists my requests", async () => {
+		const MANAGED = {
+			...PROJECT,
+			organisation: {
+				id: "o1",
+				name: "Acme",
+				sharedFrom: "2026-03-04T00:00:00Z",
+				contractManaged: true,
+			},
+		};
+		hooks.requests.mockReturnValue([
+			{
+				id: "r1",
+				projectId: "p1",
+				userId: "u1",
+				date: "2026-09-21",
+				type: "vacation",
+				halfDay: false,
+				status: "pending",
+				requestedAt: "2026-09-09T08:00:00Z",
+			},
+			{
+				id: "r2",
+				projectId: "p1",
+				userId: "u1",
+				date: "2026-09-14",
+				type: "sick",
+				halfDay: false,
+				status: "declined",
+				requestedAt: "2026-09-01T08:00:00Z",
+				decidedAt: "2026-09-02T08:00:00Z",
+				decidedBy: "boss",
+				comment: "come in anyway",
+			},
+			// Another project's request stays out of this panel.
+			{
+				id: "r3",
+				projectId: "p2",
+				userId: "u1",
+				date: "2026-09-15",
+				type: "other",
+				halfDay: false,
+				status: "pending",
+				requestedAt: "2026-09-08T08:00:00Z",
+			},
+		]);
+		const props = renderTimeOff({ project: MANAGED });
+		const region = screen.getByRole("region", { name: "Time off" });
+
+		expect(within(region).queryByRole("button", { name: "+ Book" })).not.toBeInTheDocument();
+		const ask = within(region).getByRole("button", { name: "Ask for time off" });
+
+		// A pending request carries Withdraw; a declined one its status and the comment.
+		const rows = within(within(region).getByRole("list", { name: "Time off requests" }))
+			.getAllByRole("listitem")
+			.map((li) => li.textContent);
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toContain("Mon Sep 21");
+		expect(rows[0]).toContain("Withdraw");
+		expect(rows[1]).toContain("declined");
+		expect(rows[1]).toContain("come in anyway");
+
+		await userEvent.click(within(region).getByRole("button", { name: "Withdraw" }));
+		expect(hooks.withdraw).toHaveBeenCalledWith("r1", expect.anything());
+
+		// An absence row no longer opens the change dialog.
+		expect(
+			within(region).queryByRole("button", { name: /Fri Oct 2 – Tue Oct 6/ }),
+		).not.toBeInTheDocument();
+
+		// The dialog hands the typed values to useRequestAbsence's mutate.
+		await userEvent.click(ask);
+		const dialog = screen.getByRole("dialog", { name: "Ask for time off" });
+		expect(dialog).toHaveTextContent(
+			"Your manager reads this note; the organisation's record never shows it.",
+		);
+		await userEvent.click(within(dialog).getByRole("button", { name: "Sick" }));
+		await userEvent.click(within(dialog).getByRole("checkbox", { name: "Half day" }));
+		await userEvent.type(within(dialog).getByLabelText("Note"), "flu");
+		await userEvent.click(within(dialog).getByRole("button", { name: "Ask" }));
+		expect(hooks.requestAbsence).toHaveBeenCalledWith(
+			// Tomorrow is the default day.
+			{ projectId: "p1", date: "2026-09-11", type: "sick", halfDay: true, note: "flu" },
+			expect.anything(),
+		);
+		expect(props.onBook).not.toHaveBeenCalled();
 	});
 
 	it("says nothing is booked, and that holidays wait for a region", () => {

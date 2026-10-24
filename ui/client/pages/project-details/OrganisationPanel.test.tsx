@@ -4,21 +4,30 @@
  * to connect only while the member belongs to an organisation, and never
  * when it is billed to a client, which the API would refuse.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Membership } from "@/entities/organisation";
+import type { Membership, Timesheet } from "@/entities/organisation";
 import type { ProjectWithDuration } from "@/entities/project";
 import { OrganisationPanel } from "./OrganisationPanel";
 
 const { hooks } = vi.hoisted(() => ({
-	hooks: { memberships: vi.fn<() => Membership[]>(() => []) },
+	hooks: {
+		memberships: vi.fn<() => Membership[]>(() => []),
+		timesheets: vi.fn<() => Timesheet[]>(() => []),
+		submit: vi.fn(),
+	},
 }));
 
 vi.mock("@/entities/organisation", async () => {
 	const actual =
 		await vi.importActual<typeof import("@/entities/organisation")>("@/entities/organisation");
-	return { ...actual, useMemberships: () => ({ data: hooks.memberships() }) };
+	return {
+		...actual,
+		useMemberships: () => ({ data: hooks.memberships() }),
+		useTimesheets: () => ({ data: hooks.timesheets() }),
+		useSubmitTimesheet: () => ({ mutate: hooks.submit, isPending: false }),
+	};
 });
 
 const ACME: Membership = {
@@ -55,7 +64,11 @@ function renderPanel(project: ProjectWithDuration, billed = false) {
 }
 
 describe("OrganisationPanel", () => {
-	beforeEach(() => hooks.memberships.mockReturnValue([]));
+	beforeEach(() => {
+		hooks.memberships.mockReturnValue([]);
+		hooks.timesheets.mockReturnValue([]);
+		hooks.submit.mockReset();
+	});
 	afterEach(cleanup);
 
 	it("names the owner of an organisation's project and links to what they see", () => {
@@ -74,6 +87,55 @@ describe("OrganisationPanel", () => {
 			"href",
 			"/organisations/o1/visible",
 		);
+	});
+
+	it("lists my timesheets with what approval froze, and offers only unsettled ended months", () => {
+		const sheet = (overrides: Partial<Timesheet>): Timesheet => ({
+			id: "t",
+			projectId: "p1",
+			userId: "u1",
+			month: "2026-08-01",
+			status: "submitted",
+			submittedAt: "2026-09-01T08:00:00Z",
+			history: [],
+			...overrides,
+		});
+		hooks.timesheets.mockReturnValue([
+			sheet({
+				id: "t-aug",
+				month: "2026-08-01",
+				status: "approved",
+				frozen: { worked: 42.5, expected: 44, balanceEnd: -1.5, entries: 61, absenceDays: 2 },
+			}),
+			sheet({ id: "t-sep", month: "2026-09-01", status: "submitted" }),
+			// Another project's sheet stays out of this panel.
+			sheet({ id: "t-other", projectId: "p2", month: "2026-07-01" }),
+		]);
+		renderPanel({
+			...PERSONAL,
+			organisation: {
+				id: "o1",
+				name: "Acme",
+				sharedFrom: "2026-03-03T23:00:00Z",
+				contractManaged: true,
+			},
+		});
+		const panel = screen.getByRole("region", { name: "Organisation" });
+
+		expect(panel).toHaveTextContent("August 2026 — approved · 42.5 h");
+		expect(panel).toHaveTextContent("September 2026 — submitted");
+		expect(panel).toHaveTextContent(
+			"Approval freezes the month and locks its days; a decider can reopen it.",
+		);
+
+		// Submitted and approved months are not offered again; open ended months are.
+		const options = within(screen.getByRole("combobox", { name: "Month to submit" }))
+			.getAllByRole("option")
+			.map((o) => o.textContent);
+		expect(options).not.toContain("September 2026");
+		expect(options).not.toContain("August 2026");
+		expect(options).toContain("July 2026");
+		expect(options).not.toContain("October 2026");
 	});
 
 	it("offers to connect a personal project once the member belongs to an organisation", () => {
