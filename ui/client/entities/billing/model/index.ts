@@ -7,11 +7,14 @@ export { type BillingBudgetWords, billingBudgetState, describeBillingBudget } fr
 export {
 	toApiBillingBudgetInput,
 	toApiProjectBillingInput,
+	toApiReportLinkInput,
 	toBillingBudget,
 	toBillingBudgetStatus,
 	toBillingMonth,
 	toOverrideMap,
 	toProjectBilling,
+	toReport,
+	toReportLink,
 } from "./mappers";
 // Whether an entry is billable: the API's flag rule, mirrored
 export { type EntryBillable, entryBillable, inForceOn } from "./resolve";
@@ -33,6 +36,11 @@ export type {
 	ProjectBilling,
 	ProjectBillingInput,
 	RateSource,
+	Report,
+	ReportEntry,
+	ReportLine,
+	ReportLink,
+	ReportLinkInput,
 	UnattachedHours,
 } from "./types";
 // Ask before a write that changes a month already over

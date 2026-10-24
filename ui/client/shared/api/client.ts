@@ -228,6 +228,33 @@ export function del<T>(endpoint: string): Promise<T> {
 	return apiClient<T>(endpoint, { method: "DELETE" });
 }
 
+/**
+ * A GET that never carries the session.
+ *
+ * The one public route the SPA reads is a report link
+ * (`/api/reports/{token}`, docs/billing.md phase 1c). The token in the URL
+ * is the whole of its authorisation, and the page has to work for a client
+ * who has no account at all. Attaching the owner's bearer token when they
+ * happen to be signed in would make the page behave differently for them
+ * than for the person they sent it to, which is the one thing a "see what
+ * your client sees" page must not do.
+ *
+ * Not `get` with headers overridden: `apiClient` spreads its own headers
+ * first, so an override can replace `Authorization` but never remove it.
+ */
+export async function getPublic<T>(endpoint: string): Promise<T> {
+	const response = await fetch(`${config.apiBaseUrl}${endpoint}`, {
+		method: "GET",
+		headers: { Accept: "application/json" },
+	});
+
+	if (!response.ok) {
+		throw await apiErrorFrom(response);
+	}
+
+	return response.json();
+}
+
 // Offline-aware mutation wrapper (Stage 1.4)
 
 /**

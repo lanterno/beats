@@ -10,11 +10,16 @@ import {
 	ApiBillingBudgetStatusListSchema,
 	ApiProjectBillingListSchema,
 	ApiProjectBillingSchema,
+	ApiReportLinkListSchema,
+	ApiReportLinkSchema,
 	BillingMonthSchema,
 	del,
 	get,
+	getPublic,
 	parseApiResponse,
+	post,
 	put,
+	ReportSchema,
 } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
 import type {
@@ -25,15 +30,21 @@ import type {
 	BillingMonth,
 	ProjectBilling,
 	ProjectBillingInput,
+	Report,
+	ReportLink,
+	ReportLinkInput,
 } from "../model";
 import {
 	toApiBillingBudgetInput,
 	toApiProjectBillingInput,
+	toApiReportLinkInput,
 	toBillingBudget,
 	toBillingBudgetStatus,
 	toBillingMonth,
 	toOverrideMap,
 	toProjectBilling,
+	toReport,
+	toReportLink,
 } from "../model";
 
 /** Every billed project's billing, by project id: a small set, read whole. */
@@ -144,4 +155,42 @@ export async function deleteBillingBudget(
 	scopeId: string,
 ): Promise<void> {
 	await del<void>(`${BUDGET_PATHS[scope]}/${scopeId}`);
+}
+
+/**
+ * One client's report links, newest first. Each carries its token, so a
+ * link already sent to a client can be copied again.
+ */
+export async function fetchReportLinks(clientId: string): Promise<ReportLink[]> {
+	const data = await get<unknown>(`/api/clients/${clientId}/links`);
+	return parseApiResponse(ApiReportLinkListSchema, data).map(toReportLink);
+}
+
+/**
+ * Mint a link over a fixed range. 422 for a range that runs backwards or
+ * covers more than 366 days, 400 INVALID_TIMEZONE for a zone the API does
+ * not know. Not gated by `withPastConsent`: a link changes no figure, it
+ * only shows what is already there.
+ */
+export async function createReportLink(
+	clientId: string,
+	input: ReportLinkInput,
+): Promise<ReportLink> {
+	const data = await post<unknown>(`/api/clients/${clientId}/links`, toApiReportLinkInput(input));
+	return toReportLink(parseApiResponse(ApiReportLinkSchema, data));
+}
+
+/** Revoke a link: the URL is dead from the next read. 204 even if it was already gone. */
+export async function deleteReportLink(clientId: string, linkId: string): Promise<void> {
+	await del<void>(`/api/clients/${clientId}/links/${linkId}`);
+}
+
+/**
+ * Read a report link. The one call in the SPA that sends no session
+ * (`getPublic`): the token is the whole of the authorisation, and the page
+ * must read the same for the client it was sent to as for its owner.
+ */
+export async function fetchReport(token: string): Promise<Report> {
+	const data = await getPublic<unknown>(`/api/reports/${encodeURIComponent(token)}`);
+	return toReport(parseApiResponse(ReportSchema, data));
 }

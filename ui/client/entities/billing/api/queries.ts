@@ -10,14 +10,21 @@ import type {
 	BillingMonth,
 	ProjectBilling,
 	ProjectBillingInput,
+	Report,
+	ReportLink,
+	ReportLinkInput,
 } from "../model";
 import {
 	clearEntryBillable,
+	createReportLink,
 	deleteBillingBudget,
+	deleteReportLink,
 	fetchBillableOverrides,
 	fetchBillingBudgets,
 	fetchBillingMonth,
 	fetchProjectBillings,
+	fetchReport,
+	fetchReportLinks,
 	putBillingBudget,
 	removeProjectBilling,
 	setEntryBillable,
@@ -35,6 +42,7 @@ const billingKeys = {
 	entries: () => [...billingKeys.all, "entries"] as const,
 	month: (month: string, tz: string) => [...billingKeys.all, "month", month, tz] as const,
 	budgets: (tz: string) => [...billingKeys.all, "budgets", tz] as const,
+	links: (clientId: string) => [...billingKeys.all, "links", clientId] as const,
 };
 
 /**
@@ -220,4 +228,55 @@ export function useClearEntryBillable() {
 		({ beatId }: { beatId: string }) => clearEntryBillable(beatId),
 		(marks, { beatId }) => marks.delete(beatId),
 	);
+}
+
+/**
+ * One client's report links. Under the billing root like everything else
+ * here, though no session or timer write moves a link: it keeps one entity
+ * owning one root, and the list is small.
+ */
+export function useReportLinks(clientId: string, { enabled = true }: { enabled?: boolean } = {}) {
+	return useQuery({
+		queryKey: billingKeys.links(clientId),
+		queryFn: (): Promise<ReportLink[]> => fetchReportLinks(clientId),
+		enabled,
+	});
+}
+
+/** Mint a link over a fixed range. */
+export function useCreateReportLink() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ clientId, input }: { clientId: string; input: ReportLinkInput }) =>
+			createReportLink(clientId, input),
+		onSuccess: (_link, { clientId }) =>
+			queryClient.invalidateQueries({ queryKey: billingKeys.links(clientId) }),
+		retry: false,
+	});
+}
+
+/** Revoke a link. */
+export function useDeleteReportLink() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ clientId, linkId }: { clientId: string; linkId: string }) =>
+			deleteReportLink(clientId, linkId),
+		onSuccess: (_void, { clientId }) =>
+			queryClient.invalidateQueries({ queryKey: billingKeys.links(clientId) }),
+		retry: false,
+	});
+}
+
+/**
+ * The public read, for the page a client opens. Outside `billingRootKey`:
+ * the reader has no account, so there is no cache of theirs to invalidate,
+ * and nothing in the app writes what it shows. Not retried on a 404 — a
+ * revoked link will not come back.
+ */
+export function useReport(token: string) {
+	return useQuery({
+		queryKey: ["report", token] as const,
+		queryFn: (): Promise<Report> => fetchReport(token),
+		retry: false,
+	});
 }

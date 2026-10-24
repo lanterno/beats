@@ -34,6 +34,7 @@ import {
 	BillingBudgetRow,
 	entryBillable,
 	inForceOn,
+	ReportLinksBlock,
 } from "@/entities/billing";
 import type { Client } from "@/entities/client";
 import { useArchiveClient, useDeleteClient, useUnarchiveClient } from "@/entities/client";
@@ -57,6 +58,9 @@ export interface ClientPanelProps {
 	tz: string;
 	/** "October". */
 	monthName: string;
+	/** The open month's first and last day: what a new report link covers. */
+	monthFirst: string;
+	monthLast: string;
 	/** Every project's name by id, archived ones included, for the entries. */
 	projectNames: ReadonlyMap<string, string>;
 	projectBillings?: ReadonlyMap<string, ProjectBilling>;
@@ -173,6 +177,8 @@ export function ClientPanel({
 	todayIso,
 	tz,
 	monthName,
+	monthFirst,
+	monthLast,
 	projectNames,
 	projectBillings,
 	overrides,
@@ -248,6 +254,18 @@ export function ClientPanel({
 				<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
 			</button>
 		);
+
+	const linksBlock = (
+		<ReportLinksBlock
+			clientId={billing.clientId}
+			clientName={billing.name}
+			first={monthFirst}
+			last={monthLast}
+			tz={tz}
+			monthName={monthName}
+			writable={writable}
+		/>
+	);
 
 	const budgetBlock = budgetsFailed ? (
 		<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
@@ -408,6 +426,7 @@ export function ClientPanel({
 							: `Nothing logged for ${billing.name} in ${monthName}.`}
 					</p>
 					{budgetBlock}
+					{linksBlock}
 				</>
 			) : (
 				<>
@@ -544,6 +563,8 @@ export function ClientPanel({
 							)}
 						</div>
 					)}
+
+					{linksBlock}
 				</>
 			)}
 

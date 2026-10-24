@@ -8,6 +8,8 @@ import type {
 	ApiBillingTerm,
 	ApiClientBilling,
 	ApiProjectBilling,
+	ApiReport,
+	ApiReportLink,
 } from "@/shared/api";
 import type {
 	BillingBudget,
@@ -20,6 +22,9 @@ import type {
 	ClientBilling,
 	ProjectBilling,
 	ProjectBillingInput,
+	Report,
+	ReportLink,
+	ReportLinkInput,
 } from "./types";
 
 function toBillingTerm(api: ApiBillingTerm): BillingTerm {
@@ -179,5 +184,65 @@ export function toApiBillingBudgetInput(input: BillingBudgetInput) {
 		limit_minor: input.unit === "money" ? (input.limitMinor ?? null) : null,
 		starts_on: input.period === "total" ? (input.startsOn ?? null) : null,
 		warn_at_percent: input.warnAtPercent,
+	};
+}
+
+/** A report link as its owner sees it, token included. */
+export function toReportLink(api: ApiReportLink): ReportLink {
+	return {
+		id: api.id,
+		clientId: api.client_id,
+		token: api.token,
+		first: api.first,
+		last: api.last,
+		tz: api.tz,
+		showAmounts: api.show_amounts,
+		showEntries: api.show_entries,
+		createdAt: api.created_at,
+	};
+}
+
+/** The write body: every key the API requires. */
+export function toApiReportLinkInput(input: ReportLinkInput) {
+	return {
+		first: input.first,
+		last: input.last,
+		tz: input.tz,
+		show_amounts: input.showAmounts,
+		show_entries: input.showEntries,
+	};
+}
+
+/**
+ * What a report link serves. Every money figure arrives null when the link
+ * hides amounts, and becomes `undefined` here, so a component asks
+ * `amountMinor === undefined` rather than distinguishing two empties.
+ */
+export function toReport(api: ApiReport): Report {
+	return {
+		clientName: api.client_name,
+		first: api.first,
+		last: api.last,
+		showAmounts: api.show_amounts,
+		showEntries: api.show_entries,
+		currency: api.currency ?? undefined,
+		minorUnits: api.minor_units ?? undefined,
+		billableHours: api.billable_hours,
+		unpricedHours: api.unpriced_hours ?? undefined,
+		amountMinor: api.amount_minor ?? undefined,
+		lines: api.lines.map((line) => ({
+			projectName: line.project_name,
+			first: line.first,
+			last: line.last,
+			hours: line.hours,
+			rateMinor: line.rate_minor ?? undefined,
+			amountMinor: line.amount_minor ?? undefined,
+		})),
+		entries: api.entries.map((entry) => ({
+			day: entry.day,
+			start: entry.start,
+			end: entry.end,
+			hours: entry.hours,
+		})),
 	};
 }

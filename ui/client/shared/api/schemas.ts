@@ -401,6 +401,66 @@ export const BillingMonthSchema = z.object({
 
 export type ApiBillingMonth = z.infer<typeof BillingMonthSchema>;
 
+// Report links (docs/billing.md, phase 1c). A link a client opens with no
+// login to read its own hours over a fixed range. The owner's side carries
+// the token, so a link already sent can be copied again.
+
+export const ApiReportLinkSchema = z.object({
+	id: z.string(),
+	client_id: z.string(),
+	token: z.string(),
+	first: z.string(), // YYYY-MM-DD
+	last: z.string(), // YYYY-MM-DD
+	tz: z.string(), // IANA: the zone the link's days are bucketed in
+	show_amounts: z.boolean(),
+	show_entries: z.boolean(),
+	created_at: z.string(), // ISO datetime
+});
+
+export type ApiReportLink = z.infer<typeof ApiReportLinkSchema>;
+export const ApiReportLinkListSchema = z.array(ApiReportLinkSchema);
+
+// What the public read answers. A line's rate and amount are null on an
+// unpriced run, and on every line when the link does not show amounts; the
+// hours are there either way. Deliberately narrower than
+// `BillingLineSchema` and `BillingEntrySchema` above — no ids, no source,
+// no mark — because the API's public response is narrower.
+
+const ReportLineSchema = z.object({
+	project_name: z.string(),
+	first: z.string(), // YYYY-MM-DD
+	last: z.string(), // YYYY-MM-DD
+	hours: z.number(),
+	rate_minor: z.number().int().nullable(),
+	amount_minor: z.number().int().nullable(),
+});
+
+const ReportEntrySchema = z.object({
+	day: z.string(), // YYYY-MM-DD, the local day it started on
+	start: z.string(), // ISO datetime
+	end: z.string(), // ISO datetime
+	hours: z.number(),
+});
+
+export const ReportSchema = z.object({
+	client_name: z.string(),
+	first: z.string(), // YYYY-MM-DD
+	last: z.string(), // YYYY-MM-DD
+	show_amounts: z.boolean(),
+	show_entries: z.boolean(),
+	currency: z.string().nullable(),
+	minor_units: z.number().int().nullable(),
+	billable_hours: z.number(),
+	unpriced_hours: z.number().nullable(),
+	amount_minor: z.number().int().nullable(),
+	lines: z.array(ReportLineSchema),
+	entries: z.array(ReportEntrySchema),
+});
+
+export type ApiReport = z.infer<typeof ReportSchema>;
+export type ApiReportLine = z.infer<typeof ReportLineSchema>;
+export type ApiReportEntry = z.infer<typeof ReportEntrySchema>;
+
 // Billing budgets (docs/billing.md, phase 1b). These mirror the API's
 // `BillingBudgetResponse`, `BillingBudgetRunningResponse` and
 // `BillingBudgetStatusResponse`. A budget is addressed by its scope, so it

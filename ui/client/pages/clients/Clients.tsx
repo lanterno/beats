@@ -267,6 +267,8 @@ export default function Clients() {
 								todayIso={today}
 								tz={tz}
 								monthName={name}
+								monthFirst={report.first}
+								monthLast={report.last}
 								projectNames={projectNames}
 								projectBillings={billings}
 								overrides={overrides}

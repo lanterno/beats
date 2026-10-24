@@ -195,3 +195,79 @@ export interface BillingBudgetStatus extends BillingBudget {
 	runsOutOn?: string;
 	running?: BillingBudgetRunning;
 }
+
+/**
+ * A report link: a client opens it with no login and reads its own hours
+ * over the range the owner fixed (docs/billing.md, phase 1c).
+ *
+ * The owner's side only. `token` is here because the owner must be able to
+ * copy a link they already sent; the SPA turns it into a URL with its own
+ * origin, since the API does not know where the app is served from.
+ */
+export interface ReportLink {
+	id: string;
+	clientId: string;
+	token: string;
+	first: string; // YYYY-MM-DD
+	last: string; // YYYY-MM-DD
+	/** The zone the link's days are bucketed in, frozen when it was minted. */
+	tz: string;
+	showAmounts: boolean;
+	showEntries: boolean;
+	createdAt: string; // ISO datetime
+}
+
+/** What minting a link sends. The range runs forward and spans at most 366 days. */
+export interface ReportLinkInput {
+	first: string; // YYYY-MM-DD
+	last: string; // YYYY-MM-DD
+	tz: string;
+	showAmounts: boolean;
+	showEntries: boolean;
+}
+
+/**
+ * A run of consecutive days of one project at one rate, as a client sees
+ * it. Narrower than {@link BillingLine}: no project id, and no source.
+ */
+export interface ReportLine {
+	projectName: string;
+	first: string; // YYYY-MM-DD
+	last: string; // YYYY-MM-DD
+	hours: number;
+	/** Absent on an unpriced run, and on every line when amounts are hidden. */
+	rateMinor?: number;
+	amountMinor?: number;
+}
+
+/**
+ * One billable entry as a client sees it. Narrower than
+ * {@link BillingEntry}: no entry id, no project id, no mark, no rate.
+ */
+export interface ReportEntry {
+	day: string; // YYYY-MM-DD
+	start: string; // ISO datetime
+	end: string; // ISO datetime
+	hours: number;
+}
+
+/**
+ * What a report link serves. With `showAmounts` false every money figure is
+ * absent and the hours still add up; with `showEntries` false `entries` is
+ * empty and the lines still do.
+ */
+export interface Report {
+	clientName: string;
+	first: string; // YYYY-MM-DD
+	last: string; // YYYY-MM-DD
+	showAmounts: boolean;
+	showEntries: boolean;
+	currency?: string;
+	minorUnits?: number;
+	billableHours: number;
+	/** The part of `billableHours` with no rate; absent when amounts are hidden. */
+	unpricedHours?: number;
+	amountMinor?: number;
+	lines: ReportLine[];
+	entries: ReportEntry[];
+}

@@ -19,6 +19,7 @@ import NotFound from "@/pages/not-found";
 import PlanPage from "@/pages/plan";
 import ProjectDetails from "@/pages/project-details";
 import ProjectsIndex from "@/pages/projects-index";
+import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
 import { Toaster, TooltipProvider } from "@/shared/ui";
@@ -90,6 +91,10 @@ export function App() {
 								{/* Where sign-in providers send the browser back: public,
 								    since a sign-in arrives before there is a session. */}
 								<Route path="/auth/callback" element={<SsoCallback />} />
+								{/* A report link (docs/billing.md, phase 1c): a client opens it
+								    with no account, so it sits outside ProtectedRoute and
+								    outside Layout — there is nothing here to navigate to. */}
+								<Route path="/r/:token" element={<Report />} />
 								{/* Protected routes with persistent layout */}
 								<Route
 									element={
