@@ -15,8 +15,8 @@
     "typecheck": "tsc",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
-    "gen:openapi": "cd ../api && uv run python scripts/dump_openapi.py ../ui/client/shared/api/openapi.json",
-    "gen:types": "pnpm gen:openapi && openapi-typescript client/shared/api/openapi.json -o client/shared/api/generated.ts",
+    "gen:openapi": "cd ../api && BEATS_ENV_FILE=.env.test uv run python scripts/dump_openapi.py ../ui/client/shared/api/openapi.json",
+    "gen:types": "pnpm gen:openapi && pnpm --filter @beats/openapi-types gen",
     "gen:types:check": "pnpm gen:types && git diff --exit-code client/shared/api/openapi.json client/shared/api/generated.ts"
   },
   "dependencies": {
@@ -49,7 +49,6 @@
     "@vitejs/plugin-react-swc": "^4.3.3",
     "fake-indexeddb": "^6.2.6",
     "jsdom": "^30.0.1",
-    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.31",
     "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
@@ -59,5 +58,5 @@
     "vitest": "^5.0.0"
   },
   "packageManager": "pnpm@12.15.0+sha512.b3951d6d6ff4a9f13dc7cf56cd28d2b8eb37dbcc9c68e52e1e1191873ea9f82a017287ab50baadc5ccc494f036c67c0e47eb13608c2fa36f47711b61ea128e61",
-  "description": "Beats web client — React SPA for the Beats time-tracking API."
+  "description": "Beats web client \u2014 React SPA for the Beats time-tracking API."
 }

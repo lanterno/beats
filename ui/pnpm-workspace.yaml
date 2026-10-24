@@ -1,5 +1,12 @@
 # pnpm settings (not package.json's "pnpm" field, which pnpm 11+ no longer reads).
 
+# The SPA is the root package. tools/openapi-types is the one other package: the
+# OpenAPI type generator with a TypeScript 5 of its own, since it drives the
+# compiler API that typescript@7 no longer exposes and a peer cannot be
+# overridden away from the root's compiler.
+packages:
+  - tools/*
+
 # Dependency overrides — security pins for transitive dependencies.
 overrides:
   vite>rollup: ">=4.59.0"

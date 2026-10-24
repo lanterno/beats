@@ -36,11 +36,9 @@ jobs:
       - run: pnpm typecheck
       # Fail CI if the committed OpenAPI types drift from the API schema. Was
       # previously only enforced in the pre-push hook (skippable / not in CI).
-      # dump_openapi.py imports the app, which needs a JWT_SECRET (>=32 bytes) to
-      # build Settings(); the value never affects the emitted schema.
+      # The dump reads api/.env.test for the settings the app needs to import;
+      # none of them affects the emitted schema.
       - run: pnpm gen:types:check
-        env:
-          JWT_SECRET: ci_openapi_dump_placeholder_secret_0123456789
       - run: pnpm test
       - run: pnpm build
 

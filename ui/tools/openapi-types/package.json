@@ -1,0 +1,12 @@
+{
+  "name": "@beats/openapi-types",
+  "private": true,
+  "description": "Regenerates client/shared/api/generated.ts from openapi.json. A workspace package of its own because openapi-typescript drives the TypeScript compiler API (ts.factory), which typescript@7 no longer exposes: here it gets a TypeScript 5 of its own, and the SPA's compiler stays on 7.",
+  "scripts": {
+    "gen": "openapi-typescript ../../client/shared/api/openapi.json -o ../../client/shared/api/generated.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.9.3"
+  }
+}
