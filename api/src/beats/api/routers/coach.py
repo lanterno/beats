@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from beats.api.dependencies import CurrentUserId, TimezoneDep
+from beats.coach import gateway
 from beats.coach.brief import generate_brief, get_brief, list_briefs
 from beats.coach.chat import handle_chat_turn
 from beats.coach.feedback import BriefRating, set_brief_feedback
@@ -24,6 +25,7 @@ from beats.coach.repos import (
     LLM_USAGE_COLLECTION,
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker, budget_message
+from beats.domain.exceptions import CoachNotConfigured
 from beats.infrastructure.database import Database
 from beats.settings import settings
 
@@ -77,12 +79,27 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
 
 
+class CoachStatusResponse(BaseModel):
+    """Whether this deployment can run the coach at all. False when no
+    ANTHROPIC_API_KEY is configured: every route that would call the model
+    then answers 503 COACH_NOT_CONFIGURED, and a client reading this first
+    leaves the coach out rather than offer it and fail."""
+
+    configured: bool
+
+
 class MemoryResponse(BaseModel):
     content: str | None = None
     updated_at: datetime | None = None
 
 
 # ── Briefs ───────────────────────────────────────────────────────────
+
+
+@router.get("/status", response_model=CoachStatusResponse)
+async def coach_status(user_id: CurrentUserId) -> CoachStatusResponse:
+    """Whether the coach is set up on this server."""
+    return CoachStatusResponse(configured=gateway.configured())
 
 
 @router.get("/brief/today", response_model=BriefResponse | None)
@@ -147,6 +164,8 @@ async def trigger_brief_generation(
 
     try:
         doc = await generate_brief(user_id, target_date=target, tz=tz)
+    except CoachNotConfigured:
+        raise
     except BudgetExceeded as exc:
         # Distinct from the generic RATE_LIMITED — clients should surface
         # "monthly LLM budget reached", not "slow down your requests".
@@ -186,6 +205,9 @@ async def coach_chat(
         try:
             async for event in event_stream:
                 yield f"data: {json.dumps(event)}\n\n"
+        except CoachNotConfigured as exc:
+            error = {"type": "error", "error": exc.message, "code": 503}
+            yield f"data: {json.dumps(error)}\n\n"
         except BudgetExceeded as exc:
             # Built from the figures, never str(exc): an exception's text is
             # not something to hand a client.
@@ -310,6 +332,8 @@ async def rewrite_memory(user_id: CurrentUserId, tz: TimezoneDep):
     """Trigger the coach to rewrite its memory from the last 7 days."""
     try:
         content = await rewrite_coach_memory(user_id, tz=tz)
+    except CoachNotConfigured:
+        raise
     except BudgetExceeded as exc:
         # Match the brief branch: explicit BUDGET_EXCEEDED
         # code so clients can render "monthly LLM budget reached"

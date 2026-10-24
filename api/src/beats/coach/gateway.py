@@ -22,6 +22,7 @@ from anthropic.lib.streaming import ParsedMessageStreamEvent
 from anthropic.types import ContentBlock, Message
 
 from beats.coach.usage import UsageTracker
+from beats.domain.exceptions import CoachNotConfigured
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -131,9 +132,14 @@ def _estimate_cost(
     )
 
 
+def configured() -> bool:
+    """Whether the coach can run at all: an API key is set."""
+    return bool(settings.anthropic_api_key)
+
+
 def _get_client() -> anthropic.AsyncAnthropic:
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not configured")
+    if not configured():
+        raise CoachNotConfigured()
     return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 

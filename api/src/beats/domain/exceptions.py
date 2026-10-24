@@ -568,3 +568,14 @@ class ShareFromInFuture(DomainException):
     status_code = 409
     message = "The day to share from cannot be after today"
     code = "SHARE_FROM_IN_FUTURE"
+
+
+class CoachNotConfigured(DomainException):
+    """The coach needs an Anthropic API key and this deployment has none.
+    Every route that would call the model answers this instead of trying,
+    and `GET /api/coach/status` says so up front, so a client can leave the
+    coach out rather than offer it and fail."""
+
+    status_code = 503
+    message = "The coach is not set up on this server: no ANTHROPIC_API_KEY is configured"
+    code = "COACH_NOT_CONFIGURED"
