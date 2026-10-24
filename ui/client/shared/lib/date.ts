@@ -110,6 +110,19 @@ export function addIsoDays(yyyyMmDd: string, days: number): string {
 	return toIsoDate(d);
 }
 
+/**
+ * The earlier of two 'YYYY-MM-DD's. The format orders as text, so this is a
+ * string comparison: Math.min would read the dates as NaN.
+ */
+export function earlierIso(a: string, b: string): string {
+	return a < b ? a : b;
+}
+
+/** The later of two 'YYYY-MM-DD's; see earlierIso. */
+export function laterIso(a: string, b: string): string {
+	return a > b ? a : b;
+}
+
 /** The Monday of the ISO week a 'YYYY-MM-DD' falls in, as 'YYYY-MM-DD'. */
 export function mondayOfIso(yyyyMmDd: string): string {
 	const d = parseIsoDate(yyyyMmDd);

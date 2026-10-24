@@ -11,7 +11,7 @@
  */
 
 import { APP_NAME } from "@/shared/config";
-import { addIsoDays, formatDateShort, parseIsoDate } from "@/shared/lib";
+import { addIsoDays, earlierIso, formatDateShort, parseIsoDate } from "@/shared/lib";
 import { sortTerms } from "./contract";
 import type { Contract } from "./types";
 
@@ -59,7 +59,7 @@ export function timesheetMonths(contract: Contract, todayIso: string): Timesheet
 	const lastMonth = covered.slice(0, 7);
 	for (let month = startsOn.slice(0, 7); month <= lastMonth; month = nextMonth(month)) {
 		const end = monthEnd(month);
-		const last = covered < end ? covered : end;
+		const last = earlierIso(covered, end);
 		months.push({ month, last, partial: last < end });
 	}
 	return months.reverse();

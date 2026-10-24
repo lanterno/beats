@@ -15,7 +15,7 @@
  * keeps its label and its date, and a neighbour too close gives up its own.
  */
 
-import { formatDateShort, parseIsoDate } from "@/shared/lib";
+import { earlierIso, formatDateShort, laterIso, parseIsoDate } from "@/shared/lib";
 
 export interface ChartStep {
 	/** The day the step takes effect, YYYY-MM-DD. */
@@ -106,8 +106,7 @@ export function stepChartGeometry(input: {
 	if (sorted.length === 0) return null;
 	const first = sorted[0].date;
 	const last = sorted[sorted.length - 1].date;
-	const later =
-		addMonths(todayIso, 3) > addMonths(last, 6) ? addMonths(todayIso, 3) : addMonths(last, 6);
+	const later = laterIso(addMonths(todayIso, 3), addMonths(last, 6));
 	const end = endedOn ?? later;
 	// A step dated after the contract ended never took effect.
 	const steps = sorted.filter((s) => s.date <= end);
@@ -122,7 +121,7 @@ export function stepChartGeometry(input: {
 	const y = (hours: number) => PAD_TOP + (1 - hours / max) * (CHART_HEIGHT - PAD_TOP - PAD_BOTTOM);
 	const baseline = round(y(0));
 	// Solid through today, or through the end when the contract is over.
-	const cutIso = todayIso < end ? todayIso : end;
+	const cutIso = earlierIso(todayIso, end);
 	const cut = x(cutIso);
 
 	const segments: ChartSegment[] = [];

@@ -6,6 +6,7 @@ export { cn } from "./cn";
 export {
 	addIsoDays,
 	browserTimeZone,
+	earlierIso,
 	formatDate,
 	formatDateOnly,
 	formatDateShort,
@@ -15,6 +16,7 @@ export {
 	getISOWeek,
 	getMondayOfWeeksAgo,
 	getWeekRange,
+	laterIso,
 	mondayOfIso,
 	parseIsoDate,
 	parseUtcIso,
