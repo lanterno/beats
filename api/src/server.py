@@ -110,15 +110,13 @@ DEVICE_ALLOWED_PREFIXES = (
     "/api/biometrics/daily",
     "/api/timer",
     "/api/projects",
-    # Companion's "How did it go?" prompt updates the just-stopped beat with
-    # an optional note + tags via PUT /api/beats/.
+    # The companion logs a forgotten session, moves a start, and undoes a
+    # stop through POST and PUT /api/beats/.
     "/api/beats",
     "/api/coach/brief",
     # Companion timer screen renders today/week totals + streak from the heatmap.
     # Other /api/analytics/* endpoints remain off-limits.
     "/api/analytics/heatmap",
-    # Companion's post-stop "How did it go?" sheet uses the user's prior tags
-    # as one-tap chips alongside the freeform input.
     "/api/analytics/tags",
     # The Mac app's Body screen reads the week's biometrics (GET /api/biometrics/),
     # not just the daily push above, and its Settings show and change the Fitbit

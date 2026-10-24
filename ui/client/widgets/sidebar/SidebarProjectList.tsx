@@ -10,7 +10,6 @@
 import { ChevronDown, ChevronRight, Plus, Star } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { OrganisationMark } from "@/entities/organisation";
 import {
 	NewProjectDialog,
 	type ProjectWithDuration,
@@ -87,14 +86,6 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 									style={{ backgroundColor: project.color }}
 								/>
 								<span className="truncate flex-1 min-w-0">{project.name}</span>
-								{project.organisation && (
-									<OrganisationMark
-										name={project.organisation.name}
-										logoUrl={project.organisation.logoUrl}
-										tileOnly
-										className="shrink-0"
-									/>
-								)}
 								<span
 									className={cn(
 										"text-xs font-mono font-bold shrink-0",
