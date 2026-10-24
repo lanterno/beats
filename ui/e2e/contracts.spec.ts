@@ -99,7 +99,7 @@ test.describe("Work contracts", () => {
 			await page.goto(`${projectUrl}?week=${week}`);
 			const expected = expectedFigure(page);
 			await expect(expected).toHaveText(/^\d+\.\d h$/);
-			before = hoursIn(await expected.innerText());
+			before = hoursIn((await expected.textContent()) ?? "");
 
 			await page
 				.getByRole("region", { name: "Time off" })
