@@ -12,6 +12,8 @@ what makes the "what Acme can see" page honest: it is not a description of
 the read, it is the read.
 """
 
+import csv
+import io
 import secrets
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
@@ -149,8 +151,10 @@ class Archive(NamedTuple):
 
 
 def _entry(beat: Beat, tz: ZoneInfo) -> RecordEntry:
-    assert beat.end is not None
-    assert beat.id is not None
+    """One finished beat as the record lists it. The readers hand over
+    finished beats only (`end` set), so a running one here is a bug."""
+    if beat.end is None or beat.id is None:
+        raise ValueError("the record lists finished, stored beats only")
     return RecordEntry(
         id=beat.id,
         day=local_date(beat.start, tz),
@@ -234,7 +238,8 @@ class OrganisationService:
         organisation = await self.store.create_organisation(
             Organisation(**fields.model_dump(), created_by=user_id, created_at=self._now())
         )
-        assert organisation.id is not None
+        if organisation.id is None:
+            raise RuntimeError("the store returned an organisation without an id")
         membership = await self.store.open_membership(
             OrgMembership(
                 organisation_id=organisation.id,
@@ -734,7 +739,8 @@ class OrganisationService:
         started in the month in `tz`, the absences, the all-time totals and
         the balance of a contract if there is one. With `user_id`, that
         member's slice alone — the same queries, narrowed."""
-        assert organisation.id is not None
+        if organisation.id is None:
+            raise ValueError("a stored organisation has an id")
         organisation_id = organisation.id
         today = local_date(self._now(), tz)
         first, last = month, month_end(month)
@@ -846,9 +852,6 @@ class OrganisationService:
 def archive_csv(archive: Archive) -> str:
     """The archive as RFC 4180 CSV: a row per entry — project, local day,
     start, end, hours and the note."""
-    import csv
-    import io
-
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(["project", "day", "start", "end", "hours", "note"])
@@ -865,19 +868,3 @@ def archive_csv(archive: Archive) -> str:
                 ]
             )
     return out.getvalue()
-
-
-__all__ = [
-    "Archive",
-    "ArchiveProject",
-    "Member",
-    "MemberBalance",
-    "MemberRecord",
-    "OrganisationService",
-    "ProjectMembers",
-    "ProjectRecord",
-    "Record",
-    "RecordAbsence",
-    "RecordEntry",
-    "archive_csv",
-]
