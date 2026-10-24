@@ -17,7 +17,7 @@ override — editing a past entry is itself the consent. Nor is a billing
 budget: it changes no billable figure, and only its current period is read.
 """
 
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import NamedTuple
@@ -157,7 +157,7 @@ def _earliest(*days: date | None) -> date | None:
 
 
 @contextmanager
-def _naming(record: str) -> Iterator[None]:
+def _naming(record: str) -> Generator[None]:
     """A refusal raised inside, its detail prefixed with the backup record it
     is about (`project_billing.0: …`), as a 422 names a field."""
     try:

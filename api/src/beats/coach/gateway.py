@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import anthropic
-from anthropic.lib.streaming import MessageStreamEvent
+from anthropic.lib.streaming import ParsedMessageStreamEvent
 from anthropic.types import ContentBlock, Message
 
 from beats.coach.usage import UsageTracker
@@ -252,14 +252,12 @@ async def stream(
     cache_spec: CacheSpec | None = None,
     max_tokens: int = 4096,
     purpose: str = "chat",
-) -> AsyncIterator[MessageStreamEvent]:
+) -> AsyncIterator[ParsedMessageStreamEvent[Any]]:
     """Streaming completion. Yields the SDK's high-level stream events
     (TextEvent / CitationEvent / ThinkingEvent / etc.) from
-    ``client.messages.stream``. The previous annotation said
-    ``RawMessageStreamEvent`` but the stream manager iterator yields
-    the parsed wrapper events, not the raw SSE protocol events —
-    consumers expecting `.text` / `.delta` on the events would have
-    found AttributeErrors had this ever been called.
+    ``client.messages.stream`` — the parsed wrapper events the stream
+    manager iterates, not the raw SSE protocol events; consumers read
+    `.text` / `.delta` off them.
 
     Usage is tracked at the end via the `message_stop` event which carries
     the final usage stats.

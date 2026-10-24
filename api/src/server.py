@@ -271,14 +271,16 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
 # Rate limiting
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Registered through the decorator rather than add_exception_handler: Starlette
+# types a handler as taking any Exception, and these take the one they are for.
+app.exception_handler(RateLimitExceeded)(_rate_limit_exceeded_handler)
 
 
 # Unified error envelope: every HTTP error and validation failure flows
 # through the handlers in beats.api.errors so clients see a consistent
 # {detail, code, fields?} shape.
-app.add_exception_handler(HTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.exception_handler(HTTPException)(http_exception_handler)
+app.exception_handler(RequestValidationError)(validation_exception_handler)
 
 
 @app.exception_handler(DomainException)
