@@ -58,3 +58,23 @@ The design, with its decisions, goes in `docs/billing.md` under *Report links
 - The response cannot name another client, a personal project, a tag, a note,
   flow, biometrics or the coach — structurally, not by an allowlist someone has
   to remember.
+
+## Built
+
+On branch `feat/ahm-74-1c-report-links`, nine commits, all four boxes above
+checked by tests. Set the issue to In Review when it is filed, and put
+`Fixes AHM-<n>` in the PR body once it has a number.
+
+Beyond the scope above, three things the work turned up:
+
+- **PRIVACY.md had promised this feature's own disclosure** — "if sharing a
+  report with a client is ever added … this page will say so before the release
+  that adds it" — so it is updated, along with DATA.md's collection list.
+- **The service worker would have cached a report** for five minutes despite
+  the API's `no-store`, because the Cache Storage API does not read
+  Cache-Control. A `NetworkOnly` route now sits before the generic `/api/` one.
+- **The backup stays at 1.3**: report links are deliberately not exported, so
+  no backup file carries a live URL to a year of someone's hours.
+
+Two issues filed beside this one: [report-links-notes](report-links-notes.md)
+and [ui-gen-types-broken](ui-gen-types-broken.md).
