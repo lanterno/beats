@@ -28,6 +28,13 @@ loop: branch `<type>/ahm-<n>-<slug>`, `(AHM-n)` at the end of each commit subjec
 `Fixes AHM-n` in the PR body, and anything found along the way filed as an issue.
 GitHub issues are left to Renovate's Dependency Dashboard.
 
+The one multi-stage epic in flight, **organisations** (AHM-74), has its plan in
+[docs/organisations-roadmap.md](docs/organisations-roadmap.md): the four stages,
+what each needs, and the decisions still open. It is a deliberate exception to
+the rule above, made while the Linear workspace is unreachable from the
+development environment; it says so at the top, and it gives way to issues once
+Linear is reachable again.
+
 ## Quick Start
 
 ```bash

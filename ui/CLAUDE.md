@@ -61,6 +61,21 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
   `gen:types:check` fails on drift. The API's own `/docs` sits behind the auth
   middleware and a browser tab carries no bearer token, so it is not reachable
   from the SPA — read `shared/api/openapi.json` instead.
+
+  **The second half of that command currently cannot run.**
+  `openapi-typescript@7.13.0` reaches for `ts.factory`, which `typescript@7.0.2`
+  no longer exposes, and it throws at module load — so the crash is independent
+  of the input document. `pnpm gen:openapi` (the dump) works on its own and is
+  what keeps `openapi.json` current; `generated.ts` is frozen at whatever the
+  last working run produced, and `gen:types:check` — a pre-push gate and a step
+  in `.github/workflows/ui.yml` — fails for this reason rather than for drift,
+  so it cannot presently detect the thing it exists to detect. Nothing imports
+  the generated types (`shared/api/schema.ts` re-exports them and has no
+  consumers; runtime validation is the hand-written Zod in
+  `shared/api/schemas.ts`), so the stale file misleads no running code. Fixing
+  it means upgrading `openapi-typescript` to a TypeScript 7 release, or pinning
+  TypeScript for that one tool, and then regenerating — a large diff covering
+  every route added since it last ran.
 - **Linting**: Biome (replaces ESLint+Prettier) — tabs, line width 100. Covers
   `client/`, `e2e/` and the root config files; accessibility rules fail the
   check, all but `noAutofocus` (dialogs focus their first field on purpose).
