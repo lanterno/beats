@@ -42,3 +42,10 @@ If a note crosses to a third party, the note input needs the visible marker the
 epic asks for, on every surface that writes one: the SPA, the companion's "How
 did it go?" sheet, the VS Code extension and the daemon. Deciding yes means
 that work, not just the flag.
+
+## Related
+
+[org-notes-and-tags](org-notes-and-tags.md) is the same question for an
+organisation reading its own projects, and it gates phase 2. The marker work
+above is shared between them, so decide both in one sitting rather than paying
+for it twice.
