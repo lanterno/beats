@@ -8,7 +8,10 @@ const feedbackMutate = vi.fn();
 const useCoachBriefMock = vi.fn();
 const useCoachBriefHistoryMock = vi.fn();
 
+const useCoachStatusMock = vi.fn(() => ({ configured: true }));
+
 vi.mock("@/entities/coach", () => ({
+	useCoachStatus: () => useCoachStatusMock(),
 	useCoachBrief: () => useCoachBriefMock(),
 	useCoachBriefHistory: () => useCoachBriefHistoryMock(),
 	useGenerateBrief: () => ({ mutate: generateMutate, isPending: false }),
@@ -36,6 +39,12 @@ describe("DailyBrief history", () => {
 	it("shows today's brief by default", () => {
 		render(<DailyBrief />);
 		expect(screen.getByText("today body")).toBeInTheDocument();
+	});
+
+	it("is left out on a server without the coach", () => {
+		useCoachStatusMock.mockReturnValueOnce({ configured: false });
+		const { container } = render(<DailyBrief />);
+		expect(container).toBeEmptyDOMElement();
 	});
 
 	it("swaps to a past brief's body when its date is clicked", async () => {
