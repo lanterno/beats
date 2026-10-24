@@ -15,8 +15,10 @@ import { toast } from "sonner";
 import type { Membership, OrganisationInput } from "@/entities/organisation";
 import {
 	canAdminister,
+	decides,
 	OrganisationMark,
 	ROLE_LABELS,
+	readsRecord,
 	useLeaveOrganisation,
 	useMembership,
 	useUpdateOrganisation,
@@ -24,12 +26,17 @@ import {
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
+import { AbsenceRequestsSection } from "./AbsenceRequestsSection";
+import { AuditSection } from "./AuditSection";
 import { InvitesSection } from "./InvitesSection";
 import { JoinRequestsSection } from "./JoinRequestsSection";
 import { MembersSection } from "./MembersSection";
+import { MyTimesheetsSection } from "./MyTimesheetsSection";
 import { OrganisationForm } from "./OrganisationForm";
 import { ProjectsSection } from "./ProjectsSection";
 import { HEADING, HEADING_ICON, LEAD, LINKISH, TITLE } from "./styles";
+import { TeamsSection } from "./TeamsSection";
+import { TimesheetsSection } from "./TimesheetsSection";
 
 const DANGER_HOVER = "hover:text-destructive-ink";
 
@@ -111,7 +118,7 @@ export default function Organisation() {
 				<OrganisationMark name={org.name} logoUrl={org.logoUrl} size="md" tileOnly />
 				<h1 className={TITLE}>{org.name}</h1>
 				<span className="text-sm font-medium text-foreground/90">{ROLE_LABELS[data.role]}</span>
-				{admin && (
+				{readsRecord(data.role) && (
 					<Link to={`/organisations/${id}/record`} className={`${LINKISH} ml-auto`}>
 						This month's record
 					</Link>
@@ -121,12 +128,20 @@ export default function Organisation() {
 			{admin && (
 				<>
 					<MembersSection organisationId={id} />
+					<TeamsSection organisationId={id} />
 					<InvitesSection organisationId={id} />
 					<JoinRequestsSection organisationId={id} />
-					<ProjectsSection organisationId={id} />
+					<ProjectsSection organisationId={id} role={data.role} />
 					<SettingsSection membership={data} />
 				</>
 			)}
+
+			{decides(data.role) && <AbsenceRequestsSection organisationId={id} />}
+			{(decides(data.role) || data.role === "viewer") && (
+				<TimesheetsSection organisationId={id} role={data.role} />
+			)}
+
+			<MyTimesheetsSection organisationId={id} role={data.role} />
 
 			<section aria-label={`What ${org.name} can see`} className="mb-8">
 				<h2 className={HEADING}>
@@ -149,6 +164,8 @@ export default function Organisation() {
 					</Link>
 				</Panel>
 			</section>
+
+			{admin && <AuditSection organisationId={id} />}
 
 			<section aria-label="Leave" className="mb-8">
 				<h2 className={HEADING}>

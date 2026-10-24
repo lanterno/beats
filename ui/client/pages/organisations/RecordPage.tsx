@@ -10,14 +10,22 @@
  */
 
 import type { UseQueryResult } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Link, useParams } from "react-router";
+import { toast } from "sonner";
 import { monthOf, nextMonth, prevMonth } from "@/entities/billing";
 import type { MemberRecord, OrgRecord } from "@/entities/organisation";
-import { describeShareFrom } from "@/entities/organisation";
+import { complianceCsvUrl, describeShareFrom, recordCsvUrl } from "@/entities/organisation";
 import { ApiError, describeError } from "@/shared/api";
-import { cn, formatDate, formatDateOnly, hoursText, todayIso as readToday } from "@/shared/lib";
-import { Panel } from "@/shared/ui";
+import {
+	cn,
+	downloadFile,
+	formatDate,
+	formatDateOnly,
+	hoursText,
+	todayIso as readToday,
+} from "@/shared/lib";
+import { Button, Panel } from "@/shared/ui";
 import { EntriesTable } from "./EntriesTable";
 import { KIND_LABELS } from "./kinds";
 import { LABEL, LEAD, LINKISH, SKY_NAV, TITLE } from "./styles";
@@ -115,13 +123,24 @@ export function RecordPage({ variant, useRecord }: RecordPageProps) {
 		p.members.some((m) => m.entries.length > 0 || m.absences.length > 0),
 	);
 
+	const download = async (url: string, filename: string) => {
+		try {
+			await downloadFile(url, filename);
+			toast.success("Downloaded");
+		} catch (err) {
+			toast.error(describeError(err, "The download failed."));
+		}
+	};
+
 	let body: React.ReactNode;
 	if (query.error) {
 		const forbidden = query.error instanceof ApiError && query.error.statusCode === 403;
 		body = (
 			<Panel role="alert" padding="px-6 py-[22px]">
 				<p className="font-heading text-lg font-extrabold text-foreground">
-					{forbidden ? "Admins only." : "The record could not be read."}
+					{forbidden
+						? "Owners, admins, managers and viewers only."
+						: "The record could not be read."}
 				</p>
 				{!forbidden && (
 					<p className="mt-1 text-xs text-muted-foreground">
@@ -176,7 +195,35 @@ export function RecordPage({ variant, useRecord }: RecordPageProps) {
 	return (
 		<div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5 pb-24">
 			<header className="space-y-1">
-				<h1 className={TITLE}>{record ? title : "Loading…"}</h1>
+				<div className="flex items-center gap-2 flex-wrap">
+					<h1 className={TITLE}>{record ? title : "Loading…"}</h1>
+					{variant === "record" && record && (
+						<span className="ml-auto flex items-center gap-2">
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								onClick={() =>
+									void download(recordCsvUrl(id, month), `${name}-record-${month}.csv`)
+								}
+							>
+								<Download aria-hidden="true" />
+								Record CSV
+							</Button>
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								onClick={() =>
+									void download(complianceCsvUrl(id, month), `${name}-compliance-${month}.csv`)
+								}
+							>
+								<Download aria-hidden="true" />
+								Compliance CSV
+							</Button>
+						</span>
+					)}
+				</div>
 				{variant === "visible" && record && (
 					<p className="text-sm font-medium text-foreground/90">
 						This is the data {name} holds about you, read through the same query it uses.
