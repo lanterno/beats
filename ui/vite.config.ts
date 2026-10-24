@@ -78,6 +78,17 @@ export default defineConfig(() => ({
 				globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
 				runtimeCaching: [
 					{
+						// A report link's answer is never cached, by anything. The API
+						// sends `Cache-Control: no-store`, but the Cache Storage API
+						// does not read Cache-Control, so the generic /api/ rule below
+						// would keep a client's hours in this origin's cache for five
+						// minutes after they closed the tab — on a shared machine,
+						// exactly what `no-store` was set to prevent. Workbox matches
+						// routes in registration order, so this has to stay first.
+						urlPattern: /^https?:\/\/.*\/api\/reports\//,
+						handler: "NetworkOnly",
+					},
+					{
 						urlPattern: /^https?:\/\/.*\/api\//,
 						handler: "NetworkFirst",
 						options: {
