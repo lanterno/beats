@@ -111,6 +111,23 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
             )
             keep("balance_adjustments", adjustments.modified_count)
 
+        # The timesheets are the employer's record of the approvals; the
+        # absence requests are not — the absence itself is kept, the request
+        # (whose note was addressed to a decider) goes with the account.
+        sheets = await db.org_timesheets.update_many(
+            {"organisation_id": org_id, "user_id": user_id}, {"$set": {"user_id": stone}}
+        )
+        keep("org_timesheets", sheets.modified_count)
+        await db.org_timesheets.update_many(
+            {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
+        )
+        await db.org_absence_requests.update_many(
+            {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
+        )
+        await db.org_teams.update_many(
+            {"organisation_id": org_id}, {"$pull": {"member_ids": user_id}}
+        )
+
         assignments = await db.org_assignments.update_many(
             {"organisation_id": org_id, "user_id": user_id},
             [
