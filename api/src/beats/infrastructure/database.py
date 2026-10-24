@@ -46,6 +46,12 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     # A user's sessions by project and start: the billing month's range read
     # over its projects, and every per-project read before it.
     await db.timeLogs.create_index([("user_id", 1), ("project_id", 1), ("start", 1)])
+    # The project list, as `MongoProjectRepository.list` asks for it. Until
+    # organisations this was the one collection read by `user_id` without an
+    # index — a scan at one person's scale, and wrong once the read became
+    # "mine, plus every organisation project I am assigned to" across every
+    # tenant (the roadmap's stage 2 note; measured in test_organisations).
+    await db.projects.create_index([("user_id", 1), ("archived", 1)])
     await db.clients.create_index("user_id")
     # One billing per project: a second write replaces the first. By client
     # too, for the reads that ask what is billed to one.
