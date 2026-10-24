@@ -176,6 +176,7 @@ def _archive(archive: Archive) -> ArchiveResponse:
                 color=p.color,
                 hours=p.hours,
                 entries=_entries(p.entries),
+                absences=[RecordAbsenceResponse(**a._asdict()) for a in p.absences],
             )
             for p in archive.projects
         ],
@@ -204,11 +205,12 @@ async def create_organisation(
 
 @router.get("/invitations", response_model=list[InvitationResponse])
 async def list_invitations(user_id: CurrentUserId, service: OrganisationServiceDep):
-    """The open invitations addressed to the caller's own email address.
-    Nothing is sent anywhere: this is where an invitation is found."""
+    """The open invitations addressed to the caller's own email address —
+    who has invited them, and as what. Without the token: an address is
+    not verified at sign-up, so the way in stays the link the inviter passed
+    on, and `/join/{token}` checks it against the address as well."""
     return [
         InvitationResponse(
-            token=invite.token,
             role=invite.role,
             expires_at=invite.expires_at,
             organisation=_card(organisation),
@@ -546,12 +548,13 @@ async def read_archive(
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
     beats: BeatRepoDep,
+    absences: AbsenceRepoDep,
     tz: TimezoneDep,
 ):
     """The caller's own hours that are this organisation's record, by
     project: the read-only "Acme (left)" archive, kept after leaving. Read
     through the caller's own repository. Members and former members."""
-    return _archive(await service.archive(organisation_id, user_id, beats, tz))
+    return _archive(await service.archive(organisation_id, user_id, beats, absences, tz))
 
 
 @router.get(
@@ -564,10 +567,11 @@ async def read_archive_csv(
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
     beats: BeatRepoDep,
+    absences: AbsenceRepoDep,
     tz: TimezoneDep,
 ) -> Response:
     """`/archive` as CSV, a row per entry, for the person to keep."""
-    archive = await service.archive(organisation_id, user_id, beats, tz)
+    archive = await service.archive(organisation_id, user_id, beats, absences, tz)
     return Response(
         content=archive_csv(archive),
         media_type="text/csv",
