@@ -28,6 +28,12 @@ export interface AdvancedFieldsProps {
 	autoFocusField?: "githubRepo";
 	/** A refused save's messages for these fields, shown beside their inputs. */
 	errors?: { category?: string; githubRepo?: string; autostartRepos?: string };
+	/**
+	 * The category and GitHub repo are an organisation's, not the member's
+	 * (docs/organisations.md): shown, not edited. The autostart paths stay
+	 * the member's own.
+	 */
+	locked?: boolean;
 }
 
 // Loose owner/repo match: word chars, dots, hyphens, exactly one slash.
@@ -44,7 +50,7 @@ export function isValidGithubRepo(input: string): boolean {
 }
 
 const inputCls =
-	"w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60";
+	"w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60 disabled:opacity-60 disabled:cursor-not-allowed";
 const labelCls =
 	"block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1.5";
 
@@ -61,6 +67,7 @@ export function AdvancedFields({
 	githubConnected,
 	autoFocusField,
 	errors = {},
+	locked = false,
 }: AdvancedFieldsProps) {
 	const catListId = useId();
 	const repoInvalid = Boolean(errors.githubRepo) || !isValidGithubRepo(values.githubRepo);
@@ -125,6 +132,7 @@ export function AdvancedFields({
 					id="project-form-category"
 					value={values.category}
 					onChange={(e) => set("category", e.target.value)}
+					disabled={locked}
 					list={catListId}
 					placeholder="coding, design, writing…"
 					aria-invalid={errors.category ? true : undefined}
@@ -157,6 +165,7 @@ export function AdvancedFields({
 						id="project-form-github-repo"
 						value={values.githubRepo}
 						onChange={(e) => set("githubRepo", e.target.value)}
+						disabled={locked}
 						placeholder="owner/repo"
 						autoFocus={autoFocusField === "githubRepo"}
 						aria-invalid={repoInvalid}

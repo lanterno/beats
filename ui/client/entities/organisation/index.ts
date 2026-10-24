@@ -69,4 +69,9 @@ export {
 	WEEK_START_LABELS,
 	type WeekStart,
 } from "./model";
-export { OrganisationMark, type OrganisationMarkProps } from "./ui";
+export {
+	ConnectProjectDialog,
+	type ConnectProjectDialogProps,
+	OrganisationMark,
+	type OrganisationMarkProps,
+} from "./ui";

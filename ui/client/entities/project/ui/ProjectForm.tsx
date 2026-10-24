@@ -159,6 +159,14 @@ export interface ProjectFormProps {
 	 * project's contract.
 	 */
 	kindNotice?: (kind: ProjectKind) => string | null;
+	/**
+	 * The organisation that owns the project (docs/organisations.md). Set, the
+	 * name, description, colour, kind, category and GitHub repo are read-only
+	 * and submitted as they came — the API answers 409 ORGANISATION_PROJECT to
+	 * a change — and a line above the form says so. The goal, the autostart
+	 * paths and the contract stay editable: they are the member's.
+	 */
+	lockedBy?: string;
 }
 
 function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues {
@@ -206,7 +214,7 @@ const KIND_OPTIONS: {
 ];
 
 const inputCls =
-	"w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60";
+	"w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60 disabled:opacity-60 disabled:cursor-not-allowed";
 const labelCls =
 	"block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1.5";
 const errorCls = "mt-1 text-xs text-destructive-ink";
@@ -226,7 +234,9 @@ export function ProjectForm({
 	holidayRegions,
 	submitError,
 	kindNotice,
+	lockedBy,
 }: ProjectFormProps) {
+	const locked = lockedBy !== undefined;
 	const [values, setValues] = useState<ProjectFormValues>(() => defaultValues(initialValues));
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [clientErrors, setClientErrors] = useState<ProjectFormErrors>(emptyProjectFormErrors);
@@ -362,6 +372,12 @@ export function ProjectForm({
 
 	return (
 		<form ref={formRef} onSubmit={handleSubmit} className="space-y-4" noValidate>
+			{locked && (
+				<p className="text-xs text-muted-foreground leading-normal">
+					{lockedBy} owns this project's name, colour, kind, description, repository and category.
+					Your goal, local repo paths and contract are yours.
+				</p>
+			)}
 			<div>
 				<label htmlFor="project-form-name" className={labelCls}>
 					Name
@@ -371,7 +387,8 @@ export function ProjectForm({
 					value={values.name}
 					onChange={(e) => set("name", e.target.value)}
 					required
-					autoFocus={autoFocusField === "name"}
+					disabled={locked}
+					autoFocus={autoFocusField === "name" && !locked}
 					placeholder="e.g. Deep Work"
 					aria-invalid={errors.name ? true : undefined}
 					aria-describedby={errors.name ? "project-form-name-error" : undefined}
@@ -392,7 +409,8 @@ export function ProjectForm({
 					id="project-form-description"
 					value={values.description}
 					onChange={(e) => set("description", e.target.value)}
-					autoFocus={autoFocusField === "description"}
+					disabled={locked}
+					autoFocus={autoFocusField === "description" && !locked}
 					placeholder="What this project covers"
 					className={inputCls}
 				/>
@@ -406,10 +424,11 @@ export function ProjectForm({
 					<button
 						type="button"
 						onClick={() => setPickerOpen((o) => !o)}
+						disabled={locked}
 						aria-labelledby="project-form-color-label"
 						aria-haspopup="dialog"
 						aria-expanded={pickerOpen}
-						className="inline-flex items-center gap-2 min-h-9 px-3 rounded-full bg-secondary text-sm font-bold text-foreground hover:bg-sidebar-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						className="inline-flex items-center gap-2 min-h-9 px-3 rounded-full bg-secondary text-sm font-bold text-foreground hover:bg-sidebar-accent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-secondary"
 					>
 						<span
 							className="inline-block w-3 h-3 rounded-full shrink-0"
@@ -444,8 +463,10 @@ export function ProjectForm({
 						return (
 							<label
 								key={value}
-								className={`flex items-start gap-2 rounded-2xl min-h-12 px-3 py-2 cursor-pointer transition-colors ${
-									selected ? "bg-sidebar-accent" : "bg-secondary hover:bg-sidebar-accent/60"
+								className={`flex items-start gap-2 rounded-2xl min-h-12 px-3 py-2 transition-colors ${
+									selected ? "bg-sidebar-accent" : "bg-secondary"
+								} ${locked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"} ${
+									!locked && !selected ? "hover:bg-sidebar-accent/60" : ""
 								}`}
 							>
 								<input
@@ -453,6 +474,7 @@ export function ProjectForm({
 									name="project-form-kind"
 									value={value}
 									checked={selected}
+									disabled={locked}
 									onChange={() =>
 										// Choosing a day job reveals the contract section,
 										// whatever the switch said before.
@@ -847,7 +869,8 @@ export function ProjectForm({
 							}
 							categorySuggestions={categorySuggestions}
 							githubConnected={githubConnected}
-							autoFocusField={autoFocusField === "githubRepo" ? "githubRepo" : undefined}
+							locked={locked}
+							autoFocusField={autoFocusField === "githubRepo" && !locked ? "githubRepo" : undefined}
 							errors={{
 								category: errors.category,
 								githubRepo: errors.githubRepo,

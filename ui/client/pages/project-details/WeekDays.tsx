@@ -495,6 +495,11 @@ export function WeekDays({
 												</span>
 												<span className="text-muted-foreground font-medium truncate flex gap-1.5 items-center min-w-0">
 													{session.note && <span className="truncate">{session.note}</span>}
+													{session.note && project.organisation && (
+														<span className="text-[10.5px] font-medium text-muted-foreground shrink-0 whitespace-nowrap">
+															{project.organisation.name} can read this note
+														</span>
+													)}
 													{session.tags.map((tag) => (
 														<span
 															key={tag}

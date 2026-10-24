@@ -3,12 +3,19 @@
  * chip, description, repo, the Archived chip with its inline Restore, the
  * gear. No figures (the mockup's "the header identifies and never
  * measures"): everything that could disagree with the standing below left.
+ *
+ * On an organisation's project (docs/organisations.md) the name, colour and
+ * description are the organisation's to change, so they are read here, not
+ * edited: the dot is a dot, the name a heading, and a chip after the kind
+ * names the organisation and since when the hours are shared. The gear stays:
+ * the goal, the local repo paths and the contract are still the member's.
  */
 
 import { Loader2, Settings } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { describeShareFrom, OrganisationMark } from "@/entities/organisation";
 import type { ProjectFormAutoFocusField, ProjectWithDuration } from "@/entities/project";
 import {
 	assignColor,
@@ -86,11 +93,17 @@ const SKY_CHIP =
 
 const FOCUS = "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
+const DOT = "w-3.5 h-3.5 rounded-full shrink-0 shadow-[0_0_0_3px_hsl(var(--card)/.6)]";
+const NAME =
+	"font-heading text-[30px] font-extrabold tracking-[-0.02em] leading-[1.1] text-foreground text-balance";
+
 export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHeaderProps) {
 	const navigate = useNavigate();
 	const [colorPickerOpen, setColorPickerOpen] = useState(false);
 	const updateProject = useUpdateProject();
 	const unarchive = useUnarchiveProject();
+	const organisation = project.organisation;
+	const color = project.color || assignColor(project.id);
 
 	const handleRestore = () => {
 		unarchive.mutate(project.id, {
@@ -101,52 +114,78 @@ export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHead
 
 	return (
 		<header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 pt-1.5 pb-[18px]">
-			<div className="relative">
+			{organisation ? (
+				<span className={cn(DOT, "block")} style={{ backgroundColor: color }} aria-hidden="true" />
+			) : (
+				<div className="relative">
+					<button
+						type="button"
+						onClick={() => setColorPickerOpen((o) => !o)}
+						className={cn(DOT, "block hover:scale-110 transition-transform", FOCUS)}
+						style={{ backgroundColor: color }}
+						title="Change colour"
+						aria-label="Change colour"
+					/>
+					{colorPickerOpen && (
+						<ColorPicker
+							value={color}
+							onChange={(next) => {
+								updateProject.mutate({
+									id: project.id,
+									name: project.name,
+									description: project.description,
+									color: next,
+									archived: project.archived,
+									weekly_goal: project.weeklyGoal,
+									goal_type: project.goalType,
+								});
+							}}
+							onClose={() => setColorPickerOpen(false)}
+						/>
+					)}
+				</div>
+			)}
+
+			{organisation ? (
+				<span className={NAME}>{project.name}</span>
+			) : (
 				<button
 					type="button"
-					onClick={() => setColorPickerOpen((o) => !o)}
+					onClick={() => onOpenSettings("name")}
 					className={cn(
-						"block w-3.5 h-3.5 rounded-full shrink-0 shadow-[0_0_0_3px_hsl(var(--card)/.6)] hover:scale-110 transition-transform",
+						NAME,
+						"text-left hover:text-accent-ink transition-colors rounded-lg",
 						FOCUS,
 					)}
-					style={{ backgroundColor: project.color || assignColor(project.id) }}
-					title="Change colour"
-					aria-label="Change colour"
-				/>
-				{colorPickerOpen && (
-					<ColorPicker
-						value={project.color || assignColor(project.id)}
-						onChange={(color) => {
-							updateProject.mutate({
-								id: project.id,
-								name: project.name,
-								description: project.description,
-								color,
-								archived: project.archived,
-								weekly_goal: project.weeklyGoal,
-								goal_type: project.goalType,
-							});
-						}}
-						onClose={() => setColorPickerOpen(false)}
-					/>
-				)}
-			</div>
-
-			<button
-				type="button"
-				onClick={() => onOpenSettings("name")}
-				className={cn(
-					"font-heading text-[30px] font-extrabold tracking-[-0.02em] leading-[1.1] text-foreground text-left text-balance hover:text-accent-ink transition-colors rounded-lg",
-					FOCUS,
-				)}
-				title="Edit project"
-			>
-				{project.name}
-			</button>
+					title="Edit project"
+				>
+					{project.name}
+				</button>
+			)}
 
 			<span className={SKY_CHIP}>{kindChip(project, todayIso)}</span>
 
-			{project.description ? (
+			{organisation && (
+				<span
+					className={SKY_CHIP}
+					title={`Owned by ${organisation.name} · shared ${describeShareFrom(organisation.sharedFrom)}`}
+				>
+					<OrganisationMark
+						name={organisation.name}
+						logoUrl={organisation.logoUrl}
+						size="md"
+						className="text-xs text-foreground"
+					/>
+				</span>
+			)}
+
+			{organisation ? (
+				project.description && (
+					<span className="text-sm font-medium text-foreground/90 truncate max-w-[32ch]">
+						{project.description}
+					</span>
+				)
+			) : project.description ? (
 				<button
 					type="button"
 					onClick={() => onOpenSettings("description")}

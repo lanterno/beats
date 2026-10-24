@@ -16,13 +16,20 @@
  * dashboard) or restore — the page's once-per-project action, moved here from
  * the danger zone that sat on every visit (Decision 12). The Archived chip in
  * the header keeps its own inline Restore.
+ *
+ * Organisations (docs/organisations.md): on an organisation's project the
+ * form's identity fields are the organisation's and locked (`lockedBy`), and
+ * the foot says who owns it instead of offering Archive. On a personal
+ * project, when the member belongs to an organisation, the foot offers to
+ * connect it (`ConnectProjectDialog`).
  */
 
 import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
 import { useId, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useGitHubStatus } from "@/entities/github";
+import { ConnectProjectDialog, useMemberships } from "@/entities/organisation";
 import {
 	contractFrameDefaults,
 	extractCategories,
@@ -40,8 +47,9 @@ import {
 	useUpdateProject,
 } from "@/entities/project";
 import { describeError } from "@/shared/api";
+import { todayIso } from "@/shared/lib";
 import { Button, Dialog } from "@/shared/ui";
-import { LABEL } from "./styles";
+import { LABEL, LINKISH } from "./styles";
 
 interface ProjectSettingsDrawerProps {
 	project: Project;
@@ -72,7 +80,12 @@ export function ProjectSettingsDrawer({
 	const { data: holidayRegions } = useHolidayRegions();
 	const [submitError, setSubmitError] = useState<unknown>(null);
 	const [confirmingArchive, setConfirmingArchive] = useState(false);
+	const [connecting, setConnecting] = useState(false);
 	const archiveHeadingId = useId();
+	const organisationHeadingId = useId();
+	const organisation = project.organisation;
+	const { data: memberships } = useMemberships();
+	const activeMemberships = (memberships ?? []).filter((m) => m.leftAt === undefined);
 	// "Change contract…" closes the drawer and lands on the register.
 	// The hand-over waits for the dialog's own focus return, which would
 	// otherwise put focus back on the settings button a moment later.
@@ -136,6 +149,7 @@ export function ProjectSettingsDrawer({
 	const handleClose = () => {
 		setSubmitError(null);
 		setConfirmingArchive(false);
+		setConnecting(false);
 		onClose();
 	};
 
@@ -202,86 +216,141 @@ export function ProjectSettingsDrawer({
 				holidayRegions={holidayRegions}
 				submitError={submitError}
 				kindNotice={kindNotice}
+				lockedBy={organisation?.name}
 			/>
 
-			<section aria-labelledby={archiveHeadingId} className="mt-6 pt-4 border-t border-border">
-				<h3 id={archiveHeadingId} className={LABEL}>
-					{project.archived ? "Archived" : "Archive"}
-				</h3>
-				{project.archived ? (
-					<>
-						<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
-							This project is archived. Restoring it makes it visible again in pickers, the sidebar,
-							and lists. Sessions and history were preserved.
-						</p>
-						<Button
-							type="button"
-							variant="secondary"
-							size="sm"
-							className="mt-3"
-							onClick={handleRestore}
-							disabled={unarchive.isPending}
-						>
-							{unarchive.isPending ? (
-								<Loader2 className="animate-spin" aria-hidden="true" />
-							) : (
-								<ArchiveRestore aria-hidden="true" />
-							)}
-							Restore project
-						</Button>
-					</>
-				) : (
-					<>
-						<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
-							Archiving hides {project.name} from pickers, lists, and the sidebar. Sessions are
-							preserved and you can restore the project later — there is no hard-delete by design.
-						</p>
-						{confirming ? (
-							<div className="mt-3 flex flex-wrap items-center gap-2">
-								<span className="text-xs text-foreground">
-									Archive <strong>{project.name}</strong>?
-								</span>
+			{organisation ? (
+				<section
+					aria-labelledby={organisationHeadingId}
+					className="mt-6 pt-4 border-t border-border"
+				>
+					<h3 id={organisationHeadingId} className={LABEL}>
+						Organisation
+					</h3>
+					<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+						{organisation.name} owns this project. Leaving the organisation takes it off your list;
+						the organisation keeps its record of your hours.{" "}
+						<Link to={`/organisations/${organisation.id}`} className={LINKISH}>
+							Open {organisation.name}
+						</Link>
+					</p>
+				</section>
+			) : (
+				<>
+					<section aria-labelledby={archiveHeadingId} className="mt-6 pt-4 border-t border-border">
+						<h3 id={archiveHeadingId} className={LABEL}>
+							{project.archived ? "Archived" : "Archive"}
+						</h3>
+						{project.archived ? (
+							<>
+								<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+									This project is archived. Restoring it makes it visible again in pickers, the
+									sidebar, and lists. Sessions and history were preserved.
+								</p>
 								<Button
 									type="button"
-									variant="destructive"
+									variant="secondary"
 									size="sm"
-									onClick={handleArchive}
-									disabled={archive.isPending}
+									className="mt-3"
+									onClick={handleRestore}
+									disabled={unarchive.isPending}
 								>
-									{archive.isPending ? "Archiving…" : "Archive project"}
+									{unarchive.isPending ? (
+										<Loader2 className="animate-spin" aria-hidden="true" />
+									) : (
+										<ArchiveRestore aria-hidden="true" />
+									)}
+									Restore project
 								</Button>
-								<Button
-									ref={takeFocusOnSwap}
-									type="button"
-									variant="ghost"
-									size="sm"
-									onClick={() => {
-										focusOnSwap.current = true;
-										setConfirmingArchive(false);
-									}}
-								>
-									Cancel
-								</Button>
-							</div>
+							</>
 						) : (
+							<>
+								<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+									Archiving hides {project.name} from pickers, lists, and the sidebar. Sessions are
+									preserved and you can restore the project later — there is no hard-delete by
+									design.
+								</p>
+								{confirming ? (
+									<div className="mt-3 flex flex-wrap items-center gap-2">
+										<span className="text-xs text-foreground">
+											Archive <strong>{project.name}</strong>?
+										</span>
+										<Button
+											type="button"
+											variant="destructive"
+											size="sm"
+											onClick={handleArchive}
+											disabled={archive.isPending}
+										>
+											{archive.isPending ? "Archiving…" : "Archive project"}
+										</Button>
+										<Button
+											ref={takeFocusOnSwap}
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => {
+												focusOnSwap.current = true;
+												setConfirmingArchive(false);
+											}}
+										>
+											Cancel
+										</Button>
+									</div>
+								) : (
+									<Button
+										ref={takeFocusOnSwap}
+										type="button"
+										variant="secondary"
+										size="sm"
+										className="mt-3"
+										onClick={() => {
+											focusOnSwap.current = true;
+											setConfirmingArchive(true);
+										}}
+									>
+										<Archive aria-hidden="true" />
+										Archive project
+									</Button>
+								)}
+							</>
+						)}
+					</section>
+
+					{activeMemberships.length > 0 && (
+						<section
+							aria-labelledby={organisationHeadingId}
+							className="mt-6 pt-4 border-t border-border"
+						>
+							<h3 id={organisationHeadingId} className={LABEL}>
+								Organisation
+							</h3>
+							<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+								Connect {project.name} to an organisation you're a member of. Its hours become part
+								of that organisation's working-time record from a day you choose.
+							</p>
 							<Button
-								ref={takeFocusOnSwap}
 								type="button"
 								variant="secondary"
 								size="sm"
 								className="mt-3"
-								onClick={() => {
-									focusOnSwap.current = true;
-									setConfirmingArchive(true);
-								}}
+								onClick={() => setConnecting(true)}
 							>
-								<Archive aria-hidden="true" />
-								Archive project
+								Connect to an organisation…
 							</Button>
-						)}
-					</>
-				)}
-			</section>
+							{connecting && (
+								<ConnectProjectDialog
+									project={{ id: project.id, name: project.name }}
+									memberships={activeMemberships}
+									todayIso={todayIso()}
+									onConnected={handleClose}
+									onClose={() => setConnecting(false)}
+								/>
+							)}
+						</section>
+					)}
+				</>
+			)}
 		</Dialog>
 	);
 }
