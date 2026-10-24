@@ -102,7 +102,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   container; locally it is the fallback when Docker is unavailable):
 
   ```bash
-  docker run -d --name beats-test-mongo -p 27018:27017 mongo:8
+  docker run -d --name beats-test-mongo -p 27018:27017 mongo:9
   BEATS_TEST_ENV=1 DB_DSN=mongodb://localhost:27018 DB_NAME=beats_test \
     uv run --group dev pytest src/
   ```
@@ -129,16 +129,16 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   nothing, so a bar at no height or a panel's failure state is checked here.
 
   ```bash
-  docker run -d --name beats-dev-mongo -p 27019:27017 mongo:8
+  docker run -d --name beats-dev-mongo -p 27019:27017 mongo:9
   cd api && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<32+ bytes> \
     uv run uvicorn --app-dir src server:app --port 7999 &
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test) — 322 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
-  The SDK lives at `~/development/flutter` (stable), on `PATH` via `~/.zshrc`
-  and symlinked into `~/.local/bin` so the lefthook gates — which run under a
-  non-interactive `sh` that reads neither — can find it. `flutter doctor`
+  The SDK is the Homebrew install at `/opt/homebrew/share/flutter` (stable), on
+  `PATH` through `/opt/homebrew/bin`, which the lefthook gates inherit from the
+  shell that runs `git`. `flutter doctor`
   reports the Android, Chrome and Linux-desktop toolchains as missing; that is
   expected and does not affect `analyze` or `test`, which is all the hooks run.
   Building the companion for a real target needs those installed.
@@ -234,9 +234,8 @@ nothing.
   instead, so the dependency points inward and a service that reads beats cannot
   quietly start writing them.
   The ruff select list in `api/pyproject.toml` documents what each group is for
-  and, just as usefully, which groups are deliberately left out. `ty` cannot fail
-  CI on its own yet (`error-on-warning = false`); `api/scripts/ty_budget.py` holds
-  the diagnostic count at its current ceiling so a new one still does.
+  and, just as usefully, which groups are deliberately left out. `ty` runs with
+  `error-on-warning = true` and the tree is clean, so a new diagnostic fails CI.
 - TypeScript: Biome for linting/formatting, tsc strict mode, tabs, line width 100.
   Biome covers `client/`, `e2e/` and the root config files, and the VS Code
   extension has its own config. Accessibility rules are on and fail the check, all

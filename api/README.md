@@ -22,7 +22,7 @@ For the Cloud Run deployment, the API, Artifact Registry and the MongoDB
 Atlas cluster all live in `europe-west1` (Belgium) — already
 intra-region, so API↔DB latency is ~2 ms.
 
-Local dev uses the `db` service in `compose.yml` (`mongo:8`, isolated
+Local dev uses the `db` service in `compose.yml` (`mongo:9`, isolated
 from prod). Tests use `testcontainers` (ephemeral). Atlas only sees
 production traffic.
 

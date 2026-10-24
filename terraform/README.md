@@ -295,6 +295,22 @@ Terraform will automatically:
 - Create a CNAME record for `api.lifepete.com` → `ghs.googlehosted.com` (Cloud Run)
 - Create an A record for `lifepete.com` → Load Balancer IP address
 
+### Moving to provider 5
+
+Cloudflare's provider 5 renamed `cloudflare_record` to `cloudflare_dns_record`, and
+Terraform cannot move state between resource types. A state written under provider 4
+still holds the CNAME under the old name, so the first apply would try to create it
+again and Cloudflare would refuse the duplicate. Adopt the record instead, once:
+
+```bash
+terraform state rm 'cloudflare_record.api_cname[0]'
+terraform import 'cloudflare_dns_record.api_cname[0]' <zone_id>/<record_id>
+```
+
+The zone id is the `cloudflare_zone_id` output and the record id is
+`cloudflare_api_cname_record`, both readable from the old state before the `rm`
+(`terraform output`). A plan afterwards should show no change to the record.
+
 ### Configuration Options
 
 - `cloudflare_api_token`: Your Cloudflare API token (required, sensitive)

@@ -224,7 +224,7 @@ Integration tests use [Testcontainers](https://testcontainers.com/) to spin up a
 
 **How it works:**
 
-1. `conftest.py::pytest_configure` starts a `MongoDbContainer("mongo:8")` on a random port
+1. `conftest.py::pytest_configure` starts a `MongoDbContainer("mongo:9")` on a random port
 2. Sets `DB_DSN` and `DB_NAME` environment variables before any test module is imported
 3. Pydantic Settings picks up the container's connection string (env vars override `.env.test`)
 4. A session-scoped `test_client` fixture creates `TestClient(app)` inside a `with` block, triggering the FastAPI lifespan which connects PyMongo's async client to the container
@@ -253,7 +253,7 @@ breakdown, and `pytest` is the authority over both.
 ### Prerequisites
 
 - **Docker** must be running (testcontainers uses the Docker daemon)
-- First run pulls the `mongo:8` image (~200MB), subsequent runs use cache
+- First run pulls the `mongo:9` image (~200MB), subsequent runs use cache
 - No cloud database or Docker Compose needed for local development
 
 ---
