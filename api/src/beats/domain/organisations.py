@@ -60,6 +60,7 @@ from beats.domain.models import (
 )
 from beats.domain.ports import (
     BillingPresence,
+    OrganisationAbsenceReader,
     OrganisationBeatReader,
     OrganisationRecords,
     OrganisationStamper,
@@ -141,6 +142,7 @@ class ArchiveProject(NamedTuple):
     color: str | None
     hours: float
     entries: list[RecordEntry]
+    absences: list[RecordAbsence]
 
 
 class Archive(NamedTuple):
@@ -306,6 +308,9 @@ class OrganisationService:
         updated = await self.store.set_role(organisation_id, user_id, role)
         if updated is None:
             raise MemberNotFound()
+        if target.role is OrgRole.OWNER and not await self._an_owner_remains(organisation_id):
+            await self.store.set_role(organisation_id, user_id, OrgRole.OWNER)
+            raise LastOwner()
         await self._audit(
             organisation_id,
             actor,
@@ -328,8 +333,19 @@ class OrganisationService:
         ended = await self.store.end_membership(organisation_id, user_id, reason, at)
         if ended is None:
             raise MemberNotFound()
+        if ended.role is OrgRole.OWNER and not await self._an_owner_remains(organisation_id):
+            # Two owners leaving at once each saw the other: the write is
+            # undone and refused, as the check before it would have.
+            await self.store.open_membership(ended.model_copy(update={"left_at": None}))
+            raise LastOwner()
         await self.store.end_assignments(organisation_id, user_id, at)
         return ended
+
+    async def _an_owner_remains(self, organisation_id: str) -> bool:
+        """Re-read after a write that may have taken the last owner away. The
+        check before the write is not atomic with it, so the write is made
+        and undone if it left no owner (`count_owners` is a plain count)."""
+        return await self.store.count_owners(organisation_id) >= 1
 
     async def leave(self, organisation_id: str, user_id: str) -> Member:
         me = await self._member(organisation_id, user_id)
@@ -408,7 +424,11 @@ class OrganisationService:
         await self._audit(organisation_id, actor, "invite.revoked", invite_id=invite_id)
 
     async def my_invitations(self, user_id: str) -> list[tuple[OrgInvite, Organisation]]:
-        """The open invitations addressed to the account's own address."""
+        """The open invitations addressed to the account's own address — to
+        say who has invited them and as what. The route strips the token:
+        an address is not verified at sign-up, so whoever registered it
+        first must not be handed the way in. Joining takes the token the
+        inviter passed on *and* the address (`_open_invite`)."""
         _, email = await self._identity(user_id)
         now = self._now()
         invites = [i for i in await self.store.invites_for_email(email.lower()) if i.open_at(now)]
@@ -590,6 +610,9 @@ class OrganisationService:
         if existing is not None and existing.active:
             return existing
         now = self._now()
+        # Reopening an ended assignment keeps its personal half — the goal,
+        # the repo paths and the contract behind a balance the organisation
+        # read; only a connect replaces them.
         assignment = await self.store.open_assignment(
             OrgAssignment(
                 organisation_id=organisation_id,
@@ -598,7 +621,8 @@ class OrganisationService:
                 shared_from=now,
                 assigned_at=now,
                 assigned_by=actor,
-            )
+            ),
+            keep_personal=True,
         )
         await self._audit(
             organisation_id,
@@ -669,13 +693,24 @@ class OrganisationService:
                 assigned_at=now,
                 assigned_by=user_id,
                 **personal,
-            )
+            ),
+            keep_personal=False,
         )
         if not await self.store.hand_project_to_organisation(project_id, user_id, organisation_id):
+            # The project left the member's hands between the read above and
+            # now — another tab connected it, or a backup import replaced it.
+            # The assignment just opened would point at a document this
+            # organisation does not own and resolve to nothing; end it rather
+            # than leave it to be found later.
+            await self.store.end_assignments(organisation_id, user_id, now, project_id)
             raise ProjectNotFound(project_id)
         if share_from is not None:
             await beats.stamp_organisation(project_id, organisation_id, shared_from)
             await absences.stamp_organisation(project_id, organisation_id, share_from)
+        else:
+            # Nothing before now is shared, but a day off already booked for
+            # a day to come is part of the record from here on.
+            await absences.stamp_organisation(project_id, organisation_id, today)
         await self._audit(
             organisation_id,
             user_id,
@@ -695,6 +730,15 @@ class OrganisationService:
     ) -> MemberBalance | None:
         contract = assignment.contract
         if contract is None or assignment.project_id is None:
+            return None
+        # A balance sums every hour since the contract began. On a connected
+        # project with hours before the day the member chose to share from,
+        # that sum would carry what rule 4 keeps back — so it is withheld,
+        # and shown only when every entry and absence on the project is the
+        # organisation's, where it equals the member's own figure.
+        if await self.records.has_unshared(
+            organisation_id, assignment.project_id, assignment.user_id
+        ):
             return None
         start = contract.starts_on
         beats = await self.records.beats_of_member(
@@ -817,29 +861,43 @@ class OrganisationService:
         return await self._record(organisation, projects, month, tz, user_id=user_id)
 
     async def archive(
-        self, organisation_id: str, user_id: str, beats: OrganisationBeatReader, tz: ZoneInfo
+        self,
+        organisation_id: str,
+        user_id: str,
+        beats: OrganisationBeatReader,
+        absences: OrganisationAbsenceReader,
+        tz: ZoneInfo,
     ) -> Archive:
-        """The person's own hours stamped as this organisation's record,
-        grouped by project — read-only, kept after leaving, exportable. Read
-        through the person's own user-scoped repository: it is their view."""
+        """The person's own hours and days off stamped as this organisation's
+        record, grouped by project — read-only, kept after leaving,
+        exportable. Read through the person's own user-scoped repositories:
+        it is their view."""
         membership = await self.store.membership(organisation_id, user_id)
         organisation = await self.store.get_organisation(organisation_id)
         if membership is None or organisation is None:
             raise OrganisationNotFound()
         own = await beats.list_for_organisation(organisation_id)
-        names = await self.store.project_names(organisation_id, {b.project_id for b in own})
-        grouped: dict[str, list[RecordEntry]] = {}
+        days_off = await absences.list_for_organisation(organisation_id)
+        project_ids = {b.project_id for b in own} | {a.project_id for a in days_off}
+        names = await self.store.project_names(organisation_id, project_ids)
+        entries: dict[str, list[RecordEntry]] = {pid: [] for pid in project_ids}
+        offs: dict[str, list[RecordAbsence]] = {pid: [] for pid in project_ids}
         for beat in own:
-            grouped.setdefault(beat.project_id, []).append(_entry(beat, tz))
+            entries[beat.project_id].append(_entry(beat, tz))
+        for absence in days_off:
+            offs[absence.project_id].append(
+                RecordAbsence(date=absence.date, type=absence.type.value, half_day=absence.half_day)
+            )
         projects = [
             ArchiveProject(
                 project_id=pid,
                 name=names[pid].name if pid in names else "a project since removed",
                 color=names[pid].color if pid in names else None,
-                hours=round(sum(e.hours for e in entries), 2),
-                entries=entries,
+                hours=round(sum(e.hours for e in entries[pid]), 2),
+                entries=entries[pid],
+                absences=offs[pid],
             )
-            for pid, entries in sorted(grouped.items(), key=lambda kv: kv[0])
+            for pid in sorted(project_ids)
         ]
         return Archive(
             organisation=organisation,
@@ -850,21 +908,36 @@ class OrganisationService:
 
 
 def archive_csv(archive: Archive) -> str:
-    """The archive as RFC 4180 CSV: a row per entry — project, local day,
-    start, end, hours and the note."""
+    """The archive as RFC 4180 CSV: a row per entry and per absence —
+    project, local day, kind (`entry`, or the absence's type), start, end,
+    hours and the note; an absence's start, end and hours are blank, and a
+    half day says so in the note's place."""
     out = io.StringIO()
     writer = csv.writer(out)
-    writer.writerow(["project", "day", "start", "end", "hours", "note"])
+    writer.writerow(["project", "day", "kind", "start", "end", "hours", "note"])
     for project in archive.projects:
         for e in project.entries:
             writer.writerow(
                 [
                     project.name,
                     e.day.isoformat(),
+                    "entry",
                     e.start.isoformat(),
                     e.end.isoformat(),
                     f"{e.hours:.2f}",
                     e.note or "",
+                ]
+            )
+        for a in project.absences:
+            writer.writerow(
+                [
+                    project.name,
+                    a.date.isoformat(),
+                    a.type,
+                    "",
+                    "",
+                    "",
+                    "half day" if a.half_day else "",
                 ]
             )
     return out.getvalue()

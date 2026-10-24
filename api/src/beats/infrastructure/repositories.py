@@ -1026,6 +1026,7 @@ class AbsenceRepository(Protocol):
     async def list_all(self) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
+    async def list_for_organisation(self, organisation_id: str) -> list[Absence]: ...
     async def stamp_organisation(
         self, project_id: str, organisation_id: str, since: date
     ) -> int: ...
@@ -1047,6 +1048,11 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
         # Every project's, for the full export: an absence outlives a kind
         # change away from day_job, and a backup keeps it all the same.
         return await self._find_many(sort=("date", 1))
+
+    async def list_for_organisation(self, organisation_id: str) -> list[Absence]:
+        """The caller's own absences stamped as one organisation's record, for
+        the archive they keep after leaving. User-scoped like every read here."""
+        return await self._find_many({"organisation_id": organisation_id}, sort=("date", 1))
 
     async def stamp_organisation(self, project_id: str, organisation_id: str, since: date) -> int:
         """As `MongoBeatRepository.stamp_organisation`: the caller's absences

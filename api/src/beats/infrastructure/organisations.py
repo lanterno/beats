@@ -404,15 +404,23 @@ class MongoOrganisationStore:
         docs = await self.assignments.find(query).sort("assigned_at", 1).to_list(length=None)
         return [_load(OrgAssignment, doc) for doc in docs]
 
-    async def open_assignment(self, assignment: OrgAssignment) -> OrgAssignment:
+    async def open_assignment(
+        self, assignment: OrgAssignment, *, keep_personal: bool
+    ) -> OrgAssignment:
         """Assign, or reopen an ended assignment: one document per member per
-        project. Reopening replaces the personal fields with the ones sent
-        (empty on a plain assignment; the project's own on a connect)."""
+        project. With `keep_personal` the personal fields stored on an ended
+        assignment stay — a member taken off and put back keeps their goal,
+        repo paths and contract; without it they are replaced by the ones
+        sent, which only a connect does."""
         data = _dump(assignment)
         data.pop("_id", None)
         data["ended_at"] = None
-        for field in PERSONAL_FIELDS:
-            data.setdefault(field, None)
+        if keep_personal:
+            for field in PERSONAL_FIELDS:
+                data.pop(field, None)
+        else:
+            for field in PERSONAL_FIELDS:
+                data.setdefault(field, None)
         unset = {k: "" for k, v in list(data.items()) if v is None}
         for k in unset:
             data.pop(k)
@@ -504,6 +512,22 @@ class MongoOrganisationRecords:
         query = self._beats_query(organisation_id, [project_id], user_id)
         docs = await self.beats.find(query).sort("start", 1).to_list(length=None)
         return [_load(Beat, doc) for doc in docs]
+
+    async def has_unshared(self, organisation_id: str, project_id: str, user_id: str) -> bool:
+        """Whether the member has an entry or an absence on the project that
+        is not this organisation's record — one dated before the day they
+        chose to share from. Read to withhold a balance, never to show
+        anything: the answer is a yes or a no."""
+        unstamped = {"organisation_id": {"$ne": organisation_id}}
+        beat = await self.beats.find_one(
+            {"project_id": project_id, "user_id": user_id, **unstamped}, {"_id": 1}
+        )
+        if beat is not None:
+            return True
+        absence = await self.absences.find_one(
+            {"project_id": project_id, "user_id": user_id, **unstamped}, {"_id": 1}
+        )
+        return absence is not None
 
     async def totals(
         self, organisation_id: str, project_ids: Iterable[str], *, user_id: str | None = None

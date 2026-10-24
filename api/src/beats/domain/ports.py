@@ -313,9 +313,15 @@ class OrganisationStamper(Protocol):
 
 class OrganisationBeatReader(Protocol):
     """A person's own finished beats stamped as one organisation's — the
-    archive they keep after leaving, and the "what Acme can see" page."""
+    archive they keep after leaving."""
 
     async def list_for_organisation(self, organisation_id: str) -> list[Beat]: ...
+
+
+class OrganisationAbsenceReader(Protocol):
+    """A person's own absences stamped as one organisation's, for the same archive."""
+
+    async def list_for_organisation(self, organisation_id: str) -> list[Absence]: ...
 
 
 class OrganisationStore(Protocol):
@@ -387,7 +393,9 @@ class OrganisationStore(Protocol):
         user_id: str | None = None,
         active_only: bool = True,
     ) -> list[OrgAssignment]: ...
-    async def open_assignment(self, assignment: OrgAssignment) -> OrgAssignment: ...
+    async def open_assignment(
+        self, assignment: OrgAssignment, *, keep_personal: bool
+    ) -> OrgAssignment: ...
     async def end_assignments(
         self, organisation_id: str, user_id: str, at: datetime, project_id: str | None = None
     ) -> int: ...
@@ -412,6 +420,7 @@ class OrganisationRecords(Protocol):
     async def beats_of_member(
         self, organisation_id: str, project_id: str, user_id: str
     ) -> list[Beat]: ...
+    async def has_unshared(self, organisation_id: str, project_id: str, user_id: str) -> bool: ...
     async def totals(
         self, organisation_id: str, project_ids: Iterable[str], *, user_id: str | None = None
     ) -> dict[tuple[str, str], MemberTotals]: ...

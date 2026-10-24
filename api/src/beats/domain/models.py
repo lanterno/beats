@@ -1650,8 +1650,9 @@ class OrgProject(BaseModel):
     category: str | None = None
 
 
-class MemberTotals(BaseModel):
-    """What one member's finished entries on one project add up to, all time."""
+class MemberTotals(TzNormalizedModel):
+    """What one member's finished entries on one project add up to, all time.
+    Mongo hands the instants back naive; this makes them UTC like every other."""
 
     entries: int = 0
     hours: float = 0.0
