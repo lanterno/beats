@@ -22,7 +22,7 @@ import { describeError } from "@/shared/api";
 import { Button, Panel, useConfirm } from "@/shared/ui";
 import { KIND_LABELS } from "./kinds";
 import { OrgProjectDialog } from "./OrgProjectDialog";
-import { CHIP, FIELD, HEADING, HEADING_ICON, LEAD, LINKISH, LIST } from "./styles";
+import { CHIP, HEADING, HEADING_ICON, LEAD, LINKISH, LIST, SELECT } from "./styles";
 
 type Editor = { mode: "new" } | { mode: "edit"; project: OrgProject };
 
@@ -138,7 +138,7 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 												onChange={(e) => e.target.value && assignTo(project, e.target.value)}
 												disabled={assign.isPending}
 												aria-label={`Assign a member to ${project.name}`}
-												className={`${FIELD} w-auto py-1 text-xs`}
+												className={SELECT}
 											>
 												<option value="">Assign…</option>
 												{free.map((m) => (

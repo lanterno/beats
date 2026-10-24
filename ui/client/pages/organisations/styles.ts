@@ -24,6 +24,10 @@ export const LEAD = "text-[12.5px] leading-normal text-muted-foreground";
 export const FIELD =
 	"w-full min-w-0 bg-secondary border-0 rounded-xl text-foreground px-3 py-2 text-[13.5px] font-medium placeholder:text-muted-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent aria-invalid:ring-2 aria-invalid:ring-destructive/60 disabled:opacity-60";
 
+/** A compact select in a row: the wash, sized to its text, never the row's width. */
+export const SELECT =
+	"min-w-0 bg-secondary border-0 rounded-xl text-foreground px-3 py-1.5 text-xs font-bold focus:outline-hidden focus:ring-[3px] focus:ring-accent disabled:opacity-60";
+
 /** A field's message, under it. */
 export const ERROR = "mt-1 text-xs text-destructive-ink";
 

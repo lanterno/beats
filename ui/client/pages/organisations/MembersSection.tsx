@@ -20,7 +20,7 @@ import { useAuth } from "@/features/auth";
 import { describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
 import { Panel, useConfirm } from "@/shared/ui";
-import { FIELD, HEADING, HEADING_ICON, LEAD, LIST, REMOVE, ROW } from "./styles";
+import { HEADING, HEADING_ICON, LEAD, LIST, REMOVE, ROW, SELECT } from "./styles";
 
 const ROLES: OrgRole[] = ["member", "admin", "owner"];
 
@@ -92,7 +92,7 @@ export function MembersSection({ organisationId }: { organisationId: string }) {
 												onChange={(e) => changeRole(member, e.target.value as OrgRole)}
 												disabled={setRole.isPending}
 												aria-label={`Role of ${member.name}`}
-												className={`${FIELD} w-auto py-1 text-xs`}
+												className={SELECT}
 											>
 												{ROLES.map((role) => (
 													<option key={role} value={role}>
