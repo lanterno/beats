@@ -6,15 +6,13 @@
  * and a kind change says so before save. Archive asks first and then leaves
  * the page; an archived project restores. On an organisation's project the
  * organisation's fields are locked and sent as they came, and the foot names
- * the owner instead of offering Archive; a personal project offers to connect
- * once the member belongs to an organisation.
+ * the owner instead of offering Archive.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Membership } from "@/entities/organisation";
 import type { Contract, Project } from "@/entities/project";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 
@@ -24,15 +22,8 @@ const { hooks } = vi.hoisted(() => ({
 		archive: vi.fn(),
 		unarchive: vi.fn(),
 		navigate: vi.fn(),
-		memberships: vi.fn<() => Membership[]>(() => []),
 	},
 }));
-
-vi.mock("@/entities/organisation", async () => {
-	const actual =
-		await vi.importActual<typeof import("@/entities/organisation")>("@/entities/organisation");
-	return { ...actual, useMemberships: () => ({ data: hooks.memberships() }) };
-});
 
 vi.mock("@/entities/project", async () => {
 	const actual = await vi.importActual<typeof import("@/entities/project")>("@/entities/project");
@@ -99,22 +90,9 @@ const DAY_JOB: Project = {
 
 const KIND_LINE = /Changing the kind deletes the contract/;
 
-const ACME: Membership = {
-	organisation: {
-		id: "o1",
-		name: "Acme",
-		weekStart: "monday",
-		timezone: "Europe/Zurich",
-		createdAt: "2026-01-01T00:00:00Z",
-	},
-	role: "member",
-	joinedAt: "2026-03-04T00:00:00Z",
-};
-
 describe("ProjectSettingsDrawer", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		hooks.memberships.mockReturnValue([]);
 	});
 	afterEach(cleanup);
 
@@ -278,29 +256,5 @@ describe("ProjectSettingsDrawer", () => {
 		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		const body = hooks.update.mock.calls[0][0];
 		expect(body).toMatchObject({ name: "Employer", color: "#888", kind: "day_job" });
-	});
-
-	it("offers to connect a personal project once the member belongs to an organisation", () => {
-		hooks.memberships.mockReturnValue([ACME]);
-		render(
-			<MemoryRouter>
-				<ProjectSettingsDrawer project={DAY_JOB} open onClose={vi.fn()} />
-			</MemoryRouter>,
-		);
-
-		expect(screen.getByRole("region", { name: "Archive" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Connect to an organisation…" })).toBeInTheDocument();
-	});
-
-	it("offers no connect without an active membership", () => {
-		hooks.memberships.mockReturnValue([
-			{ ...ACME, leftAt: "2026-09-30T00:00:00Z", leftReason: "left" },
-		]);
-		render(<ProjectSettingsDrawer project={DAY_JOB} open onClose={vi.fn()} />);
-
-		expect(
-			screen.queryByRole("button", { name: "Connect to an organisation…" }),
-		).not.toBeInTheDocument();
-		expect(screen.queryByRole("region", { name: "Organisation" })).not.toBeInTheDocument();
 	});
 });
