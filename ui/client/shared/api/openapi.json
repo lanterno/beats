@@ -1703,6 +1703,20 @@
         "title": "ClientWriteRequest",
         "type": "object"
       },
+      "CoachStatusResponse": {
+        "description": "Whether this deployment can run the coach at all. False when no\nANTHROPIC_API_KEY is configured: every route that would call the model\nthen answers 503 COACH_NOT_CONFIGURED, and a client reading this first\nleaves the coach out rather than offer it and fail.",
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured"
+        ],
+        "title": "CoachStatusResponse",
+        "type": "object"
+      },
       "CompanyHoliday": {
         "description": "A day off the employer gives that the region's calendar does not \u2014\nChristmas Eve, a bridge day, a company day. A whole day, on one date.",
         "properties": {
@@ -9877,6 +9891,28 @@
           }
         },
         "summary": "Rewrite Memory",
+        "tags": [
+          "coach"
+        ]
+      }
+    },
+    "/api/coach/status": {
+      "get": {
+        "description": "Whether the coach is set up on this server.",
+        "operationId": "coach_status_api_coach_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Coach Status",
         "tags": [
           "coach"
         ]

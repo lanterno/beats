@@ -848,7 +848,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Client
-         * @description Delete a client, and its billing budget with it. 409
+         * @description Delete a client, and its billing budget and report links with it. 409
          *     CLIENT_HAS_PROJECTS while a project is billed to it: archive it instead,
          *     so past reports keep its name and currency.
          */
@@ -874,6 +874,57 @@ export interface paths {
          */
         post: operations["archive_client_api_clients__client_id__archive_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clients/{client_id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Report Links
+         * @description One client's report links, newest first, each with its token: the
+         *     owner has to be able to re-copy a link they already sent.
+         */
+        get: operations["list_report_links_api_clients__client_id__links_get"];
+        put?: never;
+        /**
+         * Create Report Link
+         * @description Mint a link over a fixed range, which a client opens with no login.
+         *
+         *     The range and the timezone its days are bucketed in are frozen now and
+         *     never read from a request again, so two reads of the link agree. 422 for
+         *     a range that runs backwards or covers more than 366 days, 400
+         *     INVALID_TIMEZONE for a zone `zoneinfo` does not know.
+         */
+        post: operations["create_report_link_api_clients__client_id__links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clients/{client_id}/links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Report Link
+         * @description Revoke a link: the URL is dead from the next read. 204 even when
+         *     there was no such link — with none there is nothing left to clear.
+         */
+        delete: operations["delete_report_link_api_clients__client_id__links__link_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1080,6 +1131,26 @@ export interface paths {
          * @description Trigger the coach to rewrite its memory from the last 7 days.
          */
         post: operations["rewrite_memory_api_coach_memory_rewrite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coach/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coach Status
+         * @description Whether the coach is set up on this server.
+         */
+        get: operations["coach_status_api_coach_status_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1885,6 +1956,455 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organisations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Mine
+         * @description Every organisation the caller is or was a member of, with their role
+         *     and, for one they left, when and how.
+         */
+        get: operations["list_mine_api_organisations__get"];
+        put?: never;
+        /**
+         * Create Organisation
+         * @description Create an organisation; the caller is its first owner. 400 for a
+         *     holiday region the calendar does not know (UNKNOWN_HOLIDAY_REGION) or a
+         *     timezone the database does not (INVALID_TIMEZONE).
+         */
+        post: operations["create_organisation_api_organisations__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invitations
+         * @description The open invitations addressed to the caller's own email address.
+         *     Nothing is sent anywhere: this is where an invitation is found.
+         */
+        get: operations["list_invitations_api_organisations_invitations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/join/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Invite
+         * @description What an invite token opens: the organisation's name and the role it
+         *     gives. 404 for a token that is unknown or addressed to another address
+         *     (INVITE_NOT_FOUND), 410 for one that was real and is closed
+         *     (INVITE_EXPIRED).
+         */
+        get: operations["preview_invite_api_organisations_join__token__get"];
+        put?: never;
+        /**
+         * Join
+         * @description Take an invite. Joining makes one membership document and nothing
+         *     else: no second account, no moved data (rule 1). A link with an approval
+         *     step answers `pending` and leaves a request for an admin. 409 when
+         *     already a member (ALREADY_A_MEMBER) or already waiting
+         *     (JOIN_REQUEST_PENDING).
+         */
+        post: operations["join_api_organisations_join__token__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Organisation
+         * @description The organisation and the caller's standing in it. Members only.
+         */
+        get: operations["get_organisation_api_organisations__organisation_id__get"];
+        /**
+         * Update Organisation
+         * @description Replace the organisation's settings. Admins.
+         */
+        put: operations["update_organisation_api_organisations__organisation_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Archive
+         * @description The caller's own hours that are this organisation's record, by
+         *     project: the read-only "Acme (left)" archive, kept after leaving. Read
+         *     through the caller's own repository. Members and former members.
+         */
+        get: operations["read_archive_api_organisations__organisation_id__archive_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/archive.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Archive Csv
+         * @description `/archive` as CSV, a row per entry, for the person to keep.
+         */
+        get: operations["read_archive_csv_api_organisations__organisation_id__archive_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect Project
+         * @description Connect one of the caller's own projects to the organisation (rule 4):
+         *     the project becomes the organisation's, its goal, local repo paths and
+         *     contract stay the caller's, and the caller's hours and absences on it
+         *     from `share_from` — a local day in `tz`, which is required — are the
+         *     organisation's record; null shares nothing before now. Any member.
+         *     409 on a project billed to a client (PROJECT_HAS_BILLING), one already
+         *     an organisation's (ORGANISATION_PROJECT), or a day after today
+         *     (SHARE_FROM_IN_FUTURE).
+         */
+        post: operations["connect_project_api_organisations__organisation_id__connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invites
+         * @description The open invites. Admins.
+         */
+        get: operations["list_invites_api_organisations__organisation_id__invites_get"];
+        put?: never;
+        /**
+         * Create Invite
+         * @description An invitation to one address, taken once by the account that holds
+         *     it, or with no address an invite link anyone may use until it expires.
+         *     The token is returned here and nowhere else: the API sends no email, the
+         *     inviter passes it on. Admins.
+         */
+        post: operations["create_invite_api_organisations__organisation_id__invites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/invites/{invite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invite
+         * @description Revoke an invite: its token stops working at once. Admins.
+         */
+        delete: operations["revoke_invite_api_organisations__organisation_id__invites__invite_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave
+         * @description Leave. Every assignment ends, the organisation's projects leave the
+         *     caller's list, the organisation keeps its working-time record, and the
+         *     caller keeps `/archive`. 409 LAST_OWNER for the only owner.
+         */
+        post: operations["leave_api_organisations__organisation_id__leave_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Members
+         * @description The active members, by the name and address each joined under.
+         */
+        get: operations["list_members_api_organisations__organisation_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/members/{member_user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description Remove a member: their assignments end, tracking to the
+         *     organisation's projects stops, and the organisation keeps its record of
+         *     their hours. Admins; an owner only by an owner, never the last.
+         */
+        delete: operations["remove_member_api_organisations__organisation_id__members__member_user_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Set Role
+         * @description Change a member's role. Admins; the owner role is given and taken by
+         *     owners alone (403 OWNER_ROLE_RESERVED), and the last owner keeps it
+         *     (409 LAST_OWNER).
+         */
+        patch: operations["set_role_api_organisations__organisation_id__members__member_user_id__patch"];
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects
+         * @description The organisation's projects with who is on each. Admins.
+         */
+        get: operations["list_projects_api_organisations__organisation_id__projects_get"];
+        put?: never;
+        /**
+         * Create Project
+         * @description A project the organisation owns: it appears on a member's list once
+         *     they are assigned. Admins.
+         */
+        post: operations["create_project_api_organisations__organisation_id__projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Project
+         * @description Write the organisation's fields of one of its projects — name,
+         *     colour, kind, description, repository, category, archived. A field left
+         *     out keeps its value. Admins.
+         */
+        put: operations["update_project_api_organisations__organisation_id__projects__project_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign
+         * @description Put a member on a project: it appears on their list, and their hours
+         *     on it are the organisation's from now. Admins.
+         */
+        put: operations["assign_api_organisations__organisation_id__projects__project_id__members__member_user_id__put"];
+        post?: never;
+        /**
+         * Unassign
+         * @description Take a member off a project: it leaves their list and their tracking
+         *     to it stops; the hours already on it stay the organisation's. Admins.
+         */
+        delete: operations["unassign_api_organisations__organisation_id__projects__project_id__members__member_user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Record
+         * @description What the organisation sees: per project, per member, the finished
+         *     entries started in `month` in `tz` (start, end, hours, note), the
+         *     absences (date, type, half day), the all-time totals, and where the
+         *     member has a contract its balance as of today. Nothing else, and nothing
+         *     about now. Admins.
+         */
+        get: operations["read_record_api_organisations__organisation_id__record_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Requests
+         * @description The join requests waiting on an invite link with an approval step. Admins.
+         */
+        get: operations["list_requests_api_organisations__organisation_id__requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Request
+         * @description Approve or decline a join request; approving makes the member. Admins.
+         */
+        post: operations["decide_request_api_organisations__organisation_id__requests__request_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/visible": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Visible
+         * @description What the organisation sees of the caller — the "what Acme can see"
+         *     page: `/record` narrowed to one member by the same read, so it shows
+         *     the data actually held, not a description of it. Members and former
+         *     members.
+         */
+        get: operations["read_visible_api_organisations__organisation_id__visible_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/oura/connect": {
         parameters: {
             query?: never;
@@ -2473,6 +2993,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Report
+         * @description One client's billable work over a report link's frozen range.
+         *
+         *     Public: no bearer token, and a device token is still refused before this
+         *     runs (`device_may_reach` in `server.py`). Rate-limited less against
+         *     guessing — 32 bytes are not guessed — than against a leaked link being
+         *     hammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.
+         */
+        get: operations["read_report_api_reports__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/signals/all": {
         parameters: {
             query?: never;
@@ -2855,7 +3400,8 @@ export interface components {
         };
         /**
          * AbsenceResponse
-         * @description Response schema for an absence.
+         * @description Response schema for an absence. `organisation_id` is set on one
+         *     recorded on an organisation's project: that organisation's record.
          */
         AbsenceResponse: {
             /**
@@ -2872,6 +3418,8 @@ export interface components {
             id: string;
             /** Note */
             note?: string | null;
+            /** Organisation Id */
+            organisation_id?: string | null;
             /** Project Id */
             project_id: string;
             type: components["schemas"]["AbsenceType"];
@@ -2911,6 +3459,60 @@ export interface components {
             note?: string | null;
             /** Project Id */
             project_id: string;
+        };
+        /** ArchiveProjectResponse */
+        ArchiveProjectResponse: {
+            /** Color */
+            color: string | null;
+            /** Entries */
+            entries: components["schemas"]["RecordEntryResponse"][];
+            /** Hours */
+            hours: number;
+            /** Name */
+            name: string;
+            /** Project Id */
+            project_id: string;
+        };
+        /**
+         * ArchiveResponse
+         * @description The person's own hours stamped as one organisation's record, after
+         *     leaving or before: read-only, grouped by project.
+         */
+        ArchiveResponse: {
+            /** Hours */
+            hours: number;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** Left At */
+            left_at: string | null;
+            organisation: components["schemas"]["OrganisationCardResponse"];
+            /** Projects */
+            projects: components["schemas"]["ArchiveProjectResponse"][];
+            role: components["schemas"]["OrgRole"];
+        };
+        /** AssignmentResponse */
+        AssignmentResponse: {
+            /**
+             * Assigned At
+             * Format: date-time
+             */
+            assigned_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Has Contract */
+            has_contract: boolean;
+            /** Name */
+            name: string | null;
+            /**
+             * Shared From
+             * Format: date-time
+             */
+            shared_from: string;
+            /** User Id */
+            user_id: string;
         };
         /** AutoTimerSuggestion */
         AutoTimerSuggestion: {
@@ -3421,6 +4023,17 @@ export interface components {
             rates: components["schemas"]["RateTerm"][];
         };
         /**
+         * CoachStatusResponse
+         * @description Whether this deployment can run the coach at all. False when no
+         *     ANTHROPIC_API_KEY is configured: every route that would call the model
+         *     then answers 503 COACH_NOT_CONFIGURED, and a client reading this first
+         *     leaves the coach out rather than offer it and fail.
+         */
+        CoachStatusResponse: {
+            /** Configured */
+            configured: boolean;
+        };
+        /**
          * CompanyHoliday
          * @description A day off the employer gives that the region's calendar does not —
          *     Christmas Eve, a bridge day, a company day. A whole day, on one date.
@@ -3433,6 +4046,18 @@ export interface components {
             date: string;
             /** Name */
             name: string;
+        };
+        /**
+         * ConnectProjectRequest
+         * @description Connect one of the caller's own projects: from `share_from` (a local
+         *     day in `tz`) the hours and absences on it are the organisation's; null
+         *     starts fresh from now.
+         */
+        ConnectProjectRequest: {
+            /** Project Id */
+            project_id: string;
+            /** Share From */
+            share_from?: string | null;
         };
         /**
          * Contract
@@ -3686,6 +4311,10 @@ export interface components {
             /** Note */
             note?: string | null;
             type: components["schemas"]["AbsenceType"];
+        };
+        /** DecideRequest */
+        DecideRequest: {
+            decision: components["schemas"]["JoinDecision"];
         };
         /** DeleteSignalsResponse */
         DeleteSignalsResponse: {
@@ -4018,11 +4647,13 @@ export interface components {
         };
         /**
          * ImportSkip
-         * @description An absence or a balance adjustment in a backup that the import left
-         *     out, because the rule its own route applies refused it: `code` and
-         *     `detail` are what that route would have answered. An absence on a
-         *     project that is no longer a day job is one; an adjustment dated outside
-         *     the contract the backup restored is another.
+         * @description A record in a backup that the import left out, with the code and
+         *     detail its own route would have answered. An absence on a project that
+         *     is no longer a day job is one; an adjustment dated outside the contract
+         *     the backup restored is another; an organisation's project the account
+         *     is no longer assigned to (ORGANISATION_PROJECT), and every session,
+         *     absence and adjustment on it, is a third — a backup does not restore a
+         *     project the organisation owns (docs/organisations.md).
          */
         ImportSkip: {
             /** Code */
@@ -4031,12 +4662,9 @@ export interface components {
              * Collection
              * @enum {string}
              */
-            collection: "absences" | "balance_adjustments";
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
+            collection: "projects" | "beats" | "absences" | "balance_adjustments";
+            /** Date */
+            date: string | null;
             /** Detail */
             detail: string;
             /** Project Id */
@@ -4104,6 +4732,112 @@ export interface components {
             title: string;
             /** Type */
             type: string;
+        };
+        /**
+         * InvitationResponse
+         * @description An open invitation addressed to the caller's own address.
+         */
+        InvitationResponse: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            organisation: components["schemas"]["OrganisationCardResponse"];
+            role: components["schemas"]["OrgRole"];
+            /** Token */
+            token: string;
+        };
+        /** InvitePreviewResponse */
+        InvitePreviewResponse: {
+            /** Addressed */
+            addressed: boolean;
+            /** Already Member */
+            already_member: boolean;
+            organisation: components["schemas"]["OrganisationCardResponse"];
+            /** Requires Approval */
+            requires_approval: boolean;
+            role: components["schemas"]["OrgRole"];
+        };
+        /**
+         * InviteRequest
+         * @description An invitation to one address, or with `email` null an invite link.
+         *     `requires_approval` is read on a link alone; no invite carries the
+         *     owner role (403 OWNER_ROLE_RESERVED).
+         */
+        InviteRequest: {
+            /** Email */
+            email?: string | null;
+            /**
+             * Expires In Days
+             * @default 14
+             */
+            expires_in_days: number;
+            /**
+             * Requires Approval
+             * @default false
+             */
+            requires_approval: boolean;
+            /** @default member */
+            role: components["schemas"]["OrgRole"];
+        };
+        /** InviteResponse */
+        InviteResponse: {
+            /** Accepted At */
+            accepted_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Id */
+            id: string;
+            /** Requires Approval */
+            requires_approval: boolean;
+            role: components["schemas"]["OrgRole"];
+            /** Token */
+            token: string;
+        };
+        /**
+         * JoinDecision
+         * @enum {string}
+         */
+        JoinDecision: "approved" | "declined";
+        /** JoinRequestResponse */
+        JoinRequestResponse: {
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * JoinResponse
+         * @description `joined`, with the membership; or `pending`, when the link has an
+         *     approval step and a request is now waiting.
+         */
+        JoinResponse: {
+            membership?: components["schemas"]["MembershipResponse"] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "joined" | "pending";
         };
         /**
          * Ledger
@@ -4253,6 +4987,113 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
+        /** MemberBalanceResponse */
+        MemberBalanceResponse: {
+            /** Adjusted */
+            adjusted: number;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Balance */
+            balance: number;
+            /** Expected Through */
+            expected_through: number;
+            /** Opening */
+            opening: number;
+            /** Worked */
+            worked: number;
+        };
+        /** MemberRecordResponse */
+        MemberRecordResponse: {
+            /** Absences */
+            absences: components["schemas"]["RecordAbsenceResponse"][];
+            /** Active */
+            active: boolean;
+            balance: components["schemas"]["MemberBalanceResponse"] | null;
+            /** Entries */
+            entries: components["schemas"]["RecordEntryResponse"][];
+            /** Has Contract */
+            has_contract: boolean;
+            /** Hours */
+            hours: number;
+            /** Name */
+            name: string;
+            /**
+             * Shared From
+             * Format: date-time
+             */
+            shared_from: string;
+            totals: components["schemas"]["MemberTotals"];
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * MemberResponse
+         * @description A member as the organisation lists them: the name and address they
+         *     joined under. `user_id` is a tombstone once the account has been erased.
+         */
+        MemberResponse: {
+            /** Email */
+            email: string;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** Left At */
+            left_at: string | null;
+            /** Name */
+            name: string;
+            role: components["schemas"]["OrgRole"];
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * MemberTotals
+         * @description What one member's finished entries on one project add up to, all time.
+         */
+        MemberTotals: {
+            /**
+             * Entries
+             * @default 0
+             */
+            entries: number;
+            /** First */
+            first?: string | null;
+            /**
+             * Hours
+             * @default 0
+             */
+            hours: number;
+            /** Last */
+            last?: string | null;
+        };
+        /**
+         * MembershipEnd
+         * @description Why a membership ended.
+         * @enum {string}
+         */
+        MembershipEnd: "left" | "removed" | "erased";
+        /**
+         * MembershipResponse
+         * @description One of the caller's organisations, with their standing in it. A
+         *     membership that ended (`left_at`) is listed too: the archive of the
+         *     person's own hours there is reached through it.
+         */
+        MembershipResponse: {
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** Left At */
+            left_at: string | null;
+            left_reason: components["schemas"]["MembershipEnd"] | null;
+            organisation: components["schemas"]["OrganisationResponse"];
+            role: components["schemas"]["OrgRole"];
+        };
         /** MemoryResponse */
         MemoryResponse: {
             /** Content */
@@ -4273,6 +5114,146 @@ export interface components {
             total_minutes: number;
             /** Warnings */
             warnings: string[];
+        };
+        /**
+         * OrgProject
+         * @description An organisation's project as the organisation sees it: the document's
+         *     fields (`ORGANISATION_FIELDS`) and nothing personal, since the personal
+         *     half is each member's own.
+         */
+        OrgProject: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Category */
+            category?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Github Repo */
+            github_repo?: string | null;
+            /** Id */
+            id: string;
+            /** @default side_project */
+            kind: components["schemas"]["ProjectKind"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * OrgProjectRequest
+         * @description The organisation's fields of one of its projects. On an update a
+         *     field left out is kept and `null` clears a nullable one.
+         */
+        OrgProjectRequest: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Category */
+            category?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Github Repo */
+            github_repo?: string | null;
+            /** @default side_project */
+            kind: components["schemas"]["ProjectKind"];
+            /** Name */
+            name: string;
+        };
+        /** OrgProjectResponse */
+        OrgProjectResponse: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Category */
+            category?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Github Repo */
+            github_repo?: string | null;
+            /** Id */
+            id: string;
+            /** @default side_project */
+            kind: components["schemas"]["ProjectKind"];
+            /** Members */
+            members: components["schemas"]["AssignmentResponse"][];
+            /** Name */
+            name: string;
+        };
+        /**
+         * OrgRole
+         * @description What a member may do in an organisation. Each role includes the ones
+         *     below it: an owner is an admin, an admin is a member.
+         * @enum {string}
+         */
+        OrgRole: "owner" | "admin" | "member";
+        /**
+         * OrganisationCardResponse
+         * @description An organisation as a joiner sees it before joining: the name and logo.
+         */
+        OrganisationCardResponse: {
+            /** Id */
+            id: string;
+            /** Logo Url */
+            logo_url: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * OrganisationFields
+         * @description What an organisation is set up with: the fields its admins write.
+         */
+        OrganisationFields: {
+            /** Holiday Country */
+            holiday_country?: string | null;
+            /** Holiday Subdivision */
+            holiday_subdivision?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /** @default monday */
+            week_start: components["schemas"]["WeekStart"];
+        };
+        /** OrganisationResponse */
+        OrganisationResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Holiday Country */
+            holiday_country?: string | null;
+            /** Holiday Subdivision */
+            holiday_subdivision?: string | null;
+            /** Id */
+            id: string;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /** @default monday */
+            week_start: components["schemas"]["WeekStart"];
         };
         /** OuraConnectRequest */
         OuraConnectRequest: {
@@ -4508,6 +5489,33 @@ export interface components {
          */
         ProjectKind: "day_job" | "freelance" | "side_project";
         /**
+         * ProjectOrganisation
+         * @description The organisation that owns a project, as its member sees it on the
+         *     project: enough to mark it in a list, and the instant from which the
+         *     member's hours on it are the organisation's (docs/organisations.md).
+         *     `shared_from` is the member's own choice when they connected a project of
+         *     theirs, and the moment of assignment otherwise.
+         */
+        ProjectOrganisation: {
+            /** Id */
+            id: string;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Shared From
+             * Format: date-time
+             */
+            shared_from: string;
+        };
+        /** ProjectRecordResponse */
+        ProjectRecordResponse: {
+            /** Members */
+            members: components["schemas"]["MemberRecordResponse"][];
+            project: components["schemas"]["OrgProject"];
+        };
+        /**
          * ProjectResponse
          * @description Canonical response shape for a project — every field of the domain
          *     Project the API exposes. Previously declared only 6 of 11 fields;
@@ -4545,6 +5553,7 @@ export interface components {
             kind: components["schemas"]["ProjectKind"];
             /** Name */
             name: string;
+            organisation?: components["schemas"]["ProjectOrganisation"] | null;
             /** Weekly Goal */
             weekly_goal?: number | null;
         };
@@ -4602,6 +5611,7 @@ export interface components {
             last_tracked_at?: string | null;
             /** Name */
             name: string;
+            organisation?: components["schemas"]["ProjectOrganisation"] | null;
             /** Total Minutes */
             total_minutes?: number | null;
             /** Weekly Goal */
@@ -4643,6 +5653,70 @@ export interface components {
         RecentDriftResponse: {
             /** Events */
             events: components["schemas"]["DriftEvent"][];
+        };
+        /** RecordAbsenceResponse */
+        RecordAbsenceResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Half Day */
+            half_day: boolean;
+            /** Type */
+            type: string;
+        };
+        /**
+         * RecordEntryResponse
+         * @description One finished entry as the organisation reads it: when, how long, and
+         *     the note (decision 1). Nothing about the person beyond that.
+         */
+        RecordEntryResponse: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Hours */
+            hours: number;
+            /** Id */
+            id: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /**
+         * RecordResponse
+         * @description What the organisation sees (`GET /{id}/record`), and what it sees of
+         *     one member (`GET /{id}/visible`) — the same shape from the same read,
+         *     narrowed to one person. Written field by field, as the public report
+         *     is, so what crosses cannot grow by inheritance.
+         */
+        RecordResponse: {
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Month */
+            month: string;
+            organisation: components["schemas"]["OrganisationCardResponse"];
+            /** Projects */
+            projects: components["schemas"]["ProjectRecordResponse"][];
         };
         /**
          * RecordTimeRequest
@@ -4719,6 +5793,155 @@ export interface components {
             verified: boolean;
         };
         /**
+         * ReportEntryResponse
+         * @description One billable entry: the local day it started on, when it ran, and how
+         *     long. Empty on a link that does not show entries.
+         */
+        ReportEntryResponse: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Hours */
+            hours: number;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /**
+         * ReportLineResponse
+         * @description A run of consecutive days of one project at one rate. `rate_minor` and
+         *     `amount_minor` are null on an unpriced run, and on every line when the
+         *     link does not show amounts.
+         */
+        ReportLineResponse: {
+            /** Amount Minor */
+            amount_minor: number | null;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Hours */
+            hours: number;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Project Name */
+            project_name: string;
+            /** Rate Minor */
+            rate_minor: number | null;
+        };
+        /**
+         * ReportLinkRequest
+         * @description Request body for minting a report link: the range, the timezone its
+         *     days are bucketed in, and the two flags, every key required. The range
+         *     runs forward and covers at most 366 days.
+         */
+        ReportLinkRequest: {
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Entries */
+            show_entries: boolean;
+            /** Tz */
+            tz: string;
+        };
+        /**
+         * ReportLinkResponse
+         * @description A report link as its owner sees it, token included: the owner has to
+         *     be able to re-copy the link they sent a client last month.
+         */
+        ReportLinkResponse: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /** Id */
+            id: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Entries */
+            show_entries: boolean;
+            /** Token */
+            token: string;
+            /** Tz */
+            tz: string;
+        };
+        /**
+         * ReportResponse
+         * @description What `GET /api/reports/{token}` answers: one client's billable work
+         *     over the link's frozen range.
+         *
+         *     With `show_amounts` false, `currency`, `minor_units`, `unpriced_hours`,
+         *     `amount_minor` and every line's rate and amount are null, and the hours
+         *     still add up — a proof of time with the price left out.
+         */
+        ReportResponse: {
+            /** Amount Minor */
+            amount_minor: number | null;
+            /** Billable Hours */
+            billable_hours: number;
+            /** Client Name */
+            client_name: string;
+            /** Currency */
+            currency: string | null;
+            /** Entries */
+            entries: components["schemas"]["ReportEntryResponse"][];
+            /**
+             * First
+             * Format: date
+             */
+            first: string;
+            /**
+             * Last
+             * Format: date
+             */
+            last: string;
+            /** Lines */
+            lines: components["schemas"]["ReportLineResponse"][];
+            /** Minor Units */
+            minor_units: number | null;
+            /** Show Amounts */
+            show_amounts: boolean;
+            /** Show Entries */
+            show_entries: boolean;
+            /** Unpriced Hours */
+            unpriced_hours: number | null;
+        };
+        /**
          * RhythmSlotResponse
          * @description Response schema for a half-hour slot in the daily rhythm chart.
          */
@@ -4727,6 +5950,10 @@ export interface components {
             minutes: number;
             /** Slot */
             slot: number;
+        };
+        /** RoleRequest */
+        RoleRequest: {
+            role: components["schemas"]["OrgRole"];
         };
         /** SSOCompleteRequest */
         SSOCompleteRequest: {
@@ -5056,6 +6283,12 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * WeekStart
+         * @description Which day an organisation's week begins on, for its own reports.
+         * @enum {string}
+         */
+        WeekStart: "monday" | "saturday" | "sunday";
         /**
          * WeeklyDigestResponse
          * @description Response schema for a weekly digest.
@@ -6726,6 +7959,123 @@ export interface operations {
             };
         };
     };
+    list_report_links_api_clients__client_id__links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportLinkResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_report_link_api_clients__client_id__links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportLinkResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_report_link_api_clients__client_id__links__link_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     unarchive_client_api_clients__client_id__unarchive_post: {
         parameters: {
             query?: never;
@@ -7054,6 +8404,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coach_status_api_coach_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoachStatusResponse"];
                 };
             };
         };
@@ -8056,6 +9426,1026 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RegionHoliday"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mine_api_organisations__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_organisation_api_organisations__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganisationFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invitations_api_organisations_invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_invite_api_organisations_join__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitePreviewResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    join_api_organisations_join__token__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_organisation_api_organisations__organisation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_organisation_api_organisations__organisation_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganisationFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_archive_api_organisations__organisation_id__archive_get: {
+        parameters: {
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_archive_csv_api_organisations__organisation_id__archive_csv_get: {
+        parameters: {
+            query?: {
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The archive as CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_project_api_organisations__organisation_id__connect_post: {
+        parameters: {
+            query: {
+                /** @description IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do. */
+                tz: string;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invites_api_organisations__organisation_id__invites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite_api_organisations__organisation_id__invites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invite_api_organisations__organisation_id__invites__invite_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_api_organisations__organisation_id__leave_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_api_organisations__organisation_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_api_organisations__organisation_id__members__member_user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_role_api_organisations__organisation_id__members__member_user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_projects_api_organisations__organisation_id__projects_get: {
+        parameters: {
+            query?: {
+                archived?: boolean | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgProjectResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_project_api_organisations__organisation_id__projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgProjectResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_api_organisations__organisation_id__projects__project_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgProjectResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_api_organisations__organisation_id__projects__project_id__members__member_user_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unassign_api_organisations__organisation_id__projects__project_id__members__member_user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_record_api_organisations__organisation_id__record_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests_api_organisations__organisation_id__requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinRequestResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_request_api_organisations__organisation_id__requests__request_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinRequestResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_visible_api_organisations__organisation_id__visible_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9174,6 +11564,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VacationYear"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_report_api_reports__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
                 };
             };
             /** @description Not found */
