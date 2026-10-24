@@ -1090,6 +1090,206 @@ Each addable later without migrating data:
 
 ---
 
+## Report links (phase 1c)
+
+> A freelancer sends a client a link. The client opens it in any browser,
+> with no login and no account, and sees the hours on their own projects for
+> a range the freelancer fixed — and, if the freelancer chose, what they
+> cost. Nothing else about the freelancer is reachable from it.
+
+This is the first time any Beats data reaches a reader with no session, which
+makes it the place to be strict rather than clever. A link holds no figures:
+it names a client, a range and a timezone, and every number is worked out on
+each read by the 1a arithmetic, through `assemble_client`.
+
+The decisions below are 1c's own. They build on 1a's decisions 1–15 and 1b's
+and change none of them; "decision N" in this section means one of its own.
+
+### Decisions
+
+1. **A link is a capability in its URL**, 32 bytes from
+   `secrets.token_urlsafe`, and it is stored as it is read, not hashed. A
+   pairing code is hashed because it is eight guessable characters that live
+   for minutes; this is neither. Hashing would protect nothing here — whoever
+   can read the `report_links` collection can read the hours it serves, out of
+   the same database — and it would cost the one thing the owner needs, which
+   is to open the link they sent a client last month and see what the client
+   sees. The token is the whole secret, so it is never put in a log line, and
+   the route it sits on is rate-limited (decision 8).
+2. **The range and the timezone are frozen when the link is minted.** A link
+   stores `first`, `last` and the owner's `tz`, and its figures never move
+   again: the days are bucketed in the owner's zone, not the reader's, because
+   those are the days the owner invoiced on, and a client in Auckland reading
+   a Berlin freelancer's October must see October as it was billed. With a
+   fixed range and 1a's decision 9 — a running beat is not billed — two reads
+   of one link a week apart agree, unless the owner edited the underlying
+   time. The range is capped at 366 days: a report link backs an invoice
+   period, and the assembler walks the range day by day.
+3. **A link names one client, and the read never fetches another's.**
+   `BillingService.client_period` reads that client's billings, those
+   billings' projects, those projects' beats in the range, and those beats'
+   overrides — then calls `assemble_client`. It never calls `period`, which
+   assembles every client and would leave the public route filtering a list it
+   should never have been handed. A reader of one client cannot reach
+   another's because the query for another's was never made. This is the same
+   reasoning as 1a's decision 2: a collection boundary, not a serialiser
+   someone has to remember.
+4. **The public response is its own schema, written field by field.**
+   `ReportResponse` and its rows are not `ClientBillingResponse` with keys
+   removed, and do not inherit from it. A field added to the private month
+   report later — a note, a tag, a flow score — cannot reach a client's eyes
+   by inheritance. The two schemas drifting apart is the point of them.
+5. **What no link can show**, structurally, because it is not among
+   `assemble_client`'s inputs: another client, a personal project, a day job,
+   a side project, an unbilled freelance project, a tag, a flow score, a
+   biometric, a calendar event, the coach, the account's name or email. What a
+   link deliberately leaves out of what it *could* show: `client_id`,
+   `project_id` and `beat_id` (a client has no use for the owner's internal
+   ids), `non_billable_hours` (hours the client is not billed for are the
+   freelancer's business), `overridden` (how a figure was arrived at is not
+   the client's business either) and `running` (see decision 7).
+6. **Notes do not cross in 1c.** The question *What the report lists* leaves
+   open — whether a client's report shows an entry's note — stays open: a note
+   is not threaded through `assemble_client`, so there is nothing to leak. It
+   is a third flag whenever it is decided, defaulting off, and links already
+   minted keep showing what their owner saw when they minted them.
+7. **A link says nothing about now.** `running` is not in the response, so a
+   client cannot learn from a report that a timer is on at this moment.
+   AHM-74 makes live presence a per-member consent decision, off by default;
+   a report link is not the back door to it.
+8. **The public prefix is narrow, slow and uncached.** `/api/reports` is the
+   only entry in `PUBLIC_PREFIXES` that serves a user's data, and it serves
+   exactly one shape. The route is rate-limited to 30/minute, answers
+   `Cache-Control: no-store` so a shared machine's browser keeps no copy, and
+   `X-Robots-Tag: noindex` so a link pasted into something that crawls does
+   not land in an index. A device token reaching it still gets 403: the
+   middleware resolves a Bearer token and checks `device_may_reach` before a
+   path's publicness is ever considered.
+9. **One 404 for every way a link fails.** Not found, mistyped, revoked, or
+   for a client that has since been deleted: all answer 404 `REPORT_NOT_FOUND`
+   with the same words. A reader with no session must not learn from the
+   difference between "never existed" and "revoked yesterday".
+10. **Revoking is deleting.** `DELETE` removes the record and the URL is dead
+    from the next read. A `revoked` flag beside a dead token would be a second
+    state every read has to consider, for no gain: 32 bytes are never minted
+    twice, so a deleted token cannot come back. Deleting a client takes its
+    links with it, as it takes its billing budget.
+11. **Minting is the owner's, under `/api/clients/{id}/links`.** Session token
+    only, no device prefix, like every other billing route. The API returns
+    the token, never a URL: the SPA knows its own origin and the API does not,
+    and inventing a setting for it would be one more thing a self-host has to
+    get right.
+12. **Archived keeps reading.** A link on an archived client still serves, and
+    an archived project with hours in the range is still a line. The owner
+    archived them; the client still has an invoice to check.
+
+### Data model
+
+```python
+REPORT_RANGE_MAX_DAYS = 366
+
+class ReportLinkFields(BaseModel):  # the write body: every key required
+    first: date_type
+    last: date_type                 # not before `first`, at most 366 days
+    tz: str                         # IANA; checked at write time, not here
+    show_amounts: bool              # strict: rates, amounts and the currency
+    show_entries: bool              # strict: the day-by-day rows under the lines
+
+class ReportLink(ReportLinkFields):  # collection `report_links`
+    id: str | None
+    client_id: str
+    token: str
+    created_at: datetime
+```
+
+- **`last` and the cap are model validators**, since they are facts about the
+  record that cannot start failing on a read. **`tz` is checked in the
+  service**, with the same reasoning as the currency and the holiday region: a
+  zone that leaves the tz database must not make a stored link unreadable.
+- **Indexes** (`ensure_indexes`): `report_links (token)`, unique — the public
+  lookup, which is the one read in the system that crosses users — and
+  `report_links (user_id, client_id)` for the owner's list.
+- **The repository is two things**, as pairing codes are:
+  `MongoReportLinkRepository` is user-scoped through `MongoStore` for the
+  owner's list, create and delete; `find_by_token` is unscoped, because the
+  reader is not signed in and the owner is not known until the token resolves.
+  Resolving it is the only place a request's `user_id` comes from anything but
+  a session, and it is commented as such at the call site.
+
+### What a link shows
+
+```jsonc
+// GET /api/reports/{token}
+{ "client_name": "Studio Kite",
+  "first": "2026-10-01", "last": "2026-10-31",
+  "show_amounts": true, "show_entries": true,
+  "currency": "EUR", "minor_units": 2,     // null when amounts are hidden
+  "billable_hours": 41.5,
+  "unpriced_hours": 0.0,                   // null when amounts are hidden
+  "amount_minor": 352750,                  // null when amounts are hidden
+  "lines": [{ "project_name": "Website", "first": "2026-10-01",
+              "last": "2026-10-14", "hours": 30.0,
+              "rate_minor": 8500, "amount_minor": 255000 }],
+  "entries": [{ "day": "2026-10-02", "start": "…Z", "end": "…Z",
+                "hours": 2.5 }] }
+```
+
+- **Only billable work.** The lines are 1a's lines, which are billable by
+  construction; the entries are filtered to the billable ones. A client sees
+  what they are being asked to pay for and nothing beside it.
+- **With `show_amounts` false**, `currency`, `minor_units`, `unpriced_hours`,
+  `amount_minor` and every line's `rate_minor` and `amount_minor` are null.
+  The hours still add up, so the link works as a proof of time with the price
+  left out — which is what a client on a fixed fee should get.
+- **With `show_entries` false**, `entries` is `[]`: the lines and the totals
+  only. The flags are independent, so all four combinations are reachable.
+- **Hours are the same figures the owner sees** on the Clients page for the
+  same range, to the hundredth, because they come from the same assembler.
+
+### HTTP contract
+
+| Method | Path | Body, params | Answers |
+|---|---|---|---|
+| GET | `/api/clients/{id}/links` | | the client's links, newest first; 404 `CLIENT_NOT_FOUND` |
+| POST | `/api/clients/{id}/links` | `ReportLinkFields` | 201 with the token; 404 `CLIENT_NOT_FOUND`; 400 `INVALID_TIMEZONE`; 422 |
+| DELETE | `/api/clients/{id}/links/{link_id}` | | 204, always: with no such link there is nothing left to clear |
+| GET | `/api/reports/{token}` | **public** | the report; 404 `REPORT_NOT_FOUND`; 429 |
+
+### The UI's rules
+
+- **The owner's side** is a *Shared reports* block in `ClientPanel`: the
+  client's links, each with its range, its two flags in words, a Copy button
+  and a Revoke button, and a *Share this month* action that mints a link over
+  the open month with amounts and entries on. Copy writes the SPA's own origin
+  plus `/r/{token}`.
+- **The reader's side** is `/r/:token`, a route outside `ProtectedRoute` —
+  beside `/auth/callback`, the only other public one — on its own page with no
+  `Layout`, no sidebar and no nav: there is nothing for a reader to navigate
+  to. It reads the public route with no bearer token, and a 404 is a plain
+  "This report link is no longer available."
+- **The SPA still prices nothing**: every hour and amount on the page is the
+  API's, `formatMoney` with the API's `minor_units` as everywhere else.
+
+### Left out of 1c
+
+Each addable later without migrating data:
+
+- **Notes** on an entry (decision 6), and tags, which 1a's decision keeps out.
+- **An expiry date** on a link, and a password on one.
+- **A label** the owner gives a link to tell two apart; the range does it today.
+- **A read count**, a last-read time, or any record of who opened a link.
+- **CSV or PDF** off the public page, and an invoice built from it.
+- **A link scoped to one project** rather than a client, and one spanning
+  several clients.
+- **A rolling range** — "the last 30 days", "this month" — which decision 2
+  rules out for now on purpose, since a moving figure is not something to
+  invoice against.
+- **Organisations**: a client that is an Acme organisation reads its hours
+  through membership instead, and the link stays for clients who are not
+  (phase 2).
+
+---
+
 ## How later phases build on it
 
 - **1b, billing budgets.** Built: see *Billing budgets (phase 1b)*. A
@@ -1099,12 +1299,13 @@ Each addable later without migrating data:
   `assemble_client` over the scope, so a total agrees with the invoices to
   the minor unit; unpriced hours are reported as unpriced, never as zero. A
   money budget never mixes currencies, because a client has one.
-- **1c, report links.** A link names one client and a range, under a new
-  public prefix, and is served by `assemble_client` with only that
-  client's inputs, through an allowlist of what a client may see; amounts
-  only when the link says so. It cannot structurally reach other clients,
-  personal projects, flow, biometrics or the coach, and since running
-  beats are left out it shows the same figures on every read.
+- **1c, report links.** Built: see *Report links (phase 1c)*. A link names
+  one client and a range, under a new public prefix, and is served by
+  `assemble_client` with only that client's inputs, through a response
+  schema written field by field; amounts only when the link says so. It
+  cannot structurally reach other clients, personal projects, flow,
+  biometrics or the coach, and since running beats are left out and the
+  range is frozen, it shows the same figures on every read.
 - **Phase 2, organisations.** An organisation-owned project gains an owner
   on `Project`; a contractor's `project_billing` stays in their own
   collection, keyed by their `user_id` and the organisation's project id,
