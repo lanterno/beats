@@ -19,7 +19,7 @@ If you bill freelance work, Beats also stores your clients — each one's name, 
 - **The hosting providers** that run the infrastructure (Google Cloud for the API, MongoDB Atlas / GCP for the database, Firebase Hosting for the web app). They see encrypted-at-transit traffic and storage they manage on their side. Standard cloud-provider terms apply.
 - **Your clients, only through a link you made.** A client is a record in your account, not an account of theirs, and sees nothing until you decide otherwise. You can create a **report link**: a URL for one client and a date range you fix, which anyone holding it opens without an account. It shows that client's projects by name, the hours on them in that range, and — only if you ticked the box when you made it — the rates and amounts; you can also leave out the entry-by-entry list and share the totals alone. It shows nothing else: not your other clients or what they pay, not your personal, day-job or side projects, not a project of theirs you have not billed, not your notes or tags, not your flow scores, biometrics, calendar or coach, and not whether a timer is running now. The range never moves, so the link shows the same figures every time it is opened. You can see every link a client has, and what each one shows, on the Clients page, and revoking one kills the URL immediately. Deleting a client revokes its links too. Anyone you send a link to can pass it on, so treat it as you would an emailed invoice. No paired device — a phone, the daemon, the wall clock — can read your clients, rates, billing, budgets or amounts: those routes refuse a device's token, and so does the report link's.
 - **An organisation you join, only its own projects' hours.** An organisation — an employer, a team — is a party that owns projects. If you accept its invitation you keep your one account and your one timeline, its projects appear on your list marked with its name, and tracking on them works as on any other. What the organisation sees is the hours on *its* projects: each entry's start, end, duration and note; your absences on them as date, type and whole or half day; and, where you keep a contract on one, its running balance. It sees nothing else — not your personal projects or that they exist, not your tags, flow scores, apps, repositories, idle time, biometrics, calendar, coach or insights, and not whether a timer is running now; its read takes finished entries only. If you connect a project you already tracked, it sees that project's hours only from a day you choose. You can see exactly what it holds about you, through the same read it uses, on the organisation's "What Acme can see" page. Leaving stops tracking to its projects and takes them off your list; the organisation keeps the hours already on them as its working-time record, and you keep a read-only copy of your own that you can download. No paired device can reach an organisation's routes. Nothing about an organisation is sent to the coach beyond the names of its projects, as any project's name is.
-- **No one else.** Beats does not sell, share, or syndicate your data. There are no advertising partners. There is no analytics provider with PII.
+- **No one else.** Beats does not sell, share, or syndicate your data. There are no advertising partners. No analytics provider sees anything from your account; the home page counts its visitors as [The website](#the-website) describes.
 
 ## Authentication
 
@@ -36,6 +36,21 @@ If you connect any of these, the relevant OAuth token is stored in the database 
 The phone apps do not read Apple Health or Health Connect today. If they ever do, it will be opt-in, and this page will say so before the release that adds it.
 
 You can disconnect any integration at any time. Disconnecting revokes the token on Beats' side; revoke at the provider too if you want belt-and-braces.
+
+## The website
+
+The home page at lifepete.com, the one you see signed out, counts its visitors with [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/about/). A script from Cloudflare reports to Cloudflare twice: when the page loads, and when you leave or hide the tab. It sends:
+- the page's address, and the address of the site that linked to it, each without any query or fragment;
+- your browser and its version, and your operating system and its version. On Chrome that is the exact version, which Chrome otherwise keeps out of what it tells websites;
+- how quickly the page loaded and settled: timings, the page's memory use and the network protocol;
+- for the slowest tap, click or keypress, and for the largest image or block of text and the biggest layout shift, which element of the page it was. That is a CSS selector, never what you typed. It also sends whether you used a keyboard or a pointer, and the address of the largest image;
+- a random id for that one page view, which ties the two reports together and is kept nowhere.
+
+The script sets no cookie and stores nothing on your device. Cloudflare sees your IP address, as it does for any request it serves, and works out your country from it. What I see is counts. I can break them down by page, referring site, country, browser, operating system and device type, but they show no individual visitor.
+
+Nothing else on the site loads the script: not the app once you are signed in, not a report link or an invitation, and not the page a sign-in provider sends you back to. It loads only when you come to the home page from outside the site. It does not load when the app itself sends you there, for example when you sign out. When you sign in from the home page, the page reloads into the app, so the script is gone before you get there. If your browser sends Do Not Track or Global Privacy Control, the script is not loaded at all. A LifePete you host yourself does not load it.
+
+Every page of the site, the home page included, takes its two typefaces from Google Fonts, which shows Google your IP address. The home page also asks GitHub's API for the project's star count and latest commits, which shows GitHub your IP address too.
 
 ## The phone apps
 
