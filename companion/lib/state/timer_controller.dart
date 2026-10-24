@@ -18,6 +18,11 @@ class Project {
   final bool archived;
   final double? weeklyGoal;
 
+  /// The organisation that owns the project, when it is not the person
+  /// tracking on it (docs/organisations.md): its name marks the project
+  /// wherever the kind is shown. Tracking on it is no different.
+  final String? organisationName;
+
   const Project({
     required this.id,
     required this.name,
@@ -25,6 +30,7 @@ class Project {
     required this.kind,
     this.archived = false,
     this.weeklyGoal,
+    this.organisationName,
   });
 
   factory Project.fromJson(Map<String, dynamic> j) => Project(
@@ -34,13 +40,20 @@ class Project {
         kind: j['kind'] as String? ?? 'side_project',
         archived: j['archived'] == true,
         weeklyGoal: (j['weekly_goal'] as num?)?.toDouble(),
+        organisationName: (j['organisation'] as Map?)?['name'] as String?,
       );
 
-  String get kindLabel => switch (kind) {
-        'day_job' => 'Day job',
-        'freelance' => 'Freelance',
-        _ => 'Side project',
-      };
+  /// "Day job", or on an organisation's project "Day job · Acme" — the one
+  /// line every list and the menu bar put under a project's name.
+  String get kindLabel {
+    final base = switch (kind) {
+      'day_job' => 'Day job',
+      'freelance' => 'Freelance',
+      _ => 'Side project',
+    };
+    final org = organisationName;
+    return org == null || org.isEmpty ? base : '$base · $org';
+  }
 }
 
 /// The session a stop just closed, kept for a minute so it can be undone.
