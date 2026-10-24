@@ -19,9 +19,8 @@
  *
  * Organisations (docs/organisations.md): on an organisation's project the
  * form's identity fields are the organisation's and locked (`lockedBy`), and
- * the foot says who owns it instead of offering Archive. On a personal
- * project, when the member belongs to an organisation, the foot offers to
- * connect it (`ConnectProjectDialog`).
+ * the foot says who owns it instead of offering Archive. Connecting a
+ * personal project is the rail's `OrganisationPanel`, not a step here.
  */
 
 import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
@@ -29,7 +28,6 @@ import { useId, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useGitHubStatus } from "@/entities/github";
-import { ConnectProjectDialog, useMemberships } from "@/entities/organisation";
 import {
 	contractFrameDefaults,
 	extractCategories,
@@ -47,7 +45,6 @@ import {
 	useUpdateProject,
 } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { todayIso } from "@/shared/lib";
 import { Button, Dialog } from "@/shared/ui";
 import { LABEL, LINKISH } from "./styles";
 
@@ -80,12 +77,9 @@ export function ProjectSettingsDrawer({
 	const { data: holidayRegions } = useHolidayRegions();
 	const [submitError, setSubmitError] = useState<unknown>(null);
 	const [confirmingArchive, setConfirmingArchive] = useState(false);
-	const [connecting, setConnecting] = useState(false);
 	const archiveHeadingId = useId();
 	const organisationHeadingId = useId();
 	const organisation = project.organisation;
-	const { data: memberships } = useMemberships();
-	const activeMemberships = (memberships ?? []).filter((m) => m.leftAt === undefined);
 	// "Change contract…" closes the drawer and lands on the register.
 	// The hand-over waits for the dialog's own focus return, which would
 	// otherwise put focus back on the settings button a moment later.
@@ -149,7 +143,6 @@ export function ProjectSettingsDrawer({
 	const handleClose = () => {
 		setSubmitError(null);
 		setConfirmingArchive(false);
-		setConnecting(false);
 		onClose();
 	};
 
@@ -316,39 +309,6 @@ export function ProjectSettingsDrawer({
 							</>
 						)}
 					</section>
-
-					{activeMemberships.length > 0 && (
-						<section
-							aria-labelledby={organisationHeadingId}
-							className="mt-6 pt-4 border-t border-border"
-						>
-							<h3 id={organisationHeadingId} className={LABEL}>
-								Organisation
-							</h3>
-							<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
-								Connect {project.name} to an organisation you're a member of. Its hours become part
-								of that organisation's working-time record from a day you choose.
-							</p>
-							<Button
-								type="button"
-								variant="secondary"
-								size="sm"
-								className="mt-3"
-								onClick={() => setConnecting(true)}
-							>
-								Connect to an organisation…
-							</Button>
-							{connecting && (
-								<ConnectProjectDialog
-									project={{ id: project.id, name: project.name }}
-									memberships={activeMemberships}
-									todayIso={todayIso()}
-									onConnected={handleClose}
-									onClose={() => setConnecting(false)}
-								/>
-							)}
-						</section>
-					)}
 				</>
 			)}
 		</Dialog>

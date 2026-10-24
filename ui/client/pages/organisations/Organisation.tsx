@@ -1,15 +1,15 @@
 /**
  * Organisation — `/organisations/:id`: one organisation and the caller's
- * standing in it (docs/organisations-roadmap.md, stage 2). For everyone:
- * what the organisation can see, in plain sentences with a link to the
- * data itself, and the way out. For admins and owners: the members, the
- * invites, the join requests, the projects with who is on each, and the
- * settings — each a section in the settings page's voice. The API resolves
+ * standing in it (docs/organisations.md). For admins and owners, first: the
+ * members, the invites, the join requests, the projects with who is on
+ * each, and the settings — each a section in the settings page's voice.
+ * For everyone, after: what the organisation can see, in plain sentences
+ * with a link to the data itself, and the way out. The API resolves
  * the caller's membership first on every route here, so a 404 is "not a
  * member", and the archive is what remains of one that ended.
  */
 
-import { Building2, Eye, LogOut, Settings } from "lucide-react";
+import { Eye, LogOut, Settings } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import type { Membership, OrganisationInput } from "@/entities/organisation";
@@ -118,6 +118,16 @@ export default function Organisation() {
 				)}
 			</header>
 
+			{admin && (
+				<>
+					<MembersSection organisationId={id} />
+					<InvitesSection organisationId={id} />
+					<JoinRequestsSection organisationId={id} />
+					<ProjectsSection organisationId={id} />
+					<SettingsSection membership={data} />
+				</>
+			)}
+
 			<section aria-label={`What ${org.name} can see`} className="mb-8">
 				<h2 className={HEADING}>
 					<Eye className={HEADING_ICON} />
@@ -140,16 +150,6 @@ export default function Organisation() {
 				</Panel>
 			</section>
 
-			{admin && (
-				<>
-					<MembersSection organisationId={id} />
-					<InvitesSection organisationId={id} />
-					<JoinRequestsSection organisationId={id} />
-					<ProjectsSection organisationId={id} />
-					<SettingsSection membership={data} />
-				</>
-			)}
-
 			<section aria-label="Leave" className="mb-8">
 				<h2 className={HEADING}>
 					<LogOut className={HEADING_ICON} />
@@ -168,7 +168,7 @@ export default function Organisation() {
 						onClick={() => void leaveNow()}
 						disabled={leave.isPending}
 					>
-						<Building2 aria-hidden="true" />
+						<LogOut aria-hidden="true" />
 						Leave {org.name}
 					</Button>
 				</Panel>

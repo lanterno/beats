@@ -78,6 +78,13 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 							<button
 								type="button"
 								onClick={() => navigate(`/project/${project.id}`)}
+								// An organisation's project is named with its organisation on
+								// hover; a tile in the row cost the name itself the width.
+								title={
+									project.organisation
+										? `${project.name} · ${project.organisation.name}`
+										: undefined
+								}
 								className="flex items-center gap-2 flex-1 min-w-0 text-left text-[13px] pl-2.5 pr-1 py-1.5 rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								{/* A quiet project dims its dot, not its row: the name is already the muted ink. */}

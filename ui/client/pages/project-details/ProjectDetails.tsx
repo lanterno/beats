@@ -39,6 +39,7 @@ import { BillingPanel } from "./BillingPanel";
 import { ContractRegister } from "./ContractRegister";
 import { nextWeekdayAfter } from "./dates";
 import { HolidaysDialog } from "./HolidaysDialog";
+import { OrganisationPanel } from "./OrganisationPanel";
 import { ProjectHeader } from "./ProjectHeader";
 import { ProjectSettingsDrawer } from "./ProjectSettingsDrawer";
 import { QuietFacts } from "./QuietFacts";
@@ -286,6 +287,7 @@ export default function ProjectDetails() {
 								error={billingsQuery.error}
 							/>
 						)}
+						<OrganisationPanel project={project} todayIso={today} billed={billing !== undefined} />
 						<QuietFacts project={project} sessions={sessionList} todayIso={today} />
 					</aside>
 				</div>

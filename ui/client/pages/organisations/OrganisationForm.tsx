@@ -12,10 +12,11 @@
 import { useId, useState } from "react";
 import type { Organisation, OrganisationInput, WeekStart } from "@/entities/organisation";
 import { WEEK_START_LABELS } from "@/entities/organisation";
+import { useHolidayRegions } from "@/entities/project";
 import { ApiError, apiFieldErrors, describeError } from "@/shared/api";
 import { browserTimeZone } from "@/shared/lib";
 import { Button } from "@/shared/ui";
-import { ERROR, FIELD, LABEL } from "./styles";
+import { ERROR, FIELD, LABEL, LEAD } from "./styles";
 
 export interface OrganisationFormProps {
 	/** The organisation to edit; a new one without it. */
@@ -86,6 +87,13 @@ export function OrganisationForm({
 	const [timezone, setTimezone] = useState(initial?.timezone ?? browserTimeZone());
 	const [errors, setErrors] = useState<FormErrors>({});
 	const [busy, setBusy] = useState(false);
+	// The same list the contract form picks from; until it arrives, the
+	// stored code stays selectable so a re-render cannot blank it.
+	const { data: regions } = useHolidayRegions();
+	const countries =
+		regions ??
+		(holidayCountry ? [{ code: holidayCountry, name: holidayCountry, subdivisions: [] }] : []);
+	const subdivisions = countries.find((c) => c.code === holidayCountry)?.subdivisions ?? [];
 
 	const save = async () => {
 		if (!name.trim()) {
@@ -200,28 +208,42 @@ export function OrganisationForm({
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 				{field("holidayCountry", "Holiday region", (props) => (
-					<input
+					<select
 						{...props}
-						type="text"
 						value={holidayCountry}
-						onChange={(e) => setHolidayCountry(e.target.value)}
-						placeholder="Country code, e.g. DE · optional"
-						maxLength={2}
-						autoCapitalize="characters"
-					/>
+						onChange={(e) => {
+							setHolidayCountry(e.target.value);
+							setHolidaySubdivision("");
+						}}
+					>
+						<option value="">No region</option>
+						{countries.map((c) => (
+							<option key={c.code} value={c.code}>
+								{c.name}
+							</option>
+						))}
+					</select>
 				))}
-				{field("holidaySubdivision", "Subdivision", (props) => (
-					<input
-						{...props}
-						type="text"
-						value={holidaySubdivision}
-						onChange={(e) => setHolidaySubdivision(e.target.value)}
-						placeholder="e.g. BE · optional"
-						maxLength={6}
-						autoCapitalize="characters"
-					/>
-				))}
+				{subdivisions.length > 0 &&
+					field("holidaySubdivision", "Subdivision", (props) => (
+						<select
+							{...props}
+							value={holidaySubdivision}
+							onChange={(e) => setHolidaySubdivision(e.target.value)}
+						>
+							<option value="">Whole country</option>
+							{subdivisions.map((sd) => (
+								<option key={sd.code} value={sd.code}>
+									{sd.name}
+								</option>
+							))}
+						</select>
+					))}
 			</div>
+			<p className={`${LEAD} -mt-1`}>
+				The public holidays a contract under {name.trim() || "this organisation"} starts from; each
+				contract can still name its own.
+			</p>
 
 			{errors.general && (
 				<p role="alert" className="text-sm text-destructive-ink">
