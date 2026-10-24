@@ -295,20 +295,19 @@ how, and the notes under them are kept as the reasoning.
 
 Rule 3 lists exactly what crosses, and the note is the only free-text field in
 it — the only one a person might write something personal into without
-realising who reads it. If the answer is yes, the visible marker is not a
-nicety: it is what makes the rule honest, and it has to appear on *every*
-surface that writes a note — the SPA, the companion's "How did it go?" sheet,
-the VS Code extension, and anything the daemon writes. That is real work in
-four places and it has to land with the feature.
+realising who reads it. Settled in stage 2: the note crosses, and since no
+surface writes a note today (the companion's post-stop sheet went with the
+last free-text inputs, the web app takes none, the API ignores one on edit),
+the marker sits where a note is *shown* on an organisation's project. Any
+note input brought back ships the marker on the input with it.
 
 Tags are the easier half: they are derived from the daemon's flow windows, which
 makes them a signal about *how* someone worked rather than *what* they worked
-on — much closer to the flow scores rule 3 puts firmly on the far side.
+on — much closer to the flow scores rule 3 puts firmly on the far side. They do
+not cross.
 
-The same question exists one step smaller for a freelancer's client. Stage 1c
-shipped without notes precisely so the two could be decided together instead of
-drifting apart; `docs/billing.md` records it as open there. Decide both in one
-sitting — the marker work is shared.
+The same question existed one step smaller for a freelancer's client; a report
+link still shows no notes (`docs/billing.md`, 1c decision 6).
 
 ### Live presence
 

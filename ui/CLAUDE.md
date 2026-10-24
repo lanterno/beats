@@ -207,11 +207,14 @@ invitations, my organisations, the ones I left), `/organisations/:id` (the organ
 assignments and settings for admins), `/organisations/:id/record` and `/visible` (one
 component over two hooks: the organisation's read, and the same read narrowed to me),
 `/organisations/:id/archive` (my own rows that are its record, with a CSV) and
-`/organisations/join/:token`. On the project side: the index, the picker and the sidebar
-mark an organisation's project; the activity feed offers *Everything · Personal · Acme*
-(`?owner=`); the project page's header names the organisation and the settings drawer
-disables the organisation's fields and offers *Connect to an organisation…* on a
-personal one; a note shown on an organisation's project says "Acme can read this note".
+`/organisations/join/:token`. On the project side: the index and the picker mark an
+organisation's project (the sidebar names it on hover, since a tile there cost the name
+its width); the activity feed offers *Everything · Personal · Acme* (`?owner=`); the
+project page's header names the organisation, its rail's `OrganisationPanel` says whose
+the project is and links to what they see, or on a personal project offers *Connect to
+Acme…* (`ConnectProjectDialog`, on the page rather than inside the settings drawer), and
+the settings drawer disables the organisation's fields; a note shown on an
+organisation's project says "Acme can read this note".
 Every write that changes what is on the member's own timeline — joining, leaving, an
 assignment, a connect — invalidates the project and session roots too.
 
