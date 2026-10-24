@@ -58,6 +58,12 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.billing_budgets.create_index(
         [("user_id", 1), ("scope", 1), ("scope_id", 1)], unique=True
     )
+    # A report link is found by its token alone: the public read has no
+    # session, so this is the one index that is not led by user_id. Unique,
+    # because the token is the whole of a link's identity to its reader.
+    await db.report_links.create_index("token", unique=True)
+    # The owner's list, per client.
+    await db.report_links.create_index([("user_id", 1), ("client_id", 1)])
 
 
 class Database:

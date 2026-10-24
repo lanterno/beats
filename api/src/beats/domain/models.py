@@ -909,6 +909,69 @@ class BillableOverride(BaseModel):
     billable: bool = Field(strict=True)
 
 
+# A report link backs an invoice period, and the assembler walks its range a
+# day at a time, so a link cannot span more than a year and a day.
+REPORT_RANGE_MAX_DAYS = 366
+
+
+class ReportLinkFields(BaseModel):
+    """A report link as a write sends it — the body of `POST
+    /api/clients/{id}/links` — so its validators are the 422. Every key is
+    required: a flag an older client leaves out must be refused, not read as
+    off."""
+
+    first: date_type
+    last: date_type
+    # IANA. That the zone is one `zoneinfo` knows is checked where a link is
+    # written, as a client's currency is: this model is re-validated on every
+    # read, and a zone leaving the tz database must not make a stored link
+    # unreadable.
+    tz: str = Field(min_length=1)
+    # Strict, as `BillingTerm.billable`: lax mode reads 1 and "true" as True,
+    # and showing a client money by accident is the one mistake to rule out.
+    show_amounts: bool = Field(strict=True)
+    show_entries: bool = Field(strict=True)
+
+    @field_validator("last")
+    @classmethod
+    def range_runs_forward_and_is_bounded(cls, last: date_type, info: ValidationInfo) -> date_type:
+        # A field validator rather than a model one, so the 422 names `last`.
+        # `first` is declared first and so is in `info.data` — unless it
+        # failed, and then its own error is the answer.
+        first = info.data.get("first")
+        if first is None:
+            return last
+        if last < first:
+            msg = "last is before first"
+            raise ValueError(msg)
+        if (last - first).days + 1 > REPORT_RANGE_MAX_DAYS:
+            msg = f"a report link covers at most {REPORT_RANGE_MAX_DAYS} days"
+            raise ValueError(msg)
+        return last
+
+
+class ReportLink(ReportLinkFields, TzNormalizedModel):
+    """A link a client opens with no login to read its own hours for a fixed
+    range (docs/billing.md, phase 1c).
+
+    It holds no figures: every number is worked out on each read by
+    `assemble_client`, from this client's inputs only. The range and `tz` are
+    frozen here so two reads agree — the days are bucketed in the owner's
+    zone, not the reader's, because those are the days the owner invoiced on.
+
+    `token` is stored as it is read, not hashed: whoever can read this
+    collection can read the hours it serves out of the same database, and the
+    owner has to be able to open the link they sent a client last month.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    client_id: str
+    token: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Beat(TzNormalizedModel):
     """A time tracking entry (heartbeat) for a project.
 

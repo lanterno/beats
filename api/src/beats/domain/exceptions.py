@@ -261,6 +261,37 @@ class ClientNotFound(DomainException):
             super().__init__()
 
 
+class UnknownTimezone(DomainException):
+    """Raised when a write names an IANA zone `zoneinfo` does not know.
+
+    Same status and code as the `tz` query parameter's refusal in
+    `api/dependencies.py`, so a client sees one answer for one mistake
+    wherever the zone came from.
+    """
+
+    status_code = 400
+    message = "Unknown timezone"
+    code = "INVALID_TIMEZONE"
+
+    def __init__(self, tz: str):
+        super().__init__(f"Unknown timezone: {tz}")
+
+
+class ReportNotFound(DomainException):
+    """Raised for every way a report link fails to resolve: no such token, a
+    mistyped one, a revoked one, or one whose client has since been deleted.
+
+    One answer for all of them, with no id echoed back and no code naming
+    which: the reader has no session, and must not learn from the difference
+    between "never existed" and "revoked yesterday" (docs/billing.md, 1c
+    decision 9).
+    """
+
+    status_code = 404
+    message = "This report link is no longer available"
+    code = "REPORT_NOT_FOUND"
+
+
 class UnknownCurrency(DomainException):
     """Raised when a client names a currency `domain/currencies.py` does not
     know: the table is the one source of a currency's minor units."""

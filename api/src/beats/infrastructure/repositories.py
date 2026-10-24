@@ -14,7 +14,7 @@ hold exactly one document per user.
 import builtins
 from collections.abc import Collection, Iterable
 from datetime import UTC, date, datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, NamedTuple, Protocol
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -47,6 +47,7 @@ from beats.domain.models import (
     PendingSuggestion,
     Project,
     ProjectBilling,
+    ReportLink,
     SignalSummary,
     SSOFlow,
     User,
@@ -1140,3 +1141,82 @@ class MongoBillableOverrideRepository(MongoStore[BillableOverride], BillableOver
 
     async def delete(self, beat_id: str) -> bool:
         return await self._delete_one({"beat_id": beat_id})
+
+
+class ReportLinkRepository(Protocol):
+    async def list_for_client(self, client_id: str) -> list[ReportLink]: ...
+    async def create(self, link: ReportLink) -> ReportLink: ...
+    async def delete(self, client_id: str, link_id: str) -> bool: ...
+    async def delete_for_client(self, client_id: str) -> int: ...
+
+
+class MongoReportLinkRepository(MongoStore[ReportLink], ReportLinkRepository):
+    """The owner's side of report links: list, mint and revoke. User-scoped
+    like every other billing collection. The public read goes through
+    `MongoReportLinkLookup`, which is not."""
+
+    model = ReportLink
+
+    async def list_for_client(self, client_id: str) -> list[ReportLink]:
+        return await self._find_many({"client_id": client_id}, sort=("created_at", -1))
+
+    async def create(self, link: ReportLink) -> ReportLink:
+        return await self._insert(link)
+
+    async def delete(self, client_id: str, link_id: str) -> bool:
+        # Keyed on the client as well as the id, so a link cannot be revoked
+        # through the wrong client's path. A malformed id is "no such link",
+        # as an unknown one is: the route answers 204 either way, since with
+        # no link there is nothing left to clear.
+        try:
+            oid = ObjectId(link_id)
+        except InvalidId:
+            return False
+        return await self._delete_one({"_id": oid, "client_id": client_id})
+
+    async def delete_for_client(self, client_id: str) -> int:
+        """Every link on one client, for when the client is deleted: a link
+        whose client has gone would serve nothing, and must not linger as a
+        live URL."""
+        result = await self.collection.delete_many(self._q({"client_id": client_id}))
+        return result.deleted_count
+
+
+class OwnedReportLink(NamedTuple):
+    """A resolved token: the link, and the account whose hours it serves.
+
+    The owner is carried beside the link rather than on it because
+    `user_id` is a column of every document and a field of no model — the
+    scoping lives in `MongoStore`, not in the domain.
+    """
+
+    link: ReportLink
+    user_id: str
+
+
+class ReportLinkLookup(Protocol):
+    async def find_by_token(self, token: str) -> OwnedReportLink | None: ...
+
+
+class MongoReportLinkLookup(ReportLinkLookup):
+    """Not user-scoped: the public report endpoint has no session, and the
+    owner is not known until the token resolves. This is the only read in the
+    system whose `user_id` comes from a stored record rather than a token —
+    see the call site in `api/routers/reports.py`.
+    """
+
+    def __init__(self, collection: AsyncCollection):
+        self.collection = collection
+
+    async def find_by_token(self, token: str) -> OwnedReportLink | None:
+        # An exact match on the unique-indexed token. No regex, no prefix: the
+        # token is the whole secret and nothing about it is guessed at here.
+        doc = await self.collection.find_one({"token": token})
+        if not doc:
+            return None
+        owner = doc.get("user_id")
+        if not isinstance(owner, str):
+            # A link with no owner can serve nothing, and guessing one would
+            # be the worst possible guess. Treat it as no link at all.
+            return None
+        return OwnedReportLink(ReportLink(**serialize_from_document(doc)), owner)

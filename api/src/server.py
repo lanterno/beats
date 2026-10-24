@@ -38,6 +38,7 @@ from beats.api.routers.meta import router as meta_router
 from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
+from beats.api.routers.reports import router as reports_router
 from beats.api.routers.signals import router as signals_router
 from beats.api.routers.sso import router as sso_router
 from beats.api.routers.timer import router as timer_router
@@ -71,8 +72,18 @@ try:
 except PackageNotFoundError:  # running from a source tree without an install
     API_VERSION = "0.0.0+unknown"
 
-# Paths that never require authentication
-PUBLIC_PREFIXES = ("/api/auth", "/health", "/api/device/pair/exchange")
+# Paths that never require authentication.
+#
+# /api/reports is the only one that serves a user's data. A report link's
+# token is the whole of its authorisation, and the route serves exactly one
+# shape, assembled from one client's inputs (docs/billing.md, phase 1c).
+# Nothing else belongs here on those terms.
+PUBLIC_PREFIXES = (
+    "/api/auth",
+    "/health",
+    "/api/device/pair/exchange",
+    "/api/reports",
+)
 
 # Paths that device tokens (daemon) are allowed to access.
 #
@@ -304,6 +315,7 @@ app.include_router(adjustments_router)
 app.include_router(meta_router)
 app.include_router(clients_router)
 app.include_router(billing_router)
+app.include_router(reports_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
 app.include_router(analytics_router)

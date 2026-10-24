@@ -17,15 +17,18 @@ override — editing a past entry is itself the consent. Nor is a billing
 budget: it changes no billable figure, and only its current period is read.
 """
 
+import secrets
 from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import NamedTuple
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from beats.domain.billing import (
     BillingPeriod,
+    ClientBilling,
     assemble_billing,
+    assemble_client,
     link_change,
     marked_change,
     month_range,
@@ -44,6 +47,7 @@ from beats.domain.exceptions import (
     BillingBudgetCurrencyMismatch,
     BillingBudgetNeedsBilling,
     ClientHasProjects,
+    ClientNotFound,
     CurrencyInUse,
     CurrencyMismatch,
     DomainException,
@@ -51,7 +55,9 @@ from beats.domain.exceptions import (
     ProjectHasBilling,
     ProjectHasBillingBudget,
     ProjectNotBilled,
+    ReportNotFound,
     RetroactiveChange,
+    UnknownTimezone,
 )
 from beats.domain.models import (
     Beat,
@@ -66,6 +72,8 @@ from beats.domain.models import (
     Project,
     ProjectBilling,
     ProjectKind,
+    ReportLink,
+    ReportLinkFields,
 )
 from beats.domain.ports import (
     BillableOverrideStore,
@@ -74,6 +82,7 @@ from beats.domain.ports import (
     BillingProjectReader,
     ClientStore,
     ProjectBillingStore,
+    ReportLinkStore,
 )
 
 
@@ -185,6 +194,7 @@ class BillingService:
         projects: BillingProjectReader,
         beats: BillingBeatReader,
         budgets: BillingBudgetStore,
+        links: ReportLinkStore,
         now: Callable[[ZoneInfo], datetime] = datetime.now,
     ):
         self.clients = clients
@@ -193,6 +203,7 @@ class BillingService:
         self.projects = projects
         self.beats = beats
         self.budgets = budgets
+        self.links = links
         self._now = now
 
     def _month_start(self, tz: ZoneInfo) -> date:
@@ -260,14 +271,16 @@ class BillingService:
 
     async def delete_client(self, client_id: str) -> None:
         """Delete a client no project is billed to; while one is, 409
-        CLIENT_HAS_PROJECTS — archive it instead. Its billing budget goes
-        with it: with nothing billed it counts nothing. The budget is deleted
-        first, so a failure between the two leaves a client without its
-        budget, never a budget without its client."""
+        CLIENT_HAS_PROJECTS — archive it instead. Its billing budget and its
+        report links go with it: with nothing billed the budget counts
+        nothing, and a link whose client has gone must not linger as a live
+        URL. Both are deleted first, so a failure between leaves a client
+        without them, never either without its client."""
         await self.clients.get_by_id(client_id)
         if await self.billings.list_by_client(client_id):
             raise ClientHasProjects()
         await self.budgets.delete(BillingBudgetScope.CLIENT, client_id)
+        await self.links.delete_for_client(client_id)
         await self.clients.delete(client_id)
 
     async def _record(self, client: Client) -> ClientRecord:
@@ -484,6 +497,108 @@ class BillingService:
         after that."""
         first, last = month_range(month, self._now(tz).date())
         return await self.period(first, last, tz)
+
+    async def client_period(
+        self, client: Client, first: date, last: date, tz: ZoneInfo
+    ) -> ClientBilling:
+        """One client's figures for `first` through `last` in `tz`, from that
+        client's inputs alone (`assemble_client`).
+
+        What a report link is served by, so what it reads is the whole of its
+        privacy story. It never calls `period`, which assembles every client
+        and would leave the public route filtering a list it should never
+        have been handed: a reader of one client cannot reach another's
+        because the query for another's is never made. The projects are
+        narrowed to this client's billed ones before the assembler sees them,
+        so no other project's name is in reach either.
+
+        The client is passed in rather than fetched by id: the public caller
+        has already resolved it, and a service method that took an id could
+        be called with one the reader never named.
+        """
+        billings = await self.billings.list_by_client(client.id or "")
+        wanted = {billing.project_id for billing in billings}
+        projects = {
+            project.id: project
+            for project in [
+                *await self.projects.list(archived=False),
+                *await self.projects.list(archived=True),
+            ]
+            if project.id is not None and project.id in wanted
+        }
+        # A billing whose project has gone has no name to report under.
+        billings = [billing for billing in billings if billing.project_id in projects]
+        start, end = utc_range(first, last, tz)
+        beats = (
+            await self.beats.list_started_between(sorted(projects), start, end) if projects else []
+        )
+        overrides = await self.overrides.list_for(beat.id for beat in beats if beat.id is not None)
+        return assemble_client(
+            client,
+            billings,
+            projects,
+            beats,
+            {override.beat_id: override.billable for override in overrides},
+            first,
+            last,
+            tz,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Report links
+    # ------------------------------------------------------------------ #
+
+    async def report_period(self, link: ReportLink) -> ClientBilling:
+        """What a resolved report link serves: its client's figures over its
+        frozen range, in its frozen zone.
+
+        The link's own client is the only one fetched, and a client deleted
+        since the link was minted is `ReportNotFound` — the same answer an
+        unknown token gets, because the reader has no session and must not
+        learn from the difference.
+        """
+        try:
+            client = await self.clients.get_by_id(link.client_id)
+        except ClientNotFound:
+            raise ReportNotFound() from None
+        return await self.client_period(client, link.first, link.last, ZoneInfo(link.tz))
+
+    async def list_report_links(self, client_id: str) -> list[ReportLink]:
+        """One client's links, newest first. 404 for a client that is not the
+        caller's, a malformed id included."""
+        await self.clients.get_by_id(client_id)
+        return await self.links.list_for_client(client_id)
+
+    async def create_report_link(self, client_id: str, fields: ReportLinkFields) -> ReportLink:
+        """Mint a link over a fixed range for one of the caller's clients.
+
+        The range and its timezone are frozen here and never read again from
+        the request: the days are bucketed in the owner's zone, because those
+        are the days the owner invoices on. The zone is checked now rather
+        than on the model, as a client's currency is — a zone leaving the tz
+        database must not make a stored link unreadable.
+        """
+        await self.clients.get_by_id(client_id)
+        try:
+            ZoneInfo(fields.tz)
+        except ZoneInfoNotFoundError, ValueError:
+            raise UnknownTimezone(fields.tz) from None
+        return await self.links.create(
+            ReportLink(
+                **fields.model_dump(),
+                client_id=client_id,
+                # 32 bytes, URL-safe. The whole secret of the link, stored as
+                # it is read (docs/billing.md, 1c decision 1).
+                token=secrets.token_urlsafe(32),
+            )
+        )
+
+    async def delete_report_link(self, client_id: str, link_id: str) -> None:
+        """Revoke a link: the record goes, and the URL is dead from the next
+        read. 404 only for a client that is not the caller's — with no such
+        link there is nothing left to clear."""
+        await self.clients.get_by_id(client_id)
+        await self.links.delete(client_id, link_id)
 
     # ------------------------------------------------------------------ #
     # Billing budgets

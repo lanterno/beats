@@ -50,6 +50,8 @@ from beats.infrastructure.repositories import (
     MongoPendingSuggestionRepository,
     MongoProjectBillingRepository,
     MongoProjectRepository,
+    MongoReportLinkLookup,
+    MongoReportLinkRepository,
     MongoSignalSummaryRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
@@ -59,6 +61,8 @@ from beats.infrastructure.repositories import (
     PendingSuggestionRepository,
     ProjectBillingRepository,
     ProjectRepository,
+    ReportLinkLookup,
+    ReportLinkRepository,
     SignalSummaryRepository,
     WebhookRepository,
     WeeklyDigestRepository,
@@ -206,6 +210,15 @@ get_billable_override_repository = _user_scoped(
 get_billing_budget_repository = _user_scoped(MongoBillingBudgetRepository, "billing_budgets")
 
 
+get_report_link_repository = _user_scoped(MongoReportLinkRepository, "report_links")
+
+
+# Resolving a report link's token is the one read that crosses users: the
+# public report endpoint has no session, so the owner is not known until the
+# token resolves (`_unscoped`, as pairing codes and SSO flows are).
+get_report_link_lookup = _unscoped(MongoReportLinkLookup, "report_links")
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
@@ -271,10 +284,11 @@ def get_billing_service(
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     billing_budget_repo: Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)],
+    report_link_repo: Annotated[ReportLinkRepository, Depends(get_report_link_repository)],
 ) -> BillingService:
     """Get the billing service with injected repositories. It is the only
-    service given the billing budgets: no device route and no coach port
-    reaches them."""
+    service given the billing budgets and the report links: no device route
+    and no coach port reaches them."""
     return BillingService(
         clients=client_repo,
         billings=billing_repo,
@@ -282,6 +296,30 @@ def get_billing_service(
         projects=project_repo,
         beats=beat_repo,
         budgets=billing_budget_repo,
+        links=report_link_repo,
+    )
+
+
+def billing_service_for(user_id: str) -> BillingService:
+    """A `BillingService` for an account named by something other than a
+    session token.
+
+    The one caller is the public report route. A report link carries the
+    account whose hours it serves, so that account's repositories are built
+    here rather than by `Depends`, which has no user to resolve. Every one of
+    them is the same user-scoped repository a signed-in route is given, bound
+    to the owner the token resolved to — so the public read is as scoped as
+    any other, and the only question is whether the token was right.
+    """
+    db = Database.get_db()
+    return BillingService(
+        clients=MongoClientRepository(db.clients, user_id=user_id),
+        billings=MongoProjectBillingRepository(db.project_billing, user_id=user_id),
+        overrides=MongoBillableOverrideRepository(db.billable_overrides, user_id=user_id),
+        projects=MongoProjectRepository(db.projects, user_id=user_id),
+        beats=MongoBeatRepository(db.timeLogs, user_id=user_id),
+        budgets=MongoBillingBudgetRepository(db.billing_budgets, user_id=user_id),
+        links=MongoReportLinkRepository(db.report_links, user_id=user_id),
     )
 
 
@@ -348,6 +386,9 @@ BillableOverrideRepoDep = Annotated[
 # For the backup's export alone; every other reader goes through BillingService.
 BillingBudgetRepoDep = Annotated[BillingBudgetRepository, Depends(get_billing_budget_repository)]
 BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
+# For the public report route alone, which resolves a token to its owner
+# before it can build anything user-scoped.
+ReportLinkLookupDep = Annotated[ReportLinkLookup, Depends(get_report_link_lookup)]
 AnalyticsServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 WebhookRepoDep = Annotated[WebhookRepository, Depends(get_webhook_repository)]
 WeeklyDigestRepoDep = Annotated[WeeklyDigestRepository, Depends(get_weekly_digest_repository)]

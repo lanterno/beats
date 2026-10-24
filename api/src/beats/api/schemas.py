@@ -23,6 +23,7 @@ from beats.domain.models import (
     ProjectBreakdownEntry,
     ProjectKind,
     RateTerm,
+    ReportLinkFields,
 )
 
 
@@ -382,6 +383,89 @@ class BillingMonthResponse(BaseModel):
     totals: list[CurrencyTotalResponse]
     clients: list[ClientBillingResponse]
     unattached: list[UnattachedHoursResponse]
+
+
+class ReportLinkRequest(ReportLinkFields):
+    """Request body for minting a report link: the range, the timezone its
+    days are bucketed in, and the two flags, every key required. The range
+    runs forward and covers at most 366 days."""
+
+
+class ReportLinkResponse(BaseModel):
+    """A report link as its owner sees it, token included: the owner has to
+    be able to re-copy the link they sent a client last month."""
+
+    id: str
+    client_id: str
+    token: str
+    first: date_type
+    last: date_type
+    tz: str
+    show_amounts: bool
+    show_entries: bool
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------- #
+# The public report (phase 1c)
+#
+# These three are what a reader with no session sees, and they are written
+# out field by field on purpose: they do not inherit from
+# `ClientBillingResponse`, `BillingLineResponse` or `BillingEntryResponse`,
+# so a field added to the private month report later cannot reach a client's
+# eyes by inheritance. Deliberately absent, though the assembler has them:
+# `client_id`, `project_id` and `beat_id` (a client has no use for the
+# owner's internal ids), `source` and `overridden` (how a figure was arrived
+# at), `non_billable_hours` (hours the client is not billed for) and
+# `running` (a report says nothing about now). See docs/billing.md, 1c
+# decisions 4, 5 and 7.
+# ---------------------------------------------------------------------- #
+
+
+class ReportLineResponse(BaseModel):
+    """A run of consecutive days of one project at one rate. `rate_minor` and
+    `amount_minor` are null on an unpriced run, and on every line when the
+    link does not show amounts."""
+
+    project_name: str
+    first: date_type
+    last: date_type
+    hours: float
+    rate_minor: int | None
+    amount_minor: int | None
+
+
+class ReportEntryResponse(BaseModel):
+    """One billable entry: the local day it started on, when it ran, and how
+    long. Empty on a link that does not show entries."""
+
+    day: date_type
+    start: datetime
+    end: datetime
+    hours: float
+
+
+class ReportResponse(BaseModel):
+    """What `GET /api/reports/{token}` answers: one client's billable work
+    over the link's frozen range.
+
+    With `show_amounts` false, `currency`, `minor_units`, `unpriced_hours`,
+    `amount_minor` and every line's rate and amount are null, and the hours
+    still add up — a proof of time with the price left out.
+    """
+
+    client_name: str
+    first: date_type
+    last: date_type
+    show_amounts: bool
+    show_entries: bool
+    currency: str | None
+    minor_units: int | None
+    billable_hours: float
+    unpriced_hours: float | None
+    amount_minor: int | None
+    lines: list[ReportLineResponse]
+    entries: list[ReportEntryResponse]
 
 
 class BillingBudgetRequest(BillingBudgetFields):

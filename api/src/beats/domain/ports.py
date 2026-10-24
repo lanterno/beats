@@ -32,6 +32,7 @@ from beats.domain.models import (
     FlowWindow,
     Project,
     ProjectBilling,
+    ReportLink,
 )
 
 
@@ -263,3 +264,19 @@ class BillableOverrideStore(Protocol):
     async def list_for(self, beat_ids: Iterable[str]) -> list[BillableOverride]: ...
     async def upsert(self, override: BillableOverride) -> BillableOverride: ...
     async def delete(self, beat_id: str) -> bool: ...
+
+
+class ReportLinkStore(Protocol):
+    """Report links, the owner's side only: list, mint and revoke, each
+    keyed on the client the link is for.
+
+    Resolving a token is deliberately absent. That read crosses users — the
+    reader has no session — so it lives on its own unscoped lookup in the
+    infrastructure layer, and the route hands the resolved link's owner in.
+    A service that mints links cannot use one.
+    """
+
+    async def list_for_client(self, client_id: str) -> list[ReportLink]: ...
+    async def create(self, link: ReportLink) -> ReportLink: ...
+    async def delete(self, client_id: str, link_id: str) -> bool: ...
+    async def delete_for_client(self, client_id: str) -> int: ...
