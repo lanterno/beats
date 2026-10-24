@@ -523,8 +523,8 @@ async def read_record(
     entries started in `month` in `tz` (start, end, hours, note), the
     absences (date, type, half day), the all-time totals, and where the
     member has a contract its balance as of today. Nothing else, and nothing
-    about now. Admins."""
-    return _record(await service.record(organisation_id, user_id, month, tz))
+    about now. Owners, admins and viewers whole; a manager their teams'."""
+    return _record(await service.scoped_record(organisation_id, user_id, month, tz))
 
 
 @router.get("/{organisation_id}/visible", response_model=RecordResponse)

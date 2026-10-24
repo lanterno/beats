@@ -30,6 +30,7 @@ from beats.api.routers.calendar import router as calendar_router
 from beats.api.routers.clients import router as clients_router
 from beats.api.routers.coach import router as coach_router
 from beats.api.routers.device import router as device_router
+from beats.api.routers.employment import router as employment_router
 from beats.api.routers.export import router as export_router
 from beats.api.routers.fitbit import router as fitbit_router
 from beats.api.routers.github import router as github_router
@@ -319,6 +320,7 @@ app.include_router(meta_router)
 app.include_router(clients_router)
 app.include_router(billing_router)
 app.include_router(organisations_router)
+app.include_router(employment_router)
 app.include_router(reports_router)
 app.include_router(beats_router)
 app.include_router(timer_router)
