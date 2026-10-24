@@ -23,7 +23,7 @@ from beats.infrastructure.repositories import (
     MongoAdjustmentRepository,
     MongoBeatRepository,
     MongoFlowWindowRepository,
-    MongoProjectRepository,
+    project_repository_for,
 )
 
 # Collection names — single source of truth for all coach Mongo collections.
@@ -99,7 +99,10 @@ def fmt_contract_goal(term: ContractTerm) -> str:
 async def build_repos(user_id: str) -> CoachRepos:
     """Build user-scoped repositories for the coach."""
     db = Database.get_db()
-    projects = MongoProjectRepository(db.projects, user_id=user_id)
+    # With the member's organisation projects merged in, as every read the
+    # person makes: the coach is the member's, and names their day job. It
+    # is given no organisation port — nothing here reads another member.
+    projects = project_repository_for(db, user_id)
     beats = MongoBeatRepository(db.timeLogs, user_id=user_id)
     return CoachRepos(
         project=projects,

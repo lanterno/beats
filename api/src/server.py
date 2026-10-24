@@ -35,6 +35,7 @@ from beats.api.routers.fitbit import router as fitbit_router
 from beats.api.routers.github import router as github_router
 from beats.api.routers.intelligence import router as intelligence_router
 from beats.api.routers.meta import router as meta_router
+from beats.api.routers.organisations import router as organisations_router
 from beats.api.routers.oura import router as oura_router
 from beats.api.routers.planning import router as planning_router
 from beats.api.routers.projects import router as projects_router
@@ -91,6 +92,10 @@ PUBLIC_PREFIXES = (
 # their rates, project billing, billable marks, and billing budgets with what
 # they have spent. Never add them here, and never put billing under
 # /api/projects or /api/beats, which are prefix matches (docs/billing.md).
+# Organisations live under /api/organisations for the same reason: a paired
+# device tracks on an organisation's project like any other, through
+# /api/projects, but must not be able to invite, assign, read the record or
+# hand a project over (docs/organisations.md).
 DEVICE_ALLOWED_PREFIXES = (
     # Wall-clock firmware reads /status on a 10s poll for the timer
     # state + today_minutes + theme. Without this prefix, the
@@ -315,6 +320,7 @@ app.include_router(adjustments_router)
 app.include_router(meta_router)
 app.include_router(clients_router)
 app.include_router(billing_router)
+app.include_router(organisations_router)
 app.include_router(reports_router)
 app.include_router(beats_router)
 app.include_router(timer_router)

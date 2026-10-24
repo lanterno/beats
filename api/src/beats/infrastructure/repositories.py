@@ -29,6 +29,7 @@ from beats.domain.exceptions import (
     ProjectNotFound,
 )
 from beats.domain.models import (
+    PERSONAL_FIELDS,
     Absence,
     BalanceAdjustment,
     Beat,
@@ -42,11 +43,13 @@ from beats.domain.models import (
     FitbitIntegration,
     FlowWindow,
     GitHubIntegration,
+    OrgAssignment,
     OuraIntegration,
     PairingCode,
     PendingSuggestion,
     Project,
     ProjectBilling,
+    ProjectOrganisation,
     ReportLink,
     SignalSummary,
     SSOFlow,
@@ -232,6 +235,10 @@ class BeatRepository(Protocol):
     async def exists(self, beat_id: str) -> bool: ...
     async def restore(self, beat: Beat) -> None: ...
     async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]: ...
+    async def list_for_organisation(self, organisation_id: str) -> builtins.list[Beat]: ...
+    async def stamp_organisation(
+        self, project_id: str, organisation_id: str, since: datetime
+    ) -> int: ...
 
 
 class ProjectRepository(Protocol):
@@ -361,6 +368,28 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
             {"project_id": {"$in": ids}, "start": {"$gte": start, "$lt": end}}
         )
 
+    async def list_for_organisation(self, organisation_id: str) -> builtins.list[Beat]:
+        """The caller's own finished beats stamped as one organisation's
+        record — what the "Acme (left)" archive and the "what Acme can see"
+        page show. User-scoped like every other read here: it is the
+        person's view of their own hours, whatever the stamp says."""
+        return await self._find_many(
+            {"organisation_id": organisation_id, "end": {"$ne": None}}, sort=("start", 1)
+        )
+
+    async def stamp_organisation(
+        self, project_id: str, organisation_id: str, since: datetime
+    ) -> int:
+        """Mark the caller's beats on `project_id` started at or after `since`
+        as `organisation_id`'s record — connecting a project over the history
+        the member chose to share (docs/organisations.md, rule 4). Nothing
+        before `since` is touched, and the beats stay the member's documents."""
+        result = await self.collection.update_many(
+            self._q({"project_id": project_id, "start": {"$gte": since}}),
+            {"$set": {"organisation_id": organisation_id}},
+        )
+        return result.modified_count
+
     async def exists(self, beat_id: str) -> bool:
         # A malformed id is "no such beat", as `MongoProjectRepository.exists`
         # has it, so a route taking the id from its path answers 404.
@@ -387,10 +416,94 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
         return await self._ids_held_elsewhere(ids)
 
 
+class OrgProjectCollections(NamedTuple):
+    """The two collections a member's project read joins on: their active
+    assignments, and the organisations those name. Passed to
+    `MongoProjectRepository` by every caller that serves a person — left
+    out, the repository reads personal projects alone, which is what the
+    import's ownership check and the one-off scripts want."""
+
+    assignments: AsyncCollection
+    organisations: AsyncCollection
+
+
 class MongoProjectRepository(MongoStore[Project], ProjectRepository):
-    """MongoDB implementation of ProjectRepository."""
+    """MongoDB implementation of ProjectRepository.
+
+    The one user-scoped repository whose scope is wider than `user_id`: a
+    person's projects are their own documents plus every organisation
+    project they hold an active assignment to (docs/organisations.md). An
+    organisation's project document carries the organisation's fields and
+    no `user_id`; the member's assignment carries the personal fields
+    (`PERSONAL_FIELDS`); a read merges the two into one `Project`, and a
+    write splits them again. The seventeen other repositories are untouched:
+    a beat on an organisation's project is still the member's own document.
+
+    The assignments are read once per repository, so per request, and the
+    organisation projects are read by id — never by organisation, so a
+    member who is on one of Acme's projects cannot list the rest of Acme's.
+    """
 
     model = Project
+
+    def __init__(
+        self, collection: AsyncCollection, user_id: str, org: OrgProjectCollections | None = None
+    ):
+        super().__init__(collection, user_id)
+        self.org = org
+        self._assigned: dict[str, OrgAssignment] | None = None
+        self._organisations: dict[str, dict[str, Any]] = {}
+
+    async def _assignments(self) -> dict[str, OrgAssignment]:
+        """The caller's active assignments, by project id. One read, cached
+        for the life of the repository — a request."""
+        if self._assigned is None:
+            self._assigned = {}
+            if self.org is not None:
+                docs = await self.org.assignments.find(
+                    {"user_id": self.user_id, "ended_at": None}
+                ).to_list(length=None)
+                for doc in docs:
+                    assignment = OrgAssignment(**serialize_from_document(doc))
+                    self._assigned[assignment.project_id] = assignment
+        return self._assigned
+
+    async def _organisation(self, organisation_id: str) -> dict[str, Any]:
+        if organisation_id not in self._organisations and self.org is not None:
+            doc = await self.org.organisations.find_one(
+                {"_id": ObjectId(organisation_id)}, {"name": 1, "logo_url": 1}
+            )
+            self._organisations[organisation_id] = doc or {}
+        return self._organisations.get(organisation_id, {})
+
+    async def _merge(self, doc: dict[str, Any], assignment: OrgAssignment) -> Project:
+        """One `Project` from an organisation's document and the member's
+        assignment to it."""
+        data = serialize_from_document(doc)
+        org = await self._organisation(assignment.organisation_id)
+        for field in PERSONAL_FIELDS:
+            data[field] = getattr(assignment, field)
+        data.pop("organisation_id", None)
+        data["organisation"] = ProjectOrganisation(
+            id=assignment.organisation_id,
+            name=org.get("name", "an organisation"),
+            logo_url=org.get("logo_url"),
+            shared_from=assignment.shared_from,
+        )
+        return Project(**data)
+
+    async def _org_project(self, project_id: str) -> Project | None:
+        """The organisation project with this id, if the caller is assigned
+        to it. The query names the organisation as well as the id, so an
+        assignment left pointing at a document that has since changed hands
+        resolves to nothing."""
+        assignment = (await self._assignments()).get(project_id)
+        if assignment is None:
+            return None
+        doc = await self.collection.find_one(
+            {"_id": ObjectId(project_id), "organisation_id": assignment.organisation_id}
+        )
+        return await self._merge(doc, assignment) if doc else None
 
     async def get_by_id(self, project_id: str) -> Project:
         # A malformed id is "no such project", like an unknown one: every route
@@ -402,6 +515,8 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
             raise ProjectNotFound(project_id) from None
         project = await self._find_one({"_id": oid})
         if project is None:
+            project = await self._org_project(project_id)
+        if project is None:
             raise ProjectNotFound(project_id)
         return project
 
@@ -410,22 +525,86 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
         # a dropped connection, an auth failure — must surface rather than be
         # reported to the caller as a missing project.
         try:
-            oid = ObjectId(project_id)
-        except InvalidId:
+            await self.get_by_id(project_id)
+        except ProjectNotFound:
             return False
-        return await self.collection.find_one(self._q({"_id": oid})) is not None
+        return True
 
     async def create(self, project: Project) -> Project:
-        return await self._insert(project)
+        # A created project is the caller's own; `organisation` is read-only.
+        return await self._insert(project.model_copy(update={"organisation": None}))
 
     async def update(self, project: Project) -> Project:
-        return await self._replace(project.id, project)
+        """Write a project the caller holds. Their own: replaced whole, as
+        before. An organisation's they are assigned to: the personal fields
+        go to the assignment and the organisation's fields are not written —
+        `ProjectService.update_project` has already refused a change to them.
+        Which it is comes from the stored document, never from the model
+        passed in."""
+        if not project.id:
+            raise ValueError("Project ID is required for update")
+        oid = ObjectId(project.id)
+        stored = await self.collection.find_one({"_id": oid}, {"user_id": 1, "organisation_id": 1})
+        if stored is None:
+            raise ProjectNotFound(project.id)
+        if stored.get("user_id") == self.user_id:
+            return await self._replace(
+                project.id, project.model_copy(update={"organisation": None})
+            )
+        assignment = (await self._assignments()).get(project.id)
+        if (
+            self.org is None
+            or assignment is None
+            or stored.get("organisation_id") != assignment.organisation_id
+        ):
+            raise ProjectNotFound(project.id)
+        personal = project.model_dump(mode="json", include=set(PERSONAL_FIELDS))
+        await self.org.assignments.update_one(
+            {"project_id": project.id, "user_id": self.user_id, "ended_at": None},
+            {"$set": personal},
+        )
+        self._assigned = None
+        return await self.get_by_id(project.id)
 
     async def list(self, archived: bool = False) -> builtins.list[Project]:
-        return await self._find_many({"archived": archived})
+        own = await self._find_many({"archived": archived})
+        assignments = await self._assignments()
+        if not assignments:
+            return own
+        docs = await self.collection.find(
+            {
+                "_id": {"$in": [ObjectId(pid) for pid in assignments]},
+                "archived": archived,
+                "organisation_id": {
+                    "$in": sorted({a.organisation_id for a in assignments.values()})
+                },
+            }
+        ).to_list(length=None)
+        shared = []
+        for doc in docs:
+            assignment = assignments[str(doc["_id"])]
+            if doc.get("organisation_id") == assignment.organisation_id:
+                shared.append(await self._merge(doc, assignment))
+        return own + shared
 
     async def ids_held_elsewhere(self, ids: Iterable[str]) -> set[str]:
+        # An organisation's document has no `user_id`, so it reads as held
+        # elsewhere, which for a restore is the right answer: a backup cannot
+        # write over an organisation's project. The import handles those
+        # before asking this.
         return await self._ids_held_elsewhere(ids)
+
+
+def project_repository_for(db: Any, user_id: str) -> MongoProjectRepository:
+    """A person's project repository over `db`: their own projects and the
+    organisation projects they are assigned to. Every reader that serves a
+    person builds it this way; the import's ownership check and a one-off
+    script may build the bare repository instead."""
+    return MongoProjectRepository(
+        db.projects,
+        user_id=user_id,
+        org=OrgProjectCollections(assignments=db.org_assignments, organisations=db.organisations),
+    )
 
 
 class MongoUserRepository(UserRepository):
@@ -847,6 +1026,9 @@ class AbsenceRepository(Protocol):
     async def list_all(self) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
+    async def stamp_organisation(
+        self, project_id: str, organisation_id: str, since: date
+    ) -> int: ...
 
 
 class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
@@ -865,6 +1047,15 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
         # Every project's, for the full export: an absence outlives a kind
         # change away from day_job, and a backup keeps it all the same.
         return await self._find_many(sort=("date", 1))
+
+    async def stamp_organisation(self, project_id: str, organisation_id: str, since: date) -> int:
+        """As `MongoBeatRepository.stamp_organisation`: the caller's absences
+        on the project from `since` on become the organisation's record."""
+        result = await self.collection.update_many(
+            self._q({"project_id": project_id, "date": {"$gte": since.isoformat()}}),
+            {"$set": {"organisation_id": organisation_id}},
+        )
+        return result.modified_count
 
     async def upsert(self, absence: Absence) -> Absence:
         # A replace rather than the shared `$set` merge: the document IS the

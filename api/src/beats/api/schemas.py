@@ -19,9 +19,16 @@ from beats.domain.models import (
     ClientFields,
     Contract,
     GoalType,
+    JoinDecision,
+    MembershipEnd,
+    MemberTotals,
+    OrganisationFields,
+    OrgProject,
+    OrgRole,
     ProjectBillingFields,
     ProjectBreakdownEntry,
     ProjectKind,
+    ProjectOrganisation,
     RateTerm,
     ReportLinkFields,
 )
@@ -164,6 +171,11 @@ class ProjectResponse(BaseModel):
     autostart_repos: list[str] = Field(default_factory=list)
     kind: ProjectKind = ProjectKind.SIDE_PROJECT
     contract: Contract | None = None
+    # The organisation that owns the project, when it is not the caller: its
+    # name and logo mark the project in a list, and `shared_from` is the
+    # instant from which the caller's hours on it are the organisation's.
+    # Null on a personal project (docs/organisations.md).
+    organisation: ProjectOrganisation | None = None
 
 
 class ProjectsListItemResponse(ProjectResponse):
@@ -217,7 +229,8 @@ class AbsenceRequest(BaseModel):
 
 
 class AbsenceResponse(BaseModel):
-    """Response schema for an absence."""
+    """Response schema for an absence. `organisation_id` is set on one
+    recorded on an organisation's project: that organisation's record."""
 
     id: str
     project_id: str
@@ -225,6 +238,7 @@ class AbsenceResponse(BaseModel):
     type: AbsenceType
     half_day: bool = False
     note: str | None = None
+    organisation_id: str | None = None
 
 
 class AdjustmentResponse(BaseModel):
@@ -563,15 +577,17 @@ class ImportCounts(BaseModel):
 
 
 class ImportSkip(BaseModel):
-    """An absence or a balance adjustment in a backup that the import left
-    out, because the rule its own route applies refused it: `code` and
-    `detail` are what that route would have answered. An absence on a
-    project that is no longer a day job is one; an adjustment dated outside
-    the contract the backup restored is another."""
+    """A record in a backup that the import left out, with the code and
+    detail its own route would have answered. An absence on a project that
+    is no longer a day job is one; an adjustment dated outside the contract
+    the backup restored is another; an organisation's project the account
+    is no longer assigned to (ORGANISATION_PROJECT), and every session,
+    absence and adjustment on it, is a third — a backup does not restore a
+    project the organisation owns (docs/organisations.md)."""
 
-    collection: Literal["absences", "balance_adjustments"]
+    collection: Literal["projects", "beats", "absences", "balance_adjustments"]
     project_id: str
-    date: date_type
+    date: date_type | None
     code: str
     detail: str
 
@@ -727,3 +743,219 @@ class InboxResponse(BaseModel):
 
     items: list[InboxItemResponse]
     generated_at: datetime
+
+
+# --- Organisations (docs/organisations.md) ------------------------------------
+
+
+class OrganisationResponse(OrganisationFields):
+    id: str
+    created_at: datetime
+
+
+class MembershipResponse(BaseModel):
+    """One of the caller's organisations, with their standing in it. A
+    membership that ended (`left_at`) is listed too: the archive of the
+    person's own hours there is reached through it."""
+
+    organisation: OrganisationResponse
+    role: OrgRole
+    joined_at: datetime
+    left_at: datetime | None
+    left_reason: MembershipEnd | None
+
+
+class MemberResponse(BaseModel):
+    """A member as the organisation lists them: the name and address they
+    joined under. `user_id` is a tombstone once the account has been erased."""
+
+    user_id: str
+    name: str
+    email: str
+    role: OrgRole
+    joined_at: datetime
+    left_at: datetime | None
+
+
+class RoleRequest(BaseModel):
+    role: OrgRole
+
+
+class InviteRequest(BaseModel):
+    """An invitation to one address, or with `email` null an invite link.
+    `requires_approval` is read on a link alone; no invite carries the
+    owner role (403 OWNER_ROLE_RESERVED)."""
+
+    email: str | None = Field(default=None, max_length=254)
+    role: OrgRole = OrgRole.MEMBER
+    requires_approval: bool = False
+    expires_in_days: int = Field(default=14, ge=1, le=90)
+
+
+class InviteResponse(BaseModel):
+    id: str
+    email: str | None
+    role: OrgRole
+    requires_approval: bool
+    token: str
+    created_at: datetime
+    expires_at: datetime
+    accepted_at: datetime | None
+
+
+class OrganisationCardResponse(BaseModel):
+    """An organisation as a joiner sees it before joining: the name and logo."""
+
+    id: str
+    name: str
+    logo_url: str | None
+
+
+class InvitationResponse(BaseModel):
+    """An open invitation addressed to the caller's own address."""
+
+    token: str
+    role: OrgRole
+    expires_at: datetime
+    organisation: OrganisationCardResponse
+
+
+class InvitePreviewResponse(BaseModel):
+    organisation: OrganisationCardResponse
+    role: OrgRole
+    requires_approval: bool
+    addressed: bool  # to the caller's address, as opposed to a link
+    already_member: bool
+
+
+class JoinResponse(BaseModel):
+    """`joined`, with the membership; or `pending`, when the link has an
+    approval step and a request is now waiting."""
+
+    status: Literal["joined", "pending"]
+    membership: MembershipResponse | None = None
+
+
+class JoinRequestResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    email: str
+    requested_at: datetime
+
+
+class DecideRequest(BaseModel):
+    decision: JoinDecision
+
+
+class OrgProjectRequest(BaseModel):
+    """The organisation's fields of one of its projects. On an update a
+    field left out is kept and `null` clears a nullable one."""
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = None
+    color: str | None = None
+    kind: ProjectKind = ProjectKind.SIDE_PROJECT
+    github_repo: str | None = None
+    category: str | None = None
+    archived: bool = False
+
+
+class AssignmentResponse(BaseModel):
+    user_id: str
+    name: str | None
+    shared_from: datetime
+    assigned_at: datetime
+    ended_at: datetime | None
+    has_contract: bool
+
+
+class OrgProjectResponse(OrgProject):
+    members: list[AssignmentResponse]
+
+
+class ConnectProjectRequest(BaseModel):
+    """Connect one of the caller's own projects: from `share_from` (a local
+    day in `tz`) the hours and absences on it are the organisation's; null
+    starts fresh from now."""
+
+    project_id: str
+    share_from: date_type | None = None
+
+
+class RecordEntryResponse(BaseModel):
+    """One finished entry as the organisation reads it: when, how long, and
+    the note (decision 1). Nothing about the person beyond that."""
+
+    id: str
+    day: date_type
+    start: datetime
+    end: datetime
+    hours: float
+    note: str | None
+
+
+class RecordAbsenceResponse(BaseModel):
+    date: date_type
+    type: str
+    half_day: bool
+
+
+class MemberBalanceResponse(BaseModel):
+    as_of: date_type
+    balance: float
+    opening: float
+    worked: float
+    expected_through: float
+    adjusted: float
+
+
+class MemberRecordResponse(BaseModel):
+    user_id: str
+    name: str
+    shared_from: datetime
+    active: bool
+    hours: float
+    entries: list[RecordEntryResponse]
+    absences: list[RecordAbsenceResponse]
+    has_contract: bool
+    balance: MemberBalanceResponse | None
+    totals: MemberTotals
+
+
+class ProjectRecordResponse(BaseModel):
+    project: OrgProject
+    members: list[MemberRecordResponse]
+
+
+class RecordResponse(BaseModel):
+    """What the organisation sees (`GET /{id}/record`), and what it sees of
+    one member (`GET /{id}/visible`) — the same shape from the same read,
+    narrowed to one person. Written field by field, as the public report
+    is, so what crosses cannot grow by inheritance."""
+
+    organisation: OrganisationCardResponse
+    month: str
+    first: date_type
+    last: date_type
+    projects: list[ProjectRecordResponse]
+
+
+class ArchiveProjectResponse(BaseModel):
+    project_id: str
+    name: str
+    color: str | None
+    hours: float
+    entries: list[RecordEntryResponse]
+
+
+class ArchiveResponse(BaseModel):
+    """The person's own hours stamped as one organisation's record, after
+    leaving or before: read-only, grouped by project."""
+
+    organisation: OrganisationCardResponse
+    role: OrgRole
+    joined_at: datetime
+    left_at: datetime | None
+    hours: float
+    projects: list[ArchiveProjectResponse]

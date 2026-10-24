@@ -443,6 +443,10 @@ class Absence(BaseModel):
     half_day: bool = False
     type: AbsenceType
     note: str | None = None
+    # As on `Beat`: set when recorded on an organisation's project, and what
+    # the organisation's read of absences asks for. The note is never read
+    # through it — an absence crosses as its date, type and half-day alone.
+    organisation_id: str | None = None
 
 
 class AdjustmentKind(StrEnum):
@@ -987,6 +991,15 @@ class Beat(TzNormalizedModel):
     end: datetime | None = None
     note: str | None = None
     tags: list[str] = Field(default_factory=list)
+    # Set when the beat was tracked on an organisation's project: this beat is
+    # that organisation's working-time record, and the stamp is what says so
+    # on the document itself, so the question is answered per row — by the
+    # organisation's read, which asks for its own stamp and nothing else, and
+    # by an account's erasure, which keeps the stamped rows and nothing else
+    # (docs/organisations.md). Written by the services that write a beat
+    # against its project, and by connecting a project over its shared
+    # history; moving a beat to a personal project clears it.
+    organisation_id: str | None = None
 
     @computed_field
     @property
@@ -1015,6 +1028,34 @@ class Beat(TzNormalizedModel):
         return self.start.date()
 
 
+class ProjectOrganisation(BaseModel):
+    """The organisation that owns a project, as its member sees it on the
+    project: enough to mark it in a list, and the instant from which the
+    member's hours on it are the organisation's (docs/organisations.md).
+    `shared_from` is the member's own choice when they connected a project of
+    theirs, and the moment of assignment otherwise."""
+
+    id: str
+    name: str
+    logo_url: str | None = None
+    shared_from: datetime
+
+
+# On an organisation's project, which fields are whose. The organisation's
+# fields live on the project document and only an organisation admin writes
+# them; the personal fields live on the member's assignment, so two members
+# of one project each keep their own goal, their own local repo paths and —
+# until an employer owns it (stage 3) — their own contract. The repository
+# merges the two on read and splits them on write; `ProjectService` refuses a
+# member's write that changes an organisation field (409 ORGANISATION_PROJECT).
+ORGANISATION_FIELDS = frozenset(
+    {"name", "description", "color", "archived", "kind", "github_repo", "category"}
+)
+PERSONAL_FIELDS = frozenset(
+    {"weekly_goal", "goal_type", "goal_overrides", "autostart_repos", "contract"}
+)
+
+
 class Project(BaseModel):
     """A project to track time against.
 
@@ -1037,6 +1078,12 @@ class Project(BaseModel):
     autostart_repos: list[str] = Field(default_factory=list)  # Local repo paths for auto-timer
     kind: ProjectKind = ProjectKind.SIDE_PROJECT
     contract: Contract | None = None  # only meaningful when kind == day_job
+    # Who owns the project when it is not the person reading it. Read-only:
+    # set by the repository when it merges an organisation's project with the
+    # reader's assignment to it, never by a request. On such a project the
+    # organisation's fields (`ORGANISATION_FIELDS`) are the organisation's to
+    # write and the personal ones (`PERSONAL_FIELDS`) stay the member's.
+    organisation: ProjectOrganisation | None = None
 
     def goal_term(self, week_monday: date_type) -> ContractTerm | None:
         """The contract term that governs this week's goal, or None when the personal goal does.
@@ -1404,3 +1451,209 @@ class Webhook(TzNormalizedModel):
     events: list[str] = Field(default_factory=lambda: ["timer.start", "timer.stop"])
     active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+# --- Organisations (docs/organisations.md) ---------------------------------
+
+
+class OrgRole(StrEnum):
+    """What a member may do in an organisation. Each role includes the ones
+    below it: an owner is an admin, an admin is a member."""
+
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+    @property
+    def rank(self) -> int:
+        return _ROLE_RANK[self]
+
+    def at_least(self, other: OrgRole) -> bool:
+        return self.rank >= other.rank
+
+
+_ROLE_RANK = {OrgRole.MEMBER: 0, OrgRole.ADMIN: 1, OrgRole.OWNER: 2}
+
+
+class WeekStart(StrEnum):
+    """Which day an organisation's week begins on, for its own reports."""
+
+    MONDAY = "monday"
+    SATURDAY = "saturday"
+    SUNDAY = "sunday"
+
+
+_OrgName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
+class OrganisationFields(BaseModel):
+    """What an organisation is set up with: the fields its admins write."""
+
+    name: _OrgName
+    logo_url: Annotated[str, StringConstraints(max_length=2000)] | None = None
+    week_start: WeekStart = WeekStart.MONDAY
+    # The region whose public holidays a contract under it defaults to; checked
+    # against the calendar library at write time, as a contract's region is.
+    holiday_country: str | None = None
+    holiday_subdivision: str | None = None
+    timezone: str = "UTC"
+
+
+class Organisation(OrganisationFields, TzNormalizedModel):
+    """A party that owns projects and reads the hours on them. Not a user,
+    and not scoped by one: `user_id` is a column of no document here."""
+
+    id: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_by: str
+
+
+class MembershipEnd(StrEnum):
+    """Why a membership ended."""
+
+    LEFT = "left"
+    REMOVED = "removed"
+    ERASED = "erased"  # the account was deleted; the record stays (decision 3)
+
+
+class OrgMembership(TzNormalizedModel):
+    """One person in one organisation, once: a membership that ends keeps its
+    document, with `left_at`, and joining again reopens it.
+
+    `name` and `email` are what the organisation knew the person by, taken
+    from the account when they joined. They stay when the account is erased
+    and `user_id` becomes a tombstone (`erased:<membership id>`, which no
+    account ever has) — the one place a name outlives its account, as the
+    employer's record (docs/organisations.md, decision 3).
+    """
+
+    id: str | None = None
+    organisation_id: str
+    user_id: str
+    role: OrgRole
+    name: str
+    email: str
+    joined_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    left_at: datetime | None = None
+    left_reason: MembershipEnd | None = None
+
+    @property
+    def active(self) -> bool:
+        return self.left_at is None
+
+
+class OrgInvite(TzNormalizedModel):
+    """A way in. With `email`, an invitation to one address, taken once; with
+    none, a link anyone may use until it expires or is revoked, which with
+    `requires_approval` makes a join request rather than a member. The
+    token is the whole of what the joiner presents."""
+
+    id: str | None = None
+    organisation_id: str
+    token: str
+    email: str | None = None
+    role: OrgRole = OrgRole.MEMBER
+    requires_approval: bool = False
+    created_by: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime
+    accepted_at: datetime | None = None
+    accepted_by: str | None = None
+    revoked_at: datetime | None = None
+
+    def open_at(self, now: datetime) -> bool:
+        """Still usable: not revoked, not expired, and — for an invitation to
+        one address — not yet taken."""
+        if self.revoked_at is not None or normalize_tz(self.expires_at) <= normalize_tz(now):
+            return False
+        return self.email is None or self.accepted_at is None
+
+
+class JoinDecision(StrEnum):
+    APPROVED = "approved"
+    DECLINED = "declined"
+
+
+class OrgJoinRequest(TzNormalizedModel):
+    """Someone who used an invite link with an approval step, waiting."""
+
+    id: str | None = None
+    organisation_id: str
+    user_id: str
+    invite_id: str
+    name: str
+    email: str
+    requested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    decided_at: datetime | None = None
+    decision: JoinDecision | None = None
+    decided_by: str | None = None
+
+
+class OrgAssignment(TzNormalizedModel):
+    """One member on one of the organisation's projects, and the personal
+    half of that project for them (`PERSONAL_FIELDS`).
+
+    `shared_from` is the instant from which the member's hours on the
+    project are the organisation's: the moment of assignment, or on a
+    connected project the local midnight of the day the member chose. An
+    assignment that ends keeps its document with `ended_at`; assigning
+    again reopens it.
+    """
+
+    id: str | None = None
+    organisation_id: str
+    project_id: str
+    user_id: str
+    shared_from: datetime
+    assigned_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    assigned_by: str | None = None
+    ended_at: datetime | None = None
+    weekly_goal: float | None = None
+    goal_type: GoalType = GoalType.TARGET
+    goal_overrides: list[GoalOverride] = Field(default_factory=list)
+    autostart_repos: list[str] = Field(default_factory=list)
+    contract: Contract | None = None
+
+    @property
+    def active(self) -> bool:
+        return self.ended_at is None
+
+
+class OrgAuditEvent(TzNormalizedModel):
+    """One thing that happened in an organisation, written as it happens and
+    read by nothing yet: membership, roles, projects, assignments, a
+    connected project, an erased account. Kept from the start because it is
+    cheap to write and impossible to backfill (the roadmap's stage 4 note)."""
+
+    id: str | None = None
+    organisation_id: str
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    actor_user_id: str | None
+    event: str
+    subject_user_id: str | None = None
+    project_id: str | None = None
+    details: dict[str, object] = Field(default_factory=dict)
+
+
+class OrgProject(BaseModel):
+    """An organisation's project as the organisation sees it: the document's
+    fields (`ORGANISATION_FIELDS`) and nothing personal, since the personal
+    half is each member's own."""
+
+    id: str
+    name: str
+    description: str | None = None
+    color: str | None = None
+    archived: bool = False
+    kind: ProjectKind = ProjectKind.SIDE_PROJECT
+    github_repo: str | None = None
+    category: str | None = None
+
+
+class MemberTotals(BaseModel):
+    """What one member's finished entries on one project add up to, all time."""
+
+    entries: int = 0
+    hours: float = 0.0
+    first: datetime | None = None
+    last: datetime | None = None

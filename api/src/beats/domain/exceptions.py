@@ -457,3 +457,114 @@ class NoObjectMatched(DomainException):
 
     status_code = 404
     message = "No matching record found"
+
+
+# Organisations (docs/organisations.md)
+class OrganisationNotFound(DomainException):
+    """An organisation the caller is not an active member of — one that does
+    not exist, one they left, one they were never in — all read the same:
+    not found, never forbidden, so a non-member learns nothing from the
+    difference. A malformed id too."""
+
+    status_code = 404
+    message = "Organisation not found"
+    code = "ORGANISATION_NOT_FOUND"
+
+
+class OrganisationRoleRequired(DomainException):
+    """The caller is a member, but the action needs a higher role."""
+
+    status_code = 403
+    message = "This needs a higher role in the organisation"
+    code = "ORGANISATION_ROLE_REQUIRED"
+
+    def __init__(self, role: str):
+        super().__init__(f"This needs the {role} role in the organisation")
+
+
+class OrganisationProject(DomainException):
+    """A write a member may not make to an organisation's project: its name,
+    colour, kind, description, repository, category and archive flag are the
+    organisation's; billing it to a client, or connecting it again, is
+    refused too."""
+
+    status_code = 409
+    message = "This project belongs to an organisation"
+    code = "ORGANISATION_PROJECT"
+
+
+class InviteNotFound(DomainException):
+    """No open invite with this token, or one not addressed to the caller:
+    one answer for every way a token fails, as a report link's is."""
+
+    status_code = 404
+    message = "Invite not found"
+    code = "INVITE_NOT_FOUND"
+
+
+class InviteExpired(DomainException):
+    """An invite that was real and is no longer usable: expired, revoked or
+    already taken. Told apart from an unknown token so the page can say so."""
+
+    status_code = 410
+    message = "This invite is no longer valid"
+    code = "INVITE_EXPIRED"
+
+
+class AlreadyAMember(DomainException):
+    status_code = 409
+    message = "Already a member of this organisation"
+    code = "ALREADY_A_MEMBER"
+
+
+class JoinRequestPending(DomainException):
+    status_code = 409
+    message = "A request to join this organisation is already waiting"
+    code = "JOIN_REQUEST_PENDING"
+
+
+class JoinRequestNotFound(DomainException):
+    status_code = 404
+    message = "Join request not found"
+    code = "JOIN_REQUEST_NOT_FOUND"
+
+
+class MemberNotFound(DomainException):
+    status_code = 404
+    message = "Not a member of this organisation"
+    code = "MEMBER_NOT_FOUND"
+
+
+class LastOwner(DomainException):
+    """An organisation always has an owner: the last one cannot leave, be
+    removed or be demoted until another is named."""
+
+    status_code = 409
+    message = "An organisation needs at least one owner"
+    code = "LAST_OWNER"
+
+
+class OwnerRoleReserved(DomainException):
+    """Only an owner grants or takes the owner role, and no invite carries it."""
+
+    status_code = 403
+    message = "Only an owner can give or take the owner role"
+    code = "OWNER_ROLE_RESERVED"
+
+
+class NotAssigned(DomainException):
+    """A member who is not on the project: assigning needs an active member,
+    unassigning needs an active assignment."""
+
+    status_code = 404
+    message = "Not assigned to this project"
+    code = "NOT_ASSIGNED"
+
+
+class ShareFromInFuture(DomainException):
+    """A connected project shares history from a day already begun, not one
+    to come: tomorrow's hours are shared by being tracked."""
+
+    status_code = 409
+    message = "The day to share from cannot be after today"
+    code = "SHARE_FROM_IN_FUTURE"

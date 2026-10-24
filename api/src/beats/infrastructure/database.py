@@ -52,6 +52,30 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     # "mine, plus every organisation project I am assigned to" across every
     # tenant (the roadmap's stage 2 note; measured in test_organisations).
     await db.projects.create_index([("user_id", 1), ("archived", 1)])
+    # An organisation's own projects.
+    await db.projects.create_index("organisation_id", sparse=True)
+    # The organisation's read of its working-time record is keyed on its own
+    # stamp and nothing else (docs/organisations.md): the stamp is sparse,
+    # since a personal beat carries none.
+    await db.timeLogs.create_index(
+        [("organisation_id", 1), ("project_id", 1), ("start", 1)], sparse=True
+    )
+    await db.absences.create_index([("organisation_id", 1), ("project_id", 1)], sparse=True)
+    # One membership per person per organisation, reopened on rejoining.
+    await db.org_members.create_index([("organisation_id", 1), ("user_id", 1)], unique=True)
+    await db.org_members.create_index("user_id")
+    # An invite is found by its token alone, as a report link is.
+    await db.org_invites.create_index("token", unique=True)
+    await db.org_invites.create_index("organisation_id")
+    # The invitations waiting for an address, read at sign-in.
+    await db.org_invites.create_index("email", sparse=True)
+    await db.org_join_requests.create_index([("organisation_id", 1), ("user_id", 1)])
+    # One assignment per member per project, reopened on reassigning; and a
+    # member's own, which every project read joins on.
+    await db.org_assignments.create_index([("project_id", 1), ("user_id", 1)], unique=True)
+    await db.org_assignments.create_index([("user_id", 1), ("ended_at", 1)])
+    await db.org_assignments.create_index("organisation_id")
+    await db.org_audit.create_index([("organisation_id", 1), ("at", -1)])
     await db.clients.create_index("user_id")
     # One billing per project: a second write replaces the first. By client
     # too, for the reads that ask what is billed to one.

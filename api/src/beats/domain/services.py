@@ -29,6 +29,7 @@ from beats.domain.exceptions import (
     NoObjectMatched,
     NotADayJob,
     NoVacationEntitlement,
+    OrganisationProject,
     ProjectHasBilling,
     ProjectNotFound,
     TimerAlreadyRunning,
@@ -44,6 +45,7 @@ from beats.domain.holidays import (
 )
 from beats.domain.ledger import assemble_ledger
 from beats.domain.models import (
+    ORGANISATION_FIELDS,
     Absence,
     AbsenceType,
     BalanceAdjustment,
@@ -112,6 +114,27 @@ async def derive_flow_tags(
     return tags[:_MAX_FLOW_TAGS]
 
 
+def organisation_of(project: Project) -> str | None:
+    """The organisation whose record a beat on `project` is, or None."""
+    return project.organisation.id if project.organisation is not None else None
+
+
+def check_organisation_fields(existing: Project, project: Project) -> None:
+    """What a member's write to an organisation's project must leave alone:
+    every field in `ORGANISATION_FIELDS`, which only the organisation's admins
+    write, through its own routes. The member keeps the personal fields —
+    goal, overrides, local repo paths, and until stage 3 the contract — so a
+    contract or goal edit passes, and a rename, a recolour, a kind change or
+    an archive is a 409 (ORGANISATION_PROJECT) naming the field."""
+    if existing.organisation is None:
+        return
+    for field in sorted(ORGANISATION_FIELDS):
+        if getattr(existing, field) != getattr(project, field):
+            raise OrganisationProject(
+                f"{existing.organisation.name} owns this project's {field.replace('_', ' ')}"
+            )
+
+
 class TimerService:
     """Service for managing timer operations.
 
@@ -143,9 +166,10 @@ class TimerService:
             ProjectNotFound: If the project doesn't exist.
             TimerAlreadyRunning: If another timer is already active.
         """
-        # Validate project exists
-        if not await self.project_repo.exists(project_id):
-            raise ProjectNotFound(project_id)
+        # Validate project exists — one the caller holds, their own or an
+        # organisation's they are assigned to; an assignment that has ended
+        # makes the project not found, which is how leaving stops tracking.
+        project = await self.project_repo.get_by_id(project_id)
 
         # Check no active timer
         active = await self.beat_repo.get_active()
@@ -156,9 +180,10 @@ class TimerService:
                 beat=active.model_dump(mode="json"),
             )
 
-        # Create new beat
+        # Create new beat, stamped as the organisation's record when the
+        # project is an organisation's (docs/organisations.md).
         start = start_time or datetime.now(UTC)
-        beat = Beat(project_id=project_id, start=start)
+        beat = Beat(project_id=project_id, start=start, organisation_id=organisation_of(project))
         return await self.beat_repo.create(beat)
 
     async def stop_timer(self, end_time: datetime | None = None) -> Beat:
@@ -239,13 +264,29 @@ class BeatService:
         beat_repo: BeatStore,
         overrides: BillableOverrideRemover,
         flow_repo: FlowWindowReader | None = None,
+        projects: ProjectReader | None = None,
     ):
         self.beat_repo = beat_repo
         self.overrides = overrides
         self.flow_repo = flow_repo
+        # For the organisation stamp: a beat written against an
+        # organisation's project is that organisation's record, and one
+        # moved to a personal project is nobody's but the member's. Given
+        # a reader, a beat on a project the caller does not hold is a 404,
+        # as the timer's is; without one (the tests' bare service) the beat
+        # is written as sent.
+        self.projects = projects
+
+    async def _stamped(self, beat: Beat) -> Beat:
+        if self.projects is None:
+            return beat
+        project = await self.projects.get_by_id(beat.project_id)
+        beat.organisation_id = organisation_of(project)
+        return beat
 
     async def create_beat(self, beat: Beat) -> Beat:
         """Create a new beat, auto-tagging it from daemon flow signals."""
+        beat = await self._stamped(beat)
         if self.flow_repo is not None and beat.end is not None:
             beat.tags = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
         return await self.beat_repo.create(beat)
@@ -272,6 +313,9 @@ class BeatService:
             if end < start:
                 raise InvalidEndTime()
         written = {"project_id", "start", "end"}
+        if self.projects is not None:
+            await self._stamped(beat)
+            written.add("organisation_id")
         if self.flow_repo is not None and beat.end is not None:
             derived = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
             if derived:
@@ -391,6 +435,9 @@ class ProjectService:
         freelance after the write, so the colour picker on a freelance project
         reads nothing."""
         _check_contract(project)
+        if project.id is not None:
+            existing = await self.project_repo.get_by_id(project.id)
+            check_organisation_fields(existing, project)
         if (
             project.kind is not ProjectKind.FREELANCE
             and project.id is not None
@@ -472,6 +519,10 @@ class ProjectService:
     async def archive_project(self, project_id: str) -> Project:
         """Archive a project."""
         project = await self.project_repo.get_by_id(project_id)
+        if project.organisation is not None:
+            # The organisation archives its own projects; a member leaves
+            # one by leaving the organisation (docs/organisations.md).
+            raise OrganisationProject(f"{project.organisation.name} owns this project")
         project.archived = True
         return await self.project_repo.update(project)
 
@@ -485,6 +536,8 @@ class ProjectService:
         would drop them.
         """
         project = await self.project_repo.get_by_id(project_id)
+        if project.organisation is not None:
+            raise OrganisationProject(f"{project.organisation.name} owns this project")
         project.archived = False
         return await self.project_repo.update(project)
 
@@ -964,8 +1017,11 @@ class ContractService:
         )
 
     async def record_absence(self, absence: Absence) -> Absence:
-        """Record an absence; one already on that date is replaced."""
-        await self._day_job(absence.project_id)
+        """Record an absence; one already on that date is replaced. On an
+        organisation's project it is stamped as that organisation's record,
+        as a beat there is."""
+        project = await self._day_job(absence.project_id)
+        absence.organisation_id = organisation_of(project)
         return await self.absence_repo.upsert(absence)
 
     async def remove_absence(self, project_id: str, absence_id: str) -> None:

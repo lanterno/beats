@@ -15,9 +15,11 @@ from beats.domain.calendar import CalendarService
 from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
+from beats.domain.organisations import OrganisationService
 from beats.domain.oura import OuraService
 from beats.domain.services import BeatService, ContractService, ProjectService, TimerService
 from beats.infrastructure.database import Database
+from beats.infrastructure.organisations import MongoOrganisationRecords, MongoOrganisationStore
 from beats.infrastructure.repositories import (
     AbsenceRepository,
     AdjustmentRepository,
@@ -53,6 +55,7 @@ from beats.infrastructure.repositories import (
     MongoReportLinkLookup,
     MongoReportLinkRepository,
     MongoSignalSummaryRepository,
+    MongoUserRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
     MongoWeeklyPlanRepository,
@@ -68,6 +71,7 @@ from beats.infrastructure.repositories import (
     WeeklyDigestRepository,
     WeeklyPlanRepository,
 )
+from beats.infrastructure.repositories import project_repository_for as _project_repository_for
 from beats.settings import Settings
 
 
@@ -190,7 +194,16 @@ MondayDate = Annotated[date | None, AfterValidator(monday_or_none)]
 get_beat_repository = _user_scoped(MongoBeatRepository, "timeLogs")
 
 
-get_project_repository = _user_scoped(MongoProjectRepository, "projects")
+def get_project_repository(user_id: CurrentUserId) -> ProjectRepository:
+    """The caller's projects: their own, and the organisation projects they
+    are assigned to, merged with their assignment (docs/organisations.md).
+    The one repository given more than its collection, because it is the one
+    whose scope is wider than `user_id`."""
+    return project_repository_for(user_id)
+
+
+def project_repository_for(user_id: str) -> MongoProjectRepository:
+    return _project_repository_for(Database.get_db(), user_id)
 
 
 get_flow_window_repository = _user_scoped(MongoFlowWindowRepository, "flow_windows")
@@ -232,10 +245,15 @@ def get_beat_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     override_repo: Annotated[BillableOverrideRepository, Depends(get_billable_override_repository)],
     flow_repo: Annotated[FlowWindowRepository, Depends(get_flow_window_repository)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
 ) -> BeatService:
     """Get the beat service with injected repositories. The billable
-    overrides are there for the delete: a beat's override goes with it."""
-    return BeatService(beat_repo=beat_repo, overrides=override_repo, flow_repo=flow_repo)
+    overrides are there for the delete: a beat's override goes with it. The
+    projects are there for the organisation stamp: a beat written against an
+    organisation's project is that organisation's record."""
+    return BeatService(
+        beat_repo=beat_repo, overrides=override_repo, flow_repo=flow_repo, projects=project_repo
+    )
 
 
 get_absence_repository = _user_scoped(MongoAbsenceRepository, "absences")
@@ -316,11 +334,32 @@ def billing_service_for(user_id: str) -> BillingService:
         clients=MongoClientRepository(db.clients, user_id=user_id),
         billings=MongoProjectBillingRepository(db.project_billing, user_id=user_id),
         overrides=MongoBillableOverrideRepository(db.billable_overrides, user_id=user_id),
-        projects=MongoProjectRepository(db.projects, user_id=user_id),
+        projects=project_repository_for(user_id),
         beats=MongoBeatRepository(db.timeLogs, user_id=user_id),
         budgets=MongoBillingBudgetRepository(db.billing_budgets, user_id=user_id),
         links=MongoReportLinkRepository(db.report_links, user_id=user_id),
     )
+
+
+def get_organisation_service(
+    billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
+) -> OrganisationService:
+    """The organisation service. Its store and its records reader are the
+    two classes in the system not scoped by `user_id`
+    (`infrastructure/organisations.py`); every read they make names an
+    organisation the caller's membership was resolved against first. The
+    caller's own billing is there for connecting a project: one billed to a
+    client stays personal."""
+    db = Database.get_db()
+    return OrganisationService(
+        store=MongoOrganisationStore(db),
+        records=MongoOrganisationRecords(db),
+        users=MongoUserRepository(db.users),
+        billing=billing_repo,
+    )
+
+
+OrganisationServiceDep = Annotated[OrganisationService, Depends(get_organisation_service)]
 
 
 def get_analytics_service(

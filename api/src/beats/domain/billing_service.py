@@ -52,6 +52,7 @@ from beats.domain.exceptions import (
     CurrencyMismatch,
     DomainException,
     NotFreelance,
+    OrganisationProject,
     ProjectHasBilling,
     ProjectHasBillingBudget,
     ProjectNotBilled,
@@ -333,6 +334,10 @@ class BillingService:
         project = await self.projects.get_by_id(project_id)
         if project.kind is not ProjectKind.FREELANCE:
             raise NotFreelance()
+        if project.organisation is not None:
+            # Billing is the person's own; an organisation's project is
+            # billed by nobody here (docs/organisations.md).
+            raise OrganisationProject()
         client = await self.clients.get_by_id(client_id)
         stored = await self.billings.get(project_id)
         month_start = self._month_start(tz)

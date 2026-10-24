@@ -30,9 +30,21 @@ from beats.domain.models import (
     Client,
     ContractWeek,
     FlowWindow,
+    JoinDecision,
+    MembershipEnd,
+    MemberTotals,
+    Organisation,
+    OrgAssignment,
+    OrgAuditEvent,
+    OrgInvite,
+    OrgJoinRequest,
+    OrgMembership,
+    OrgProject,
+    OrgRole,
     Project,
     ProjectBilling,
     ReportLink,
+    User,
 )
 
 
@@ -280,3 +292,138 @@ class ReportLinkStore(Protocol):
     async def create(self, link: ReportLink) -> ReportLink: ...
     async def delete(self, client_id: str, link_id: str) -> bool: ...
     async def delete_for_client(self, client_id: str) -> int: ...
+
+
+class UserDirectory(Protocol):
+    """What the organisation service asks of accounts: one by id, to take
+    the name and address a member joins under. Nothing is ever matched by
+    email — an invitation to an address is accepted by the account signed
+    in, whose address it must be."""
+
+    async def get_by_id(self, user_id: str) -> User | None: ...
+
+
+class OrganisationStamper(Protocol):
+    """The two writes connecting a project makes to the member's own
+    records, through their own user-scoped repositories: the beats and the
+    absences from the day they chose become the organisation's record."""
+
+    async def stamp_organisation(self, project_id: str, organisation_id: str, since) -> int: ...
+
+
+class OrganisationBeatReader(Protocol):
+    """A person's own finished beats stamped as one organisation's — the
+    archive they keep after leaving, and the "what Acme can see" page."""
+
+    async def list_for_organisation(self, organisation_id: str) -> list[Beat]: ...
+
+
+class OrganisationStore(Protocol):
+    """Organisations, members, invites, join requests, projects, assignments
+    and the audit log — every read and write `OrganisationService` makes,
+    each scoped by organisation except the two that are a person's own
+    (`memberships_of`) or a token's (`invite_by_token`)."""
+
+    async def create_organisation(self, organisation: Organisation) -> Organisation: ...
+    async def get_organisation(self, organisation_id: str) -> Organisation | None: ...
+    async def get_organisations(self, ids: Iterable[str]) -> dict[str, Organisation]: ...
+    async def update_organisation(self, organisation: Organisation) -> Organisation: ...
+    async def membership(self, organisation_id: str, user_id: str) -> OrgMembership | None: ...
+    async def memberships_of(self, user_id: str) -> list[OrgMembership]: ...
+    async def list_members(
+        self, organisation_id: str, *, active_only: bool = True
+    ) -> list[OrgMembership]: ...
+    async def count_owners(self, organisation_id: str) -> int: ...
+    async def open_membership(self, membership: OrgMembership) -> OrgMembership: ...
+    async def set_role(
+        self, organisation_id: str, user_id: str, role: OrgRole
+    ) -> OrgMembership | None: ...
+    async def end_membership(
+        self, organisation_id: str, user_id: str, reason: MembershipEnd, at: datetime
+    ) -> OrgMembership | None: ...
+    async def create_invite(self, invite: OrgInvite) -> OrgInvite: ...
+    async def list_invites(self, organisation_id: str) -> list[OrgInvite]: ...
+    async def invite_by_token(self, token: str) -> OrgInvite | None: ...
+    async def invites_for_email(self, email: str) -> list[OrgInvite]: ...
+    async def get_invite(self, organisation_id: str, invite_id: str) -> OrgInvite | None: ...
+    async def mark_invite_accepted(self, invite_id: str, user_id: str, at: datetime) -> None: ...
+    async def revoke_invite(self, organisation_id: str, invite_id: str, at: datetime) -> bool: ...
+    async def create_request(self, request: OrgJoinRequest) -> OrgJoinRequest: ...
+    async def pending_request(
+        self, organisation_id: str, user_id: str
+    ) -> OrgJoinRequest | None: ...
+    async def list_requests(self, organisation_id: str) -> list[OrgJoinRequest]: ...
+    async def decide_request(
+        self,
+        organisation_id: str,
+        request_id: str,
+        decision: JoinDecision,
+        decided_by: str,
+        at: datetime,
+    ) -> OrgJoinRequest | None: ...
+    async def create_project(self, organisation_id: str, fields: dict) -> OrgProject: ...
+    async def list_projects(
+        self, organisation_id: str, archived: bool | None = None
+    ) -> list[OrgProject]: ...
+    async def get_project(self, organisation_id: str, project_id: str) -> OrgProject | None: ...
+    async def update_project(
+        self, organisation_id: str, project_id: str, fields: dict
+    ) -> OrgProject | None: ...
+    async def personal_project(self, project_id: str, user_id: str) -> Project | None: ...
+    async def hand_project_to_organisation(
+        self, project_id: str, user_id: str, organisation_id: str
+    ) -> bool: ...
+    async def project_names(
+        self, organisation_id: str, project_ids: Iterable[str]
+    ) -> dict[str, OrgProject]: ...
+    async def assignment(
+        self, organisation_id: str, project_id: str, user_id: str
+    ) -> OrgAssignment | None: ...
+    async def list_assignments(
+        self,
+        organisation_id: str,
+        *,
+        project_id: str | None = None,
+        user_id: str | None = None,
+        active_only: bool = True,
+    ) -> list[OrgAssignment]: ...
+    async def open_assignment(self, assignment: OrgAssignment) -> OrgAssignment: ...
+    async def end_assignments(
+        self, organisation_id: str, user_id: str, at: datetime, project_id: str | None = None
+    ) -> int: ...
+    async def record(self, event: OrgAuditEvent) -> None: ...
+
+
+class OrganisationRecords(Protocol):
+    """The organisation's read of its working-time record: finished beats
+    and absences by the organisation's own stamp over its project ids, and
+    one member's adjustments for the balance. Nothing else is reachable
+    through it, which is the point (docs/organisations.md, rule 3)."""
+
+    async def beats_between(
+        self,
+        organisation_id: str,
+        project_ids: Iterable[str],
+        start: datetime,
+        end: datetime,
+        *,
+        user_id: str | None = None,
+    ) -> list[tuple[str, Beat]]: ...
+    async def beats_of_member(
+        self, organisation_id: str, project_id: str, user_id: str
+    ) -> list[Beat]: ...
+    async def totals(
+        self, organisation_id: str, project_ids: Iterable[str], *, user_id: str | None = None
+    ) -> dict[tuple[str, str], MemberTotals]: ...
+    async def absences_between(
+        self,
+        organisation_id: str,
+        project_ids: Iterable[str],
+        start: date,
+        end: date,
+        *,
+        user_id: str | None = None,
+    ) -> list[tuple[str, Absence]]: ...
+    async def adjustments_of_member(
+        self, project_id: str, user_id: str, start: date, end: date
+    ) -> list[BalanceAdjustment]: ...
