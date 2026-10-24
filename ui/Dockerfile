@@ -6,7 +6,7 @@
 # the bundle at `/` and proxies `/api` to the API container behind it, so the
 # stack publishes one port and needs no CORS entry for wherever it is hosted.
 
-FROM node:25-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /app
 
