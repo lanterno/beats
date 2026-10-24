@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
