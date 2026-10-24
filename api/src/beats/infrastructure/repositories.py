@@ -15,6 +15,7 @@ import builtins
 from collections.abc import Collection, Iterable
 from datetime import UTC, date, datetime
 from typing import Any, Literal, NamedTuple, Protocol
+from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -489,6 +490,7 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
             name=org.get("name", "an organisation"),
             logo_url=org.get("logo_url"),
             shared_from=assignment.shared_from,
+            contract_managed=assignment.contract_managed,
         )
         return Project(**data)
 
@@ -593,6 +595,54 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
         # write over an organisation's project. The import handles those
         # before asking this.
         return await self._ids_held_elsewhere(ids)
+
+
+class MongoPeriodLocks:
+    """The member-side answer to "is this month approved?": a read of
+    `org_timesheets` for the caller's own sheet on the project. The month is
+    the organisation's timezone's, read off the organisation document, and
+    cached per request — the check runs on every beat write on an
+    organisation project."""
+
+    def __init__(self, db: Any, user_id: str):
+        self.db = db
+        self.user_id = user_id
+        self._zones: dict[str, ZoneInfo] = {}
+
+    async def _zone_of(self, project_id: str) -> ZoneInfo:
+        if project_id not in self._zones:
+            zone = ZoneInfo("UTC")
+            project = await self.db.projects.find_one(
+                {"_id": ObjectId(project_id)}, {"organisation_id": 1}
+            )
+            if project and project.get("organisation_id"):
+                org = await self.db.organisations.find_one(
+                    {"_id": ObjectId(project["organisation_id"])}, {"timezone": 1}
+                )
+                try:
+                    zone = ZoneInfo((org or {}).get("timezone", "UTC"))
+                except KeyError, ValueError:
+                    zone = ZoneInfo("UTC")
+            self._zones[project_id] = zone
+        return self._zones[project_id]
+
+    async def locked_day(self, project_id: str, day: date) -> date | None:
+        month = day.replace(day=1)
+        doc = await self.db.org_timesheets.find_one(
+            {
+                "project_id": project_id,
+                "user_id": self.user_id,
+                "month": month.isoformat(),
+                "status": "approved",
+            },
+            {"_id": 1},
+        )
+        return month if doc else None
+
+    async def locked_instant(self, project_id: str, instant: datetime) -> date | None:
+        zone = await self._zone_of(project_id)
+        local = (instant if instant.tzinfo else instant.replace(tzinfo=UTC)).astimezone(zone)
+        return await self.locked_day(project_id, local.date())
 
 
 def project_repository_for(db: Any, user_id: str) -> MongoProjectRepository:

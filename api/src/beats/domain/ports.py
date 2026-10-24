@@ -33,6 +33,7 @@ from beats.domain.models import (
     JoinDecision,
     MembershipEnd,
     MemberTotals,
+    OrgAbsenceRequest,
     Organisation,
     OrgAssignment,
     OrgAuditEvent,
@@ -41,9 +42,13 @@ from beats.domain.models import (
     OrgMembership,
     OrgProject,
     OrgRole,
+    OrgTeam,
+    OrgTimesheet,
     Project,
     ProjectBilling,
     ReportLink,
+    RequestStatus,
+    TimesheetStatus,
     User,
 )
 
@@ -400,6 +405,63 @@ class OrganisationStore(Protocol):
         self, organisation_id: str, user_id: str, at: datetime, project_id: str | None = None
     ) -> int: ...
     async def record(self, event: OrgAuditEvent) -> None: ...
+    async def list_audit(
+        self, organisation_id: str, *, before: datetime | None = None, limit: int = 100
+    ) -> list[OrgAuditEvent]: ...
+    async def create_team(self, team: OrgTeam) -> OrgTeam: ...
+    async def list_teams(self, organisation_id: str) -> list[OrgTeam]: ...
+    async def get_team(self, organisation_id: str, team_id: str) -> OrgTeam | None: ...
+    async def update_team(self, organisation_id: str, team: OrgTeam) -> OrgTeam | None: ...
+    async def delete_team(self, organisation_id: str, team_id: str) -> bool: ...
+    async def manager_scope(self, organisation_id: str, user_id: str) -> set[str]: ...
+    async def remove_from_teams(self, organisation_id: str, user_id: str) -> None: ...
+    async def create_absence_request(self, request: OrgAbsenceRequest) -> OrgAbsenceRequest: ...
+    async def get_absence_request(
+        self, organisation_id: str, request_id: str
+    ) -> OrgAbsenceRequest | None: ...
+    async def list_absence_requests(
+        self,
+        organisation_id: str,
+        *,
+        user_id: str | None = None,
+        pending_only: bool = False,
+    ) -> list[OrgAbsenceRequest]: ...
+    async def decide_absence_request(
+        self,
+        organisation_id: str,
+        request_id: str,
+        status: RequestStatus,
+        decided_by: str,
+        at: datetime,
+        comment: str | None,
+    ) -> OrgAbsenceRequest | None: ...
+    async def withdraw_absence_request(
+        self, organisation_id: str, request_id: str, user_id: str
+    ) -> bool: ...
+    async def upsert_timesheet(self, sheet: OrgTimesheet) -> OrgTimesheet: ...
+    async def get_timesheet(self, organisation_id: str, sheet_id: str) -> OrgTimesheet | None: ...
+    async def find_timesheet(
+        self, project_id: str, user_id: str, month: date
+    ) -> OrgTimesheet | None: ...
+    async def list_timesheets(
+        self,
+        organisation_id: str,
+        *,
+        user_id: str | None = None,
+        month: date | None = None,
+    ) -> list[OrgTimesheet]: ...
+    async def set_timesheet_state(
+        self,
+        organisation_id: str,
+        sheet_id: str,
+        *,
+        status: TimesheetStatus,
+        only_from: Iterable[TimesheetStatus],
+        decided_by: str,
+        at: datetime,
+        comment: str | None,
+        frozen: dict | None,
+    ) -> OrgTimesheet | None: ...
 
 
 class OrganisationRecords(Protocol):
@@ -421,6 +483,9 @@ class OrganisationRecords(Protocol):
         self, organisation_id: str, project_id: str, user_id: str
     ) -> list[Beat]: ...
     async def has_unshared(self, organisation_id: str, project_id: str, user_id: str) -> bool: ...
+    async def running_in(
+        self, organisation_id: str, project_id: str, user_id: str, start: datetime, end: datetime
+    ) -> bool: ...
     async def totals(
         self, organisation_id: str, project_ids: Iterable[str], *, user_id: str | None = None
     ) -> dict[tuple[str, str], MemberTotals]: ...
@@ -436,3 +501,13 @@ class OrganisationRecords(Protocol):
     async def adjustments_of_member(
         self, project_id: str, user_id: str, start: date, end: date
     ) -> list[BalanceAdjustment]: ...
+
+
+class PeriodLocks(Protocol):
+    """Whether an approved timesheet month covers a day or an instant of the
+    caller's, on a project (docs/organisations.md, stage 3). What the
+    member-side services ask before a write that would move a frozen figure;
+    returns the month, so the refusal can name it."""
+
+    async def locked_day(self, project_id: str, day: date) -> date | None: ...
+    async def locked_instant(self, project_id: str, instant: datetime) -> date | None: ...

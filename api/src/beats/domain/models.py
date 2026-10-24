@@ -991,6 +991,11 @@ class Beat(TzNormalizedModel):
     end: datetime | None = None
     note: str | None = None
     tags: list[str] = Field(default_factory=list)
+    # Set when an organisation's admin or manager entered the time for the
+    # member (docs/organisations.md, stage 3): who, so the entry says so on
+    # the member's own timeline and in the record. Never set by the member's
+    # own writes.
+    entered_by: str | None = None
     # Set when the beat was tracked on an organisation's project: this beat is
     # that organisation's working-time record, and the stamp is what says so
     # on the document itself, so the question is answered per row — by the
@@ -1039,6 +1044,11 @@ class ProjectOrganisation(BaseModel):
     name: str
     logo_url: str | None = None
     shared_from: datetime
+    # The employer writes the contract (docs/organisations.md, stage 3): the
+    # member reads their week and balance as ever, but the contract, the
+    # absences (which become requests) and the balance adjustments are the
+    # organisation's to change, through its own routes.
+    contract_managed: bool = False
 
 
 # On an organisation's project, which fields are whose. The organisation's
@@ -1457,11 +1467,20 @@ class Webhook(TzNormalizedModel):
 
 
 class OrgRole(StrEnum):
-    """What a member may do in an organisation. Each role includes the ones
-    below it: an owner is an admin, an admin is a member."""
+    """What a member may do in an organisation.
+
+    Owner and admin run it; a **manager** decides absences and timesheets
+    for the members of their teams and reads their slice of the record; a
+    **viewer** (an accountant, a works council seat) reads the whole record
+    and changes nothing; a member tracks. The ladder (`at_least`) orders
+    them for the owner/admin checks; what the middle roles may do is the
+    three capabilities below, not the ladder.
+    """
 
     OWNER = "owner"
     ADMIN = "admin"
+    MANAGER = "manager"
+    VIEWER = "viewer"
     MEMBER = "member"
 
     @property
@@ -1471,8 +1490,32 @@ class OrgRole(StrEnum):
     def at_least(self, other: OrgRole) -> bool:
         return self.rank >= other.rank
 
+    @property
+    def administers(self) -> bool:
+        """Members, invites, projects, assignments, settings, teams, audit."""
+        return self in (OrgRole.OWNER, OrgRole.ADMIN)
 
-_ROLE_RANK = {OrgRole.MEMBER: 0, OrgRole.ADMIN: 1, OrgRole.OWNER: 2}
+    @property
+    def decides(self) -> bool:
+        """Absence requests, timesheets, admin-entered time, managed
+        contracts — an owner or admin for anyone, a manager for the members
+        of their teams."""
+        return self in (OrgRole.OWNER, OrgRole.ADMIN, OrgRole.MANAGER)
+
+    @property
+    def reads_record(self) -> bool:
+        """The record, the compliance record and the report CSVs — a manager
+        for their teams, a viewer for everyone."""
+        return self is not OrgRole.MEMBER
+
+
+_ROLE_RANK = {
+    OrgRole.MEMBER: 0,
+    OrgRole.VIEWER: 1,
+    OrgRole.MANAGER: 2,
+    OrgRole.ADMIN: 3,
+    OrgRole.OWNER: 4,
+}
 
 
 class WeekStart(StrEnum):
@@ -1613,6 +1656,8 @@ class OrgAssignment(TzNormalizedModel):
     goal_overrides: list[GoalOverride] = Field(default_factory=list)
     autostart_repos: list[str] = Field(default_factory=list)
     contract: Contract | None = None
+    # Stage 3: the contract on this assignment is the employer's to write.
+    contract_managed: bool = False
 
     @property
     def active(self) -> bool:
@@ -1658,3 +1703,99 @@ class MemberTotals(TzNormalizedModel):
     hours: float = 0.0
     first: datetime | None = None
     last: datetime | None = None
+
+
+class OrgTeam(TzNormalizedModel):
+    """A team inside an organisation: a name and who is in it. What gives a
+    manager their scope — a manager decides and reads for the members of
+    the teams they are in, and for nobody else (docs/organisations.md,
+    stage 4)."""
+
+    id: str | None = None
+    organisation_id: str
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    member_ids: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class RequestStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DECLINED = "declined"
+
+
+class OrgAbsenceRequest(TzNormalizedModel):
+    """A day off asked for on a managed assignment (docs/organisations.md,
+    stage 3): the employee asks, a decider approves — which writes the
+    absence, stamped as the organisation's — or declines with a comment.
+    The note travels to the absence; the organisation's record never shows
+    it (rule 3), but the decider sees it here: it is addressed to them."""
+
+    id: str | None = None
+    organisation_id: str
+    project_id: str
+    user_id: str
+    date: date_type
+    type: AbsenceType
+    half_day: bool = False
+    note: str | None = None
+    status: RequestStatus = RequestStatus.PENDING
+    requested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    decided_at: datetime | None = None
+    decided_by: str | None = None
+    comment: str | None = None
+
+
+class TimesheetStatus(StrEnum):
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    REOPENED = "reopened"
+
+
+class FrozenMonth(BaseModel):
+    """What approval freezes (docs/organisations.md, stage 3): the figures
+    as they stood, stored for the first time anywhere in the system. The
+    live arithmetic goes on; an approved month's edits are refused, so the
+    two cannot drift silently, and a reopen is the recorded way to change
+    one. `balance_end` is None where the record withholds the balance
+    (decision 16) or no term owes hours."""
+
+    worked: float
+    expected: float | None
+    balance_end: float | None
+    entries: int
+    absence_days: float
+
+
+class TimesheetEvent(BaseModel):
+    """One step of a timesheet's history: submitted, approved, changes
+    requested, reopened — each with who and, where one was given, why."""
+
+    at: datetime
+    by: str
+    action: TimesheetStatus
+    comment: str | None = None
+
+
+class OrgTimesheet(TzNormalizedModel):
+    """One member's month on one organisation project, submitted and
+    decided (docs/organisations.md, stage 3). One per (project, member,
+    month); resubmission reuses the document and appends to `history`.
+    While `status` is `approved`, the month is locked: the member's writes
+    dated inside it are refused (409 PERIOD_APPROVED), and `frozen` holds
+    the figures approval saw. Months are the organisation's own timezone's.
+    """
+
+    id: str | None = None
+    organisation_id: str
+    project_id: str
+    user_id: str
+    month: date_type  # the 1st, in the organisation's timezone
+    status: TimesheetStatus = TimesheetStatus.SUBMITTED
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    decided_at: datetime | None = None
+    decided_by: str | None = None
+    comment: str | None = None
+    frozen: FrozenMonth | None = None
+    history: list[TimesheetEvent] = Field(default_factory=list)

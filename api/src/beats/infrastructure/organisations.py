@@ -34,6 +34,7 @@ from beats.domain.models import (
     JoinDecision,
     MembershipEnd,
     MemberTotals,
+    OrgAbsenceRequest,
     Organisation,
     OrgAssignment,
     OrgAuditEvent,
@@ -42,7 +43,11 @@ from beats.domain.models import (
     OrgMembership,
     OrgProject,
     OrgRole,
+    OrgTeam,
+    OrgTimesheet,
     Project,
+    RequestStatus,
+    TimesheetStatus,
 )
 from beats.infrastructure.repositories import serialize_from_document, serialize_to_document
 
@@ -80,6 +85,9 @@ class MongoOrganisationStore:
         self.assignments: AsyncCollection = db.org_assignments
         self.audit: AsyncCollection = db.org_audit
         self.projects: AsyncCollection = db.projects
+        self.teams: AsyncCollection = db.org_teams
+        self.absence_requests: AsyncCollection = db.org_absence_requests
+        self.timesheets: AsyncCollection = db.org_timesheets
 
     # --- organisations -------------------------------------------------
 
@@ -450,10 +458,271 @@ class MongoOrganisationStore:
         result = await self.assignments.update_many(query, {"$set": {"ended_at": at.isoformat()}})
         return result.modified_count
 
+    # --- teams (stage 4) --------------------------------------------------------
+
+    async def create_team(self, team: OrgTeam) -> OrgTeam:
+        data = _dump(team)
+        result = await self.teams.insert_one(data)
+        return _load(OrgTeam, {**data, "_id": result.inserted_id})
+
+    async def list_teams(self, organisation_id: str) -> list[OrgTeam]:
+        docs = (
+            await self.teams.find({"organisation_id": organisation_id})
+            .sort("name", 1)
+            .to_list(length=None)
+        )
+        return [_load(OrgTeam, doc) for doc in docs]
+
+    async def get_team(self, organisation_id: str, team_id: str) -> OrgTeam | None:
+        oid = oid_or_none(team_id)
+        if oid is None:
+            return None
+        doc = await self.teams.find_one({"_id": oid, "organisation_id": organisation_id})
+        return _load(OrgTeam, doc) if doc else None
+
+    async def update_team(self, organisation_id: str, team: OrgTeam) -> OrgTeam | None:
+        oid = oid_or_none(team.id or "")
+        if oid is None:
+            return None
+        data = _dump(team)
+        data.pop("_id", None)
+        doc = await self.teams.find_one_and_update(
+            {"_id": oid, "organisation_id": organisation_id},
+            {"$set": data},
+            return_document=ReturnDocument.AFTER,
+        )
+        return _load(OrgTeam, doc) if doc else None
+
+    async def delete_team(self, organisation_id: str, team_id: str) -> bool:
+        oid = oid_or_none(team_id)
+        if oid is None:
+            return False
+        result = await self.teams.delete_one({"_id": oid, "organisation_id": organisation_id})
+        return result.deleted_count > 0
+
+    async def manager_scope(self, organisation_id: str, user_id: str) -> set[str]:
+        """The members a manager may decide and read for: everyone in a team
+        the manager is in, themselves included. A manager in no team has an
+        empty scope and sees nothing."""
+        docs = await self.teams.find(
+            {"organisation_id": organisation_id, "member_ids": user_id}, {"member_ids": 1}
+        ).to_list(length=None)
+        scope: set[str] = set()
+        for doc in docs:
+            scope.update(doc.get("member_ids", []))
+        return scope
+
+    async def remove_from_teams(self, organisation_id: str, user_id: str) -> None:
+        """Take a person out of every team — when they leave, are removed, or
+        are erased (then under their tombstone id nothing matches anyway)."""
+        await self.teams.update_many(
+            {"organisation_id": organisation_id}, {"$pull": {"member_ids": user_id}}
+        )
+
+    # --- absence requests (stage 3) ---------------------------------------------
+
+    async def create_absence_request(self, request: OrgAbsenceRequest) -> OrgAbsenceRequest:
+        data = _dump(request)
+        result = await self.absence_requests.insert_one(data)
+        return _load(OrgAbsenceRequest, {**data, "_id": result.inserted_id})
+
+    async def get_absence_request(
+        self, organisation_id: str, request_id: str
+    ) -> OrgAbsenceRequest | None:
+        oid = oid_or_none(request_id)
+        if oid is None:
+            return None
+        doc = await self.absence_requests.find_one({"_id": oid, "organisation_id": organisation_id})
+        return _load(OrgAbsenceRequest, doc) if doc else None
+
+    async def list_absence_requests(
+        self,
+        organisation_id: str,
+        *,
+        user_id: str | None = None,
+        pending_only: bool = False,
+    ) -> list[OrgAbsenceRequest]:
+        query: dict[str, Any] = {"organisation_id": organisation_id}
+        if user_id is not None:
+            query["user_id"] = user_id
+        if pending_only:
+            query["status"] = RequestStatus.PENDING.value
+        docs = await self.absence_requests.find(query).sort("requested_at", -1).to_list(length=None)
+        return [_load(OrgAbsenceRequest, doc) for doc in docs]
+
+    async def decide_absence_request(
+        self,
+        organisation_id: str,
+        request_id: str,
+        status: RequestStatus,
+        decided_by: str,
+        at: datetime,
+        comment: str | None,
+    ) -> OrgAbsenceRequest | None:
+        """Decide a pending request; one already decided resolves to None, so
+        two deciders racing cannot both write the absence."""
+        oid = oid_or_none(request_id)
+        if oid is None:
+            return None
+        doc = await self.absence_requests.find_one_and_update(
+            {
+                "_id": oid,
+                "organisation_id": organisation_id,
+                "status": RequestStatus.PENDING.value,
+            },
+            {
+                "$set": {
+                    "status": status.value,
+                    "decided_at": at.isoformat(),
+                    "decided_by": decided_by,
+                    "comment": comment,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        return _load(OrgAbsenceRequest, doc) if doc else None
+
+    async def withdraw_absence_request(
+        self, organisation_id: str, request_id: str, user_id: str
+    ) -> bool:
+        """The asker takes a pending request back; a decided one stays."""
+        oid = oid_or_none(request_id)
+        if oid is None:
+            return False
+        result = await self.absence_requests.delete_one(
+            {
+                "_id": oid,
+                "organisation_id": organisation_id,
+                "user_id": user_id,
+                "status": RequestStatus.PENDING.value,
+            }
+        )
+        return result.deleted_count > 0
+
+    # --- timesheets (stage 3) ------------------------------------------------------
+
+    async def upsert_timesheet(self, sheet: OrgTimesheet) -> OrgTimesheet:
+        """Submit, or resubmit: one document per (project, member, month),
+        its history appended to. Never touches an approved sheet — the
+        filter excludes it, so a resubmission racing an approval loses."""
+        data = _dump(sheet)
+        data.pop("_id", None)
+        history = data.pop("history", [])
+        doc = await self.timesheets.find_one_and_update(
+            {
+                "project_id": sheet.project_id,
+                "user_id": sheet.user_id,
+                "month": data["month"],
+                "status": {"$ne": TimesheetStatus.APPROVED.value},
+            },
+            {"$set": data, "$push": {"history": {"$each": history}}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if doc is None:
+            raise RuntimeError("upsert of OrgTimesheet returned no document")
+        return _load(OrgTimesheet, doc)
+
+    async def get_timesheet(self, organisation_id: str, sheet_id: str) -> OrgTimesheet | None:
+        oid = oid_or_none(sheet_id)
+        if oid is None:
+            return None
+        doc = await self.timesheets.find_one({"_id": oid, "organisation_id": organisation_id})
+        return _load(OrgTimesheet, doc) if doc else None
+
+    async def find_timesheet(
+        self, project_id: str, user_id: str, month: date
+    ) -> OrgTimesheet | None:
+        doc = await self.timesheets.find_one(
+            {"project_id": project_id, "user_id": user_id, "month": month.isoformat()}
+        )
+        return _load(OrgTimesheet, doc) if doc else None
+
+    async def list_timesheets(
+        self,
+        organisation_id: str,
+        *,
+        user_id: str | None = None,
+        month: date | None = None,
+    ) -> list[OrgTimesheet]:
+        query: dict[str, Any] = {"organisation_id": organisation_id}
+        if user_id is not None:
+            query["user_id"] = user_id
+        if month is not None:
+            query["month"] = month.isoformat()
+        docs = await self.timesheets.find(query).sort("month", -1).to_list(length=None)
+        return [_load(OrgTimesheet, doc) for doc in docs]
+
+    async def set_timesheet_state(
+        self,
+        organisation_id: str,
+        sheet_id: str,
+        *,
+        status: TimesheetStatus,
+        only_from: Iterable[TimesheetStatus],
+        decided_by: str,
+        at: datetime,
+        comment: str | None,
+        frozen: dict[str, Any] | None,
+    ) -> OrgTimesheet | None:
+        """Move a sheet between states, only from the states named — so an
+        approval cannot land on a sheet approved by someone else a moment
+        before, and a reopen only opens what is approved."""
+        oid = oid_or_none(sheet_id)
+        if oid is None:
+            return None
+        sets: dict[str, Any] = {
+            "status": status.value,
+            "decided_at": at.isoformat(),
+            "decided_by": decided_by,
+            "comment": comment,
+        }
+        if frozen is not None:
+            sets["frozen"] = frozen
+        changes: dict[str, Any] = {
+            "$set": sets,
+            "$push": {
+                "history": {
+                    "at": at.isoformat(),
+                    "by": decided_by,
+                    "action": status.value,
+                    "comment": comment,
+                }
+            },
+        }
+        if frozen is None and status is not TimesheetStatus.APPROVED:
+            changes["$unset"] = {"frozen": ""}
+        doc = await self.timesheets.find_one_and_update(
+            {
+                "_id": oid,
+                "organisation_id": organisation_id,
+                "status": {"$in": [state.value for state in only_from]},
+            },
+            changes,
+            return_document=ReturnDocument.AFTER,
+        )
+        return _load(OrgTimesheet, doc) if doc else None
+
     # --- audit -------------------------------------------------------------------
 
     async def record(self, event: OrgAuditEvent) -> None:
         await self.audit.insert_one(_dump(event))
+
+    async def list_audit(
+        self, organisation_id: str, *, before: datetime | None = None, limit: int = 100
+    ) -> list[OrgAuditEvent]:
+        """The log, newest first, paged by instant: written since stage 2,
+        read from stage 4 on."""
+        query: dict[str, Any] = {"organisation_id": organisation_id}
+        if before is not None:
+            query["at"] = {"$lt": before.isoformat()}
+        docs = (
+            await self.audit.find(query)
+            .sort("at", -1)
+            .limit(max(1, min(limit, 500)))
+            .to_list(length=None)
+        )
+        return [_load(OrgAuditEvent, doc) for doc in docs]
 
 
 class MongoOrganisationRecords:
@@ -512,6 +781,24 @@ class MongoOrganisationRecords:
         query = self._beats_query(organisation_id, [project_id], user_id)
         docs = await self.beats.find(query).sort("start", 1).to_list(length=None)
         return [_load(Beat, doc) for doc in docs]
+
+    async def running_in(
+        self, organisation_id: str, project_id: str, user_id: str, start: datetime, end: datetime
+    ) -> bool:
+        """Whether a stamped timer is still running in [start, end) — what
+        makes an approval wait: a running beat is in no figure yet, and
+        freezing around it would guarantee a drift."""
+        doc = await self.beats.find_one(
+            {
+                "organisation_id": organisation_id,
+                "project_id": project_id,
+                "user_id": user_id,
+                "end": None,
+                "start": {"$gte": start, "$lt": end},
+            },
+            {"_id": 1},
+        )
+        return doc is not None
 
     async def has_unshared(self, organisation_id: str, project_id: str, user_id: str) -> bool:
         """Whether the member has an entry or an absence on the project that
