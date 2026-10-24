@@ -75,6 +75,12 @@ beforeEach(() => {
 	setSummaries({ today: makeSummary(), yesterday: EMPTY });
 });
 
+/** Hands the router's search string to `onSearch` on every render, so a test reads where a click went. */
+function LocationProbe({ onSearch }: { onSearch: (search: string) => void }) {
+	onSearch(useLocation().search);
+	return null;
+}
+
 describe("FlowHeadline", () => {
 	it("renders today's avg score in the headline number when populated", () => {
 		renderWithRouter(<FlowHeadline />);
@@ -132,16 +138,16 @@ describe("FlowHeadline", () => {
 
 	it("clicks 'best on <repo>' to deep-link Insights pre-filtered by repo", () => {
 		// Tests the URL navigation, not the rendered Insights page.
-		// LocationProbe captures the URL after the click.
+		// LocationProbe reports the URL after the click.
 		let lastSearch = "";
-		const LocationProbe = () => {
-			lastSearch = useLocation().search;
-			return null;
-		};
 		render(
 			<MemoryRouter>
 				<FlowHeadline />
-				<LocationProbe />
+				<LocationProbe
+					onSearch={(search) => {
+						lastSearch = search;
+					}}
+				/>
 			</MemoryRouter>,
 		);
 
@@ -157,14 +163,14 @@ describe("FlowHeadline", () => {
 		// passed through as the filter value — same contract the
 		// FlowByApp click-to-filter uses.
 		let lastSearch = "";
-		const LocationProbe = () => {
-			lastSearch = useLocation().search;
-			return null;
-		};
 		render(
 			<MemoryRouter>
 				<FlowHeadline />
-				<LocationProbe />
+				<LocationProbe
+					onSearch={(search) => {
+						lastSearch = search;
+					}}
+				/>
 			</MemoryRouter>,
 		);
 
@@ -176,14 +182,14 @@ describe("FlowHeadline", () => {
 
 	it("clicks 'in <language>' to deep-link Insights pre-filtered by language", () => {
 		let lastSearch = "";
-		const LocationProbe = () => {
-			lastSearch = useLocation().search;
-			return null;
-		};
 		render(
 			<MemoryRouter>
 				<FlowHeadline />
-				<LocationProbe />
+				<LocationProbe
+					onSearch={(search) => {
+						lastSearch = search;
+					}}
+				/>
 			</MemoryRouter>,
 		);
 
@@ -202,14 +208,14 @@ describe("FlowHeadline", () => {
 		// what the user wants. Verify the pill wins cleanly: search
 		// string contains repo=, not empty.
 		let lastSearch = "";
-		const LocationProbe = () => {
-			lastSearch = useLocation().search;
-			return null;
-		};
 		render(
 			<MemoryRouter>
 				<FlowHeadline />
-				<LocationProbe />
+				<LocationProbe
+					onSearch={(search) => {
+						lastSearch = search;
+					}}
+				/>
 			</MemoryRouter>,
 		);
 
