@@ -408,11 +408,13 @@ export async function withdrawAbsenceRequest(
 export async function submitTimesheet(
 	organisationId: string,
 	projectId: string,
-	month: string, // YYYY-MM
+	month: string, // "YYYY-MM" or any day of the month
 ): Promise<Timesheet> {
 	const data = await post<unknown>(`${BASE}/${organisationId}/timesheets`, {
 		project_id: projectId,
-		month: `${month}-01`,
+		// The API stores the 1st whatever day is sent; normalise here so a
+		// caller may pass "2026-09" or "2026-09-01" alike.
+		month: `${month.slice(0, 7)}-01`,
 	});
 	return toTimesheet(parseApiResponse(ApiTimesheetSchema, data));
 }
