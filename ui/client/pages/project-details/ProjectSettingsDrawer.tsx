@@ -229,87 +229,84 @@ export function ProjectSettingsDrawer({
 					</p>
 				</section>
 			) : (
-				<>
-					<section aria-labelledby={archiveHeadingId} className="mt-6 pt-4 border-t border-border">
-						<h3 id={archiveHeadingId} className={LABEL}>
-							{project.archived ? "Archived" : "Archive"}
-						</h3>
-						{project.archived ? (
-							<>
-								<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
-									This project is archived. Restoring it makes it visible again in pickers, the
-									sidebar, and lists. Sessions and history were preserved.
-								</p>
+				<section aria-labelledby={archiveHeadingId} className="mt-6 pt-4 border-t border-border">
+					<h3 id={archiveHeadingId} className={LABEL}>
+						{project.archived ? "Archived" : "Archive"}
+					</h3>
+					{project.archived ? (
+						<>
+							<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+								This project is archived. Restoring it makes it visible again in pickers, the
+								sidebar, and lists. Sessions and history were preserved.
+							</p>
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								className="mt-3"
+								onClick={handleRestore}
+								disabled={unarchive.isPending}
+							>
+								{unarchive.isPending ? (
+									<Loader2 className="animate-spin" aria-hidden="true" />
+								) : (
+									<ArchiveRestore aria-hidden="true" />
+								)}
+								Restore project
+							</Button>
+						</>
+					) : (
+						<>
+							<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
+								Archiving hides {project.name} from pickers, lists, and the sidebar. Sessions are
+								preserved and you can restore the project later — there is no hard-delete by design.
+							</p>
+							{confirming ? (
+								<div className="mt-3 flex flex-wrap items-center gap-2">
+									<span className="text-xs text-foreground">
+										Archive <strong>{project.name}</strong>?
+									</span>
+									<Button
+										type="button"
+										variant="destructive"
+										size="sm"
+										onClick={handleArchive}
+										disabled={archive.isPending}
+									>
+										{archive.isPending ? "Archiving…" : "Archive project"}
+									</Button>
+									<Button
+										ref={takeFocusOnSwap}
+										type="button"
+										variant="ghost"
+										size="sm"
+										onClick={() => {
+											focusOnSwap.current = true;
+											setConfirmingArchive(false);
+										}}
+									>
+										Cancel
+									</Button>
+								</div>
+							) : (
 								<Button
+									ref={takeFocusOnSwap}
 									type="button"
 									variant="secondary"
 									size="sm"
 									className="mt-3"
-									onClick={handleRestore}
-									disabled={unarchive.isPending}
+									onClick={() => {
+										focusOnSwap.current = true;
+										setConfirmingArchive(true);
+									}}
 								>
-									{unarchive.isPending ? (
-										<Loader2 className="animate-spin" aria-hidden="true" />
-									) : (
-										<ArchiveRestore aria-hidden="true" />
-									)}
-									Restore project
+									<Archive aria-hidden="true" />
+									Archive project
 								</Button>
-							</>
-						) : (
-							<>
-								<p className="mt-1.5 text-xs text-muted-foreground leading-normal">
-									Archiving hides {project.name} from pickers, lists, and the sidebar. Sessions are
-									preserved and you can restore the project later — there is no hard-delete by
-									design.
-								</p>
-								{confirming ? (
-									<div className="mt-3 flex flex-wrap items-center gap-2">
-										<span className="text-xs text-foreground">
-											Archive <strong>{project.name}</strong>?
-										</span>
-										<Button
-											type="button"
-											variant="destructive"
-											size="sm"
-											onClick={handleArchive}
-											disabled={archive.isPending}
-										>
-											{archive.isPending ? "Archiving…" : "Archive project"}
-										</Button>
-										<Button
-											ref={takeFocusOnSwap}
-											type="button"
-											variant="ghost"
-											size="sm"
-											onClick={() => {
-												focusOnSwap.current = true;
-												setConfirmingArchive(false);
-											}}
-										>
-											Cancel
-										</Button>
-									</div>
-								) : (
-									<Button
-										ref={takeFocusOnSwap}
-										type="button"
-										variant="secondary"
-										size="sm"
-										className="mt-3"
-										onClick={() => {
-											focusOnSwap.current = true;
-											setConfirmingArchive(true);
-										}}
-									>
-										<Archive aria-hidden="true" />
-										Archive project
-									</Button>
-								)}
-							</>
-						)}
-					</section>
-				</>
+							)}
+						</>
+					)}
+				</section>
 			)}
 		</Dialog>
 	);
