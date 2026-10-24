@@ -35,7 +35,7 @@ output "built_image_url" {
 
 output "cloudflare_api_cname_record" {
   description = "Cloudflare CNAME record ID for API domain"
-  value       = length(cloudflare_record.api_cname) > 0 ? cloudflare_record.api_cname[0].id : null
+  value       = length(cloudflare_dns_record.api_cname) > 0 ? cloudflare_dns_record.api_cname[0].id : null
 }
 
 output "cloudflare_zone_id" {
