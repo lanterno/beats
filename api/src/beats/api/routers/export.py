@@ -28,8 +28,9 @@ from beats.api.dependencies import (
 )
 from beats.api.errors import error_code
 from beats.api.schemas import ImportCounts, ImportResponse, ImportSkip
-from beats.domain.exceptions import BackupOfAnotherAccount, DomainException
+from beats.domain.exceptions import BackupOfAnotherAccount, DomainException, ProjectNotFound
 from beats.domain.models import (
+    PERSONAL_FIELDS,
     Absence,
     BalanceAdjustment,
     Beat,
@@ -203,6 +204,78 @@ class _Backup(BaseModel):
     billing_budgets: list[BillingBudget] = Field(default_factory=list)
 
 
+async def _split_organisation_projects(
+    backup: _Backup, project_repo: ProjectRepository, skipped: list[ImportSkip]
+) -> tuple[list[_BackupProject], _Backup]:
+    """Take the organisation-owned projects out of the file. Those the
+    account still sees (assigned, in that organisation) are returned to be
+    written as their personal half; the rest, and every session, absence and
+    adjustment on them, go to `skipped`, each with ORGANISATION_PROJECT."""
+    held: list[_BackupProject] = []
+    dropped: set[str] = set()
+    personal: list[_BackupProject] = []
+    for project in backup.projects:
+        if project.organisation is None:
+            personal.append(project)
+            continue
+        current = None
+        if project.id is not None:
+            try:
+                current = await project_repo.get_by_id(project.id)
+            except ProjectNotFound:
+                current = None
+        if (
+            current is not None
+            and current.organisation is not None
+            and current.organisation.id == project.organisation.id
+        ):
+            held.append(project)
+            continue
+        dropped.add(project.id or "")
+        skipped.append(
+            ImportSkip(
+                collection="projects",
+                project_id=project.id or "",
+                date=None,
+                code="ORGANISATION_PROJECT",
+                detail=(
+                    f"{project.organisation.name} owns this project; a backup does not "
+                    "restore it, nor the sessions, absences and adjustments on it"
+                ),
+            )
+        )
+    if not dropped:
+        return held, backup.model_copy(update={"projects": personal})
+
+    def keep[T: Beat | Absence | BalanceAdjustment](
+        records: list[T], collection: Literal["beats", "absences", "balance_adjustments"]
+    ) -> list[T]:
+        kept: list[T] = []
+        for record in records:
+            if record.project_id in dropped:
+                skipped.append(
+                    ImportSkip(
+                        collection=collection,
+                        project_id=record.project_id,
+                        date=getattr(record, "date", None) or getattr(record, "day", None),
+                        code="ORGANISATION_PROJECT",
+                        detail="on an organisation's project the backup does not restore",
+                    )
+                )
+            else:
+                kept.append(record)
+        return kept
+
+    return held, backup.model_copy(
+        update={
+            "projects": personal,
+            "beats": keep(backup.beats, "beats"),
+            "absences": keep(backup.absences, "absences"),
+            "balance_adjustments": keep(backup.balance_adjustments, "balance_adjustments"),
+        }
+    )
+
+
 async def _check_references(
     backup: _Backup,
     project_repo: ProjectRepository,
@@ -317,6 +390,16 @@ async def import_full_json(
     except ValidationError as exc:
         raise RequestValidationError(exc.errors(include_url=False)) from None
 
+    # An organisation's project in the file is restored only as the personal
+    # half of one the account still sees — the organisation owns the rest —
+    # and is otherwise left out with everything on it (docs/organisations.md,
+    # *Backups*). Settled first, because such a project reads as another
+    # account's to the ownership check below.
+    skipped: list[ImportSkip] = []
+    organisation_projects, backup = await _split_organisation_projects(
+        backup, project_repo, skipped
+    )
+
     # Every write is scoped to the caller, so a record of someone else's
     # would not move across but collide with theirs, partway through.
     foreign_projects = await project_repo.ids_held_elsewhere(
@@ -353,7 +436,6 @@ async def import_full_json(
         billable_overrides=0,
         billing_budgets=0,
     )
-    skipped: list[ImportSkip] = []
 
     # Clients before the billing that names them; projects before their
     # billing too, so the kind guard reads the billing the account had.
@@ -363,6 +445,19 @@ async def import_full_json(
 
     for project in backup.projects:
         await project_service.restore_project(project)
+        counts.projects += 1
+
+    # The personal half of an organisation project the account still holds:
+    # the organisation's fields are read from what the organisation has, so
+    # a rename since the backup is not undone, and the write is a project
+    # write like any other.
+    for project in organisation_projects:
+        assert project.id is not None
+        current = await project_repo.get_by_id(project.id)
+        restored = current.model_copy(
+            update={field: getattr(project, field) for field in PERSONAL_FIELDS}
+        )
+        await project_service.update_project(restored, previous_contract=current.contract)
         counts.projects += 1
 
     for billing in backup.project_billing:
