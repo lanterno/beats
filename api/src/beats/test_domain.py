@@ -4559,7 +4559,9 @@ def _no_op_raise_for_status(self):
     if self.status_code >= 400:
         import httpx
 
-        raise httpx.HTTPStatusError("err", request=None, response=None)  # type: ignore[arg-type]
+        request = httpx.Request("GET", "https://example.test")
+        response = httpx.Response(self.status_code, request=request)
+        raise httpx.HTTPStatusError("err", request=request, response=response)
 
 
 class TestFitbitAuthUrl:

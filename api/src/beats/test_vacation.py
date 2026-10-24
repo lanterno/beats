@@ -51,8 +51,11 @@ def _contract(
     ended_on: date | None = None,
     schedule: ScheduleType = ScheduleType.FULL_TIME,
 ) -> Contract:
-    hours = {"full_time_hours": 40} if schedule is ScheduleType.FULL_TIME else {}
-    term = ContractTerm(effective_from=starts_on, schedule_type=schedule, **hours)
+    term = (
+        ContractTerm(effective_from=starts_on, schedule_type=schedule, full_time_hours=40)
+        if schedule is ScheduleType.FULL_TIME
+        else ContractTerm(effective_from=starts_on, schedule_type=schedule)
+    )
     return Contract(terms=[term], ended_on=ended_on, vacation=entitlement)
 
 
