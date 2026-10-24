@@ -270,7 +270,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
                 "type": "string"
               },
               {
@@ -4584,6 +4583,292 @@
         "title": "RegistrationVerifyResponse",
         "type": "object"
       },
+      "ReportEntryResponse": {
+        "description": "One billable entry: the local day it started on, when it ran, and how\nlong. Empty on a link that does not show entries.",
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "start",
+          "end",
+          "hours"
+        ],
+        "title": "ReportEntryResponse",
+        "type": "object"
+      },
+      "ReportLineResponse": {
+        "description": "A run of consecutive days of one project at one rate. `rate_minor` and\n`amount_minor` are null on an unpriced run, and on every line when the\nlink does not show amounts.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "rate_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Minor"
+          }
+        },
+        "required": [
+          "project_name",
+          "first",
+          "last",
+          "hours",
+          "rate_minor",
+          "amount_minor"
+        ],
+        "title": "ReportLineResponse",
+        "type": "object"
+      },
+      "ReportLinkRequest": {
+        "description": "Request body for minting a report link: the range, the timezone its\ndays are bucketed in, and the two flags, every key required. The range\nruns forward and covers at most 366 days.",
+        "properties": {
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_entries": {
+            "title": "Show Entries",
+            "type": "boolean"
+          },
+          "tz": {
+            "minLength": 1,
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "first",
+          "last",
+          "tz",
+          "show_amounts",
+          "show_entries"
+        ],
+        "title": "ReportLinkRequest",
+        "type": "object"
+      },
+      "ReportLinkResponse": {
+        "description": "A report link as its owner sees it, token included: the owner has to\nbe able to re-copy the link they sent a client last month.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_entries": {
+            "title": "Show Entries",
+            "type": "boolean"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "token",
+          "first",
+          "last",
+          "tz",
+          "show_amounts",
+          "show_entries",
+          "created_at"
+        ],
+        "title": "ReportLinkResponse",
+        "type": "object"
+      },
+      "ReportResponse": {
+        "description": "What `GET /api/reports/{token}` answers: one client's billable work\nover the link's frozen range.\n\nWith `show_amounts` false, `currency`, `minor_units`, `unpriced_hours`,\n`amount_minor` and every line's rate and amount are null, and the hours\nstill add up \u2014 a proof of time with the price left out.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "billable_hours": {
+            "title": "Billable Hours",
+            "type": "number"
+          },
+          "client_name": {
+            "title": "Client Name",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReportEntryResponse"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReportLineResponse"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "minor_units": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minor Units"
+          },
+          "show_amounts": {
+            "title": "Show Amounts",
+            "type": "boolean"
+          },
+          "show_entries": {
+            "title": "Show Entries",
+            "type": "boolean"
+          },
+          "unpriced_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpriced Hours"
+          }
+        },
+        "required": [
+          "client_name",
+          "first",
+          "last",
+          "show_amounts",
+          "show_entries",
+          "currency",
+          "minor_units",
+          "billable_hours",
+          "unpriced_hours",
+          "amount_minor",
+          "lines",
+          "entries"
+        ],
+        "title": "ReportResponse",
+        "type": "object"
+      },
       "RhythmSlotResponse": {
         "description": "Response schema for a half-hour slot in the daily rhythm chart.",
         "properties": {
@@ -7457,7 +7742,7 @@
     },
     "/api/clients/{client_id}": {
       "delete": {
-        "description": "Delete a client, and its billing budget with it. 409\nCLIENT_HAS_PROJECTS while a project is billed to it: archive it instead,\nso past reports keep its name and currency.",
+        "description": "Delete a client, and its billing budget and report links with it. 409\nCLIENT_HAS_PROJECTS while a project is billed to it: archive it instead,\nso past reports keep its name and currency.",
         "operationId": "delete_client_api_clients__client_id__delete",
         "parameters": [
           {
@@ -7645,6 +7930,158 @@
           }
         },
         "summary": "Archive Client",
+        "tags": [
+          "Clients"
+        ]
+      }
+    },
+    "/api/clients/{client_id}/links": {
+      "get": {
+        "description": "One client's report links, newest first, each with its token: the\nowner has to be able to re-copy a link they already sent.",
+        "operationId": "list_report_links_api_clients__client_id__links_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportLinkResponse"
+                  },
+                  "title": "Response List Report Links Api Clients  Client Id  Links Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Report Links",
+        "tags": [
+          "Clients"
+        ]
+      },
+      "post": {
+        "description": "Mint a link over a fixed range, which a client opens with no login.\n\nThe range and the timezone its days are bucketed in are frozen now and\nnever read from a request again, so two reads of the link agree. 422 for\na range that runs backwards or covers more than 366 days, 400\nINVALID_TIMEZONE for a zone `zoneinfo` does not know.",
+        "operationId": "create_report_link_api_clients__client_id__links_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Report Link",
+        "tags": [
+          "Clients"
+        ]
+      }
+    },
+    "/api/clients/{client_id}/links/{link_id}": {
+      "delete": {
+        "description": "Revoke a link: the URL is dead from the next read. 204 even when\nthere was no such link \u2014 with none there is nothing left to clear.",
+        "operationId": "delete_report_link_api_clients__client_id__links__link_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "title": "Link Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Report Link",
         "tags": [
           "Clients"
         ]
@@ -11326,6 +11763,52 @@
         "summary": "Get Vacation",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/api/reports/{token}": {
+      "get": {
+        "description": "One client's billable work over a report link's frozen range.\n\nPublic: no bearer token, and a device token is still refused before this\nruns (`device_may_reach` in `server.py`). Rate-limited less against\nguessing \u2014 32 bytes are not guessed \u2014 than against a leaked link being\nhammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.",
+        "operationId": "read_report_api_reports__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Report",
+        "tags": [
+          "Reports"
         ]
       }
     },
