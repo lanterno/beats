@@ -60,7 +60,12 @@ const PROJECTS: ProjectWithDuration[] = [
 		id: "work",
 		name: "Backend",
 		kind: "day_job",
-		organisation: { id: "o1", name: "Acme", sharedFrom: "2026-03-04T00:00:00Z" },
+		organisation: {
+			id: "o1",
+			name: "Acme",
+			sharedFrom: "2026-03-04T00:00:00Z",
+			contractManaged: false,
+		},
 	}),
 ];
 

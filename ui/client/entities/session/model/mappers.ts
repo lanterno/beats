@@ -19,6 +19,7 @@ export function toSession(beat: ApiBeat): Session {
 		note: beat.note ?? undefined,
 		tags: beat.tags ?? [],
 		organisationId: beat.organisation_id ?? undefined,
+		enteredBy: beat.entered_by ?? undefined,
 	};
 }
 

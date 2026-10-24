@@ -230,7 +230,12 @@ describe("ProjectSettingsDrawer", () => {
 	it("locks the organisation's fields on its project, sends them as they came, and names the owner instead of Archive", async () => {
 		const owned: Project = {
 			...DAY_JOB,
-			organisation: { id: "o1", name: "Acme", sharedFrom: "2026-03-04T00:00:00Z" },
+			organisation: {
+				id: "o1",
+				name: "Acme",
+				sharedFrom: "2026-03-04T00:00:00Z",
+				contractManaged: false,
+			},
 		};
 		render(
 			<MemoryRouter>

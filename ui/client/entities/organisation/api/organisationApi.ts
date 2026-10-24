@@ -262,3 +262,210 @@ export function archiveCsvUrl(organisationId: string): string {
 	const params = new URLSearchParams({ tz: browserTimeZone() });
 	return `${BASE}/${organisationId}/archive.csv?${params.toString()}`;
 }
+
+// --- Employment (docs/organisations.md, stages 3 and 4) -----------------------
+
+import {
+	ApiAbsenceRequestListSchema,
+	ApiAbsenceRequestSchema,
+	ApiAuditEventListSchema,
+	ApiManagedContractSchema,
+	ApiTeamListSchema,
+	ApiTeamSchema,
+	ApiTimesheetListSchema,
+	ApiTimesheetSchema,
+} from "@/shared/api";
+import type {
+	AbsenceRequest,
+	AuditEvent,
+	ManagedContract,
+	Team,
+	TeamInput,
+	Timesheet,
+} from "../model";
+import {
+	toAbsenceRequest,
+	toApiTeamInput,
+	toAuditEvent,
+	toManagedContract,
+	toTeam,
+	toTimesheet,
+} from "../model";
+
+export async function fetchTeams(organisationId: string): Promise<Team[]> {
+	const data = await get<unknown>(`${BASE}/${organisationId}/teams`);
+	return parseApiResponse(ApiTeamListSchema, data).map(toTeam);
+}
+
+export async function createTeam(organisationId: string, input: TeamInput): Promise<Team> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/teams`, toApiTeamInput(input));
+	return toTeam(parseApiResponse(ApiTeamSchema, data));
+}
+
+export async function updateTeam(
+	organisationId: string,
+	teamId: string,
+	input: TeamInput,
+): Promise<Team> {
+	const data = await put<unknown>(
+		`${BASE}/${organisationId}/teams/${teamId}`,
+		toApiTeamInput(input),
+	);
+	return toTeam(parseApiResponse(ApiTeamSchema, data));
+}
+
+export async function deleteTeam(organisationId: string, teamId: string): Promise<void> {
+	await del<void>(`${BASE}/${organisationId}/teams/${teamId}`);
+}
+
+export async function fetchManagedContract(
+	organisationId: string,
+	projectId: string,
+	userId: string,
+): Promise<ManagedContract> {
+	const data = await get<unknown>(
+		`${BASE}/${organisationId}/projects/${projectId}/members/${userId}/contract`,
+	);
+	return toManagedContract(parseApiResponse(ApiManagedContractSchema, data));
+}
+
+/** The wire contract comes from the project entity's `toApiContract`. */
+export async function setManagedContract(
+	organisationId: string,
+	projectId: string,
+	userId: string,
+	contract: unknown | null,
+	managed: boolean,
+): Promise<ManagedContract> {
+	const data = await put<unknown>(
+		`${BASE}/${organisationId}/projects/${projectId}/members/${userId}/contract`,
+		{ contract, managed },
+	);
+	return toManagedContract(parseApiResponse(ApiManagedContractSchema, data));
+}
+
+export async function enterTime(
+	organisationId: string,
+	projectId: string,
+	userId: string,
+	input: { start: string; end: string; note?: string },
+): Promise<void> {
+	await post<unknown>(`${BASE}/${organisationId}/projects/${projectId}/members/${userId}/entries`, {
+		start: input.start,
+		end: input.end,
+		note: input.note ?? null,
+	});
+}
+
+export async function requestAbsence(
+	organisationId: string,
+	input: {
+		projectId: string;
+		date: string;
+		type: "vacation" | "sick" | "other";
+		halfDay: boolean;
+		note?: string;
+	},
+): Promise<AbsenceRequest> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/absence-requests`, {
+		project_id: input.projectId,
+		date: input.date,
+		type: input.type,
+		half_day: input.halfDay,
+		note: input.note ?? null,
+	});
+	return toAbsenceRequest(parseApiResponse(ApiAbsenceRequestSchema, data));
+}
+
+export async function fetchAbsenceRequests(
+	organisationId: string,
+	pending = false,
+): Promise<AbsenceRequest[]> {
+	const data = await get<unknown>(`${BASE}/${organisationId}/absence-requests?pending=${pending}`);
+	return parseApiResponse(ApiAbsenceRequestListSchema, data).map(toAbsenceRequest);
+}
+
+export async function decideAbsenceRequest(
+	organisationId: string,
+	requestId: string,
+	approve: boolean,
+	comment?: string,
+): Promise<AbsenceRequest> {
+	const data = await post<unknown>(
+		`${BASE}/${organisationId}/absence-requests/${requestId}/decision`,
+		{ approve, comment: comment ?? null },
+	);
+	return toAbsenceRequest(parseApiResponse(ApiAbsenceRequestSchema, data));
+}
+
+export async function withdrawAbsenceRequest(
+	organisationId: string,
+	requestId: string,
+): Promise<void> {
+	await del<void>(`${BASE}/${organisationId}/absence-requests/${requestId}`);
+}
+
+export async function submitTimesheet(
+	organisationId: string,
+	projectId: string,
+	month: string, // YYYY-MM
+): Promise<Timesheet> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/timesheets`, {
+		project_id: projectId,
+		month: `${month}-01`,
+	});
+	return toTimesheet(parseApiResponse(ApiTimesheetSchema, data));
+}
+
+export async function fetchTimesheets(
+	organisationId: string,
+	month?: string, // YYYY-MM
+): Promise<Timesheet[]> {
+	const params = month ? `?month=${month}` : "";
+	const data = await get<unknown>(`${BASE}/${organisationId}/timesheets${params}`);
+	return parseApiResponse(ApiTimesheetListSchema, data).map(toTimesheet);
+}
+
+export async function decideTimesheet(
+	organisationId: string,
+	sheetId: string,
+	approve: boolean,
+	comment?: string,
+): Promise<Timesheet> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/timesheets/${sheetId}/decision`, {
+		approve,
+		comment: comment ?? null,
+	});
+	return toTimesheet(parseApiResponse(ApiTimesheetSchema, data));
+}
+
+export async function reopenTimesheet(
+	organisationId: string,
+	sheetId: string,
+	reason: string,
+): Promise<Timesheet> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/timesheets/${sheetId}/reopen`, {
+		reason,
+	});
+	return toTimesheet(parseApiResponse(ApiTimesheetSchema, data));
+}
+
+export async function fetchAuditLog(
+	organisationId: string,
+	before?: string,
+): Promise<AuditEvent[]> {
+	const params = before ? `?before=${encodeURIComponent(before)}` : "";
+	const data = await get<unknown>(`${BASE}/${organisationId}/audit${params}`);
+	return parseApiResponse(ApiAuditEventListSchema, data).map(toAuditEvent);
+}
+
+/** Where the month's record and compliance CSVs are, for `downloadFile`. */
+export function recordCsvUrl(organisationId: string, month: string): string {
+	const params = new URLSearchParams({ month, tz: browserTimeZone() });
+	return `${BASE}/${organisationId}/record.csv?${params.toString()}`;
+}
+
+export function complianceCsvUrl(organisationId: string, month: string): string {
+	const params = new URLSearchParams({ month, tz: browserTimeZone() });
+	return `${BASE}/${organisationId}/compliance.csv?${params.toString()}`;
+}

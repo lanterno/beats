@@ -537,6 +537,9 @@ export const ProjectOrganisationSchema = z.object({
 	name: z.string(),
 	logo_url: z.string().nullable().optional(),
 	shared_from: z.string(), // ISO datetime
+	// Stage 3: the employer writes the contract, the absences and the
+	// adjustments; the member asks for days off.
+	contract_managed: z.boolean().optional().default(false),
 });
 
 export type ApiProjectOrganisation = z.infer<typeof ProjectOrganisationSchema>;
@@ -602,6 +605,8 @@ export const ApiBeatSchema = z.object({
 	// Set when the entry is an organisation's working-time record: tracked
 	// on one of its projects, or shared with it when the project was connected.
 	organisation_id: z.string().nullable().optional(),
+	// Stage 3: who entered this time for the member, when a decider did.
+	entered_by: z.string().nullable().optional(),
 });
 
 export type ApiBeat = z.infer<typeof ApiBeatSchema>;
@@ -820,7 +825,7 @@ export const GapListSchema = z.array(GapSchema);
 // `JoinResponse`, `JoinRequestResponse`, `OrgProjectResponse`,
 // `AssignmentResponse`, `RecordResponse` and `ArchiveResponse`.
 
-export const OrgRoleSchema = z.enum(["owner", "admin", "member"]);
+export const OrgRoleSchema = z.enum(["owner", "admin", "manager", "viewer", "member"]);
 export type ApiOrgRole = z.infer<typeof OrgRoleSchema>;
 
 export const WeekStartSchema = z.enum(["monday", "saturday", "sunday"]);
@@ -996,6 +1001,92 @@ export const ApiRecordSchema = z.object({
 	),
 });
 export type ApiRecord = z.infer<typeof ApiRecordSchema>;
+
+// Employment (docs/organisations.md, stages 3 and 4).
+
+export const ApiTeamSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	member_ids: z.array(z.string()),
+});
+export type ApiTeam = z.infer<typeof ApiTeamSchema>;
+export const ApiTeamListSchema = z.array(ApiTeamSchema);
+
+export const ApiManagedContractSchema = z.object({
+	project_id: z.string(),
+	user_id: z.string(),
+	managed: z.boolean(),
+	contract: ContractSchema.nullable().optional(),
+});
+export type ApiManagedContract = z.infer<typeof ApiManagedContractSchema>;
+
+export const RequestStatusSchema = z.enum(["pending", "approved", "declined"]);
+
+export const ApiAbsenceRequestSchema = z.object({
+	id: z.string(),
+	project_id: z.string(),
+	user_id: z.string(),
+	date: z.string(),
+	type: z.enum(["vacation", "sick", "other"]),
+	half_day: z.boolean(),
+	note: z.string().nullable().optional(),
+	status: RequestStatusSchema,
+	requested_at: z.string(),
+	decided_at: z.string().nullable().optional(),
+	decided_by: z.string().nullable().optional(),
+	comment: z.string().nullable().optional(),
+});
+export type ApiAbsenceRequest = z.infer<typeof ApiAbsenceRequestSchema>;
+export const ApiAbsenceRequestListSchema = z.array(ApiAbsenceRequestSchema);
+
+export const TimesheetStatusSchema = z.enum([
+	"submitted",
+	"approved",
+	"changes_requested",
+	"reopened",
+]);
+
+const FrozenMonthSchema = z.object({
+	worked: z.number(),
+	expected: z.number().nullable(),
+	balance_end: z.number().nullable(),
+	entries: z.number(),
+	absence_days: z.number(),
+});
+
+export const ApiTimesheetSchema = z.object({
+	id: z.string(),
+	project_id: z.string(),
+	user_id: z.string(),
+	month: z.string(), // YYYY-MM-01
+	status: TimesheetStatusSchema,
+	submitted_at: z.string(),
+	decided_at: z.string().nullable().optional(),
+	decided_by: z.string().nullable().optional(),
+	comment: z.string().nullable().optional(),
+	frozen: FrozenMonthSchema.nullable().optional(),
+	history: z.array(
+		z.object({
+			at: z.string(),
+			by: z.string(),
+			action: TimesheetStatusSchema,
+			comment: z.string().nullable().optional(),
+		}),
+	),
+});
+export type ApiTimesheet = z.infer<typeof ApiTimesheetSchema>;
+export const ApiTimesheetListSchema = z.array(ApiTimesheetSchema);
+
+export const ApiAuditEventSchema = z.object({
+	at: z.string(),
+	actor_user_id: z.string().nullable().optional(),
+	event: z.string(),
+	subject_user_id: z.string().nullable().optional(),
+	project_id: z.string().nullable().optional(),
+	details: z.record(z.string(), z.unknown()),
+});
+export type ApiAuditEvent = z.infer<typeof ApiAuditEventSchema>;
+export const ApiAuditEventListSchema = z.array(ApiAuditEventSchema);
 
 export const ApiArchiveSchema = z.object({
 	organisation: OrganisationCardSchema,

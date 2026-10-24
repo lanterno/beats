@@ -61,7 +61,12 @@ describe("OrganisationPanel", () => {
 	it("names the owner of an organisation's project and links to what they see", () => {
 		renderPanel({
 			...PERSONAL,
-			organisation: { id: "o1", name: "Acme", sharedFrom: "2026-03-03T23:00:00Z" },
+			organisation: {
+				id: "o1",
+				name: "Acme",
+				sharedFrom: "2026-03-03T23:00:00Z",
+				contractManaged: false,
+			},
 		});
 		const panel = screen.getByRole("region", { name: "Organisation" });
 		expect(panel).toHaveTextContent(/Acme owns this project/);

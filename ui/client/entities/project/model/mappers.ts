@@ -59,6 +59,7 @@ export function toProject(apiProject: ApiProject): Project {
 					name: apiProject.organisation.name,
 					logoUrl: apiProject.organisation.logo_url ?? undefined,
 					sharedFrom: apiProject.organisation.shared_from,
+					contractManaged: apiProject.organisation.contract_managed ?? false,
 				}
 			: undefined,
 	};
