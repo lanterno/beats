@@ -153,6 +153,22 @@ describe("ProjectPicker", () => {
 		expect(readPickerRecents("alice@example.com")).toEqual(["b"]);
 	});
 
+	it("marks an organisation's project with the organisation's name", async () => {
+		const projects = [
+			...PROJECTS,
+			project({
+				id: "work",
+				name: "Backend",
+				organisation: { id: "o1", name: "Acme", sharedFrom: "2026-03-04T00:00:00Z" },
+			}),
+		];
+		render(<ProjectPicker value={null} onChange={vi.fn()} projects={projects} />);
+		await userEvent.click(screen.getByRole("button", { name: "Project" }));
+
+		expect(screen.getByRole("option", { name: /Backend/ })).toHaveTextContent("Acme");
+		expect(screen.getByRole("option", { name: /Alpha/ })).not.toHaveTextContent("Acme");
+	});
+
 	it("surfaces archived rows when showArchived=true", async () => {
 		render(<ProjectPicker value={null} onChange={vi.fn()} projects={PROJECTS} showArchived />);
 		await userEvent.click(screen.getByRole("button", { name: "Project" }));
