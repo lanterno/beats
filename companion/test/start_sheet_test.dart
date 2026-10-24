@@ -7,7 +7,7 @@ import 'package:beats_companion/services/api_client.dart';
 import 'package:beats_companion/state/timer_controller.dart';
 import 'package:beats_companion/state/week_controller.dart';
 import 'package:beats_companion/theme/sky.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
