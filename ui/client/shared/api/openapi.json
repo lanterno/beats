@@ -37,7 +37,7 @@
         "type": "object"
       },
       "AbsenceResponse": {
-        "description": "Response schema for an absence.",
+        "description": "Response schema for an absence. `organisation_id` is set on one\nrecorded on an organisation's project: that organisation's record.",
         "properties": {
           "date": {
             "format": "date",
@@ -63,6 +63,17 @@
               }
             ],
             "title": "Note"
+          },
+          "organisation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organisation Id"
           },
           "project_id": {
             "title": "Project Id",
@@ -144,6 +155,153 @@
           "hours"
         ],
         "title": "AdjustmentResponse",
+        "type": "object"
+      },
+      "ArchiveProjectResponse": {
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RecordEntryResponse"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "name",
+          "color",
+          "hours",
+          "entries"
+        ],
+        "title": "ArchiveProjectResponse",
+        "type": "object"
+      },
+      "ArchiveResponse": {
+        "description": "The person's own hours stamped as one organisation's record, after\nleaving or before: read-only, grouped by project.",
+        "properties": {
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "left_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left At"
+          },
+          "organisation": {
+            "$ref": "#/components/schemas/OrganisationCardResponse"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ArchiveProjectResponse"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          }
+        },
+        "required": [
+          "organisation",
+          "role",
+          "joined_at",
+          "left_at",
+          "hours",
+          "projects"
+        ],
+        "title": "ArchiveResponse",
+        "type": "object"
+      },
+      "AssignmentResponse": {
+        "properties": {
+          "assigned_at": {
+            "format": "date-time",
+            "title": "Assigned At",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "has_contract": {
+            "title": "Has Contract",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "shared_from": {
+            "format": "date-time",
+            "title": "Shared From",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "shared_from",
+          "assigned_at",
+          "ended_at",
+          "has_contract"
+        ],
+        "title": "AssignmentResponse",
         "type": "object"
       },
       "AutoTimerSuggestion": {
@@ -1567,6 +1725,32 @@
         "title": "CompanyHoliday",
         "type": "object"
       },
+      "ConnectProjectRequest": {
+        "description": "Connect one of the caller's own projects: from `share_from` (a local\nday in `tz`) the hours and absences on it are the organisation's; null\nstarts fresh from now.",
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "share_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share From"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "ConnectProjectRequest",
+        "type": "object"
+      },
       "Contract": {
         "description": "A day job's terms as they changed over time, plus what frames them.\n\n`terms` is the history \u2014 part-time, then 80%, then full-time \u2014 kept in\norder of `effective_from` with no two starting on the same day, because\nthe day decides which term applies. The region names the employer's\npublic holidays: `holiday_subdivision` only means something inside a\n`holiday_country`. Both must be codes the holidays library knows, but\nthat is checked where a contract is written (`ProjectService`), not\nhere: this model is re-validated on every read, and the set of codes the\nlibrary knows moves with its version \u2014 a code it stops recognising must\nmake one contract un-editable, not every project of the user unreadable.\n`opening_balance_hours` is what was banked (or owed) before Beats started\ncounting; `ended_on` freezes the balance from that day on.\n\nWhere the employer's days off differ from the region's, two lists say\nhow: `company_holidays` adds days, `holidays_not_given` takes region\nholidays away (`domain/holidays.contract_calendar` combines the three).\nA removal that matches no region holiday \u2014 or is kept while there is no\nregion \u2014 does nothing; a company day on a removed date wins. Each list's\nonly rule is its own (no date twice), and no rule may ever tie either\nlist to another field or to the other list: an incoming contract that\nleaves a list out keeps the stored one (`keep_unsent_contract_fields`),\nmerged without re-validating, which is safe only while every rule on\nthese lists is per-list. A cross-field rule would need that merge to\nre-validate and answer a 422 \u2014 otherwise a merged contract could fail\nthe next read, and every project of the user with it.\n\n`vacation` is the leave the job gives (`VacationEntitlement`), None when\nnothing is tracked. It is kept when left out the same way, and so has no\nrule here tying it to the terms or `ended_on`: that its opening falls\ninside the contract's dates is checked after the merge, on the write.",
         "properties": {
@@ -2115,6 +2299,18 @@
           "half_day"
         ],
         "title": "DayAbsence",
+        "type": "object"
+      },
+      "DecideRequest": {
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/JoinDecision"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "DecideRequest",
         "type": "object"
       },
       "DeleteSignalsResponse": {
@@ -2953,7 +3149,7 @@
         "type": "object"
       },
       "ImportSkip": {
-        "description": "An absence or a balance adjustment in a backup that the import left\nout, because the rule its own route applies refused it: `code` and\n`detail` are what that route would have answered. An absence on a\nproject that is no longer a day job is one; an adjustment dated outside\nthe contract the backup restored is another.",
+        "description": "A record in a backup that the import left out, with the code and\ndetail its own route would have answered. An absence on a project that\nis no longer a day job is one; an adjustment dated outside the contract\nthe backup restored is another; an organisation's project the account\nis no longer assigned to (ORGANISATION_PROJECT), and every session,\nabsence and adjustment on it, is a third \u2014 a backup does not restore a\nproject the organisation owns (docs/organisations.md).",
         "properties": {
           "code": {
             "title": "Code",
@@ -2961,6 +3157,8 @@
           },
           "collection": {
             "enum": [
+              "projects",
+              "beats",
               "absences",
               "balance_adjustments"
             ],
@@ -2968,9 +3166,16 @@
             "type": "string"
           },
           "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
           },
           "detail": {
             "title": "Detail",
@@ -3112,6 +3317,234 @@
           "body"
         ],
         "title": "InsightCardResponse",
+        "type": "object"
+      },
+      "InvitationResponse": {
+        "description": "An open invitation addressed to the caller's own address.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "organisation": {
+            "$ref": "#/components/schemas/OrganisationCardResponse"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "role",
+          "expires_at",
+          "organisation"
+        ],
+        "title": "InvitationResponse",
+        "type": "object"
+      },
+      "InvitePreviewResponse": {
+        "properties": {
+          "addressed": {
+            "title": "Addressed",
+            "type": "boolean"
+          },
+          "already_member": {
+            "title": "Already Member",
+            "type": "boolean"
+          },
+          "organisation": {
+            "$ref": "#/components/schemas/OrganisationCardResponse"
+          },
+          "requires_approval": {
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          }
+        },
+        "required": [
+          "organisation",
+          "role",
+          "requires_approval",
+          "addressed",
+          "already_member"
+        ],
+        "title": "InvitePreviewResponse",
+        "type": "object"
+      },
+      "InviteRequest": {
+        "description": "An invitation to one address, or with `email` null an invite link.\n`requires_approval` is read on a link alone; no invite carries the\nowner role (403 OWNER_ROLE_RESERVED).",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "expires_in_days": {
+            "default": 14,
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Expires In Days",
+            "type": "integer"
+          },
+          "requires_approval": {
+            "default": false,
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole",
+            "default": "member"
+          }
+        },
+        "title": "InviteRequest",
+        "type": "object"
+      },
+      "InviteResponse": {
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "requires_approval": {
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "requires_approval",
+          "token",
+          "created_at",
+          "expires_at",
+          "accepted_at"
+        ],
+        "title": "InviteResponse",
+        "type": "object"
+      },
+      "JoinDecision": {
+        "enum": [
+          "approved",
+          "declined"
+        ],
+        "title": "JoinDecision",
+        "type": "string"
+      },
+      "JoinRequestResponse": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "email",
+          "requested_at"
+        ],
+        "title": "JoinRequestResponse",
+        "type": "object"
+      },
+      "JoinResponse": {
+        "description": "`joined`, with the membership; or `pending`, when the link has an\napproval step and a request is now waiting.",
+        "properties": {
+          "membership": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MembershipResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "joined",
+              "pending"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "JoinResponse",
         "type": "object"
       },
       "Ledger": {
@@ -3489,6 +3922,260 @@
         "title": "LoginVerifyResponse",
         "type": "object"
       },
+      "MemberBalanceResponse": {
+        "properties": {
+          "adjusted": {
+            "title": "Adjusted",
+            "type": "number"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "balance": {
+            "title": "Balance",
+            "type": "number"
+          },
+          "expected_through": {
+            "title": "Expected Through",
+            "type": "number"
+          },
+          "opening": {
+            "title": "Opening",
+            "type": "number"
+          },
+          "worked": {
+            "title": "Worked",
+            "type": "number"
+          }
+        },
+        "required": [
+          "as_of",
+          "balance",
+          "opening",
+          "worked",
+          "expected_through",
+          "adjusted"
+        ],
+        "title": "MemberBalanceResponse",
+        "type": "object"
+      },
+      "MemberRecordResponse": {
+        "properties": {
+          "absences": {
+            "items": {
+              "$ref": "#/components/schemas/RecordAbsenceResponse"
+            },
+            "title": "Absences",
+            "type": "array"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "balance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberBalanceResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RecordEntryResponse"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "has_contract": {
+            "title": "Has Contract",
+            "type": "boolean"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "shared_from": {
+            "format": "date-time",
+            "title": "Shared From",
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/MemberTotals"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "shared_from",
+          "active",
+          "hours",
+          "entries",
+          "absences",
+          "has_contract",
+          "balance",
+          "totals"
+        ],
+        "title": "MemberRecordResponse",
+        "type": "object"
+      },
+      "MemberResponse": {
+        "description": "A member as the organisation lists them: the name and address they\njoined under. `user_id` is a tombstone once the account has been erased.",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "left_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "email",
+          "role",
+          "joined_at",
+          "left_at"
+        ],
+        "title": "MemberResponse",
+        "type": "object"
+      },
+      "MemberTotals": {
+        "description": "What one member's finished entries on one project add up to, all time.",
+        "properties": {
+          "entries": {
+            "default": 0,
+            "title": "Entries",
+            "type": "integer"
+          },
+          "first": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "hours": {
+            "default": 0.0,
+            "title": "Hours",
+            "type": "number"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          }
+        },
+        "title": "MemberTotals",
+        "type": "object"
+      },
+      "MembershipEnd": {
+        "description": "Why a membership ended.",
+        "enum": [
+          "left",
+          "removed",
+          "erased"
+        ],
+        "title": "MembershipEnd",
+        "type": "string"
+      },
+      "MembershipResponse": {
+        "description": "One of the caller's organisations, with their standing in it. A\nmembership that ended (`left_at`) is listed too: the archive of the\nperson's own hours there is reached through it.",
+        "properties": {
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "left_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left At"
+          },
+          "left_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MembershipEnd"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "organisation": {
+            "$ref": "#/components/schemas/OrganisationResponse"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          }
+        },
+        "required": [
+          "organisation",
+          "role",
+          "joined_at",
+          "left_at",
+          "left_reason"
+        ],
+        "title": "MembershipResponse",
+        "type": "object"
+      },
       "MemoryResponse": {
         "properties": {
           "content": {
@@ -3546,6 +4233,395 @@
           "warnings"
         ],
         "title": "MonthlyTotalsResponse",
+        "type": "object"
+      },
+      "OrgProject": {
+        "description": "An organisation's project as the organisation sees it: the document's\nfields (`ORGANISATION_FIELDS`) and nothing personal, since the personal\nhalf is each member's own.",
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind",
+            "default": "side_project"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "OrgProject",
+        "type": "object"
+      },
+      "OrgProjectRequest": {
+        "description": "The organisation's fields of one of its projects. On an update a\nfield left out is kept and `null` clears a nullable one.",
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind",
+            "default": "side_project"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OrgProjectRequest",
+        "type": "object"
+      },
+      "OrgProjectResponse": {
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "github_repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Repo"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind",
+            "default": "side_project"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentResponse"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "members"
+        ],
+        "title": "OrgProjectResponse",
+        "type": "object"
+      },
+      "OrgRole": {
+        "description": "What a member may do in an organisation. Each role includes the ones\nbelow it: an owner is an admin, an admin is a member.",
+        "enum": [
+          "owner",
+          "admin",
+          "member"
+        ],
+        "title": "OrgRole",
+        "type": "string"
+      },
+      "OrganisationCardResponse": {
+        "description": "An organisation as a joiner sees it before joining: the name and logo.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "logo_url"
+        ],
+        "title": "OrganisationCardResponse",
+        "type": "object"
+      },
+      "OrganisationFields": {
+        "description": "What an organisation is set up with: the fields its admins write.",
+        "properties": {
+          "holiday_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Country"
+          },
+          "holiday_subdivision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Subdivision"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "UTC",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "week_start": {
+            "$ref": "#/components/schemas/WeekStart",
+            "default": "monday"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OrganisationFields",
+        "type": "object"
+      },
+      "OrganisationResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "holiday_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Country"
+          },
+          "holiday_subdivision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holiday Subdivision"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "UTC",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "week_start": {
+            "$ref": "#/components/schemas/WeekStart",
+            "default": "monday"
+          }
+        },
+        "required": [
+          "name",
+          "id",
+          "created_at"
+        ],
+        "title": "OrganisationResponse",
         "type": "object"
       },
       "OuraConnectRequest": {
@@ -4045,6 +5121,62 @@
         "title": "ProjectKind",
         "type": "string"
       },
+      "ProjectOrganisation": {
+        "description": "The organisation that owns a project, as its member sees it on the\nproject: enough to mark it in a list, and the instant from which the\nmember's hours on it are the organisation's (docs/organisations.md).\n`shared_from` is the member's own choice when they connected a project of\ntheirs, and the moment of assignment otherwise.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "shared_from": {
+            "format": "date-time",
+            "title": "Shared From",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "shared_from"
+        ],
+        "title": "ProjectOrganisation",
+        "type": "object"
+      },
+      "ProjectRecordResponse": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberRecordResponse"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "project": {
+            "$ref": "#/components/schemas/OrgProject"
+          }
+        },
+        "required": [
+          "project",
+          "members"
+        ],
+        "title": "ProjectRecordResponse",
+        "type": "object"
+      },
       "ProjectResponse": {
         "description": "Canonical response shape for a project \u2014 every field of the domain\nProject the API exposes. Previously declared only 6 of 11 fields;\nlist/update routes returned `model_dump()` with no response_model\ndeclared, so the OpenAPI contract was silently widened. Now precise so\ngenerated clients see the full shape.\n\n`contract` is the domain model as stored \u2014 the terms, region, opening\nbalance and end date \u2014 and is only meaningful when `kind` is `day_job`.",
         "properties": {
@@ -4136,6 +5268,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "organisation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectOrganisation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "weekly_goal": {
             "anyOf": [
@@ -4336,6 +5478,16 @@
             "title": "Name",
             "type": "string"
           },
+          "organisation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectOrganisation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "total_minutes": {
             "anyOf": [
               {
@@ -4423,6 +5575,117 @@
           "events"
         ],
         "title": "RecentDriftResponse",
+        "type": "object"
+      },
+      "RecordAbsenceResponse": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "half_day": {
+            "title": "Half Day",
+            "type": "boolean"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "type",
+          "half_day"
+        ],
+        "title": "RecordAbsenceResponse",
+        "type": "object"
+      },
+      "RecordEntryResponse": {
+        "description": "One finished entry as the organisation reads it: when, how long, and\nthe note (decision 1). Nothing about the person beyond that.",
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "day",
+          "start",
+          "end",
+          "hours",
+          "note"
+        ],
+        "title": "RecordEntryResponse",
+        "type": "object"
+      },
+      "RecordResponse": {
+        "description": "What the organisation sees (`GET /{id}/record`), and what it sees of\none member (`GET /{id}/visible`) \u2014 the same shape from the same read,\nnarrowed to one person. Written field by field, as the public report\nis, so what crosses cannot grow by inheritance.",
+        "properties": {
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "organisation": {
+            "$ref": "#/components/schemas/OrganisationCardResponse"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectRecordResponse"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "organisation",
+          "month",
+          "first",
+          "last",
+          "projects"
+        ],
+        "title": "RecordResponse",
         "type": "object"
       },
       "RecordTimeRequest": {
@@ -4886,6 +6149,18 @@
           "minutes"
         ],
         "title": "RhythmSlotResponse",
+        "type": "object"
+      },
+      "RoleRequest": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "RoleRequest",
         "type": "object"
       },
       "SSOCompleteRequest": {
@@ -5643,6 +6918,16 @@
         ],
         "title": "WebhookResponse",
         "type": "object"
+      },
+      "WeekStart": {
+        "description": "Which day an organisation's week begins on, for its own reports.",
+        "enum": [
+          "monday",
+          "saturday",
+          "sunday"
+        ],
+        "title": "WeekStart",
+        "type": "string"
       },
       "WeeklyDigestResponse": {
         "description": "Response schema for a weekly digest.",
@@ -10105,6 +11390,1423 @@
         "summary": "List Region Holidays",
         "tags": [
           "Meta"
+        ]
+      }
+    },
+    "/api/organisations/": {
+      "get": {
+        "description": "Every organisation the caller is or was a member of, with their role\nand, for one they left, when and how.",
+        "operationId": "list_mine_api_organisations__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MembershipResponse"
+                  },
+                  "title": "Response List Mine Api Organisations  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "List Mine",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "post": {
+        "description": "Create an organisation; the caller is its first owner. 400 for a\nholiday region the calendar does not know (UNKNOWN_HOLIDAY_REGION) or a\ntimezone the database does not (INVALID_TIMEZONE).",
+        "operationId": "create_organisation_api_organisations__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganisationFields"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Organisation",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/invitations": {
+      "get": {
+        "description": "The open invitations addressed to the caller's own email address.\nNothing is sent anywhere: this is where an invitation is found.",
+        "operationId": "list_invitations_api_organisations_invitations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InvitationResponse"
+                  },
+                  "title": "Response List Invitations Api Organisations Invitations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "List Invitations",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/join/{token}": {
+      "get": {
+        "description": "What an invite token opens: the organisation's name and the role it\ngives. 404 for a token that is unknown or addressed to another address\n(INVITE_NOT_FOUND), 410 for one that was real and is closed\n(INVITE_EXPIRED).",
+        "operationId": "preview_invite_api_organisations_join__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Invite",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "post": {
+        "description": "Take an invite. Joining makes one membership document and nothing\nelse: no second account, no moved data (rule 1). A link with an approval\nstep answers `pending` and leaves a request for an admin. 409 when\nalready a member (ALREADY_A_MEMBER) or already waiting\n(JOIN_REQUEST_PENDING).",
+        "operationId": "join_api_organisations_join__token__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Join",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}": {
+      "get": {
+        "description": "The organisation and the caller's standing in it. Members only.",
+        "operationId": "get_organisation_api_organisations__organisation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Organisation",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "put": {
+        "description": "Replace the organisation's settings. Admins.",
+        "operationId": "update_organisation_api_organisations__organisation_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganisationFields"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Organisation",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/archive": {
+      "get": {
+        "description": "The caller's own hours that are this organisation's record, by\nproject: the read-only \"Acme (left)\" archive, kept after leaving. Read\nthrough the caller's own repository. Members and former members.",
+        "operationId": "read_archive_api_organisations__organisation_id__archive_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Archive",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/archive.csv": {
+      "get": {
+        "description": "`/archive` as CSV, a row per entry, for the person to keep.",
+        "operationId": "read_archive_csv_api_organisations__organisation_id__archive_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "The archive as CSV."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Archive Csv",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/connect": {
+      "post": {
+        "description": "Connect one of the caller's own projects to the organisation (rule 4):\nthe project becomes the organisation's, its goal, local repo paths and\ncontract stay the caller's, and the caller's hours and absences on it\nfrom `share_from` \u2014 a local day in `tz`, which is required \u2014 are the\norganisation's record; null shares nothing before now. Any member.\n409 on a project billed to a client (PROJECT_HAS_BILLING), one already\nan organisation's (ORGANISATION_PROJECT), or a day after today\n(SHARE_FROM_IN_FUTURE).",
+        "operationId": "connect_project_api_organisations__organisation_id__connect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+            "in": "query",
+            "name": "tz",
+            "required": true,
+            "schema": {
+              "description": "IANA timezone name (e.g. America/New_York). Required: which day is today decides what the request may do.",
+              "minLength": 1,
+              "title": "Tz",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect Project",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/invites": {
+      "get": {
+        "description": "The open invites. Admins.",
+        "operationId": "list_invites_api_organisations__organisation_id__invites_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InviteResponse"
+                  },
+                  "title": "Response List Invites Api Organisations  Organisation Id  Invites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Invites",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "post": {
+        "description": "An invitation to one address, taken once by the account that holds\nit, or with no address an invite link anyone may use until it expires.\nThe token is returned here and nowhere else: the API sends no email, the\ninviter passes it on. Admins.",
+        "operationId": "create_invite_api_organisations__organisation_id__invites_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Invite",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/invites/{invite_id}": {
+      "delete": {
+        "description": "Revoke an invite: its token stops working at once. Admins.",
+        "operationId": "revoke_invite_api_organisations__organisation_id__invites__invite_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "invite_id",
+            "required": true,
+            "schema": {
+              "title": "Invite Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Invite",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/leave": {
+      "post": {
+        "description": "Leave. Every assignment ends, the organisation's projects leave the\ncaller's list, the organisation keeps its working-time record, and the\ncaller keeps `/archive`. 409 LAST_OWNER for the only owner.",
+        "operationId": "leave_api_organisations__organisation_id__leave_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leave",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/members": {
+      "get": {
+        "description": "The active members, by the name and address each joined under.",
+        "operationId": "list_members_api_organisations__organisation_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberResponse"
+                  },
+                  "title": "Response List Members Api Organisations  Organisation Id  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Members",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/members/{member_user_id}": {
+      "delete": {
+        "description": "Remove a member: their assignments end, tracking to the\norganisation's projects stops, and the organisation keeps its record of\ntheir hours. Admins; an owner only by an owner, never the last.",
+        "operationId": "remove_member_api_organisations__organisation_id__members__member_user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Member",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "patch": {
+        "description": "Change a member's role. Admins; the owner role is given and taken by\nowners alone (403 OWNER_ROLE_RESERVED), and the last owner keeps it\n(409 LAST_OWNER).",
+        "operationId": "set_role_api_organisations__organisation_id__members__member_user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Role",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/projects": {
+      "get": {
+        "description": "The organisation's projects with who is on each. Admins.",
+        "operationId": "list_projects_api_organisations__organisation_id__projects_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrgProjectResponse"
+                  },
+                  "title": "Response List Projects Api Organisations  Organisation Id  Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "post": {
+        "description": "A project the organisation owns: it appears on a member's list once\nthey are assigned. Admins.",
+        "operationId": "create_project_api_organisations__organisation_id__projects_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrgProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Project",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/projects/{project_id}": {
+      "put": {
+        "description": "Write the organisation's fields of one of its projects \u2014 name,\ncolour, kind, description, repository, category, archived. A field left\nout keeps its value. Admins.",
+        "operationId": "update_project_api_organisations__organisation_id__projects__project_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrgProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Project",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}": {
+      "delete": {
+        "description": "Take a member off a project: it leaves their list and their tracking\nto it stops; the hours already on it stay the organisation's. Admins.",
+        "operationId": "unassign_api_organisations__organisation_id__projects__project_id__members__member_user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unassign",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "put": {
+        "description": "Put a member on a project: it appears on their list, and their hours\non it are the organisation's from now. Admins.",
+        "operationId": "assign_api_organisations__organisation_id__projects__project_id__members__member_user_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assign",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/record": {
+      "get": {
+        "description": "What the organisation sees: per project, per member, the finished\nentries started in `month` in `tz` (start, end, hours, note), the\nabsences (date, type, half day), the all-time totals, and where the\nmember has a contract its balance as of today. Nothing else, and nothing\nabout now. Admins.",
+        "operationId": "read_record_api_organisations__organisation_id__record_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Record",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/requests": {
+      "get": {
+        "description": "The join requests waiting on an invite link with an approval step. Admins.",
+        "operationId": "list_requests_api_organisations__organisation_id__requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JoinRequestResponse"
+                  },
+                  "title": "Response List Requests Api Organisations  Organisation Id  Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Requests",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/requests/{request_id}": {
+      "post": {
+        "description": "Approve or decline a join request; approving makes the member. Admins.",
+        "operationId": "decide_request_api_organisations__organisation_id__requests__request_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Request",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/visible": {
+      "get": {
+        "description": "What the organisation sees of the caller \u2014 the \"what Acme can see\"\npage: `/record` narrowed to one member by the same read, so it shows\nthe data actually held, not a description of it. Members and former\nmembers.",
+        "operationId": "read_visible_api_organisations__organisation_id__visible_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Visible",
+        "tags": [
+          "Organisations"
         ]
       }
     },
