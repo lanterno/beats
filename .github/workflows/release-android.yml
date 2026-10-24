@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the tags and merges What's new is built from
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17

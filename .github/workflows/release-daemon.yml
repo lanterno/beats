@@ -120,7 +120,7 @@ jobs:
       # its checksum. Skipped instead, the release keeps the archives the
       # formula's checksums name, and the homebrew job, which reads its
       # checksums from the release, bumps the formula to those.
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           overwrite_files: false
