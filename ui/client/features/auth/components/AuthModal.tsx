@@ -8,6 +8,7 @@ import { type SyntheticEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { describeError } from "@/shared/api";
 import { APP_NAME } from "@/shared/config";
+import { leaveLanding } from "@/shared/lib";
 import { BrandMark, Button } from "@/shared/ui";
 import {
 	getCurrentUser,
@@ -130,7 +131,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				getCurrentUser()
 					.then((u) => setUser({ email: u.email, displayName: u.display_name }))
 					.catch(() => {});
-				navigate("/app", { replace: true });
+				leaveLanding("/app", navigate);
 			} else {
 				setError("Registration failed. Please try again.");
 			}
@@ -163,7 +164,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				getCurrentUser()
 					.then((u) => setUser({ email: u.email, displayName: u.display_name }))
 					.catch(() => {});
-				navigate("/app", { replace: true });
+				leaveLanding("/app", navigate);
 			} else {
 				setError("Authentication failed. Please try again.");
 			}

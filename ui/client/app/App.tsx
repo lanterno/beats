@@ -5,7 +5,7 @@
 import "../global.css";
 
 import { useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router";
 import { initializeAuth, useAuth } from "@/features/auth";
 import Clients from "@/pages/clients";
 import Coach from "@/pages/coach/Coach";
@@ -28,6 +28,7 @@ import ProjectsIndex from "@/pages/projects-index";
 import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
+import { leaveLanding } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
@@ -59,8 +60,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  */
 function HomeOrDashboard() {
 	const { isAuthenticated, isLoading } = useAuth();
+	const navigate = useNavigate();
 
-	if (isLoading) {
+	// Signed in, on arrival or from the landing page: on to the dashboard,
+	// leaving the landing page's analytics behind (leaveLanding says why it
+	// matters how).
+	useEffect(() => {
+		if (!isLoading && isAuthenticated) leaveLanding("/app", navigate);
+	}, [isLoading, isAuthenticated, navigate]);
+
+	if (isLoading || isAuthenticated) {
 		return (
 			<div className="min-h-screen bg-background flex items-center justify-center">
 				<div className="text-muted-foreground">Loading...</div>
@@ -68,11 +77,7 @@ function HomeOrDashboard() {
 		);
 	}
 
-	if (!isAuthenticated) {
-		return <HomePage />;
-	}
-
-	return <Navigate to="/app" replace />;
+	return <HomePage />;
 }
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
