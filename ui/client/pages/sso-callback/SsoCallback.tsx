@@ -17,6 +17,7 @@ import {
 	useAuth,
 } from "@/features/auth";
 import { describeError } from "@/shared/api";
+import { takeReturnTo } from "@/shared/lib";
 import { Button } from "@/shared/ui";
 
 export default function SsoCallback() {
@@ -68,7 +69,7 @@ export default function SsoCallback() {
 				getCurrentUser()
 					.then((u) => setUser({ email: u.email, displayName: u.display_name }))
 					.catch(() => {});
-				navigate("/app", { replace: true });
+				navigate(takeReturnTo() ?? "/app", { replace: true });
 			})
 			.catch((err) => setFailure(describeError(err, "Sign-in failed. Start again.")));
 	}, [navigate]);

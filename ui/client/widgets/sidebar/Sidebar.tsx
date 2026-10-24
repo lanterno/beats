@@ -33,6 +33,7 @@ import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarStats } from "./SidebarStats";
 import { SidebarTimer, type TimerProps } from "./SidebarTimer";
 import { useBillingBudgetAttention } from "./useBillingBudgetAttention";
+import { useInvitationAttention } from "./useInvitationAttention";
 import { useShowClients } from "./useShowClients";
 
 interface SidebarProps extends TimerProps {
@@ -66,6 +67,16 @@ export function Sidebar(props: SidebarProps) {
 			(item.to !== "/clients" || showClients) && (item.to !== "/coach" || coachConfigured === true),
 	);
 	const budgetUsedUp = useBillingBudgetAttention(showClients);
+	// With a dot while an invitation to this account waits (`useInvitationAttention`).
+	const invitations = useInvitationAttention();
+	const dotted = (to: string) =>
+		(to === "/clients" && budgetUsedUp) || (to === "/organisations" && invitations > 0);
+	const dotLabel = (to: string, title: string) =>
+		to === "/clients" && budgetUsedUp
+			? "Clients, a billing budget is used up"
+			: to === "/organisations" && invitations > 0
+				? `${title}, ${invitations === 1 ? "an invitation is" : `${invitations} invitations are`} waiting`
+				: undefined;
 
 	const handleLogout = async () => {
 		await signOut();
@@ -102,14 +113,10 @@ export function Sidebar(props: SidebarProps) {
 										: "bg-secondary text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
 								)}
 								title={title}
-								aria-label={
-									to === "/clients" && budgetUsedUp
-										? "Clients, a billing budget is used up"
-										: undefined
-								}
+								aria-label={dotLabel(to, title)}
 							>
 								<Icon className="w-4 h-4" />
-								{to === "/clients" && budgetUsedUp && (
+								{dotted(to) && (
 									<span
 										aria-hidden="true"
 										className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-destructive ring-2 ring-sidebar"
