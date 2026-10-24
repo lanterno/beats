@@ -11,6 +11,8 @@ export interface Session {
 	duration: number; // in minutes
 	note?: string;
 	tags: string[];
+	/** Set when the entry is an organisation's working-time record (docs/organisations.md). */
+	organisationId?: string;
 }
 
 export interface DaySummary {

@@ -111,6 +111,7 @@ export type {
 	LedgerWeek,
 	Project,
 	ProjectKind,
+	ProjectOrganisation,
 	ProjectWithDuration,
 	RegionHoliday,
 	ScheduleType,

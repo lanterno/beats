@@ -53,6 +53,14 @@ export function toProject(apiProject: ApiProject): Project {
 			apiProject.kind === "day_job" && apiProject.contract
 				? toContract(apiProject.contract)
 				: undefined,
+		organisation: apiProject.organisation
+			? {
+					id: apiProject.organisation.id,
+					name: apiProject.organisation.name,
+					logoUrl: apiProject.organisation.logo_url ?? undefined,
+					sharedFrom: apiProject.organisation.shared_from,
+				}
+			: undefined,
 	};
 }
 

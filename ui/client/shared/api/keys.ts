@@ -12,3 +12,9 @@ export const billingRootKey = ["billing"] as const;
 
 /** Every client read. */
 export const clientsRootKey = ["clients"] as const;
+
+/**
+ * Every organisation read. A project write invalidates it too, since
+ * connecting a project changes who owns one (docs/organisations.md).
+ */
+export const organisationsRootKey = ["organisations"] as const;

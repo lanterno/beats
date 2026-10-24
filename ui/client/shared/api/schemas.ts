@@ -532,6 +532,15 @@ const BillingBudgetStatusSchema = z.object({
 export type ApiBillingBudgetStatus = z.infer<typeof BillingBudgetStatusSchema>;
 export const ApiBillingBudgetStatusListSchema = z.array(BillingBudgetStatusSchema);
 
+export const ProjectOrganisationSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	logo_url: z.string().nullable().optional(),
+	shared_from: z.string(), // ISO datetime
+});
+
+export type ApiProjectOrganisation = z.infer<typeof ProjectOrganisationSchema>;
+
 export const ApiProjectSchema = z.object({
 	id: z.string().nullable().optional(),
 	name: z.string(),
@@ -549,6 +558,12 @@ export const ApiProjectSchema = z.object({
 	// A contract is read only on a day job; on any other kind it is null.
 	kind: ProjectKindSchema.optional().default("side_project"),
 	contract: ContractSchema.nullable().optional(),
+	// The organisation that owns the project, when it is not the reader
+	// (docs/organisations.md): its name and logo mark the project in a list,
+	// and `shared_from` is the instant from which the reader's hours on it
+	// are the organisation's. Null, or absent from an older API, on a
+	// personal project.
+	organisation: ProjectOrganisationSchema.nullable().optional(),
 });
 
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
@@ -584,6 +599,9 @@ export const ApiBeatSchema = z.object({
 	project_id: z.string().nullable().optional(),
 	note: z.string().nullable().optional(),
 	tags: z.array(z.string()).optional().default([]),
+	// Set when the entry is an organisation's working-time record: tracked
+	// on one of its projects, or shared with it when the project was connected.
+	organisation_id: z.string().nullable().optional(),
 });
 
 export type ApiBeat = z.infer<typeof ApiBeatSchema>;
@@ -795,6 +813,208 @@ export const GapSchema = z.object({
 export type Gap = z.infer<typeof GapSchema>;
 
 export const GapListSchema = z.array(GapSchema);
+
+// Organisations (docs/organisations.md). These mirror the API's
+// `OrganisationResponse`, `MembershipResponse`, `MemberResponse`,
+// `InviteResponse`, `InvitationResponse`, `InvitePreviewResponse`,
+// `JoinResponse`, `JoinRequestResponse`, `OrgProjectResponse`,
+// `AssignmentResponse`, `RecordResponse` and `ArchiveResponse`.
+
+export const OrgRoleSchema = z.enum(["owner", "admin", "member"]);
+export type ApiOrgRole = z.infer<typeof OrgRoleSchema>;
+
+export const WeekStartSchema = z.enum(["monday", "saturday", "sunday"]);
+
+export const ApiOrganisationSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	logo_url: z.string().nullable().optional(),
+	week_start: WeekStartSchema.optional().default("monday"),
+	holiday_country: z.string().nullable().optional(),
+	holiday_subdivision: z.string().nullable().optional(),
+	timezone: z.string().optional().default("UTC"),
+	created_at: z.string(),
+});
+export type ApiOrganisation = z.infer<typeof ApiOrganisationSchema>;
+
+export const ApiMembershipSchema = z.object({
+	organisation: ApiOrganisationSchema,
+	role: OrgRoleSchema,
+	joined_at: z.string(),
+	left_at: z.string().nullable().optional(),
+	left_reason: z.enum(["left", "removed", "erased"]).nullable().optional(),
+});
+export type ApiMembership = z.infer<typeof ApiMembershipSchema>;
+export const ApiMembershipListSchema = z.array(ApiMembershipSchema);
+
+export const ApiMemberSchema = z.object({
+	user_id: z.string(),
+	name: z.string(),
+	email: z.string(),
+	role: OrgRoleSchema,
+	joined_at: z.string(),
+	left_at: z.string().nullable().optional(),
+});
+export type ApiMember = z.infer<typeof ApiMemberSchema>;
+export const ApiMemberListSchema = z.array(ApiMemberSchema);
+
+export const ApiInviteSchema = z.object({
+	id: z.string(),
+	email: z.string().nullable().optional(),
+	role: OrgRoleSchema,
+	requires_approval: z.boolean(),
+	token: z.string(),
+	created_at: z.string(),
+	expires_at: z.string(),
+	accepted_at: z.string().nullable().optional(),
+});
+export type ApiInvite = z.infer<typeof ApiInviteSchema>;
+export const ApiInviteListSchema = z.array(ApiInviteSchema);
+
+const OrganisationCardSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	logo_url: z.string().nullable().optional(),
+});
+
+export const ApiInvitationSchema = z.object({
+	token: z.string(),
+	role: OrgRoleSchema,
+	expires_at: z.string(),
+	organisation: OrganisationCardSchema,
+});
+export type ApiInvitation = z.infer<typeof ApiInvitationSchema>;
+export const ApiInvitationListSchema = z.array(ApiInvitationSchema);
+
+export const ApiInvitePreviewSchema = z.object({
+	organisation: OrganisationCardSchema,
+	role: OrgRoleSchema,
+	requires_approval: z.boolean(),
+	addressed: z.boolean(),
+	already_member: z.boolean(),
+});
+export type ApiInvitePreview = z.infer<typeof ApiInvitePreviewSchema>;
+
+export const ApiJoinSchema = z.object({
+	status: z.enum(["joined", "pending"]),
+	membership: ApiMembershipSchema.nullable().optional(),
+});
+export type ApiJoin = z.infer<typeof ApiJoinSchema>;
+
+export const ApiJoinRequestSchema = z.object({
+	id: z.string(),
+	user_id: z.string(),
+	name: z.string(),
+	email: z.string(),
+	requested_at: z.string(),
+});
+export type ApiJoinRequest = z.infer<typeof ApiJoinRequestSchema>;
+export const ApiJoinRequestListSchema = z.array(ApiJoinRequestSchema);
+
+export const ApiAssignmentSchema = z.object({
+	user_id: z.string(),
+	name: z.string().nullable().optional(),
+	shared_from: z.string(),
+	assigned_at: z.string(),
+	ended_at: z.string().nullable().optional(),
+	has_contract: z.boolean(),
+});
+export type ApiAssignment = z.infer<typeof ApiAssignmentSchema>;
+
+const OrgProjectFieldsSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	description: z.string().nullable().optional(),
+	color: z.string().nullable().optional(),
+	archived: z.boolean().optional().default(false),
+	kind: ProjectKindSchema.optional().default("side_project"),
+	github_repo: z.string().nullable().optional(),
+	category: z.string().nullable().optional(),
+});
+
+export const ApiOrgProjectSchema = OrgProjectFieldsSchema.extend({
+	members: z.array(ApiAssignmentSchema),
+});
+export type ApiOrgProject = z.infer<typeof ApiOrgProjectSchema>;
+export const ApiOrgProjectListSchema = z.array(ApiOrgProjectSchema);
+
+const RecordEntrySchema = z.object({
+	id: z.string(),
+	day: z.string(),
+	start: z.string(),
+	end: z.string(),
+	hours: z.number(),
+	note: z.string().nullable().optional(),
+});
+export type ApiRecordEntry = z.infer<typeof RecordEntrySchema>;
+
+const RecordAbsenceSchema = z.object({
+	date: z.string(),
+	type: z.string(),
+	half_day: z.boolean(),
+});
+
+const MemberBalanceSchema = z.object({
+	as_of: z.string(),
+	balance: z.number(),
+	opening: z.number(),
+	worked: z.number(),
+	expected_through: z.number(),
+	adjusted: z.number(),
+});
+
+const MemberTotalsSchema = z.object({
+	entries: z.number(),
+	hours: z.number(),
+	first: z.string().nullable().optional(),
+	last: z.string().nullable().optional(),
+});
+
+const MemberRecordSchema = z.object({
+	user_id: z.string(),
+	name: z.string(),
+	shared_from: z.string(),
+	active: z.boolean(),
+	hours: z.number(),
+	entries: z.array(RecordEntrySchema),
+	absences: z.array(RecordAbsenceSchema),
+	has_contract: z.boolean(),
+	balance: MemberBalanceSchema.nullable().optional(),
+	totals: MemberTotalsSchema,
+});
+export type ApiMemberRecord = z.infer<typeof MemberRecordSchema>;
+
+export const ApiRecordSchema = z.object({
+	organisation: OrganisationCardSchema,
+	month: z.string(),
+	first: z.string(),
+	last: z.string(),
+	projects: z.array(
+		z.object({
+			project: OrgProjectFieldsSchema,
+			members: z.array(MemberRecordSchema),
+		}),
+	),
+});
+export type ApiRecord = z.infer<typeof ApiRecordSchema>;
+
+export const ApiArchiveSchema = z.object({
+	organisation: OrganisationCardSchema,
+	role: OrgRoleSchema,
+	joined_at: z.string(),
+	left_at: z.string().nullable().optional(),
+	hours: z.number(),
+	projects: z.array(
+		z.object({
+			project_id: z.string(),
+			name: z.string(),
+			color: z.string().nullable().optional(),
+			hours: z.number(),
+			entries: z.array(RecordEntrySchema),
+		}),
+	),
+});
+export type ApiArchive = z.infer<typeof ApiArchiveSchema>;
 
 // Array schemas for list endpoints
 

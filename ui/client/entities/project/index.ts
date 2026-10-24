@@ -53,6 +53,7 @@ export type {
 	LedgerWeekRow,
 	Project,
 	ProjectKind,
+	ProjectOrganisation,
 	ProjectWithDuration,
 	RuleRow,
 	ScheduleType,

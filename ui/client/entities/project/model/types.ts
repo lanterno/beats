@@ -18,6 +18,21 @@ export interface GoalOverride {
 export type ProjectKind = "day_job" | "freelance" | "side_project";
 
 /**
+ * The organisation that owns a project, as its member sees it on the
+ * project (docs/organisations.md): enough to mark it in a list, and the
+ * instant from which the member's hours on it are the organisation's. On
+ * such a project the name, colour, kind, description, repository, category
+ * and archive flag are the organisation's to change; the goal, the local
+ * repo paths and the contract stay the member's.
+ */
+export interface ProjectOrganisation {
+	id: string;
+	name: string;
+	logoUrl?: string;
+	sharedFrom: string; // ISO datetime
+}
+
+/**
  * How a contract term states the hours it owes. `full_time` and `part_time`
  * owe `fullTimeHours × percentage`; `custom` states `weeklyHours` outright;
  * `objective` owes nothing and has no balance (the personal goal applies).
@@ -282,6 +297,8 @@ export interface Project {
 	kind: ProjectKind;
 	/** Only on a day job; a day job may still lack one ("leave first, contract later"). */
 	contract?: Contract;
+	/** Set when an organisation owns the project; absent on a personal one. */
+	organisation?: ProjectOrganisation;
 }
 
 export interface ProjectWithDuration extends Project {
