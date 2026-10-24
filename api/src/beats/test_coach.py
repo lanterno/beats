@@ -17,6 +17,7 @@ from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 import pytest
+from anthropic.types import TextBlock
 from pymongo import AsyncMongoClient
 
 from beats.coach import brief as brief_module
@@ -451,24 +452,17 @@ class TestUsageTracker:
         assert "ts" in doc
 
 
-class _FakeTextBlock:
-    """Stand-in for anthropic.types.TextBlock — brief.py extracts
-    `.text` from each TextBlock instance via isinstance() so the
-    fake must subclass the real type."""
-
-    def __new__(cls, text: str):
-        from anthropic.types import TextBlock
-
-        # Use the real Pydantic constructor so isinstance(block, TextBlock)
-        # in brief.py returns True.
-        return TextBlock(type="text", text=text, citations=None)
+def _text_block(text: str) -> TextBlock:
+    """A real anthropic.types.TextBlock — brief.py extracts `.text` from
+    each block via isinstance(), so a stand-in has to be the real type."""
+    return TextBlock(type="text", text=text, citations=None)
 
 
 def _fake_gateway_response(text: str = "Good morning. Two intentions today.") -> GatewayResponse:
     """Build a GatewayResponse the way `complete()` would — content is
     a list of TextBlocks, model + token + cost fields populated."""
     return GatewayResponse(
-        content=[_FakeTextBlock(text)],
+        content=[_text_block(text)],
         model="claude-opus-4-7",
         input_tokens=1234,
         output_tokens=89,
@@ -574,8 +568,8 @@ class TestGenerateBrief:
         async def fake_complete(**_kwargs):
             return GatewayResponse(
                 content=[
-                    _FakeTextBlock("First sentence. "),
-                    _FakeTextBlock("Second sentence."),
+                    _text_block("First sentence. "),
+                    _text_block("Second sentence."),
                 ],
                 model="claude-opus-4-7",
                 input_tokens=10,
