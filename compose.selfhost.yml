@@ -22,7 +22,7 @@ name: beats
 
 services:
   db:
-    image: mongo:8
+    image: mongo:9
     container_name: beats-db
     restart: unless-stopped
     environment:

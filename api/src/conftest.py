@@ -51,7 +51,7 @@ def pytest_configure(config):
     from testcontainers.mongodb import MongoDbContainer
 
     _mongo_container = (
-        MongoDbContainer("mongo:8")
+        MongoDbContainer("mongo:9")
         .with_kwargs(ulimits=[Ulimit(name="nofile", soft=_MONGO_NOFILE, hard=_MONGO_NOFILE)])
         .start()
     )

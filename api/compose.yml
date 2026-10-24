@@ -1,7 +1,7 @@
 services:
   # MongoDB for development
   db:
-    image: mongo:8
+    image: mongo:9
     container_name: beats-db
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
 
   # MongoDB for testing (separate instance)
   db_test:
-    image: mongo:8
+    image: mongo:9
     container_name: beats-db-test
     restart: unless-stopped
     environment:

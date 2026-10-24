@@ -32,11 +32,12 @@ jobs:
         working-directory: api
     services:
       mongo:
-        # Not the floating mongo:8: its newer images refuse to start on Linux
-        # 6.19+ (SERVER-121912), the kernel some GitHub runners now have, and
-        # fail the job in "Initialize containers". 8.2 predates that check.
-        # Move on once MongoDB ships the TCMalloc fix (AHM-107); a Renovate PR
-        # to 8.3 will fail the same way until then.
+        # Not mongo:9, which compose and the test container run: the 8.3 and
+        # 9.0 images refuse to start on Linux 6.19+ (SERVER-121912,
+        # SERVER-136272), the kernel some GitHub runners now have, and fail the
+        # job in "Initialize containers". 8.2 predates that check. Move on once
+        # MongoDB ships the TCMalloc fix (AHM-107); a Renovate PR to 9 will fail
+        # the same way until then.
         image: mongo:8.2
         ports: [27017:27017]
         options: >-
