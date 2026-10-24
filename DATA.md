@@ -93,7 +93,8 @@ No passwords are stored — Beats does not have a password login path.
   and sessions alone. Nothing about a reader is recorded — no visit count, no time, no
   address. Deleted when you revoke it or delete its client, and left out of the backup
   on purpose, so an export file carries no live URL to your hours.
-- **Beats (sessions)**: start, end, project id, tags, a note, and on an organisation's
+- **Beats (sessions)**: start, end, project id, tags, a note, `entered_by` when an
+  organisation's decider logged the time for the member (stage 3), and on an organisation's
   project `organisation_id` — the stamp that says the entry is that organisation's
   working-time record, set when it is tracked there (or shared with it when a project is
   connected, from the day chosen) and cleared when the entry is moved to a personal
@@ -133,6 +134,18 @@ None of these is scoped by `user_id` (docs/organisations.md):
   project are the organisation's), `assigned_at`, `assigned_by`, `ended_at`, and the
   member's personal half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
   `autostart_repos`, `contract`.
+- **Teams** (`org_teams`): a name and `member_ids` — the scope a manager decides and
+  reads for (docs/organisations.md, decision 25).
+- **Absence requests** (`org_absence_requests`): a day off asked for on a managed
+  assignment — project, member, `date`, `type`, `half_day`, a `note` addressed to the
+  decider (never in the record), `status` and who decided it with what comment. Deleted
+  with the account; the approved absence itself is the record and stays.
+- **Timesheets** (`org_timesheets`): one per project · member · month — the `status`,
+  who decided and when, the comment or reopen reason, a `history` of every step, and
+  while approved the `frozen` figures (worked, expected, entries, absence days, the
+  balance at the close): the one place a derived figure is stored, deliberately, so an
+  approved month cannot drift silently (decision 23). Kept at erasure under the
+  tombstone, as the employer's record of the approval.
 - **Audit log** (`org_audit`): `organisation_id`, `at`, `actor_user_id`, `event`,
   `subject_user_id`, `project_id`, `details` — every membership, role, invite, request,
   project, assignment and connection event, and an erasure. Written now, read by nothing
