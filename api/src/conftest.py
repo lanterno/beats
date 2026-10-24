@@ -43,6 +43,12 @@ def pytest_configure(config):
     # Settings() at import time. .env.test is committed; a developer's .env is
     # not, so this is also what makes a fresh clone runnable.
     os.environ.setdefault("BEATS_ENV_FILE", ".env.test")
+    # The suite never talks to Anthropic. A key exported in the developer's
+    # shell would otherwise reach Settings() and let a test that forgot to
+    # mock `complete` spend real money; with none, the coach answers 503
+    # COACH_NOT_CONFIGURED, which is what a deployment without the coach
+    # does, and `_no_anthropic` below refuses the client in any case.
+    os.environ["ANTHROPIC_API_KEY"] = ""
 
     if os.getenv("BEATS_TEST_ENV") == "1":
         return
@@ -103,6 +109,20 @@ def _indexes():
             await client.close()
 
     asyncio.run(build())
+
+
+@pytest.fixture(autouse=True)
+def _no_anthropic(monkeypatch):
+    """No test builds an Anthropic client. The coach tests script `complete`
+    itself; anything that gets as far as the SDK is a test calling the real
+    model, and fails here instead of on the network."""
+    import anthropic
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the test suite must not call Anthropic; mock gateway.complete")
+
+    monkeypatch.setattr(anthropic, "AsyncAnthropic", refuse)
+    monkeypatch.setattr(anthropic, "Anthropic", refuse)
 
 
 @pytest.fixture(autouse=True)

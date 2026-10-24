@@ -4407,6 +4407,38 @@ class TestCoachEndpoints:
         response = client.post("/api/coach/chat", json={"message": "hello"})
         assert response.status_code == 401
 
+    def test_without_an_api_key_the_coach_says_so_and_calls_nothing(self, client, auth_headers):
+        """The suite runs with no ANTHROPIC_API_KEY (.env.test), as a
+        self-hosted deployment may: /status says the coach is not set up,
+        and every route that would call the model answers 503
+        COACH_NOT_CONFIGURED before a client is even built — not the 502
+        "resting" a real failure gets."""
+        from beats.settings import settings
+
+        assert settings.anthropic_api_key == ""
+        status = client.get("/api/coach/status", headers=auth_headers)
+        assert status.status_code == 200
+        assert status.json() == {"configured": False}
+
+        brief = client.post("/api/coach/brief/generate", json={}, headers=auth_headers)
+        assert brief.status_code == 503, brief.text
+        assert brief.json()["code"] == "COACH_NOT_CONFIGURED"
+        rewrite = client.post("/api/coach/memory/rewrite", headers=auth_headers)
+        assert rewrite.status_code == 503
+        assert rewrite.json()["code"] == "COACH_NOT_CONFIGURED"
+        with client.stream(
+            "POST", "/api/coach/chat", json={"message": "hello"}, headers=auth_headers
+        ) as chat:
+            events = [line for line in chat.iter_lines() if line.startswith("data: ")]
+        assert any('"code": 503' in line for line in events), events
+        assert events[-1] == "data: [DONE]"
+
+    def test_with_an_api_key_the_status_says_configured(self, client, auth_headers, monkeypatch):
+        from beats.settings import settings
+
+        monkeypatch.setattr(settings, "anthropic_api_key", "sk-ant-test")
+        assert client.get("/api/coach/status", headers=auth_headers).json() == {"configured": True}
+
 
 class TestCoachRouterGapFill:
     """Coach routes whose logic isn't covered by the smoke suite —

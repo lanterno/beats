@@ -4120,15 +4120,17 @@ class TestGatewayRetryAndMissingKey:
         )
 
     def test_get_client_raises_when_no_api_key(self, monkeypatch):
-        """_get_client → RuntimeError when ANTHROPIC_API_KEY isn't
-        configured. Pin so a self-host that forgot to set the env
-        var gets a clear error rather than a confusing 500 deep
-        inside the Anthropic SDK."""
+        """_get_client → CoachNotConfigured (503 on the wire) when
+        ANTHROPIC_API_KEY isn't configured. Pin so a self-host that did not
+        set the env var gets a plain answer rather than a 500 deep inside
+        the Anthropic SDK, and `configured()` says so up front."""
         from beats import settings as settings_module
         from beats.coach import gateway
+        from beats.domain.exceptions import CoachNotConfigured
 
         monkeypatch.setattr(settings_module.settings, "anthropic_api_key", "")
-        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        assert gateway.configured() is False
+        with pytest.raises(CoachNotConfigured, match="ANTHROPIC_API_KEY"):
             gateway._get_client()
 
     async def test_complete_retries_on_429_then_succeeds(self, monkeypatch):
