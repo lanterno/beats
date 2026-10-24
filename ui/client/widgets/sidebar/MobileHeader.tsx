@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { useCoachStatus } from "@/entities/coach";
 import type { ProjectWithDuration } from "@/entities/project";
 import { useAuth } from "@/features/auth";
 import { APP_NAME } from "@/shared/config";
@@ -56,7 +57,13 @@ export function MobileHeader(props: MobileHeaderProps) {
 
 	const { isRunning, elapsedSeconds, customStartTime, selectedProjectId, projects } = props;
 	const showClients = useShowClients(projects);
-	const nav = NAV.filter((item) => item.to !== "/clients" || showClients);
+	// Coach only on a server that can run it (`useCoachStatus`); until it has
+	// answered, no Coach rather than one that comes and goes.
+	const { configured: coachConfigured } = useCoachStatus();
+	const nav = NAV.filter(
+		(item) =>
+			(item.to !== "/clients" || showClients) && (item.to !== "/coach" || coachConfigured === true),
+	);
 	const budgetUsedUp = useBillingBudgetAttention(showClients);
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 

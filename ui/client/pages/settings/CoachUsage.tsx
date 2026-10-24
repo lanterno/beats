@@ -3,15 +3,17 @@
  */
 
 import { BarChart3, Sparkles } from "lucide-react";
-import { useCoachUsage } from "@/entities/coach";
+import { useCoachStatus, useCoachUsage } from "@/entities/coach";
 import { cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LABEL } from "./styles";
 
 export function CoachUsage() {
-	const { data, isLoading } = useCoachUsage();
+	// Nothing to show on a server without the coach: no call is ever billed.
+	const { configured } = useCoachStatus();
+	const { data, isLoading } = useCoachUsage(30, { enabled: configured === true });
 
-	if (isLoading || !data) return null;
+	if (configured !== true || isLoading || !data) return null;
 
 	const { days, month_total_usd, budget_usd } = data;
 	const budgetPct = budget_usd > 0 ? Math.min(100, (month_total_usd / budget_usd) * 100) : 0;

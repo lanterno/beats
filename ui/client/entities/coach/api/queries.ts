@@ -10,6 +10,7 @@ import {
 	deleteCoachData,
 	deleteMemory,
 	fetchBriefHistory,
+	fetchCoachStatus,
 	fetchMemory,
 	fetchTodayBrief,
 	fetchUsage,
@@ -20,25 +21,46 @@ import {
 
 const coachKeys = {
 	all: ["coach"] as const,
+	status: () => [...coachKeys.all, "status"] as const,
 	brief: () => [...coachKeys.all, "brief"] as const,
 	briefHistory: (limit: number) => [...coachKeys.all, "brief-history", limit] as const,
 	usage: (days: number) => [...coachKeys.all, "usage", days] as const,
 	memory: () => [...coachKeys.all, "memory"] as const,
 };
 
-export function useCoachBrief() {
+/**
+ * Whether the coach is set up on this server. Read once a session and kept:
+ * it changes only with a deploy. Until it has answered, `configured` is
+ * undefined, and a caller shows nothing of the coach rather than a flash of
+ * it; an older API without the route reads as configured, as it always was.
+ */
+export function useCoachStatus(): { configured: boolean | undefined } {
+	const query = useQuery({
+		queryKey: coachKeys.status(),
+		queryFn: fetchCoachStatus,
+		staleTime: Number.POSITIVE_INFINITY,
+		gcTime: Number.POSITIVE_INFINITY,
+		retry: false,
+	});
+	if (query.isError) return { configured: true };
+	return { configured: query.data?.configured };
+}
+
+export function useCoachBrief(options: { enabled?: boolean } = {}) {
 	return useQuery({
 		queryKey: coachKeys.brief(),
 		queryFn: fetchTodayBrief,
 		staleTime: 5 * 60_000,
+		enabled: options.enabled ?? true,
 	});
 }
 
-export function useCoachBriefHistory(limit = 14) {
+export function useCoachBriefHistory(limit = 14, options: { enabled?: boolean } = {}) {
 	return useQuery({
 		queryKey: coachKeys.briefHistory(limit),
 		queryFn: () => fetchBriefHistory(limit),
 		staleTime: 10 * 60_000,
+		enabled: options.enabled ?? true,
 	});
 }
 
@@ -73,11 +95,12 @@ export function useBriefFeedback() {
 	});
 }
 
-export function useCoachUsage(days = 30) {
+export function useCoachUsage(days = 30, options: { enabled?: boolean } = {}) {
 	return useQuery({
 		queryKey: coachKeys.usage(days),
 		queryFn: () => fetchUsage(days),
 		staleTime: 5 * 60_000,
+		enabled: options.enabled ?? true,
 	});
 }
 

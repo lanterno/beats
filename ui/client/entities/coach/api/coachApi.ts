@@ -14,6 +14,15 @@ export type BriefRating = NonNullable<BriefResponse["feedback"]>;
 // calendar day server-side; send the browser timezone so a brief/review
 // generated and fetched near midnight resolve to the same local day.
 
+/**
+ * Whether this server can run the coach at all: false when it has no
+ * Anthropic API key, in which case every coach call answers 503
+ * COACH_NOT_CONFIGURED and the SPA leaves the coach out.
+ */
+export async function fetchCoachStatus(): Promise<{ configured: boolean }> {
+	return get<{ configured: boolean }>("/api/coach/status");
+}
+
 export async function fetchTodayBrief(): Promise<BriefResponse | null> {
 	return get<BriefResponse | null>(
 		`/api/coach/brief/today?tz=${encodeURIComponent(browserTimeZone())}`,

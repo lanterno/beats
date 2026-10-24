@@ -11,6 +11,7 @@ export {
 	useCoachBrief,
 	useCoachBriefHistory,
 	useCoachMemory,
+	useCoachStatus,
 	useCoachUsage,
 	useDeleteCoachData,
 	useDeleteMemory,

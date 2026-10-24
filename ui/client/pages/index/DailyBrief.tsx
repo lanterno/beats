@@ -14,6 +14,7 @@ import {
 	useBriefFeedback,
 	useCoachBrief,
 	useCoachBriefHistory,
+	useCoachStatus,
 	useGenerateBrief,
 } from "@/entities/coach";
 import { cn } from "@/shared/lib";
@@ -25,13 +26,16 @@ const LINKISH =
 	"text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 export function DailyBrief() {
-	const { data: brief, isLoading } = useCoachBrief();
-	const { data: history } = useCoachBriefHistory();
+	// On a server without the coach there is no brief to show or to write:
+	// the card is left out, as the Coach nav item is.
+	const { configured } = useCoachStatus();
+	const { data: brief, isLoading } = useCoachBrief({ enabled: configured === true });
+	const { data: history } = useCoachBriefHistory(14, { enabled: configured === true });
 	const generate = useGenerateBrief();
 	// null = today's brief; otherwise the date key of a past brief from history.
 	const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-	if (isLoading) return null;
+	if (configured !== true || isLoading) return null;
 
 	const selectedBrief =
 		selectedDate !== null

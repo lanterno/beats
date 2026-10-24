@@ -4,12 +4,43 @@
 
 import { Brain, Loader2, RotateCcw, Send, Sparkles, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type ChatMessage, useCoachChat } from "@/entities/coach";
+import { type ChatMessage, useCoachChat, useCoachStatus } from "@/entities/coach";
 import { cn } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { CoachMemoryDialog } from "./CoachMemoryDialog";
 
 export default function Coach() {
+	const { configured } = useCoachStatus();
+	if (configured === false) return <CoachNotSetUp />;
+	return <CoachChat />;
+}
+
+/** The page on a server without an Anthropic API key: the coach's routes
+ * answer 503 COACH_NOT_CONFIGURED, so nothing here would work. The nav
+ * leaves the page out; this is for a bookmark or a typed URL. */
+function CoachNotSetUp() {
+	return (
+		<div className="max-w-3xl mx-auto px-6 py-6">
+			<header className="flex items-center gap-2 mb-4">
+				<Sparkles className="w-5 h-5 text-muted-foreground" />
+				<h1 className="font-heading text-[22px] font-extrabold tracking-[-0.01em] text-foreground">
+					Coach
+				</h1>
+			</header>
+			<Panel role="status" padding="px-6 py-[22px]">
+				<p className="font-heading text-lg font-extrabold text-foreground">
+					The coach isn't set up on this server.
+				</p>
+				<p className="mt-1 text-[12.5px] text-muted-foreground font-medium leading-normal">
+					It needs an Anthropic API key (<code className="font-code">ANTHROPIC_API_KEY</code>) on
+					the API. Everything else works without it.
+				</p>
+			</Panel>
+		</div>
+	);
+}
+
+function CoachChat() {
 	const { messages, streaming, currentTool, loadingHistory, sendMessage, stop, reset } =
 		useCoachChat();
 	const [input, setInput] = useState("");
