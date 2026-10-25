@@ -13,13 +13,14 @@ import {
 	Upload,
 } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { config, publicApiBase } from "@/shared/config";
 import { browserTimeZone, cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
-import { Button, buttonVariants, Panel } from "@/shared/ui";
+import { Button, buttonVariants, Panel, type TabItem, TabPanel, Tabs } from "@/shared/ui";
 import { CalendarSection } from "./CalendarSection";
 import { CoachUsage } from "./CoachUsage";
 import { CodeBlock } from "./CodeBlock";
@@ -34,10 +35,39 @@ import { SingleSignOnSection } from "./SingleSignOnSection";
 import { CHIP_BUTTON, HEADING, HEADING_ICON, LABEL, LEAD } from "./styles";
 import { WebhooksSection } from "./WebhooksSection";
 
+type SettingsTab = "appearance" | "integrations" | "daemon" | "security" | "data";
+
+const TABS: readonly TabItem<SettingsTab>[] = [
+	{ value: "appearance", label: "Appearance" },
+	{ value: "integrations", label: "Integrations" },
+	{ value: "daemon", label: "Daemon" },
+	{ value: "security", label: "Security" },
+	{ value: "data", label: "Data & API" },
+];
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+	return TABS.some((t) => t.value === value);
+}
+
 export default function Settings() {
 	const { data: projects } = useProjects();
 	const [importing, setImporting] = useState(false);
 	const { theme, setTheme, density, setDensity } = useTheme();
+	const [searchParams, setSearchParams] = useSearchParams();
+
+	// The selected tab lives in the URL so a section can be linked to; an
+	// unknown or absent `?tab=` reads as the first tab.
+	const tabParam = searchParams.get("tab");
+	const tab: SettingsTab = isSettingsTab(tabParam) ? tabParam : TABS[0].value;
+	const setTab = (next: SettingsTab) => {
+		setSearchParams(
+			(prev) => {
+				prev.set("tab", next);
+				return prev;
+			},
+			{ replace: true },
+		);
+	};
 
 	// The address the Developer examples print: on the same-origin self-hosted
 	// build the configured base is empty, which would read `curl /api/...`.
@@ -107,209 +137,218 @@ export default function Settings() {
 				Settings
 			</h1>
 			{/* On the bare sky: the muted ink is 3:1 there, ink at 90 % reads. */}
-			<p className="text-sm font-medium text-foreground/90 mb-8">
+			<p className="text-sm font-medium text-foreground/90 mb-6">
 				Appearance, data export, and developer tools.
 			</p>
 
-			{/* Appearance — Theme */}
-			<section className="mb-8">
-				<h2 className={HEADING}>
-					<Palette className={HEADING_ICON} />
-					Theme
-				</h2>
-				<Panel padding="p-5">
-					<div className="flex flex-wrap gap-2">
-						{THEMES.map((t) => (
-							<button
-								type="button"
-								key={t.id}
-								onClick={() => setTheme(t.id)}
-								aria-pressed={theme === t.id}
-								className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
-									theme === t.id
-										? "bg-accent text-accent-foreground"
-										: "bg-secondary text-foreground hover:bg-sidebar-accent"
-								}`}
-							>
-								<span
-									className="w-3 h-3 rounded-full shrink-0"
-									style={{ backgroundColor: t.sky }}
-								/>
-								{t.label}
-							</button>
-						))}
-					</div>
-				</Panel>
-			</section>
+			<Tabs tabs={TABS} value={tab} onChange={setTab} label="Settings sections" className="mb-8" />
 
-			{/* Appearance — Density */}
-			<section className="mb-8">
-				<h2 className={HEADING}>
-					<Rows3 className={HEADING_ICON} />
-					Layout Density
-				</h2>
-				<Panel padding="p-5">
-					<div className="flex flex-wrap gap-2">
-						{DENSITIES.map((d) => (
-							<button
-								type="button"
-								key={d.id}
-								onClick={() => setDensity(d.id)}
-								aria-pressed={density === d.id}
-								className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
-									density === d.id
-										? "bg-accent text-accent-foreground"
-										: "bg-secondary text-foreground hover:bg-sidebar-accent"
-								}`}
-							>
-								{d.label}
-							</button>
-						))}
-					</div>
-				</Panel>
-			</section>
+			<TabPanel value="appearance" current={tab}>
+				{/* Appearance — Theme */}
+				<section className="mb-8">
+					<h2 className={HEADING}>
+						<Palette className={HEADING_ICON} />
+						Theme
+					</h2>
+					<Panel padding="p-5">
+						<div className="flex flex-wrap gap-2">
+							{THEMES.map((t) => (
+								<button
+									type="button"
+									key={t.id}
+									onClick={() => setTheme(t.id)}
+									aria-pressed={theme === t.id}
+									className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
+										theme === t.id
+											? "bg-accent text-accent-foreground"
+											: "bg-secondary text-foreground hover:bg-sidebar-accent"
+									}`}
+								>
+									<span
+										className="w-3 h-3 rounded-full shrink-0"
+										style={{ backgroundColor: t.sky }}
+									/>
+									{t.label}
+								</button>
+							))}
+						</div>
+					</Panel>
+				</section>
 
-			{/* Data Export */}
-			<section className="mb-8">
-				<h2 className={HEADING}>
-					<Download className={HEADING_ICON} />
-					Data Export
-				</h2>
-				<Panel padding="px-5 py-1" className="divide-y divide-border">
-					{/* CSV */}
-					<div className="py-4">
-						<div className="flex items-start gap-3">
-							<FileSpreadsheet className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
-							<div className="flex-1 min-w-0">
-								<p className="text-sm font-bold text-foreground">Sessions CSV</p>
-								<p className={cn(LEAD, "mt-0.5")}>
-									Export sessions as a spreadsheet with date, project, start, end, duration, notes,
-									and tags.
-								</p>
-								<div className="flex flex-wrap items-center gap-2 mt-3">
-									<Button variant="secondary" size="sm" onClick={() => handleExportCSV()}>
-										All sessions
-									</Button>
-									{activeProjects.map((p) => (
-										<button
-											type="button"
-											key={p.id}
-											onClick={() => handleExportCSV(p.id)}
-											className={CHIP_BUTTON}
-										>
-											{p.name}
-										</button>
-									))}
+				{/* Appearance — Density */}
+				<section className="mb-8">
+					<h2 className={HEADING}>
+						<Rows3 className={HEADING_ICON} />
+						Layout Density
+					</h2>
+					<Panel padding="p-5">
+						<div className="flex flex-wrap gap-2">
+							{DENSITIES.map((d) => (
+								<button
+									type="button"
+									key={d.id}
+									onClick={() => setDensity(d.id)}
+									aria-pressed={density === d.id}
+									className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
+										density === d.id
+											? "bg-accent text-accent-foreground"
+											: "bg-secondary text-foreground hover:bg-sidebar-accent"
+									}`}
+								>
+									{d.label}
+								</button>
+							))}
+						</div>
+					</Panel>
+				</section>
+			</TabPanel>
+
+			<TabPanel value="integrations" current={tab}>
+				{/* Integrations — independent connection cards, two-up on wide screens. */}
+				<div className="grid gap-x-6 md:grid-cols-2 items-start">
+					<CalendarSection />
+					<GitHubSection />
+					<FitbitSection />
+					<OuraSection />
+				</div>
+				<WebhooksSection />
+			</TabPanel>
+
+			<TabPanel value="daemon" current={tab}>
+				<DaemonSection />
+				<DaemonPrivacySection />
+			</TabPanel>
+
+			<TabPanel value="security" current={tab}>
+				<PasskeysSection />
+				{/* Identities at sign-in providers */}
+				<SingleSignOnSection />
+			</TabPanel>
+
+			<TabPanel value="data" current={tab}>
+				{/* Data Export */}
+				<section className="mb-8">
+					<h2 className={HEADING}>
+						<Download className={HEADING_ICON} />
+						Data Export
+					</h2>
+					<Panel padding="px-5 py-1" className="divide-y divide-border">
+						{/* CSV */}
+						<div className="py-4">
+							<div className="flex items-start gap-3">
+								<FileSpreadsheet className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+								<div className="flex-1 min-w-0">
+									<p className="text-sm font-bold text-foreground">Sessions CSV</p>
+									<p className={cn(LEAD, "mt-0.5")}>
+										Export sessions as a spreadsheet with date, project, start, end, duration,
+										notes, and tags.
+									</p>
+									<div className="flex flex-wrap items-center gap-2 mt-3">
+										<Button variant="secondary" size="sm" onClick={() => handleExportCSV()}>
+											All sessions
+										</Button>
+										{activeProjects.map((p) => (
+											<button
+												type="button"
+												key={p.id}
+												onClick={() => handleExportCSV(p.id)}
+												className={CHIP_BUTTON}
+											>
+												{p.name}
+											</button>
+										))}
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
 
-					{/* JSON */}
-					<div className="py-4">
-						<div className="flex items-start gap-3">
-							<FileJson className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
-							<div className="flex-1 min-w-0">
-								<p className="text-sm font-bold text-foreground">Full JSON Backup</p>
-								<p className={cn(LEAD, "mt-0.5")}>
-									Every project, contract included, every session, and a day job's time off and
-									balance adjustments. Re-importable for disaster recovery.
-								</p>
-								<Button variant="secondary" size="sm" onClick={handleExportJSON} className="mt-3">
-									Download backup
-								</Button>
+						{/* JSON */}
+						<div className="py-4">
+							<div className="flex items-start gap-3">
+								<FileJson className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+								<div className="flex-1 min-w-0">
+									<p className="text-sm font-bold text-foreground">Full JSON Backup</p>
+									<p className={cn(LEAD, "mt-0.5")}>
+										Every project, contract included, every session, and a day job's time off and
+										balance adjustments. Re-importable for disaster recovery.
+									</p>
+									<Button variant="secondary" size="sm" onClick={handleExportJSON} className="mt-3">
+										Download backup
+									</Button>
+								</div>
 							</div>
 						</div>
-					</div>
-				</Panel>
-			</section>
+					</Panel>
+				</section>
 
-			{/* Data Import */}
-			<section className="mb-8">
-				<h2 className={HEADING}>
-					<Upload className={HEADING_ICON} />
-					Data Import
-				</h2>
-				<Panel padding="p-5">
-					<p className={cn(LEAD, "mb-3")}>
-						Restore from a JSON backup file. Records are upserted by ID — safe to re-import without
-						duplicates.
-					</p>
-					<label
-						className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "cursor-pointer")}
-					>
-						<Upload />
-						{importing ? "Importing..." : "Choose backup file"}
-						<input
-							type="file"
-							accept=".json"
-							onChange={handleImport}
-							disabled={importing}
-							className="hidden"
-						/>
-					</label>
-				</Panel>
-			</section>
-
-			{/* Integrations */}
-			<CalendarSection />
-			<GitHubSection />
-			<FitbitSection />
-			<OuraSection />
-
-			{/* Daemon */}
-			<DaemonSection />
-			<DaemonPrivacySection />
-
-			{/* Passkeys */}
-			<PasskeysSection />
-
-			{/* Identities at sign-in providers */}
-			<SingleSignOnSection />
-
-			{/* Webhooks */}
-			<WebhooksSection />
-
-			{/* Coach Usage */}
-			<CoachUsage />
-
-			{/* API Info */}
-			<section className="mb-8">
-				<h2 className={HEADING}>
-					<Terminal className={HEADING_ICON} />
-					Developer
-				</h2>
-				<Panel padding="px-5 py-1" className="divide-y divide-border">
-					<div className="py-4">
-						<p className={cn(LABEL, "mb-1.5")}>API Base URL</p>
-						<code className="inline-block max-w-full break-all rounded-lg bg-secondary px-2.5 py-1 text-[13px] text-foreground font-code">
-							{apiBase}
-						</code>
-					</div>
-					<div className="py-4">
-						<p className={cn(LABEL, "mb-2")}>Quick Start</p>
-						<div className="space-y-2.5">
-							<CodeBlock
-								label="Start timer"
-								code={`curl -X POST ${apiBase}/api/projects/YOUR_PROJECT_ID/start -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
+				{/* Data Import */}
+				<section className="mb-8">
+					<h2 className={HEADING}>
+						<Upload className={HEADING_ICON} />
+						Data Import
+					</h2>
+					<Panel padding="p-5">
+						<p className={cn(LEAD, "mb-3")}>
+							Restore from a JSON backup file. Records are upserted by ID — safe to re-import
+							without duplicates.
+						</p>
+						<label
+							className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "cursor-pointer")}
+						>
+							<Upload />
+							{importing ? "Importing..." : "Choose backup file"}
+							<input
+								type="file"
+								accept=".json"
+								onChange={handleImport}
+								disabled={importing}
+								className="hidden"
 							/>
-							<CodeBlock
-								label="Stop timer"
-								code={`curl -X POST ${apiBase}/api/projects/stop -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
-							/>
-							<CodeBlock label="Get timer status" code={`curl ${apiBase}/api/timer/status`} />
-							<CodeBlock
-								label="Export backup"
-								code={`curl ${apiBase}/api/export/full -o backup.json`}
-							/>
-							<CodeBlock
-								label="Import backup"
-								code={`curl -X POST ${apiBase}/api/export/import -F "file=@backup.json"`}
-							/>
+						</label>
+					</Panel>
+				</section>
+
+				{/* Coach Usage */}
+				<CoachUsage />
+
+				{/* API Info */}
+				<section className="mb-8">
+					<h2 className={HEADING}>
+						<Terminal className={HEADING_ICON} />
+						Developer
+					</h2>
+					<Panel padding="px-5 py-1" className="divide-y divide-border">
+						<div className="py-4">
+							<p className={cn(LABEL, "mb-1.5")}>API Base URL</p>
+							<code className="inline-block max-w-full break-all rounded-lg bg-secondary px-2.5 py-1 text-[13px] text-foreground font-code">
+								{apiBase}
+							</code>
 						</div>
-					</div>
-				</Panel>
-			</section>
+						<div className="py-4">
+							<p className={cn(LABEL, "mb-2")}>Quick Start</p>
+							<div className="space-y-2.5">
+								<CodeBlock
+									label="Start timer"
+									code={`curl -X POST ${apiBase}/api/projects/YOUR_PROJECT_ID/start -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
+								/>
+								<CodeBlock
+									label="Stop timer"
+									code={`curl -X POST ${apiBase}/api/projects/stop -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"time": null}'`}
+								/>
+								<CodeBlock label="Get timer status" code={`curl ${apiBase}/api/timer/status`} />
+								<CodeBlock
+									label="Export backup"
+									code={`curl ${apiBase}/api/export/full -o backup.json`}
+								/>
+								<CodeBlock
+									label="Import backup"
+									code={`curl -X POST ${apiBase}/api/export/import -F "file=@backup.json"`}
+								/>
+							</div>
+						</div>
+					</Panel>
+				</section>
+			</TabPanel>
 		</div>
 	);
 }
