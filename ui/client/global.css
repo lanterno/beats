@@ -53,7 +53,7 @@
     Every token below is an HSL triple on :root so `hsl(var(--x) / .5)` keeps
     working wherever it is written by hand. The washes — panel, wash, hairline,
     the sidebar's — are translucent in the mockup, and the alpha rides in a
-    companion token so the two themes can differ (.93 by day, .94 at dusk).
+    companion token so the two themes can differ.
   */
   --color-border: hsl(var(--border) / var(--border-alpha));
   --color-input: hsl(var(--input) / var(--secondary-alpha));
@@ -180,9 +180,13 @@
 		--background: 185 32% 92%;
 		--foreground: 204 23% 22%;
 
-		/* cloud-white panels, #FFFDF7 at 93 % */
+		/*
+		  cloud-white panels, #FFFDF7 at 97 % — raised from the mockup's 93 %
+		  so body text sits on a steadier surface; the sky still shows between
+		  panels and through the sidebar's lighter wash
+		*/
 		--card: 45 100% 98%;
-		--card-alpha: 0.93;
+		--card-alpha: 0.97;
 		--card-foreground: 204 23% 22%;
 
 		--popover: 45 100% 98%;
@@ -202,10 +206,11 @@
 		  neutral #EEEBE2 is 1.15:1 on the panel — a goal ring at 0 % vanished —
 		  so this is a sky-grey that still reads on cream (~1.35:1).
 		  --muted-foreground is a step darker than the mockup's ink-2 (#66737D)
-		  because page subtitles sit on the sky, not a panel, until Phase 4.
+		  because page subtitles sit on the sky, not a panel, until Phase 4 —
+		  and darker again (4.9:1 on the panel) so helper text clears AA.
 		*/
 		--muted: 203 35% 85%;
-		--muted-foreground: 206 10% 40%;
+		--muted-foreground: 206 12% 36%;
 
 		--accent: 40 88% 57%;
 		--accent-foreground: 204 23% 22%;
@@ -294,9 +299,9 @@
 		--background: 225 41% 31%;
 		--foreground: 210 36% 95%;
 
-		/* #243049 at 94 % */
+		/* #243049 at 97 % (raised with the afternoon's, same reason) */
 		--card: 221 34% 21%;
-		--card-alpha: 0.94;
+		--card-alpha: 0.97;
 		--card-foreground: 210 36% 95%;
 
 		--popover: 221 34% 21%;
@@ -311,7 +316,7 @@
 		--secondary-foreground: 210 36% 95%;
 
 		--muted: 218 19% 28%;
-		--muted-foreground: 214 16% 70%;
+		--muted-foreground: 214 18% 74%;
 
 		--accent: 41 89% 66%;
 		--accent-foreground: 204 23% 22%;
@@ -424,6 +429,17 @@
 		font-family: var(--font-body);
 		font-variant-numeric: lining-nums;
 		min-height: 100vh;
+		/* Zen Maru sets tight by default; prose needs the extra leading */
+		line-height: 1.55;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		line-height: 1.25;
 	}
 
 	h1,
