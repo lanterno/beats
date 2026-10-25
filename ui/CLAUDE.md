@@ -148,8 +148,15 @@ the Sunday projection, the ledger's rows, and the +/− on a week without a clos
 ## Clients and billing
 
 `pages/clients` is `/clients`, a month of what each client is owed (`docs/billing.md`):
-the sentence (`summary.ts`), a `ClientPanel` per client, the freelance hours billed to
-no one. The sidebar offers it once there is a client or a freelance project
+a page bar (the heading, the month stepper and *New client*, on a card rather than bare
+on the sky), the month's totals per currency (`MonthTotals`, every figure one the API
+already returned in `totals`), the index to the panels beside the sentence
+(`ClientsOverview`, `summary.ts`), a `ClientPanel` per client, the freelance hours billed
+to no one. An overview row is a fragment link to that client's panel (`anchors.ts`), not
+a `?client=` that shows one at a time: the month is read by comparing clients, so every
+figure stays on the page. Each panel's header carries its actions — Edit, *Share a
+report* (which opens `ReportLinksBlock`, still reading nothing until it is open), Budget,
+Archive, Delete — and a state is always a word on a wash (`Chip`), never a colour alone. The sidebar offers it once there is a client or a freelance project
 (`useShowClients`). Every hour and amount is the API's `/api/billing/month`; the SPA
 never prices. Money is integer minor units with the API's `minor_units`
 (`shared/lib/money.ts`: `formatMoney`; `parseAmount` reads the string, never
@@ -175,8 +182,9 @@ can read them. The Clients nav item wears a dot only while an active budget is u
 block says "Budgets aren't available right now." and the rest renders as before.
 
 Report links (phase 1c) let a client read its own hours with no account. Each
-`ClientPanel` carries a *Shared reports* disclosure (`ReportLinksBlock`, in the billing
-entity): the client's links with what each shows in words, Copy, Revoke, and *Share
+`ClientPanel` opens its shared reports from the header (`ReportLinksBlock`, in the billing
+entity, controlled by the panel; left uncontrolled it keeps a disclosure of its own):
+the client's links with what each shows in words, Copy, Revoke, and *Share
 <month>* behind two checkboxes. It reads only once opened — a panel per client would
 otherwise be a request per client on load — and Copy builds the URL from the SPA's own
 origin, since the API returns a bare token. The reader's page is `/r/:token`
