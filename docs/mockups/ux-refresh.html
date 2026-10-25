@@ -12,9 +12,9 @@
    card alpha raised 0.93 → 0.97 — text sits on a steadier surface while the
    sky still breathes through at panel edges. Everything else verbatim. ═══ */
 :root {
-  --background: hsl(185 32% 92%);
-  --foreground: hsl(204 23% 22%);
-  --card: hsl(45 100% 98% / 0.97);
+  --background: hsl(185 28% 88%);
+  --foreground: hsl(204 23% 20%);
+  --card: hsl(45 56% 96% / 0.97);
   --accent: hsl(40 88% 57%);
   --accent-ink: #8C5E12;
   --secondary: hsl(203 55% 64% / 0.16);
@@ -27,7 +27,7 @@
   --border: hsl(204 23% 22% / 0.09);
   --row: hsl(203 55% 64% / 0.07);
   --shadow-color: rgb(43 84 110 / .22);
-  --sky-top: #8cc1e2; --sky-mid: #bcddee; --sky-low: #e4f0f1; --sky-ground: #e9f2e6;
+  --sky-top: #7fb4d8; --sky-mid: #a9d0e4; --sky-low: #cfe3e8; --sky-ground: #d6e5d4;
   --hill-far: #b9d9a8; --hill-mid: #8ac07c; --hill-near: #5c9f5e;
   --sun: rgb(255 236 170 / .75);
   --focus: hsl(210 80% 45%);
@@ -88,10 +88,10 @@ h1,h2,h3,.fig { font-family: var(--font-heading); line-height: 1.25; }
 .sidebar { position: sticky; top: 16px; height: calc(100vh - 32px); background: var(--card); border-radius: var(--radius);
   box-shadow: 0 22px 48px -26px var(--shadow-color); padding: 18px 14px 12px; display: flex; flex-direction: column; min-height: 0; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 12px; flex: none; }
-.brand .tile { width: 32px; height: 32px; border-radius: 9px; background: #1A2446; position: relative; flex: none; }
+.brand .tile { width: 38px; height: 38px; border-radius: 9px; background: #1A2446; position: relative; flex: none; }
 .brand .tile::after { content: ""; position: absolute; inset: 6px; border-radius: 50%;
   border: 3px solid #2E3E6E; border-top-color: #F5C35E; border-right-color: #F5C35E; }
-.brand b { font-family: var(--font-heading); font-size: 17px; }
+.brand b { font-family: var(--font-heading); font-size: 20px; }
 .search-pill { display: flex; align-items: center; gap: 8px; margin: 10px 4px 8px; padding: 9px 13px; min-height: 40px;
   background: var(--secondary); border-radius: 999px; color: var(--muted-fg); font-size: 13px; cursor: pointer; border: none; font-family: inherit; width: calc(100% - 8px); flex: none; }
 .nav { flex: none; }
@@ -118,7 +118,16 @@ h1,h2,h3,.fig { font-family: var(--font-heading); line-height: 1.25; }
 
 /* The foot: utilities as icons, named by their tooltip */
 .side-foot { flex: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  display: flex; flex-direction: column; gap: 8px; }
+.side-account { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; color: var(--muted-fg); }
+.side-account span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.placerow { display: flex; align-items: center; justify-content: space-between; gap: 4px; flex: none; margin: 4px 2px 10px; }
+.placebtn { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 16px;
+  text-decoration: none; color: var(--muted-fg); font-size: 19px; }
+.placebtn:hover { background: var(--secondary); color: var(--foreground); }
+.placebtn[aria-current="page"] { background: var(--secondary); box-shadow: inset 0 -3px 0 var(--accent); }
+.iconbtn.sm { width: 32px; height: 32px; font-size: 13px; }
 .iconrow { display: flex; align-items: center; gap: 6px; }
 .iconbtn { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px;
   text-decoration: none; color: var(--muted-fg); font-size: 15px; }
@@ -266,7 +275,16 @@ a.plain { color: var(--accent-ink); font-weight: 700; text-decoration: underline
   <aside class="sidebar" aria-label="Primary">
     <div class="brand"><div class="tile" aria-hidden="true"></div><b>LifePete</b></div>
 
-    <!-- The timer first: the thing the rail is opened for -->
+    <!-- The places: one row of large icons, named by their tooltip -->
+    <nav class="placerow" aria-label="Pages">
+      <a href="#" class="placebtn navlink" aria-current="page" data-s="dash" title="Today" aria-label="Today">☀️</a>
+      <a href="#" class="placebtn navlink" data-s="project" title="Projects" aria-label="Projects">▦</a>
+      <a href="#" class="placebtn navlink" data-s="dash" title="Weekly plan" aria-label="Weekly plan">◷</a>
+      <a href="#" class="placebtn navlink" data-s="insights" title="Insights" aria-label="Insights">📈</a>
+      <a href="#" class="placebtn navlink" data-s="dash" title="Coach" aria-label="Coach">💬</a>
+    </nav>
+
+    <!-- The timer, straight under the places -->
     <div class="timer" role="status" aria-label="Timer running on beats-api, 1 hour 47 minutes">
       <div class="proj"><i aria-hidden="true"></i> beats-api · organisations</div>
       <div class="top"><div class="fig">1:47:12</div><button class="stopbtn" title="Stop (Space)" aria-label="Stop timer">■</button></div>
@@ -275,14 +293,6 @@ a.plain { color: var(--accent-ink); font-weight: 700; text-decoration: underline
 
     <button class="search-pill">🔍 Search &amp; commands <span class="kbd">⌘K</span></button>
 
-    <!-- The rows that name a place -->
-    <nav class="nav">
-      <a href="#" class="navlink" aria-current="page" data-s="dash"><span class="ic">☀️</span> Today</a>
-      <a href="#" class="navlink" data-s="project"><span class="ic">▦</span> Projects</a>
-      <a href="#" class="navlink" data-s="dash"><span class="ic">◷</span> Weekly plan</a>
-      <a href="#" class="navlink" data-s="insights"><span class="ic">📈</span> Insights</a>
-      <a href="#" class="navlink" data-s="dash"><span class="ic">💬</span> Coach</a>
-    </nav>
 
     <div class="side-stats">
       <span>Today</span><b>4.2 h</b>
@@ -305,7 +315,10 @@ a.plain { color: var(--accent-ink); font-weight: 700; text-decoration: underline
         <a href="#" class="iconbtn navlink" data-s="org" title="Organisations" aria-label="Organisations, 2 invitations are waiting">🏢<span class="count" aria-hidden="true">2</span></a>
         <a href="#" class="iconbtn navlink" data-s="settings" title="Settings" aria-label="Settings">⚙︎</a>
       </nav>
-      <a href="#" class="iconbtn" title="Sign out (ahmed@…)" aria-label="Sign out">⏻</a>
+      <div class="side-account">
+        <span>ahmed@…</span>
+        <a href="#" class="iconbtn sm" title="Sign out" aria-label="Sign out">⏻</a>
+      </div>
     </div>
   </aside>
 
