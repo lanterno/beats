@@ -1,15 +1,22 @@
 /**
  * Insights Page
- * Analytics dashboard with summary stats, contribution heatmap,
- * daily rhythm chart, and top projects breakdown.
+ * Analytics dashboard, split into tabs (the UX-refresh mockup's pill
+ * tablist): Overview (the at-a-glance read), Flow (the daemon's flow
+ * charts), Where time goes (repo / language / app / project breakdowns)
+ * and Reviews (digests and the month / year retrospectives).
+ *
+ * The project and tag filters sit above the tabs because they filter
+ * every tab; the selected tab itself is URL-persisted (`?tab=`) like the
+ * filters, so the whole view is bookmarkable as one unit. An unknown
+ * `?tab=` value reads as "overview".
  */
 import { X } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { ProjectPicker, useProjects, visibleProjects } from "@/entities/project";
 import { useAllTags, useHeatmap } from "@/entities/session";
-import { formatDuration } from "@/shared/lib";
-import { Panel } from "@/shared/ui";
+import { formatDuration, useUrlParam } from "@/shared/lib";
+import { Panel, TabPanel, Tabs } from "@/shared/ui";
 import { BestMoment } from "./BestMoment";
 import { ContributionHeatmap } from "./ContributionHeatmap";
 import { DailyRhythmChart } from "./DailyRhythmChart";
@@ -30,14 +37,29 @@ import { TopProjects } from "./TopProjects";
 import { useInsightsFilters } from "./useInsightsFilters";
 import { WeeklyCard } from "./WeeklyCard";
 
+const INSIGHTS_TABS = [
+	{ value: "overview", label: "Overview" },
+	{ value: "flow", label: "Flow" },
+	{ value: "time", label: "Where time goes" },
+	{ value: "reviews", label: "Reviews" },
+] as const;
+
+export type InsightsTab = (typeof INSIGHTS_TABS)[number]["value"];
+
+/** Read any `?tab=` value as a tab; anything unknown is "overview". */
+export function resolveInsightsTab(raw: string | undefined): InsightsTab {
+	const match = INSIGHTS_TABS.find((t) => t.value === raw);
+	return match ? match.value : "overview";
+}
+
 export default function Insights() {
 	// Every filter on this page is URL-persisted so the whole view (project +
-	// tag dropdowns + click-to-filter chips) is bookmarkable as one unit.
-	// Refreshing or sharing the URL reproduces the exact slice the user was
-	// looking at — the inconsistency of "chips persist but dropdowns reset"
-	// would surprise anyone who actually tries it. The "clear all filters"
-	// link only shows when 2+ are active; one filter is trivially clearable
-	// via its own dropdown / dismiss pill.
+	// tag dropdowns + click-to-filter chips + the selected tab) is bookmarkable
+	// as one unit. Refreshing or sharing the URL reproduces the exact slice the
+	// user was looking at — the inconsistency of "chips persist but dropdowns
+	// reset" would surprise anyone who actually tries it. The "clear all
+	// filters" link only shows when 2+ are active; one filter is trivially
+	// clearable via its own dropdown / dismiss pill.
 	const {
 		selectedProjectId,
 		setSelectedProjectId,
@@ -52,9 +74,16 @@ export default function Insights() {
 		activeFilterCount,
 		clearAllFilters,
 	} = useInsightsFilters();
+	const [rawTab, setRawTab] = useUrlParam("tab");
+	const tab = resolveInsightsTab(rawTab);
+	// The default tab keeps a clean URL: ?tab=overview and no ?tab= are the
+	// same view, so we never write the default.
+	const setTab = (next: InsightsTab) => setRawTab(next === "overview" ? undefined : next);
 	const { data: projects } = useProjects();
 	const { data: allTags } = useAllTags();
-	const currentYear = new Date().getFullYear();
+	const now = new Date();
+	const currentYear = now.getFullYear();
+	const currentMonth = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 	const { data: heatmapData } = useHeatmap(currentYear, selectedProjectId, selectedTag);
 
 	const activeProjects = visibleProjects(projects);
@@ -62,31 +91,30 @@ export default function Insights() {
 	// Compute current month summary from heatmap data
 	const monthSummary = useMemo(() => {
 		if (!heatmapData) return null;
-		const now = new Date();
-		const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		const today = new Date();
+		const monthPrefix = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 		const monthDays = heatmapData.filter((d) => d.date.startsWith(monthPrefix));
 
 		const totalMinutes = monthDays.reduce((sum, d) => sum + d.total_minutes, 0);
 		const totalSessions = monthDays.reduce((sum, d) => sum + d.session_count, 0);
 		const activeDays = monthDays.filter((d) => d.total_minutes > 0).length;
-		const daysElapsed = now.getDate();
+		const daysElapsed = today.getDate();
 		const avgDailyMinutes = daysElapsed > 0 ? totalMinutes / daysElapsed : 0;
 
 		return { totalMinutes, totalSessions, activeDays, avgDailyMinutes };
 	}, [heatmapData]);
 
+	// Flow charts read the daemon's flow windows, which don't carry tags, so a
+	// tag filter hides them rather than pretending to apply.
+	const flowHidden = Boolean(selectedTag);
+	const flowDimensionFilterActive = Boolean(selectedRepo || selectedLanguage || selectedBundleId);
+
 	return (
 		<div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
-			{/* Header with project filter */}
+			{/* Header with the filters that apply to every tab */}
 			<div className="flex flex-wrap items-center justify-between gap-y-2">
 				<div className="flex flex-wrap items-center gap-3">
 					<h1 className="font-heading text-xl text-foreground shrink-0">Insights</h1>
-					<Link to="/insights/digests" className={SKY_CHIP}>
-						Digests
-					</Link>
-					<Link to={`/insights/year/${new Date().getFullYear() - 1}`} className={SKY_CHIP}>
-						{new Date().getFullYear() - 1} Review
-					</Link>
 					{activeFilterCount >= 2 && (
 						<button
 							type="button"
@@ -141,9 +169,24 @@ export default function Insights() {
 				</div>
 			</div>
 
-			{/* Monthly summary stats */}
-			{monthSummary && monthSummary.totalMinutes > 0 && (
-				<div className="space-y-2">
+			<Tabs tabs={INSIGHTS_TABS} value={tab} onChange={setTab} label="Insights sections" />
+
+			{/* Flow-dimension chips filter flow charts on every tab but Reviews,
+			    so they sit above the panels rather than inside one of them. */}
+			{!flowHidden && flowDimensionFilterActive && tab !== "reviews" && (
+				<FlowFilterChips
+					repo={selectedRepo}
+					language={selectedLanguage}
+					bundleId={selectedBundleId}
+					onClearRepo={() => setSelectedRepo(undefined)}
+					onClearLanguage={() => setSelectedLanguage(undefined)}
+					onClearBundleId={() => setSelectedBundleId(undefined)}
+				/>
+			)}
+
+			<TabPanel value="overview" current={tab} className="space-y-5">
+				{/* Monthly summary stats */}
+				{monthSummary && monthSummary.totalMinutes > 0 && (
 					<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 						<SummaryCard
 							label="Hours this month"
@@ -157,78 +200,76 @@ export default function Insights() {
 							value={formatDuration(monthSummary.avgDailyMinutes)}
 						/>
 					</div>
-					<div className="flex justify-end">
-						<Link
-							to={`/insights/month/${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
-							className={SKY_CHIP}
-						>
-							View full monthly retrospective &rarr;
-						</Link>
-					</div>
-				</div>
-			)}
+				)}
 
-			{/* Intelligence: Pattern cards */}
-			{!selectedProjectId && !selectedTag && <PatternCards />}
+				{/* Intelligence: Pattern cards */}
+				{!selectedProjectId && !selectedTag && <PatternCards />}
 
-			{/* Today's flow score + repo / language dimensions, from the daemon.
-			    Tag filter still hides these — flow windows don't carry tags. */}
-			{!selectedTag && (
-				<>
-					{(selectedRepo || selectedLanguage || selectedBundleId) && (
-						<FlowFilterChips
-							repo={selectedRepo}
-							language={selectedLanguage}
-							bundleId={selectedBundleId}
-							onClearRepo={() => setSelectedRepo(undefined)}
-							onClearLanguage={() => setSelectedLanguage(undefined)}
-							onClearBundleId={() => setSelectedBundleId(undefined)}
-						/>
-					)}
-					<FlowToday
-						projectId={selectedProjectId}
-						editorRepo={selectedRepo}
-						editorLanguage={selectedLanguage}
-						bundleId={selectedBundleId}
-					/>
-					{/* Drift events aren't scoped by project/repo/language/app, so only
-					    show this when no flow-dimension filter is active — otherwise it
-					    would read as filtered when it isn't. */}
-					{!selectedProjectId && !selectedRepo && !selectedLanguage && !selectedBundleId && (
-						<DistractionsToday />
-					)}
-					<BestMoment
-						projectId={selectedProjectId}
-						editorRepo={selectedRepo}
-						editorLanguage={selectedLanguage}
-						bundleId={selectedBundleId}
-					/>
-					<FlowThisWeek
-						projectId={selectedProjectId}
-						editorRepo={selectedRepo}
-						editorLanguage={selectedLanguage}
-						bundleId={selectedBundleId}
-					/>
-					<FlowTrend
-						projectId={selectedProjectId}
-						editorRepo={selectedRepo}
-						editorLanguage={selectedLanguage}
-						bundleId={selectedBundleId}
-					/>
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-						<FlowRhythm
+				{/* Today's flow score and its best moment, from the daemon */}
+				{!flowHidden && (
+					<>
+						<FlowToday
 							projectId={selectedProjectId}
 							editorRepo={selectedRepo}
 							editorLanguage={selectedLanguage}
 							bundleId={selectedBundleId}
 						/>
-						<FlowByWeekday
+						<BestMoment
 							projectId={selectedProjectId}
 							editorRepo={selectedRepo}
 							editorLanguage={selectedLanguage}
 							bundleId={selectedBundleId}
 						/>
-					</div>
+					</>
+				)}
+
+				<ContributionHeatmap projectId={selectedProjectId} tag={selectedTag} />
+
+				{/* Weekly shareable card */}
+				{!selectedProjectId && !selectedTag && <WeeklyCard />}
+			</TabPanel>
+
+			<TabPanel value="flow" current={tab} className="space-y-5">
+				{/* Flow windows don't carry tags, so the tag filter hides them. */}
+				{!flowHidden && (
+					<>
+						{/* Drift events aren't scoped by project/repo/language/app, so only
+						    show this when no flow-dimension filter is active — otherwise it
+						    would read as filtered when it isn't. */}
+						{!selectedProjectId && !flowDimensionFilterActive && <DistractionsToday />}
+						<FlowThisWeek
+							projectId={selectedProjectId}
+							editorRepo={selectedRepo}
+							editorLanguage={selectedLanguage}
+							bundleId={selectedBundleId}
+						/>
+						<FlowTrend
+							projectId={selectedProjectId}
+							editorRepo={selectedRepo}
+							editorLanguage={selectedLanguage}
+							bundleId={selectedBundleId}
+						/>
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+							<FlowRhythm
+								projectId={selectedProjectId}
+								editorRepo={selectedRepo}
+								editorLanguage={selectedLanguage}
+								bundleId={selectedBundleId}
+							/>
+							<FlowByWeekday
+								projectId={selectedProjectId}
+								editorRepo={selectedRepo}
+								editorLanguage={selectedLanguage}
+								bundleId={selectedBundleId}
+							/>
+						</div>
+					</>
+				)}
+				<DailyRhythmChart projectId={selectedProjectId} tag={selectedTag} />
+			</TabPanel>
+
+			<TabPanel value="time" current={tab} className="space-y-5">
+				{!flowHidden && (
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 						<FlowByRepo
 							projectId={selectedProjectId}
@@ -252,25 +293,54 @@ export default function Insights() {
 							onSelectBundleId={setSelectedBundleId}
 						/>
 					</div>
-				</>
-			)}
+				)}
 
-			<ContributionHeatmap projectId={selectedProjectId} tag={selectedTag} />
+				{!selectedProjectId && (
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+						<TopProjects tag={selectedTag} />
+					</div>
+				)}
 
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-				<DailyRhythmChart projectId={selectedProjectId} tag={selectedTag} />
-				{!selectedProjectId && <TopProjects tag={selectedTag} />}
-			</div>
+				{/* Intelligence: Project Health */}
+				{!selectedProjectId && !selectedTag && (
+					<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+						<ProjectHealth />
+					</div>
+				)}
+			</TabPanel>
 
-			{/* Intelligence: Project Health */}
-			{!selectedProjectId && !selectedTag && (
-				<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-					<ProjectHealth />
-				</div>
-			)}
-
-			{/* Weekly shareable card */}
-			{!selectedProjectId && !selectedTag && <WeeklyCard />}
+			<TabPanel value="reviews" current={tab}>
+				<Panel className="space-y-4">
+					<div>
+						<h2 className="font-heading text-base font-bold text-foreground">Reviews</h2>
+						<p className="text-sm text-muted-foreground">
+							Longer looks back: weekly digests and the month and year retrospectives.
+						</p>
+					</div>
+					<ul className="space-y-2">
+						<li>
+							<Link to="/insights/digests" className={SKY_CHIP}>
+								Weekly digests
+							</Link>
+						</li>
+						<li>
+							<Link to={`/insights/month/${currentMonth}`} className={SKY_CHIP}>
+								This month's retrospective
+							</Link>
+						</li>
+						<li>
+							<Link to={`/insights/year/${currentYear}`} className={SKY_CHIP}>
+								{currentYear} Review
+							</Link>
+						</li>
+						<li>
+							<Link to={`/insights/year/${currentYear - 1}`} className={SKY_CHIP}>
+								{currentYear - 1} Review
+							</Link>
+						</li>
+					</ul>
+				</Panel>
+			</TabPanel>
 		</div>
 	);
 }
