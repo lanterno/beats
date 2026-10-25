@@ -275,9 +275,17 @@
 		--sky-low: #cfe3e8;
 		--sky-ground: #d6e5d4;
 		--sun: rgb(255 236 170 / 0.75);
-		--cloud: #ffffff;
-		--cloud-shade: rgb(150 185 215 / 0.45);
-		--cloud-alpha: 0.88;
+		/*
+		  The cloud is the sky's own hue, never a white. Pure #ffffff at .88
+		  composited BRIGHTER than the paper (L 0.943–0.966 against 0.931) at
+		  1.01–1.04:1 — no edge — so a drifting cloud dissolved and moved every
+		  panel boundary it passed behind (docs/mockups/surface-calm.html has
+		  the measurements). Tinted, it sits at L 0.726: paper is the one
+		  brightest surface, and the edge holds still.
+		*/
+		--cloud: #cfe6f2;
+		--cloud-shade: rgb(120 160 200 / 0.4);
+		--cloud-alpha: 0.8;
 		--hill-far: #b9d9a8;
 		--hill-mid: #8ac07c;
 		--hill-near: #5c9f5e;
