@@ -662,6 +662,44 @@
 }
 
 /*
+  The sheet layout (`data-layout="sheet"`, picked in Settings beside the hour
+  and the density; docs/mockups/surface-calm.html is the comparison): one
+  paper↔sky edge per page instead of one per panel. A page opts in by classing
+  its stack `page-sheet`; under the attribute the stack becomes the one card
+  and every Panel inside it flattens — transparent, unshadowed, square — with
+  a hairline between the stack's top-level children. Inside the sheet a group
+  is a wash or a hairline, never another white box; a `panel-tile` keeps a
+  surface as a wash. Without the attribute none of this applies and a Panel
+  paints itself, which is why these rules sit OUTSIDE every cascade layer:
+  unlayered styles outrank the utility layer that paints the Panel.
+*/
+[data-layout="sheet"] .page-sheet {
+	background: var(--color-card);
+	border-radius: var(--radius-3xl);
+	box-shadow: var(--shadow-soft);
+	overflow: hidden;
+	padding: 0.5rem 0.75rem;
+	/* the sheet is paper, so the sky's halo ends at its edge */
+	text-shadow: none;
+}
+
+[data-layout="sheet"] .page-sheet .panel {
+	background: transparent;
+	box-shadow: none;
+	border-radius: 0;
+}
+
+[data-layout="sheet"] .page-sheet > * + * {
+	border-top: 1px solid var(--color-border);
+	padding-top: 1.25rem;
+}
+
+[data-layout="sheet"] .page-sheet .panel-tile {
+	background: hsl(var(--secondary) / var(--secondary-alpha));
+	border-radius: var(--radius-xl);
+}
+
+/*
   Nothing moves under reduced motion: the clouds stop above, and every other
   animation or transition — the page fade, the spark bars, a dialog's
   entrance — jumps to its end state. `!important` because several of them

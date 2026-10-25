@@ -7,6 +7,7 @@ import {
 	Download,
 	FileJson,
 	FileSpreadsheet,
+	LayoutPanelTop,
 	Palette,
 	Rows3,
 	Terminal,
@@ -18,7 +19,15 @@ import { toast } from "sonner";
 import { useProjects } from "@/entities/project";
 import { describeError } from "@/shared/api";
 import { config, publicApiBase } from "@/shared/config";
-import { browserTimeZone, cn, DENSITIES, downloadFile, THEMES, useTheme } from "@/shared/lib";
+import {
+	browserTimeZone,
+	cn,
+	DENSITIES,
+	downloadFile,
+	LAYOUTS,
+	THEMES,
+	useTheme,
+} from "@/shared/lib";
 import { sessionToken } from "@/shared/session";
 import { Button, buttonVariants, Panel, type TabItem, TabPanel, Tabs } from "@/shared/ui";
 import { CalendarSection } from "./CalendarSection";
@@ -52,7 +61,7 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 export default function Settings() {
 	const { data: projects } = useProjects();
 	const [importing, setImporting] = useState(false);
-	const { theme, setTheme, density, setDensity } = useTheme();
+	const { theme, setTheme, density, setDensity, layout, setLayout } = useTheme();
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	// The selected tab lives in the URL so a section can be linked to; an
@@ -199,6 +208,37 @@ export default function Settings() {
 								</button>
 							))}
 						</div>
+					</Panel>
+				</section>
+
+				{/* Appearance — Page layout */}
+				<section className="mb-8">
+					<h2 className={HEADING}>
+						<LayoutPanelTop className={HEADING_ICON} />
+						Page layout
+					</h2>
+					<Panel padding="p-5">
+						<div className="flex flex-wrap gap-2">
+							{LAYOUTS.map((l) => (
+								<button
+									type="button"
+									key={l.id}
+									onClick={() => setLayout(l.id)}
+									aria-pressed={layout === l.id}
+									className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
+										layout === l.id
+											? "bg-accent text-accent-foreground"
+											: "bg-secondary text-foreground hover:bg-sidebar-accent"
+									}`}
+								>
+									{l.label}
+								</button>
+							))}
+						</div>
+						<p className="mt-3 text-[12.5px] text-muted-foreground">
+							Boxes is a panel per section floating on the sky; one sheet is a single card per page,
+							its sections parted by hairlines.
+						</p>
 					</Panel>
 				</section>
 			</TabPanel>

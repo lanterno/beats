@@ -60,7 +60,8 @@ export const TITLE = "font-heading text-2xl font-extrabold tracking-[-0.02em] te
  * The page's container. Wide, because the sidebar already takes 18rem and a
  * single narrow column wastes the rest; the grids below use the width.
  */
-export const PAGE = "max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-4 pb-24";
+/** `page-sheet`: under the sheet layout the stack is the page's one card (global.css). */
+export const PAGE = "page-sheet max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-4 pb-24";
 
 /**
  * `.pagebar` — a Panel strip at the top of a page: the mark, the title or

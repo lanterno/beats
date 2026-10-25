@@ -157,8 +157,9 @@ export default function Clients() {
 		return true;
 	};
 
+	// `page-sheet`: under the sheet layout the stack is the page's one card (global.css).
 	return (
-		<div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-3.5 pb-24">
+		<div className="page-sheet max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-3.5 pb-24">
 			{/* The page bar (docs/mockups/ux-refresh.html, `.pagebar`): the
 			    heading, the month it is reading, and the one primary action, all
 			    on a card. The heading used to sit bare on the sky, and the month

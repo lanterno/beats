@@ -1,7 +1,11 @@
 /**
- * Panel — a cloud-white surface floating on the sky: rounded, shadowed, no
+ * Panel — a paper surface floating on the sky: rounded, shadowed, no
  * border. The one card the app has; pages compose it instead of repeating
  * the class string.
+ *
+ * The literal `panel` class carries no styling of its own: it is the handle
+ * the sheet layout flattens panels by (`[data-layout="sheet"] .page-sheet
+ * .panel` in global.css). Nothing else may select it.
  */
 import type * as React from "react";
 
@@ -17,7 +21,7 @@ export function Panel({ className, padding = "p-6", ref, ...props }: PanelProps)
 	return (
 		<div
 			ref={ref}
-			className={cn("rounded-[1.625rem] bg-card shadow-soft", padding, className)}
+			className={cn("panel rounded-[1.625rem] bg-card shadow-soft", padding, className)}
 			{...props}
 		/>
 	);

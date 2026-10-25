@@ -13,6 +13,7 @@
 
 import type { BillingMonth } from "@/entities/billing";
 import { formatMoney, hoursText } from "@/shared/lib";
+import { Panel } from "@/shared/ui";
 
 /** The API's figures are hundredths; summing floats must not invent a third decimal. */
 function sum(values: number[]): number {
@@ -21,7 +22,8 @@ function sum(values: number[]): number {
 
 function Tile({ label, figure, note }: { label: string; figure: string; note?: string }) {
 	return (
-		<div className="rounded-[1.625rem] bg-card shadow-soft px-5 py-4">
+		// `panel-tile`: in the sheet layout a tile keeps a surface as a wash.
+		<Panel padding="px-5 py-4" className="panel-tile">
 			<p className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
 				{label}
 			</p>
@@ -29,7 +31,7 @@ function Tile({ label, figure, note }: { label: string; figure: string; note?: s
 				{figure}
 			</p>
 			{note && <p className="mt-1.5 text-[12px] font-medium text-muted-foreground">{note}</p>}
-		</div>
+		</Panel>
 	);
 }
 

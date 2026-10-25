@@ -17,6 +17,7 @@
         }
         var density = localStorage.getItem("beats_density");
         if (density === "compact" || density === "spacious") root.dataset.density = density;
+        if (localStorage.getItem("beats_layout") === "sheet") root.dataset.layout = "sheet";
       } catch (e) {}
     </script>
     <meta name="mobile-web-app-capable" content="yes" />
