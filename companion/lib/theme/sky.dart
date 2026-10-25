@@ -72,11 +72,11 @@ class SkyPalette extends ThemeExtension<SkyPalette> {
   });
 
   static const afternoon = SkyPalette(
-    ink: Color(0xFF2B3A44),
-    inkMuted: Color(0xFF5C6770),
+    ink: Color(0xFF27353F),
+    inkMuted: Color(0xFF515D67),
     inkOnSky: Color(0xFF3D5160),
-    panel: Color(0xF2FFFDF7),
-    sidebar: Color(0xB8FFFDF7),
+    panel: Color(0xF7FAF8EF),
+    sidebar: Color(0xDBFAF8EF),
     sun: Color(0xFFF2B233),
     sunInk: Color(0xFF8C5E12),
     wash: Color(0x2972B0D6),
@@ -87,7 +87,7 @@ class SkyPalette extends ThemeExtension<SkyPalette> {
     leafInk: Color(0xFF2A6F3D),
     persimmon: Color(0xFFD2683F),
     persimmonInk: Color(0xFFA84924),
-    sky: [Color(0xFF8CC1E2), Color(0xFFBCDDEE), Color(0xFFE4F0F1), Color(0xFFE9F2E6)],
+    sky: [Color(0xFF7FB4D8), Color(0xFFA9D0E4), Color(0xFFCFE3E8), Color(0xFFD6E5D4)],
     hills: [Color(0xFFB9D9A8), Color(0xFF8AC07C), Color(0xFF5C9F5E)],
   );
 
