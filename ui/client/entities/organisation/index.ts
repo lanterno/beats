@@ -13,7 +13,7 @@ export {
 	recordCsvUrl,
 	useAbsenceRequests,
 	useArchive,
-	useAssignMember,
+	useAssignMembers,
 	useAuditLog,
 	useConnectProject,
 	useCreateInvite,

@@ -296,12 +296,19 @@ export function useUpdateOrgProject(organisationId: string) {
 	});
 }
 
-export function useAssignMember(organisationId: string) {
+export function useAssignMembers(organisationId: string) {
 	const invalidate = useInvalidateTimeline();
 	return useMutation({
-		mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) =>
-			assignMember(organisationId, projectId, userId),
-		onSuccess: invalidate,
+		mutationFn: async ({ projectId, userIds }: { projectId: string; userIds: string[] }) => {
+			// One PUT per member, in order. Assigning is idempotent on the
+			// server — an already-active assignment is returned, not doubled —
+			// so sending the whole pick again after a failure partway is safe.
+			for (const userId of userIds) {
+				await assignMember(organisationId, projectId, userId);
+			}
+		},
+		// A failure partway has still assigned everyone before it.
+		onSettled: invalidate,
 	});
 }
 

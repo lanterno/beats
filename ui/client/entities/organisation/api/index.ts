@@ -3,7 +3,7 @@ export {
 	organisationKeys,
 	useAbsenceRequests,
 	useArchive,
-	useAssignMember,
+	useAssignMembers,
 	useAuditLog,
 	useConnectProject,
 	useCreateInvite,
