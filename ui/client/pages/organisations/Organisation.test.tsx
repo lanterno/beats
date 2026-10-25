@@ -1,12 +1,12 @@
 /**
- * What the organisation page shows for which role: every member gets the
- * plain account of what the organisation can see and the way out; the
- * members, invites and projects are an admin's. And when the API answers
+ * What the organisation page shows for which role, tab by tab: every member
+ * gets the plain account of what the organisation can see and the way out;
+ * the members, invites and projects are an admin's. And when the API answers
  * 404 — the membership ended, or never was — the page points at the
  * archive rather than at nothing.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Membership, OrgRole } from "@/entities/organisation";
@@ -98,11 +98,17 @@ function renderPage() {
 
 afterEach(cleanup);
 
+/** Switch to the tab named `name` in the organisation tablist. */
+function openTab(name: string) {
+	fireEvent.click(screen.getByRole("tab", { name }));
+}
+
 describe("Organisation", () => {
-	it("as a member, explains what Acme can see and offers to leave, and no admin section", () => {
+	it("as a member, has one tab: what Acme can see, your timesheets, and the way out", () => {
 		state.membership = { data: membership("member"), error: null };
 		renderPage();
 
+		expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Timesheets"]);
 		expect(screen.getByRole("heading", { name: "What Acme can see" })).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "See the actual data" })).toHaveAttribute(
 			"href",
@@ -110,9 +116,6 @@ describe("Organisation", () => {
 		);
 		expect(screen.getByRole("button", { name: "Leave Acme" })).toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Members" })).not.toBeInTheDocument();
-		expect(screen.queryByRole("heading", { name: /Invites/ })).not.toBeInTheDocument();
-		expect(screen.queryByRole("heading", { name: /Projects/ })).not.toBeInTheDocument();
-		expect(screen.queryByRole("heading", { name: /Teams/ })).not.toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Absence requests" })).not.toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Timesheets" })).not.toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
@@ -120,10 +123,14 @@ describe("Organisation", () => {
 		expect(screen.queryByRole("link", { name: "This month's record" })).not.toBeInTheDocument();
 	});
 
-	it("as a manager, shows the requests and timesheets but no admin sections", () => {
+	it("as a manager, lands on the approvals but has no admin tabs", () => {
 		state.membership = { data: membership("manager"), error: null };
 		renderPage();
 
+		expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
+			"Approvals",
+			"Timesheets",
+		]);
 		expect(screen.getByRole("heading", { name: "Absence requests" })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Timesheets" })).toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Members" })).not.toBeInTheDocument();
@@ -131,24 +138,63 @@ describe("Organisation", () => {
 		expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
 	});
 
-	it("as an owner, shows the members, invites and projects", () => {
+	it("as an owner, has every tab, each with its sections", () => {
 		state.membership = { data: membership("owner"), error: null };
 		renderPage();
+
+		expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
+			"People",
+			"Projects",
+			"Approvals",
+			"Timesheets",
+			"Audit",
+			"Settings",
+		]);
 
 		expect(screen.getByRole("heading", { name: "Members" })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: /Teams/ })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: /Invites/ })).toBeInTheDocument();
+
+		openTab("Projects");
 		expect(screen.getByRole("heading", { name: /Projects/ })).toBeInTheDocument();
-		expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+
+		openTab("Approvals");
 		expect(screen.getByRole("heading", { name: "Absence requests" })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Timesheets" })).toBeInTheDocument();
+
+		openTab("Timesheets");
 		expect(screen.getByRole("heading", { name: "Your timesheets" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "What Acme can see" })).toBeInTheDocument();
+		// An admin leaves from Settings, not here.
+		expect(screen.queryByRole("button", { name: "Leave Acme" })).not.toBeInTheDocument();
+
+		openTab("Audit");
 		expect(screen.getByRole("heading", { name: "Audit log" })).toBeInTheDocument();
+
+		openTab("Settings");
+		expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Leave Acme" })).toBeInTheDocument();
+
 		expect(screen.getByRole("link", { name: "This month's record" })).toHaveAttribute(
 			"href",
 			"/organisations/o1/record",
 		);
-		expect(screen.getByRole("button", { name: "Leave Acme" })).toBeInTheDocument();
+	});
+
+	it("an unknown ?tab= falls back to the first tab the role can see", () => {
+		state.membership = { data: membership("owner"), error: null };
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<MemoryRouter initialEntries={["/organisations/o1?tab=nonsense"]}>
+					<Routes>
+						<Route path="/organisations/:id" element={<Organisation />} />
+					</Routes>
+				</MemoryRouter>
+			</QueryClientProvider>,
+		);
+
+		expect(screen.getByRole("tab", { name: "People" })).toHaveAttribute("aria-selected", "true");
+		expect(screen.getByRole("heading", { name: "Members" })).toBeInTheDocument();
 	});
 
 	it("when not a member, says so and points at the archive", () => {
