@@ -115,7 +115,7 @@ export function Layout() {
 			<SkyBackdrop />
 
 			{/* Desktop sidebar */}
-			<Sidebar {...timerProps} />
+			<Sidebar {...timerProps} onOpenCommandPalette={() => setCommandPaletteOpen(true)} />
 
 			{/* Mobile header + drawer */}
 			<MobileHeader {...timerProps} />
