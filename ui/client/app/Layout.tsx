@@ -1,7 +1,7 @@
 /**
  * Layout Component
  * Sidebar-based shell with persistent timer for all authenticated pages.
- * Desktop: fixed left sidebar (w-64) + offset main content.
+ * Desktop: fixed left sidebar (w-72) + offset main content.
  * Mobile: sticky header with hamburger drawer.
  * Handles favicon indicator, keyboard shortcuts, command palette, and focus mode.
  */
@@ -122,7 +122,7 @@ export function Layout() {
 
 			{/* Main content area */}
 			{/* on-sky: the headings and captions the pages set straight on the sky */}
-			<main className="lg:ml-64 on-sky" key={location.pathname}>
+			<main className="lg:ml-72 on-sky" key={location.pathname}>
 				<div style={{ animation: "fadeSlideIn 200ms ease-out both" }}>
 					<Outlet />
 				</div>

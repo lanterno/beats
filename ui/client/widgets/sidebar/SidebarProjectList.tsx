@@ -9,7 +9,7 @@
  */
 import { ChevronDown, ChevronRight, Plus, Star } from "lucide-react";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
 	NewProjectDialog,
 	type ProjectWithDuration,
@@ -21,6 +21,13 @@ import { cn, formatDuration } from "@/shared/lib";
 
 interface SidebarProjectListProps {
 	projects: ProjectWithDuration[];
+	/**
+	 * How many projects to name before handing over to the Projects page. The
+	 * rail does not scroll, so without a cap a long list would push the foot
+	 * off the column. Unset lists every project, which is what the mobile
+	 * drawer wants.
+	 */
+	limit?: number;
 }
 
 const HEADING = "text-muted-foreground text-[9.5px] font-bold uppercase tracking-[0.14em]";
@@ -29,7 +36,7 @@ const HEADING = "text-muted-foreground text-[9.5px] font-bold uppercase tracking
 // dot off the wash. A literal white turned into pale rims on the dusk panel.
 const DOT = "w-[11px] h-[11px] rounded-full shrink-0 shadow-[0_0_0_3px_hsl(var(--card)/.6)]";
 
-export function SidebarProjectList({ projects }: SidebarProjectListProps) {
+export function SidebarProjectList({ projects, limit }: SidebarProjectListProps) {
 	const navigate = useNavigate();
 	const { projectId: activeProjectId } = useParams<{ projectId: string }>();
 	const [dialogOpen, setDialogOpen] = useState(false);
@@ -37,8 +44,12 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 	const { pins, toggle: togglePinId, isPinned } = usePinnedProjects();
 
 	const { visible, archived } = partitionByArchived(projects);
-	const sortedVisible = sortProjectsForList(visible, { pinnedIds: pins });
-	const sortedArchived = sortProjectsForList(archived);
+	const sortedAll = sortProjectsForList(visible, { pinnedIds: pins });
+	const sortedVisible = limit === undefined ? sortedAll : sortedAll.slice(0, limit);
+	const hidden = sortedAll.length - sortedVisible.length;
+	// A capped rail leaves the archived to the Projects index, which is the
+	// link below it; listing them here is what the cap exists to prevent.
+	const sortedArchived = limit === undefined ? sortProjectsForList(archived) : [];
 
 	const isActiveProject = (id: string) => id === activeProjectId;
 
@@ -138,7 +149,7 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 				    the CTA at the top header (+) — pre-FF.10 the empty-state
 				    contradicted itself by claiming "no projects" above an
 				    archived rail listing the projects. */}
-				{sortedVisible.length === 0 && sortedArchived.length === 0 && (
+				{visible.length === 0 && archived.length === 0 && (
 					<button
 						type="button"
 						onClick={() => setDialogOpen(true)}
@@ -149,6 +160,20 @@ export function SidebarProjectList({ projects }: SidebarProjectListProps) {
 					</button>
 				)}
 			</nav>
+
+			{/* The way to the rest — the ones the cap left out, and the archived. */}
+			{limit !== undefined && hidden + archived.length > 0 && (
+				<Link
+					to="/projects"
+					className="mt-0.5 flex items-center gap-2 rounded-full px-2.5 py-1.5 text-[13px] text-muted-foreground hover:bg-secondary hover:text-sidebar-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					<ChevronRight className="w-3.5 h-3.5 shrink-0" />
+					<span className="truncate">
+						{hidden > 0 ? `${hidden} more` : "Archived"}
+						{hidden > 0 && archived.length > 0 ? " · archived" : ""}
+					</span>
+				</Link>
+			)}
 
 			{sortedArchived.length > 0 && (
 				<div className="mt-3">
