@@ -11,6 +11,7 @@ import { Users, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Member, OrgRole } from "@/entities/organisation";
 import {
+	ROLE_HINTS,
 	ROLE_LABELS,
 	useMembers,
 	useRemoveMember,
@@ -22,7 +23,7 @@ import { formatDate } from "@/shared/lib";
 import { Panel, useConfirm } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LEAD, LIST, REMOVE, ROW, SELECT } from "./styles";
 
-const ROLES: OrgRole[] = ["member", "admin", "owner"];
+const ROLES: OrgRole[] = ["member", "viewer", "manager", "admin", "owner"];
 
 export function MembersSection({ organisationId }: { organisationId: string }) {
 	const { user } = useAuth();
@@ -59,6 +60,9 @@ export function MembersSection({ organisationId }: { organisationId: string }) {
 				<Users className={HEADING_ICON} />
 				Members
 			</h2>
+			<p className={`${LEAD} -mt-1 mb-3`}>
+				Admins run the organisation; a manager decides for their teams; a viewer reads the record.
+			</p>
 			<Panel padding="px-5 py-1">
 				{members.error ? (
 					<p className={`${LEAD} py-3`} role="alert">
@@ -95,7 +99,7 @@ export function MembersSection({ organisationId }: { organisationId: string }) {
 												className={SELECT}
 											>
 												{ROLES.map((role) => (
-													<option key={role} value={role}>
+													<option key={role} value={role} title={ROLE_HINTS[role]}>
 														{ROLE_LABELS[role]}
 													</option>
 												))}

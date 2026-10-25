@@ -1,6 +1,6 @@
 /**
  * The index page's states that depend on what the account holds: an
- * invitation waiting is offered with Accept, and an organisation left is
+ * invitation waiting is named without a way in, and an organisation left is
  * named as left, with its archive the way back to one's own hours.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -57,7 +57,6 @@ const KITE: Membership = {
 };
 
 const INVITATION: Invitation = {
-	token: "tok-1",
 	role: "admin",
 	expiresAt: "2026-11-07T12:00:00Z",
 	organisation: { id: "o3", name: "Beacon" },
@@ -76,14 +75,16 @@ function renderPage() {
 afterEach(cleanup);
 
 describe("Organisations", () => {
-	it("offers a waiting invitation with Accept, and names an organisation left", () => {
+	it("names a waiting invitation and the link it needs, and an organisation left", () => {
 		state.invitations = [INVITATION];
 		state.memberships = [KITE, ACME];
 		renderPage();
 
 		const invitations = screen.getByRole("region", { name: "Invitations" });
 		expect(invitations).toHaveTextContent("Beacon");
-		expect(within(invitations).getByRole("button", { name: "Accept" })).toBeInTheDocument();
+		// The way in is the link the inviter sent, never a button here.
+		expect(within(invitations).queryByRole("button")).not.toBeInTheDocument();
+		expect(invitations).toHaveTextContent(/Open the invite link you were sent/);
 
 		expect(screen.getByRole("link", { name: "Kite Studio" })).toHaveAttribute(
 			"href",

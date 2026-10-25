@@ -60,7 +60,12 @@ const PROJECTS: ProjectWithDuration[] = [
 		id: "work",
 		name: "Backend",
 		kind: "day_job",
-		organisation: { id: "o1", name: "Acme", sharedFrom: "2026-03-04T00:00:00Z" },
+		organisation: {
+			id: "o1",
+			name: "Acme",
+			sharedFrom: "2026-03-04T00:00:00Z",
+			contractManaged: false,
+		},
 	}),
 ];
 
@@ -142,6 +147,22 @@ describe("TodayFeed — owner scope", () => {
 		// The marker sits with the organisation's note, not the personal one.
 		expect(markers[0].parentElement).toHaveTextContent("deploy");
 		expect(markers[0].parentElement).not.toHaveTextContent("weeding");
+	});
+
+	it("marks a session entered by a decider as entered for you", async () => {
+		hooks.today.mockReturnValue([
+			session("s1", "mine", 3, "weeding"),
+			{ ...session("s2", "work", 1, "deploy"), enteredBy: "manager-1" },
+		]);
+		await renderFeed();
+
+		const marker = screen.getByText("entered for you");
+		expect(marker).toHaveAttribute(
+			"title",
+			"Entered by an organisation admin or manager; it is in the audit log",
+		);
+		expect(marker.parentElement).toHaveTextContent("deploy");
+		expect(marker.parentElement).not.toHaveTextContent("weeding");
 	});
 
 	it("shows no owner pills while every project is personal", async () => {

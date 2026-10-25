@@ -1,9 +1,10 @@
 /**
  * Organisations — `/organisations`: the invitations waiting for this
- * account, the organisations it is in, and the ones it left, each of which
- * keeps a read-only archive of the person's own hours
- * (docs/organisations-roadmap.md, stage 2). A new organisation is made
- * here, and the account that makes it is its first owner.
+ * account (who, as what — the way in is the link the inviter sent), the
+ * organisations it is in, and the ones it left, each of which keeps a
+ * read-only archive of the person's own hours (docs/organisations.md). A
+ * new organisation is made here, and the account that makes it is its
+ * first owner.
  */
 
 import { Building2, Mail, Plus } from "lucide-react";
@@ -16,7 +17,6 @@ import {
 	ROLE_LABELS,
 	useCreateOrganisation,
 	useInvitations,
-	useJoinOrganisation,
 	useMemberships,
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
@@ -36,25 +36,11 @@ export default function Organisations() {
 	const [creating, setCreating] = useState(false);
 	const invitations = useInvitations();
 	const memberships = useMemberships();
-	const join = useJoinOrganisation();
 	const create = useCreateOrganisation();
 
 	const active = (memberships.data ?? []).filter((m) => !m.leftAt);
 	const left = (memberships.data ?? []).filter((m) => m.leftAt);
 	const pending = invitations.data ?? [];
-
-	const accept = (token: string, name: string) =>
-		join.mutate(token, {
-			onSuccess: (result) => {
-				if (result.status === "joined") {
-					toast.success(`Joined ${name}`);
-					navigate(`/organisations/${result.membership.organisation.id}`);
-				} else {
-					toast(`Your request to join ${name} is waiting for an admin.`);
-				}
-			},
-			onError: (err) => toast.error(describeError(err, "The invitation could not be accepted.")),
-		});
 
 	const saveNew = async (input: OrganisationInput) => {
 		const membership: Membership = await create.mutateAsync(input);
@@ -83,7 +69,7 @@ export default function Organisations() {
 					<Panel padding="px-5 py-1">
 						<ul className={LIST}>
 							{pending.map((invitation) => (
-								<li key={invitation.token} className={ROW}>
+								<li key={invitation.organisation.id} className={ROW}>
 									<OrganisationMark
 										name={invitation.organisation.name}
 										logoUrl={invitation.organisation.logoUrl}
@@ -93,18 +79,15 @@ export default function Organisations() {
 										as a {ROLE_LABELS[invitation.role].toLowerCase()} · until{" "}
 										{formatDate(invitation.expiresAt)}
 									</span>
-									<Button
-										type="button"
-										size="sm"
-										className="ml-auto"
-										disabled={join.isPending}
-										onClick={() => accept(invitation.token, invitation.organisation.name)}
-									>
-										Accept
-									</Button>
 								</li>
 							))}
 						</ul>
+						{/* The way in is the link, not this list: an address is not
+						    verified at sign-up, so the API hands out no token here. */}
+						<p className={`${LEAD} py-3`}>
+							Open the invite link you were sent to join. If you don't have it, ask the person who
+							invited you.
+						</p>
 					</Panel>
 				</section>
 			)}

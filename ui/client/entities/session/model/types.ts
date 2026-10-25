@@ -13,6 +13,8 @@ export interface Session {
 	tags: string[];
 	/** Set when the entry is an organisation's working-time record (docs/organisations.md). */
 	organisationId?: string;
+	/** Who entered this time for the member, when a decider did (stage 3). */
+	enteredBy?: string;
 }
 
 export interface DaySummary {

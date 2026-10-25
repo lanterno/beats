@@ -11,7 +11,7 @@
 
 import type { ProjectKind } from "@/entities/project";
 
-export type OrgRole = "owner" | "admin" | "member";
+export type OrgRole = "owner" | "admin" | "manager" | "viewer" | "member";
 
 export type WeekStart = "monday" | "saturday" | "sunday";
 
@@ -84,9 +84,11 @@ export interface OrganisationCard {
 	logoUrl?: string;
 }
 
-/** An open invitation addressed to the caller's own address. */
+/**
+ * An open invitation addressed to the caller's own address: who, and as
+ * what. Not the token — the way in is the link the inviter passed on.
+ */
 export interface Invitation {
-	token: string;
 	role: OrgRole;
 	expiresAt: string;
 	organisation: OrganisationCard;
@@ -219,6 +221,7 @@ export interface ArchiveProject {
 	color?: string;
 	hours: number;
 	entries: RecordEntry[];
+	absences: RecordAbsence[];
 }
 
 /** The person's own hours that are one organisation's record, by project. */
@@ -229,4 +232,88 @@ export interface Archive {
 	leftAt?: string;
 	hours: number;
 	projects: ArchiveProject[];
+}
+
+// Employment (docs/organisations.md, stages 3 and 4).
+
+/** A team: a name and who is in it — what gives a manager their scope. */
+export interface Team {
+	id: string;
+	name: string;
+	memberIds: string[];
+}
+
+export interface TeamInput {
+	name: string;
+	memberIds: string[];
+}
+
+export type RequestStatus = "pending" | "approved" | "declined";
+
+/** A day off asked for on a managed assignment, and what became of it. */
+export interface AbsenceRequest {
+	id: string;
+	projectId: string;
+	userId: string;
+	date: string;
+	type: "vacation" | "sick" | "other";
+	halfDay: boolean;
+	note?: string;
+	status: RequestStatus;
+	requestedAt: string;
+	decidedAt?: string;
+	decidedBy?: string;
+	comment?: string;
+}
+
+export type TimesheetStatus = "submitted" | "approved" | "changes_requested" | "reopened";
+
+/** What approval froze: the month's figures as they stood. */
+export interface FrozenMonth {
+	worked: number;
+	expected: number | null;
+	balanceEnd: number | null;
+	entries: number;
+	absenceDays: number;
+}
+
+export interface TimesheetEvent {
+	at: string;
+	by: string;
+	action: TimesheetStatus;
+	comment?: string;
+}
+
+/** One member's month on one organisation project, submitted and decided. */
+export interface Timesheet {
+	id: string;
+	projectId: string;
+	userId: string;
+	month: string; // YYYY-MM-01
+	status: TimesheetStatus;
+	submittedAt: string;
+	decidedAt?: string;
+	decidedBy?: string;
+	comment?: string;
+	frozen?: FrozenMonth;
+	history: TimesheetEvent[];
+}
+
+/** The employer's view of one assignment's contract. */
+export interface ManagedContract {
+	projectId: string;
+	userId: string;
+	managed: boolean;
+	/** The wire contract, passed to the project entity's mappers where edited. */
+	contract: unknown | null;
+}
+
+/** One line of the audit log. */
+export interface AuditEvent {
+	at: string;
+	actorUserId?: string;
+	event: string;
+	subjectUserId?: string;
+	projectId?: string;
+	details: Record<string, unknown>;
 }

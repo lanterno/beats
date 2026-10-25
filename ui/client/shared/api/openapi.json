@@ -36,6 +36,143 @@
         "title": "AbsenceRequest",
         "type": "object"
       },
+      "AbsenceRequestBody": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "half_day": {
+            "default": false,
+            "title": "Half Day",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AbsenceType"
+          }
+        },
+        "required": [
+          "project_id",
+          "date",
+          "type"
+        ],
+        "title": "AbsenceRequestBody",
+        "type": "object"
+      },
+      "AbsenceRequestResponse": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "half_day": {
+            "title": "Half Day",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RequestStatus"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AbsenceType"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "user_id",
+          "date",
+          "type",
+          "half_day",
+          "note",
+          "status",
+          "requested_at",
+          "decided_at",
+          "decided_by",
+          "comment"
+        ],
+        "title": "AbsenceRequestResponse",
+        "type": "object"
+      },
       "AbsenceResponse": {
         "description": "Response schema for an absence. `organisation_id` is set on one\nrecorded on an organisation's project: that organisation's record.",
         "properties": {
@@ -159,6 +296,13 @@
       },
       "ArchiveProjectResponse": {
         "properties": {
+          "absences": {
+            "items": {
+              "$ref": "#/components/schemas/RecordAbsenceResponse"
+            },
+            "title": "Absences",
+            "type": "array"
+          },
           "color": {
             "anyOf": [
               {
@@ -195,7 +339,8 @@
           "name",
           "color",
           "hours",
-          "entries"
+          "entries",
+          "absences"
         ],
         "title": "ArchiveProjectResponse",
         "type": "object"
@@ -302,6 +447,67 @@
           "has_contract"
         ],
         "title": "AssignmentResponse",
+        "type": "object"
+      },
+      "AuditEventResponse": {
+        "properties": {
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
+          }
+        },
+        "required": [
+          "at",
+          "actor_user_id",
+          "event",
+          "subject_user_id",
+          "project_id",
+          "details"
+        ],
+        "title": "AuditEventResponse",
         "type": "object"
       },
       "AutoTimerSuggestion": {
@@ -2327,6 +2533,31 @@
         "title": "DecideRequest",
         "type": "object"
       },
+      "DecisionBody": {
+        "properties": {
+          "approve": {
+            "title": "Approve",
+            "type": "boolean"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "approve"
+        ],
+        "title": "DecisionBody",
+        "type": "object"
+      },
       "DeleteSignalsResponse": {
         "properties": {
           "deleted_summaries": {
@@ -2658,6 +2889,38 @@
         "title": "DurationResponse",
         "type": "object"
       },
+      "EnterTimeRequest": {
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "EnterTimeRequest",
+        "type": "object"
+      },
       "FlowWindowResponse": {
         "properties": {
           "active_project_id": {
@@ -2863,6 +3126,54 @@
           "components"
         ],
         "title": "FocusScoreResponse",
+        "type": "object"
+      },
+      "FrozenMonth": {
+        "description": "What approval freezes (docs/organisations.md, stage 3): the figures\nas they stood, stored for the first time anywhere in the system. The\nlive arithmetic goes on; an approved month's edits are refused, so the\ntwo cannot drift silently, and a reopen is the recorded way to change\none. `balance_end` is None where the record withholds the balance\n(decision 16) or no term owes hours.",
+        "properties": {
+          "absence_days": {
+            "title": "Absence Days",
+            "type": "number"
+          },
+          "balance_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance End"
+          },
+          "entries": {
+            "title": "Entries",
+            "type": "integer"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "worked": {
+            "title": "Worked",
+            "type": "number"
+          }
+        },
+        "required": [
+          "worked",
+          "expected",
+          "balance_end",
+          "entries",
+          "absence_days"
+        ],
+        "title": "FrozenMonth",
         "type": "object"
       },
       "GenerateBriefRequest": {
@@ -3334,7 +3645,7 @@
         "type": "object"
       },
       "InvitationResponse": {
-        "description": "An open invitation addressed to the caller's own address.",
+        "description": "An open invitation addressed to the caller's own address: who, and as\nwhat. Not the token \u2014 an address is not verified at sign-up, so the way\nin is the link the inviter passed on, which the join route then checks\nagainst the address too.",
         "properties": {
           "expires_at": {
             "format": "date-time",
@@ -3346,14 +3657,9 @@
           },
           "role": {
             "$ref": "#/components/schemas/OrgRole"
-          },
-          "token": {
-            "title": "Token",
-            "type": "string"
           }
         },
         "required": [
-          "token",
           "role",
           "expires_at",
           "organisation"
@@ -3936,6 +4242,64 @@
         "title": "LoginVerifyResponse",
         "type": "object"
       },
+      "ManagedContractRequest": {
+        "description": "The employer's contract on an assignment. `managed` true takes the\nterms under the organisation's hand; false hands them back. `contract`\nleft null keeps what the assignment has.",
+        "properties": {
+          "contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "managed": {
+            "title": "Managed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "managed"
+        ],
+        "title": "ManagedContractRequest",
+        "type": "object"
+      },
+      "ManagedContractResponse": {
+        "properties": {
+          "contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "managed": {
+            "title": "Managed",
+            "type": "boolean"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "user_id",
+          "managed",
+          "contract"
+        ],
+        "title": "ManagedContractResponse",
+        "type": "object"
+      },
       "MemberBalanceResponse": {
         "properties": {
           "adjusted": {
@@ -4093,7 +4457,7 @@
         "type": "object"
       },
       "MemberTotals": {
-        "description": "What one member's finished entries on one project add up to, all time.",
+        "description": "What one member's finished entries on one project add up to, all time.\nMongo hands the instants back naive; this makes them UTC like every other.",
         "properties": {
           "entries": {
             "default": 0,
@@ -4470,10 +4834,12 @@
         "type": "object"
       },
       "OrgRole": {
-        "description": "What a member may do in an organisation. Each role includes the ones\nbelow it: an owner is an admin, an admin is a member.",
+        "description": "What a member may do in an organisation.\n\nOwner and admin run it; a **manager** decides absences and timesheets\nfor the members of their teams and reads their slice of the record; a\n**viewer** (an accountant, a works council seat) reads the whole record\nand changes nothing; a member tracks. The ladder (`at_least`) orders\nthem for the owner/admin checks; what the middle roles may do is the\nthree capabilities below, not the ladder.",
         "enum": [
           "owner",
           "admin",
+          "manager",
+          "viewer",
           "member"
         ],
         "title": "OrgRole",
@@ -5138,6 +5504,11 @@
       "ProjectOrganisation": {
         "description": "The organisation that owns a project, as its member sees it on the\nproject: enough to mark it in a list, and the instant from which the\nmember's hours on it are the organisation's (docs/organisations.md).\n`shared_from` is the member's own choice when they connected a project of\ntheirs, and the moment of assignment otherwise.",
         "properties": {
+          "contract_managed": {
+            "default": false,
+            "title": "Contract Managed",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5860,6 +6231,21 @@
         "title": "RegistrationVerifyResponse",
         "type": "object"
       },
+      "ReopenBody": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReopenBody",
+        "type": "object"
+      },
       "ReportEntryResponse": {
         "description": "One billable entry: the local day it started on, when it ran, and how\nlong. Empty on a link that does not show entries.",
         "properties": {
@@ -6146,6 +6532,15 @@
         "title": "ReportResponse",
         "type": "object"
       },
+      "RequestStatus": {
+        "enum": [
+          "pending",
+          "approved",
+          "declined"
+        ],
+        "title": "RequestStatus",
+        "type": "string"
+      },
       "RhythmSlotResponse": {
         "description": "Response schema for a half-hour slot in the daily rhythm chart.",
         "properties": {
@@ -6374,6 +6769,25 @@
         "title": "Subdivision",
         "type": "object"
       },
+      "SubmitTimesheetBody": {
+        "properties": {
+          "month": {
+            "format": "date",
+            "title": "Month",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "month"
+        ],
+        "title": "SubmitTimesheetBody",
+        "type": "object"
+      },
       "SuggestionResponse": {
         "description": "Response schema for a daily plan suggestion.",
         "properties": {
@@ -6401,6 +6815,55 @@
           "reasoning"
         ],
         "title": "SuggestionResponse",
+        "type": "object"
+      },
+      "TeamRequest": {
+        "properties": {
+          "member_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Member Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TeamRequest",
+        "type": "object"
+      },
+      "TeamResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "member_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Member Ids",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "member_ids"
+        ],
+        "title": "TeamResponse",
         "type": "object"
       },
       "TimerStatusResponse": {
@@ -6437,6 +6900,147 @@
         ],
         "title": "TimerStatusResponse",
         "type": "object"
+      },
+      "TimesheetEvent": {
+        "description": "One step of a timesheet's history: submitted, approved, changes\nrequested, reopened \u2014 each with who and, where one was given, why.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/TimesheetStatus"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "action"
+        ],
+        "title": "TimesheetEvent",
+        "type": "object"
+      },
+      "TimesheetResponse": {
+        "description": "A timesheet as both sides read it. `frozen` is set only while\napproved: the figures as approval saw them, which the lock then keeps.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "frozen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrozenMonth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetEvent"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "month": {
+            "format": "date",
+            "title": "Month",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TimesheetStatus"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "user_id",
+          "month",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "decided_by",
+          "comment",
+          "frozen",
+          "history"
+        ],
+        "title": "TimesheetResponse",
+        "type": "object"
+      },
+      "TimesheetStatus": {
+        "enum": [
+          "submitted",
+          "approved",
+          "changes_requested",
+          "reopened"
+        ],
+        "title": "TimesheetStatus",
+        "type": "string"
       },
       "TopBucket": {
         "description": "One bucket from a leaderboard within FlowWindowSummaryResponse.",
@@ -11503,7 +12107,7 @@
     },
     "/api/organisations/invitations": {
       "get": {
-        "description": "The open invitations addressed to the caller's own email address.\nNothing is sent anywhere: this is where an invitation is found.",
+        "description": "The open invitations addressed to the caller's own email address \u2014\nwho has invited them, and as what. Without the token: an address is\nnot verified at sign-up, so the way in stays the link the inviter passed\non, and `/join/{token}` checks it against the address as well.",
         "operationId": "list_invitations_api_organisations_invitations_get",
         "responses": {
           "200": {
@@ -11720,6 +12324,235 @@
         ]
       }
     },
+    "/api/organisations/{organisation_id}/absence-requests": {
+      "get": {
+        "description": "A member's own requests; a decider's whole scope \u2014 an owner's or\nadmin's everyone, a manager's their teams.",
+        "operationId": "list_absence_requests_api_organisations__organisation_id__absence_requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the undecided ones.",
+            "in": "query",
+            "name": "pending",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only the undecided ones.",
+              "title": "Pending",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AbsenceRequestResponse"
+                  },
+                  "title": "Response List Absence Requests Api Organisations  Organisation Id  Absence Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Absence Requests",
+        "tags": [
+          "Employment"
+        ]
+      },
+      "post": {
+        "description": "Ask for a day off on a managed assignment. The note is addressed to\nthe decider; the organisation's record never carries it (rule 3). On an\nunmanaged assignment the member books directly, as ever (409\nNOT_MANAGED here).",
+        "operationId": "request_absence_api_organisations__organisation_id__absence_requests_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Absence",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/absence-requests/{request_id}": {
+      "delete": {
+        "description": "Take a pending request of one's own back; a decided one stays.",
+        "operationId": "withdraw_absence_request_api_organisations__organisation_id__absence_requests__request_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Absence Request",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/absence-requests/{request_id}/decision": {
+      "post": {
+        "description": "Approve \u2014 which books the absence, stamped as the organisation's \u2014 or\ndecline with a comment. Once: a second decision answers 409.",
+        "operationId": "decide_absence_request_api_organisations__organisation_id__absence_requests__request_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Absence Request",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
     "/api/organisations/{organisation_id}/archive": {
       "get": {
         "description": "The caller's own hours that are this organisation's record, by\nproject: the read-only \"Acme (left)\" archive, kept after leaving. Read\nthrough the caller's own repository. Members and former members.",
@@ -11841,6 +12674,161 @@
         "summary": "Read Archive Csv",
         "tags": [
           "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/audit": {
+      "get": {
+        "description": "The audit log, newest first \u2014 written since the first organisation\nexisted, readable from stage 4 on. Owners and admins.",
+        "operationId": "read_audit_api_organisations__organisation_id__audit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only events before this instant; for paging.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events before this instant; for paging.",
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEventResponse"
+                  },
+                  "title": "Response Read Audit Api Organisations  Organisation Id  Audit Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Audit",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/compliance.csv": {
+      "get": {
+        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total \u2014 the shape a\nworking-time authority asks for. Whoever reads the record.",
+        "operationId": "read_compliance_csv_api_organisations__organisation_id__compliance_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "The month's compliance record as CSV."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Compliance Csv",
+        "tags": [
+          "Employment"
         ]
       }
     },
@@ -12575,9 +13563,291 @@
         ]
       }
     },
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}/adjustments": {
+      "post": {
+        "description": "A balance adjustment \u2014 a payout, a reset, a cap \u2014 on a managed\nassignment: the employer's act, audited, on the member's own balance.\nThe member's route answers 409 CONTRACT_MANAGED there; this one answers\n409 NOT_MANAGED where the member still writes their own.",
+        "operationId": "enter_adjustment_api_organisations__organisation_id__projects__project_id__members__member_user_id__adjustments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BalanceAdjustmentFields"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjustmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enter Adjustment",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}/contract": {
+      "get": {
+        "description": "The assignment's contract, for the decider editing it.",
+        "operationId": "read_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Managed Contract",
+        "tags": [
+          "Employment"
+        ]
+      },
+      "put": {
+        "description": "Write the employer's contract on an assignment, or hand it back\n(docs/organisations.md, stage 3). Taking a contract under management\nstarts from the terms the member recorded \u2014 nothing is rewritten\nsilently \u2014 and from then on the member's own contract, absence and\nadjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for\ntheir teams.",
+        "operationId": "set_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedContractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedContractResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Managed Contract",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}/entries": {
+      "post": {
+        "description": "Enter a finished session for a member (docs/organisations.md, stage\n3): the entry lands on the member's own timeline, stamped as the\norganisation's record and marked with who entered it, and the act is in\nthe audit log. Refused inside an approved month.",
+        "operationId": "enter_time_api_organisations__organisation_id__projects__project_id__members__member_user_id__entries_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_user_id",
+            "required": true,
+            "schema": {
+              "title": "Member User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterTimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enter Time",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
     "/api/organisations/{organisation_id}/record": {
       "get": {
-        "description": "What the organisation sees: per project, per member, the finished\nentries started in `month` in `tz` (start, end, hours, note), the\nabsences (date, type, half day), the all-time totals, and where the\nmember has a contract its balance as of today. Nothing else, and nothing\nabout now. Admins.",
+        "description": "What the organisation sees: per project, per member, the finished\nentries started in `month` in `tz` (start, end, hours, note), the\nabsences (date, type, half day), the all-time totals, and where the\nmember has a contract its balance as of today. Nothing else, and nothing\nabout now. Owners, admins and viewers whole; a manager their teams'.",
         "operationId": "read_record_api_organisations__organisation_id__record_get",
         "parameters": [
           {
@@ -12650,6 +13920,80 @@
         "summary": "Read Record",
         "tags": [
           "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/record.csv": {
+      "get": {
+        "description": "The month's record as CSV, a row per entry \u2014 the report an accountant\nfiles. Whoever reads the record; a manager's is their teams'.",
+        "operationId": "read_record_csv_api_organisations__organisation_id__record_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "The month's record as CSV."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Record Csv",
+        "tags": [
+          "Employment"
         ]
       }
     },
@@ -12765,6 +14109,475 @@
         "summary": "Decide Request",
         "tags": [
           "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/teams": {
+      "get": {
+        "description": "The teams, for anyone who reads the record \u2014 a manager's scope is the\nteams they are in.",
+        "operationId": "list_teams_api_organisations__organisation_id__teams_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamResponse"
+                  },
+                  "title": "Response List Teams Api Organisations  Organisation Id  Teams Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Teams",
+        "tags": [
+          "Employment"
+        ]
+      },
+      "post": {
+        "description": "A team: a name and who is in it. Ids that are not active members are\ndropped. Admins.",
+        "operationId": "create_team_api_organisations__organisation_id__teams_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Team",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/teams/{team_id}": {
+      "delete": {
+        "description": "Delete a team: its managers lose that scope, nothing else changes. Admins.",
+        "operationId": "delete_team_api_organisations__organisation_id__teams__team_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Team",
+        "tags": [
+          "Employment"
+        ]
+      },
+      "put": {
+        "description": "Replace a team's name and members. Admins.",
+        "operationId": "update_team_api_organisations__organisation_id__teams__team_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Team",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/timesheets": {
+      "get": {
+        "description": "A member's own sheets; a decider's or viewer's whole scope.",
+        "operationId": "list_timesheets_api_organisations__organisation_id__timesheets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "examples": [
+                    "2026-09"
+                  ],
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TimesheetResponse"
+                  },
+                  "title": "Response List Timesheets Api Organisations  Organisation Id  Timesheets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Timesheets",
+        "tags": [
+          "Employment"
+        ]
+      },
+      "post": {
+        "description": "Submit a month of one's own on an organisation project, once it has\nended in the organisation's timezone (409 MONTH_NOT_ENDED before). A\nsheet sent back or reopened resubmits the same way; an approved one is\nrefused until reopened (409 TIMESHEET_APPROVED).",
+        "operationId": "submit_timesheet_api_organisations__organisation_id__timesheets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitTimesheetBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Timesheet",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/timesheets/{sheet_id}/decision": {
+      "post": {
+        "description": "Approve \u2014 freezing the month's figures as they stand and locking every\nwrite dated inside it \u2014 or send the sheet back with a comment. Approval\nwaits while a stamped timer still runs in the month (409\nPERIOD_APPROVED names it). Deciders.",
+        "operationId": "decide_timesheet_api_organisations__organisation_id__timesheets__sheet_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Timesheet",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/timesheets/{sheet_id}/reopen": {
+      "post": {
+        "description": "Lift an approved month's lock, with a reason, recorded in the sheet's\nhistory and the audit log. The frozen figures go with it; re-approval\nfreezes afresh. Deciders.",
+        "operationId": "reopen_timesheet_api_organisations__organisation_id__timesheets__sheet_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReopenBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Timesheet",
+        "tags": [
+          "Employment"
         ]
       }
     },

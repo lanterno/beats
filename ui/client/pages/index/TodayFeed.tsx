@@ -170,11 +170,19 @@ function SessionRow({
 						</button>
 					))}
 			</div>
-			{(session.note || session.tags.length > 0) && (
+			{(session.note || session.tags.length > 0 || session.enteredBy) && (
 				<div className="flex items-center gap-1.5 ml-4 mt-0.5">
 					{session.note && (
 						<span className="text-[11.5px] font-medium text-muted-foreground truncate">
 							{session.note}
+						</span>
+					)}
+					{session.enteredBy && (
+						<span
+							className="text-[10.5px] font-medium text-muted-foreground shrink-0 whitespace-nowrap"
+							title="Entered by an organisation admin or manager; it is in the audit log"
+						>
+							entered for you
 						</span>
 					)}
 					{session.note && organisationName && (

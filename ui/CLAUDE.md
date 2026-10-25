@@ -207,7 +207,22 @@ Acme…* (`ConnectProjectDialog`, on the page rather than inside the settings dr
 the settings drawer disables the organisation's fields; a note shown on an
 organisation's project says "Acme can read this note".
 Every write that changes what is on the member's own timeline — joining, leaving, an
-assignment, a connect — invalidates the project and session roots too.
+assignment, a connect — invalidates the project and session roots too. The Organisations
+nav item wears a dot while an invitation to this account waits
+(`widgets/sidebar/useInvitationAttention.ts`); the invitation itself is joined through the
+link the inviter sent, since the API hands out no token. A page behind `ProtectedRoute`
+opened while signed out — an invite URL, a project link — is kept (`shared/lib/returnTo.ts`)
+and is where sign-in, passkey or SSO, lands.
+
+Employment (stages 3–4): the organisation page adds Teams, pending absence requests (the
+note is addressed to the decider), timesheets with the frozen figures and
+approve / ask-for-changes / reopen, *Your timesheets* with a submit for ended months, the
+audit-log disclosure, Contract… and Enter time… per assignment, and the record page's
+Record/Compliance CSV downloads; managers (scoped to their teams) and viewers read the
+record. On a managed assignment the member's project page asks instead of booking
+(`RequestAbsenceDialog`, the request list in `TimeOff`), the contract register names the
+organisation as the terms' owner, and the rail's Organisation panel carries the project's
+timesheets and submit; a decider-entered session wears "entered for you".
 
 ## Testing
 

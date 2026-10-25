@@ -4,8 +4,8 @@
  */
 import "../global.css";
 
-import { useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router";
+import { useEffect, useRef } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { initializeAuth, useAuth } from "@/features/auth";
 import Clients from "@/pages/clients";
 import Coach from "@/pages/coach/Coach";
@@ -28,7 +28,7 @@ import ProjectsIndex from "@/pages/projects-index";
 import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
-import { leaveLanding } from "@/shared/lib";
+import { leaveLanding, rememberReturnTo, takeReturnTo } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
@@ -39,6 +39,7 @@ import { QueryProvider } from "./providers";
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
 	const { isAuthenticated, isLoading } = useAuth();
+	const location = useLocation();
 
 	if (isLoading) {
 		return (
@@ -49,6 +50,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 	}
 
 	if (!isAuthenticated) {
+		// Kept for after sign-in: an invite URL or a project link opened while
+		// signed out must not be lost on the way to the homepage.
+		rememberReturnTo(location.pathname + location.search);
 		return <Navigate to="/" replace />;
 	}
 
@@ -61,12 +65,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function HomeOrDashboard() {
 	const { isAuthenticated, isLoading } = useAuth();
 	const navigate = useNavigate();
+	const left = useRef(false);
 
-	// Signed in, on arrival or from the landing page: on to the dashboard,
-	// leaving the landing page's analytics behind (leaveLanding says why it
-	// matters how).
+	// Signed in, on arrival or from the landing page: on to where the visitor
+	// was going, else the dashboard, leaving the landing page's analytics behind
+	// (leaveLanding says why it matters how). Once only: the return path is
+	// taken as it is read, and a second pass would land on /app instead.
 	useEffect(() => {
-		if (!isLoading && isAuthenticated) leaveLanding("/app", navigate);
+		if (isLoading || !isAuthenticated || left.current) return;
+		left.current = true;
+		leaveLanding(takeReturnTo() ?? "/app", navigate);
 	}, [isLoading, isAuthenticated, navigate]);
 
 	if (isLoading || isAuthenticated) {

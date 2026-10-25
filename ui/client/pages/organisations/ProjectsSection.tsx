@@ -10,8 +10,9 @@
 import { Layers, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { OrgProject } from "@/entities/organisation";
+import type { OrgProject, OrgRole } from "@/entities/organisation";
 import {
+	decides,
 	describeShareFrom,
 	useAssignMember,
 	useMembers,
@@ -20,19 +21,38 @@ import {
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { Button, Panel, useConfirm } from "@/shared/ui";
+import { EnterTimeDialog } from "./EnterTimeDialog";
 import { KIND_LABELS } from "./kinds";
+import { ManagedContractDialog } from "./ManagedContractDialog";
 import { OrgProjectDialog } from "./OrgProjectDialog";
 import { CHIP, HEADING, HEADING_ICON, LEAD, LINKISH, LIST, SELECT } from "./styles";
 
 type Editor = { mode: "new" } | { mode: "edit"; project: OrgProject };
 
-export function ProjectsSection({ organisationId }: { organisationId: string }) {
+/** One assignment a decider acts on: whose contract, or whose time. */
+type MemberAct = {
+	kind: "contract" | "time";
+	projectId: string;
+	projectName: string;
+	userId: string;
+	memberName: string;
+};
+
+export function ProjectsSection({
+	organisationId,
+	role,
+}: {
+	organisationId: string;
+	role: OrgRole;
+}) {
 	const projects = useOrgProjects(organisationId);
 	const members = useMembers(organisationId);
 	const assign = useAssignMember(organisationId);
 	const unassign = useUnassignMember(organisationId);
 	const { confirm, confirmDialog } = useConfirm();
 	const [editor, setEditor] = useState<Editor | null>(null);
+	const [act, setAct] = useState<MemberAct | null>(null);
+	const mayDecide = decides(role);
 
 	const assignTo = (project: OrgProject, userId: string) => {
 		const member = (members.data ?? []).find((m) => m.userId === userId);
@@ -130,6 +150,42 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 												>
 													<X className="w-3 h-3" aria-hidden="true" />
 												</button>
+												{mayDecide && (
+													<>
+														<button
+															type="button"
+															onClick={() =>
+																setAct({
+																	kind: "contract",
+																	projectId: project.id,
+																	projectName: project.name,
+																	userId: a.userId,
+																	memberName: a.name ?? "this member",
+																})
+															}
+															aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
+															className={LINKISH}
+														>
+															Contract…
+														</button>
+														<button
+															type="button"
+															onClick={() =>
+																setAct({
+																	kind: "time",
+																	projectId: project.id,
+																	projectName: project.name,
+																	userId: a.userId,
+																	memberName: a.name ?? "this member",
+																})
+															}
+															aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
+															className={LINKISH}
+														>
+															Enter time…
+														</button>
+													</>
+												)}
 											</span>
 										))}
 										{free.length > 0 && (
@@ -161,6 +217,28 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 					organisationId={organisationId}
 					project={editor.mode === "edit" ? editor.project : undefined}
 					onClose={() => setEditor(null)}
+				/>
+			)}
+			{act?.kind === "contract" && (
+				<ManagedContractDialog
+					key={`${act.projectId}-${act.userId}`}
+					organisationId={organisationId}
+					projectId={act.projectId}
+					projectName={act.projectName}
+					userId={act.userId}
+					memberName={act.memberName}
+					onClose={() => setAct(null)}
+				/>
+			)}
+			{act?.kind === "time" && (
+				<EnterTimeDialog
+					key={`${act.projectId}-${act.userId}`}
+					organisationId={organisationId}
+					projectId={act.projectId}
+					projectName={act.projectName}
+					userId={act.userId}
+					memberName={act.memberName}
+					onClose={() => setAct(null)}
 				/>
 			)}
 			{confirmDialog}

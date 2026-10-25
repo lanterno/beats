@@ -42,7 +42,24 @@ vi.mock("@/entities/organisation", async () => {
 		useUnassignMember: idle,
 		useCreateOrgProject: idle,
 		useUpdateOrgProject: idle,
+		useTeams: list,
+		useAbsenceRequests: list,
+		useTimesheets: list,
+		useAuditLog: list,
+		useManagedContract: list,
+		useSaveTeam: idle,
+		useDeleteTeam: idle,
+		useDecideAbsenceRequest: idle,
+		useDecideTimesheet: idle,
+		useReopenTimesheet: idle,
+		useSubmitTimesheet: idle,
+		useSetManagedContract: idle,
+		useEnterTime: idle,
 	};
+});
+vi.mock("@/entities/project", async () => {
+	const actual = await vi.importActual<typeof import("@/entities/project")>("@/entities/project");
+	return { ...actual, useProjects: list };
 });
 vi.mock("@/features/auth", () => ({
 	useAuth: () => ({
@@ -95,7 +112,23 @@ describe("Organisation", () => {
 		expect(screen.queryByRole("heading", { name: "Members" })).not.toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: /Invites/ })).not.toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: /Projects/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: /Teams/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Absence requests" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Timesheets" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Your timesheets" })).toBeInTheDocument();
 		expect(screen.queryByRole("link", { name: "This month's record" })).not.toBeInTheDocument();
+	});
+
+	it("as a manager, shows the requests and timesheets but no admin sections", () => {
+		state.membership = { data: membership("manager"), error: null };
+		renderPage();
+
+		expect(screen.getByRole("heading", { name: "Absence requests" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Timesheets" })).toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Members" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: /Teams/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
 	});
 
 	it("as an owner, shows the members, invites and projects", () => {
@@ -103,9 +136,14 @@ describe("Organisation", () => {
 		renderPage();
 
 		expect(screen.getByRole("heading", { name: "Members" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: /Teams/ })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: /Invites/ })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: /Projects/ })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Absence requests" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Timesheets" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Your timesheets" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Audit log" })).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "This month's record" })).toHaveAttribute(
 			"href",
 			"/organisations/o1/record",
