@@ -17,7 +17,7 @@ const DENSITY_KEY = "beats_density";
  * the same values before first paint so a stored dusk does not flash.
  */
 export const THEMES: { id: ThemeName; label: string; sky: string }[] = [
-	{ id: "afternoon", label: "Afternoon", sky: "#8CC1E2" },
+	{ id: "afternoon", label: "Afternoon", sky: "#7FB4D8" },
 	{ id: "dusk", label: "Dusk", sky: "#1A2446" },
 ];
 

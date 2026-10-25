@@ -177,20 +177,22 @@
 		color-scheme: light;
 
 		/* the sky's low haze; the sky itself is a fixed layer (.sky) */
-		--background: 185 32% 92%;
-		--foreground: 204 23% 22%;
+		--background: 185 28% 88%;
+		--foreground: 204 23% 20%;
 
 		/*
-		  cloud-white panels, #FFFDF7 at 97 % — raised from the mockup's 93 %
-		  so body text sits on a steadier surface; the sky still shows between
-		  panels and through the sidebar's lighter wash
+		  Paper panels at 97 % opacity — raised from the mockup's 93 % so body
+		  text sits on a steadier surface, and let down from its 98 % lightness
+		  to 96 %. A near-white panel on a near-white lower sky was the glare
+		  people read as "too bright": the two surfaces now part by a step the
+		  eye can rest on, and the ink gains contrast rather than losing it.
 		*/
-		--card: 45 100% 98%;
+		--card: 45 56% 96%;
 		--card-alpha: 0.97;
-		--card-foreground: 204 23% 22%;
+		--card-foreground: 204 23% 20%;
 
-		--popover: 45 100% 98%;
-		--popover-foreground: 204 23% 22%;
+		--popover: 45 56% 96%;
+		--popover-foreground: 204 23% 20%;
 
 		/* sunlight: today, the running timer, the primary action */
 		--primary: 40 88% 57%;
@@ -244,9 +246,9 @@
 		*/
 		--success-ink: 136 45% 30%;
 
-		/* the sidebar: the panel at 82 % and its ink */
-		--sidebar-background: 45 100% 98%;
-		--sidebar-alpha: 0.82;
+		/* the sidebar: the panel at 86 % and its ink */
+		--sidebar-background: 45 56% 96%;
+		--sidebar-alpha: 0.86;
 		--sidebar-foreground: 204 23% 22%;
 		--sidebar-primary: 37 77% 31%;
 		--sidebar-primary-foreground: 204 23% 22%;
@@ -263,11 +265,15 @@
 		--shadow-color: rgb(43 84 110 / 0.22);
 		--veil: rgb(60 100 130 / 0.38);
 
-		/* the painting */
-		--sky-top: #8cc1e2;
-		--sky-mid: #bcddee;
-		--sky-low: #e4f0f1;
-		--sky-ground: #e9f2e6;
+		/*
+		  The painting. The lower bands are a step deeper than the first cut:
+		  they sit behind the body of every page, and at #e4f0f1 they were all
+		  but white, so a panel laid on them had nothing to lift it.
+		*/
+		--sky-top: #7fb4d8;
+		--sky-mid: #a9d0e4;
+		--sky-low: #cfe3e8;
+		--sky-ground: #d6e5d4;
 		--sun: rgb(255 236 170 / 0.75);
 		--cloud: #ffffff;
 		--cloud-shade: rgb(150 185 215 / 0.45);
