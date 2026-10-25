@@ -82,10 +82,12 @@ Two hours: `afternoon` (light, the default) and `dusk`. `client/global.css` defi
 the tokens on `:root` and redefines them under `:root[data-theme="dusk"]`; they are
 the names every component already reads (`--card`, `--accent`, `--muted-foreground`
 …), as HSL triples so `hsl(var(--x) / .5)` works by hand, and `@theme` maps them to
-Tailwind colours. `shared/lib/useTheme.ts` owns the hour and the density: the
-storage keys, the `data-theme` / `data-density` attributes and `theme-color`; a
-stored value that is not one of the two hours reads as afternoon. The inline script
-at the top of `index.html` stamps both before first paint, so a stored dusk does not
+Tailwind colours. `shared/lib/useTheme.ts` owns the hour, the density and the page layout (boxes, or
+one sheet per page — the `page-sheet` rules at the foot of `global.css`, compared in
+`docs/mockups/surface-calm.html`): the storage keys, the `data-theme` /
+`data-density` / `data-layout` attributes and `theme-color`; a stored value that is
+not one of the offered ids reads as the default. The inline script at the top of
+`index.html` stamps all three before first paint, so a stored dusk or sheet does not
 flash, and repeats the keys and the dusk sky's hex — change them in both places.
 
 - **The sky** is `SkyBackdrop` (`shared/ui/sky-backdrop.tsx`), rendered first by

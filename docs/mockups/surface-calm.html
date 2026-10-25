@@ -37,10 +37,10 @@
   --font-heading: "M PLUS Rounded 1c", "Zen Maru Gothic", system-ui, sans-serif;
   --font-body: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
 
-  /* TODAY: pure white at 88% — the thing under study */
-  --cloud: #ffffff;
-  --cloud-shade: rgb(150 185 215 / .45);
-  --cloud-alpha: .88;
+  /* DECIDED and shipped: the sky-tinted cloud (global.css carries the same). */
+  --cloud: #cfe6f2;
+  --cloud-shade: rgb(120 160 200 / .40);
+  --cloud-alpha: .80;
 }
 :root[data-theme="dusk"] {
   --background: hsl(225 41% 31%);
@@ -68,12 +68,11 @@
   --cloud-alpha: .6;
 }
 
-/* PROPOSED cloud: the sky's own hue, clearly below paper luminance.
-   Measured: composite L 0.726 vs paper 0.931 → 1.26:1, paper brightest. */
-:root[data-clouds="tinted"]:not([data-theme="dusk"]) {
-  --cloud: #cfe6f2;
-  --cloud-shade: rgb(120 160 200 / .40);
-  --cloud-alpha: .80;
+/* The white cloud survives only as the before-state for comparison. */
+:root[data-clouds="white"]:not([data-theme="dusk"]) {
+  --cloud: #ffffff;
+  --cloud-shade: rgb(150 185 215 / .45);
+  --cloud-alpha: .88;
 }
 
 * { box-sizing: border-box; }
@@ -114,13 +113,6 @@ h1,h2,h3,.fig { font-family: var(--font-heading); line-height: 1.25; }
 .hills { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 200px; display: block; }
 .hills .far { fill: var(--hill-far); } .hills .mid { fill: var(--hill-mid); } .hills .near { fill: var(--hill-near); }
 @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } }
-
-/* OPTION: keep the clouds out of the band the page's content sits in. The
-   painting stays, but it stops passing behind the paper. */
-:root[data-clouds="calm"] .cloud {
-  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 16vh, transparent 34vh);
-          mask-image: linear-gradient(180deg, #000 0, #000 16vh, transparent 34vh);
-}
 
 /* ═══ shell ═══ */
 .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 18px 80px; }
@@ -235,22 +227,22 @@ a.plain { color: var(--accent-ink); font-weight: 700; text-decoration: underline
       Two findings, both measured from the shipped tokens. <b>One:</b> the afternoon cloud is
       <em>brighter than the paper</em> and sits at 1.01–1.04:1 against it — no edge at all — while drifting on a
       140–200&nbsp;s loop, so a panel's boundary dissolves and <em>moves</em>. <b>Two:</b> a page is eight to ten
-      separate white rectangles, so the eye crosses that unstable edge ten times down one screen. Switch the
-      controls and watch the panel edges, not the content.
+      separate white rectangles, so the eye crosses that unstable edge ten times down one screen. Decided: the sky-tinted
+      cloud shipped as the one afternoon cloud, and the layout shipped as a preference — <b>Settings →
+      Appearance → Page layout</b>, boxes or one sheet. The switches remain so the before can still be seen.
     </p>
 
     <div class="switches">
       <label class="switch"><span>Clouds</span>
         <span class="seg" id="seg-clouds">
-          <button data-v="white" aria-pressed="true">Pure white — today</button>
-          <button data-v="tinted" aria-pressed="false">Sky-tinted — proposed</button>
-          <button data-v="calm" aria-pressed="false">Kept above the content</button>
+          <button data-v="tinted" aria-pressed="true">Sky-tinted — shipped</button>
+          <button data-v="white" aria-pressed="false">Pure white — the before</button>
         </span>
       </label>
       <label class="switch"><span>Layout</span>
         <span class="seg" id="seg-layout">
-          <button data-v="boxes" aria-pressed="true">Separate boxes — today</button>
-          <button data-v="sheet" aria-pressed="false">One sheet — proposed</button>
+          <button data-v="boxes" aria-pressed="true">Boxes</button>
+          <button data-v="sheet" aria-pressed="false">One sheet</button>
         </span>
       </label>
       <label class="switch"><span>Hour</span>
@@ -464,7 +456,7 @@ wire("seg-layout", v => {
   document.getElementById("layout-sheet").classList.toggle("hide", v !== "sheet");
 });
 wire("seg-theme", v => { if (v === "dusk") root.dataset.theme = "dusk"; else root.removeAttribute("data-theme"); });
-root.dataset.clouds = "white";
+root.dataset.clouds = "tinted";
 </script>
 </body>
 </html>
