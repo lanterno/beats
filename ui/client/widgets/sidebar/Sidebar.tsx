@@ -1,19 +1,21 @@
 /**
  * Sidebar Component
- * Composite sidebar shell: brand, timer, search, nav, stats, projects, utilities.
+ * Composite sidebar shell: brand, places, timer, search, stats, projects, utilities.
  * Pinned left on desktop, hidden on mobile (MobileHeader handles mobile).
  *
  * The fixed `w-72` slot is the geometry Layout offsets `main` by; inside it
  * the column floats as a rounded panel with a gutter of air, the way the
  * mockup's `.sidebar` sits beside the page — no border, no edge.
  *
- * Nothing in the column scrolls. The timer is first under the brand, because
- * it is the thing people come here for; the five rows that name a place carry
- * their names; and the three utilities — Clients, Organisations, Settings —
- * are an icon row at the foot, tooltipped, where a full row each only added
- * length. The project list is the one part that would grow without bound, so
- * it is capped (`PROJECTS_SHOWN`) with the Projects row as the way to the
- * rest, and clips rather than scrolls on a short viewport.
+ * Nothing in the column scrolls, and the order is how often a thing is
+ * reached. The five places people move between all day — Today, Projects,
+ * Weekly plan, Insights, Coach — are one row of large icons at the top,
+ * named by their tooltip; the timer sits straight under them; and the three
+ * utilities — Clients, Organisations, Settings — are a smaller row of their
+ * own at the foot, above the line that signs out. The project list is the one
+ * part that would grow without bound, so it is capped (`PROJECTS_SHOWN`) with
+ * the Projects icon as the way to the rest, and clips rather than scrolls on
+ * a short viewport.
  */
 
 import {
@@ -54,7 +56,7 @@ interface SidebarProps extends TimerProps {
 /** How many projects the rail names before the Projects page takes over. */
 const PROJECTS_SHOWN = 6;
 
-/** The rows that name a place. */
+/** The places, the top row: where people move between all day. */
 const NAV = [
 	{ to: "/app", title: "Today", Icon: Sun, prefix: false },
 	{ to: "/projects", title: "Projects", Icon: Layers, prefix: true },
@@ -63,7 +65,7 @@ const NAV = [
 	{ to: "/coach", title: "Coach", Icon: Sparkles, prefix: false },
 ] as const;
 
-/** The utilities: an icon each at the foot, named by their tooltip. */
+/** The utilities, the foot row: reached once in a while, not all day. */
 const UTILITIES = [
 	// Clients only once there is someone or something to bill (`useShowClients`).
 	{ to: "/clients", title: "Clients", Icon: Briefcase, prefix: false },
@@ -113,18 +115,45 @@ export function Sidebar(props: SidebarProps) {
 		<aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-72 p-3 z-40">
 			<div className="flex-1 min-h-0 flex flex-col rounded-[1.625rem] bg-sidebar shadow-soft">
 				{/* Brand */}
-				<div className="flex items-center justify-between px-5 pt-5 pb-3">
+				<div className="flex items-center justify-between gap-2 px-5 pt-5 pb-3">
 					<Link
 						to="/app"
-						className="flex items-center gap-2.5 font-heading text-[22px] font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground hover:text-sidebar-primary transition-colors"
+						className="flex items-center gap-2.5 min-w-0 font-heading text-2xl font-extrabold tracking-[-0.01em] leading-none text-sidebar-foreground hover:text-sidebar-primary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-full"
 					>
-						<BrandMark className="w-7 h-7 shrink-0" />
-						{APP_NAME}
+						<BrandMark className="w-9 h-9 shrink-0" />
+						<span className="truncate">{APP_NAME}</span>
 					</Link>
 					<SyncStatus />
 				</div>
 
-				{/* The timer, first: the thing the rail is opened for */}
+				{/* The places: one row of large icons, named by their tooltip */}
+				<nav aria-label="Pages" className="flex items-center justify-between gap-1 px-4 pb-3">
+					{nav.map(({ to, title, Icon, prefix }) => {
+						const active = isActive(to, prefix);
+						return (
+							<Tooltip key={to}>
+								<TooltipTrigger asChild>
+									<Link
+										to={to}
+										aria-current={active ? "page" : undefined}
+										aria-label={title}
+										className={cn(
+											"grid place-items-center w-11 h-11 rounded-2xl transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+											active
+												? "bg-sidebar-accent text-sidebar-primary shadow-[inset_0_-3px_0_hsl(var(--accent))]"
+												: "text-sidebar-foreground/70 hover:bg-secondary hover:text-sidebar-foreground",
+										)}
+									>
+										<Icon className="w-5 h-5" />
+									</Link>
+								</TooltipTrigger>
+								<TooltipContent side="bottom">{title}</TooltipContent>
+							</Tooltip>
+						);
+					})}
+				</nav>
+
+				{/* The timer, straight under the places */}
 				<div className="px-5 pb-3">
 					<SidebarTimer {...props} />
 				</div>
@@ -145,26 +174,6 @@ export function Sidebar(props: SidebarProps) {
 						</button>
 					</div>
 				)}
-
-				{/* Places */}
-				<nav aria-label="Pages" className="px-3 pb-3 space-y-0.5">
-					{nav.map(({ to, title, Icon, prefix }) => (
-						<Link
-							key={to}
-							to={to}
-							aria-current={isActive(to, prefix) ? "page" : undefined}
-							className={cn(
-								"flex items-center gap-2.5 rounded-full px-3.5 py-2 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-								isActive(to, prefix)
-									? "bg-sidebar-accent font-bold text-sidebar-foreground shadow-[inset_3px_0_0_hsl(var(--accent))]"
-									: "font-medium text-sidebar-foreground/80 hover:bg-secondary hover:text-sidebar-foreground",
-							)}
-						>
-							<Icon className="w-4 h-4 shrink-0" />
-							<span className="flex-1 truncate">{title}</span>
-						</Link>
-					))}
-				</nav>
 
 				{/* Stats */}
 				<div className="px-5 pb-3">
@@ -202,62 +211,67 @@ export function Sidebar(props: SidebarProps) {
 					</div>
 				)}
 
-				{/* The foot: the wall clock, then the utilities as icons */}
-				<div className="px-5 pt-3 pb-4 mt-2 border-t border-border space-y-3">
+				{/* The foot: the wall clock, the utilities, then the account */}
+				<div className="px-5 pt-3 pb-4 mt-2 border-t border-border space-y-2">
 					<DeviceStatus />
+
+					{/* The utilities, a line of their own */}
+					<nav aria-label="Utilities" className="flex items-center gap-1.5">
+						{utilities.map(({ to, title, Icon, prefix }) => {
+							const attention = attentionFor(to);
+							return (
+								<Tooltip key={to}>
+									<TooltipTrigger asChild>
+										<Link
+											to={to}
+											aria-current={isActive(to, prefix) ? "page" : undefined}
+											aria-label={attention?.label ?? title}
+											className={cn(
+												"relative grid place-items-center w-9 h-9 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+												isActive(to, prefix)
+													? "bg-sidebar-accent text-sidebar-primary"
+													: "text-sidebar-foreground/70 hover:bg-secondary hover:text-sidebar-foreground",
+											)}
+										>
+											<Icon className="w-4 h-4" />
+											{attention && (
+												<span
+													aria-hidden="true"
+													className={cn(
+														"absolute -top-0.5 -right-0.5 rounded-full bg-destructive ring-2 ring-sidebar",
+														attention.count
+															? "min-w-4 px-1 font-heading text-[10px] font-bold leading-4 text-destructive-foreground"
+															: "w-2.5 h-2.5",
+													)}
+												>
+													{attention.count}
+												</span>
+											)}
+										</Link>
+									</TooltipTrigger>
+									<TooltipContent side="top">{title}</TooltipContent>
+								</Tooltip>
+							);
+						})}
+					</nav>
+
+					{/* The account, the last line */}
 					<div className="flex items-center justify-between gap-2">
-						<nav aria-label="Utilities" className="flex items-center gap-1.5">
-							{utilities.map(({ to, title, Icon, prefix }) => {
-								const attention = attentionFor(to);
-								return (
-									<Tooltip key={to}>
-										<TooltipTrigger asChild>
-											<Link
-												to={to}
-												aria-current={isActive(to, prefix) ? "page" : undefined}
-												aria-label={attention?.label ?? title}
-												className={cn(
-													"relative grid place-items-center w-9 h-9 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-													isActive(to, prefix)
-														? "bg-sidebar-accent text-sidebar-primary"
-														: "text-sidebar-foreground/70 hover:bg-secondary hover:text-sidebar-foreground",
-												)}
-											>
-												<Icon className="w-4 h-4" />
-												{attention && (
-													<span
-														aria-hidden="true"
-														className={cn(
-															"absolute -top-0.5 -right-0.5 rounded-full bg-destructive ring-2 ring-sidebar",
-															attention.count
-																? "min-w-4 px-1 font-heading text-[10px] font-bold leading-4 text-destructive-foreground"
-																: "w-2.5 h-2.5",
-														)}
-													>
-														{attention.count}
-													</span>
-												)}
-											</Link>
-										</TooltipTrigger>
-										<TooltipContent side="top">{title}</TooltipContent>
-									</Tooltip>
-								);
-							})}
-						</nav>
+						<span className="text-xs text-muted-foreground truncate min-w-0" title={user?.email}>
+							{user?.email}
+						</span>
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<button
 									type="button"
 									onClick={handleLogout}
 									aria-label="Sign out"
-									className="grid place-items-center w-9 h-9 shrink-0 rounded-full text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+									className="grid place-items-center w-8 h-8 shrink-0 rounded-full text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									<LogOut className="w-4 h-4" />
 								</button>
 							</TooltipTrigger>
-							<TooltipContent side="top">
-								Sign out{user?.email ? ` (${user.email})` : ""}
-							</TooltipContent>
+							<TooltipContent side="top">Sign out</TooltipContent>
 						</Tooltip>
 					</div>
 				</div>
