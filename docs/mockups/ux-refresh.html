@@ -82,33 +82,54 @@ body {
 h1,h2,h3,.fig { font-family: var(--font-heading); line-height: 1.25; }
 .fig { font-variant-numeric: tabular-nums; }
 
-.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 16px; padding: 16px; min-height: 100vh; align-items: stretch; }
+.app { display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 16px; padding: 16px; min-height: 100vh; align-items: stretch; }
 
-/* ═══ Sidebar: nav scrolls, timer pinned, ≥40px hit targets ═══ */
+/* ═══ Sidebar: nothing scrolls, timer first, ≥40px hit targets ═══ */
 .sidebar { position: sticky; top: 16px; height: calc(100vh - 32px); background: var(--card); border-radius: var(--radius);
-  box-shadow: 0 22px 48px -26px var(--shadow-color); padding: 16px 12px 12px; display: flex; flex-direction: column; min-height: 0; }
+  box-shadow: 0 22px 48px -26px var(--shadow-color); padding: 18px 14px 12px; display: flex; flex-direction: column; min-height: 0; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 12px; flex: none; }
 .brand .tile { width: 32px; height: 32px; border-radius: 9px; background: #1A2446; position: relative; flex: none; }
 .brand .tile::after { content: ""; position: absolute; inset: 6px; border-radius: 50%;
   border: 3px solid #2E3E6E; border-top-color: #F5C35E; border-right-color: #F5C35E; }
 .brand b { font-family: var(--font-heading); font-size: 17px; }
-.search-pill { display: flex; align-items: center; gap: 8px; margin: 0 4px 6px; padding: 9px 13px; min-height: 40px;
+.search-pill { display: flex; align-items: center; gap: 8px; margin: 10px 4px 8px; padding: 9px 13px; min-height: 40px;
   background: var(--secondary); border-radius: 999px; color: var(--muted-fg); font-size: 13px; cursor: pointer; border: none; font-family: inherit; width: calc(100% - 8px); flex: none; }
-.side-scroll { flex: 1; overflow-y: auto; min-height: 0; margin: 0 -4px; padding: 0 4px; }
-.navgroup { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-fg); padding: 10px 10px 3px; }
-.nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-height: 40px; border-radius: 999px;
+.nav { flex: none; }
+.nav a { display: flex; align-items: center; gap: 10px; padding: 8px 12px; min-height: 40px; border-radius: 999px;
   color: inherit; text-decoration: none; font-weight: 500; font-size: 14px; }
 .nav a:hover { background: var(--secondary); }
 .nav a[aria-current="page"] { background: var(--secondary); font-weight: 700; box-shadow: inset 3px 0 0 var(--accent); }
 .nav a .ic { width: 20px; text-align: center; flex: none; }
 .kbd { font-family: var(--font-heading); font-size: 11px; background: var(--card); border: 1px solid var(--border);
   border-radius: 6px; padding: 0 6px; color: var(--muted-fg); margin-left: auto; box-shadow: 0 1px 0 var(--border); }
-.badge-n { margin-left: auto; font-size: 11px; background: var(--destructive); color: #fff;
-  border-radius: 999px; padding: 1px 7px; font-weight: 700; }
-.side-stats { margin: 10px 6px 0; font-size: 12.5px; color: var(--muted-fg); display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.side-stats { flex: none; margin: 12px 8px 4px; font-size: 12.5px; color: var(--muted-fg); display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
 .side-stats b { color: var(--foreground); font-family: var(--font-heading); text-align: right; }
-.side-pin { flex: none; margin-top: 10px; }
-.timer { background: var(--secondary); border-radius: 18px; padding: 12px 14px; }
+
+/* The projects take the slack and clip — the rail never grows a scrollbar */
+.side-projects { flex: 1; min-height: 0; overflow: hidden; margin-top: 8px; }
+.plist-head { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-fg); padding: 0 12px 4px; }
+.prow { display: flex; align-items: center; gap: 9px; padding: 6px 12px; border-radius: 999px; text-decoration: none;
+  color: var(--muted-fg); font-size: 13px; }
+.prow:hover { background: var(--secondary); color: var(--foreground); }
+.prow i { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.prow span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow b { font-family: var(--font-heading); font-size: 12px; }
+.prow.more { color: var(--muted-fg); font-size: 12.5px; padding-left: 14px; }
+
+/* The foot: utilities as icons, named by their tooltip */
+.side-foot { flex: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.iconrow { display: flex; align-items: center; gap: 6px; }
+.iconbtn { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px;
+  text-decoration: none; color: var(--muted-fg); font-size: 15px; }
+.iconbtn:hover { background: var(--secondary); color: var(--foreground); }
+.iconbtn .dot { position: absolute; top: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--destructive); box-shadow: 0 0 0 2px var(--card); }
+.iconbtn .count { position: absolute; top: -3px; right: -3px; min-width: 16px; padding: 0 3px; border-radius: 999px;
+  background: var(--destructive); color: #fff; font-family: var(--font-heading); font-size: 10px; font-weight: 700;
+  line-height: 16px; box-shadow: 0 0 0 2px var(--card); }
+
+.timer { flex: none; background: var(--secondary); border-radius: 18px; padding: 12px 14px; }
 .timer .proj { font-size: 12.5px; color: var(--muted-fg); display: flex; align-items: center; gap: 6px; }
 .timer .proj i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; }
 .timer .top { display: flex; align-items: center; gap: 8px; }
@@ -116,8 +137,6 @@ h1,h2,h3,.fig { font-family: var(--font-heading); line-height: 1.25; }
 .timer .stopbtn { border: none; background: var(--accent); color: #3a2a05; border-radius: 999px; width: 40px; height: 40px;
   font-size: 13px; cursor: pointer; flex: none; }
 .timer .hint { font-size: 11.5px; color: var(--muted-fg); }
-.sidebar .foot { padding: 8px 8px 0; margin-top: 8px; border-top: 1px solid var(--border);
-  font-size: 12px; color: var(--muted-fg); display: flex; justify-content: space-between; }
 
 main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
@@ -154,7 +173,7 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .gridmain { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 14px; align-items: start; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; }
 @media (max-width: 1100px) { .gridmain { grid-template-columns: 1fr; } }
-@media (max-width: 860px) { .app { grid-template-columns: 1fr; } .sidebar { position: static; height: auto; } .side-scroll { overflow: visible; } }
+@media (max-width: 860px) { .app { grid-template-columns: 1fr; } .sidebar { position: static; height: auto; } .side-projects { overflow: visible; } }
 
 .stat .fig { font-size: 28px; font-weight: 800; }
 .stat .lbl { font-size: 12.5px; color: var(--muted-fg); }
@@ -246,38 +265,47 @@ a.plain { color: var(--accent-ink); font-weight: 700; text-decoration: underline
 <div class="app">
   <aside class="sidebar" aria-label="Primary">
     <div class="brand"><div class="tile" aria-hidden="true"></div><b>LifePete</b></div>
-    <button class="search-pill">🔍 Search &amp; commands <span class="kbd">⌘K</span></button>
 
-    <div class="side-scroll">
-      <nav class="nav">
-        <div class="navgroup">Work</div>
-        <a href="#" class="navlink" aria-current="page" data-s="dash"><span class="ic">☀️</span> Today <span class="kbd">1</span></a>
-        <a href="#" class="navlink" data-s="project"><span class="ic">▦</span> Projects <span class="kbd">2</span></a>
-        <a href="#" class="navlink" data-s="dash"><span class="ic">◷</span> Weekly plan <span class="kbd">3</span></a>
-        <div class="navgroup">Understand</div>
-        <a href="#" class="navlink" data-s="insights"><span class="ic">📈</span> Insights <span class="kbd">4</span></a>
-        <a href="#" class="navlink" data-s="dash"><span class="ic">💬</span> Coach <span class="kbd">5</span></a>
-        <div class="navgroup">Money &amp; people</div>
-        <a href="#" class="navlink" data-s="dash"><span class="ic">💶</span> Billing <span class="badge-n" aria-label="1 budget warning">1</span></a>
-        <a href="#" class="navlink" data-s="org"><span class="ic">🏢</span> Organisations <span class="badge-n" aria-label="2 pending">2</span></a>
-        <div class="navgroup"></div>
-        <a href="#" class="navlink" data-s="settings"><span class="ic">⚙︎</span> Settings</a>
-      </nav>
-      <div class="side-stats">
-        <span>Today</span><b>4.2 h</b>
-        <span>This week</span><b>24.3 h</b>
-        <span>Flow score</span><b>82</b>
-        <span>Wall clock</span><b style="color:var(--success-ink)">●</b>
-      </div>
+    <!-- The timer first: the thing the rail is opened for -->
+    <div class="timer" role="status" aria-label="Timer running on beats-api, 1 hour 47 minutes">
+      <div class="proj"><i aria-hidden="true"></i> beats-api · organisations</div>
+      <div class="top"><div class="fig">1:47:12</div><button class="stopbtn" title="Stop (Space)" aria-label="Stop timer">■</button></div>
+      <div class="hint"><span class="kbd" style="margin:0">Space</span> stop · <span class="kbd" style="margin:0">F</span> focus</div>
     </div>
 
-    <div class="side-pin">
-      <div class="timer" role="status" aria-label="Timer running on beats-api, 1 hour 47 minutes">
-        <div class="proj"><i aria-hidden="true"></i> beats-api · organisations</div>
-        <div class="top"><div class="fig">1:47:12</div><button class="stopbtn" title="Stop (Space)" aria-label="Stop timer">■</button></div>
-        <div class="hint"><span class="kbd" style="margin:0">Space</span> stop · <span class="kbd" style="margin:0">F</span> focus</div>
-      </div>
-      <div class="foot"><span>ahmed@…</span><a class="plain" href="#">Sign out</a></div>
+    <button class="search-pill">🔍 Search &amp; commands <span class="kbd">⌘K</span></button>
+
+    <!-- The rows that name a place -->
+    <nav class="nav">
+      <a href="#" class="navlink" aria-current="page" data-s="dash"><span class="ic">☀️</span> Today</a>
+      <a href="#" class="navlink" data-s="project"><span class="ic">▦</span> Projects</a>
+      <a href="#" class="navlink" data-s="dash"><span class="ic">◷</span> Weekly plan</a>
+      <a href="#" class="navlink" data-s="insights"><span class="ic">📈</span> Insights</a>
+      <a href="#" class="navlink" data-s="dash"><span class="ic">💬</span> Coach</a>
+    </nav>
+
+    <div class="side-stats">
+      <span>Today</span><b>4.2 h</b>
+      <span>This week</span><b>24.3 h</b>
+    </div>
+
+    <!-- The projects, capped: the one region that takes the slack -->
+    <div class="side-projects">
+      <div class="plist-head">Projects</div>
+      <a href="#" class="prow"><i style="background:#F2B233"></i><span>beats-api</span><b>12.4</b></a>
+      <a href="#" class="prow"><i style="background:#5c9f5e"></i><span>beats-ui</span><b>8.1</b></a>
+      <a href="#" class="prow"><i style="background:#8cc1e2"></i><span>acme-site</span><b>2.0</b></a>
+      <a href="#" class="prow more"><span>3 more · archived</span></a>
+    </div>
+
+    <!-- The foot: the utilities as icons, named by their tooltip -->
+    <div class="side-foot">
+      <nav class="iconrow" aria-label="Utilities">
+        <a href="#" class="iconbtn navlink" data-s="dash" title="Clients" aria-label="Clients, a billing budget is used up">💶<span class="dot" aria-hidden="true"></span></a>
+        <a href="#" class="iconbtn navlink" data-s="org" title="Organisations" aria-label="Organisations, 2 invitations are waiting">🏢<span class="count" aria-hidden="true">2</span></a>
+        <a href="#" class="iconbtn navlink" data-s="settings" title="Settings" aria-label="Settings">⚙︎</a>
+      </nav>
+      <a href="#" class="iconbtn" title="Sign out (ahmed@…)" aria-label="Sign out">⏻</a>
     </div>
   </aside>
 
