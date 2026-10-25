@@ -35,6 +35,7 @@ describe("useTheme", () => {
 		vi.clearAllMocks();
 		document.documentElement.removeAttribute("data-theme");
 		document.documentElement.removeAttribute("data-density");
+		document.documentElement.removeAttribute("data-layout");
 		document.head.querySelector('meta[name="theme-color"]')?.remove();
 		const meta = document.createElement("meta");
 		meta.name = "theme-color";
@@ -101,5 +102,21 @@ describe("useTheme", () => {
 		expect(result.current.density).toBe("spacious");
 		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_density", "spacious");
 		expect(document.documentElement.getAttribute("data-density")).toBe("spacious");
+	});
+
+	it("defaults to the boxes layout, and reads a stored value that is not a layout as boxes", () => {
+		store.beats_layout = "mosaic";
+		const { result } = renderHook(() => useTheme());
+		expect(result.current.layout).toBe("boxes");
+		expect(document.documentElement.getAttribute("data-layout")).toBe("boxes");
+		expect(mockStorage.setItem).not.toHaveBeenCalledWith("beats_layout", expect.anything());
+	});
+
+	it("setLayout persists and applies data-layout", () => {
+		const { result } = renderHook(() => useTheme());
+		act(() => result.current.setLayout("sheet"));
+		expect(result.current.layout).toBe("sheet");
+		expect(mockStorage.setItem).toHaveBeenCalledWith("beats_layout", "sheet");
+		expect(document.documentElement.getAttribute("data-layout")).toBe("sheet");
 	});
 });
